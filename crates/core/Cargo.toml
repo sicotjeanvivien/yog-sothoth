@@ -4,16 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Serialization / deserialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Solana Types
 solana-sdk = "3"
 solana-transaction-status = "3"
-
-# Borsh — a serialization format for Solana accounts
 borsh = { version = "1", features = ["derive"] }
-
-# Errors
 thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
