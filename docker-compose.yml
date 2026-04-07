@@ -1,0 +1,15 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: yog-timescaledb
+    environment:
+      POSTGRES_USER: yog
+      POSTGRES_PASSWORD: yog
+      POSTGRES_DB: yog_sothoth
+    ports:
+      - "5433:5432"   # port 5433 pour éviter le conflit avec PostgreSQL local
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+
+volumes:
+  timescaledb_data:
