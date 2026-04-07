@@ -27,6 +27,3 @@ pub enum CoreError {
     #[error("unsupported instruction in transaction {signature}")]
     UnsupportedInstruction { signature: String },
 }
-
-/// Convenience alias used throughout the crate.
-pub type CoreResult<T> = Result<T, CoreError>;
