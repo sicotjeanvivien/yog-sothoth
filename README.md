@@ -110,7 +110,7 @@ Price and slippage calculations are **identical** between backend and frontend â
 
 ```bash
 # Clone
-git clone https://github.com/<your-username>/yog-sothoth.git
+git clone https://github.com/sicotjeanvivien/yog-sothoth.git
 cd yog-sothoth
 
 # Start TimescaleDB
