@@ -20,6 +20,7 @@ solana-client = "3"
 solana-commitment-config = "3"
 solana-pubsub-client = "3"
 solana-sdk = "3"
+solana-transaction-status = "3"
 
 # Database
 sqlx = { version = "0.8", features = [

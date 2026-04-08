@@ -1,9 +1,15 @@
-use crate::{config::Config, infra::Database};
+mod application;
+mod config;
+mod domain;
+mod infra;
 
-pub(crate) mod application;
-pub(crate) mod config;
-pub(crate) mod domain;
-pub(crate) mod infra;
+use application::services::IndexerService;
+use config::Config;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use std::sync::Arc;
+use tracing::info;
+
+use crate::infra::{Database, RpcListener};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,15 +27,35 @@ async fn main() -> anyhow::Result<()> {
     db.run_migrations().await?;
     tracing::info!("migrations applied");
 
-    // TODO: initialize repositories
-    // TODO: initialize services
-    // TODO: start WebSocket RPC listener
+    // Initialize RPC client (HTTP) for transaction fetching
+    let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.clone()));
 
-    tracing::info!("indexer started");
+    // Initialize indexer service
+    let indexer_service = Arc::new(IndexerService::new(Arc::clone(&rpc_client)));
 
-    // Keep the process alive
+    // Initialize RPC listener (WebSocket)
+    let mut listener =
+        RpcListener::new(config.solana_rpc_ws.clone(), config.solana_rpc_http.clone());
+
+    // Watch the test pool
+    listener.watch("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j".to_string());
+
+    info!("indexer started — watching test pool");
+
+    // Start the WebSocket listener
+    let service = Arc::clone(&indexer_service);
+    listener
+        .run(move |signature| {
+            let service = Arc::clone(&service);
+            async move {
+                service.handle_signature(signature).await;
+            }
+        })
+        .await;
+
+    // Graceful shutdown on Ctrl+C
     tokio::signal::ctrl_c().await?;
-    tracing::info!("shutting down");
+    info!("shutting down");
 
     Ok(())
 }

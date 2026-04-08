@@ -1809,6 +1809,7 @@ dependencies = [
  "solana-commitment-config",
  "solana-pubsub-client",
  "solana-sdk",
+ "solana-transaction-status",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
