@@ -17,6 +17,8 @@ futures-util = "0.3"
 
 # RPC Solana
 solana-client = "3"
+solana-commitment-config = "3"
+solana-pubsub-client = "3"
 solana-sdk = "3"
 
 # Database

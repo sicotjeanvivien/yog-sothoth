@@ -1806,6 +1806,8 @@ dependencies = [
  "serde",
  "serde_json",
  "solana-client",
+ "solana-commitment-config",
+ "solana-pubsub-client",
  "solana-sdk",
  "sqlx",
  "thiserror 2.0.18",

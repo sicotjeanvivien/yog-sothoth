@@ -7,6 +7,8 @@ pub(crate) struct Config {
     pub(crate) database_url: String,
     /// Solana RPC WebSocket URL.
     pub(crate) solana_rpc_ws: String,
+    /// Solana RPC http url
+    pub(crate) solana_rpc_http: String,
 }
 
 impl Config {
@@ -18,6 +20,7 @@ impl Config {
         Self {
             database_url: required("DATABASE_URL"),
             solana_rpc_ws: required("SOLANA_RPC_WS"),
+            solana_rpc_http: required("SOLANA_RPC_HTTP"),
         }
     }
 }
