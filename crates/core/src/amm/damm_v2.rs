@@ -29,6 +29,10 @@ pub fn net_price_impact(
     price_impact(reserve_a, reserve_b, amount_in_net)
 }
 
+// ============================================================
+// Tests
+// ============================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;

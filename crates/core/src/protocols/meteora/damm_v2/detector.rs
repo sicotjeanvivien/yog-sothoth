@@ -1,7 +1,9 @@
-use super::DAMM_V2_PROGRAM_ID;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
-pub(crate) fn is_swap(tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
+pub(super) fn is_swap(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+    program_id_str: &str,
+) -> bool {
     let Some(meta) = &tx.transaction.meta else {
         return false;
     };
@@ -18,8 +20,9 @@ pub(crate) fn is_swap(tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
         return false;
     };
 
+    // TODO(perf): DAMM_V2_PROGRAM_ID.to_string() alloue à chaque appel — cacher via LazyLock<String> si hot path
     logs.windows(2).any(|pair| {
-        pair[0].contains(DAMM_V2_PROGRAM_ID)
+        pair[0].contains(program_id_str)
             && pair[0].contains("invoke")
             && pair[1] == "Program log: Instruction: Swap"
     })

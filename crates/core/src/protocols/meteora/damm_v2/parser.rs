@@ -1,18 +1,15 @@
-use crate::protocols::meteora::damm_v2::{detector, reserves, transfer};
+use crate::protocols::meteora::damm_v2::{reserves, transfer};
 use crate::protocols::meteora::{extract_signature, extract_timestamp};
-use crate::types::DammV2SwapResult;
-use crate::{CoreError, CoreResult};
+use crate::{CoreError, CoreResult, SwapEvent};
+use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Parse a DAMM v2 swap from a confirmed transaction.
-pub fn parse_swap(
+pub(super) fn parse_swap(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
-    pool_address: &str,
-) -> CoreResult<Option<DammV2SwapResult>> {
-    if !detector::is_swap(tx) {
-        return Ok(None);
-    }
-
+    pool_address: Pubkey,
+    program_id_str: &str,
+) -> CoreResult<SwapEvent> {
     let meta = tx
         .transaction
         .meta
@@ -27,14 +24,14 @@ pub fn parse_swap(
 
     // Find the two transferChecked instructions that follow the DAMM v2 swap
     let (transfer_in, transfer_out, vault_a, vault_b) =
-        transfer::extract_swap_transfers(meta, &signature)?;
+        transfer::extract_swap_transfers(meta, &signature, program_id_str)?;
 
     // Extract reserves from pre/post token balances
     let (reserve_a_before, reserve_b_before, reserve_a_after, reserve_b_after) =
         reserves::extract_reserves(tx, meta, &vault_a, &vault_b, &signature)?;
 
-    Ok(Some(DammV2SwapResult {
-        pool_address: pool_address.to_string(),
+    Ok(SwapEvent {
+        pool_address: pool_address,
         token_in_mint: transfer_in.mint,
         token_out_mint: transfer_out.mint,
         amount_in: transfer_in.amount,
@@ -45,5 +42,5 @@ pub fn parse_swap(
         reserve_b_after,
         signature,
         timestamp,
-    }))
+    })
 }

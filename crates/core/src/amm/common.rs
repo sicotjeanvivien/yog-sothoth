@@ -93,6 +93,10 @@ pub fn imbalance(reserve_a: u128, reserve_b: u128) -> CoreResult<u32> {
     Ok(imbalance_bps as u32)
 }
 
+// ============================================================
+// Tests
+// ============================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;

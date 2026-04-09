@@ -1,6 +1,5 @@
-use super::DAMM_V2_PROGRAM_ID;
-use crate::{CoreError, CoreResult};
 use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionStatusMeta};
+use crate::{CoreError, CoreResult};
 
 /// Intermediate struct for a token transfer extracted from inner instructions.
 pub(crate) struct TokenTransfer {
@@ -12,9 +11,10 @@ pub(crate) struct TokenTransfer {
 
 /// Find the two transferChecked instructions that immediately follow
 /// the DAMM v2 swap inner instruction.
-pub(crate) fn extract_swap_transfers(
+pub(super) fn extract_swap_transfers(
     meta: &UiTransactionStatusMeta,
     signature: &str,
+    program_id_str: &str,
 ) -> CoreResult<(TokenTransfer, TokenTransfer, String, String)> {
     use solana_transaction_status::option_serializer::OptionSerializer;
 
@@ -35,7 +35,7 @@ pub(crate) fn extract_swap_transfers(
         // Find the DAMM v2 swap instruction index
         let damm_swap_idx = instructions.iter().position(|ix| {
             matches!(ix, UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p))
-        if p.program_id == DAMM_V2_PROGRAM_ID)
+        if p.program_id == program_id_str)
         });
 
         if let Some(idx) = damm_swap_idx {

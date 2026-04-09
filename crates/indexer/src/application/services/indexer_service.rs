@@ -1,6 +1,7 @@
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::RpcTransactionConfig;
+use solana_sdk::pubkey;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
@@ -8,7 +9,8 @@ use tracing::{error, info, warn};
 use yog_core::amm::common::{imbalance, spot_price};
 use yog_core::amm::damm_v2::net_price_impact;
 use yog_core::protocols::meteora::damm_v2::DammV2;
-use yog_core::types::DammV2SwapResult;
+use yog_core::protocols::PoolIndexer;
+use yog_core::SwapEvent;
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler.
@@ -27,8 +29,10 @@ impl IndexerService {
 
         match self.fetch_transaction(&signature).await {
             Ok(Some(tx)) => {
-                match DammV2::parse_swap(&tx, "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j") {
-                    Ok(Some(swap)) => {
+                let damm_v2_proto =
+                    DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+                match damm_v2_proto.parse_swap(&tx) {
+                    Ok(swap) => {
                         info!(
                             signature = %swap.signature,
                             amount_in = swap.amount_in,
@@ -39,7 +43,6 @@ impl IndexerService {
                         );
                         self.compute_and_log_metrics(&swap);
                     }
-                    Ok(None) => {} // not a DAMM v2 swap — ignore
                     Err(e) => {
                         error!("failed to parse swap {signature}: {e}");
                     }
@@ -55,7 +58,7 @@ impl IndexerService {
     }
 
     /// Compute and log AMM metrics from a parsed swap.
-    fn compute_and_log_metrics(&self, swap: &DammV2SwapResult) {
+    fn compute_and_log_metrics(&self, swap: &SwapEvent) {
         let reserve_a = swap.reserve_a_after as u128;
         let reserve_b = swap.reserve_b_after as u128;
         let amount_in = swap.amount_in as u128;

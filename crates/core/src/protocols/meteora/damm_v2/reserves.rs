@@ -5,7 +5,7 @@ use solana_transaction_status::{
 };
 
 /// Extract pre/post reserves for the two pool vaults.
-pub(crate) fn extract_reserves(
+pub(super) fn extract_reserves(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
     meta: &UiTransactionStatusMeta,
     vault_a_address: &str,

@@ -12,24 +12,36 @@ impl PoolIndexer for MeteoraDlmm {
         unimplemented!("Meteora DLMM program ID — Phase 2")
     }
 
+    fn is_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
+        unimplemented!("Meteora DLMM program ID — Phase 2")
+    }
+
+    fn is_add_liquidity(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
+        unimplemented!("Meteora DLMM program ID — Phase 2")
+    }
+
+    fn is_remove_liquidity(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
+        unimplemented!("Meteora DLMM program ID — Phase 2")
+    }
+
     fn parse_swap(
         &self,
         _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<Option<SwapEvent>> {
+    ) -> CoreResult<SwapEvent> {
         unimplemented!("Meteora DLMM — Phase 2")
     }
 
     fn parse_add_liquidity(
         &self,
         _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<Option<LiquidityEvent>> {
+    ) -> CoreResult<LiquidityEvent> {
         unimplemented!("Meteora DLMM — Phase 2")
     }
 
     fn parse_remove_liquidity(
         &self,
         _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<Option<LiquidityEvent>> {
+    ) -> CoreResult<LiquidityEvent> {
         unimplemented!("Meteora DLMM — Phase 2")
     }
 }
