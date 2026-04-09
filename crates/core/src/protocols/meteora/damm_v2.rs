@@ -4,7 +4,10 @@ pub(super) mod reserves;
 pub(super) mod transfer;
 
 use crate::protocols::PoolIndexer;
-use crate::{CoreResult, LiquidityEvent, SwapEvent};
+use crate::{
+    domain::{LiquidityEvent, SwapEvent},
+    CoreResult,
+};
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
@@ -129,7 +132,7 @@ mod tests {
     fn test_parse_swap_returns_err_for_malformed_transaction() {
         let tx = load_tx(MALFORMED_SWAP_TX);
         let pool = DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
-        assert!(pool.is_swap(&tx)); 
+        assert!(pool.is_swap(&tx));
         assert!(pool.parse_swap(&tx).is_err());
     }
 

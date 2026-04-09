@@ -1,5 +1,8 @@
 use crate::protocols::PoolIndexer;
-use crate::{CoreResult, LiquidityEvent, SwapEvent};
+use crate::{
+    domain::{LiquidityEvent, SwapEvent},
+    CoreResult,
+};
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
@@ -24,10 +27,7 @@ impl PoolIndexer for MeteoraDlmm {
         unimplemented!("Meteora DLMM program ID — Phase 2")
     }
 
-    fn parse_swap(
-        &self,
-        _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<SwapEvent> {
+    fn parse_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent> {
         unimplemented!("Meteora DLMM — Phase 2")
     }
 

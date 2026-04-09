@@ -1,7 +1,7 @@
-use crate::domain::{Protocol, WatchedPool, WatchedPoolRepository};
+use crate::domain::{WatchedPool, WatchedPoolRepository};
 use async_trait::async_trait;
 use sqlx::PgPool;
-use yog_core::{CoreError, CoreResult};
+use yog_core::{domain::Protocol, CoreError, CoreResult};
 
 pub(crate) struct PgWatchedPoolRepository {
     pool: PgPool,
@@ -74,10 +74,12 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
             .into_iter()
             .map(|row| {
                 let protocol =
-                    Protocol::from_str(&row.protocol).ok_or_else(|| CoreError::ParseError {
-                        signature: String::new(),
-                        reason: format!("unknown protocol: {}", row.protocol),
-                    })?;
+                    row.protocol
+                        .parse::<Protocol>()
+                        .map_err(|_| CoreError::ParseError {
+                            signature: String::new(),
+                            reason: format!("unknown protocol: {}", row.protocol),
+                        })?;
 
                 Ok(WatchedPool {
                     address: row.address,

@@ -11,3 +11,4 @@ solana-transaction-status = { workspace = true }
 borsh = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+async-trait = { workspace = true }

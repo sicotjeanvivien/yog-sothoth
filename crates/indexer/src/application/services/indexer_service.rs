@@ -10,7 +10,7 @@ use yog_core::amm::common::{imbalance, spot_price};
 use yog_core::amm::damm_v2::net_price_impact;
 use yog_core::protocols::meteora::damm_v2::DammV2;
 use yog_core::protocols::PoolIndexer;
-use yog_core::SwapEvent;
+use yog_core::domain::SwapEvent;
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler.

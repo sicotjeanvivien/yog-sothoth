@@ -1,4 +1,7 @@
-use crate::{CoreResult, LiquidityEvent, SwapEvent};
+use crate::{
+    domain::{LiquidityEvent, SwapEvent},
+    CoreResult,
+};
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
@@ -27,10 +30,7 @@ pub trait PoolIndexer {
 
     /// Parse a swap instruction from a confirmed transaction.
     /// Returns `None` if the transaction is not a swap for this protocol.
-    fn parse_swap(
-        &self,
-        tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<SwapEvent>;
+    fn parse_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent>;
 
     /// Parse a liquidity add instruction from a confirmed transaction.
     /// Returns `None` if the transaction is not a liquidity add for this protocol.

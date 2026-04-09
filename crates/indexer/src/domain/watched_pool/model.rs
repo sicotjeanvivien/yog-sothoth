@@ -1,5 +1,5 @@
-use crate::domain::Protocol;
 use chrono::{DateTime, Utc};
+use yog_core::domain::Protocol;
 
 /// A pool configured for indexing.
 #[derive(Debug, Clone)]
