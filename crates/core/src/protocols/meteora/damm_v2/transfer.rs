@@ -35,7 +35,7 @@ pub(crate) fn extract_swap_transfers(
         // Find the DAMM v2 swap instruction index
         let damm_swap_idx = instructions.iter().position(|ix| {
             matches!(ix, UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p))
-                if p.program_id == DAMM_V2_PROGRAM_ID && p.data.starts_with("PgQWtn8"))
+        if p.program_id == DAMM_V2_PROGRAM_ID)
         });
 
         if let Some(idx) = damm_swap_idx {
