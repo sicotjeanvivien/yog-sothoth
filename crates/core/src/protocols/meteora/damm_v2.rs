@@ -2,7 +2,7 @@ use crate::protocols::meteora::DammV2SwapResult;
 use crate::{CoreError, CoreResult};
 use chrono::{DateTime, Utc};
 use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiInstruction,
+    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiInstruction, UiMessage,
     UiParsedInstruction, UiTransactionStatusMeta,
 };
 
@@ -64,16 +64,12 @@ impl DammV2 {
         let timestamp = extract_timestamp(tx)?;
 
         // Find the two transferChecked instructions that follow the DAMM v2 swap
-        let (transfer_in, transfer_out) = extract_swap_transfers(meta, &signature)?;
+        let (transfer_in, transfer_out, vault_a, vault_b) =
+            extract_swap_transfers(meta, &signature)?;
 
         // Extract reserves from pre/post token balances
         let (reserve_a_before, reserve_b_before, reserve_a_after, reserve_b_after) =
-            extract_reserves(
-                meta,
-                &transfer_in.vault_address,
-                &transfer_out.vault_address,
-                &signature,
-            )?;
+            extract_reserves(tx, meta, &vault_a, &vault_b, &signature)?;
 
         Ok(Some(DammV2SwapResult {
             pool_address: pool_address.to_string(),
@@ -95,7 +91,8 @@ impl DammV2 {
 struct TokenTransfer {
     mint: String,
     amount: u64,
-    vault_address: String,
+    source: String,
+    destination: String,
 }
 
 /// Extract the transaction signature.
@@ -136,7 +133,7 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 fn extract_swap_transfers(
     meta: &UiTransactionStatusMeta,
     signature: &str,
-) -> CoreResult<(TokenTransfer, TokenTransfer)> {
+) -> CoreResult<(TokenTransfer, TokenTransfer, String, String)> {
     use solana_transaction_status::option_serializer::OptionSerializer;
 
     let inner_instructions = match &meta.inner_instructions {
@@ -182,7 +179,12 @@ fn extract_swap_transfers(
             let transfer_in = parse_transfer_checked(transfers[0], signature)?;
             let transfer_out = parse_transfer_checked(transfers[1], signature)?;
 
-            return Ok((transfer_in, transfer_out));
+            // vault_a = destination of transfer_in (user → pool)
+            // vault_b = source of transfer_out (pool → user)
+            let vault_a = transfer_in.destination.clone();
+            let vault_b = transfer_out.source.clone();
+
+            return Ok((transfer_in, transfer_out, vault_a, vault_b));
         }
     }
 
@@ -241,8 +243,18 @@ fn parse_transfer_checked(ix: &UiInstruction, signature: &str) -> CoreResult<Tok
         })?;
 
     // vault_address = destination of transfer_in (user → pool vault)
-    let vault_address = info
+    let destination = info
         .get("destination")
+        .and_then(|d| d.as_str())
+        .ok_or_else(|| CoreError::MissingField {
+            signature: signature.to_string(),
+            field: "transferChecked.destination".to_string(),
+        })?
+        .to_string();
+
+    // vault_address = source of transfer_in (user → pool vault)
+    let source = info
+        .get("source")
         .and_then(|d| d.as_str())
         .ok_or_else(|| CoreError::MissingField {
             signature: signature.to_string(),
@@ -253,12 +265,14 @@ fn parse_transfer_checked(ix: &UiInstruction, signature: &str) -> CoreResult<Tok
     Ok(TokenTransfer {
         mint,
         amount,
-        vault_address,
+        destination,
+        source,
     })
 }
 
 /// Extract pre/post reserves for the two pool vaults.
 fn extract_reserves(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
     meta: &UiTransactionStatusMeta,
     vault_a_address: &str,
     vault_b_address: &str,
@@ -266,7 +280,27 @@ fn extract_reserves(
 ) -> CoreResult<(u64, u64, u64, u64)> {
     use solana_transaction_status::option_serializer::OptionSerializer;
 
-    let _pre = match &meta.pre_token_balances {
+    // Extract account keys from the message
+    let account_keys = extract_account_keys(tx, signature)?;
+
+    // Find account indices for the two vaults
+    let vault_a_idx = account_keys
+        .iter()
+        .position(|k| k == vault_a_address)
+        .ok_or_else(|| CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: format!("vault_a not found in account keys: {vault_a_address}"),
+        })? as u8;
+
+    let vault_b_idx = account_keys
+        .iter()
+        .position(|k| k == vault_b_address)
+        .ok_or_else(|| CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: format!("vault_b not found in account keys: {vault_b_address}"),
+        })? as u8;
+
+    let pre = match &meta.pre_token_balances {
         OptionSerializer::Some(b) => b,
         _ => {
             return Err(CoreError::MissingField {
@@ -276,7 +310,7 @@ fn extract_reserves(
         }
     };
 
-    let _post = match &meta.post_token_balances {
+    let post = match &meta.post_token_balances {
         OptionSerializer::Some(b) => b,
         _ => {
             return Err(CoreError::MissingField {
@@ -286,10 +320,57 @@ fn extract_reserves(
         }
     };
 
-    // TODO: match vaults by account index from the message account keys
-    Ok((0, 0, 0, 0))
+    let reserve_a_before = find_balance(pre, vault_a_idx, signature)?;
+    let reserve_b_before = find_balance(pre, vault_b_idx, signature)?;
+    let reserve_a_after = find_balance(post, vault_a_idx, signature)?;
+    let reserve_b_after = find_balance(post, vault_b_idx, signature)?;
+
+    Ok((
+        reserve_a_before,
+        reserve_b_before,
+        reserve_a_after,
+        reserve_b_after,
+    ))
 }
 
+/// Extract the ordered list of account public keys from the transaction message.
+fn extract_account_keys(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+    signature: &str,
+) -> CoreResult<Vec<String>> {
+    let ui_tx = match &tx.transaction.transaction {
+        EncodedTransaction::Json(ui_tx) => ui_tx,
+        _ => {
+            return Err(CoreError::ParseError {
+                signature: signature.to_string(),
+                reason: "unexpected transaction encoding".to_string(),
+            })
+        }
+    };
+
+    let keys = match &ui_tx.message {
+        UiMessage::Parsed(msg) => msg.account_keys.iter().map(|k| k.pubkey.clone()).collect(),
+        UiMessage::Raw(msg) => msg.account_keys.clone(),
+    };
+
+    Ok(keys)
+}
+
+/// Find the token balance amount for a given account index.
+fn find_balance(
+    balances: &[solana_transaction_status::UiTransactionTokenBalance],
+    account_index: u8,
+    signature: &str,
+) -> CoreResult<u64> {
+    balances
+        .iter()
+        .find(|b| b.account_index == account_index)
+        .and_then(|b| b.ui_token_amount.amount.parse::<u64>().ok())
+        .ok_or_else(|| CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: format!("no token balance found for account index {account_index}"),
+        })
+}
 // ============================================================
 // Tests
 // ============================================================
@@ -347,5 +428,27 @@ mod tests {
         let result = DammV2::parse_swap(&tx, "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j")
             .expect("parse_swap failed");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_swap_extracts_correct_reserves() {
+        let tx = load_tx(SUCCESSFUL_SWAP_TX);
+        let result = DammV2::parse_swap(&tx, "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j")
+            .expect("parse_swap failed")
+            .expect("expected Some(result)");
+
+        // From preTokenBalances — vault SOL (E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E)
+        // owner: HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC
+        // pre:  85167550281
+        // post: 85301211438
+        assert_eq!(result.reserve_a_before, 85167550281);
+        assert_eq!(result.reserve_a_after, 85301211438);
+
+        // From preTokenBalances — vault USDC (HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx)
+        // owner: HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC
+        // pre:  3178914121 
+        // post: 3167919281
+        assert_eq!(result.reserve_b_before, 3178914121);
+        assert_eq!(result.reserve_b_after, 3167919281);
     }
 }
