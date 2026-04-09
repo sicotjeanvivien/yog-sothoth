@@ -24,6 +24,12 @@ impl IndexerService {
         match self.fetch_transaction(&signature).await {
             Ok(Some(tx)) => {
                 info!("fetched transaction: slot={:?}", tx.slot,);
+
+                // Temporary — log raw transaction for inspection
+                if let Ok(json) = serde_json::to_string_pretty(&tx) {
+                    info!("raw transaction: {}", json);
+                }
+
                 // TODO: dispatch to PoolIndexer (Phase 1)
                 // TODO: compute AMM metrics (Phase 1)
                 // TODO: write to DB (Phase 1)
