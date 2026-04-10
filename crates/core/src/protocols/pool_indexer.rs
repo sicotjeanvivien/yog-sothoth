@@ -2,7 +2,7 @@ use crate::{
     domain::{LiquidityEvent, SwapEvent},
     CoreResult,
 };
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Common interface for all supported AMM protocols.

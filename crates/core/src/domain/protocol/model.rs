@@ -1,7 +1,7 @@
 // core/src/domain/protocol.rs
 
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 /// Supported AMM protocols.
 ///

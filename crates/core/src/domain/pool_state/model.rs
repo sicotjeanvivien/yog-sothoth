@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 /// Snapshot of an AMM pool's state at a given point in time.
 ///

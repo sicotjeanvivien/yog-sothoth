@@ -4,7 +4,7 @@ use crate::{
     CoreResult,
 };
 
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Meteora DAMM v1 protocol handler (x·y=k + dual-yield).

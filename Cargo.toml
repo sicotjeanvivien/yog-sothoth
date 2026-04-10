@@ -9,13 +9,12 @@ futures-util = "0.3"
 tokio-retry = "0.3"
 
 # Solana
-solana-rpc-client = "3"
-solana-rpc-client-api = "3"
-solana-commitment-config = "3"
-solana-pubsub-client = "3"
-solana-sdk = "3"
-solana-transaction-status = "3"
-
+solana-rpc-client = { version = "3", default-features = false }
+solana-rpc-client-api = { version = "3", default-features = false }
+solana-commitment-config = { version = "3", default-features = false }
+solana-pubsub-client = { version = "3", default-features = false }
+solana-pubkey = { version = "3", default-features = false }
+solana-transaction-status = { version = "3", default-features = false }
 
 # Database
 sqlx = { version = "0.8", features = [

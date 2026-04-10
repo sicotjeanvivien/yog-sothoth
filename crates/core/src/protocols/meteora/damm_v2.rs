@@ -8,8 +8,8 @@ use crate::{
     domain::{LiquidityEvent, SwapEvent},
     CoreResult,
 };
-use solana_sdk::pubkey;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::{self, pubkey};
+use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Meteora DAMM v2 program ID.
@@ -81,7 +81,7 @@ mod tests {
 
     use super::*;
     use serde_json;
-    use solana_sdk::pubkey;
+    use solana_pubkey;
 
     /// Load a real transaction JSON captured from the RPC.
     fn load_tx(json: &str) -> EncodedConfirmedTransactionWithStatusMeta {

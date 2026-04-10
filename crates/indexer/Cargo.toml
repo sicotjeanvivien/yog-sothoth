@@ -14,7 +14,7 @@ solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-commitment-config = { workspace = true }
 solana-pubsub-client = { workspace = true }
-solana-sdk = { workspace = true }
+solana-pubkey = { workspace = true }
 solana-transaction-status = { workspace = true }
 
 sqlx = { workspace = true }

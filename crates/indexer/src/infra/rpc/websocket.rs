@@ -1,10 +1,8 @@
 use futures_util::StreamExt;
 use solana_commitment_config::CommitmentConfig;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_rpc_client::{
-    api::config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter},
-    nonblocking::rpc_client::RpcClient,
-};
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};

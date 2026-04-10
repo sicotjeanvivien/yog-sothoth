@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 /// Parsed swap event produced by the AMM parser.
 ///

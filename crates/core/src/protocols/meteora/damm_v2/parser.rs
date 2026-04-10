@@ -1,7 +1,7 @@
 use crate::protocols::meteora::damm_v2::{reserves, transfer};
 use crate::protocols::meteora::{extract_signature, extract_timestamp};
 use crate::{CoreError, CoreResult, domain::SwapEvent};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Parse a DAMM v2 swap from a confirmed transaction.

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 /// Whether liquidity was added or removed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
