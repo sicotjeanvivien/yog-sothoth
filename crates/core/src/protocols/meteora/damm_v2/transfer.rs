@@ -1,12 +1,14 @@
 use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionStatusMeta};
 use crate::{CoreError, CoreResult};
+use std::str::FromStr;
+use solana_pubkey::Pubkey;
 
 /// Intermediate struct for a token transfer extracted from inner instructions.
 pub(crate) struct TokenTransfer {
-    pub(crate) mint: String,
+    pub(crate) mint: Pubkey,
     pub(crate) amount: u64,
-    pub(crate) source: String,
-    pub(crate) destination: String,
+    pub(crate) source: Pubkey,
+    pub(crate) destination: Pubkey,
 }
 
 /// Find the two transferChecked instructions that immediately follow
@@ -59,8 +61,8 @@ pub(super) fn extract_swap_transfers(
 
             // vault_a = destination of transfer_in (user → pool)
             // vault_b = source of transfer_out (pool → user)
-            let vault_a = transfer_in.destination.clone();
-            let vault_b = transfer_out.source.clone();
+            let vault_a = transfer_in.destination.clone().to_string();
+            let vault_b = transfer_out.source.clone().to_string();
 
             return Ok((transfer_in, transfer_out, vault_a, vault_b));
         }
@@ -95,8 +97,13 @@ fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTran
         .ok_or_else(|| CoreError::MissingField {
             signature: signature.to_string(),
             field: "transferChecked.mint".to_string(),
-        })?
-        .to_string();
+        })
+        .and_then(|s| {
+            Pubkey::from_str(s).map_err(|_| CoreError::ParseError {
+                signature: signature.to_string(),
+                reason: format!("invalid pubkey for mint: {s}"),
+            })
+        })?;
 
     let amount_str = info
         .get("tokenAmount")
@@ -114,25 +121,33 @@ fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTran
             reason: format!("invalid token amount: {amount_str}"),
         })?;
 
-    // vault_address = destination of transfer_in (user → pool vault)
     let destination = info
         .get("destination")
         .and_then(|d| d.as_str())
         .ok_or_else(|| CoreError::MissingField {
             signature: signature.to_string(),
             field: "transferChecked.destination".to_string(),
-        })?
-        .to_string();
+        })
+        .and_then(|s| {
+            Pubkey::from_str(s).map_err(|_| CoreError::ParseError {
+                signature: signature.to_string(),
+                reason: format!("invalid pubkey for destination: {s}"),
+            })
+        })?;
 
-    // vault_address = source of transfer_in (user → pool vault)
     let source = info
         .get("source")
         .and_then(|d| d.as_str())
         .ok_or_else(|| CoreError::MissingField {
             signature: signature.to_string(),
-            field: "transferChecked.destination".to_string(),
-        })?
-        .to_string();
+            field: "transferChecked.source".to_string(), // corrigé : était "destination"
+        })
+        .and_then(|s| {
+            Pubkey::from_str(s).map_err(|_| CoreError::ParseError {
+                signature: signature.to_string(),
+                reason: format!("invalid pubkey for source: {s}"),
+            })
+        })?;
 
     Ok(TokenTransfer {
         mint,
@@ -141,7 +156,6 @@ fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTran
         source,
     })
 }
-
 /// Check if an instruction is a parsed transferChecked.
 fn is_transfer_checked(ix: &UiInstruction) -> bool {
     matches!(ix, UiInstruction::Parsed(UiParsedInstruction::Parsed(p))

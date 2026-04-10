@@ -37,38 +37,26 @@ impl std::str::FromStr for LiquidityEventKind {
     }
 }
 
-/// Parsed liquidity add or remove event produced by the AMM parser.
+/// Raw liquidity add or remove event parsed from a DAMM v2 transaction.
 ///
-/// Captures the full state transition — amounts deposited or withdrawn and
-/// pool reserves before and after — so TVL and imbalance metrics can be
-/// derived without re-reading the chain.
+/// Contains only on-chain data — no derived metrics.
+/// Metrics (TVL, imbalance) are computed by the indexer from this struct
+/// and written separately to `pool_metrics`.
 ///
-/// Amounts are expressed in each token's native units (no decimal scaling).
+/// Amounts are in native units (no decimal scaling).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiquidityEvent {
     /// On-chain address of the AMM pool.
     pub pool_address: Pubkey,
 
     /// Whether liquidity was added or removed.
-    pub kind: LiquidityEventKind,
+    pub liquidity_event_kind: LiquidityEventKind,
 
     /// Amount of token A deposited or withdrawn, in native units.
     pub amount_a: u64,
 
     /// Amount of token B deposited or withdrawn, in native units.
     pub amount_b: u64,
-
-    /// Reserve of token A immediately before the event.
-    pub reserve_a_before: u64,
-
-    /// Reserve of token B immediately before the event.
-    pub reserve_b_before: u64,
-
-    /// Reserve of token A immediately after the event.
-    pub reserve_a_after: u64,
-
-    /// Reserve of token B immediately after the event.
-    pub reserve_b_after: u64,
 
     /// Transaction signature, base58-encoded.
     pub signature: String,

@@ -1,6 +1,6 @@
 use crate::protocols::meteora::damm_v2::{reserves, transfer};
 use crate::protocols::meteora::{extract_signature, extract_timestamp};
-use crate::{CoreError, CoreResult, domain::SwapEvent};
+use crate::{domain::SwapEvent, CoreError, CoreResult};
 use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
@@ -41,6 +41,7 @@ pub(super) fn parse_swap(
         reserve_a_after,
         reserve_b_after,
         fee_bps: None,
+        fee_amount: None,
         signature,
         timestamp,
     })

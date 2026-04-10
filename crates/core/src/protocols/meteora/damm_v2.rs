@@ -8,8 +8,8 @@ use crate::{
     domain::{LiquidityEvent, SwapEvent},
     CoreResult,
 };
-use solana_pubkey::{self, pubkey};
 use solana_pubkey::Pubkey;
+use solana_pubkey::{self, pubkey};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Meteora DAMM v2 program ID.
@@ -120,11 +120,11 @@ mod tests {
         assert_eq!(result.amount_out, 10994840);
         assert_eq!(
             result.token_in_mint,
-            "So11111111111111111111111111111111111111112"
+            pubkey!("So11111111111111111111111111111111111111112")
         );
         assert_eq!(
             result.token_out_mint,
-            "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
         );
     }
 
