@@ -6,7 +6,7 @@ use solana_rpc_client_api::config::RpcTransactionConfig;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use yog_core::amm::common::{imbalance, spot_price};
 use yog_core::amm::damm_v2::net_price_impact;
 use yog_core::domain::SwapEvent;
@@ -45,7 +45,7 @@ impl IndexerService {
                         self.compute_and_log_metrics(&swap);
                     }
                     Err(e) => {
-                        error!("failed to parse swap {signature}: {e}");
+                        debug!("skipping non-swap transaction {signature}: {e}");
                     }
                 }
             }

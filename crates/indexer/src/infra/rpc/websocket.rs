@@ -62,7 +62,7 @@ impl RpcListener {
     async fn connect_and_listen<F, Fut>(
         &self,
         on_signature: F,
-    ) -> Result<(), Box<dyn std::error::Error>>
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     where
         F: Fn(String) -> Fut + Send + Sync + Clone + 'static,
         Fut: std::future::Future<Output = ()> + Send,

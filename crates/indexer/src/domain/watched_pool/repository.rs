@@ -15,5 +15,5 @@ pub(crate) trait WatchedPoolRepository {
     async fn find_all(&self) -> CoreResult<Vec<WatchedPool>>;
 
     /// Remove a pool from the watchlist.
-    async fn remove(&self, pool: &WatchedPool) -> CoreResult<()>;
+    async fn remove(&self, pool: &str) -> CoreResult<()>;
 }
