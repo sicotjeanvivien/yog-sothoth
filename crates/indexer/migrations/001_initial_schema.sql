@@ -93,6 +93,7 @@ volume_a NUMERIC, -- native units token A traded
 volume_b NUMERIC, -- native units token B traded
 
 -- DLMM-specific (NULL for DAMM v2 and DAMM v1)
+
 active_bin_id       INTEGER,                -- active bin ID at the time of the event
     -- bin_step is constant per DLMM pool — stored here to avoid an RPC call
     -- from the frontend when recalculating bin prices
@@ -149,7 +150,9 @@ SELECT add_compression_policy ( 'pool_metrics', INTERVAL '7 days' );
 
 SELECT add_compression_policy ( 'swap_events', INTERVAL '7 days' );
 
-SELECT add_compression_policy ( 'liquidity_events', INTERVAL '7 days' );
+SELECT add_compression_policy (
+        'liquidity_events', INTERVAL '7 days'
+    );
 
 -- ============================================================
 -- Retention policy
@@ -161,7 +164,9 @@ SELECT add_retention_policy ( 'pool_metrics', INTERVAL '30 days' );
 
 SELECT add_retention_policy ( 'swap_events', INTERVAL '30 days' );
 
-SELECT add_retention_policy ( 'liquidity_events', INTERVAL '30 days' );
+SELECT add_retention_policy (
+        'liquidity_events', INTERVAL '30 days'
+    );
 
 -- ============================================================
 -- Indexes for common query patterns
@@ -207,8 +212,7 @@ last (reserve_b, timestamp) AS reserve_b,
 avg(imbalance_bps) AS avg_imbalance_bps,
 
 -- Cumulative volume over the window (NULL if no swap)
-sum(volume_a) AS volume_a,
-sum(volume_b) AS volume_b,
+sum(volume_a) AS volume_a, sum(volume_b) AS volume_b,
 
 -- Cumulative fees over the window
 sum(fees_collected_a) AS fees_collected_a,
@@ -225,15 +229,18 @@ WITH
 
 -- Refresh policy: sliding window 2h → now
 -- TimescaleDB only recomputes recently modified buckets.
+-- Par :
 SELECT
     add_continuous_aggregate_policy (
         'pool_metrics_1h',
-        start_offset => INTERVAL '2 hours',
-        end_offset => INTERVAL '5 minutes',
-        schedule_interval => INTERVAL '5 minutes'
+        start_offset => INTERVAL '1 day',
+        end_offset => INTERVAL '1 hour',
+        schedule_interval => INTERVAL '1 hour'
     );
 
 -- Hourly aggregate retention: 1 year
 -- Aggregates are far lighter than raw data — keeping them long-term
 -- is cheap and supports monetisation of historical API access.
-SELECT add_retention_policy ( 'pool_metrics_1h', INTERVAL '365 days' );
+SELECT add_retention_policy (
+        'pool_metrics_1h', INTERVAL '365 days'
+    );
