@@ -96,8 +96,8 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
         Ok(pools)
     }
 
-    async fn remove(&self, address: &str) -> CoreResult<()> {
-        sqlx::query!("DELETE FROM watched_pools WHERE address = $1", address)
+    async fn remove(&self, pool: &WatchedPool) -> CoreResult<()> {
+        sqlx::query!("DELETE FROM watched_pools WHERE address = $1", pool.address)
             .execute(&self.pool)
             .await
             .map_err(|e| CoreError::ParseError {

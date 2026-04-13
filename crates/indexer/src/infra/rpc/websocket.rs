@@ -1,10 +1,10 @@
 use futures_util::StreamExt;
 use solana_commitment_config::CommitmentConfig;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 const MAX_RETRY_DELAY_SECS: u64 = 60;
@@ -14,7 +14,7 @@ const INITIAL_RETRY_DELAY_SECS: u64 = 1;
 pub(crate) struct RpcListener {
     ws_url: String,
     http_url: String,
-    pool_addresses: Vec<String>,
+    watched_pools: Mutex<Vec<String>>,
 }
 
 impl RpcListener {
@@ -22,13 +22,16 @@ impl RpcListener {
         Self {
             ws_url,
             http_url,
-            pool_addresses: Vec::new(),
+            watched_pools: Mutex::new(Vec::new()),
         }
     }
 
-    /// Add a pool address to the watchlist.
-    pub(crate) fn watch(&mut self, pool_address: String) {
-        self.pool_addresses.push(pool_address);
+    pub(crate) async fn watch(&self, address: String) {
+        self.watched_pools.lock().await.push(address);
+    }
+
+    pub(crate) async fn unwatch(&self, address: String) {
+        self.watched_pools.lock().await.retain(|a| a != &address);
     }
 
     /// Start the listener loop with automatic reconnection.
@@ -65,16 +68,14 @@ impl RpcListener {
         Fut: std::future::Future<Output = ()> + Send,
     {
         let pubsub = Arc::new(PubsubClient::new(&self.ws_url).await?);
-        let rpc = Arc::new(RpcClient::new(self.http_url.clone()));
 
-        info!(
-            "connected — subscribing to {} pools",
-            self.pool_addresses.len()
-        );
+        // Lock, clone, release immédiatement
+        let addresses = self.watched_pools.lock().await.clone();
+        info!("connected — subscribing to {} pools", addresses.len());
 
         let mut handles = Vec::new();
 
-        for address in &self.pool_addresses {
+        for address in addresses {
             let pubsub = Arc::clone(&pubsub);
             let on_signature = on_signature.clone();
             let address = address.clone();
