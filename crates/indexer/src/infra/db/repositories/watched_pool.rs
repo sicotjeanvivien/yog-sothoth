@@ -1,7 +1,11 @@
-use crate::domain::{WatchedPool, WatchedPoolRepository};
 use async_trait::async_trait;
 use sqlx::PgPool;
-use yog_core::{domain::Protocol, CoreError, CoreResult};
+use yog_core::{
+    domain::{WatchedPool, WatchedPoolRepository},
+    CoreError, CoreResult,
+};
+
+use crate::infra::db::{convert_string_to_pubkey, parse_string_to_protocol};
 
 pub(crate) struct PgWatchedPoolRepository {
     pool: PgPool,
@@ -19,14 +23,14 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
         sqlx::query!(
             r#"
             INSERT INTO watched_pools
-                (address, protocol, token_a_mint, token_b_mint, token_a_decimals, token_b_decimals)
+                (pool_address, protocol, token_a_mint, token_b_mint, token_a_decimals, token_b_decimals)
             VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (address) DO NOTHING
+            ON CONFLICT (pool_address) DO NOTHING
             "#,
-            watched_pool.address,
+            watched_pool.pool_address.to_string(),
             watched_pool.protocol.as_str(),
-            watched_pool.token_a_mint,
-            watched_pool.token_b_mint,
+            watched_pool.token_a_mint.to_string(),
+            watched_pool.token_b_mint.to_string(),
             watched_pool.token_a_decimals as i16,
             watched_pool.token_b_decimals as i16,
         )
@@ -42,7 +46,7 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
 
     async fn exists(&self, address: &str) -> CoreResult<bool> {
         let result = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM watched_pools WHERE address = $1)",
+            "SELECT EXISTS(SELECT 1 FROM watched_pools WHERE pool_address = $1)",
             address
         )
         .fetch_one(&self.pool)
@@ -58,7 +62,7 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
     async fn find_all(&self) -> CoreResult<Vec<WatchedPool>> {
         let rows = sqlx::query!(
             r#"
-            SELECT address, protocol, token_a_mint, token_b_mint,
+            SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    token_a_decimals, token_b_decimals, added_at
             FROM watched_pools
             "#
@@ -73,19 +77,11 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
         let pools = rows
             .into_iter()
             .map(|row| {
-                let protocol =
-                    row.protocol
-                        .parse::<Protocol>()
-                        .map_err(|_| CoreError::ParseError {
-                            signature: String::new(),
-                            reason: format!("unknown protocol: {}", row.protocol),
-                        })?;
-
                 Ok(WatchedPool {
-                    address: row.address,
-                    protocol,
-                    token_a_mint: row.token_a_mint,
-                    token_b_mint: row.token_b_mint,
+                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
+                    protocol: parse_string_to_protocol(row.protocol, "protocol")?,
+                    token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
+                    token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
                     token_a_decimals: row.token_a_decimals as u8,
                     token_b_decimals: row.token_b_decimals as u8,
                     added_at: row.added_at,
@@ -97,13 +93,16 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
     }
 
     async fn remove(&self, pool_address: &str) -> CoreResult<()> {
-        sqlx::query!("DELETE FROM watched_pools WHERE address = $1", pool_address)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| CoreError::ParseError {
-                signature: String::new(),
-                reason: format!("db remove watched_pool: {e}"),
-            })?;
+        sqlx::query!(
+            "DELETE FROM watched_pools WHERE pool_address = $1",
+            pool_address
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| CoreError::ParseError {
+            signature: String::new(),
+            reason: format!("db remove watched_pool: {e}"),
+        })?;
 
         Ok(())
     }

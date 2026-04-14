@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
@@ -7,6 +5,8 @@ use yog_core::{
     domain::{SwapEvent, SwapEventRepository},
     CoreError, CoreResult,
 };
+
+use crate::infra::db::{convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64};
 
 pub(crate) struct PgSwapEventRepository {
     pool: PgPool,
@@ -34,14 +34,17 @@ impl SwapEventRepository for PgSwapEventRepository {
             event.signature,
             event.token_in_mint.to_string(),
             event.token_out_mint.to_string(),
-            event.amount_in as i64,
-            event.amount_out as i64,
-            event.reserve_a_before as i64,
-            event.reserve_b_before as i64,
-            event.reserve_a_after as i64,
-            event.reserve_b_after as i64,
+            convert_u64_to_i64(event.amount_in, "amount_in")?,
+            convert_u64_to_i64(event.amount_out, "amount_out")?,
+            convert_u64_to_i64(event.reserve_a_before, "reserve_a_before")?,
+            convert_u64_to_i64(event.reserve_b_before, "reserve_b_before")?,
+            convert_u64_to_i64(event.reserve_a_after, "reserve_a_after")?,
+            convert_u64_to_i64(event.reserve_b_after, "reserve_b_after")?,
             event.fee_bps.map(|f| f as i32),
-            event.fee_amount.map(|f| f as i64),
+            event
+                .fee_amount
+                .map(|f| convert_u64_to_i64(f, "fee_amount"))
+                .transpose()?,
             event.timestamp,
         )
         .execute(&self.pool)
@@ -78,32 +81,21 @@ impl SwapEventRepository for PgSwapEventRepository {
 
         rows.into_iter()
             .map(|row| {
-                let parse_pubkey = |s: &str, field: &str| {
-                    Pubkey::from_str(s).map_err(|e| CoreError::ParseError {
-                        signature: String::new(),
-                        reason: format!("invalid {field} pubkey: {e}"),
-                    })
-                };
-
-                let parse_u64 = |v: i64, field: &str| {
-                    u64::try_from(v).map_err(|e| CoreError::ParseError {
-                        signature: String::new(),
-                        reason: format!("invalid {field}: {e}"),
-                    })
-                };
-
                 Ok(SwapEvent {
-                    pool_address: parse_pubkey(&row.pool_address, "pool_address")?,
-                    token_in_mint: parse_pubkey(&row.token_in_mint, "token_in_mint")?,
-                    token_out_mint: parse_pubkey(&row.token_out_mint, "token_out_mint")?,
-                    amount_in: parse_u64(row.amount_in, "amount_in")?,
-                    amount_out: parse_u64(row.amount_out, "amount_out")?,
-                    reserve_a_before: parse_u64(row.reserve_a_before, "reserve_a_before")?,
-                    reserve_b_before: parse_u64(row.reserve_b_before, "reserve_b_before")?,
-                    reserve_a_after: parse_u64(row.reserve_a_after, "reserve_a_after")?,
-                    reserve_b_after: parse_u64(row.reserve_b_after, "reserve_b_after")?,
+                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
+                    token_in_mint: convert_string_to_pubkey(row.token_in_mint, "token_in_mint")?,
+                    token_out_mint: convert_string_to_pubkey(row.token_out_mint, "token_out_mint")?,
+                    amount_in: convert_i64_to_u64(row.amount_in, "amount_in")?,
+                    amount_out: convert_i64_to_u64(row.amount_out, "amount_out")?,
+                    reserve_a_before: convert_i64_to_u64(row.reserve_a_before, "reserve_a_before")?,
+                    reserve_b_before: convert_i64_to_u64(row.reserve_b_before, "reserve_b_before")?,
+                    reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
+                    reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
                     fee_bps: row.fee_bps.map(|f| f as u32),
-                    fee_amount: row.fee_amount.map(|f| f as u64),
+                    fee_amount: row
+                        .fee_amount
+                        .map(|f| convert_i64_to_u64(f, "fee_amount"))
+                        .transpose()?,
                     signature: row.signature,
                     timestamp: row.timestamp,
                 })

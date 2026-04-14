@@ -21,7 +21,9 @@ sqlx = { version = "0.8", features = [
   "postgres",
   "runtime-tokio-native-tls",
   "chrono",
+  "bigdecimal"
 ] }
+bigdecimal = "0.4"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

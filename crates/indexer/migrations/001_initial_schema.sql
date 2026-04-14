@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 -- Populated by the dashboard (add / remove pools).
 -- ============================================================
 CREATE TABLE watched_pools (
-    address TEXT PRIMARY KEY,
+    pool_address TEXT PRIMARY KEY,
     protocol TEXT NOT NULL, -- 'damm_v2' | 'dlmm' | 'damm_v1'
     token_a_mint TEXT NOT NULL,
     token_b_mint TEXT NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE watched_pools (
 -- ============================================================
 CREATE TABLE swap_events (
     id BIGSERIAL,
-    pool_address TEXT NOT NULL REFERENCES watched_pools (address),
+    pool_address TEXT NOT NULL REFERENCES watched_pools (pool_address),
     signature TEXT NOT NULL,
     token_in_mint TEXT NOT NULL,
     token_out_mint TEXT NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE swap_events (
 -- ============================================================
 CREATE TABLE liquidity_events (
     id BIGSERIAL,
-    pool_address TEXT NOT NULL REFERENCES watched_pools (address),
+    pool_address TEXT NOT NULL REFERENCES watched_pools (pool_address),
     signature TEXT NOT NULL,
     liquidity_event_kind TEXT NOT NULL, -- 'add' | 'remove'
     amount_a BIGINT NOT NULL, -- native units
@@ -68,43 +68,34 @@ CREATE TABLE liquidity_events (
 -- second). The signature guarantees true uniqueness.
 -- ============================================================
 CREATE TABLE pool_metrics (
-    pool_address        TEXT        NOT NULL REFERENCES watched_pools(address),
+    pool_address        TEXT        NOT NULL REFERENCES watched_pools(pool_address),
     signature           TEXT        NOT NULL,   -- Solana tx that triggered this state update
-
--- Reserves
-reserve_a BIGINT NOT NULL, -- native units token A
-reserve_b BIGINT NOT NULL, -- native units token B
-
--- Price
--- Stored as Q64 fixed-point (encoded u128 integer).
--- NUMERIC(39, 0) guarantees lossless precision for a u128.
--- Rust side: cast u128 → BigDecimal before INSERT.
-price_q64 NUMERIC(39, 0) NOT NULL,
-
--- Swap quality metrics
-price_impact_bps INTEGER, -- price impact of the swap in basis points (NULL for non-swap events)
-imbalance_bps INTEGER, -- reserve imbalance in basis points
-
--- Fees — distinct semantics from swap_events.fee_bps
--- current_fee_bps  : dynamic fee rate in effect at the time of the event
--- fees_collected_* : absolute fee amount collected on this event
-current_fee_bps INTEGER, -- DAMM v2: current dynamic fee rate (NULL for other protocols)
-fees_collected_a BIGINT, -- fee amount token A on this event (native units)
-fees_collected_b BIGINT, -- fee amount token B on this event (native units)
-
--- Volume — amounts traded on this event, used for aggregation
--- NULL if the event is an add/remove liquidity (not a swap)
-volume_a BIGINT, -- native units token A traded
-volume_b BIGINT, -- native units token B traded
-
--- DLMM-specific (NULL for DAMM v2 and DAMM v1)
-
-
-active_bin_id       INTEGER,                -- active bin ID at the time of the event
+    -- Reserves
+    reserve_a BIGINT NOT NULL, -- native units token A
+    reserve_b BIGINT NOT NULL, -- native units token B
+    -- Price
+    -- Stored as Q64 fixed-point (encoded u128 integer).
+    -- NUMERIC(39, 0) guarantees lossless precision for a u128.
+    -- Rust side: cast u128 → BigDecimal before INSERT.
+    price_q64 NUMERIC(39, 0) NOT NULL,
+    -- Swap quality metrics
+    price_impact_bps INTEGER, -- price impact of the swap in basis points (NULL for non-swap events)
+    imbalance_bps INTEGER, -- reserve imbalance in basis points
+    -- Fees — distinct semantics from swap_events.fee_bps
+    -- current_fee_bps  : dynamic fee rate in effect at the time of the event
+    -- fees_collected_* : absolute fee amount collected on this event
+    current_fee_bps INTEGER, -- DAMM v2: current dynamic fee rate (NULL for other protocols)
+    fees_collected_a BIGINT, -- fee amount token A on this event (native units)
+    fees_collected_b BIGINT, -- fee amount token B on this event (native units)
+    -- Volume — amounts traded on this event, used for aggregation
+    -- NULL if the event is an add/remove liquidity (not a swap)
+    volume_a BIGINT, -- native units token A traded
+    volume_b BIGINT, -- native units token B traded
+    -- DLMM-specific (NULL for DAMM v2 and DAMM v1)
+    active_bin_id       INTEGER,                -- active bin ID at the time of the event
     -- bin_step is constant per DLMM pool — stored here to avoid an RPC call
     -- from the frontend when recalculating bin prices
     bin_step            SMALLINT,               -- bin step in basis points
-
     timestamp           TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (pool_address, signature, timestamp)
 );

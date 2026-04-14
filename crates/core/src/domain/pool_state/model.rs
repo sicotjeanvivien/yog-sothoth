@@ -11,7 +11,7 @@ use solana_pubkey::Pubkey;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoolState {
     /// On-chain address of the AMM pool.
-    pub address: Pubkey,
+    pub pool_address: Pubkey,
 
     /// Reserve of token A, in native units.
     pub reserve_a: u64,

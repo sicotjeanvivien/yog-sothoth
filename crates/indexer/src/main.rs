@@ -1,7 +1,6 @@
 mod application;
 mod bootstrap;
 mod config;
-mod domain;
 mod infra;
 
 use config::Config;

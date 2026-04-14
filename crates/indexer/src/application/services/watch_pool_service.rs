@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use tracing::info;
-use yog_core::CoreResult;
-
-use crate::{
+use yog_core::{
     domain::{WatchedPool, WatchedPoolRepository},
-    infra::RpcListener,
+    CoreResult,
 };
+
+use crate::infra::RpcListener;
 
 /// Manages the lifecycle of pool subscriptions.
 ///
@@ -32,8 +32,8 @@ impl WatchedPoolService {
     /// Persist a pool and register its WebSocket subscription.
     pub async fn watch(&self, pool: WatchedPool) -> CoreResult<()> {
         self.repository.add(&pool).await?;
-        self.listener.watch(pool.address.clone()).await;
-        info!(address = %pool.address, protocol = %pool.protocol, "pool watch registered");
+        self.listener.watch(pool.pool_address.to_string()).await;
+        info!(address = %pool.pool_address, protocol = %pool.protocol, "pool watch registered");
         Ok(())
     }
 
@@ -51,7 +51,7 @@ impl WatchedPoolService {
         let pools = self.repository.find_all().await?;
         let count = pools.len();
         for pool in pools {
-            self.listener.watch(pool.address).await;
+            self.listener.watch(pool.pool_address.to_string()).await;
         }
         info!(count, "subscriptions restored from database");
         Ok(())
