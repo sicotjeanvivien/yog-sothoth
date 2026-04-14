@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
@@ -73,7 +74,7 @@ impl Daemon {
     /// 2. register the dev test pool (phase 1 — hardcoded)
     /// 3. spawn the WebSocket listener task
     /// 4. wait for a task failure or Ctrl+C, then shut down cleanly
-    pub(crate) async fn run(self) -> anyhow::Result<()> {
+    pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         // Resubscribe to all pools that were active before the last shutdown
         self.watched_pool_service.restore_subscriptions().await?;
         info!("subscriptions restored");
@@ -92,14 +93,18 @@ impl Daemon {
         // Task 1 — WebSocket loop: receives signatures and dispatches to IndexerService
         let ws_task = tokio::spawn({
             let listener = Arc::clone(&listener);
+            let shutdown = shutdown.clone();
             async move {
                 listener
-                    .run(move |signature| {
-                        let service = Arc::clone(&indexer_service);
-                        async move {
-                            service.handle_signature(signature).await;
-                        }
-                    })
+                    .run(
+                        move |signature| {
+                            let service = Arc::clone(&indexer_service);
+                            async move {
+                                service.handle_signature(signature).await;
+                            }
+                        },
+                        shutdown,
+                    )
                     .await
             }
         });
@@ -109,14 +114,23 @@ impl Daemon {
         // and call listener.watch() / listener.unwatch() accordingly
 
         tokio::select! {
-            _ = ws_task => {
-                info!("WebSocket listener stopped unexpectedly");
+            result = ws_task => {
+                match result {
+                    Ok(Ok(())) => tracing::info!("WebSocket listener stopped"),
+                    Ok(Err(e)) => {
+                        tracing::error!(error = %e, "WebSocket listener failed");
+                        return Err(e); 
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "WebSocket listener panicked");
+                        return Err(anyhow::anyhow!("WebSocket listener panicked: {e}"));
+                    }
+                }
             }
-            _ = tokio::signal::ctrl_c() => {
-                info!("shutdown signal received — stopping daemon");
+            _ = shutdown.cancelled() => {
+                tracing::info!("cancellation received — stopping");
             }
         }
-
         Ok(())
     }
 }

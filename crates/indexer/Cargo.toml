@@ -9,6 +9,7 @@ yog-core = { path = "../core" }
 tokio = { workspace = true }
 futures-util = { workspace = true }
 tokio-retry = { workspace = true }
+tokio-util = { workspace = true }
 
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }

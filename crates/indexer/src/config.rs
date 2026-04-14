@@ -14,14 +14,14 @@ pub(crate) struct Config {
 impl Config {
     /// Load configuration from environment variables.
     /// Panics at startup if a required variable is missing.
-    pub(crate) fn load() -> Self {
+    pub(crate) fn load() -> anyhow::Result<Self> {
         dotenv().ok();
 
-        Self {
+        Ok(Self {
             database_url: required("DATABASE_URL"),
             solana_rpc_ws: required("SOLANA_RPC_WS"),
             solana_rpc_http: required("SOLANA_RPC_HTTP"),
-        }
+        })
     }
 }
 
