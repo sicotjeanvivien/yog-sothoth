@@ -116,6 +116,12 @@ cd yog-sothoth
 # Start TimescaleDB
 docker compose up -d
 
+# Stop and delete container
+docker compose down -v
+
+# Start Indexer
+cargo run --bin indexer
+
 # Build the Rust workspace
 cargo build
 

@@ -29,11 +29,16 @@ CREATE TABLE swap_events (
     id BIGSERIAL,
     pool_address TEXT NOT NULL REFERENCES watched_pools (address),
     signature TEXT NOT NULL,
-    token_in TEXT NOT NULL,
-    token_out TEXT NOT NULL,
-    amount_in NUMERIC NOT NULL, -- native units (before decimals)
-    amount_out NUMERIC NOT NULL, -- native units (before decimals)
-    fee_bps INTEGER, -- fee applied to this specific swap (nullable — protocol-specific)
+    token_in_mint TEXT NOT NULL,
+    token_out_mint TEXT NOT NULL,
+    amount_in BIGINT NOT NULL,
+    amount_out BIGINT NOT NULL,
+    reserve_a_before BIGINT NOT NULL,
+    reserve_b_before BIGINT NOT NULL,
+    reserve_a_after BIGINT NOT NULL,
+    reserve_b_after BIGINT NOT NULL,
+    fee_bps INTEGER,
+    fee_amount BIGINT,
     timestamp TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (id, timestamp)
 );
@@ -47,8 +52,8 @@ CREATE TABLE liquidity_events (
     pool_address TEXT NOT NULL REFERENCES watched_pools (address),
     signature TEXT NOT NULL,
     liquidity_event_kind TEXT NOT NULL, -- 'add' | 'remove'
-    amount_a NUMERIC NOT NULL, -- native units
-    amount_b NUMERIC NOT NULL, -- native units
+    amount_a BIGINT NOT NULL, -- native units
+    amount_b BIGINT NOT NULL, -- native units
     timestamp TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (id, timestamp)
 );
@@ -67,8 +72,8 @@ CREATE TABLE pool_metrics (
     signature           TEXT        NOT NULL,   -- Solana tx that triggered this state update
 
 -- Reserves
-reserve_a NUMERIC NOT NULL, -- native units token A
-reserve_b NUMERIC NOT NULL, -- native units token B
+reserve_a BIGINT NOT NULL, -- native units token A
+reserve_b BIGINT NOT NULL, -- native units token B
 
 -- Price
 -- Stored as Q64 fixed-point (encoded u128 integer).
@@ -84,15 +89,16 @@ imbalance_bps INTEGER, -- reserve imbalance in basis points
 -- current_fee_bps  : dynamic fee rate in effect at the time of the event
 -- fees_collected_* : absolute fee amount collected on this event
 current_fee_bps INTEGER, -- DAMM v2: current dynamic fee rate (NULL for other protocols)
-fees_collected_a NUMERIC, -- fee amount token A on this event (native units)
-fees_collected_b NUMERIC, -- fee amount token B on this event (native units)
+fees_collected_a BIGINT, -- fee amount token A on this event (native units)
+fees_collected_b BIGINT, -- fee amount token B on this event (native units)
 
 -- Volume — amounts traded on this event, used for aggregation
 -- NULL if the event is an add/remove liquidity (not a swap)
-volume_a NUMERIC, -- native units token A traded
-volume_b NUMERIC, -- native units token B traded
+volume_a BIGINT, -- native units token A traded
+volume_b BIGINT, -- native units token B traded
 
 -- DLMM-specific (NULL for DAMM v2 and DAMM v1)
+
 
 active_bin_id       INTEGER,                -- active bin ID at the time of the event
     -- bin_step is constant per DLMM pool — stored here to avoid an RPC call
