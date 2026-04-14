@@ -2,7 +2,10 @@ use std::str::FromStr;
 
 use solana_pubkey::Pubkey;
 use sqlx::types::BigDecimal;
-use yog_core::{domain::Protocol, CoreError};
+use yog_core::{
+    domain::{LiquidityEventKind, Protocol},
+    CoreError,
+};
 
 pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> Result<Pubkey, CoreError> {
     Pubkey::from_str(&key).map_err(|e| CoreError::ParseError {
@@ -47,5 +50,17 @@ pub(crate) fn parse_string_to_protocol(
         .map_err(|_| CoreError::ParseError {
             signature: String::new(),
             reason: format!("unknown {field}: {}", protocol),
+        })
+}
+
+pub(crate) fn parse_string_to_liquidity_event_kind(
+    liquidity_event_kind: String,
+    field: &str,
+) -> Result<LiquidityEventKind, CoreError> {
+    liquidity_event_kind
+        .parse::<LiquidityEventKind>()
+        .map_err(|_| CoreError::ParseError {
+            signature: String::new(),
+            reason: format!("invalid {field}: {}", liquidity_event_kind),
         })
 }
