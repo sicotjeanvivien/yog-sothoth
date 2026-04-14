@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    domain::{LiquidityEvent, LiquidityEventKind, LiquidityEventRepository},
+    domain::{LiquidityEvent, LiquidityEventRepository},
     CoreError, CoreResult,
 };
 

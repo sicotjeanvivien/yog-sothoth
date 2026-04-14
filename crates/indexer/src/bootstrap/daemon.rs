@@ -7,7 +7,10 @@ use tracing::info;
 use crate::{
     application::services::{IndexerService, WatchedPoolService},
     config::Config,
-    infra::{Database, PgWatchedPoolRepository, RpcListener},
+    infra::{
+        db::{PgPoolMetricRepository, PgSwapEventRepository},
+        Database, PgWatchedPoolRepository, RpcListener,
+    },
 };
 
 /// Meteora DAMM v2 pool used for development and testing.
@@ -40,7 +43,14 @@ impl Daemon {
         let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.clone()));
         info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
-        let indexer_service = Arc::new(IndexerService::new(Arc::clone(&rpc_client)));
+        let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
+        let pg_pool_metric_repo = Arc::new(PgPoolMetricRepository::new(database.pool()));
+
+        let indexer_service = Arc::new(IndexerService::new(
+            Arc::clone(&rpc_client),
+            pg_swap_event_repo,
+            pg_pool_metric_repo,
+        ));
         info!("indexer service initialized");
 
         // WebSocket client — receives transaction signatures in real time
@@ -119,7 +129,7 @@ impl Daemon {
                     Ok(Ok(())) => tracing::info!("WebSocket listener stopped"),
                     Ok(Err(e)) => {
                         tracing::error!(error = %e, "WebSocket listener failed");
-                        return Err(e); 
+                        return Err(e);
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "WebSocket listener panicked");
@@ -143,3 +153,5 @@ async fn init_db(database_url: String) -> anyhow::Result<Database> {
     tracing::info!("migrations applied");
     Ok(db)
 }
+
+

@@ -6,6 +6,8 @@ use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTra
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
 use tracing::{debug, error, info, warn};
+use yog_core::domain::{PoolMetric, PoolMetricRepository, SwapEventRepository};
+use yog_core::CoreResult;
 use yog_core::{
     amm::{
         common::{imbalance, spot_price},
@@ -19,11 +21,21 @@ use yog_core::{
 /// dispatches to the appropriate protocol handler.
 pub(crate) struct IndexerService {
     rpc_client: Arc<RpcClient>,
+    swap_event_repo: Arc<dyn SwapEventRepository + Send + Sync>,
+    pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
 }
 
 impl IndexerService {
-    pub(crate) fn new(rpc_client: Arc<RpcClient>) -> Self {
-        Self { rpc_client }
+    pub(crate) fn new(
+        rpc_client: Arc<RpcClient>,
+        swap_event_repo: Arc<dyn SwapEventRepository + Send + Sync>,
+        pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
+    ) -> Self {
+        Self {
+            rpc_client,
+            swap_event_repo,
+            pool_metric_repo,
+        }
     }
 
     /// Handle a transaction signature received from the WebSocket.
@@ -40,23 +52,30 @@ impl IndexerService {
                             signature = %swap.signature,
                             amount_in = swap.amount_in,
                             amount_out = swap.amount_out,
-                            token_in = %swap.token_in_mint,
-                            token_out = %swap.token_out_mint,
                             "swap parsed"
                         );
-                        self.compute_and_log_metrics(&swap);
+
+                        if let Err(e) = self.swap_event_repo.insert(&swap).await {
+                            error!("failed to insert swap_event: {e}");
+                            return;
+                        }
+
+                        match self.compute_metrics(&swap) {
+                            Ok(metric) => {
+                                if let Err(e) = self.pool_metric_repo.insert(&metric).await {
+                                    error!("failed to insert pool_metric: {e}");
+                                }
+                            }
+                            Err(e) => error!("failed to compute metrics: {e}"),
+                        }
                     }
                     Err(e) => {
                         debug!("skipping non-swap transaction {signature}: {e}");
                     }
                 }
             }
-            Ok(None) => {
-                warn!("transaction not found: {signature}");
-            }
-            Err(e) => {
-                error!("failed to fetch transaction {signature}: {e}");
-            }
+            Ok(None) => warn!("transaction not found: {signature}"),
+            Err(e) => error!("failed to fetch transaction {signature}: {e}"),
         }
     }
 
@@ -90,7 +109,7 @@ impl IndexerService {
     async fn fetch_transaction(
         &self,
         signature: &str,
-    ) -> Result<Option<EncodedConfirmedTransactionWithStatusMeta>, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<Option<EncodedConfirmedTransactionWithStatusMeta>> {
         let sig = signature.parse()?;
 
         let config = RpcTransactionConfig {
@@ -115,7 +134,43 @@ impl IndexerService {
                 warn!("transaction not available after retries: {signature}");
                 Ok(None)
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(anyhow::anyhow!(e)),
         }
+    }
+
+    fn compute_metrics(&self, swap: &SwapEvent) -> CoreResult<PoolMetric> {
+        let reserve_a = swap.reserve_a_after as u128;
+        let reserve_b = swap.reserve_b_after as u128;
+        let amount_in = swap.amount_in as u128;
+
+        let price_q64 = spot_price(reserve_a, reserve_b)?;
+        let imbalance_bps = imbalance(reserve_a, reserve_b).ok().map(|v| v as i32);
+        let price_impact_bps = net_price_impact(reserve_a, reserve_b, amount_in, 25)
+            .ok()
+            .map(|v| v as i32);
+
+        let price_display = price_q64 as f64 / (1u128 << 64) as f64;
+        info!(
+            price_q64,
+            price_display, imbalance_bps, price_impact_bps, "metrics computed"
+        );
+
+        Ok(PoolMetric {
+            pool_address: swap.pool_address,
+            signature: swap.signature.clone(),
+            reserve_a: swap.reserve_a_after,
+            reserve_b: swap.reserve_b_after,
+            price_q64,
+            price_impact_bps,
+            imbalance_bps,
+            current_fee_bps: swap.fee_bps.map(|f| f as i32),
+            fees_collected_a: None,
+            fees_collected_b: None,
+            volume_a: Some(swap.amount_in),
+            volume_b: Some(swap.amount_out),
+            active_bin_id: None,
+            bin_step: None,
+            timestamp: swap.timestamp,
+        })
     }
 }

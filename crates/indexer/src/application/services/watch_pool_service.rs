@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use chrono::Utc;
+use solana_pubkey::pubkey;
 use tracing::info;
 use yog_core::{
-    domain::{WatchedPool, WatchedPoolRepository},
+    domain::{Protocol, WatchedPool, WatchedPoolRepository},
     CoreResult,
 };
 
@@ -48,12 +50,27 @@ impl WatchedPoolService {
     /// On daemon startup, resubscribe to all pools persisted in the database.
     /// Ensures no subscription is lost across restarts.
     pub async fn restore_subscriptions(&self) -> CoreResult<()> {
+        self.watched_pool_test().await?;
         let pools = self.repository.find_all().await?;
         let count = pools.len();
         for pool in pools {
             self.listener.watch(pool.pool_address.to_string()).await;
         }
         info!(count, "subscriptions restored from database");
+        Ok(())
+    }
+
+    async fn watched_pool_test(&self) -> CoreResult<()> {
+        self.watch(WatchedPool {
+            pool_address: pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"),
+            protocol: Protocol::DammV2,
+            token_a_mint: pubkey!("E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E"), // à renseigner
+            token_b_mint: pubkey!("HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx"), // à renseigner
+            token_a_decimals: 6,                                                   // à vérifier
+            token_b_decimals: 6,                                                   // à vérifier
+            added_at: Utc::now(),
+        })
+        .await?;
         Ok(())
     }
 }
