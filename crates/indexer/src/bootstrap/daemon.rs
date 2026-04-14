@@ -89,11 +89,6 @@ impl Daemon {
         self.watched_pool_service.restore_subscriptions().await?;
         info!("subscriptions restored");
 
-        // TODO phase 3 — remove once pool management is driven by the Next.js API
-        self.listener.watch(TEST_POOL.to_string()).await;
-
-        info!("indexer started — watching test pool");
-
         let indexer_service = self.indexer_service;
         let listener = self.listener;
         // Retained for phase 3 — LISTEN/NOTIFY loop will use these

@@ -61,16 +61,20 @@ impl WatchedPoolService {
     }
 
     async fn watched_pool_test(&self) -> CoreResult<()> {
-        self.watch(WatchedPool {
-            pool_address: pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"),
-            protocol: Protocol::DammV2,
-            token_a_mint: pubkey!("E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E"), // à renseigner
-            token_b_mint: pubkey!("HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx"), // à renseigner
-            token_a_decimals: 6,                                                   // à vérifier
-            token_b_decimals: 6,                                                   // à vérifier
-            added_at: Utc::now(),
-        })
-        .await?;
+        let address = "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j";
+        if !self.repository.exists(address).await? {
+            self.repository
+                .add(&WatchedPool {
+                    pool_address: pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"),
+                    protocol: Protocol::DammV2,
+                    token_a_mint: pubkey!("E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E"),
+                    token_b_mint: pubkey!("HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx"),
+                    token_a_decimals: 6,
+                    token_b_decimals: 6,
+                    added_at: Utc::now(),
+                })
+                .await?;
+        }
         Ok(())
     }
 }
