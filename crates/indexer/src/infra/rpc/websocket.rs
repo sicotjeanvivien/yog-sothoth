@@ -89,39 +89,17 @@ impl RpcListener {
             info!("connecting to Solana RPC WebSocket: {}", self.ws_url);
 
             tokio::select! {
-                // Drive the connection attempt and the active listen session.
                 result = self.subscriber_pool(index_transaction.clone(), shutdown.clone()) => {
-                    match result {
-                        Ok(()) => {
-                            info!("RPC listener stopped cleanly");
-                            return Ok(());
-                        }
-                        Err(e) => {
-                            attempts += 1;
-                            if attempts >= MAX_RETRY_ATTEMPTS {
-                                return Err(anyhow::anyhow!(
-                                    "RPC WebSocket unreachable after {attempts} attempts: {e}"
-                                ));
-                            }
-                            warn!(
-                                error = %e,
-                                attempt = attempts,
-                                max = MAX_RETRY_ATTEMPTS,
-                                retry_in = retry_delay,
-                                "RPC WebSocket disconnected — reconnecting"
-                            );
-                        }
+                    attempts += 1;
+                    if handle_connection_result(result, attempts, retry_delay)? {
+                        return Ok(());
                     }
                 }
-                // Honour a shutdown request that arrives while we are waiting
-                // for connect_and_listen (e.g. connection is hanging).
                 _ = shutdown.cancelled() => {
                     info!("RPC listener shutdown requested during connection");
                     return Ok(());
                 }
             }
-
-            // Exponential backoff — also cancellable.
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(retry_delay)) => {}
                 _ = shutdown.cancelled() => {
@@ -168,6 +146,35 @@ impl RpcListener {
         }
 
         Ok(())
+    }
+}
+
+fn handle_connection_result(
+    result: Result<(), Box<dyn std::error::Error + Send + Sync>>,
+    attempts: u32,
+    retry_delay: u64,
+) -> anyhow::Result<bool> {
+    // true = stop, false = retry
+    match result {
+        Ok(()) => {
+            info!("RPC listener stopped cleanly");
+            Ok(true)
+        }
+        Err(e) => {
+            if attempts >= MAX_RETRY_ATTEMPTS {
+                return Err(anyhow::anyhow!(
+                    "RPC WebSocket unreachable after {attempts} attempts: {e}"
+                ));
+            }
+            warn!(
+                error = %e,
+                attempt = attempts,
+                max = MAX_RETRY_ATTEMPTS,
+                retry_in = retry_delay,
+                "RPC WebSocket disconnected — reconnecting"
+            );
+            Ok(false)
+        }
     }
 }
 
