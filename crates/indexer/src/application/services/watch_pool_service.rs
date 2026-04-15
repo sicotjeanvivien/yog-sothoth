@@ -17,13 +17,13 @@ use crate::infra::RpcListener;
 /// WebSocket subscription, and vice versa.
 pub struct WatchedPoolService {
     listener: Arc<RpcListener>,
-    repository: Arc<dyn WatchedPoolRepository>,
+    repository: Arc<dyn WatchedPoolRepository + Send + Sync>,
 }
 
 impl WatchedPoolService {
     pub(crate) fn new(
         listener: Arc<RpcListener>,
-        repository: Arc<dyn WatchedPoolRepository>,
+        repository: Arc<dyn WatchedPoolRepository + Send + Sync>,
     ) -> Self {
         Self {
             listener,
