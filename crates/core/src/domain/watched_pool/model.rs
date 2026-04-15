@@ -21,3 +21,9 @@ pub struct WatchedPool {
     /// When this pool was added to the watchlist.
     pub added_at: DateTime<Utc>,
 }
+
+impl WatchedPool {
+    pub fn pool_address_str(&self) -> String {
+        self.pool_address.to_string()
+    }
+}

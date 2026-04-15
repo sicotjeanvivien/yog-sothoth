@@ -1,5 +1,5 @@
 use solana_commitment_config::CommitmentConfig;
-use solana_pubkey::pubkey;
+use solana_pubkey::{pubkey, Pubkey};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::RpcTransactionConfig;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
@@ -12,8 +12,8 @@ use yog_core::{
         damm_v2::net_price_impact,
     },
     domain::{
-        liquidity_event, LiquidityEvent, LiquidityEventRepository, PoolMetric,
-        PoolMetricRepository, SwapEvent, SwapEventRepository,
+        LiquidityEvent, LiquidityEventRepository, PoolMetric, PoolMetricRepository, SwapEvent,
+        SwapEventRepository, WatchedPool,
     },
     protocols::{meteora::damm_v2::DammV2, PoolIndexer},
     CoreResult,
@@ -44,41 +44,38 @@ impl IndexerService {
     }
 
     /// Handle a transaction signature received from the WebSocket.
-    pub(crate) async fn handle_signature(&self, signature: String) {
+    pub(crate) async fn index_transaction(&self, watched_pool: WatchedPool, signature: String) {
         info!("received signature: {signature}");
+        let damm_v2_proto = DammV2::new(watched_pool.pool_address);
 
         match self.fetch_transaction(&signature).await {
-            Ok(Some(tx)) => {
-                let damm_v2_proto =
-                    DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
-                match damm_v2_proto.parse_swap(&tx) {
-                    Ok(swap) => {
-                        info!(
-                            signature = %swap.signature,
-                            amount_in = swap.amount_in,
-                            amount_out = swap.amount_out,
-                            "swap parsed"
-                        );
+            Ok(Some(tx)) => match damm_v2_proto.parse_swap(&tx) {
+                Ok(swap) => {
+                    info!(
+                        signature = %swap.signature,
+                        amount_in = swap.amount_in,
+                        amount_out = swap.amount_out,
+                        "swap parsed"
+                    );
 
-                        if let Err(e) = self.swap_event_repo.insert(&swap).await {
-                            error!("failed to insert swap_event: {e}");
-                            return;
-                        }
-
-                        match self.compute_metrics(&swap) {
-                            Ok(metric) => {
-                                if let Err(e) = self.pool_metric_repo.insert(&metric).await {
-                                    error!("failed to insert pool_metric: {e}");
-                                }
-                            }
-                            Err(e) => error!("failed to compute metrics: {e}"),
-                        }
+                    if let Err(e) = self.swap_event_repo.insert(&swap).await {
+                        error!("failed to insert swap_event: {e}");
+                        return;
                     }
-                    Err(e) => {
-                        debug!("skipping non-swap transaction {signature}: {e}");
+
+                    match self.compute_metrics(&swap) {
+                        Ok(metric) => {
+                            if let Err(e) = self.pool_metric_repo.insert(&metric).await {
+                                error!("failed to insert pool_metric: {e}");
+                            }
+                        }
+                        Err(e) => error!("failed to compute metrics: {e}"),
                     }
                 }
-            }
+                Err(e) => {
+                    debug!("skipping non-swap transaction {signature}: {e}");
+                }
+            },
             Ok(None) => warn!("transaction not found: {signature}"),
             Err(e) => error!("failed to fetch transaction {signature}: {e}"),
         }

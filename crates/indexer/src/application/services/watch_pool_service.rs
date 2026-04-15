@@ -1,11 +1,12 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
-use solana_pubkey::pubkey;
+use solana_pubkey::{pubkey, Pubkey};
 use tracing::info;
 use yog_core::{
     domain::{Protocol, WatchedPool, WatchedPoolRepository},
-    CoreResult,
+    CoreError, CoreResult,
 };
 
 use crate::infra::RpcListener;
@@ -34,7 +35,7 @@ impl WatchedPoolService {
     /// Persist a pool and register its WebSocket subscription.
     pub async fn _watch(&self, pool: WatchedPool) -> CoreResult<()> {
         self.repository.add(&pool).await?;
-        self.listener.watch(pool.pool_address.to_string()).await;
+        self.listener.watch(pool.clone()).await;
         info!(address = %pool.pool_address, protocol = %pool.protocol, "pool watch registered");
         Ok(())
     }
@@ -42,7 +43,11 @@ impl WatchedPoolService {
     /// Remove a pool from persistence and cancel its WebSocket subscription.
     pub async fn _unwatch(&self, address: &str) -> CoreResult<()> {
         self.repository.remove(address).await?;
-        self.listener.unwatch(address.to_string()).await;
+        let address = Pubkey::from_str(address).map_err(|e| CoreError::ParseError {
+            signature: String::new(),
+            reason: "address parse".to_string(),
+        })?;
+        self.listener.unwatch(&address).await;
         info!(address = %address, "pool watch removed");
         Ok(())
     }
@@ -54,7 +59,7 @@ impl WatchedPoolService {
         let pools = self.repository.find_all().await?;
         let count = pools.len();
         for pool in pools {
-            self.listener.watch(pool.pool_address.to_string()).await;
+            self.listener.watch(pool).await;
         }
         info!(count, "subscriptions restored from database");
         Ok(())

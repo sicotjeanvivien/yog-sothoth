@@ -111,10 +111,7 @@ async fn init_indexer_service(
 
 /// Create the RPC WebSocket listener.
 async fn init_listener(config: &Config) -> anyhow::Result<Arc<RpcListener>> {
-    Ok(Arc::new(RpcListener::new(
-        config.solana_rpc_ws.clone(),
-        config.solana_rpc_http.clone(),
-    )))
+    Ok(Arc::new(RpcListener::new(config.solana_rpc_ws.clone())))
 }
 
 /// Initialise the WatchedPoolService and its repository dependency.
@@ -141,9 +138,9 @@ fn spawn_websocket_task(
     tokio::spawn(async move {
         listener
             .run(
-                move |signature| {
+                move |watched_pool, signature| {
                     let service = Arc::clone(&indexer_service);
-                    async move { service.handle_signature(signature).await }
+                    async move { service.index_transaction(watched_pool, signature).await }
                 },
                 shutdown,
             )
