@@ -6,35 +6,40 @@ use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTra
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
 use tracing::{debug, error, info, warn};
-use yog_core::domain::{PoolMetric, PoolMetricRepository, SwapEventRepository};
-use yog_core::CoreResult;
 use yog_core::{
     amm::{
         common::{imbalance, spot_price},
         damm_v2::net_price_impact,
     },
-    domain::SwapEvent,
+    domain::{
+        liquidity_event, LiquidityEvent, LiquidityEventRepository, PoolMetric,
+        PoolMetricRepository, SwapEvent, SwapEventRepository,
+    },
     protocols::{meteora::damm_v2::DammV2, PoolIndexer},
+    CoreResult,
 };
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler.
 pub(crate) struct IndexerService {
+    liquidity_event_repo: Arc<dyn LiquidityEventRepository + Send + Sync>,
+    pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
     rpc_client: Arc<RpcClient>,
     swap_event_repo: Arc<dyn SwapEventRepository + Send + Sync>,
-    pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
 }
 
 impl IndexerService {
     pub(crate) fn new(
+        liquidity_event_repo: Arc<dyn LiquidityEventRepository + Send + Sync>,
+        pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
         rpc_client: Arc<RpcClient>,
         swap_event_repo: Arc<dyn SwapEventRepository + Send + Sync>,
-        pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
     ) -> Self {
         Self {
+            liquidity_event_repo,
+            pool_metric_repo,
             rpc_client,
             swap_event_repo,
-            pool_metric_repo,
         }
     }
 

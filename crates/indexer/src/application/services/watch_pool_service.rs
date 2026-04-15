@@ -32,7 +32,7 @@ impl WatchedPoolService {
     }
 
     /// Persist a pool and register its WebSocket subscription.
-    pub async fn watch(&self, pool: WatchedPool) -> CoreResult<()> {
+    pub async fn _watch(&self, pool: WatchedPool) -> CoreResult<()> {
         self.repository.add(&pool).await?;
         self.listener.watch(pool.pool_address.to_string()).await;
         info!(address = %pool.pool_address, protocol = %pool.protocol, "pool watch registered");
@@ -40,7 +40,7 @@ impl WatchedPoolService {
     }
 
     /// Remove a pool from persistence and cancel its WebSocket subscription.
-    pub async fn unwatch(&self, address: &str) -> CoreResult<()> {
+    pub async fn _unwatch(&self, address: &str) -> CoreResult<()> {
         self.repository.remove(address).await?;
         self.listener.unwatch(address.to_string()).await;
         info!(address = %address, "pool watch removed");

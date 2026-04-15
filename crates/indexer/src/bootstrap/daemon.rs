@@ -8,13 +8,10 @@ use crate::{
     application::services::{IndexerService, WatchedPoolService},
     config::Config,
     infra::{
-        db::{PgPoolMetricRepository, PgSwapEventRepository},
+        db::{PgLiquidityEventRepository, PgPoolMetricRepository, PgSwapEventRepository},
         Database, PgWatchedPoolRepository, RpcListener,
     },
 };
-
-/// Meteora DAMM v2 pool used for development and testing.
-const TEST_POOL: &str = "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j";
 
 /// Top-level process — owns all runtime dependencies and drives the indexer lifecycle.
 ///
@@ -37,36 +34,14 @@ impl Daemon {
     /// Build and wire all runtime dependencies.
     /// Fails fast if the database is unreachable or migrations cannot be applied.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = init_db(config.database_url).await?;
-
-        // HTTP client — used by IndexerService to fetch full transaction data
-        let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.clone()));
-        info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
-
-        let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
-        let pg_pool_metric_repo = Arc::new(PgPoolMetricRepository::new(database.pool()));
-
-        let indexer_service = Arc::new(IndexerService::new(
-            Arc::clone(&rpc_client),
-            pg_swap_event_repo,
-            pg_pool_metric_repo,
-        ));
+        let database = init_db(&config.database_url).await?;
+        info!("database initialized");
+        let indexer_service = init_indexer_service(&config, &database).await?;
         info!("indexer service initialized");
-
-        // WebSocket client — receives transaction signatures in real time
-        let listener = Arc::new(RpcListener::new(
-            config.solana_rpc_ws.clone(),
-            config.solana_rpc_http.clone(),
-        ));
+        let listener = init_listener(&config).await?;
         info!("RPC listener initialized: {}", config.solana_rpc_ws);
-
-        let pg_watched_pool_repository = Arc::new(PgWatchedPoolRepository::new(database.pool()));
-        let watched_pool_service = Arc::new(WatchedPoolService::new(
-            listener.clone(),
-            pg_watched_pool_repository,
-        ));
+        let watched_pool_service = init_watched_pool_service(&database, listener.clone()).await?;
         info!("watched pool service initialized");
-
         info!("daemon initialized");
 
         Ok(Self {
@@ -141,7 +116,7 @@ impl Daemon {
 }
 
 /// Connect to the database and apply pending migrations.
-async fn init_db(database_url: String) -> anyhow::Result<Database> {
+async fn init_db(database_url: &str) -> anyhow::Result<Database> {
     let db = Database::connect(&database_url).await?;
     tracing::info!("connected to database");
     db.run_migrations().await?;
@@ -149,4 +124,43 @@ async fn init_db(database_url: String) -> anyhow::Result<Database> {
     Ok(db)
 }
 
+async fn init_indexer_service(
+    config: &Config,
+    database: &Database,
+) -> anyhow::Result<Arc<IndexerService>> {
+    // HTTP client — used by IndexerService to fetch full transaction data
+    let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.clone()));
+    info!(
+        "RPC HTTP client initialized: {}",
+        config.solana_rpc_http.clone()
+    );
 
+    let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
+    let pg_pool_metric_repo = Arc::new(PgPoolMetricRepository::new(database.pool()));
+    let pg_liquidity_event_repo = Arc::new(PgLiquidityEventRepository::new(database.pool()));
+
+    Ok(Arc::new(IndexerService::new(
+        pg_liquidity_event_repo,
+        pg_pool_metric_repo,
+        Arc::clone(&rpc_client),
+        pg_swap_event_repo,
+    )))
+}
+
+async fn init_listener(config: &Config) -> anyhow::Result<Arc<RpcListener>> {
+    Ok(Arc::new(RpcListener::new(
+        config.solana_rpc_ws.clone(),
+        config.solana_rpc_http.clone(),
+    )))
+}
+
+async fn init_watched_pool_service(
+    database: &Database,
+    listener: Arc<RpcListener>,
+) -> anyhow::Result<Arc<WatchedPoolService>> {
+    let pg_watched_pool_repository = Arc::new(PgWatchedPoolRepository::new(database.pool()));
+    Ok(Arc::new(WatchedPoolService::new(
+        listener,
+        pg_watched_pool_repository,
+    )))
+}
