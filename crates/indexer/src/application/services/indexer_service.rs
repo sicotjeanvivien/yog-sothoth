@@ -1,5 +1,4 @@
 use solana_commitment_config::CommitmentConfig;
-use solana_pubkey::{pubkey, Pubkey};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::RpcTransactionConfig;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
@@ -12,28 +11,31 @@ use yog_core::{
         damm_v2::net_price_impact,
     },
     domain::{
-        LiquidityEvent, LiquidityEventRepository, PoolMetric, PoolMetricRepository, SwapEvent,
-        SwapEventRepository, WatchedPool,
+        LiquidityEvent, LiquidityEventRepository, PoolMetric, PoolMetricRepository, Protocol,
+        SwapEvent, SwapEventRepository, WatchedPool,
     },
-    protocols::{meteora::damm_v2::DammV2, PoolIndexer},
+    protocols::{
+        meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
+        PoolIndexer,
+    },
     CoreResult,
 };
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler.
 pub(crate) struct IndexerService {
-    liquidity_event_repo: Arc<dyn LiquidityEventRepository + Send + Sync>,
-    pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
+    liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
+    pool_metric_repo: Arc<dyn PoolMetricRepository>,
     rpc_client: Arc<RpcClient>,
-    swap_event_repo: Arc<dyn SwapEventRepository + Send + Sync>,
+    swap_event_repo: Arc<dyn SwapEventRepository>,
 }
 
 impl IndexerService {
     pub(crate) fn new(
-        liquidity_event_repo: Arc<dyn LiquidityEventRepository + Send + Sync>,
-        pool_metric_repo: Arc<dyn PoolMetricRepository + Send + Sync>,
+        liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
+        pool_metric_repo: Arc<dyn PoolMetricRepository>,
         rpc_client: Arc<RpcClient>,
-        swap_event_repo: Arc<dyn SwapEventRepository + Send + Sync>,
+        swap_event_repo: Arc<dyn SwapEventRepository>,
     ) -> Self {
         Self {
             liquidity_event_repo,
@@ -44,67 +46,44 @@ impl IndexerService {
     }
 
     /// Handle a transaction signature received from the WebSocket.
-    pub(crate) async fn index_transaction(&self, watched_pool: WatchedPool, signature: String) {
+    pub(crate) async fn index_transaction(
+        &self,
+        watched_pool: WatchedPool,
+        signature: String,
+    ) -> anyhow::Result<()> {
         info!("received signature: {signature}");
-        let damm_v2_proto = DammV2::new(watched_pool.pool_address);
+        let tx = self
+            .fetch_transaction(&signature)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("transaction not found: {signature}"))?;
 
-        match self.fetch_transaction(&signature).await {
-            Ok(Some(tx)) => match damm_v2_proto.parse_swap(&tx) {
-                Ok(swap) => {
-                    info!(
-                        signature = %swap.signature,
-                        amount_in = swap.amount_in,
-                        amount_out = swap.amount_out,
-                        "swap parsed"
-                    );
+        let indexer = protocol_indexer(&watched_pool);
 
-                    if let Err(e) = self.swap_event_repo.insert(&swap).await {
-                        error!("failed to insert swap_event: {e}");
-                        return;
-                    }
-
-                    match self.compute_metrics(&swap) {
-                        Ok(metric) => {
-                            if let Err(e) = self.pool_metric_repo.insert(&metric).await {
-                                error!("failed to insert pool_metric: {e}");
-                            }
-                        }
-                        Err(e) => error!("failed to compute metrics: {e}"),
-                    }
-                }
-                Err(e) => {
-                    debug!("skipping non-swap transaction {signature}: {e}");
-                }
-            },
-            Ok(None) => warn!("transaction not found: {signature}"),
-            Err(e) => error!("failed to fetch transaction {signature}: {e}"),
+        if indexer.is_swap(&tx) {
+            let swap = indexer.parse_swap(&tx)?;
+            info!(signature = %swap.signature, amount_in = swap.amount_in, amount_out = swap.amount_out, "swap parsed");
+            self.persist_swap(&swap).await?;
+            self.persist_metrics(&swap).await?;
+        } else if indexer.is_add_liquidity(&tx) {
+            // Phase 2
+        } else if indexer.is_remove_liquidity(&tx) {
+            // Phase 2
+        } else {
+            debug!("skipping unrecognised transaction: {signature}");
         }
+
+        Ok(())
     }
 
-    /// Compute and log AMM metrics from a parsed swap.
-    fn compute_and_log_metrics(&self, swap: &SwapEvent) {
-        let reserve_a = swap.reserve_a_after as u128;
-        let reserve_b = swap.reserve_b_after as u128;
-        let amount_in = swap.amount_in as u128;
+    async fn persist_swap(&self, swap: &SwapEvent) -> anyhow::Result<()> {
+        self.swap_event_repo.insert(swap).await?;
+        Ok(())
+    }
 
-        match spot_price(reserve_a, reserve_b) {
-            Ok(price_q64) => {
-                let price_display = price_q64 as f64 / (1u128 << 64) as f64;
-                info!(price_q64, price_display, "spot price");
-            }
-            Err(e) => error!("spot_price: {e}"),
-        }
-
-        match imbalance(reserve_a, reserve_b) {
-            Ok(bps) => info!(imbalance_bps = bps, "pool imbalance"),
-            Err(e) => error!("imbalance: {e}"),
-        }
-
-        // fee hardcoded at 25 bps — will be parsed from tx in next iteration
-        match net_price_impact(reserve_a, reserve_b, amount_in, 25) {
-            Ok(bps) => info!(price_impact_bps = bps, "net price impact"),
-            Err(e) => error!("net_price_impact: {e}"),
-        }
+    async fn persist_metrics(&self, swap: &SwapEvent) -> anyhow::Result<()> {
+        let metric = self.compute_metrics(swap)?;
+        self.pool_metric_repo.insert(&metric).await?;
+        Ok(())
     }
 
     /// Fetch a confirmed transaction by signature from the RPC.
@@ -174,5 +153,13 @@ impl IndexerService {
             bin_step: None,
             timestamp: swap.timestamp,
         })
+    }
+}
+
+fn protocol_indexer(pool: &WatchedPool) -> Arc<dyn PoolIndexer> {
+    match pool.protocol {
+        Protocol::MeteoraDammV2 => Arc::new(MeteoraDammV2::new(pool.pool_address)),
+        Protocol::MeteoraDammV1 => Arc::new(MeteoraDammV1::new(pool.pool_address)),
+        Protocol::MeteoraDlmm => Arc::new(MeteoraDlmm::new(pool.pool_address)),
     }
 }

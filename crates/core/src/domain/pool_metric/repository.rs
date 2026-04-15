@@ -1,10 +1,9 @@
-use crate::{CoreResult, domain::PoolMetric};
+use crate::{domain::PoolMetric, CoreResult};
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-
 #[async_trait]
-pub trait PoolMetricRepository {
+pub trait PoolMetricRepository: Send + Sync {
     /// Persist a pool metric snapshot.
     async fn insert(&self, metric: &PoolMetric) -> CoreResult<()>;
 

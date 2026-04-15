@@ -1,9 +1,9 @@
-use crate::{CoreResult, domain::WatchedPool};
+use crate::{domain::WatchedPool, CoreResult};
 use async_trait::async_trait;
 
 /// Interface for watched pool persistence.
 #[async_trait]
-pub trait WatchedPoolRepository {
+pub trait WatchedPoolRepository: Send + Sync {
     /// Insert a new pool into the watchlist.
     async fn add(&self, pool: &WatchedPool) -> CoreResult<()>;
 

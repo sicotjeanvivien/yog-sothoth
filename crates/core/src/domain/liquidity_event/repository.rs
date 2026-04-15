@@ -8,7 +8,7 @@ use crate::{domain::LiquidityEvent, CoreResult};
 /// Implemented by the infrastructure layer (`infra::db`).
 /// `core` defines the interface, the indexer wires the concrete implementation.
 #[async_trait]
-pub trait LiquidityEventRepository {
+pub trait LiquidityEventRepository: Send + Sync {
     /// Persist a liquidity event.
     async fn insert(&self, event: &LiquidityEvent) -> CoreResult<()>;
 

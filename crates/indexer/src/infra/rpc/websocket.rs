@@ -8,7 +8,10 @@ use solana_rpc_client_api::{
 };
 use std::time::Duration;
 use std::{future::Future, pin::Pin, sync::Arc};
-use tokio::{sync::Mutex, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, Mutex},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use yog_core::domain::WatchedPool;
@@ -71,15 +74,11 @@ impl RpcListener {
     ///
     /// The loop exits cleanly when `shutdown` is cancelled — both the
     /// reconnection loop and the active WebSocket session respect the token.
-    pub(crate) async fn run<F, Fut>(
+    pub(crate) async fn run(
         &self,
-        index_transaction: F,
+        tx: mpsc::Sender<(WatchedPool, String)>,
         shutdown: CancellationToken,
-    ) -> anyhow::Result<()>
-    where
-        F: Fn(WatchedPool, String) -> Fut + Send + Sync + Clone + 'static,
-        Fut: std::future::Future<Output = ()> + Send,
-    {
+    ) -> anyhow::Result<()> {
         let mut retry_delay = INITIAL_RETRY_DELAY_SECS;
         let mut attempts = 0u32;
 
@@ -87,7 +86,7 @@ impl RpcListener {
             info!("connecting to Solana RPC WebSocket: {}", self.ws_url);
 
             tokio::select! {
-                result = self.subscriber_pool(index_transaction.clone(), shutdown.clone()) => {
+                result = self.subscriber_pool(tx.clone(), shutdown.clone()) => {
                     attempts += 1;
                     if handle_connection_result(result, attempts, retry_delay)? {
                         return Ok(());
@@ -116,29 +115,18 @@ impl RpcListener {
     ///
     /// Returns `Ok(())` when all tasks finish normally. Returns `Err` on
     /// connection failure.
-    async fn subscriber_pool<F, Fut>(
+    async fn subscriber_pool(
         &self,
-        index_transaction: F,
+        tx: mpsc::Sender<(WatchedPool, String)>,
         shutdown: CancellationToken,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-    where
-        F: Fn(WatchedPool, String) -> Fut + Send + Sync + Clone + 'static,
-        Fut: std::future::Future<Output = ()> + Send,
-    {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let pubsub = Arc::new(PubsubClient::new(&self.ws_url).await?);
         let watched_pools = self.watched_pools.lock().await.clone();
         info!("connected — subscribing to {} pool(s)", watched_pools.len());
 
         let handles: Vec<_> = watched_pools
             .into_iter()
-            .map(|pool| {
-                listen_pool(
-                    pool,
-                    Arc::clone(&pubsub),
-                    index_transaction.clone(),
-                    shutdown.clone(),
-                )
-            })
+            .map(|pool| listen_pool(pool, Arc::clone(&pubsub), tx.clone(), shutdown.clone()))
             .collect();
 
         for handle in handles {
@@ -189,16 +177,12 @@ fn handle_connection_result(
 ///
 /// Returns a `JoinHandle` that resolves when the stream closes or shutdown
 /// is requested.
-fn listen_pool<F, Fut>(
+fn listen_pool(
     pool: WatchedPool,
     pubsub: Arc<PubsubClient>,
-    index_transaction: F,
+    tx: mpsc::Sender<(WatchedPool, String)>,
     shutdown: CancellationToken,
-) -> JoinHandle<anyhow::Result<()>>
-where
-    F: Fn(WatchedPool, String) -> Fut + Send + Sync + Clone + 'static,
-    Fut: std::future::Future<Output = ()> + Send,
-{
+) -> JoinHandle<anyhow::Result<()>> {
     tokio::spawn(async move {
         let pool_address_str = pool.pool_address_str();
         let filter = RpcTransactionLogsFilter::Mentions(vec![pool_address_str.clone()]);
@@ -213,15 +197,7 @@ where
 
         info!("subscribed to pool: {pool_address_str}");
 
-        dispatch_signatures(
-            &pool_address_str,
-            stream,
-            unsubscribe,
-            pool,
-            index_transaction,
-            shutdown,
-        )
-        .await;
+        dispatch_signatures(&pool_address_str, stream, unsubscribe, pool, tx, shutdown).await;
 
         anyhow::Ok(())
     })
@@ -232,16 +208,14 @@ where
 ///
 /// Each incoming signature is dispatched to `index_transaction` in a
 /// dedicated `tokio::spawn` task to avoid blocking the stream loop.
-async fn dispatch_signatures<F, Fut, S, U>(
+async fn dispatch_signatures<S, U>(
     pool_address_str: &str,
     mut stream: S,
     unsubscribe: U,
     pool: WatchedPool,
-    index_transaction: F,
+    tx: mpsc::Sender<(WatchedPool, String)>,
     shutdown: CancellationToken,
 ) where
-    F: Fn(WatchedPool, String) -> Fut + Clone + Send + 'static,
-    Fut: std::future::Future<Output = ()> + Send,
     S: StreamExt<Item = Response<RpcLogsResponse>> + Unpin,
     U: FnOnce() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> + Send,
 {
@@ -251,10 +225,10 @@ async fn dispatch_signatures<F, Fut, S, U>(
                 match maybe_response {
                     Some(response) => {
                         let pool = pool.clone();
-                        let index_transaction = index_transaction.clone();
-                        tokio::spawn(async move {
-                            index_transaction(pool, response.value.signature).await;
-                        });
+                        if let Err(e) = tx.send((pool, response.value.signature)).await {
+                            warn!("channel closed, dropping signature: {e}");
+                            break;
+                        }
                     }
                     None => {
                         warn!("log stream closed for pool: {pool_address_str}");

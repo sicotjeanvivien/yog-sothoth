@@ -15,7 +15,7 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 /// The indexer always calls a discriminant (`is_*`) before its corresponding
 /// parser (`parse_*`). Implementations may assume this ordering and skip
 /// redundant instruction-type checks inside `parse_*`.
-pub trait PoolIndexer {
+pub trait PoolIndexer: Send + Sync {
     /// The on-chain program ID for this protocol.
     fn program_id(&self) -> Pubkey;
 

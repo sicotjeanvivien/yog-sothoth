@@ -13,27 +13,27 @@ use solana_pubkey::{self, pubkey};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Meteora DAMM v2 program ID.
-pub(crate) const DAMM_V2_PROGRAM_ID: Pubkey =
+pub(crate) const METEORA_DAMM_V2_PROGRAM_ID: Pubkey =
     pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 
 /// Meteora DAMM v2 protocol handler (x·y=k + dynamic fees + NFT positions).
-pub struct DammV2 {
+pub struct MeteoraDammV2 {
     pub pool_address: Pubkey,
     program_id_str: String,
 }
 
-impl DammV2 {
+impl MeteoraDammV2 {
     pub fn new(pool_address: Pubkey) -> Self {
         Self {
             pool_address,
-            program_id_str: DAMM_V2_PROGRAM_ID.to_string(),
+            program_id_str: METEORA_DAMM_V2_PROGRAM_ID.to_string(),
         }
     }
 }
 
-impl PoolIndexer for DammV2 {
+impl PoolIndexer for MeteoraDammV2 {
     fn program_id(&self) -> Pubkey {
-        DAMM_V2_PROGRAM_ID
+        METEORA_DAMM_V2_PROGRAM_ID
     }
 
     fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
@@ -96,21 +96,21 @@ mod tests {
     #[test]
     fn test_is_swap_returns_true_for_successful_swap() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
         assert!(pool.is_swap(&tx));
     }
 
     #[test]
     fn test_is_swap_returns_false_for_failed_transaction() {
         let tx = load_tx(FAILED_TX);
-        let pool = DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
         assert!(!pool.is_swap(&tx));
     }
 
     #[test]
     fn test_parse_swap_extracts_correct_amounts() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
         let result = pool.parse_swap(&tx).unwrap();
 
         // From the captured transaction:
@@ -131,7 +131,7 @@ mod tests {
     #[test]
     fn test_parse_swap_returns_err_for_malformed_transaction() {
         let tx = load_tx(MALFORMED_SWAP_TX);
-        let pool = DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
         assert!(pool.is_swap(&tx));
         assert!(pool.parse_swap(&tx).is_err());
     }
@@ -139,7 +139,7 @@ mod tests {
     #[test]
     fn test_parse_swap_extracts_correct_reserves() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = DammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
         let result = pool.parse_swap(&tx).unwrap();
 
         // From preTokenBalances — vault SOL (E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E)

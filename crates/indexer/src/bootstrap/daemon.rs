@@ -8,9 +8,10 @@ use crate::{
 };
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use yog_core::domain::WatchedPool;
 
 /// Top-level process — owns all runtime dependencies and drives the indexer lifecycle.
 ///
@@ -61,11 +62,11 @@ impl Daemon {
         self.watched_pool_service.restore_subscriptions().await?;
         info!("subscriptions restored");
 
-        let ws_task = spawn_websocket_task(
-            Arc::clone(&self.listener),
-            Arc::clone(&self.indexer_service),
-            shutdown.clone(),
-        );
+        let (tx, rx) = mpsc::channel(100);
+
+        let ws_task = spawn_websocket_task(Arc::clone(&self.listener), tx, shutdown.clone());
+        let indexer_task =
+            spawn_indexer_task(Arc::clone(&self.indexer_service), rx, shutdown.clone());
 
         // Phase 3 — spawn_pool_watcher will be added here.
         // It will receive LISTEN/NOTIFY notifications from PostgreSQL
@@ -74,6 +75,7 @@ impl Daemon {
 
         tokio::select! {
             result = ws_task => handle_task_result(result, "WebSocket listener")?,
+            result = indexer_task => handle_task_result(result, "indexer")?,
             _ = shutdown.cancelled() => tracing::info!("cancellation received — stopping"),
         }
         Ok(())
@@ -132,19 +134,29 @@ async fn init_watched_pool_service(
 /// them to IndexerService for parsing and persistence.
 fn spawn_websocket_task(
     listener: Arc<RpcListener>,
+    tx: mpsc::Sender<(WatchedPool, String)>,
+    shutdown: CancellationToken,
+) -> JoinHandle<anyhow::Result<()>> {
+    tokio::spawn(async move { listener.run(tx, shutdown).await })
+}
+
+fn spawn_indexer_task(
     indexer_service: Arc<IndexerService>,
+    mut rx: mpsc::Receiver<(WatchedPool, String)>,
     shutdown: CancellationToken,
 ) -> JoinHandle<anyhow::Result<()>> {
     tokio::spawn(async move {
-        listener
-            .run(
-                move |watched_pool, signature| {
-                    let service = Arc::clone(&indexer_service);
-                    async move { service.index_transaction(watched_pool, signature).await }
-                },
-                shutdown,
-            )
-            .await
+        loop {
+            tokio::select! {
+                Some((pool, signature)) = rx.recv() => {
+                    if let Err(e) = indexer_service.index_transaction(pool, signature).await {
+                        tracing::error!("failed to index transaction: {e}");
+                    }
+                }
+                _ = shutdown.cancelled() => break,
+            }
+        }
+        Ok(())
     })
 }
 
