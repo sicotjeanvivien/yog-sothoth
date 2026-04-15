@@ -43,7 +43,7 @@ impl RpcListener {
         }
     }
 
-    /// Add a pool address to the watch list.
+    /// Add a pool to the watch list.
     ///
     /// Takes effect on the next (re)connection — not applied to an already
     /// running WebSocket session (phase 1 limitation).
@@ -51,7 +51,7 @@ impl RpcListener {
         self.watched_pools.lock().await.push(pool);
     }
 
-    /// Remove a pool address from the watch list.
+    /// Remove a pool from the watch list by address.
     ///
     /// Takes effect on the next (re)connection.
     pub(crate) async fn unwatch(&self, pool_address: &Pubkey) {
@@ -65,9 +65,7 @@ impl RpcListener {
     ///
     /// Reconnects on WebSocket disconnection using exponential backoff, up to
     /// [`MAX_RETRY_ATTEMPTS`] consecutive failures. Returns `Ok(())` on clean
-    /// shutdown (cancellation token fired) or after a successful connection
-    /// cycle. Returns `Err` if the maximum number of reconnection attempts is
-    /// exceeded.
+    /// shutdown or `Err` if the maximum number of reconnection attempts is exceeded.
     ///
     /// # Cancellation
     ///
@@ -100,6 +98,8 @@ impl RpcListener {
                     return Ok(());
                 }
             }
+
+            // Exponential backoff — also cancellable.
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(retry_delay)) => {}
                 _ = shutdown.cancelled() => {
@@ -112,6 +112,10 @@ impl RpcListener {
         }
     }
 
+    /// Open a PubSub connection and spawn one subscription task per watched pool.
+    ///
+    /// Returns `Ok(())` when all tasks finish normally. Returns `Err` on
+    /// connection failure.
     async fn subscriber_pool<F, Fut>(
         &self,
         index_transaction: F,
@@ -149,12 +153,15 @@ impl RpcListener {
     }
 }
 
+/// Interpret the result of a connection attempt.
+///
+/// Returns `Ok(true)` on clean stop, `Ok(false)` to retry, or `Err` if the
+/// maximum number of attempts has been reached.
 fn handle_connection_result(
     result: Result<(), Box<dyn std::error::Error + Send + Sync>>,
     attempts: u32,
     retry_delay: u64,
 ) -> anyhow::Result<bool> {
-    // true = stop, false = retry
     match result {
         Ok(()) => {
             info!("RPC listener stopped cleanly");
@@ -178,6 +185,10 @@ fn handle_connection_result(
     }
 }
 
+/// Subscribe to logs for a single pool and spawn a dispatch task.
+///
+/// Returns a `JoinHandle` that resolves when the stream closes or shutdown
+/// is requested.
 fn listen_pool<F, Fut>(
     pool: WatchedPool,
     pubsub: Arc<PubsubClient>,
@@ -216,6 +227,11 @@ where
     })
 }
 
+/// Drive the log stream for a single pool until the stream closes or shutdown
+/// is requested.
+///
+/// Each incoming signature is dispatched to `index_transaction` in a
+/// dedicated `tokio::spawn` task to avoid blocking the stream loop.
 async fn dispatch_signatures<F, Fut, S, U>(
     pool_address_str: &str,
     mut stream: S,
