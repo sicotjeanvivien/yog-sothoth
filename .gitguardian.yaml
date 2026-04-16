@@ -1,0 +1,4 @@
+ignored-detectors:
+  - name: generic-high-entropy-secret
+    paths:
+      - crates/core/tests/fixtures/
