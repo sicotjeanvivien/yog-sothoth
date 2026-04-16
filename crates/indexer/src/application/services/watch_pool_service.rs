@@ -45,7 +45,7 @@ impl WatchedPoolService {
         self.repository.remove(address).await?;
         let address = Pubkey::from_str(address).map_err(|e| CoreError::ParseError {
             signature: String::new(),
-            reason: "address parse".to_string(),
+            reason: e.to_string(),
         })?;
         self.listener.unwatch(&address).await;
         info!(address = %address, "pool watch removed");

@@ -1,7 +1,7 @@
 use dotenvy::dotenv;
 use std::env;
 
-use crate::error::IndexerError;
+use crate::error::ConfigError;
 
 /// Application configuration loaded from environment variables.
 pub(crate) struct Config {
@@ -29,6 +29,6 @@ impl Config {
 
 /// Retrieve a required environment variable.
 /// Panics with a clear message if the variable is missing.
-fn required(key: &str) -> Result<String, IndexerError> {
-    env::var(key).map_err(|_| IndexerError::ConfigError(key.to_string()))
+fn required(key: &str) -> Result<String, ConfigError> {
+    env::var(key).map_err(|_| ConfigError::MissingVariable(key.to_string()))
 }

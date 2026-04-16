@@ -38,7 +38,7 @@ impl Daemon {
         info!("database initialized");
         let indexer_service = init_indexer_service(&config, &database).await?;
         info!("indexer service initialized");
-        let listener = init_listener(&config).await?;
+        let listener = init_listener(&config);
         info!("RPC listener initialized: {}", config.solana_rpc_ws);
         let watched_pool_service = init_watched_pool_service(&database, listener.clone()).await?;
         info!("watched pool service initialized");
@@ -74,8 +74,14 @@ impl Daemon {
         let _database = self.database;
 
         tokio::select! {
-            result = ws_task => handle_task_result(result, "WebSocket listener")?,
-            result = indexer_task => handle_task_result(result, "indexer")?,
+            result = ws_task => {
+                shutdown.cancel(); 
+                handle_task_result(result, "WebSocket listener")?
+            }
+            result = indexer_task => {
+                shutdown.cancel();
+                handle_task_result(result, "indexer")?
+            }
             _ = shutdown.cancelled() => tracing::info!("cancellation received — stopping"),
         }
         Ok(())
@@ -112,8 +118,8 @@ async fn init_indexer_service(
 }
 
 /// Create the RPC WebSocket listener.
-async fn init_listener(config: &Config) -> anyhow::Result<Arc<RpcListener>> {
-    Ok(Arc::new(RpcListener::new(config.solana_rpc_ws.clone())))
+fn init_listener(config: &Config) -> Arc<RpcListener> {
+    Arc::new(RpcListener::new(config.solana_rpc_ws.clone()))
 }
 
 /// Initialise the WatchedPoolService and its repository dependency.

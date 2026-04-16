@@ -3,6 +3,7 @@ use solana_commitment_config::CommitmentConfig;
 use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_rpc_client_api::{
+    client_error::AnyhowError,
     config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter},
     response::{Response, RpcLogsResponse},
 };
@@ -15,6 +16,8 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use yog_core::domain::WatchedPool;
+
+use crate::error::RpcListenerError;
 
 const MAX_RETRY_ATTEMPTS: u32 = 10;
 const MAX_RETRY_DELAY_SECS: u64 = 60;
@@ -86,7 +89,7 @@ impl RpcListener {
             info!("connecting to Solana RPC WebSocket: {}", self.ws_url);
 
             tokio::select! {
-                result = self.subscriber_pool(tx.clone(), shutdown.clone()) => {
+                result = self.connect_and_subscribe (tx.clone(), shutdown.clone()) => {
                     attempts += 1;
                     if handle_connection_result(result, attempts, retry_delay)? {
                         return Ok(());
@@ -113,31 +116,39 @@ impl RpcListener {
 
     /// Open a PubSub connection and spawn one subscription task per watched pool.
     ///
-    /// Returns `Ok(())` when all tasks finish normally. Returns `Err` on
-    /// connection failure.
-    async fn subscriber_pool(
+    /// Returns `Ok(())` when all subscription tasks finish normally.
+    /// Returns `Err(RpcListenerError::PubSubClient)` if the WebSocket connection fails.
+    /// Returns `Err(RpcListenerError::NoPoolsConfigured)` if no pools are registered.
+    /// Returns `Err(RpcListenerError::AllSubscriptionsFailed)` if every subscription task fails.
+    async fn connect_and_subscribe(
         &self,
         tx: mpsc::Sender<(WatchedPool, String)>,
         shutdown: CancellationToken,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let pubsub = Arc::new(PubsubClient::new(&self.ws_url).await?);
-        let watched_pools = self.watched_pools.lock().await.clone();
+    ) -> Result<(), RpcListenerError> {
+        let pubsub = connect_pubsub(&self.ws_url).await?;
+        let watched_pools = self.load_watched_pools().await?;
         info!("connected — subscribing to {} pool(s)", watched_pools.len());
+        let total = watched_pools.len();
 
         let handles: Vec<_> = watched_pools
             .into_iter()
-            .map(|pool| listen_pool(pool, Arc::clone(&pubsub), tx.clone(), shutdown.clone()))
+            .map(|pool| {
+                spawn_pool_subscription(pool, Arc::clone(&pubsub), tx.clone(), shutdown.clone())
+            })
             .collect();
 
-        for handle in handles {
-            match handle.await {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => error!(error = %e, "subscription task failed"),
-                Err(e) => error!(error = %e, "subscription task panicked"),
-            }
+        join_subscription_handles(handles, total).await
+    }
+
+    /// Return the current watch list, or `Err(RpcListenerError::NoPoolsConfigured)` if empty.
+    async fn load_watched_pools(&self) -> Result<Vec<WatchedPool>, RpcListenerError> {
+        let pools = self.watched_pools.lock().await.clone();
+        if pools.is_empty() {
+            warn!("connected but no pools to watch — waiting for subscriptions");
+            return Err(RpcListenerError::NoPoolsConfigured);
         }
 
-        Ok(())
+        Ok(pools)
     }
 }
 
@@ -146,7 +157,7 @@ impl RpcListener {
 /// Returns `Ok(true)` on clean stop, `Ok(false)` to retry, or `Err` if the
 /// maximum number of attempts has been reached.
 fn handle_connection_result(
-    result: Result<(), Box<dyn std::error::Error + Send + Sync>>,
+    result: Result<(), RpcListenerError>,
     attempts: u32,
     retry_delay: u64,
 ) -> anyhow::Result<bool> {
@@ -154,6 +165,9 @@ fn handle_connection_result(
         Ok(()) => {
             info!("RPC listener stopped cleanly");
             Ok(true)
+        }
+        Err(RpcListenerError::NoPoolsConfigured) => {
+            Ok(false)
         }
         Err(e) => {
             if attempts >= MAX_RETRY_ATTEMPTS {
@@ -166,18 +180,48 @@ fn handle_connection_result(
                 attempt = attempts,
                 max = MAX_RETRY_ATTEMPTS,
                 retry_in = retry_delay,
-                "RPC WebSocket disconnected — reconnecting"
+                "connection issue — reconnecting"
             );
             Ok(false)
         }
     }
 }
 
+/// Await all subscription task handles and aggregate failures.
+///
+/// Individual task failures are logged but do not stop the others.
+/// Returns `Err(RpcListenerError::AllSubscriptionsFailed)` only if every task failed.
+async fn join_subscription_handles(
+    handles: Vec<JoinHandle<Result<(), AnyhowError>>>,
+    total: usize,
+) -> Result<(), RpcListenerError> {
+    let mut failed = 0usize;
+    for handle in handles {
+        match handle.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                error!(error = %e, "subscription task failed");
+                failed += 1;
+            }
+            Err(e) => {
+                error!(error = %e, "subscription task panicked");
+                failed += 1;
+            }
+        }
+    }
+
+    if failed == total {
+        return Err(RpcListenerError::AllSubscriptionsFailed { count: total });
+    }
+
+    Ok(())
+}
+
 /// Subscribe to logs for a single pool and spawn a dispatch task.
 ///
 /// Returns a `JoinHandle` that resolves when the stream closes or shutdown
 /// is requested.
-fn listen_pool(
+fn spawn_pool_subscription(
     pool: WatchedPool,
     pubsub: Arc<PubsubClient>,
     tx: mpsc::Sender<(WatchedPool, String)>,
@@ -206,8 +250,7 @@ fn listen_pool(
 /// Drive the log stream for a single pool until the stream closes or shutdown
 /// is requested.
 ///
-/// Each incoming signature is dispatched to `index_transaction` in a
-/// dedicated `tokio::spawn` task to avoid blocking the stream loop.
+/// Each incoming signature is dispatched via the `tx` channel to the indexer task.
 async fn dispatch_signatures<S, U>(
     pool_address_str: &str,
     mut stream: S,
@@ -243,4 +286,13 @@ async fn dispatch_signatures<S, U>(
             }
         }
     }
+}
+
+/// Open a WebSocket connection to the Solana PubSub endpoint.
+///
+/// Returns `Err(RpcListenerError::PubSubClient)` if the connection cannot be established.
+async fn connect_pubsub(ws_url: &str) -> Result<Arc<PubsubClient>, RpcListenerError> {
+    Ok(Arc::new(PubsubClient::new(ws_url).await.map_err(|e| {
+        RpcListenerError::PubSubClient(e.to_string())
+    })?))
 }
