@@ -1,6 +1,10 @@
+use crate::domain::LiquidityEventKind;
 use crate::protocols::meteora::damm_v2::{reserves, transfer};
 use crate::protocols::meteora::{extract_signature, extract_timestamp};
-use crate::{domain::SwapEvent, CoreError, CoreResult};
+use crate::{
+    domain::{LiquidityEvent, SwapEvent},
+    CoreError, CoreResult,
+};
 use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
@@ -42,6 +46,36 @@ pub(super) fn parse_swap(
         reserve_b_after,
         fee_bps: None,
         fee_amount: None,
+        signature,
+        timestamp,
+    })
+}
+
+pub(super) fn parse_liquidity(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+    pool_address: Pubkey,
+    program_id_str: &str,
+    liquidity_kind: LiquidityEventKind,
+) -> CoreResult<LiquidityEvent> {
+    let meta = tx
+        .transaction
+        .meta
+        .as_ref()
+        .ok_or_else(|| CoreError::ParseError {
+            signature: String::new(),
+            reason: "missing transaction meta".to_string(),
+        })?;
+
+    let signature = extract_signature(tx)?;
+    let timestamp = extract_timestamp(tx)?;
+
+    let (transfer_a, transfer_b) = transfer::extract_liquidity_transfers(meta, &signature)?;
+
+    Ok(LiquidityEvent {
+        pool_address,
+        liquidity_event_kind: liquidity_kind,
+        amount_a: transfer_a.amount,
+        amount_b: transfer_b.amount,
         signature,
         timestamp,
     })

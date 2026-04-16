@@ -74,6 +74,44 @@ pub(super) fn extract_swap_transfers(
     })
 }
 
+/// Find the two transferChecked instructions for an AddLiquidity/RemoveLiquidity.
+///
+/// Unlike swaps, liquidity transfers appear at the start of the inner instruction
+/// group, before the DAMM v2 event instruction.
+pub(super) fn extract_liquidity_transfers(
+    meta: &UiTransactionStatusMeta,
+    signature: &str,
+) -> CoreResult<(TokenTransfer, TokenTransfer)> {
+    use solana_transaction_status::option_serializer::OptionSerializer;
+
+    let inner_instructions = match &meta.inner_instructions {
+        OptionSerializer::Some(inner) => inner,
+        _ => return Err(CoreError::MissingField {
+            signature: signature.to_string(),
+            field: "innerInstructions".to_string(),
+        }),
+    };
+
+    for group in inner_instructions {
+        let transfers: Vec<&UiInstruction> = group.instructions
+            .iter()
+            .filter(|ix| is_transfer_checked(ix))
+            .take(2)
+            .collect();
+
+        if transfers.len() == 2 {
+            let transfer_a = extract_transfer(transfers[0], signature)?;
+            let transfer_b = extract_transfer(transfers[1], signature)?;
+            return Ok((transfer_a, transfer_b));
+        }
+    }
+
+    Err(CoreError::ParseError {
+        signature: signature.to_string(),
+        reason: "no transferChecked pair found for liquidity event".to_string(),
+    })
+}
+
 /// Extract mint, amount, and vault address from a transferChecked instruction.
 fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTransfer> {
     let parsed = match ix {

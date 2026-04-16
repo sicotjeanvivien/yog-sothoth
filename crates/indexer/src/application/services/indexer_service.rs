@@ -61,13 +61,32 @@ impl IndexerService {
 
         if indexer.is_swap(&tx) {
             let swap = indexer.parse_swap(&tx)?;
-            info!(signature = %swap.signature, amount_in = swap.amount_in, amount_out = swap.amount_out, "swap parsed");
+            info!(
+                signature = %swap.signature,
+                amount_in = swap.amount_in,
+                amount_out = swap.amount_out,
+                "swap parsed"
+            );
             self.persist_swap(&swap).await?;
             self.persist_metrics(&swap).await?;
         } else if indexer.is_add_liquidity(&tx) {
-            // Phase 2
+            let event = indexer.parse_add_liquidity(&tx)?;
+            info!(
+                signature = %event.signature,
+                amount_a = event.amount_a,
+                amount_b = event.amount_b,
+                "add liquidity parsed"
+            );
+            self.persist_liquidity_event(&event).await?;
         } else if indexer.is_remove_liquidity(&tx) {
-            // Phase 2
+            let event = indexer.parse_remove_liquidity(&tx)?;
+            info!(
+                signature = %event.signature,
+                amount_a = event.amount_a,
+                amount_b = event.amount_b,
+                "remove liquidity parsed"
+            );
+            self.persist_liquidity_event(&event).await?;
         } else {
             debug!("skipping unrecognised transaction: {signature}");
         }
@@ -83,6 +102,11 @@ impl IndexerService {
     async fn persist_metrics(&self, swap: &SwapEvent) -> anyhow::Result<()> {
         let metric = self.compute_metrics(swap)?;
         self.pool_metric_repo.insert(&metric).await?;
+        Ok(())
+    }
+
+    async fn persist_liquidity_event(&self, event: &LiquidityEvent) -> anyhow::Result<()> {
+        self.liquidity_event_repo.insert(event).await?;
         Ok(())
     }
 
