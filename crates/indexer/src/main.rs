@@ -12,7 +12,7 @@
 //!  ├─ init_tracing()      → structured logging (JSON prod / text dev)
 //!  ├─ Config::load()      → explicit validation, no credentials in logs
 //!  ├─ Daemon::new(config) → wires the dependency graph
-//!  └─ run_until_shutdown() → races daemon loop vs. SIGTERM / Ctrl-C
+//!  └─ Daemon::run()       → drives the indexer loop until shutdown signal
 //! ```
 //!
 //! ## Error handling
@@ -35,10 +35,12 @@ mod bootstrap;
 // `config` - Manages configuration loading and validation.
 mod config;
 
+// `error` - Defines IndexerError, the typed error enum for fatal startup failures.
+mod error;
+
 // `infra` - Provides infrastructure utilities (e.g., DB connections, RPC clients).
 mod infra;
 
-use anyhow::Context as _;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
@@ -132,45 +134,31 @@ async fn main() -> anyhow::Result<()> {
     // SECURITY: Config::fmt / Config::debug implementations MUST redact
     // credentials (DATABASE_URL password, API keys) before they reach the
     // log collector. See `config::redact` for the masking logic.
-    let config = match Config::load() {
-        Ok(c) => c,
-        Err(e) => {
-            // Log the full cause chain as a structured error before exiting.
-            // `{e:#}` prints the chain: "invalid config: missing field: RPC_URL"
-            error!(error = %e, "Failed to load configuration");
-            return Err(e);
-        }
-    };
+    let config =
+        Config::load().inspect_err(|e| error!(error = %e, "Failed to load configuration"))?;
 
     // ── Bootstrap ─────────────────────────────────────────────────────────────
     // `Daemon::new` wires the dependency graph: DB pool, RPC client,
     // watched-pool registry. Validates live connections before returning.
-    let daemon = match Daemon::new(config).await {
-        Ok(d) => d,
-        Err(e) => {
-            error!(error = %e, "Failed to initialize daemon");
-            return Err(e);
-        }
-    };
+    let daemon = Daemon::new(config)
+        .await
+        .inspect_err(|e| error!(error = %e, "Failed to initialize daemon"))?;
 
     let token = CancellationToken::new();
 
-    // ── Main loop with graceful shutdown ──────────────────────────────────────
-    // `tokio::select!` races the daemon loop against the shutdown signal.
-    // When a signal arrives, `daemon.run()` is cancelled.
-    // TODO: implement Drop on Daemon to flush in-flight DB writes on shutdown.
-    tokio::select! {
-        result = daemon.run(token.clone()) => {
-            token.cancel();
-            if let Err(ref e) = result {
-                error!(error = %e, "Fatal error in indexing loop");
-            }
-            result.context("Fatal error in indexing loop")
-        }
-        _ = shutdown_signal() => {
-            token.cancel();
-            tracing::info!("shutdown complete");
-            Ok(())
-        }
-    }
+    // ── Graceful shutdown ─────────────────────────────────────────────────────
+    // Spawn a task that waits for SIGTERM / Ctrl-C, then cancels the token.
+    // Daemon::run() observes the token and stops cleanly.
+    let shutdown_token = token.clone();
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        shutdown_token.cancel();
+    });
+
+    // Drive the indexer loop — returns when the token is cancelled
+    // or when an unrecoverable error occurs.
+    daemon
+        .run(token)
+        .await
+        .inspect_err(|e| error!(error = %e, "Fatal error in indexing loop"))
 }

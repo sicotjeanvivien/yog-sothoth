@@ -1,6 +1,8 @@
 use dotenvy::dotenv;
 use std::env;
 
+use crate::error::IndexerError;
+
 /// Application configuration loaded from environment variables.
 pub(crate) struct Config {
     /// TimescaleDB connection URL.
@@ -18,15 +20,15 @@ impl Config {
         dotenv().ok();
 
         Ok(Self {
-            database_url: required("DATABASE_URL"),
-            solana_rpc_ws: required("SOLANA_RPC_WS"),
-            solana_rpc_http: required("SOLANA_RPC_HTTP"),
+            database_url: required("DATABASE_URL")?,
+            solana_rpc_ws: required("SOLANA_RPC_WS")?,
+            solana_rpc_http: required("SOLANA_RPC_HTTP")?,
         })
     }
 }
 
 /// Retrieve a required environment variable.
 /// Panics with a clear message if the variable is missing.
-fn required(key: &str) -> String {
-    env::var(key).unwrap_or_else(|_| panic!("missing required environment variable: {key}"))
+fn required(key: &str) -> Result<String, IndexerError> {
+    env::var(key).map_err(|_| IndexerError::ConfigError(key.to_string()))
 }
