@@ -1,5 +1,7 @@
 # yog-sothoth
 
+![CI](https://github.com/sicotjeanvivien/yog-sothoth/actions/workflows/ci.yml/badge.svg)
+
 > Real-time liquidity analysis engine for Meteora DEX pools on Solana.
 
 *Yog-Sothoth is the entity that sees everything simultaneously — past, present, future, all planes of existence at once. A fitting name for a tool that continuously observes the on-chain transaction stream, reconstructs pool state over time, and detects patterns in DeFi liquidity flows.*
@@ -145,13 +147,75 @@ SOLANA_RPC_WS=wss://api.mainnet-beta.solana.com
 
 ---
 
+## Development
+
+### Workspace layout
+
+The Rust workspace is organized into three crates with clear separation of concerns:
+
+- **`yog-core`** — domain logic, AMM formulas, protocol parsing. Compiles native and (eventually) WASM.
+- **`yog-indexer`** — native-only binary. Solana WebSocket listener, TimescaleDB persistence via SQLx.
+- **`yog-wasm`** — browser-facing wrapper around `yog-core`. Currently a scaffold (see *Feature flags* below).
+
+### Feature flags
+
+`yog-core` exposes two features to support its dual compilation target:
+
+| Feature | Default | Purpose |
+|---|---|---|
+| `solana` | ✅ | Pulls in `solana-pubkey`, `solana-transaction-status`. Required by `yog-indexer`. |
+| `wasm` | — | Reserved for the browser build. **Not yet functional.** |
+
+The `wasm` feature is currently a placeholder. Activating it will require conditional
+compilation (`#[cfg(feature = "solana")]`) on the `amm` and `protocols` modules, plus
+abstracting `Pubkey` behind a neutral type alias. Scheduled for **Phase 2**.
+
+### Continuous integration
+
+GitHub Actions runs on every push and pull request to `main`:
+
+- **Format** — `cargo fmt --all -- --check` (strict)
+- **Lint** — `cargo clippy -p yog-core -p yog-indexer --all-targets --all-features` (warnings non-blocking during initial development)
+- **Tests** — `cargo test -p yog-core -p yog-indexer --all-features` (strict)
+
+SQLx compile-time query verification runs in offline mode via `SQLX_OFFLINE=true`,
+using the committed `.sqlx/` cache. **When you modify an `sqlx::query!` call, regenerate
+the cache** before committing:
+
+```bash
+cd crates/indexer
+cargo sqlx prepare
+```
+
+WASM builds are not part of CI yet — see *Feature flags* above.
+
+### Local checks before pushing
+
+The CI mirrors these three commands. Run them locally to catch issues before pushing:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy -p yog-core -p yog-indexer --all-targets --all-features
+SQLX_OFFLINE=true cargo test -p yog-core -p yog-indexer --all-features
+```
+
+### Lint policy
+
+Clippy warnings are currently **non-blocking** in CI. The project is in an early
+architectural phase with deliberate scaffolding (e.g. unused `program_id_str` fields
+anticipating future protocol support). `-D warnings` will be reactivated once the
+core architecture stabilizes (target: end of Phase 1).
+
+---
+
 ## Roadmap
 
 - [x] Project setup — Rust workspace, TimescaleDB, Next.js scaffold
+- [x] CI pipeline — GitHub Actions (fmt, clippy, tests) with SQLx offline verification
 - [ ] **Phase 1** — Indexer + `yog-core`: Solana WebSocket, DAMM v2 parser, AMM formulas
 - [ ] **Phase 2** — WASM integration + minimal Next.js dashboard
 - [ ] **Phase 3** — Full REST API, time-series persistence, configurable alerts
-- [ ] **Phase 4** — Production dashboard, CI/CD, Clever Cloud deployment
+- [ ] **Phase 4** — Production dashboard, CD, Clever Cloud deployment
 
 ---
 
@@ -159,12 +223,28 @@ SOLANA_RPC_WS=wss://api.mainnet-beta.solana.com
 
 Contributions are welcome. Please open an issue before submitting a pull request to discuss what you would like to change.
 
-This project follows standard Rust and TypeScript conventions:
+### Rust conventions
+
+All Rust code must pass the checks enforced by CI (see *Development > Continuous integration*):
 
 ```bash
-cargo fmt && cargo clippy   # Rust
-npm run lint                # TypeScript
+cargo fmt --all              # Format code
+cargo clippy --workspace     # Lint (warnings visible, non-blocking)
+cargo test --workspace       # Run tests
 ```
+
+### TypeScript conventions
+
+```bash
+cd web
+npm run lint
+```
+
+### Before opening a PR
+
+1. Run the three local CI commands listed in *Development > Local checks*
+2. If you modified an `sqlx::query!` call, regenerate `.sqlx/` with `cargo sqlx prepare`
+3. Open your PR against `main` — GitHub Actions will run automatically
 
 ---
 
