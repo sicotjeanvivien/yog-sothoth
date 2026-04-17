@@ -8,12 +8,14 @@ use solana_pubkey::{pubkey, Pubkey};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Meteora DAMM v2 program ID.
-pub const METEORA_DAMM_V1_PROGRAM_ID: Pubkey = pubkey!("Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB");
+pub const METEORA_DAMM_V1_PROGRAM_ID: Pubkey =
+    pubkey!("Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB");
 
 /// Meteora DAMM v1 protocol handler (x·y=k + dual-yield).
 /// Phase 2 — stub only.
 pub struct MeteoraDammV1 {
     pub pool_address: Pubkey,
+    #[expect(dead_code, reason = "Meteora DAMM v1 — Phase 2")]
     program_id_str: String,
 }
 

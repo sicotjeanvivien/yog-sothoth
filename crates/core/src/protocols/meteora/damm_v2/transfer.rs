@@ -1,7 +1,7 @@
-use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionStatusMeta};
 use crate::{CoreError, CoreResult};
-use std::str::FromStr;
 use solana_pubkey::Pubkey;
+use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionStatusMeta};
+use std::str::FromStr;
 
 /// Intermediate struct for a token transfer extracted from inner instructions.
 pub(crate) struct TokenTransfer {
@@ -86,14 +86,17 @@ pub(super) fn extract_liquidity_transfers(
 
     let inner_instructions = match &meta.inner_instructions {
         OptionSerializer::Some(inner) => inner,
-        _ => return Err(CoreError::MissingField {
-            signature: signature.to_string(),
-            field: "innerInstructions".to_string(),
-        }),
+        _ => {
+            return Err(CoreError::MissingField {
+                signature: signature.to_string(),
+                field: "innerInstructions".to_string(),
+            })
+        }
     };
 
     for group in inner_instructions {
-        let transfers: Vec<&UiInstruction> = group.instructions
+        let transfers: Vec<&UiInstruction> = group
+            .instructions
             .iter()
             .filter(|ix| is_transfer_checked(ix))
             .take(2)

@@ -75,7 +75,7 @@ impl Daemon {
 
         tokio::select! {
             result = ws_task => {
-                shutdown.cancel(); 
+                shutdown.cancel();
                 handle_task_result(result, "WebSocket listener")?
             }
             result = indexer_task => {
