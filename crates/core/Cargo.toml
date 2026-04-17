@@ -3,12 +3,16 @@ name = "yog-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["solana"]
+solana = ["dep:solana-transaction-status", "dep:solana-pubkey"]
+wasm = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-solana-pubkey = { workspace = true }
-solana-transaction-status = { workspace = true }
-# borsh = { workspace = true }
+solana-pubkey = { workspace = true, optional = true, default-features = false }
+solana-transaction-status = { workspace = true, optional = true, default-features = false }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
