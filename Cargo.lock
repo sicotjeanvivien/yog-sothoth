@@ -1301,33 +1301,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indexer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "dotenvy",
- "futures-util",
- "serde",
- "serde_json",
- "solana-commitment-config",
- "solana-pubkey 3.0.0",
- "solana-pubsub-client",
- "solana-rpc-client",
- "solana-rpc-client-api",
- "solana-transaction-status",
- "sqlx",
- "thiserror 2.0.18",
- "tokio",
- "tokio-retry",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "yog-core",
-]
-
-[[package]]
 name = "indexmap"
 version = "2.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4639,16 +4612,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 
 [[package]]
-name = "wasm"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "yog-core",
-]
-
-[[package]]
 name = "wasm-bindgen"
 version = "0.2.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5089,6 +5052,43 @@ dependencies = [
  "solana-pubkey 3.0.0",
  "solana-transaction-status",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "yog-indexer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dotenvy",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "solana-commitment-config",
+ "solana-pubkey 3.0.0",
+ "solana-pubsub-client",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-transaction-status",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-retry",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "yog-core",
+]
+
+[[package]]
+name = "yog-wasm"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "yog-core",
 ]
 
 [[package]]

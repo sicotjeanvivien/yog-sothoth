@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO swap_events\n                (pool_address, signature, token_in_mint, token_out_mint,\n                amount_in, amount_out,\n                reserve_a_before, reserve_b_before, reserve_a_after, reserve_b_after,\n                fee_bps, fee_amount, timestamp)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int4",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aa9bccdb1411688817118d6113094d659b273cc6fc7216b5fbfef7c15554a24b"
+}

@@ -166,9 +166,7 @@ fn handle_connection_result(
             info!("RPC listener stopped cleanly");
             Ok(true)
         }
-        Err(RpcListenerError::NoPoolsConfigured) => {
-            Ok(false)
-        }
+        Err(RpcListenerError::NoPoolsConfigured) => Ok(false),
         Err(e) => {
             if attempts >= MAX_RETRY_ATTEMPTS {
                 return Err(anyhow::anyhow!(

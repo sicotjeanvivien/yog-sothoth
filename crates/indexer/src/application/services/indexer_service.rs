@@ -4,7 +4,7 @@ use solana_rpc_client_api::config::RpcTransactionConfig;
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use yog_core::{
     amm::{
         common::{imbalance, spot_price},

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM watched_pools WHERE pool_address = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88d0b91b56e7e10be9bb4c7a555221d176c6d465796556557089309be6fe5c48"
+}

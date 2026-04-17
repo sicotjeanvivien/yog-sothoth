@@ -35,7 +35,7 @@ pub(super) fn parse_swap(
         reserves::extract_reserves(tx, meta, &vault_a, &vault_b, &signature)?;
 
     Ok(SwapEvent {
-        pool_address: pool_address,
+        pool_address,
         token_in_mint: transfer_in.mint,
         token_out_mint: transfer_out.mint,
         amount_in: transfer_in.amount,
@@ -54,7 +54,7 @@ pub(super) fn parse_swap(
 pub(super) fn parse_liquidity(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
     pool_address: Pubkey,
-    program_id_str: &str,
+    _program_id_str: &str,
     liquidity_kind: LiquidityEventKind,
 ) -> CoreResult<LiquidityEvent> {
     let meta = tx

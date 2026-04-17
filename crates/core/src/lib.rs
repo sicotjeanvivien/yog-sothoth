@@ -1,7 +1,9 @@
+#[cfg(feature = "solana")]
 pub mod amm;
-pub mod error;
-pub mod protocols;
 pub mod domain;
+pub mod error;
+#[cfg(feature = "solana")]
+pub mod protocols;
 
 pub use error::CoreError;
 

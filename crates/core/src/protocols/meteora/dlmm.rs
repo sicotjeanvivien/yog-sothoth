@@ -12,6 +12,7 @@ const METEORA_DLMM_PROGRAM_ID: Pubkey = pubkey!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhT
 /// Phase 2 — stub only.
 pub struct MeteoraDlmm {
     pub pool_address: Pubkey,
+    #[expect(dead_code, reason = "Meteora DLMM program ID — Phase 2")]
     program_id_str: String,
 }
 

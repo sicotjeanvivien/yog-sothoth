@@ -1,9 +1,7 @@
 use crate::{CoreError, CoreResult};
 use chrono::{DateTime, Utc};
 use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransaction,
-    UiMessage,
+    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiMessage,
     UiTransactionTokenBalance,
 };
 
@@ -12,14 +10,16 @@ pub(crate) fn extract_signature(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
 ) -> CoreResult<String> {
     match &tx.transaction.transaction {
-        EncodedTransaction::Json(ui_tx) => ui_tx
-            .signatures
-            .first()
-            .cloned()
-            .ok_or_else(|| CoreError::MissingField {
-                signature: String::new(),
-                field: "signatures".to_string(),
-            }),
+        EncodedTransaction::Json(ui_tx) => {
+            ui_tx
+                .signatures
+                .first()
+                .cloned()
+                .ok_or_else(|| CoreError::MissingField {
+                    signature: String::new(),
+                    field: "signatures".to_string(),
+                })
+        }
         _ => Err(CoreError::ParseError {
             signature: String::new(),
             reason: "unexpected transaction encoding".to_string(),
@@ -49,10 +49,12 @@ pub(crate) fn extract_account_keys(
 ) -> CoreResult<Vec<String>> {
     let ui_tx = match &tx.transaction.transaction {
         EncodedTransaction::Json(ui_tx) => ui_tx,
-        _ => return Err(CoreError::ParseError {
-            signature: signature.to_string(),
-            reason: "unexpected transaction encoding".to_string(),
-        }),
+        _ => {
+            return Err(CoreError::ParseError {
+                signature: signature.to_string(),
+                reason: "unexpected transaction encoding".to_string(),
+            })
+        }
     };
 
     let keys = match &ui_tx.message {
