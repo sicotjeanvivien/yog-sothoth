@@ -1,6 +1,6 @@
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_api::config::RpcTransactionConfig;
+use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
@@ -12,7 +12,7 @@ use yog_core::{
     },
     domain::{
         LiquidityEvent, LiquidityEventRepository, PoolMetric, PoolMetricRepository, Protocol,
-        SwapEvent, SwapEventRepository, WatchedPool,
+        SwapEvent, SwapEventRepository,
     },
     protocols::{
         meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
@@ -48,16 +48,16 @@ impl IndexerService {
     /// Handle a transaction signature received from the WebSocket.
     pub(crate) async fn index_transaction(
         &self,
-        watched_pool: WatchedPool,
-        signature: String,
+        protocol: Protocol,
+        signature: Signature,
     ) -> anyhow::Result<()> {
-        info!("received signature: {signature}");
+        info!(%signature, protocol = %protocol.as_str(), "received signature");
         let tx = self
-            .fetch_transaction(&signature)
+            .fetch_transaction(signature)
             .await?
             .ok_or_else(|| anyhow::anyhow!("transaction not found: {signature}"))?;
 
-        let indexer = protocol_indexer(&watched_pool);
+        let indexer = protocol_indexer(&protocol);
 
         if indexer.is_swap(&tx) {
             let swap = indexer.parse_swap(&tx)?;
@@ -75,7 +75,7 @@ impl IndexerService {
                 signature = %event.signature,
                 amount_a = event.amount_a,
                 amount_b = event.amount_b,
-                "add liquidity parsed"
+                "add liquidity parsed"  
             );
             self.persist_liquidity_event(&event).await?;
         } else if indexer.is_remove_liquidity(&tx) {
@@ -113,10 +113,8 @@ impl IndexerService {
     /// Fetch a confirmed transaction by signature from the RPC.
     async fn fetch_transaction(
         &self,
-        signature: &str,
+        signature: Signature,
     ) -> anyhow::Result<Option<EncodedConfirmedTransactionWithStatusMeta>> {
-        let sig = signature.parse()?;
-
         let config = RpcTransactionConfig {
             encoding: Some(UiTransactionEncoding::JsonParsed),
             commitment: Some(CommitmentConfig::confirmed()),
@@ -127,7 +125,7 @@ impl IndexerService {
 
         let result = Retry::spawn(strategy, || async {
             self.rpc_client
-                .get_transaction_with_config(&sig, config)
+                .get_transaction_with_config(&signature, config)
                 .await
                 .map_err(|e| e.to_string())
         })
@@ -180,10 +178,10 @@ impl IndexerService {
     }
 }
 
-fn protocol_indexer(pool: &WatchedPool) -> Arc<dyn PoolIndexer> {
-    match pool.protocol {
-        Protocol::MeteoraDammV2 => Arc::new(MeteoraDammV2::new(pool.pool_address)),
-        Protocol::MeteoraDammV1 => Arc::new(MeteoraDammV1::new(pool.pool_address)),
-        Protocol::MeteoraDlmm => Arc::new(MeteoraDlmm::new(pool.pool_address)),
+fn protocol_indexer(protocol: &Protocol) -> Arc<dyn PoolIndexer> {
+    match protocol {
+        Protocol::MeteoraDammV2 => Arc::new(MeteoraDammV2::new()),
+        Protocol::MeteoraDammV1 => Arc::new(MeteoraDammV1::new()),
+        Protocol::MeteoraDlmm => Arc::new(MeteoraDlmm::new()),
     }
 }

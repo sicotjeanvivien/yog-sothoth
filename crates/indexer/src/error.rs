@@ -3,5 +3,4 @@ pub(crate) mod indexer_error;
 pub(crate) mod rcp_listener_error;
 
 pub(crate) use config_error::ConfigError;
-pub(crate) use indexer_error::IndexerError;
 pub(crate) use rcp_listener_error::RpcListenerError;

@@ -1,21 +1,21 @@
 use futures_util::StreamExt;
 use solana_commitment_config::CommitmentConfig;
-use solana_pubkey::Pubkey;
 use solana_pubsub_client::nonblocking::pubsub_client::PubsubClient;
 use solana_rpc_client_api::{
     client_error::AnyhowError,
     config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter},
-    response::{Response, RpcLogsResponse},
+    response::{transaction::Signature, Response, RpcLogsResponse},
 };
-use std::time::Duration;
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    collections::HashSet, future::Future, pin::Pin, str::FromStr, sync::Arc, time::Duration,
+};
 use tokio::{
     sync::{mpsc, Mutex},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
-use yog_core::domain::WatchedPool;
+use yog_core::domain::Protocol;
 
 use crate::error::RpcListenerError;
 
@@ -26,7 +26,7 @@ const INITIAL_RETRY_DELAY_SECS: u64 = 1;
 /// Manages the WebSocket connection to the Solana RPC.
 ///
 /// Responsibilities:
-/// - maintain the list of watched pool addresses
+/// - maintain the list of watched protocols
 /// - connect to the Solana PubSub WebSocket and subscribe to log events
 /// - reconnect automatically on disconnection (exponential backoff)
 /// - dispatch incoming signatures to the provided handler
@@ -38,33 +38,30 @@ const INITIAL_RETRY_DELAY_SECS: u64 = 1;
 /// to push watch/unwatch commands into the active loop without reconnecting.
 pub(crate) struct RpcListener {
     ws_url: String,
-    watched_pools: Mutex<Vec<WatchedPool>>,
+    watched_protocols: Mutex<HashSet<Protocol>>,
 }
 
 impl RpcListener {
     pub(crate) fn new(ws_url: String) -> Self {
         Self {
             ws_url,
-            watched_pools: Mutex::new(Vec::new()),
+            watched_protocols: Mutex::new(HashSet::new()),
         }
     }
 
-    /// Add a pool to the watch list.
+    /// Add a protocol to the watch list.
     ///
     /// Takes effect on the next (re)connection — not applied to an already
     /// running WebSocket session (phase 1 limitation).
-    pub(crate) async fn watch(&self, pool: WatchedPool) {
-        self.watched_pools.lock().await.push(pool);
+    pub(crate) async fn watch(&self, protocol: Protocol) {
+        self.watched_protocols.lock().await.insert(protocol);
     }
 
-    /// Remove a pool from the watch list by address.
+    /// Remove a protocol from the watch list.
     ///
     /// Takes effect on the next (re)connection.
-    pub(crate) async fn unwatch(&self, pool_address: &Pubkey) {
-        self.watched_pools
-            .lock()
-            .await
-            .retain(|p| &p.pool_address != pool_address);
+    pub(crate) async fn unwatch(&self, protocol: &Protocol) {
+        self.watched_protocols.lock().await.remove(protocol);
     }
 
     /// Start the listener loop with automatic reconnection and graceful shutdown.
@@ -79,7 +76,7 @@ impl RpcListener {
     /// reconnection loop and the active WebSocket session respect the token.
     pub(crate) async fn run(
         &self,
-        tx: mpsc::Sender<(WatchedPool, String)>,
+        tx: mpsc::Sender<(Protocol, Signature)>,
         shutdown: CancellationToken,
     ) -> anyhow::Result<()> {
         let mut retry_delay = INITIAL_RETRY_DELAY_SECS;
@@ -114,41 +111,54 @@ impl RpcListener {
         }
     }
 
-    /// Open a PubSub connection and spawn one subscription task per watched pool.
+    /// Open a PubSub connection and spawn one subscription task per watched protocol.
     ///
     /// Returns `Ok(())` when all subscription tasks finish normally.
     /// Returns `Err(RpcListenerError::PubSubClient)` if the WebSocket connection fails.
-    /// Returns `Err(RpcListenerError::NoPoolsConfigured)` if no pools are registered.
+    /// Returns `Err(RpcListenerError::NoProtocolsConfigured)` if no protocols are registered.
     /// Returns `Err(RpcListenerError::AllSubscriptionsFailed)` if every subscription task fails.
     async fn connect_and_subscribe(
         &self,
-        tx: mpsc::Sender<(WatchedPool, String)>,
+        tx: mpsc::Sender<(Protocol, Signature)>,
         shutdown: CancellationToken,
     ) -> Result<(), RpcListenerError> {
         let pubsub = connect_pubsub(&self.ws_url).await?;
-        let watched_pools = self.load_watched_pools().await?;
-        info!("connected — subscribing to {} pool(s)", watched_pools.len());
-        let total = watched_pools.len();
+        let watched_protocols = self.load_watched_protocols().await?;
+        info!(
+            "connected — subscribing to {} protocol(s)",
+            watched_protocols.len()
+        );
+        let total = watched_protocols.len();
 
-        let handles: Vec<_> = watched_pools
+        let handles: Vec<_> = watched_protocols
             .into_iter()
-            .map(|pool| {
-                spawn_pool_subscription(pool, Arc::clone(&pubsub), tx.clone(), shutdown.clone())
+            .map(|protocol| {
+                spawn_protocol_subscription(
+                    protocol,
+                    Arc::clone(&pubsub),
+                    tx.clone(),
+                    shutdown.clone(),
+                )
             })
             .collect();
 
         join_subscription_handles(handles, total).await
     }
 
-    /// Return the current watch list, or `Err(RpcListenerError::NoPoolsConfigured)` if empty.
-    async fn load_watched_pools(&self) -> Result<Vec<WatchedPool>, RpcListenerError> {
-        let pools = self.watched_pools.lock().await.clone();
-        if pools.is_empty() {
-            warn!("connected but no pools to watch — waiting for subscriptions");
-            return Err(RpcListenerError::NoPoolsConfigured);
+    /// Return the current watch list, or `Err(RpcListenerError::NoProtocolsConfigured)` if empty.
+    async fn load_watched_protocols(&self) -> Result<Vec<Protocol>, RpcListenerError> {
+        let protocols: Vec<Protocol> = self
+            .watched_protocols
+            .lock()
+            .await
+            .iter()
+            .cloned()
+            .collect();
+        if protocols.is_empty() {
+            warn!("connected but no protocols to watch");
+            return Err(RpcListenerError::NoProtocolsConfigured);
         }
-
-        Ok(pools)
+        Ok(protocols)
     }
 }
 
@@ -166,7 +176,7 @@ fn handle_connection_result(
             info!("RPC listener stopped cleanly");
             Ok(true)
         }
-        Err(RpcListenerError::NoPoolsConfigured) => Ok(false),
+        Err(RpcListenerError::NoProtocolsConfigured) => Ok(false),
         Err(e) => {
             if attempts >= MAX_RETRY_ATTEMPTS {
                 return Err(anyhow::anyhow!(
@@ -215,46 +225,47 @@ async fn join_subscription_handles(
     Ok(())
 }
 
-/// Subscribe to logs for a single pool and spawn a dispatch task.
+/// Subscribe to logs for a single protocol and spawn a dispatch task.
 ///
 /// Returns a `JoinHandle` that resolves when the stream closes or shutdown
 /// is requested.
-fn spawn_pool_subscription(
-    pool: WatchedPool,
+fn spawn_protocol_subscription(
+    protocol: Protocol,
     pubsub: Arc<PubsubClient>,
-    tx: mpsc::Sender<(WatchedPool, String)>,
+    tx: mpsc::Sender<(Protocol, Signature)>,
     shutdown: CancellationToken,
 ) -> JoinHandle<anyhow::Result<()>> {
     tokio::spawn(async move {
-        let pool_address_str = pool.pool_address_str();
-        let filter = RpcTransactionLogsFilter::Mentions(vec![pool_address_str.clone()]);
+        let program_id = protocol.program_id();
+        let filter = RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]);
         let config = RpcTransactionLogsConfig {
             commitment: Some(CommitmentConfig::confirmed()),
         };
 
+        let protocol_name = protocol.as_str();
         let (stream, unsubscribe) = pubsub
             .logs_subscribe(filter, config)
             .await
-            .map_err(|e| anyhow::anyhow!("subscribe failed for {pool_address_str}: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("subscribe failed for {protocol_name}: {e}"))?;
 
-        info!("subscribed to pool: {pool_address_str}");
+        info!(protocol = %protocol_name, program_id = %program_id, "subscribed");
 
-        dispatch_signatures(&pool_address_str, stream, unsubscribe, pool, tx, shutdown).await;
+        dispatch_signatures(protocol_name, stream, unsubscribe, protocol, tx, shutdown).await;
 
         anyhow::Ok(())
     })
 }
 
-/// Drive the log stream for a single pool until the stream closes or shutdown
+/// Drive the log stream for a single protocol until the stream closes or shutdown
 /// is requested.
 ///
 /// Each incoming signature is dispatched via the `tx` channel to the indexer task.
 async fn dispatch_signatures<S, U>(
-    pool_address_str: &str,
+    protocol_name: &str,
     mut stream: S,
     unsubscribe: U,
-    pool: WatchedPool,
-    tx: mpsc::Sender<(WatchedPool, String)>,
+    protocol: Protocol,
+    tx: mpsc::Sender<(Protocol, Signature)>,
     shutdown: CancellationToken,
 ) where
     S: StreamExt<Item = Response<RpcLogsResponse>> + Unpin,
@@ -265,20 +276,26 @@ async fn dispatch_signatures<S, U>(
             maybe_response = stream.next() => {
                 match maybe_response {
                     Some(response) => {
-                        let pool = pool.clone();
-                        if let Err(e) = tx.send((pool, response.value.signature)).await {
+                        let signature = match Signature::from_str(&response.value.signature) {
+                            Ok(sig) => sig,
+                            Err(e) => {
+                                warn!(error = %e, raw = %response.value.signature, "invalid signature");
+                                continue;
+                            }
+                        };
+                        if let Err(e) = tx.send((protocol.clone(), signature)).await {
                             warn!("channel closed, dropping signature: {e}");
                             break;
                         }
                     }
                     None => {
-                        warn!("log stream closed for pool: {pool_address_str}");
+                        warn!("log stream closed for protocol: {protocol_name}");
                         break;
                     }
                 }
             }
             _ = shutdown.cancelled() => {
-                info!("subscription task shutting down for pool: {pool_address_str}");
+                info!("subscription task shutting down for protocol: {protocol_name}");
                 unsubscribe().await;
                 break;
             }

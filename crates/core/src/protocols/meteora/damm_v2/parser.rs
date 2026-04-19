@@ -5,13 +5,13 @@ use crate::{
     domain::{LiquidityEvent, SwapEvent},
     CoreError, CoreResult,
 };
-use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+
+use super::pool;
 
 /// Parse a DAMM v2 swap from a confirmed transaction.
 pub(super) fn parse_swap(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
-    pool_address: Pubkey,
     program_id_str: &str,
 ) -> CoreResult<SwapEvent> {
     let meta = tx
@@ -26,9 +26,12 @@ pub(super) fn parse_swap(
     let signature = extract_signature(tx)?;
     let timestamp = extract_timestamp(tx)?;
 
+    // Discover the pool from the transaction instructions
+    let pool_address = pool::extract_pool_address(tx, program_id_str, &signature)?;
+
     // Find the two transferChecked instructions that follow the DAMM v2 swap
     let (transfer_in, transfer_out, vault_a, vault_b) =
-        transfer::extract_swap_transfers(meta, &signature, program_id_str)?;
+        transfer::extract_swap_transfers(tx, meta, &signature, program_id_str)?;
 
     // Extract reserves from pre/post token balances
     let (reserve_a_before, reserve_b_before, reserve_a_after, reserve_b_after) =
@@ -53,8 +56,7 @@ pub(super) fn parse_swap(
 
 pub(super) fn parse_liquidity(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
-    pool_address: Pubkey,
-    _program_id_str: &str,
+    program_id_str: &str,
     liquidity_kind: LiquidityEventKind,
 ) -> CoreResult<LiquidityEvent> {
     let meta = tx
@@ -69,7 +71,11 @@ pub(super) fn parse_liquidity(
     let signature = extract_signature(tx)?;
     let timestamp = extract_timestamp(tx)?;
 
-    let (transfer_a, transfer_b) = transfer::extract_liquidity_transfers(meta, &signature)?;
+    // Discover the pool from the transaction instructions
+    let pool_address = pool::extract_pool_address(tx, program_id_str, &signature)?;
+
+    let (transfer_a, transfer_b) =
+        transfer::extract_liquidity_transfers(tx, meta, &signature, program_id_str)?;
 
     Ok(LiquidityEvent {
         pool_address,

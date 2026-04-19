@@ -1,6 +1,10 @@
 use crate::{CoreError, CoreResult};
 use solana_pubkey::Pubkey;
-use solana_transaction_status::{UiInstruction, UiParsedInstruction, UiTransactionStatusMeta};
+use solana_transaction_status::{
+    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
+    EncodedTransaction, UiInnerInstructions, UiInstruction, UiMessage, UiParsedInstruction,
+    UiTransactionStatusMeta,
+};
 use std::str::FromStr;
 
 /// Intermediate struct for a token transfer extracted from inner instructions.
@@ -11,80 +15,104 @@ pub(crate) struct TokenTransfer {
     pub(crate) destination: Pubkey,
 }
 
-/// Find the two transferChecked instructions that immediately follow
-/// the DAMM v2 swap inner instruction.
+/// Find the two transferChecked instructions emitted as CPI by the DAMM v2 swap.
+///
+/// Locates the outer DAMM v2 swap instruction, then extracts the two token
+/// transfers from its inner instruction group.
 pub(super) fn extract_swap_transfers(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
     meta: &UiTransactionStatusMeta,
     signature: &str,
     program_id_str: &str,
 ) -> CoreResult<(TokenTransfer, TokenTransfer, String, String)> {
-    use solana_transaction_status::option_serializer::OptionSerializer;
+    let swap_inner_group = find_damm_inner_group(tx, meta, signature, program_id_str)?;
 
-    let inner_instructions = match &meta.inner_instructions {
-        OptionSerializer::Some(inner) => inner,
-        _ => {
-            return Err(CoreError::MissingField {
-                signature: signature.to_string(),
-                field: "innerInstructions".to_string(),
-            })
-        }
-    };
+    let transfers: Vec<&UiInstruction> = swap_inner_group
+        .instructions
+        .iter()
+        .filter(|ix| is_transfer_checked(ix))
+        .take(2)
+        .collect();
 
-    // Find the instruction group that contains the DAMM v2 swap
-    for group in inner_instructions {
-        let instructions = &group.instructions;
-
-        // Find the DAMM v2 swap instruction index
-        let damm_swap_idx = instructions.iter().position(|ix| {
-            matches!(ix, UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p))
-        if p.program_id == program_id_str)
+    if transfers.len() < 2 {
+        return Err(CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: format!(
+                "expected 2 transferChecked in DAMM v2 swap inner group, got {}",
+                transfers.len()
+            ),
         });
-
-        if let Some(idx) = damm_swap_idx {
-            // The two transferChecked follow immediately after
-            let transfers: Vec<&UiInstruction> = instructions
-                .iter()
-                .skip(idx + 1)
-                .filter(|ix| is_transfer_checked(ix))
-                .take(2)
-                .collect();
-
-            if transfers.len() < 2 {
-                return Err(CoreError::ParseError {
-                    signature: signature.to_string(),
-                    reason: "expected 2 transferChecked after DAMM v2 swap".to_string(),
-                });
-            }
-
-            let transfer_in = extract_transfer(transfers[0], signature)?;
-            let transfer_out = extract_transfer(transfers[1], signature)?;
-
-            // vault_a = destination of transfer_in (user → pool)
-            // vault_b = source of transfer_out (pool → user)
-            let vault_a = transfer_in.destination.clone().to_string();
-            let vault_b = transfer_out.source.clone().to_string();
-
-            return Ok((transfer_in, transfer_out, vault_a, vault_b));
-        }
     }
 
-    Err(CoreError::ParseError {
-        signature: signature.to_string(),
-        reason: "no DAMM v2 swap instruction found in inner instructions".to_string(),
-    })
+    let transfer_in = extract_transfer(transfers[0], signature)?;
+    let transfer_out = extract_transfer(transfers[1], signature)?;
+
+    // vault_a = destination of transfer_in (user → pool)
+    // vault_b = source of transfer_out (pool → user)
+    let vault_a = transfer_in.destination.to_string();
+    let vault_b = transfer_out.source.to_string();
+
+    Ok((transfer_in, transfer_out, vault_a, vault_b))
 }
 
 /// Find the two transferChecked instructions for an AddLiquidity/RemoveLiquidity.
 ///
-/// Unlike swaps, liquidity transfers appear at the start of the inner instruction
-/// group, before the DAMM v2 event instruction.
+/// Locates the outer DAMM v2 instruction, then extracts the two token
+/// transfers from its inner instruction group.
 pub(super) fn extract_liquidity_transfers(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
     meta: &UiTransactionStatusMeta,
     signature: &str,
+    program_id_str: &str,
 ) -> CoreResult<(TokenTransfer, TokenTransfer)> {
-    use solana_transaction_status::option_serializer::OptionSerializer;
+    let inner_group = find_damm_inner_group(tx, meta, signature, program_id_str)?;
 
-    let inner_instructions = match &meta.inner_instructions {
+    let transfers: Vec<&UiInstruction> = inner_group
+        .instructions
+        .iter()
+        .filter(|ix| is_transfer_checked(ix))
+        .take(2)
+        .collect();
+
+    if transfers.len() < 2 {
+        return Err(CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: format!(
+                "expected 2 transferChecked in DAMM v2 liquidity inner group, got {}",
+                transfers.len()
+            ),
+        });
+    }
+
+    let transfer_a = extract_transfer(transfers[0], signature)?;
+    let transfer_b = extract_transfer(transfers[1], signature)?;
+
+    Ok((transfer_a, transfer_b))
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+/// Locate the inner instruction group attached to the first outer
+/// instruction that invokes the DAMM v2 program.
+fn find_damm_inner_group<'a>(
+    tx: &'a EncodedConfirmedTransactionWithStatusMeta,
+    meta: &'a UiTransactionStatusMeta,
+    signature: &str,
+    program_id_str: &str,
+) -> CoreResult<&'a UiInnerInstructions> {
+    let outer = outer_instructions(tx, signature)?;
+
+    let swap_outer_idx = outer
+        .iter()
+        .position(|ix| is_program_ix(ix, program_id_str))
+        .ok_or_else(|| CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: "no DAMM v2 outer instruction found".to_string(),
+        })?;
+
+    let inner = match &meta.inner_instructions {
         OptionSerializer::Some(inner) => inner,
         _ => {
             return Err(CoreError::MissingField {
@@ -94,28 +122,56 @@ pub(super) fn extract_liquidity_transfers(
         }
     };
 
-    for group in inner_instructions {
-        let transfers: Vec<&UiInstruction> = group
-            .instructions
-            .iter()
-            .filter(|ix| is_transfer_checked(ix))
-            .take(2)
-            .collect();
-
-        if transfers.len() == 2 {
-            let transfer_a = extract_transfer(transfers[0], signature)?;
-            let transfer_b = extract_transfer(transfers[1], signature)?;
-            return Ok((transfer_a, transfer_b));
-        }
-    }
-
-    Err(CoreError::ParseError {
-        signature: signature.to_string(),
-        reason: "no transferChecked pair found for liquidity event".to_string(),
-    })
+    inner
+        .iter()
+        .find(|group| group.index as usize == swap_outer_idx)
+        .ok_or_else(|| CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: format!(
+                "no inner instructions for DAMM v2 outer ix at index {swap_outer_idx}"
+            ),
+        })
 }
 
-/// Extract mint, amount, and vault address from a transferChecked instruction.
+/// Extract the outer instructions list from a parsed transaction.
+fn outer_instructions<'a>(
+    tx: &'a EncodedConfirmedTransactionWithStatusMeta,
+    signature: &str,
+) -> CoreResult<&'a Vec<UiInstruction>> {
+    match &tx.transaction.transaction {
+        EncodedTransaction::Json(ui_tx) => match &ui_tx.message {
+            UiMessage::Parsed(parsed) => Ok(&parsed.instructions),
+            UiMessage::Raw(_) => Err(CoreError::ParseError {
+                signature: signature.to_string(),
+                reason: "expected JsonParsed encoding, got Raw".to_string(),
+            }),
+        },
+        _ => Err(CoreError::ParseError {
+            signature: signature.to_string(),
+            reason: "unexpected transaction encoding".to_string(),
+        }),
+    }
+}
+
+/// Check if an instruction invokes a given program.
+fn is_program_ix(ix: &UiInstruction, program_id: &str) -> bool {
+    matches!(
+        ix,
+        UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p))
+            if p.program_id == program_id
+    )
+}
+
+/// Check if an instruction is a parsed transferChecked.
+fn is_transfer_checked(ix: &UiInstruction) -> bool {
+    matches!(
+        ix,
+        UiInstruction::Parsed(UiParsedInstruction::Parsed(p))
+            if p.parsed.get("type").and_then(|t| t.as_str()) == Some("transferChecked")
+    )
+}
+
+/// Extract mint, amount, source, and destination from a transferChecked instruction.
 fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTransfer> {
     let parsed = match ix {
         UiInstruction::Parsed(UiParsedInstruction::Parsed(p)) => &p.parsed,
@@ -181,7 +237,7 @@ fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTran
         .and_then(|d| d.as_str())
         .ok_or_else(|| CoreError::MissingField {
             signature: signature.to_string(),
-            field: "transferChecked.source".to_string(), // corrigé : était "destination"
+            field: "transferChecked.source".to_string(),
         })
         .and_then(|s| {
             Pubkey::from_str(s).map_err(|_| CoreError::ParseError {
@@ -193,12 +249,7 @@ fn extract_transfer(ix: &UiInstruction, signature: &str) -> CoreResult<TokenTran
     Ok(TokenTransfer {
         mint,
         amount,
-        destination,
         source,
+        destination,
     })
-}
-/// Check if an instruction is a parsed transferChecked.
-fn is_transfer_checked(ix: &UiInstruction) -> bool {
-    matches!(ix, UiInstruction::Parsed(UiParsedInstruction::Parsed(p))
-        if p.parsed.get("type").and_then(|t| t.as_str()) == Some("transferChecked"))
 }

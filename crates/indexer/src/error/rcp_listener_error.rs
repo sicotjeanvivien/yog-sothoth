@@ -8,8 +8,8 @@ pub(crate) enum RpcListenerError {
     #[error("all {count} subscription(s) failed")]
     AllSubscriptionsFailed { count: usize },
 
-    #[error("no pools configured")]
-    NoPoolsConfigured,
+    #[error("no protocols configured")]
+    NoProtocolsConfigured,
 
     #[error("PubSubClient error : {0}")]
     PubSubClient(String),

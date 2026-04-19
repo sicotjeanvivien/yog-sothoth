@@ -1,56 +1,49 @@
 pub(super) mod detector;
 pub(super) mod parser;
+pub(super) mod pool;
 pub(super) mod reserves;
 pub(super) mod transfer;
 
-use crate::domain::LiquidityEventKind;
+use crate::domain::{LiquidityEventKind, Protocol};
 use crate::protocols::PoolIndexer;
 use crate::{
     domain::{LiquidityEvent, SwapEvent},
     CoreResult,
 };
-use solana_pubkey::Pubkey;
-use solana_pubkey::{self, pubkey};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
-
-/// Meteora DAMM v2 program ID.
-pub(crate) const METEORA_DAMM_V2_PROGRAM_ID: Pubkey =
-    pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 
 /// Meteora DAMM v2 protocol handler (x·y=k + dynamic fees + NFT positions).
 pub struct MeteoraDammV2 {
-    pub pool_address: Pubkey,
+    protocol: Protocol,
     program_id_str: String,
 }
 
 impl MeteoraDammV2 {
-    pub fn new(pool_address: Pubkey) -> Self {
+    pub fn new() -> Self {
+        let protocol = Protocol::MeteoraDammV2;
+        let program_id_str = protocol.program_id().to_string();
         Self {
-            pool_address,
-            program_id_str: METEORA_DAMM_V2_PROGRAM_ID.to_string(),
+            protocol,
+            program_id_str,
         }
     }
 }
 
 impl PoolIndexer for MeteoraDammV2 {
-    fn program_id(&self) -> Pubkey {
-        METEORA_DAMM_V2_PROGRAM_ID
-    }
-
     fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        detector::is_swap(tx, self.program_id_str.as_str())
+        detector::is_swap(tx, &self.program_id_str)
     }
 
     fn is_add_liquidity(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        detector::is_add_liquidity(tx, self.program_id_str.as_str())
+        detector::is_add_liquidity(tx, &self.program_id_str)
     }
 
     fn is_remove_liquidity(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        detector::is_remove_liquidity(tx, self.program_id_str.as_str())
+        detector::is_remove_liquidity(tx, &self.program_id_str)
     }
 
     fn parse_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent> {
-        parser::parse_swap(tx, self.pool_address, self.program_id_str.as_str())
+        parser::parse_swap(tx, &self.program_id_str)
     }
 
     fn parse_add_liquidity(
@@ -58,12 +51,7 @@ impl PoolIndexer for MeteoraDammV2 {
         tx: &EncodedConfirmedTransactionWithStatusMeta,
     ) -> CoreResult<LiquidityEvent> {
         let liquidity_kind = LiquidityEventKind::Add;
-        parser::parse_liquidity(
-            tx,
-            self.pool_address,
-            self.program_id_str.as_str(),
-            liquidity_kind,
-        )
+        parser::parse_liquidity(tx, &self.program_id_str, liquidity_kind)
     }
 
     fn parse_remove_liquidity(
@@ -71,12 +59,7 @@ impl PoolIndexer for MeteoraDammV2 {
         tx: &EncodedConfirmedTransactionWithStatusMeta,
     ) -> CoreResult<LiquidityEvent> {
         let liquidity_kind = LiquidityEventKind::Remove;
-        parser::parse_liquidity(
-            tx,
-            self.pool_address,
-            self.program_id_str.as_str(),
-            liquidity_kind,
-        )
+        parser::parse_liquidity(tx, &self.program_id_str, liquidity_kind)
     }
 }
 
@@ -88,6 +71,7 @@ impl PoolIndexer for MeteoraDammV2 {
 mod tests {
     use super::*;
     use serde_json;
+    use solana_pubkey::pubkey;
 
     /// Load a real transaction JSON captured from the RPC.
     fn load_tx(json: &str) -> EncodedConfirmedTransactionWithStatusMeta {
@@ -104,21 +88,21 @@ mod tests {
     #[test]
     fn test_is_swap_returns_true_for_successful_swap() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         assert!(pool.is_swap(&tx));
     }
 
     #[test]
     fn test_is_swap_returns_false_for_failed_transaction() {
         let tx = load_tx(FAILED_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         assert!(!pool.is_swap(&tx));
     }
 
     #[test]
     fn test_parse_swap_extracts_correct_amounts() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         let result = pool.parse_swap(&tx).unwrap();
 
         // From the captured transaction:
@@ -139,7 +123,7 @@ mod tests {
     #[test]
     fn test_parse_swap_returns_err_for_malformed_transaction() {
         let tx = load_tx(MALFORMED_SWAP_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         assert!(pool.is_swap(&tx));
         assert!(pool.parse_swap(&tx).is_err());
     }
@@ -147,7 +131,7 @@ mod tests {
     #[test]
     fn test_parse_swap_extracts_correct_reserves() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         let result = pool.parse_swap(&tx).unwrap();
 
         // From preTokenBalances — vault SOL (E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E)
@@ -168,21 +152,21 @@ mod tests {
     #[test]
     fn test_is_add_liquidity_returns_true_for_add_liquidity_tx() {
         let tx = load_tx(SUCCESSFUL_LIQUIDITY_ADD_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         assert!(pool.is_add_liquidity(&tx));
     }
 
     #[test]
     fn test_is_add_liquidity_returns_false_for_swap_tx() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         assert!(!pool.is_add_liquidity(&tx));
     }
 
     #[test]
     fn test_parse_add_liquidity_extracts_correct_amounts() {
         let tx = load_tx(SUCCESSFUL_LIQUIDITY_ADD_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         let result = pool.parse_add_liquidity(&tx).unwrap();
 
         // From the captured transaction:
@@ -200,7 +184,7 @@ mod tests {
     #[test]
     fn test_parse_add_liquidity_returns_err_for_swap_tx() {
         let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new(pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j"));
+        let pool = MeteoraDammV2::new();
         // A swap tx has a different inner instruction structure — parse_liquidity should fail
         // or return wrong data. is_add_liquidity guards against this in production.
         let _ = pool.parse_add_liquidity(&tx);

@@ -2,7 +2,6 @@ use crate::{
     domain::{LiquidityEvent, SwapEvent},
     CoreResult,
 };
-use solana_pubkey::Pubkey;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Common interface for all supported AMM protocols.
@@ -16,8 +15,6 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 /// parser (`parse_*`). Implementations may assume this ordering and skip
 /// redundant instruction-type checks inside `parse_*`.
 pub trait PoolIndexer: Send + Sync {
-    /// The on-chain program ID for this protocol.
-    fn program_id(&self) -> Pubkey;
 
     /// Returns `true` if the transaction contains a swap instruction for this protocol.
     fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool;

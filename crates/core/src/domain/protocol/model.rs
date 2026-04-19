@@ -9,7 +9,7 @@ use solana_pubkey::{pubkey, Pubkey};
 ///
 /// String representations (used in SQL and JSON) match the `snake_case` variant
 /// names: `"damm_v2"`, `"damm_v1"`, `"dlmm"`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     MeteoraDammV2,
@@ -40,6 +40,14 @@ impl Protocol {
             Protocol::MeteoraDammV1 => "meteora_damm_v1",
             Protocol::MeteoraDlmm => "meteora_dlmm",
         }
+    }
+
+    pub fn all() -> &'static [Protocol] {
+        &[
+            Protocol::MeteoraDammV2,
+            Protocol::MeteoraDammV1,
+            Protocol::MeteoraDlmm,
+        ]
     }
 }
 

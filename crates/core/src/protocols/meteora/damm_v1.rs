@@ -1,3 +1,4 @@
+use crate::domain::Protocol;
 use crate::protocols::PoolIndexer;
 use crate::{
     domain::{LiquidityEvent, SwapEvent},
@@ -14,24 +15,18 @@ pub const METEORA_DAMM_V1_PROGRAM_ID: Pubkey =
 /// Meteora DAMM v1 protocol handler (x·y=k + dual-yield).
 /// Phase 2 — stub only.
 pub struct MeteoraDammV1 {
-    pub pool_address: Pubkey,
-    #[expect(dead_code, reason = "Meteora DAMM v1 — Phase 2")]
-    program_id_str: String,
+    protocol: Protocol,
 }
 
 impl MeteoraDammV1 {
-    pub fn new(pool_address: Pubkey) -> Self {
+    pub fn new() -> Self {
         Self {
-            pool_address,
-            program_id_str: METEORA_DAMM_V1_PROGRAM_ID.to_string(),
+            protocol: Protocol::MeteoraDammV1,
         }
     }
 }
 
 impl PoolIndexer for MeteoraDammV1 {
-    fn program_id(&self) -> Pubkey {
-        METEORA_DAMM_V1_PROGRAM_ID
-    }
 
     fn is_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
         unimplemented!("Meteora DAMM v1 — Phase 2")
