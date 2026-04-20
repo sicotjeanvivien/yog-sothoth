@@ -55,7 +55,11 @@ fn pool_from_instruction(
     signature: &str,
 ) -> CoreResult<Option<Pubkey>> {
     let UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
-        UiPartiallyDecodedInstruction { program_id, accounts, .. },
+        UiPartiallyDecodedInstruction {
+            program_id,
+            accounts,
+            ..
+        },
     )) = ix
     else {
         return Ok(None);
@@ -65,15 +69,15 @@ fn pool_from_instruction(
         return Ok(None);
     }
 
-    let pool_str = accounts.get(POOL_ACCOUNT_INDEX).ok_or_else(|| {
-        CoreError::ParseError {
+    let pool_str = accounts
+        .get(POOL_ACCOUNT_INDEX)
+        .ok_or_else(|| CoreError::ParseError {
             signature: signature.to_string(),
             reason: format!(
                 "DAMM v2 instruction has fewer than {} accounts",
                 POOL_ACCOUNT_INDEX + 1
             ),
-        }
-    })?;
+        })?;
 
     let pool = Pubkey::from_str(pool_str).map_err(|e| CoreError::ParseError {
         signature: signature.to_string(),

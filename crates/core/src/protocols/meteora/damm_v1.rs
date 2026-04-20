@@ -27,7 +27,6 @@ impl MeteoraDammV1 {
 }
 
 impl PoolIndexer for MeteoraDammV1 {
-
     fn is_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
         unimplemented!("Meteora DAMM v1 — Phase 2")
     }

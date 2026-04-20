@@ -75,7 +75,7 @@ impl IndexerService {
                 signature = %event.signature,
                 amount_a = event.amount_a,
                 amount_b = event.amount_b,
-                "add liquidity parsed"  
+                "add liquidity parsed"
             );
             self.persist_liquidity_event(&event).await?;
         } else if indexer.is_remove_liquidity(&tx) {
