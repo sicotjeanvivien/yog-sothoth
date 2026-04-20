@@ -63,20 +63,22 @@ impl IndexerService {
 
         let indexer = protocol_indexer(&protocol);
 
-        if let Some(meta) = tx.transaction.meta.as_ref() {
-            if let solana_transaction_status::option_serializer::OptionSerializer::Some(logs) =
-                &meta.log_messages
-            {
-                for (i, log) in logs.iter().enumerate() {
-                    if log.starts_with("Program log: Instruction:")
-                        && i > 0
-                        && logs[i - 1].contains(protocol.program_id().to_string().as_str())
-                    {
-                        tracing::info!(%signature, %log, "DAMM v2 instruction observed");
-                    }
-                }
-            }
-        }
+
+
+
+        // DEBUG temporaire — compter ce que le détecteur voit
+        let is_swap = indexer.is_swap(&tx);
+        let is_add = indexer.is_add_liquidity(&tx);
+        let is_remove = indexer.is_remove_liquidity(&tx);
+        tracing::info!(
+            %signature,
+            is_swap, is_add, is_remove,
+            "detector results"
+        );
+
+
+
+        
 
         if indexer.is_swap(&tx) {
             let swap = indexer.parse_swap(&tx)?;

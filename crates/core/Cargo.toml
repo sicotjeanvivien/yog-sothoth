@@ -16,3 +16,11 @@ solana-transaction-status = { workspace = true, optional = true, default-feature
 chrono = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+solana-rpc-client = { workspace = true }
+solana-rpc-client-api = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-transaction-status = { workspace = true }

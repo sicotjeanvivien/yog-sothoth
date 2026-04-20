@@ -5049,9 +5049,13 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "solana-commitment-config",
  "solana-pubkey 3.0.0",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-transaction-status",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
