@@ -25,11 +25,10 @@ pub(super) fn extract_swap_transfers(
     signature: &str,
     program_id_str: &str,
 ) -> CoreResult<(TokenTransfer, TokenTransfer, String, String)> {
-    let swap_inner_group = find_damm_inner_group(tx, meta, signature, program_id_str)?;
-
-    let transfers: Vec<&UiInstruction> = swap_inner_group
-        .instructions
+    let candidates = find_damm_inner_group(tx, meta, signature, program_id_str)?;
+    let transfers: Vec<&UiInstruction> = candidates
         .iter()
+        .copied()
         .filter(|ix| is_transfer_checked(ix))
         .take(2)
         .collect();
@@ -65,11 +64,11 @@ pub(super) fn extract_liquidity_transfers(
     signature: &str,
     program_id_str: &str,
 ) -> CoreResult<(TokenTransfer, TokenTransfer)> {
-    let inner_group = find_damm_inner_group(tx, meta, signature, program_id_str)?;
+    let candidates = find_damm_inner_group(tx, meta, signature, program_id_str)?;
 
-    let transfers: Vec<&UiInstruction> = inner_group
-        .instructions
+    let transfers: Vec<&UiInstruction> = candidates
         .iter()
+        .copied()
         .filter(|ix| is_transfer_checked(ix))
         .take(2)
         .collect();
@@ -101,36 +100,53 @@ fn find_damm_inner_group<'a>(
     meta: &'a UiTransactionStatusMeta,
     signature: &str,
     program_id_str: &str,
-) -> CoreResult<&'a UiInnerInstructions> {
+) -> CoreResult<Vec<&'a UiInstruction>> {
     let outer = outer_instructions(tx, signature)?;
 
-    let swap_outer_idx = outer
+    // Case 1 — DAMM v2 is an outer instruction
+    if let Some(outer_idx) = outer
         .iter()
         .position(|ix| is_program_ix(ix, program_id_str))
-        .ok_or_else(|| CoreError::ParseError {
-            signature: signature.to_string(),
-            reason: "no DAMM v2 outer instruction found".to_string(),
-        })?;
+    {
+        let inner = match &meta.inner_instructions {
+            OptionSerializer::Some(inner) => inner,
+            _ => {
+                return Err(CoreError::MissingField {
+                    signature: signature.to_string(),
+                    field: "innerInstructions".to_string(),
+                })
+            }
+        };
 
-    let inner = match &meta.inner_instructions {
-        OptionSerializer::Some(inner) => inner,
-        _ => {
-            return Err(CoreError::MissingField {
+        let group = inner
+            .iter()
+            .find(|g| g.index as usize == outer_idx)
+            .ok_or_else(|| CoreError::ParseError {
                 signature: signature.to_string(),
-                field: "innerInstructions".to_string(),
-            })
-        }
-    };
+                reason: format!("no inner group for DAMM v2 outer ix at {outer_idx}"),
+            })?;
 
-    inner
-        .iter()
-        .find(|group| group.index as usize == swap_outer_idx)
-        .ok_or_else(|| CoreError::ParseError {
-            signature: signature.to_string(),
-            reason: format!(
-                "no inner instructions for DAMM v2 outer ix at index {swap_outer_idx}"
-            ),
-        })
+        return Ok(group.instructions.iter().collect());
+    }
+
+    // Case 2 — DAMM v2 is an inner instruction (aggregator / router)
+    if let OptionSerializer::Some(inner_groups) = &meta.inner_instructions {
+        for group in inner_groups {
+            if let Some(damm_idx) = group
+                .instructions
+                .iter()
+                .position(|ix| is_program_ix(ix, program_id_str))
+            {
+                // Take all instructions after the DAMM v2 call within the same group
+                return Ok(group.instructions.iter().skip(damm_idx + 1).collect());
+            }
+        }
+    }
+
+    Err(CoreError::ParseError {
+        signature: signature.to_string(),
+        reason: "no DAMM v2 instruction found in transaction".to_string(),
+    })
 }
 
 /// Extract the outer instructions list from a parsed transaction.
