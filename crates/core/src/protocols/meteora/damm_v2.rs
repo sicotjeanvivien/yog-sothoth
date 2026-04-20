@@ -235,4 +235,16 @@ mod tests {
         assert_eq!(result.amount_a, 533814154); // SOL
         assert_eq!(result.amount_b, 18212843); // USDC
     }
+
+    #[test]
+    fn test_parse_swap_extracts_correct_pool_address() {
+        let tx = load_tx(SUCCESSFUL_SWAP_TX);
+        let pool = MeteoraDammV2::new();
+        let result = pool.parse_swap(&tx).unwrap();
+
+        assert_eq!(
+            result.pool_address,
+            pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j")
+        );
+    }
 }

@@ -2,7 +2,7 @@ use crate::{
     application::services::IndexerService,
     config::Config,
     infra::{
-        db::{PgLiquidityEventRepository, PgPoolMetricRepository, PgSwapEventRepository},
+        db::{PgLiquidityEventRepository, PgPoolMetricRepository, PgSwapEventRepository, PgPoolRepository},
         Database, RpcListener,
     },
 };
@@ -93,11 +93,13 @@ async fn init_indexer_service(
     info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
     let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
+    let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool()));
     let pg_pool_metric_repo = Arc::new(PgPoolMetricRepository::new(database.pool()));
     let pg_liquidity_event_repo = Arc::new(PgLiquidityEventRepository::new(database.pool()));
 
     Ok(Arc::new(IndexerService::new(
         pg_liquidity_event_repo,
+        pg_pool_repo,
         pg_pool_metric_repo,
         rpc_client,
         pg_swap_event_repo,

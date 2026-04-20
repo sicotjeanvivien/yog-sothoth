@@ -1,0 +1,113 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, protocol, signature,\n                   token_a_mint, token_b_mint, token_in_mint, token_out_mint,\n                   amount_in, amount_out,\n                   reserve_in_before, reserve_out_before,\n                   reserve_in_after, reserve_out_after,\n                   fee_bps, fee_amount, timestamp\n            FROM swap_events\n            WHERE pool_address = $1\n            ORDER BY timestamp DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_a_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "token_b_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "token_in_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "token_out_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "amount_in",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "amount_out",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "reserve_in_before",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "reserve_out_before",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "reserve_in_after",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "reserve_out_after",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "fee_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "fee_amount",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "21c038869eac848f945f988d02a69ff644dc213af86428c8197cf11e12ca0f5d"
+}

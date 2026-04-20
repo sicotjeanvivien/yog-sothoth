@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, protocol, signature,\n                   token_a_mint, token_b_mint,\n                   liquidity_event_kind, amount_a, amount_b, timestamp\n            FROM liquidity_events\n            WHERE pool_address = $1\n            ORDER BY timestamp DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_a_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "token_b_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "liquidity_event_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "amount_a",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "amount_b",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "935e097351224f4f42ec993f0856a0b38b440e2469e74fd027d904670a978598"
+}

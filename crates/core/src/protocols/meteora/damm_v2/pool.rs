@@ -9,7 +9,21 @@ use std::str::FromStr;
 
 /// Position of the pool account in a DAMM v2 swap/liquidity instruction.
 /// Defined by the Meteora DAMM v2 IDL (cp-amm program).
-const POOL_ACCOUNT_INDEX: usize = 0;
+pub(super) enum DammV2Instruction {
+    Swap,
+    AddLiquidity,
+    RemoveLiquidity,
+}
+
+impl DammV2Instruction {
+    fn pool_account_index(&self) -> usize {
+        match self {
+            Self::Swap => 1,            // pool_authority en 0, pool en 1
+            Self::AddLiquidity => 0,    // pool en 0
+            Self::RemoveLiquidity => 0, // à confirmer, on prend 0 par défaut
+        }
+    }
+}
 
 /// Extract the pool address from a DAMM v2 transaction.
 ///
@@ -19,21 +33,24 @@ const POOL_ACCOUNT_INDEX: usize = 0;
 pub(super) fn extract_pool_address(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
     program_id_str: &str,
+    instruction: DammV2Instruction,
     signature: &str,
 ) -> CoreResult<Pubkey> {
-    // 1. Try outer instructions first (direct DAMM v2 call)
+    let idx = instruction.pool_account_index();
+
+    // 1. Try outer instructions first
     for ix in outer_instructions(tx, signature)? {
-        if let Some(pool) = pool_from_instruction(ix, program_id_str, signature)? {
+        if let Some(pool) = pool_from_instruction(ix, program_id_str, idx, signature)? {
             return Ok(pool);
         }
     }
 
-    // 2. Fall back to inner instructions (aggregator / router case)
+    // 2. Fall back to inner instructions
     if let Some(meta) = tx.transaction.meta.as_ref() {
         if let OptionSerializer::Some(inner_groups) = &meta.inner_instructions {
             for group in inner_groups {
                 for ix in &group.instructions {
-                    if let Some(pool) = pool_from_instruction(ix, program_id_str, signature)? {
+                    if let Some(pool) = pool_from_instruction(ix, program_id_str, idx, signature)? {
                         return Ok(pool);
                     }
                 }
@@ -52,6 +69,7 @@ pub(super) fn extract_pool_address(
 fn pool_from_instruction(
     ix: &UiInstruction,
     program_id_str: &str,
+    pool_account_index: usize,
     signature: &str,
 ) -> CoreResult<Option<Pubkey>> {
     let UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(
@@ -70,12 +88,12 @@ fn pool_from_instruction(
     }
 
     let pool_str = accounts
-        .get(POOL_ACCOUNT_INDEX)
+        .get(pool_account_index)
         .ok_or_else(|| CoreError::ParseError {
             signature: signature.to_string(),
             reason: format!(
                 "DAMM v2 instruction has fewer than {} accounts",
-                POOL_ACCOUNT_INDEX + 1
+                pool_account_index + 1
             ),
         })?;
 

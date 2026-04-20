@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
+use std::str::FromStr;
 use yog_core::{
-    domain::{LiquidityEvent, LiquidityEventRepository},
+    domain::{LiquidityEvent, LiquidityEventRepository, Protocol},
     CoreError, CoreResult,
 };
 
@@ -26,21 +27,27 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
     async fn insert(&self, event: &LiquidityEvent) -> CoreResult<()> {
         sqlx::query!(
             r#"
-          INSERT INTO liquidity_events
-              (pool_address, signature, liquidity_event_kind, amount_a, amount_b, timestamp)
-          VALUES ($1, $2, $3, $4, $5, $6)
-          "#,
+            INSERT INTO liquidity_events
+                (pool_address, protocol, signature,
+                 token_a_mint, token_b_mint,
+                 liquidity_event_kind, amount_a, amount_b, timestamp)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (signature, timestamp) DO NOTHING
+            "#,
             event.pool_address.to_string(),
+            event.protocol.as_str(),
             event.signature,
+            event.token_a_mint.to_string(),
+            event.token_b_mint.to_string(),
             event.liquidity_event_kind.to_string(),
             convert_u64_to_i64(event.amount_a, "amount_a")?,
             convert_u64_to_i64(event.amount_b, "amount_b")?,
-            event.timestamp
+            event.timestamp,
         )
         .execute(&self.pool)
         .await
         .map_err(|e| CoreError::ParseError {
-            signature: String::new(),
+            signature: event.signature.clone(),
             reason: format!("db insert liquidity_events: {e}"),
         })?;
         Ok(())
@@ -53,7 +60,9 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
     ) -> CoreResult<Vec<LiquidityEvent>> {
         let rows = sqlx::query!(
             r#"
-            SELECT pool_address, signature, liquidity_event_kind, amount_a, amount_b, timestamp
+            SELECT pool_address, protocol, signature,
+                   token_a_mint, token_b_mint,
+                   liquidity_event_kind, amount_a, amount_b, timestamp
             FROM liquidity_events
             WHERE pool_address = $1
             ORDER BY timestamp DESC
@@ -73,6 +82,9 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             .map(|row| {
                 Ok(LiquidityEvent {
                     pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
+                    protocol: Protocol::from_str(&row.protocol)?,
+                    token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
+                    token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
                     liquidity_event_kind: parse_string_to_liquidity_event_kind(
                         row.liquidity_event_kind,
                         "liquidity_event_kind",

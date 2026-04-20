@@ -1,3 +1,4 @@
+use chrono::Utc;
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
@@ -11,8 +12,8 @@ use yog_core::{
         damm_v2::net_price_impact,
     },
     domain::{
-        LiquidityEvent, LiquidityEventRepository, PoolMetric, PoolMetricRepository, Protocol,
-        SwapEvent, SwapEventRepository,
+        LiquidityEvent, LiquidityEventRepository, Pool, PoolMetric, PoolMetricRepository,
+        PoolRepository, Protocol, SwapEvent, SwapEventRepository,
     },
     protocols::{
         meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
@@ -25,6 +26,7 @@ use yog_core::{
 /// dispatches to the appropriate protocol handler.
 pub(crate) struct IndexerService {
     liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
+    pool_repo: Arc<dyn PoolRepository>,
     pool_metric_repo: Arc<dyn PoolMetricRepository>,
     rpc_client: Arc<RpcClient>,
     swap_event_repo: Arc<dyn SwapEventRepository>,
@@ -33,12 +35,14 @@ pub(crate) struct IndexerService {
 impl IndexerService {
     pub(crate) fn new(
         liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
+        pool_repo: Arc<dyn PoolRepository>,
         pool_metric_repo: Arc<dyn PoolMetricRepository>,
         rpc_client: Arc<RpcClient>,
         swap_event_repo: Arc<dyn SwapEventRepository>,
     ) -> Self {
         Self {
             liquidity_event_repo,
+            pool_repo,
             pool_metric_repo,
             rpc_client,
             swap_event_repo,
@@ -67,6 +71,7 @@ impl IndexerService {
                 amount_out = swap.amount_out,
                 "swap parsed"
             );
+            self.upsert_pool_from_swap(&swap).await?;
             self.persist_swap(&swap).await?;
             self.persist_metrics(&swap).await?;
         } else if indexer.is_add_liquidity(&tx) {
@@ -77,6 +82,7 @@ impl IndexerService {
                 amount_b = event.amount_b,
                 "add liquidity parsed"
             );
+            self.upsert_pool_from_liquidity(&event).await?;
             self.persist_liquidity_event(&event).await?;
         } else if indexer.is_remove_liquidity(&tx) {
             let event = indexer.parse_remove_liquidity(&tx)?;
@@ -86,6 +92,8 @@ impl IndexerService {
                 amount_b = event.amount_b,
                 "remove liquidity parsed"
             );
+            self.upsert_pool_from_liquidity(&event).await?;
+
             self.persist_liquidity_event(&event).await?;
         } else {
             debug!("skipping unrecognised transaction: {signature}");
@@ -107,6 +115,34 @@ impl IndexerService {
 
     async fn persist_liquidity_event(&self, event: &LiquidityEvent) -> anyhow::Result<()> {
         self.liquidity_event_repo.insert(event).await?;
+        Ok(())
+    }
+
+    async fn upsert_pool_from_swap(&self, swap: &SwapEvent) -> anyhow::Result<()> {
+        let now = Utc::now();
+        let pool = Pool {
+            pool_address: swap.pool_address,
+            protocol: swap.protocol,
+            token_a_mint: swap.token_a_mint,
+            token_b_mint: swap.token_b_mint,
+            first_seen_at: now,
+            last_seen_at: now,
+        };
+        self.pool_repo.upsert(&pool).await?;
+        Ok(())
+    }
+
+    async fn upsert_pool_from_liquidity(&self, event: &LiquidityEvent) -> anyhow::Result<()> {
+        let now = Utc::now();
+        let pool = Pool {
+            pool_address: event.pool_address,
+            protocol: event.protocol,
+            token_a_mint: event.token_a_mint,
+            token_b_mint: event.token_b_mint,
+            first_seen_at: now,
+            last_seen_at: now,
+        };
+        self.pool_repo.upsert(&pool).await?;
         Ok(())
     }
 
@@ -142,8 +178,8 @@ impl IndexerService {
     }
 
     fn compute_metrics(&self, swap: &SwapEvent) -> CoreResult<PoolMetric> {
-        let reserve_a = swap.reserve_a_after as u128;
-        let reserve_b = swap.reserve_b_after as u128;
+        let reserve_a = swap.reserve_in_after as u128;
+        let reserve_b = swap.reserve_out_after as u128;
         let amount_in = swap.amount_in as u128;
 
         let price_q64 = spot_price(reserve_a, reserve_b)?;
@@ -161,8 +197,8 @@ impl IndexerService {
         Ok(PoolMetric {
             pool_address: swap.pool_address,
             signature: swap.signature.clone(),
-            reserve_a: swap.reserve_a_after,
-            reserve_b: swap.reserve_b_after,
+            reserve_a: swap.reserve_in_after,
+            reserve_b: swap.reserve_out_after,
             price_q64,
             price_impact_bps,
             imbalance_bps,

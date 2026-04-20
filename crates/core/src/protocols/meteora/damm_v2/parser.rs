@@ -46,7 +46,12 @@ pub(super) fn parse_swap(
     let timestamp = extract_timestamp(tx)?;
 
     // Discover the pool from the transaction instructions
-    let pool_address = pool::extract_pool_address(tx, program_id_str, &signature)?;
+    let pool_address = pool::extract_pool_address(
+        tx,
+        program_id_str,
+        pool::DammV2Instruction::Swap,
+        &signature,
+    )?;
 
     // Find the two transferChecked instructions that follow the DAMM v2 swap
     let (transfer_in, transfer_out, vault_a, vault_b) =
@@ -109,7 +114,11 @@ pub(super) fn parse_liquidity(
     let timestamp = extract_timestamp(tx)?;
 
     // Discover the pool from the transaction instructions
-    let pool_address = pool::extract_pool_address(tx, program_id_str, &signature)?;
+    let ix_variant = match liquidity_kind {
+        LiquidityEventKind::Add => pool::DammV2Instruction::AddLiquidity,
+        LiquidityEventKind::Remove => pool::DammV2Instruction::RemoveLiquidity,
+    };
+    let pool_address = pool::extract_pool_address(tx, program_id_str, ix_variant, &signature)?;
 
     let (transfer_a, transfer_b) =
         transfer::extract_liquidity_transfers(tx, meta, &signature, program_id_str)?;
