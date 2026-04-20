@@ -2,7 +2,10 @@ use crate::{
     application::services::IndexerService,
     config::Config,
     infra::{
-        db::{PgLiquidityEventRepository, PgPoolMetricRepository, PgSwapEventRepository, PgPoolRepository},
+        db::{
+            PgLiquidityEventRepository, PgPoolMetricRepository, PgPoolRepository,
+            PgSwapEventRepository,
+        },
         Database, RpcListener,
     },
 };
