@@ -2,8 +2,7 @@ use crate::{CoreError, CoreResult};
 use solana_pubkey::Pubkey;
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
-    EncodedTransaction, UiInnerInstructions, UiInstruction, UiMessage, UiParsedInstruction,
-    UiTransactionStatusMeta,
+    EncodedTransaction, UiInstruction, UiMessage, UiParsedInstruction, UiTransactionStatusMeta,
 };
 use std::str::FromStr;
 

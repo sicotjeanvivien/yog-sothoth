@@ -29,6 +29,12 @@ impl MeteoraDammV2 {
     }
 }
 
+impl Default for MeteoraDammV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PoolIndexer for MeteoraDammV2 {
     fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
         detector::is_swap(tx, &self.program_id_str)
@@ -43,7 +49,7 @@ impl PoolIndexer for MeteoraDammV2 {
     }
 
     fn parse_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent> {
-        parser::parse_swap(tx, &self.program_id_str)
+        parser::parse_swap(tx, self.protocol, &self.program_id_str)
     }
 
     fn parse_add_liquidity(
@@ -51,7 +57,7 @@ impl PoolIndexer for MeteoraDammV2 {
         tx: &EncodedConfirmedTransactionWithStatusMeta,
     ) -> CoreResult<LiquidityEvent> {
         let liquidity_kind = LiquidityEventKind::Add;
-        parser::parse_liquidity(tx, &self.program_id_str, liquidity_kind)
+        parser::parse_liquidity(tx, self.protocol, &self.program_id_str, liquidity_kind)
     }
 
     fn parse_remove_liquidity(
@@ -59,7 +65,7 @@ impl PoolIndexer for MeteoraDammV2 {
         tx: &EncodedConfirmedTransactionWithStatusMeta,
     ) -> CoreResult<LiquidityEvent> {
         let liquidity_kind = LiquidityEventKind::Remove;
-        parser::parse_liquidity(tx, &self.program_id_str, liquidity_kind)
+        parser::parse_liquidity(tx, self.protocol, &self.program_id_str, liquidity_kind)
     }
 }
 
@@ -138,15 +144,15 @@ mod tests {
         // owner: HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC
         // pre:  85167550281
         // post: 85301211438
-        assert_eq!(result.reserve_a_before, 85167550281);
-        assert_eq!(result.reserve_a_after, 85301211438);
+        assert_eq!(result.reserve_in_before, 85167550281);
+        assert_eq!(result.reserve_in_after, 85301211438);
 
         // From preTokenBalances — vault USDC (HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx)
         // owner: HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC
         // pre:  3178914121
         // post: 3167919281
-        assert_eq!(result.reserve_b_before, 3178914121);
-        assert_eq!(result.reserve_b_after, 3167919281);
+        assert_eq!(result.reserve_out_before, 3178914121);
+        assert_eq!(result.reserve_out_after, 3167919281);
     }
 
     #[test]
@@ -188,5 +194,45 @@ mod tests {
         // A swap tx has a different inner instruction structure — parse_liquidity should fail
         // or return wrong data. is_add_liquidity guards against this in production.
         let _ = pool.parse_add_liquidity(&tx);
+    }
+
+    #[test]
+    fn test_parse_swap_token_a_b_order_is_stable() {
+        let tx = load_tx(SUCCESSFUL_SWAP_TX);
+        let pool = MeteoraDammV2::new();
+        let result = pool.parse_swap(&tx).unwrap();
+
+        // Mints are sorted by raw bytes (Pubkey's Ord impl), not by base58
+        // string representation. For the SOL/USDC pair, SOL comes first:
+        //   token_a_mint = SOL  (So11...)
+        //   token_b_mint = USDC (EPjFW...)
+        assert_eq!(
+            result.token_a_mint,
+            pubkey!("So11111111111111111111111111111111111111112")
+        );
+        assert_eq!(
+            result.token_b_mint,
+            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+        );
+    }
+
+    #[test]
+    fn test_parse_add_liquidity_mints_and_amounts_are_aligned() {
+        let tx = load_tx(SUCCESSFUL_LIQUIDITY_ADD_TX);
+        let pool = MeteoraDammV2::new();
+        let result = pool.parse_add_liquidity(&tx).unwrap();
+
+        // After sort by raw bytes: token_a = SOL, token_b = USDC
+        // And amount_a must correspond to SOL (533814154), amount_b to USDC (18212843)
+        assert_eq!(
+            result.token_a_mint,
+            pubkey!("So11111111111111111111111111111111111111112")
+        );
+        assert_eq!(
+            result.token_b_mint,
+            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+        );
+        assert_eq!(result.amount_a, 533814154); // SOL
+        assert_eq!(result.amount_b, 18212843); // USDC
     }
 }

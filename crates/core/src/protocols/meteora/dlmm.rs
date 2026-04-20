@@ -10,13 +10,23 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 /// Phase 2 — stub only.
 pub struct MeteoraDlmm {
     protocol: Protocol,
+    program_id_str: String,
 }
 
 impl MeteoraDlmm {
     pub fn new() -> Self {
+        let protocol = Protocol::MeteoraDammV2;
+        let program_id_str = protocol.program_id().to_string();
         Self {
-            protocol: Protocol::MeteoraDlmm,
+            protocol,
+            program_id_str,
         }
+    }
+}
+
+impl Default for MeteoraDlmm {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -4,12 +4,12 @@ use solana_pubkey::{pubkey, Pubkey};
 
 /// Supported AMM protocols.
 ///
-/// Used to route a watched pool to the correct [`crate::protocols::PoolIndexer`]
-/// implementation, and to identify the protocol in stored metrics.
+/// Used to route incoming transactions to the correct protocol parser and
+/// to identify the protocol in stored events and metrics.
 ///
-/// String representations (used in SQL and JSON) match the `snake_case` variant
-/// names: `"damm_v2"`, `"damm_v1"`, `"dlmm"`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// String representations (used in SQL and JSON) are the fully qualified
+/// snake_case variant names: `"meteora_damm_v2"`, `"meteora_damm_v1"`, `"meteora_dlmm"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     MeteoraDammV2,
@@ -42,6 +42,8 @@ impl Protocol {
         }
     }
 
+    /// Returns all supported protocols. Useful at startup to register every
+    /// protocol the listener should subscribe to.
     pub fn all() -> &'static [Protocol] {
         &[
             Protocol::MeteoraDammV2,

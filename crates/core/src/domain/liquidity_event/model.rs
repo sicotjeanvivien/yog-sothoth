@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
+use crate::domain::Protocol;
+
 /// Whether liquidity was added or removed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -43,11 +45,25 @@ impl std::str::FromStr for LiquidityEventKind {
 /// Metrics (TVL, imbalance) are computed by the indexer from this struct
 /// and written separately to `pool_metrics`.
 ///
-/// Amounts are in native units (no decimal scaling).
+/// # Amounts and mints
+///
+/// All amounts are in native units (no decimal scaling).
+/// `amount_a` / `amount_b` are aligned with `token_a_mint` / `token_b_mint`,
+/// which follow the **stable pool convention** (sorted by raw pubkey bytes,
+/// see [`crate::domain::Pool`]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiquidityEvent {
     /// On-chain address of the AMM pool.
     pub pool_address: Pubkey,
+
+    /// Protocol that emitted this event (used for routing and filtering).
+    pub protocol: Protocol,
+
+    /// Mint of token A in **stable order** — see struct-level docs for convention.
+    pub token_a_mint: Pubkey,
+
+    /// Mint of token B in **stable order** — see struct-level docs for convention.
+    pub token_b_mint: Pubkey,
 
     /// Whether liquidity was added or removed.
     pub liquidity_event_kind: LiquidityEventKind,

@@ -16,13 +16,23 @@ pub const METEORA_DAMM_V1_PROGRAM_ID: Pubkey =
 /// Phase 2 — stub only.
 pub struct MeteoraDammV1 {
     protocol: Protocol,
+    program_id_str: String,
 }
 
 impl MeteoraDammV1 {
     pub fn new() -> Self {
+        let protocol = Protocol::MeteoraDammV2;
+        let program_id_str = protocol.program_id().to_string();
         Self {
-            protocol: Protocol::MeteoraDammV1,
+            protocol,
+            program_id_str,
         }
+    }
+}
+
+impl Default for MeteoraDammV1 {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
