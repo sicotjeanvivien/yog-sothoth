@@ -41,18 +41,6 @@ pub(crate) fn convert_bigdecimal_to_u128(
         })
 }
 
-pub(crate) fn parse_string_to_protocol(
-    protocol: String,
-    field: &str,
-) -> Result<Protocol, CoreError> {
-    protocol
-        .parse::<Protocol>()
-        .map_err(|_| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("unknown {field}: {}", protocol),
-        })
-}
-
 pub(crate) fn parse_string_to_liquidity_event_kind(
     liquidity_event_kind: String,
     field: &str,
