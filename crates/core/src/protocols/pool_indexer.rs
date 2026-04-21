@@ -15,6 +15,8 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 /// parser (`parse_*`). Implementations may assume this ordering and skip
 /// redundant instruction-type checks inside `parse_*`.
 pub trait PoolIndexer: Send + Sync {
+    fn program_id(&self) -> &str;
+
     /// Returns `true` if the transaction contains a swap instruction for this protocol.
     fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool;
 

@@ -36,6 +36,9 @@ impl Default for MeteoraDammV2 {
 }
 
 impl PoolIndexer for MeteoraDammV2 {
+    fn program_id(&self) -> &str {
+        &self.program_id_str
+    }
     fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
         detector::is_swap(tx, &self.program_id_str)
     }

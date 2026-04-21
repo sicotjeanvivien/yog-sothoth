@@ -31,6 +31,10 @@ impl Default for MeteoraDlmm {
 }
 
 impl PoolIndexer for MeteoraDlmm {
+    fn program_id(&self) -> &str {
+        &self.program_id_str
+    }
+
     fn is_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
         unimplemented!("Meteora DLMM program ID — Phase 2")
     }

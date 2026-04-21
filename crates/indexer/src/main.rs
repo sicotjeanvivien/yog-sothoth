@@ -41,11 +41,14 @@ mod error;
 // `infra` - Provides infrastructure utilities (e.g., DB connections, RPC clients).
 mod infra;
 
+mod utils;
+
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use bootstrap::Daemon;
 use config::Config;
+use tracing_subscriber::EnvFilter;
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -62,15 +65,20 @@ use config::Config;
 fn init_tracing() {
     let format = std::env::var("LOG_FORMAT").unwrap_or_default();
 
+    // Respecte RUST_LOG s'il est défini, sinon fallback sur "info".
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
     if format.eq_ignore_ascii_case("json") {
         tracing_subscriber::fmt()
             .json()
-            // Include the span context in every log line — useful for
-            // correlating a DB write with the RPC event that triggered it.
             .with_current_span(true)
+            .with_env_filter(filter)
             .init();
     } else {
-        tracing_subscriber::fmt().with_target(true).init();
+        tracing_subscriber::fmt()
+            .with_target(true)
+            .with_env_filter(filter)
+            .init();
     }
 }
 

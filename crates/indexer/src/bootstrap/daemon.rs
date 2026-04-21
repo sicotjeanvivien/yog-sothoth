@@ -8,11 +8,15 @@ use crate::{
         },
         Database, RpcListener,
     },
+    utils::redact::redact_api_key,
 };
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::transaction::Signature;
 use std::sync::Arc;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, Semaphore},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_core::domain::Protocol;
@@ -36,12 +40,12 @@ impl Daemon {
     /// Build and wire all runtime dependencies.
     /// Fails fast if the database is unreachable or migrations cannot be applied.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = init_db(&config.database_url).await?;
+        let database = init_db(&config.database_url.expose()).await?;
         info!("database initialized");
-        let indexer_service = init_indexer_service(&config, &database).await?;
-        info!("indexer service initialized");
         let listener = init_listener(&config).await;
         info!("RPC listener initialized: {}", config.solana_rpc_ws);
+        let indexer_service = init_indexer_service(&config, &database).await?;
+        info!("indexer service initialized");
         info!("daemon initialized");
 
         Ok(Self {
@@ -57,7 +61,7 @@ impl Daemon {
     /// 1. Spawn the WebSocket listener task and the indexer task
     /// 2. Wait for a task failure or shutdown signal, then stop cleanly
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        let (tx, rx) = mpsc::channel(100);
+        let (tx, rx) = mpsc::channel(100_000);
 
         let ws_task = spawn_websocket_task(Arc::clone(&self.listener), tx, shutdown.clone());
         let indexer_task =
@@ -92,7 +96,7 @@ async fn init_indexer_service(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<Arc<IndexerService>> {
-    let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.clone()));
+    let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
     info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
     let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
@@ -111,7 +115,7 @@ async fn init_indexer_service(
 
 /// Create the RPC WebSocket listener.
 async fn init_listener(config: &Config) -> Arc<RpcListener> {
-    let listener = Arc::new(RpcListener::new(config.solana_rpc_ws.clone()));
+    let listener = Arc::new(RpcListener::new(config.solana_rpc_ws.expose().to_string()));
     listener.watch(Protocol::MeteoraDammV2).await;
     listener
 }
@@ -128,17 +132,55 @@ fn spawn_websocket_task(
     tokio::spawn(async move { listener.run(tx, shutdown).await })
 }
 
+const MAX_CONCURRENT_INDEX_TASKS: usize = 15;
+
 fn spawn_indexer_task(
     indexer_service: Arc<IndexerService>,
     mut rx: mpsc::Receiver<(Protocol, Signature)>,
     shutdown: CancellationToken,
 ) -> JoinHandle<anyhow::Result<()>> {
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_INDEX_TASKS));
+
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                Some((protocol, signature)) = rx.recv() => {
-                    if let Err(e) = indexer_service.index_transaction(protocol, signature).await {
-                        tracing::error!("failed to index transaction: {e}");
+                maybe_msg = rx.recv() => {
+                    match maybe_msg {
+                        Some((protocol, signature)) => {
+                            // Acquire a permit before spawning — backpressure s'il
+                            // n'y a plus de permit dispo. Cloner l'Arc pour l'async move.
+                            let permit = match Arc::clone(&semaphore).acquire_owned().await {
+                                Ok(p) => p,
+                                Err(_) => {
+                                    tracing::warn!("semaphore fermé — arrêt de l'indexer");
+                                    break;
+                                }
+                            };
+
+                            tracing::debug!(
+                                queue_depth = rx.len(),
+                                permits_available = semaphore.available_permits(),
+                                protocol = %protocol.as_str(),
+                                %signature,
+                                "dispatch signature"
+                            );
+
+                            let svc = Arc::clone(&indexer_service);
+                            tokio::spawn(async move {
+                                match svc.index_transaction(protocol, signature).await {
+                                    Ok(()) => tracing::debug!(%signature, "index_transaction ok"),
+                                    Err(e) => {
+                                            let msg = redact_api_key(&e.to_string());
+                                            tracing::error!(error = %msg, %signature, "index_transaction failed");
+                                        }
+                                }
+                                drop(permit); // explicit — libère le permit
+                            });
+                        }
+                        None => {
+                            tracing::info!("channel fermé — arrêt de l'indexer");
+                            break;
+                        }
                     }
                 }
                 _ = shutdown.cancelled() => break,
@@ -161,11 +203,13 @@ fn handle_task_result(
             Ok(())
         }
         Ok(Err(e)) => {
-            tracing::error!(error = %e, "{task_name} failed");
+            let msg = redact_api_key(&e.to_string());
+            tracing::error!(error = %msg, "{task_name} failed");
             Err(e)
         }
         Err(e) => {
-            tracing::error!(error = %e, "{task_name} panicked");
+            let msg = redact_api_key(&e.to_string());
+            tracing::error!(error = %msg, "{task_name} panicked");
             Err(anyhow::anyhow!("{task_name} panicked: {e}"))
         }
     }

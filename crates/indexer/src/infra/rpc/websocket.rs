@@ -17,9 +17,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use yog_core::domain::Protocol;
 
-use crate::error::RpcListenerError;
+use crate::{error::RpcListenerError, utils::redact::redact_api_key};
 
-const MAX_RETRY_ATTEMPTS: u32 = 10;
+const MAX_RETRY_ATTEMPTS: u32 = 1000;
 const MAX_RETRY_DELAY_SECS: u64 = 60;
 const INITIAL_RETRY_DELAY_SECS: u64 = 1;
 
@@ -180,11 +180,12 @@ fn handle_connection_result(
         Err(e) => {
             if attempts >= MAX_RETRY_ATTEMPTS {
                 return Err(anyhow::anyhow!(
-                    "RPC WebSocket unreachable after {attempts} attempts: {e}"
+                    "RPC WebSocket unreachable after {attempts} attempts: {}",
+                    redact_api_key(&e.to_string())
                 ));
             }
             warn!(
-                error = %e,
+                error = %redact_api_key(&e.to_string()),
                 attempt = attempts,
                 max = MAX_RETRY_ATTEMPTS,
                 retry_in = retry_delay,
@@ -208,11 +209,11 @@ async fn join_subscription_handles(
         match handle.await {
             Ok(Ok(())) => {}
             Ok(Err(e)) => {
-                error!(error = %e, "subscription task failed");
+                error!(error = %redact_api_key(&e.to_string()), "subscription task failed");
                 failed += 1;
             }
             Err(e) => {
-                error!(error = %e, "subscription task panicked");
+                error!(error = %redact_api_key(&e.to_string()), "subscription task panicked");
                 failed += 1;
             }
         }
@@ -248,6 +249,7 @@ fn spawn_protocol_subscription(
             .await
             .map_err(|e| anyhow::anyhow!("subscribe failed for {protocol_name}: {e}"))?;
 
+
         info!(protocol = %protocol_name, program_id = %program_id, "subscribed");
 
         dispatch_signatures(protocol_name, stream, unsubscribe, protocol, tx, shutdown).await;
@@ -276,16 +278,60 @@ async fn dispatch_signatures<S, U>(
             maybe_response = stream.next() => {
                 match maybe_response {
                     Some(response) => {
-                        let signature = match Signature::from_str(&response.value.signature) {
+                        let raw_sig = response.value.signature.clone();
+                        let logs = &response.value.logs;
+
+                        // Filtre : le programme doit apparaître comme `invoke` dans les logs.
+                        // L'address peut être présente via ALT sans que le programme soit réellement
+                        // exécuté — on ne veut que les vraies invocations.
+                        let program_id_str = protocol.program_id().to_string();
+                        let invoke_marker = format!("Program {program_id_str} invoke");
+                        if !logs.iter().any(|log| log.starts_with(&invoke_marker)) {
+                            tracing::debug!(
+                                protocol = %protocol_name,
+                                signature = %raw_sig,
+                                "skipping — program not invoked (ALT only)"
+                            );
+                            continue;
+                        }
+
+                        // Ignore les txs failed — pas d'effet on-chain donc rien à indexer
+                        if response.value.err.is_some() {
+                            tracing::debug!(
+                                protocol = %protocol_name,
+                                signature = %raw_sig,
+                                "skipping — transaction failed"
+                            );
+                            continue;
+                        }
+
+                        let signature = match Signature::from_str(&raw_sig) {
                             Ok(sig) => sig,
                             Err(e) => {
-                                warn!(error = %e, raw = %response.value.signature, "invalid signature");
+                                warn!(error = %e, raw = %raw_sig, "signature invalide");
                                 continue;
                             }
                         };
-                        if let Err(e) = tx.send((protocol.clone(), signature)).await {
-                            warn!("channel closed, dropping signature: {e}");
-                            break;
+
+                        tracing::debug!(
+                            protocol = %protocol_name,
+                            %signature,
+                            "📥 websocket emitted signature"
+                        );
+
+                        match tx.try_send((protocol.clone(), signature)) {
+                            Ok(()) => {}
+                            Err(mpsc::error::TrySendError::Full(_)) => {
+                                tracing::warn!(
+                                    protocol = %protocol_name,
+                                    %signature,
+                                    "⚠️  mpsc saturé — signature droppée"
+                                );
+                            }
+                            Err(mpsc::error::TrySendError::Closed(_)) => {
+                                tracing::warn!("channel fermé, arrêt de la subscription");
+                                break;
+                            }
                         }
                     }
                     None => {

@@ -63,22 +63,7 @@ impl IndexerService {
 
         let indexer = protocol_indexer(&protocol);
 
-
-
-
-        // DEBUG temporaire — compter ce que le détecteur voit
-        let is_swap = indexer.is_swap(&tx);
-        let is_add = indexer.is_add_liquidity(&tx);
-        let is_remove = indexer.is_remove_liquidity(&tx);
-        tracing::info!(
-            %signature,
-            is_swap, is_add, is_remove,
-            "detector results"
-        );
-
-
-
-        
+        let mut handled = false;
 
         if indexer.is_swap(&tx) {
             let swap = indexer.parse_swap(&tx)?;
@@ -91,7 +76,9 @@ impl IndexerService {
             self.upsert_pool_from_swap(&swap).await?;
             self.persist_swap(&swap).await?;
             self.persist_metrics(&swap).await?;
-        } else if indexer.is_add_liquidity(&tx) {
+            handled = true;
+        }
+        if indexer.is_add_liquidity(&tx) {
             let event = indexer.parse_add_liquidity(&tx)?;
             info!(
                 signature = %event.signature,
@@ -101,7 +88,9 @@ impl IndexerService {
             );
             self.upsert_pool_from_liquidity(&event).await?;
             self.persist_liquidity_event(&event).await?;
-        } else if indexer.is_remove_liquidity(&tx) {
+            handled = true;
+        }
+        if indexer.is_remove_liquidity(&tx) {
             let event = indexer.parse_remove_liquidity(&tx)?;
             info!(
                 signature = %event.signature,
@@ -110,10 +99,35 @@ impl IndexerService {
                 "remove liquidity parsed"
             );
             self.upsert_pool_from_liquidity(&event).await?;
-
             self.persist_liquidity_event(&event).await?;
-        } else {
-            debug!("skipping unrecognised transaction: {signature}");
+            handled = true;
+        }
+        if !handled {
+            if let Some(meta) = tx.transaction.meta.as_ref() {
+                if let solana_transaction_status::option_serializer::OptionSerializer::Some(logs) =
+                    &meta.log_messages
+                {
+                    let marker = format!("Program {} invoke", indexer.program_id());
+                    let mut found_instruction = None;
+                    let mut in_prog = false;
+                    for log in logs {
+                        if log.starts_with(&marker) {
+                            in_prog = true;
+                            continue;
+                        }
+                        if in_prog {
+                            if let Some(rest) = log.strip_prefix("Program log: Instruction: ") {
+                                found_instruction = Some(rest.to_string());
+                                break;
+                            }
+                            if log.starts_with("Program ") && !log.starts_with("Program log:") {
+                                in_prog = false;
+                            }
+                        }
+                    }
+                    tracing::info!(%signature, instruction = ?found_instruction, "skipped tx");
+                }
+            }
         }
 
         Ok(())
