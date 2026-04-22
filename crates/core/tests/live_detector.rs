@@ -74,7 +74,9 @@ async fn parser_extracts_add_liquidity_correctly() {
 // Helpers
 // ============================================================
 
-async fn fetch_tx(sig_str: &str) -> solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta {
+async fn fetch_tx(
+    sig_str: &str,
+) -> solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta {
     let rpc = RpcClient::new(MAINNET_RPC.to_string());
     let sig = Signature::from_str(sig_str).expect("valid signature");
 

@@ -3,13 +3,14 @@
 //! Entry point for the `indexer` binary.
 //!
 //! Single responsibility: initialize cross-cutting infrastructure
-//! (logging, configuration) and delegate orchestration to [`Daemon`].
+//! (logging, metrics, configuration) and delegate orchestration to [`Daemon`].
 //!
 //! ## Startup sequence
 //!
 //! ```text
 //! main()
 //!  ├─ init_tracing()      → structured logging (JSON prod / text dev)
+//!  ├─ init_metrics()      → Prometheus exporter on :9000/metrics
 //!  ├─ Config::load()      → explicit validation, no credentials in logs
 //!  ├─ Daemon::new(config) → wires the dependency graph
 //!  └─ Daemon::run()       → drives the indexer loop until shutdown signal
@@ -17,14 +18,16 @@
 //!
 //! ## Error handling
 //!
-//! Fatal errors are logged via `tracing::error!` before the process exits,
-//! so every crash produces a structured log entry visible in the collector.
+//! Fatal startup errors are logged via `tracing::error!` before the process
+//! exits, so every crash produces a structured log entry visible in the
+//! collector.
 //!
 //! ## Graceful shutdown
 //!
 //! The process listens for SIGTERM (production) and SIGINT / Ctrl-C (dev).
-//! On signal reception, the daemon is given a chance to flush in-flight
-//! writes before the process exits.
+//! On signal reception, a [`CancellationToken`] is triggered: the daemon
+//! observes it, stops accepting new work, and waits for in-flight tasks
+//! (listener, dispatcher, indexer) to finish before returning.
 
 // `application` - Contains the core business logic for the indexer.
 mod application;
@@ -43,29 +46,30 @@ mod infra;
 
 mod utils;
 
+use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+use tracing_subscriber::EnvFilter;
 
 use bootstrap::Daemon;
 use config::Config;
-use tracing_subscriber::EnvFilter;
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 
 /// Initializes the tracing subscriber.
 ///
 /// Format is selected from the `LOG_FORMAT` environment variable:
-/// - `json`  → machine-readable, suitable for log collectors (Loki, Datadog…)
+/// - `json` → machine-readable, suitable for log collectors (Loki, Datadog…)
 /// - anything else → human-readable text, suitable for local development
 ///
 /// Log level is controlled by `RUST_LOG` (defaults to `info`):
 /// ```text
-/// RUST_LOG=yog_sothoth_indexer=debug,warn
+/// RUST_LOG=yog_indexer=debug,yog_core=debug,warn
 /// ```
 fn init_tracing() {
     let format = std::env::var("LOG_FORMAT").unwrap_or_default();
 
-    // Respecte RUST_LOG s'il est défini, sinon fallback sur "info".
+    // Respect RUST_LOG
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     if format.eq_ignore_ascii_case("json") {
@@ -82,7 +86,29 @@ fn init_tracing() {
     }
 }
 
-// ── Shutdown signal ───────────────────────────────────────────────────────────
+// ── Metrics ──────────────────────────────────────────────────────────────────
+
+/// Installs the Prometheus exporter as the global `metrics` recorder.
+///
+/// Exposes `http://0.0.0.0:9000/metrics` in Prometheus text format.
+/// All `counter!()` / `histogram!()` calls elsewhere in the process are
+/// silent no-ops until this runs — must be called before any metric is
+/// emitted (notably before `Daemon::new`, which registers metric
+/// descriptions).
+///
+/// # Errors
+///
+/// Returns an error if the listener address is already in use or if the
+/// recorder has already been installed (both indicate a misconfiguration
+/// and should stop the process).
+fn init_metrics() -> anyhow::Result<()> {
+    PrometheusBuilder::new()
+        .with_http_listener(([0, 0, 0, 0], 9000))
+        .install()
+        .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))
+}
+
+// ── Shutdown signal ──────────────────────────────────────────────────────────
 
 /// Resolves when SIGTERM **or** SIGINT (Ctrl-C) is received.
 ///
@@ -108,12 +134,12 @@ async fn shutdown_signal() {
     let sigterm = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c   => tracing::info!("received Ctrl-C — shutting down"),
-        _ = sigterm  => tracing::info!("received SIGTERM — shutting down"),
+        _ = ctrl_c  => tracing::info!("received Ctrl-C — shutting down"),
+        _ = sigterm => tracing::info!("received SIGTERM — shutting down"),
     }
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// ── Entry point ──────────────────────────────────────────────────────────────
 
 /// Entry point for the `indexer` binary.
 ///
@@ -124,30 +150,41 @@ async fn shutdown_signal() {
 /// # Errors
 ///
 /// Returns an error (and logs it) if:
+/// - the Prometheus exporter cannot bind its listener
 /// - the configuration is invalid or fails explicit validation
 /// - TimescaleDB is unreachable at startup
 /// - the Solana RPC connection is refused
 /// - the indexing loop encounters an unrecoverable error
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // ── Observability — must be first ─────────────────────────────────────────
-    // Initialized before anything else so that Config::load() errors and
-    // connection failures are captured as structured log entries.
-    init_tracing();
+    // Must be first: rustls 0.23 requires an explicit crypto provider.
+    // Without this, any TLS connection (WS to Helius, HTTPS to the RPC)
+    // panics on the first handshake.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install rustls crypto provider");
 
     // ── Configuration ─────────────────────────────────────────────────────────
     // `Config::load()` performs explicit validation of all required fields
     // (RPC URL, DB connection string, pool addresses…).
     //
-    // SECURITY: Config::fmt / Config::debug implementations MUST redact
+    // SECURITY: Config's Display / Debug implementations MUST redact
     // credentials (DATABASE_URL password, API keys) before they reach the
-    // log collector. See `config::redact` for the masking logic.
+    // log collector. See `utils::redact` for the masking logic.
     let config =
         Config::load().inspect_err(|e| error!(error = %e, "Failed to load configuration"))?;
 
+    // ── Observability — must be first ─────────────────────────────────────────
+    // Tracing and metrics are initialized before anything else so that
+    // Config::load() errors and connection failures are captured as structured
+    // log entries and counted in metrics.
+    init_tracing();
+    init_metrics().inspect_err(|e| error!(error = %e, "Failed to install metrics exporter"))?;
+
     // ── Bootstrap ─────────────────────────────────────────────────────────────
     // `Daemon::new` wires the dependency graph: DB pool, RPC client,
-    // watched-pool registry. Validates live connections before returning.
+    // watched-pool registry, metric descriptions. Validates live connections
+    // before returning.
     let daemon = Daemon::new(config)
         .await
         .inspect_err(|e| error!(error = %e, "Failed to initialize daemon"))?;

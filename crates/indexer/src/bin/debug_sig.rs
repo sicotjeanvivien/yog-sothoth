@@ -15,9 +15,7 @@ use std::{env, str::FromStr};
 
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_api::{
-    config::RpcTransactionConfig, response::transaction::Signature,
-};
+use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
     UiTransactionEncoding,
@@ -117,10 +115,7 @@ async fn fetch_tx(
 }
 
 /// Write the raw transaction JSON to disk for fixture replay.
-fn dump_fixture(
-    tx: &EncodedConfirmedTransactionWithStatusMeta,
-    path: &str,
-) -> anyhow::Result<()> {
+fn dump_fixture(tx: &EncodedConfirmedTransactionWithStatusMeta, path: &str) -> anyhow::Result<()> {
     let json = serde_json::to_string_pretty(tx)?;
     std::fs::write(path, json)?;
     println!("💾 Fixture écrite : {path}");

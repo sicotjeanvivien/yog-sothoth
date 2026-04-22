@@ -257,3 +257,4 @@ npm run lint
 
 
  cargo run --bin debug_sig -- 2yUdrWx2TmdL9SLk3AKaSpv54BLtMSeTUihGwqc1UhgPbUVkuZR11KvioTJFkUYwQjH1MSbpEMn64a7EaTY7BTmS
+  cargo run --release --bin yog-indexer 2>&1 | tee log/indexer-helius.log

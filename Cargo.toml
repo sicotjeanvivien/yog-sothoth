@@ -7,14 +7,14 @@ resolver = "2"
 tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
 tokio-retry = "0.3"
-tokio-util="0.7"
+tokio-util = "0.7"
 
 # Solana
 solana-rpc-client = { version = "3", default-features = false }
 solana-rpc-client-api = { version = "3", default-features = false }
 solana-commitment-config = { version = "3", default-features = false }
 solana-pubsub-client = { version = "3", default-features = false }
-solana-pubkey = { version = "3", default-features = false }
+solana-pubkey = { version = "4", default-features = false }
 solana-transaction-status = { version = "3", default-features = false }
 
 # Database
@@ -41,7 +41,12 @@ dotenvy = "0.15"
 thiserror = "2"
 anyhow = "1"
 
+metrics = "0.24"
+metrics-exporter-prometheus= "0.18"
+
 # Misc
 chrono = { version = "0.4", features = ["serde"] }
 async-trait = "0.1"
 borsh = { version = "1", features = ["derive"] }
+
+rustls = { version = "0.23", features = ["ring"] }
