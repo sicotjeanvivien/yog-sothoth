@@ -1,5 +1,8 @@
 use crate::{
-    application::{services::IndexerService, workers::IndexerWorker},
+    application::{
+        services::{IndexerService, IndexerServiceMetrics},
+        workers::IndexerWorker,
+    },
     config::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
@@ -8,7 +11,8 @@ use crate::{
             PgSwapEventRepository,
         },
         rpc::{
-            dispatcher::DispatcherMetrics, QualifiedSignature, RawLogEvent, SignatureDispatcher,
+            dispatcher::metrics::DispatcherMetrics, QualifiedSignature, RawLogEvent,
+            SignatureDispatcher,
         },
         Database, RpcListener,
     },
@@ -51,9 +55,12 @@ impl Daemon {
         let indexer_service = init_indexer_service(&config, &database).await?;
         info!("indexer service initialized");
 
-        DispatcherMetrics::register_descriptions();
         let dispatcher = SignatureDispatcher::new_default()?;
         info!("dispatcher initialized");
+
+        DispatcherMetrics::register_descriptions();
+        IndexerServiceMetrics::register_descriptions();
+        info!("Metrics initialized");
 
         info!("daemon initialized");
 

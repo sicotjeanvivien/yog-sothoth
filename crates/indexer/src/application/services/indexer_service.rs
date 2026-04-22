@@ -2,10 +2,13 @@ use chrono::Utc;
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
+use solana_transaction_status::{
+    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
+    UiTransactionEncoding,
+};
 use std::sync::Arc;
 use tokio_retry::{strategy::FixedInterval, Retry};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use yog_core::{
     amm::{
         common::{imbalance, spot_price},
@@ -21,6 +24,8 @@ use yog_core::{
     },
     CoreResult,
 };
+
+use crate::application::services::IndexerServiceMetrics;
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler.
@@ -63,7 +68,13 @@ impl IndexerService {
 
         let indexer = protocol_indexer(&protocol);
 
-        let mut handled = false;
+        // Extract every program-specific instruction name present in the
+        // transaction logs. Used solely for observability — the parsing
+        // flow below is unchanged and remains based on is_swap /
+        // is_add_liquidity / is_remove_liquidity detectors.
+        let instructions = extract_program_instructions(&tx, &indexer.program_id().to_string());
+
+        let mut any_handled = false;
 
         if indexer.is_swap(&tx) {
             let swap = indexer.parse_swap(&tx)?;
@@ -76,7 +87,8 @@ impl IndexerService {
             self.upsert_pool_from_swap(&swap).await?;
             self.persist_swap(&swap).await?;
             self.persist_metrics(&swap).await?;
-            handled = true;
+            IndexerServiceMetrics::record_indexed(&protocol, "Swap");
+            any_handled = true;
         }
         if indexer.is_add_liquidity(&tx) {
             let event = indexer.parse_add_liquidity(&tx)?;
@@ -88,7 +100,8 @@ impl IndexerService {
             );
             self.upsert_pool_from_liquidity(&event).await?;
             self.persist_liquidity_event(&event).await?;
-            handled = true;
+            IndexerServiceMetrics::record_indexed(&protocol, "AddLiquidity");
+            any_handled = true;
         }
         if indexer.is_remove_liquidity(&tx) {
             let event = indexer.parse_remove_liquidity(&tx)?;
@@ -100,33 +113,27 @@ impl IndexerService {
             );
             self.upsert_pool_from_liquidity(&event).await?;
             self.persist_liquidity_event(&event).await?;
-            handled = true;
+            IndexerServiceMetrics::record_indexed(&protocol, "RemoveLiquidity");
+            any_handled = true;
         }
-        if !handled {
-            if let Some(meta) = tx.transaction.meta.as_ref() {
-                if let solana_transaction_status::option_serializer::OptionSerializer::Some(logs) =
-                    &meta.log_messages
-                {
-                    let marker = format!("Program {} invoke", indexer.program_id());
-                    let mut found_instruction = None;
-                    let mut in_prog = false;
-                    for log in logs {
-                        if log.starts_with(&marker) {
-                            in_prog = true;
-                            continue;
-                        }
-                        if in_prog {
-                            if let Some(rest) = log.strip_prefix("Program log: Instruction: ") {
-                                found_instruction = Some(rest.to_string());
-                                break;
-                            }
-                            if log.starts_with("Program ") && !log.starts_with("Program log:") {
-                                in_prog = false;
-                            }
-                        }
-                    }
-                    tracing::info!(%signature, instruction = ?found_instruction, "skipped tx");
-                }
+
+        // Emit a skipped metric for every instruction present in the
+        // transaction that the detectors above did not match. This
+        // catches cases like Swap2 colocated with a v1 Swap — the v1
+        // Swap is indexed, the Swap2 would be silently lost without
+        // this accounting.
+        for name in &instructions {
+            if !is_matched_instruction(name, any_handled, &indexer, &tx) {
+                IndexerServiceMetrics::record_skipped(&protocol, name);
+            }
+        }
+
+        if !any_handled {
+            IndexerServiceMetrics::record_no_match(&protocol);
+            if instructions.is_empty() {
+                info!(%signature, "skipped tx — no program instruction found in logs");
+            } else {
+                info!(%signature, instructions = ?instructions, "skipped tx — no matching parser");
             }
         }
 
@@ -250,5 +257,68 @@ fn protocol_indexer(protocol: &Protocol) -> Arc<dyn PoolIndexer> {
         Protocol::MeteoraDammV2 => Arc::new(MeteoraDammV2::new()),
         Protocol::MeteoraDammV1 => Arc::new(MeteoraDammV1::new()),
         Protocol::MeteoraDlmm => Arc::new(MeteoraDlmm::new()),
+    }
+}
+
+/// Extract every `Program log: Instruction: <Name>` entry that appears
+/// within a `Program {program_id} invoke` frame in the transaction logs.
+///
+/// Returns the instruction names in order of appearance. A transaction
+/// that invokes the program three times returns three entries.
+fn extract_program_instructions(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+    program_id: &str,
+) -> Vec<String> {
+    let Some(meta) = tx.transaction.meta.as_ref() else {
+        return Vec::new();
+    };
+    let OptionSerializer::Some(logs) = &meta.log_messages else {
+        return Vec::new();
+    };
+
+    let invoke_marker = format!("Program {program_id} invoke");
+    let mut instructions = Vec::new();
+    let mut in_program = false;
+
+    for log in logs {
+        if log.starts_with(&invoke_marker) {
+            in_program = true;
+            continue;
+        }
+        if !in_program {
+            continue;
+        }
+        if let Some(name) = log.strip_prefix("Program log: Instruction: ") {
+            instructions.push(name.to_string());
+        } else if log.starts_with("Program ") && !log.starts_with("Program log:") {
+            // Exiting the program frame (success / failed / return).
+            in_program = false;
+        }
+    }
+
+    instructions
+}
+
+/// Approximate check: does this instruction name correspond to something
+/// one of the detectors actually matched?
+///
+/// Used only to decide whether to increment the "skipped" metric. Relies
+/// on the naming convention of DAMM v2 instructions (`Swap`, `AddLiquidity`,
+/// `RemoveLiquidity`). Imperfect — a colocated Swap + Swap2 will still
+/// mark Swap as matched and Swap2 as skipped, which is the intent.
+fn is_matched_instruction(
+    name: &str,
+    any_handled: bool,
+    indexer: &Arc<dyn PoolIndexer>,
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+) -> bool {
+    if !any_handled {
+        return false;
+    }
+    match name {
+        "Swap" => indexer.is_swap(tx),
+        "AddLiquidity" => indexer.is_add_liquidity(tx),
+        "RemoveLiquidity" => indexer.is_remove_liquidity(tx),
+        _ => false,
     }
 }
