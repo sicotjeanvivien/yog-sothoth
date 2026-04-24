@@ -11,6 +11,15 @@
 -- (`pool_metrics`) reference `pool_address` as raw data, without
 -- foreign key constraints. Pool dimensions are denormalised into
 -- the `pools` table for query convenience, not integrity.
+--
+-- NOTE — watched_pools allowlist (Phase 1 temporary constraint):
+-- Until the indexer runs on an upgraded RPC path (Helius
+-- transactionSubscribe, Launchpad, or equivalent gRPC), ingestion
+-- is bounded to an allowlist of pools stored in `watched_pools`.
+-- The protocol-centric architecture is preserved — the allowlist
+-- is applied as a filter in the ingestion pipeline, not as a
+-- return to static configuration. Lifting the constraint later
+-- is a matter of disabling the filter.
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
@@ -36,6 +45,42 @@ CREATE TABLE pools (
 
 CREATE INDEX idx_pools_protocol     ON pools (protocol);
 CREATE INDEX idx_pools_last_seen_at ON pools (last_seen_at DESC);
+
+-- ============================================================
+-- watched_pools
+-- Allowlist of pools that the ingestion pipeline is permitted
+-- to process. Loaded at indexer startup into an in-memory set
+-- used by the WatchedPoolFilter.
+--
+-- This table is decoupled from `pools`:
+--   - No foreign key — a watched pool may not yet have been
+--     observed (added_at < first_seen_at is valid).
+--   - Deactivation uses the `active` flag rather than row
+--     deletion, to preserve history and allow reactivation
+--     without re-selecting.
+--
+-- The `note` column is free-form annotation (selection rationale,
+-- edge-case marker, etc.) — useful for future-self context when
+-- revisiting the selection.
+--
+-- Schema anticipates v0.3 user-managed watchlists: a `user_id`
+-- column will be added then, with the current rows migrating
+-- to a system-owned user or a dedicated default tier.
+-- ============================================================
+CREATE TABLE watched_pools (
+    pool_address TEXT        PRIMARY KEY,
+    protocol     TEXT        NOT NULL,
+    active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    added_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    note         TEXT
+);
+
+-- Partial index: filter queries only care about active rows.
+-- Keeps the index small and fast as the table grows over time
+-- with deactivated entries.
+CREATE INDEX idx_watched_pools_active
+    ON watched_pools (pool_address)
+    WHERE active = TRUE;
 
 -- ============================================================
 -- swap_events

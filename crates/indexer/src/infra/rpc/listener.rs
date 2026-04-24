@@ -31,18 +31,6 @@ const MAX_RETRY_ATTEMPTS: u32 = 1000;
 const MAX_RETRY_DELAY_SECS: u64 = 60;
 const INITIAL_RETRY_DELAY_SECS: u64 = 1;
 
-/// Gestionnaire de la connexion WebSocket au RPC Solana.
-///
-/// Responsabilités :
-/// - maintenir la liste des protocoles surveillés
-/// - se connecter au PubSub Solana et souscrire aux logs
-/// - reconnecter automatiquement avec exponential backoff
-/// - émettre les [`RawLogEvent`] vers l'aval
-///
-/// # Limitations (phase 1)
-///
-/// Les protocoles ajoutés via [`Self::watch`] après le démarrage de [`Self::run`]
-/// ne sont pris en compte qu'à la prochaine reconnexion.
 pub struct RpcListener {
     ws_url: String,
     watched_protocols: Mutex<HashSet<Protocol>>,
@@ -56,21 +44,14 @@ impl RpcListener {
         }
     }
 
-    /// Ajoute un protocole à la liste de surveillance.
-    ///
-    /// Prend effet à la prochaine (re)connexion.
     pub async fn watch(&self, protocol: Protocol) {
         self.watched_protocols.lock().await.insert(protocol);
     }
 
-    /// Retire un protocole de la liste de surveillance.
-    ///
-    /// Prend effet à la prochaine (re)connexion.
     pub async fn unwatch(&self, protocol: &Protocol) {
         self.watched_protocols.lock().await.remove(protocol);
     }
 
-    /// Boucle principale avec reconnexion automatique et shutdown propre.
     pub async fn run(
         &self,
         tx: mpsc::Sender<RawLogEvent>,
@@ -89,12 +70,10 @@ impl RpcListener {
                             info!("RPC listener stopped cleanly");
                             return Ok(());
                         }
-                        // Erreur de config : on ne retry pas, on remonte.
                         Err(RpcListenerError::NoProtocolsConfigured) => {
                             warn!("no protocols configured — listener idle");
                             return Err(RpcListenerError::NoProtocolsConfigured);
                         }
-                        // Erreur transitoire : on retry avec backoff.
                         Err(e) => {
                             attempts += 1;
                             if attempts >= MAX_RETRY_ATTEMPTS {
@@ -258,6 +237,7 @@ async fn forward_raw_events<S, U>(
             maybe_response = stream.next() => {
                 match maybe_response {
                     Some(response) => {
+                        println!("{:?}",response);
                         let event = RawLogEvent {
                             protocol: protocol.clone(),
                             signature: response.value.signature,

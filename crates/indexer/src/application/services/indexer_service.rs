@@ -7,6 +7,7 @@ use solana_transaction_status::{
     UiTransactionEncoding,
 };
 use std::sync::Arc;
+use std::time::Instant;
 use tokio_retry::{strategy::FixedInterval, Retry};
 use tracing::{info, warn};
 use yog_core::{
@@ -60,11 +61,23 @@ impl IndexerService {
         protocol: Protocol,
         signature: Signature,
     ) -> anyhow::Result<()> {
+        let mut guard = ExitGuard::new(protocol.clone());
+
         info!(%signature, protocol = %protocol.as_str(), "received signature");
-        let tx = self
-            .fetch_transaction(signature)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("transaction not found: {signature}"))?;
+        let tx = match self.fetch_transaction(&protocol, signature).await {
+            Ok(Some(tx)) => tx,
+            Ok(None) => {
+                IndexerServiceMetrics::record_fetch_not_found(&protocol);
+                guard.set("fetch_not_found");
+                return Ok(());
+            }
+            Err(e) => {
+                let reason = classify_rpc_error(&e);
+                IndexerServiceMetrics::record_fetch_failure(&protocol, reason);
+                guard.set("fetch_failure");
+                return Err(e);
+            }
+        };
 
         let indexer = protocol_indexer(&protocol);
 
@@ -84,9 +97,9 @@ impl IndexerService {
                 amount_out = swap.amount_out,
                 "swap parsed"
             );
-            self.upsert_pool_from_swap(&swap).await?;
-            self.persist_swap(&swap).await?;
-            self.persist_metrics(&swap).await?;
+            self.upsert_pool_from_swap(&protocol, &swap).await?;
+            self.persist_swap(&protocol, &swap).await?;
+            self.persist_metrics(&protocol, &swap).await?;
             IndexerServiceMetrics::record_indexed(&protocol, "Swap");
             any_handled = true;
         }
@@ -98,8 +111,8 @@ impl IndexerService {
                 amount_b = event.amount_b,
                 "add liquidity parsed"
             );
-            self.upsert_pool_from_liquidity(&event).await?;
-            self.persist_liquidity_event(&event).await?;
+            self.upsert_pool_from_liquidity(&protocol, &event).await?;
+            self.persist_liquidity_event(&protocol, &event).await?;
             IndexerServiceMetrics::record_indexed(&protocol, "AddLiquidity");
             any_handled = true;
         }
@@ -111,8 +124,8 @@ impl IndexerService {
                 amount_b = event.amount_b,
                 "remove liquidity parsed"
             );
-            self.upsert_pool_from_liquidity(&event).await?;
-            self.persist_liquidity_event(&event).await?;
+            self.upsert_pool_from_liquidity(&protocol, &event).await?;
+            self.persist_liquidity_event(&protocol, &event).await?;
             IndexerServiceMetrics::record_indexed(&protocol, "RemoveLiquidity");
             any_handled = true;
         }
@@ -136,27 +149,53 @@ impl IndexerService {
                 info!(%signature, instructions = ?instructions, "skipped tx — no matching parser");
             }
         }
-
+        guard.set("ok");
         Ok(())
     }
 
-    async fn persist_swap(&self, swap: &SwapEvent) -> anyhow::Result<()> {
+    async fn persist_swap(&self, protocol: &Protocol, swap: &SwapEvent) -> anyhow::Result<()> {
+        let start = Instant::now();
         self.swap_event_repo.insert(swap).await?;
+        IndexerServiceMetrics::record_persist_duration(
+            protocol,
+            "swap",
+            start.elapsed().as_secs_f64(),
+        );
         Ok(())
     }
 
-    async fn persist_metrics(&self, swap: &SwapEvent) -> anyhow::Result<()> {
+    async fn persist_metrics(&self, protocol: &Protocol, swap: &SwapEvent) -> anyhow::Result<()> {
         let metric = self.compute_metrics(swap)?;
+        let start = Instant::now();
         self.pool_metric_repo.insert(&metric).await?;
+        IndexerServiceMetrics::record_persist_duration(
+            protocol,
+            "metric",
+            start.elapsed().as_secs_f64(),
+        );
         Ok(())
     }
 
-    async fn persist_liquidity_event(&self, event: &LiquidityEvent) -> anyhow::Result<()> {
+    async fn persist_liquidity_event(
+        &self,
+        protocol: &Protocol,
+        event: &LiquidityEvent,
+    ) -> anyhow::Result<()> {
+        let start = Instant::now();
         self.liquidity_event_repo.insert(event).await?;
+        IndexerServiceMetrics::record_persist_duration(
+            protocol,
+            "liquidity_event",
+            start.elapsed().as_secs_f64(),
+        );
         Ok(())
     }
 
-    async fn upsert_pool_from_swap(&self, swap: &SwapEvent) -> anyhow::Result<()> {
+    async fn upsert_pool_from_swap(
+        &self,
+        protocol: &Protocol,
+        swap: &SwapEvent,
+    ) -> anyhow::Result<()> {
         let now = Utc::now();
         let pool = Pool {
             pool_address: swap.pool_address,
@@ -166,11 +205,21 @@ impl IndexerService {
             first_seen_at: now,
             last_seen_at: now,
         };
+        let start = Instant::now();
         self.pool_repo.upsert(&pool).await?;
+        IndexerServiceMetrics::record_persist_duration(
+            protocol,
+            "pool_upsert",
+            start.elapsed().as_secs_f64(),
+        );
         Ok(())
     }
 
-    async fn upsert_pool_from_liquidity(&self, event: &LiquidityEvent) -> anyhow::Result<()> {
+    async fn upsert_pool_from_liquidity(
+        &self,
+        protocol: &Protocol,
+        event: &LiquidityEvent,
+    ) -> anyhow::Result<()> {
         let now = Utc::now();
         let pool = Pool {
             pool_address: event.pool_address,
@@ -180,13 +229,20 @@ impl IndexerService {
             first_seen_at: now,
             last_seen_at: now,
         };
+        let start = Instant::now();
         self.pool_repo.upsert(&pool).await?;
+        IndexerServiceMetrics::record_persist_duration(
+            protocol,
+            "pool_upsert",
+            start.elapsed().as_secs_f64(),
+        );
         Ok(())
     }
 
     /// Fetch a confirmed transaction by signature from the RPC.
     async fn fetch_transaction(
         &self,
+        protocol: &Protocol,
         signature: Signature,
     ) -> anyhow::Result<Option<EncodedConfirmedTransactionWithStatusMeta>> {
         let config = RpcTransactionConfig {
@@ -197,6 +253,7 @@ impl IndexerService {
 
         let strategy = FixedInterval::from_millis(500).take(5);
 
+        let start = Instant::now();
         let result = Retry::spawn(strategy, || async {
             self.rpc_client
                 .get_transaction_with_config(&signature, config)
@@ -204,6 +261,7 @@ impl IndexerService {
                 .map_err(|e| e.to_string())
         })
         .await;
+        IndexerServiceMetrics::record_fetch_duration(protocol, start.elapsed().as_secs_f64());
 
         match result {
             Ok(tx) => Ok(Some(tx)),
@@ -320,5 +378,66 @@ fn is_matched_instruction(
         "AddLiquidity" => indexer.is_add_liquidity(tx),
         "RemoveLiquidity" => indexer.is_remove_liquidity(tx),
         _ => false,
+    }
+}
+
+/// Classify an RPC fetch error into a small set of stable labels.
+///
+/// Keeps cardinality bounded — we want a handful of reason values,
+/// not one per unique error string.
+fn classify_rpc_error(err: &anyhow::Error) -> &'static str {
+    let msg = err.to_string().to_lowercase();
+    if msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests") {
+        "rate_limited"
+    } else if msg.contains("timeout") || msg.contains("timed out") {
+        "timeout"
+    } else if msg.contains("null") {
+        "null_response"
+    } else if msg.contains("connection") || msg.contains("connect") {
+        "connection_error"
+    } else {
+        "other"
+    }
+}
+
+/// RAII guard that records the outcome and duration of `index_transaction`.
+///
+/// Increments `index_transaction_entered_total` on construction, and on
+/// drop records both `index_transaction_exited_total{outcome=…}` and
+/// `index_transaction_duration_seconds{outcome=…}`.
+///
+/// If `set` is not called before drop, the outcome is recorded as
+/// `"unknown_exit"` — catches error paths that escape without explicit
+/// tagging (e.g. a `?` propagating a parse or persist error).
+struct ExitGuard {
+    protocol: Protocol,
+    outcome: Option<&'static str>,
+    start: Instant,
+}
+
+impl ExitGuard {
+    fn new(protocol: Protocol) -> Self {
+        IndexerServiceMetrics::record_entered(&protocol);
+        Self {
+            protocol,
+            outcome: None,
+            start: Instant::now(),
+        }
+    }
+
+    fn set(&mut self, outcome: &'static str) {
+        self.outcome = Some(outcome);
+    }
+}
+
+impl Drop for ExitGuard {
+    fn drop(&mut self) {
+        let outcome = self.outcome.unwrap_or("unknown_exit");
+        IndexerServiceMetrics::record_exited(&self.protocol, outcome);
+        IndexerServiceMetrics::record_index_tx_duration(
+            &self.protocol,
+            outcome,
+            self.start.elapsed().as_secs_f64(),
+        );
     }
 }

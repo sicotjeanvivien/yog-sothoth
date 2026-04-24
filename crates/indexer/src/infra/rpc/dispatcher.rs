@@ -12,17 +12,17 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-/// Erreurs fatales du dispatcher (configuration uniquement).
+/// Fatal dispatcher errors (configuration only).
 ///
-/// Les erreurs de données (signature malformée, drop par filtre) ne sont pas
-/// des erreurs : elles sont comptabilisées et le pipeline continue.
+/// Data errors (malformed signature, filter drop) are not errors:
+/// they are recorded as metrics and the pipeline keeps going.
 
 pub struct SignatureDispatcher {
     filters: Vec<Box<dyn LogFilter>>,
 }
 
 impl SignatureDispatcher {
-    /// Dispatcher avec la chaîne de filtres standard.
+    /// Dispatcher with the standard filter chain.
     pub fn new_default() -> Result<Self, DispatcherError> {
         Self::new_with_filters(vec![
             Box::new(InvocationFilter),
@@ -30,7 +30,7 @@ impl SignatureDispatcher {
         ])
     }
 
-    /// Dispatcher avec des filtres arbitraires (tests, configurations alternatives).
+    /// Dispatcher with arbitrary filters (tests, alternative configurations).
     pub fn new_with_filters(filters: Vec<Box<dyn LogFilter>>) -> Result<Self, DispatcherError> {
         if filters.is_empty() {
             return Err(DispatcherError::NoFilters);
@@ -38,8 +38,8 @@ impl SignatureDispatcher {
         Ok(Self { filters })
     }
 
-    /// Boucle principale : consomme les événements bruts jusqu'à shutdown
-    /// ou fermeture du canal amont.
+    /// Main loop: consumes raw events until shutdown
+    /// or upstream channel closure.
     pub async fn run(
         self,
         mut rx: mpsc::Receiver<RawLogEvent>,
@@ -67,11 +67,11 @@ impl SignatureDispatcher {
         }
     }
 
-    /// Traite un seul événement. Synchrone — aucune I/O ici.
+    /// Handles a single event. Synchronous — no I/O here.
     fn handle(&self, event: RawLogEvent, tx: &mpsc::Sender<QualifiedSignature>) {
         DispatcherMetrics::record_received(&event.protocol);
 
-        // Chaîne de filtres — premier rejet = drop.
+        // Filter chain — first rejection = drop.
         for filter in &self.filters {
             match filter.accept(&event) {
                 FilterDecision::Accept => continue,
@@ -89,7 +89,7 @@ impl SignatureDispatcher {
             }
         }
 
-        // Parsing de la signature — dernière étape avant émission.
+        // Signature parsing — last step before emission.
         let signature = match Signature::from_str(&event.signature) {
             Ok(sig) => sig,
             Err(e) => {
@@ -109,8 +109,8 @@ impl SignatureDispatcher {
             signature,
         };
 
-        // `try_send` : si l'Indexer est saturé, on drop plutôt que de bloquer
-        // tout le pipeline. Compté par la métrique `downstream_saturated`.
+        // `try_send`: if the Indexer is saturated, drop rather than block
+        // the whole pipeline. Tracked by the `downstream_saturated` metric.
         match tx.try_send(qualified) {
             Ok(()) => {
                 DispatcherMetrics::record_emitted(&event.protocol);
@@ -124,8 +124,8 @@ impl SignatureDispatcher {
                 DispatcherMetrics::record_downstream_saturated(&dropped.protocol);
             }
             Err(mpsc::error::TrySendError::Closed(_)) => {
-                // Aval fermé : on continue, le shutdown s'occupera de la sortie
-                // propre. Inutile de logger à chaque event.
+                // Downstream closed: keep going, shutdown will handle the
+                // clean exit. No need to log on every event.
             }
         }
     }
@@ -141,7 +141,7 @@ mod tests {
     use solana_rpc_client_api::response::TransactionError;
     use yog_core::domain::Protocol;
 
-    /// Signature base58 valide (64 bytes) utilisée pour les tests.
+    /// Valid base58 signature (64 bytes) used for tests.
     const VALID_SIG: &str =
         "5j7s1QzqC8J8G7X9WjvY2b6K1cN2Y3Z4W5v6u7t8s9r0q1p2o3n4m5l6k7j8i9h0g1f2e3d4c5b6a7";
 
@@ -190,14 +190,11 @@ mod tests {
         let shutdown = CancellationToken::new();
 
         tx_in.send(make_event(vec![], None)).await.unwrap();
-        drop(tx_in); // ferme l'amont → dispatcher sort
+        drop(tx_in); // close upstream → dispatcher exits
 
         dispatcher.run(rx_in, tx_out, shutdown).await.unwrap();
 
-        assert!(
-            rx_out.try_recv().is_err(),
-            "aucune signature ne doit sortir"
-        );
+        assert!(rx_out.try_recv().is_err(), "no signature should be emitted");
     }
 
     #[tokio::test]
@@ -217,7 +214,7 @@ mod tests {
         assert!(rx_out.try_recv().is_err());
     }
 
-    // NOTE : un test "accepté + signature valide → émission" est utile mais
-    // demande une signature base58 valide côté solana_sdk. À ajouter quand
-    // tu auras accès à `Keypair::new().sign_message(...).to_string()` en test.
+    // NOTE: an "accepted + valid signature → emission" test would be useful
+    // but requires a valid base58 signature from solana_sdk. To be added
+    // once `Keypair::new().sign_message(...).to_string()` is available in tests.
 }
