@@ -125,7 +125,10 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 
 /// Create the RPC WebSocket listener with its watched protocols.
 async fn init_listener(config: &Config) -> Arc<RpcListener> {
-    let listener = Arc::new(RpcListener::new(config.solana_rpc_ws.expose().to_string()));
+    let listener = Arc::new(RpcListener::new(
+        config.solana_rpc_ws.expose().to_string(),
+        config.worker_max_retries,
+    ));
     listener.watch(Protocol::MeteoraDammV2).await;
     listener
 }

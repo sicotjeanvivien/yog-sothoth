@@ -14,6 +14,8 @@ pub(crate) struct Config {
     pub(crate) solana_rpc_ws: SecretUrl,
     /// Solana RPC HTTP URL — contient potentiellement l'api-key.
     pub(crate) solana_rpc_http: SecretUrl,
+    /// Worker max retries before stop
+    pub(crate) worker_max_retries: u32,
 }
 
 impl Config {
@@ -24,10 +26,15 @@ impl Config {
             database_url: SecretUrl::new(required("DATABASE_URL")?),
             solana_rpc_ws: SecretUrl::new(required("SOLANA_RPC_WS")?),
             solana_rpc_http: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
+            worker_max_retries: parse_value_to_u32(required("RPC_WORKER_MAX_RETRIES")?),
         })
     }
 }
 
 fn required(key: &str) -> Result<String, ConfigError> {
     env::var(key).map_err(|_| ConfigError::MissingVariable(key.to_string()))
+}
+
+fn parse_value_to_u32(raw: String) -> u32 {
+    raw.parse::<u32>().ok().unwrap_or(10)
 }
