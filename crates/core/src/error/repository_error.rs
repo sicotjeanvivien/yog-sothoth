@@ -39,7 +39,6 @@ pub enum RepositoryError {
     /// because timeouts are often retryable with different semantics.
     #[error("timeout: {0}")]
     Timeout(String),
-    
 }
 
 pub type RepositoryResult<T> = Result<T, RepositoryError>;

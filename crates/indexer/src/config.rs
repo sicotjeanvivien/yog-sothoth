@@ -44,7 +44,7 @@ fn parse_required_u32(key: &str) -> Result<u32, ConfigError> {
     parse_u32(key, required(key)?)
 }
 
-fn parse_requires_bool(key: &str)-> Result<bool, ConfigError> {
+fn parse_requires_bool(key: &str) -> Result<bool, ConfigError> {
     parse_bool(key, required(key)?)
 }
 

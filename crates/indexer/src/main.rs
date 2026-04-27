@@ -163,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
-      
+
     // ── Observability — must be first ─────────────────────────────────────────
     // Tracing and metrics are initialized before anything else so that
     // Config::load() errors and connection failures are captured as structured
