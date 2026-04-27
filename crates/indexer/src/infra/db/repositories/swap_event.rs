@@ -4,10 +4,13 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     domain::{Protocol, SwapEvent, SwapEventRepository},
-    CoreError, CoreResult,
+    RepositoryError, RepositoryResult,
 };
 
-use crate::infra::db::{convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64};
+use crate::infra::db::{
+    convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
+    repository_utils::map_sqlx_error,
+};
 
 pub(crate) struct PgSwapEventRepository {
     pool: PgPool,
@@ -21,7 +24,7 @@ impl PgSwapEventRepository {
 
 #[async_trait]
 impl SwapEventRepository for PgSwapEventRepository {
-    async fn insert(&self, event: &SwapEvent) -> CoreResult<()> {
+    async fn insert(&self, event: &SwapEvent) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
             INSERT INTO swap_events
@@ -56,15 +59,16 @@ impl SwapEventRepository for PgSwapEventRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|e| CoreError::ParseError {
-            signature: event.signature.clone(),
-            reason: format!("db insert swap_event: {e}"),
-        })?;
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }
 
-    async fn find_by_pool(&self, pool_address: &Pubkey, limit: i64) -> CoreResult<Vec<SwapEvent>> {
+    async fn find_by_pool(
+        &self,
+        pool_address: &Pubkey,
+        limit: i64,
+    ) -> RepositoryResult<Vec<SwapEvent>> {
         let rows = sqlx::query!(
             r#"
             SELECT pool_address, protocol, signature,
@@ -83,16 +87,15 @@ impl SwapEventRepository for PgSwapEventRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("db find_by_pool swap_events: {e}"),
-        })?;
+        .map_err(map_sqlx_error)?;
 
         rows.into_iter()
             .map(|row| {
                 Ok(SwapEvent {
                     pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol)?,
+                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
+                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
+                    })?,
                     token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
                     token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
                     token_in_mint: convert_string_to_pubkey(row.token_in_mint, "token_in_mint")?,
@@ -121,6 +124,6 @@ impl SwapEventRepository for PgSwapEventRepository {
                     timestamp: row.timestamp,
                 })
             })
-            .collect::<CoreResult<Vec<_>>>()
+            .collect::<RepositoryResult<Vec<_>>>()
     }
 }

@@ -8,6 +8,9 @@ pub(crate) enum RpcListenerError {
     #[error("no protocols configured")]
     NoProtocolsConfigured,
 
+    #[error("No subscription targets configured")]
+    NoSubscriptionTargets ,
+
     #[error("PubSubClient error : {0}")]
     PubSubClient(String),
 

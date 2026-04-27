@@ -3,11 +3,12 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     domain::{PoolMetric, PoolMetricRepository},
-    CoreError, CoreResult,
+    RepositoryResult,
 };
 
 use crate::infra::db::{
     convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
+    repository_utils::map_sqlx_error,
 };
 
 pub(crate) struct PgPoolMetricRepository {
@@ -22,7 +23,7 @@ impl PgPoolMetricRepository {
 
 #[async_trait]
 impl PoolMetricRepository for PgPoolMetricRepository {
-    async fn insert(&self, metric: &PoolMetric) -> CoreResult<()> {
+    async fn insert(&self, metric: &PoolMetric) -> RepositoryResult<()> {
         let price_q64 = sqlx::types::BigDecimal::from(metric.price_q64);
 
         sqlx::query!(
@@ -67,15 +68,16 @@ impl PoolMetricRepository for PgPoolMetricRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|e| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("db insert pool_metrics: {e}"),
-        })?;
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }
 
-    async fn find_by_pool(&self, pool_address: &Pubkey, limit: i64) -> CoreResult<Vec<PoolMetric>> {
+    async fn find_by_pool(
+        &self,
+        pool_address: &Pubkey,
+        limit: i64,
+    ) -> RepositoryResult<Vec<PoolMetric>> {
         let rows = sqlx::query!(
             r#"
             SELECT pool_address, signature, reserve_a, reserve_b, price_q64, price_impact_bps, imbalance_bps, current_fee_bps, fees_collected_a, fees_collected_b, volume_a, volume_b, active_bin_id, bin_step, timestamp
@@ -86,10 +88,7 @@ impl PoolMetricRepository for PgPoolMetricRepository {
             "#,
             pool_address.to_string(),
             limit
-        ).fetch_all(&self.pool).await.map_err(|e| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("db find_by_pool swap_events: {e}"),
-        })?;
+        ).fetch_all(&self.pool).await.map_err(map_sqlx_error)?;
 
         rows.into_iter()
             .map(|row| {
@@ -123,6 +122,6 @@ impl PoolMetricRepository for PgPoolMetricRepository {
                     timestamp: row.timestamp,
                 })
             })
-            .collect::<CoreResult<Vec<_>>>()
+            .collect::<RepositoryResult<Vec<_>>>()
     }
 }

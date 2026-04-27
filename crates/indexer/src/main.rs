@@ -163,6 +163,13 @@ async fn main() -> anyhow::Result<()> {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
+      
+    // ── Observability — must be first ─────────────────────────────────────────
+    // Tracing and metrics are initialized before anything else so that
+    // Config::load() errors and connection failures are captured as structured
+    // log entries and counted in metrics.
+    init_tracing();
+    init_metrics().inspect_err(|e| error!(error = %e, "Failed to install metrics exporter"))?;
 
     // ── Configuration ─────────────────────────────────────────────────────────
     // `Config::load()` performs explicit validation of all required fields
@@ -173,13 +180,6 @@ async fn main() -> anyhow::Result<()> {
     // log collector. See `utils::redact` for the masking logic.
     let config =
         Config::load().inspect_err(|e| error!(error = %e, "Failed to load configuration"))?;
-
-    // ── Observability — must be first ─────────────────────────────────────────
-    // Tracing and metrics are initialized before anything else so that
-    // Config::load() errors and connection failures are captured as structured
-    // log entries and counted in metrics.
-    init_tracing();
-    init_metrics().inspect_err(|e| error!(error = %e, "Failed to install metrics exporter"))?;
 
     // ── Bootstrap ─────────────────────────────────────────────────────────────
     // `Daemon::new` wires the dependency graph: DB pool, RPC client,

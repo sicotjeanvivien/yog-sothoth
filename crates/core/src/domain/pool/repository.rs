@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::{domain::Pool, CoreResult};
+use crate::{domain::Pool, RepositoryResult};
 
 /// Persistence contract for Pool.
 ///
@@ -12,5 +12,5 @@ pub trait PoolRepository: Send + Sync {
     ///
     /// On first observation, inserts the full row.
     /// On subsequent observations, updates `last_seen_at` only.
-    async fn upsert(&self, pool: &Pool) -> CoreResult<()>;
+    async fn upsert(&self, pool: &Pool) -> RepositoryResult<()>;
 }

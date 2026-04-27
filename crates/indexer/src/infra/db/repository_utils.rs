@@ -1,54 +1,71 @@
-use std::str::FromStr;
-
 use solana_pubkey::Pubkey;
 use sqlx::types::BigDecimal;
-use yog_core::{
-    domain::{LiquidityEventKind, Protocol},
-    CoreError,
-};
+use sqlx::Error as SqlxError;
+use std::str::FromStr;
+use yog_core::{domain::LiquidityEventKind, RepositoryError, RepositoryResult};
 
-pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> Result<Pubkey, CoreError> {
-    Pubkey::from_str(&key).map_err(|e| CoreError::ParseError {
-        signature: String::new(),
-        reason: format!("invalid {field} pubkey: {e}"),
-    })
+/// Convert a string read from the database into a `Pubkey`.
+///
+/// Returns `RepositoryError::Integrity` if the value cannot be parsed —
+/// this means the row contains a malformed pubkey, which is a data
+/// integrity issue (manual edit, schema drift, or upstream write bug).
+pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> RepositoryResult<Pubkey> {
+    Pubkey::from_str(&key)
+        .map_err(|e| RepositoryError::Integrity(format!("invalid {field} pubkey: {e}")))
 }
 
-pub(crate) fn convert_u64_to_i64(v: u64, field: &str) -> Result<i64, CoreError> {
-    i64::try_from(v).map_err(|e| CoreError::ParseError {
-        signature: String::new(),
-        reason: format!("invalid {field}: {e}"),
-    })
+/// Convert a `u64` (typically a domain value) into the `i64` Postgres
+/// column type. Fails on overflow — values close to `u64::MAX` cannot
+/// round-trip through Postgres `BIGINT`.
+pub(crate) fn convert_u64_to_i64(v: u64, field: &str) -> RepositoryResult<i64> {
+    i64::try_from(v).map_err(|e| RepositoryError::Integrity(format!("invalid {field}: {e}")))
 }
 
-pub(crate) fn convert_i64_to_u64(v: i64, field: &str) -> Result<u64, CoreError> {
-    u64::try_from(v).map_err(|e| CoreError::ParseError {
-        signature: String::new(),
-        reason: format!("invalid {field}: {e}"),
-    })
+/// Convert a `BIGINT` read from Postgres into a `u64`. Fails on negative
+/// values — they should never appear if the schema is correct.
+pub(crate) fn convert_i64_to_u64(v: i64, field: &str) -> RepositoryResult<u64> {
+    u64::try_from(v).map_err(|e| RepositoryError::Integrity(format!("invalid {field}: {e}")))
 }
 
+/// Convert a Postgres `NUMERIC` (mapped to `BigDecimal`) into a `u128`.
+/// Used for fields like `price_q64` that exceed `i64` range.
 pub(crate) fn convert_bigdecimal_to_u128(
     bigdecimal: BigDecimal,
     field: &str,
-) -> Result<u128, CoreError> {
+) -> RepositoryResult<u128> {
     bigdecimal
         .to_string()
         .parse::<u128>()
-        .map_err(|e| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("{field} parse error: {e}"),
-        })
+        .map_err(|e| RepositoryError::Integrity(format!("{field} parse error: {e}")))
 }
 
+/// Parse a string column into a `LiquidityEventKind` enum value.
 pub(crate) fn parse_string_to_liquidity_event_kind(
     liquidity_event_kind: String,
     field: &str,
-) -> Result<LiquidityEventKind, CoreError> {
+) -> RepositoryResult<LiquidityEventKind> {
     liquidity_event_kind
         .parse::<LiquidityEventKind>()
-        .map_err(|_| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("invalid {field}: {}", liquidity_event_kind),
-        })
+        .map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {liquidity_event_kind}")))
+}
+
+/// Map a `sqlx::Error` to its semantic `RepositoryError` counterpart.
+///
+/// The mapping is intentionally coarse — refine variants only when a
+/// caller actually needs to distinguish specific cases.
+pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
+    match &err {
+        SqlxError::RowNotFound => RepositoryError::NotFound(err.to_string()),
+
+        SqlxError::Database(db_err) if db_err.is_unique_violation() => {
+            RepositoryError::Conflict(err.to_string())
+        }
+        SqlxError::Database(db_err) if db_err.is_foreign_key_violation() => {
+            RepositoryError::Conflict(err.to_string())
+        }
+
+        SqlxError::PoolTimedOut => RepositoryError::Timeout(err.to_string()),
+
+        _ => RepositoryError::Backend(err.to_string()),
+    }
 }

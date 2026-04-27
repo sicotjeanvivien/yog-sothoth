@@ -2,8 +2,10 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use yog_core::{
     domain::{Pool, PoolRepository},
-    CoreError, CoreResult,
+    RepositoryResult,
 };
+
+use crate::infra::db::repository_utils::map_sqlx_error;
 
 pub(crate) struct PgPoolRepository {
     pool: PgPool,
@@ -17,7 +19,7 @@ impl PgPoolRepository {
 
 #[async_trait]
 impl PoolRepository for PgPoolRepository {
-    async fn upsert(&self, pool: &Pool) -> CoreResult<()> {
+    async fn upsert(&self, pool: &Pool) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
             INSERT INTO pools
@@ -35,10 +37,7 @@ impl PoolRepository for PgPoolRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|e| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("db upsert pool: {e}"),
-        })?;
+        .map_err(map_sqlx_error)?;
 
         Ok(())
     }

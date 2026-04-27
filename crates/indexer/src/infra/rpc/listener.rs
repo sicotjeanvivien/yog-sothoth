@@ -41,15 +41,25 @@ pub struct RpcListener {
     watched_protocols: Mutex<HashSet<Protocol>>,
     watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
+    /// Selects between protocol-centric (subscribe to programs) and
+    /// pool-centric (subscribe to individual pool accounts) indexing.
+    ///
+    /// TODO(post-RPC-upgrade): remove pool-centric mode and this flag.
+    /// Pool-centric exists only because the free public RPC cannot sustain
+    /// the full protocol firehose. Once we migrate to a paid RPC (Helius /
+    /// Shyft / Triton, see roadmap), protocol-centric becomes the only mode
+    /// and `target_pools` + this flag should be deleted.
+    mode_protocol_centric: bool,
 }
 
 impl RpcListener {
-    pub fn new(ws_url: String, worker_max_retries: u32) -> Self {
+    pub fn new(ws_url: String, worker_max_retries: u32, mode_protocol_centric: bool) -> Self {
         Self {
             ws_url,
             watched_protocols: Mutex::new(HashSet::new()),
             watched_pools: Mutex::new(HashSet::new()),
             worker_max_retries,
+            mode_protocol_centric,
         }
     }
 
@@ -66,13 +76,6 @@ impl RpcListener {
             .lock()
             .await
             .insert((protocol, pool_address));
-    }
-
-    pub async fn unwatch_pool(&self, protocol: &Protocol, pool_address: &Pubkey) {
-        self.watched_pools
-            .lock()
-            .await
-            .remove(&(protocol.clone(), *pool_address));
     }
 
     /// Spawn workers, supervise them, and return when they're all done.
@@ -187,53 +190,39 @@ impl RpcListener {
     async fn build_subscription_targets(
         &self,
     ) -> Result<Vec<SubscriptionTarget>, RpcListenerError> {
-        let protocols: HashSet<Protocol> = self
-            .watched_protocols
+        let targets = if self.mode_protocol_centric {
+            self.target_protocols().await
+        } else {
+            self.target_pools().await
+        };
+
+        if targets.is_empty() {
+            return Err(RpcListenerError::NoSubscriptionTargets);
+        }
+        Ok(targets)
+    }
+
+    async fn target_protocols(&self) -> Vec<SubscriptionTarget> {
+        self.watched_protocols
             .lock()
             .await
             .iter()
             .cloned()
-            .collect();
-
-        if protocols.is_empty() {
-            return Err(RpcListenerError::NoProtocolsConfigured);
-        }
-
-        let pools: Vec<(Protocol, Pubkey)> =
-            self.watched_pools.lock().await.iter().cloned().collect();
-
-        if pools.is_empty() {
-            // Legacy path: subscribe to each program ID.
-            let targets = protocols
-                .into_iter()
-                .map(|protocol| {
-                    let program_id = protocol.program_id();
-                    SubscriptionTarget::new(protocol, program_id)
-                })
-                .collect();
-            return Ok(targets);
-        }
-
-        let targets: Vec<SubscriptionTarget> = pools
-            .into_iter()
-            .filter_map(|(protocol, pool)| {
-                if protocols.contains(&protocol) {
-                    Some(SubscriptionTarget::new(protocol, pool))
-                } else {
-                    warn!(
-                        protocol = %protocol.as_str(),
-                        pool = %pool,
-                        "skipping pool — protocol not in watched set"
-                    );
-                    None
-                }
+            .map(|protocol| {
+                let program_id = protocol.program_id();
+                SubscriptionTarget::new(protocol, program_id)
             })
-            .collect();
+            .collect()
+    }
 
-        if targets.is_empty() {
-            return Err(RpcListenerError::NoProtocolsConfigured);
-        }
-        Ok(targets)
+    async fn target_pools(&self) -> Vec<SubscriptionTarget> {
+        self.watched_pools
+            .lock()
+            .await
+            .iter()
+            .cloned()
+            .map(|(protocol, pool)| SubscriptionTarget::new(protocol, pool))
+            .collect()
     }
 }
 

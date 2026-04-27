@@ -27,3 +27,6 @@ pub enum CoreError {
     #[error("unsupported instruction in transaction {signature}")]
     UnsupportedInstruction { signature: String },
 }
+
+/// Convenience result type for all yog-core operations.
+pub type CoreResult<T> = Result<T, CoreError>;

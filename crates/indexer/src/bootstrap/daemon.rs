@@ -1,14 +1,14 @@
 use crate::{
     application::{
-        services::{IndexerService, IndexerServiceMetrics},
+        services::{IndexerService, IndexerServiceMetrics, WatchedPoolService},
         workers::IndexerWorker,
     },
     config::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
         db::{
-            PgLiquidityEventRepository, PgPoolMetricRepository, PgPoolRepository,
-            PgSwapEventRepository,
+            repositories::PgWatchedPoolRepository, PgLiquidityEventRepository,
+            PgPoolMetricRepository, PgPoolRepository, PgSwapEventRepository,
         },
         rpc::{
             dispatcher::metrics::DispatcherMetrics, QualifiedSignature, RawLogEvent,
@@ -23,7 +23,6 @@ use std::sync::Arc;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::domain::Protocol;
 
 /// Top-level process — owns all runtime dependencies and drives the
 /// indexer lifecycle.
@@ -35,6 +34,7 @@ use yog_core::domain::Protocol;
 /// - handle graceful shutdown on SIGTERM / Ctrl-C
 pub(crate) struct Daemon {
     indexer_service: Arc<IndexerService>,
+    watched_pool_service: Arc<WatchedPoolService>,
     listener: Arc<RpcListener>,
     dispatcher: SignatureDispatcher,
     _database: Database,
@@ -49,11 +49,14 @@ impl Daemon {
         let database = init_db(&config.database_url.expose()).await?;
         info!("database initialized");
 
-        let listener = init_listener(&config).await;
+        let listener = init_listener(&config);
         info!("RPC listener initialized: {}", config.solana_rpc_ws);
 
         let indexer_service = init_indexer_service(&config, &database).await?;
         info!("indexer service initialized");
+
+        let watched_pool_service = init_watched_pool_service(&database, listener.clone()).await?;
+        info!("watched pool service initialized");
 
         let dispatcher = SignatureDispatcher::new_default()?;
         info!("dispatcher initialized");
@@ -66,6 +69,7 @@ impl Daemon {
 
         Ok(Self {
             indexer_service,
+            watched_pool_service,
             listener,
             dispatcher,
             _database: database,
@@ -84,8 +88,9 @@ impl Daemon {
     /// triggered. All remaining tasks are cancelled via the shared
     /// token.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        let (raw_tx, raw_rx) = mpsc::channel::<RawLogEvent>(100_000);
-        let (sig_tx, sig_rx) = mpsc::channel::<QualifiedSignature>(100_000);
+        self.watched_pool_service.restore_subscriptions().await?;
+        let (raw_tx, raw_rx) = mpsc::channel::<RawLogEvent>(10_000);
+        let (sig_tx, sig_rx) = mpsc::channel::<QualifiedSignature>(10_000);
 
         let ws_task = spawn_websocket_task(Arc::clone(&self.listener), raw_tx, shutdown.clone());
         let dispatcher_task =
@@ -124,12 +129,13 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 }
 
 /// Create the RPC WebSocket listener with its watched protocols.
-async fn init_listener(config: &Config) -> Arc<RpcListener> {
+fn init_listener(config: &Config) -> Arc<RpcListener> {
     let listener = Arc::new(RpcListener::new(
         config.solana_rpc_ws.expose().to_string(),
         config.worker_max_retries,
+        config.mode_protocol_centric,
     ));
-    listener.watch(Protocol::MeteoraDammV2).await;
+
     listener
 }
 
@@ -155,6 +161,17 @@ async fn init_indexer_service(
     )))
 }
 
+// Initialise the WatchedPoolService and its repository dependency.
+async fn init_watched_pool_service(
+    database: &Database,
+    listener: Arc<RpcListener>,
+) -> anyhow::Result<Arc<WatchedPoolService>> {
+    let pg_watched_pool_repository = Arc::new(PgWatchedPoolRepository::new(database.pool()));
+    Ok(Arc::new(WatchedPoolService::new(
+        listener,
+        pg_watched_pool_repository,
+    )))
+}
 // ── Task spawners ────────────────────────────────────────────────────────────
 
 /// Spawn the WebSocket listener task.

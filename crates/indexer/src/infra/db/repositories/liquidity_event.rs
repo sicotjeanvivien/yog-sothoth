@@ -4,12 +4,12 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     domain::{LiquidityEvent, LiquidityEventRepository, Protocol},
-    CoreError, CoreResult,
+    RepositoryError, RepositoryResult,
 };
 
 use crate::infra::db::{
     convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
-    parse_string_to_liquidity_event_kind,
+    parse_string_to_liquidity_event_kind, repository_utils::map_sqlx_error,
 };
 
 pub(crate) struct PgLiquidityEventRepository {
@@ -24,7 +24,7 @@ impl PgLiquidityEventRepository {
 
 #[async_trait]
 impl LiquidityEventRepository for PgLiquidityEventRepository {
-    async fn insert(&self, event: &LiquidityEvent) -> CoreResult<()> {
+    async fn insert(&self, event: &LiquidityEvent) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
             INSERT INTO liquidity_events
@@ -46,10 +46,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         )
         .execute(&self.pool)
         .await
-        .map_err(|e| CoreError::ParseError {
-            signature: event.signature.clone(),
-            reason: format!("db insert liquidity_events: {e}"),
-        })?;
+        .map_err(map_sqlx_error)?;
         Ok(())
     }
 
@@ -57,7 +54,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         &self,
         pool_address: &Pubkey,
         limit: i64,
-    ) -> CoreResult<Vec<LiquidityEvent>> {
+    ) -> RepositoryResult<Vec<LiquidityEvent>> {
         let rows = sqlx::query!(
             r#"
             SELECT pool_address, protocol, signature,
@@ -73,16 +70,15 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         )
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| CoreError::ParseError {
-            signature: String::new(),
-            reason: format!("db find_by_pool liquidity_events: {e}"),
-        })?;
+        .map_err(map_sqlx_error)?;
 
         rows.into_iter()
             .map(|row| {
                 Ok(LiquidityEvent {
                     pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol)?,
+                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
+                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
+                    })?,
                     token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
                     token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
                     liquidity_event_kind: parse_string_to_liquidity_event_kind(
@@ -95,6 +91,6 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
                     timestamp: row.timestamp,
                 })
             })
-            .collect::<CoreResult<Vec<_>>>()
+            .collect::<RepositoryResult<Vec<_>>>()
     }
 }
