@@ -16,6 +16,9 @@ solana-transaction-status = { workspace = true, optional = true, default-feature
 chrono = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+bs58 = { workspace = true }
+borsh = { workspace = true }
+sha2 = { workspace = true }
 
 
 [dev-dependencies]

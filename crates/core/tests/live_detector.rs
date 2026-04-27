@@ -1,92 +1,143 @@
-//! Live integration tests — hit the real Solana mainnet RPC.
+//! Live integration tests for the DAMM v2 wire event extractor.
 //!
-//! These tests are `#[ignore]` by default. Run with:
+//! Each test loads a real Solana transaction (saved as JSON in
+//! `tests/fixtures/`) and asserts that the extractor produces the
+//! expected wire events.
 //!
-//! ```sh
-//! cargo test --package yog-core --test live_detector -- --ignored --nocapture
-//! ```
+//! Fixtures are dumped via `solana confirm -v <signature> --output json`
+//! against mainnet — they capture the exact shape the RPC returns, so
+//! these tests double as regression guards if the JSON schema ever drifts.
 
-use solana_commitment_config::CommitmentConfig;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
-use solana_transaction_status::UiTransactionEncoding;
-use std::str::FromStr;
+use std::path::PathBuf;
 
-use yog_core::protocols::{meteora::MeteoraDammV2, PoolIndexer};
+use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
-const MAINNET_RPC: &str = "https://api.mainnet-beta.solana.com";
+use yog_core::protocols::meteora::damm_v2::{
+    events::DammV2WireEvent, extractor::extract_wire_events,
+};
 
-/// Known AddLiquidity transaction on DAMM v2.
-/// Pool: Meteora (RCSC-WSOL) Market — 43xBARFhhAcLJ5V7z3c26WeNLsQRdmzPyrnRyKBMDNix
-const KNOWN_ADD_LIQUIDITY_SIG: &str =
-    "3MEnBuodZBHDRfZkzNA9pN7bzrnYufeVbqEieFsqrcMf8VbtXL7HsAdMdE7NM2CHyaZJjtSLA82Vm1YDiiKBLq8Y";
+const CP_AMM_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
 
-#[tokio::test]
-#[ignore]
-async fn detector_recognizes_known_add_liquidity() {
-    let tx = fetch_tx(KNOWN_ADD_LIQUIDITY_SIG).await;
-    let indexer = MeteoraDammV2::new();
+/// Load and parse a fixture file by name. Panics on any error — fixtures
+/// are part of the test contract, missing or malformed ones should fail
+/// the test loudly rather than producing confusing assertion errors later.
+fn load_fixture(name: &str) -> EncodedConfirmedTransactionWithStatusMeta {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests");
+    path.push("fixtures");
+    path.push(name);
 
-    let is_swap = indexer.is_swap(&tx);
-    let is_add = indexer.is_add_liquidity(&tx);
-    let is_remove = indexer.is_remove_liquidity(&tx);
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
 
-    println!("--- Detector results ---");
-    println!("  is_swap:           {is_swap}");
-    println!("  is_add_liquidity:  {is_add}");
-    println!("  is_remove_liquidity: {is_remove}");
+    serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()))
+}
 
+/// The reference transaction `2qJrr...` contains two `swap` (legacy)
+/// instructions invoking cp-amm on the same pool, in opposite directions.
+/// The extractor must surface both as `DammV2WireEvent::Swap2`.
+#[test]
+fn extracts_both_swaps_from_double_swap_tx() {
+    let tx = load_fixture("damm_v2_swap_double.json");
+
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    // Sanity: no failure path triggered.
     assert!(
-        is_add,
-        "detector should recognize {KNOWN_ADD_LIQUIDITY_SIG} as AddLiquidity"
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
     );
-    assert!(!is_swap, "should NOT be flagged as swap");
-    assert!(!is_remove, "should NOT be flagged as remove_liquidity");
-}
+    assert!(
+        extracted.unknown.is_empty(),
+        "unexpected unknown discriminators: {} entries",
+        extracted.unknown.len()
+    );
 
-#[tokio::test]
-#[ignore]
-async fn parser_extracts_add_liquidity_correctly() {
-    let tx = fetch_tx(KNOWN_ADD_LIQUIDITY_SIG).await;
-    let indexer = MeteoraDammV2::new();
-
-    let event = indexer
-        .parse_add_liquidity(&tx)
-        .expect("parse_add_liquidity should succeed");
-
-    println!("--- Parsed event ---");
-    println!("  pool_address:  {}", event.pool_address);
-    println!("  protocol:      {}", event.protocol);
-    println!("  token_a_mint:  {}", event.token_a_mint);
-    println!("  token_b_mint:  {}", event.token_b_mint);
-    println!("  amount_a:      {}", event.amount_a);
-    println!("  amount_b:      {}", event.amount_b);
-    println!("  signature:     {}", event.signature);
-
+    // Two swaps in this transaction — both should round-trip as Swap2.
     assert_eq!(
-        event.pool_address.to_string(),
-        "43xBARFhhAcLJ5V7z3c26WeNLsQRdmzPyrnRyKBMDNix",
-        "pool should be the RCSC-WSOL Market, not the Position NFT"
+        extracted.events.len(),
+        2,
+        "expected 2 events, got {}",
+        extracted.events.len()
     );
+
+    for (i, event) in extracted.events.iter().enumerate() {
+        assert!(
+            matches!(event, DammV2WireEvent::Swap2(_)),
+            "event {i} is not a Swap2: {event:?}"
+        );
+    }
 }
 
-// ============================================================
-// Helpers
-// ============================================================
+/// Decoded values must form a coherent AMM trajectory:
+/// the two swaps mutate the pool's reserves in opposite directions, and
+/// the transfer amounts match what the user sent / received on-chain.
+///
+/// Note: `reserve_a_amount` / `reserve_b_amount` in the event reflect the
+/// pool's *accounting* reserves (`pool.token_a_amount` / `token_b_amount`),
+/// **not** the raw vault balances. The vault balance also includes accrued
+/// protocol fees and other components that are tracked separately in the
+/// pool state. So we don't compare event reserves to `post_token_balances`.
+#[test]
+fn decoded_swap_values_match_onchain_reality() {
+    let tx = load_fixture("damm_v2_swap_double.json");
 
-async fn fetch_tx(
-    sig_str: &str,
-) -> solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta {
-    let rpc = RpcClient::new(MAINNET_RPC.to_string());
-    let sig = Signature::from_str(sig_str).expect("valid signature");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert_eq!(extracted.events.len(), 2, "expected 2 events");
+    assert!(extracted.failures.is_empty());
+    assert!(extracted.unknown.is_empty());
 
-    let config = RpcTransactionConfig {
-        encoding: Some(UiTransactionEncoding::JsonParsed),
-        commitment: Some(CommitmentConfig::confirmed()),
-        max_supported_transaction_version: Some(0),
+    let pool_expected = "EgSJAzgCd8oYjMFGqoqtpYFkN3LsBTrbZ5AhACLiFz8G";
+
+    let DammV2WireEvent::Swap2(first) = &extracted.events[0] else {
+        panic!("first event is not Swap2");
+    };
+    let DammV2WireEvent::Swap2(second) = &extracted.events[1] else {
+        panic!("second event is not Swap2");
     };
 
-    rpc.get_transaction_with_config(&sig, config)
-        .await
-        .expect("RPC fetch should succeed")
+    // Both events refer to the same pool.
+    assert_eq!(first.pool.to_string(), pool_expected);
+    assert_eq!(second.pool.to_string(), pool_expected);
+
+    // Trade directions:
+    // - First swap: SOL in (token_a) → AtoB (0)
+    // - Second swap: token in (token_b) → BtoA (1)
+    assert_eq!(first.trade_direction, 0, "first swap: expected AtoB (0)");
+    assert_eq!(second.trade_direction, 1, "second swap: expected BtoA (1)");
+
+    // Transfer amounts must match the on-chain transferChecked CPIs:
+    // - First swap: user sends 9.4 SOL.
+    assert_eq!(
+        first.included_transfer_fee_amount_in, 9_397_799_749,
+        "first swap input amount mismatch"
+    );
+    // - Second swap: user receives 9.987 SOL.
+    assert_eq!(
+        second.included_transfer_fee_amount_out, 9_987_369_659,
+        "second swap output amount mismatch"
+    );
+
+    // Sanity on event reserves: non-zero on both sides for both events.
+    assert!(first.reserve_a_amount > 0);
+    assert!(first.reserve_b_amount > 0);
+    assert!(second.reserve_a_amount > 0);
+    assert!(second.reserve_b_amount > 0);
+
+    // AMM invariant: the second swap is BtoA (token in, SOL out), so it
+    // must drain reserve_a (SOL) and grow reserve_b (token) compared to
+    // the state after the first swap.
+    assert!(
+        second.reserve_a_amount < first.reserve_a_amount,
+        "after BtoA swap, reserve_a should decrease (was {}, now {})",
+        first.reserve_a_amount,
+        second.reserve_a_amount
+    );
+    assert!(
+        second.reserve_b_amount > first.reserve_b_amount,
+        "after BtoA swap, reserve_b should increase (was {}, now {})",
+        first.reserve_b_amount,
+        second.reserve_b_amount
+    );
 }

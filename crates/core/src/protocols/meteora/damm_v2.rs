@@ -1,4 +1,6 @@
 pub(super) mod detector;
+pub mod events;
+pub mod extractor;
 pub(super) mod parser;
 pub(super) mod pool;
 pub(super) mod reserves;
