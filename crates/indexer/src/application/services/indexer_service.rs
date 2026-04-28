@@ -1,61 +1,65 @@
-use chrono::Utc;
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
-use solana_transaction_status::{
-    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta,
-    UiTransactionEncoding,
-};
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio_retry::{strategy::FixedInterval, Retry};
-use tracing::{info, warn};
+use tracing::{debug, error, info, warn};
 use yog_core::{
-    amm::{
-        common::{imbalance, spot_price},
-        damm_v2::net_price_impact,
-    },
     domain::{
-        LiquidityEvent, LiquidityEventRepository, Pool, PoolMetric, PoolMetricRepository,
-        PoolRepository, Protocol, SwapEvent, SwapEventRepository,
+        ClaimPositionFeeEventRepository, ClaimRewardEventRepository, DomainEvent,
+        LiquidityEventRepository, Pool, PoolRepository, Protocol, SwapEventRepository,
     },
     protocols::{
+        extraction::{discriminator_hex, ExtractionFailure, ExtractionOutcome},
         meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
         PoolIndexer,
     },
-    CoreResult,
 };
 
 use crate::application::services::IndexerServiceMetrics;
 
 /// Core pipeline — receives a signature, fetches the full transaction,
-/// dispatches to the appropriate protocol handler.
+/// dispatches to the appropriate protocol handler, persists every domain
+/// event the handler extracts.
 pub(crate) struct IndexerService {
-    liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
-    pool_repo: Arc<dyn PoolRepository>,
-    pool_metric_repo: Arc<dyn PoolMetricRepository>,
-    rpc_client: Arc<RpcClient>,
     swap_event_repo: Arc<dyn SwapEventRepository>,
+    liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
+    claim_position_fee_repo: Arc<dyn ClaimPositionFeeEventRepository>,
+    claim_reward_repo: Arc<dyn ClaimRewardEventRepository>,
+    pool_repo: Arc<dyn PoolRepository>,
+    rpc_client: Arc<RpcClient>,
 }
 
 impl IndexerService {
     pub(crate) fn new(
-        liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
-        pool_repo: Arc<dyn PoolRepository>,
-        pool_metric_repo: Arc<dyn PoolMetricRepository>,
-        rpc_client: Arc<RpcClient>,
         swap_event_repo: Arc<dyn SwapEventRepository>,
+        liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
+        claim_position_fee_repo: Arc<dyn ClaimPositionFeeEventRepository>,
+        claim_reward_repo: Arc<dyn ClaimRewardEventRepository>,
+        pool_repo: Arc<dyn PoolRepository>,
+        rpc_client: Arc<RpcClient>,
     ) -> Self {
         Self {
-            liquidity_event_repo,
-            pool_repo,
-            pool_metric_repo,
-            rpc_client,
             swap_event_repo,
+            liquidity_event_repo,
+            claim_position_fee_repo,
+            claim_reward_repo,
+            pool_repo,
+            rpc_client,
         }
     }
 
     /// Handle a transaction signature received from the WebSocket.
+    ///
+    /// Pipeline:
+    ///   1. Fetch the full transaction from RPC.
+    ///   2. Delegate event extraction to the protocol-specific handler.
+    ///   3. Persist each extracted domain event independently — a failure
+    ///      on one event never aborts the others (skip-and-log).
+    ///   4. Surface unknown discriminators and extraction failures as
+    ///      metrics + structured logs.
     pub(crate) async fn index_transaction(
         &self,
         protocol: Protocol,
@@ -64,6 +68,7 @@ impl IndexerService {
         let mut guard = ExitGuard::new(protocol.clone());
 
         info!(%signature, protocol = %protocol.as_str(), "received signature");
+
         let tx = match self.fetch_transaction(&protocol, signature).await {
             Ok(Some(tx)) => tx,
             Ok(None) => {
@@ -81,127 +86,155 @@ impl IndexerService {
 
         let indexer = protocol_indexer(&protocol);
 
-        // Extract every program-specific instruction name present in the
-        // transaction logs. Used solely for observability — the parsing
-        // flow below is unchanged and remains based on is_swap /
-        // is_add_liquidity / is_remove_liquidity detectors.
-        let instructions = extract_program_instructions(&tx, &indexer.program_id().to_string());
-
-        let mut any_handled = false;
-
-        if indexer.is_swap(&tx) {
-            let swap = indexer.parse_swap(&tx)?;
-            info!(
-                signature = %swap.signature,
-                amount_in = swap.amount_in,
-                amount_out = swap.amount_out,
-                "swap parsed"
-            );
-            self.upsert_pool_from_swap(&protocol, &swap).await?;
-            self.persist_swap(&protocol, &swap).await?;
-            self.persist_metrics(&protocol, &swap).await?;
-            IndexerServiceMetrics::record_indexed(&protocol, "Swap");
-            any_handled = true;
-        }
-        if indexer.is_add_liquidity(&tx) {
-            let event = indexer.parse_add_liquidity(&tx)?;
-            info!(
-                signature = %event.signature,
-                amount_a = event.amount_a,
-                amount_b = event.amount_b,
-                "add liquidity parsed"
-            );
-            self.upsert_pool_from_liquidity(&protocol, &event).await?;
-            self.persist_liquidity_event(&protocol, &event).await?;
-            IndexerServiceMetrics::record_indexed(&protocol, "AddLiquidity");
-            any_handled = true;
-        }
-        if indexer.is_remove_liquidity(&tx) {
-            let event = indexer.parse_remove_liquidity(&tx)?;
-            info!(
-                signature = %event.signature,
-                amount_a = event.amount_a,
-                amount_b = event.amount_b,
-                "remove liquidity parsed"
-            );
-            self.upsert_pool_from_liquidity(&protocol, &event).await?;
-            self.persist_liquidity_event(&protocol, &event).await?;
-            IndexerServiceMetrics::record_indexed(&protocol, "RemoveLiquidity");
-            any_handled = true;
-        }
-
-        // Emit a skipped metric for every instruction present in the
-        // transaction that the detectors above did not match. This
-        // catches cases like Swap2 colocated with a v1 Swap — the v1
-        // Swap is indexed, the Swap2 would be silently lost without
-        // this accounting.
-        for name in &instructions {
-            if !is_matched_instruction(name, any_handled, &indexer, &tx) {
-                IndexerServiceMetrics::record_skipped(&protocol, name);
+        // Extract all domain events the protocol handler can recognize.
+        let outcome = match indexer.extract_events(&tx) {
+            Ok(o) => o,
+            Err(e) => {
+                error!(%signature, error = %e, "extraction failed at transaction level");
+                guard.set("extract_failure");
+                return Err(anyhow::anyhow!(e));
             }
-        }
+        };
 
-        if !any_handled {
+        self.report_diagnostics(&protocol, &signature, &outcome);
+
+        if outcome.events.is_empty() {
             IndexerServiceMetrics::record_no_match(&protocol);
-            if instructions.is_empty() {
-                info!(%signature, "skipped tx — no program instruction found in logs");
-            } else {
-                info!(%signature, instructions = ?instructions, "skipped tx — no matching parser");
-            }
+            debug!(%signature, "no recognized events in transaction");
+            guard.set("no_events");
+            return Ok(());
         }
+
+        // Persist each event. Failures on one event don't abort the others.
+        for event in &outcome.events {
+            self.persist_event(&protocol, event).await;
+        }
+
         guard.set("ok");
         Ok(())
     }
 
-    async fn persist_swap(&self, protocol: &Protocol, swap: &SwapEvent) -> anyhow::Result<()> {
-        let start = Instant::now();
-        self.swap_event_repo.insert(swap).await?;
-        IndexerServiceMetrics::record_persist_duration(
-            protocol,
-            "swap",
-            start.elapsed().as_secs_f64(),
-        );
-        Ok(())
-    }
-
-    async fn persist_metrics(&self, protocol: &Protocol, swap: &SwapEvent) -> anyhow::Result<()> {
-        let metric = self.compute_metrics(swap)?;
-        let start = Instant::now();
-        self.pool_metric_repo.insert(&metric).await?;
-        IndexerServiceMetrics::record_persist_duration(
-            protocol,
-            "metric",
-            start.elapsed().as_secs_f64(),
-        );
-        Ok(())
-    }
-
-    async fn persist_liquidity_event(
+    /// Surface unknown discriminators and extraction failures via logs and
+    /// metrics. Does not affect persistence.
+    fn report_diagnostics(
         &self,
         protocol: &Protocol,
-        event: &LiquidityEvent,
-    ) -> anyhow::Result<()> {
-        let start = Instant::now();
-        self.liquidity_event_repo.insert(event).await?;
-        IndexerServiceMetrics::record_persist_duration(
-            protocol,
-            "liquidity_event",
-            start.elapsed().as_secs_f64(),
-        );
-        Ok(())
+        signature: &Signature,
+        outcome: &ExtractionOutcome,
+    ) {
+        for unknown in &outcome.unknown {
+            let hex = discriminator_hex(&unknown.discriminator);
+            debug!(
+                %signature,
+                protocol = %protocol.as_str(),
+                discriminator = %hex,
+                "unknown anchor event"
+            );
+            IndexerServiceMetrics::record_unknown_event(protocol, &hex);
+        }
+
+        for failure in &outcome.failures {
+            let kind = failure_kind(failure);
+            warn!(
+                %signature,
+                protocol = %protocol.as_str(),
+                kind,
+                error = %failure,
+                "extraction failure"
+            );
+            IndexerServiceMetrics::record_extraction_failure(protocol, kind);
+        }
     }
 
-    async fn upsert_pool_from_swap(
+    /// Persist a single domain event, including its associated pool upsert
+    /// or last-seen touch. Errors are logged and metrics are emitted, but
+    /// they don't propagate — the caller continues with the next event.
+    async fn persist_event(&self, protocol: &Protocol, event: &DomainEvent) {
+        let kind = event.kind();
+        let start = Instant::now();
+
+        let result = match event {
+            DomainEvent::Swap(e) => {
+                if let Err(err) = self
+                    .upsert_pool_full(
+                        protocol,
+                        e.pool_address,
+                        e.protocol,
+                        e.token_a_mint,
+                        e.token_b_mint,
+                    )
+                    .await
+                {
+                    warn!(error = %err, kind, "pool upsert failed");
+                }
+                self.swap_event_repo.insert(e).await.map_err(into_anyhow)
+            }
+            DomainEvent::Liquidity(e) => {
+                if let Err(err) = self
+                    .upsert_pool_full(
+                        protocol,
+                        e.pool_address,
+                        e.protocol,
+                        e.token_a_mint,
+                        e.token_b_mint,
+                    )
+                    .await
+                {
+                    warn!(error = %err, kind, "pool upsert failed");
+                }
+                self.liquidity_event_repo
+                    .insert(e)
+                    .await
+                    .map_err(into_anyhow)
+            }
+            DomainEvent::ClaimPositionFee(e) => {
+                self.touch_pool(protocol, &e.pool_address).await;
+                self.claim_position_fee_repo
+                    .insert(e)
+                    .await
+                    .map_err(into_anyhow)
+            }
+            DomainEvent::ClaimReward(e) => {
+                self.touch_pool(protocol, &e.pool_address).await;
+                self.claim_reward_repo.insert(e).await.map_err(into_anyhow)
+            }
+        };
+
+        let elapsed = start.elapsed().as_secs_f64();
+        IndexerServiceMetrics::record_persist_duration(protocol, kind, elapsed);
+
+        match result {
+            Ok(()) => {
+                IndexerServiceMetrics::record_indexed(protocol, kind);
+            }
+            Err(err) => {
+                error!(
+                    protocol = %protocol.as_str(),
+                    kind,
+                    error = %err,
+                    "persist event failed"
+                );
+                IndexerServiceMetrics::record_persist_failure(protocol, kind);
+            }
+        }
+    }
+
+    /// Upsert the pool with full information (mints known).
+    /// Used by Swap and Liquidity events.
+    async fn upsert_pool_full(
         &self,
         protocol: &Protocol,
-        swap: &SwapEvent,
+        pool_address: solana_pubkey::Pubkey,
+        pool_protocol: Protocol,
+        token_a_mint: solana_pubkey::Pubkey,
+        token_b_mint: solana_pubkey::Pubkey,
     ) -> anyhow::Result<()> {
-        let now = Utc::now();
+        let now = chrono::Utc::now();
         let pool = Pool {
-            pool_address: swap.pool_address,
-            protocol: swap.protocol,
-            token_a_mint: swap.token_a_mint,
-            token_b_mint: swap.token_b_mint,
+            pool_address,
+            protocol: pool_protocol,
+            token_a_mint,
+            token_b_mint,
             first_seen_at: now,
             last_seen_at: now,
         };
@@ -215,28 +248,27 @@ impl IndexerService {
         Ok(())
     }
 
-    async fn upsert_pool_from_liquidity(
-        &self,
-        protocol: &Protocol,
-        event: &LiquidityEvent,
-    ) -> anyhow::Result<()> {
-        let now = Utc::now();
-        let pool = Pool {
-            pool_address: event.pool_address,
-            protocol: event.protocol,
-            token_a_mint: event.token_a_mint,
-            token_b_mint: event.token_b_mint,
-            first_seen_at: now,
-            last_seen_at: now,
-        };
+    /// Refresh `last_seen_at` for a pool. No-op if the pool is unknown
+    /// (will be created when a Swap or Liquidity event arrives later).
+    /// Used by ClaimPositionFee and ClaimReward events.
+    async fn touch_pool(&self, protocol: &Protocol, pool_address: &solana_pubkey::Pubkey) {
         let start = Instant::now();
-        self.pool_repo.upsert(&pool).await?;
-        IndexerServiceMetrics::record_persist_duration(
-            protocol,
-            "pool_upsert",
-            start.elapsed().as_secs_f64(),
-        );
-        Ok(())
+        match self.pool_repo.touch_last_seen(pool_address).await {
+            Ok(()) => {
+                IndexerServiceMetrics::record_persist_duration(
+                    protocol,
+                    "pool_touch",
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(
+                    protocol = %protocol.as_str(),
+                    error = %err,
+                    "pool touch_last_seen failed"
+                );
+            }
+        }
     }
 
     /// Fetch a confirmed transaction by signature from the RPC.
@@ -272,43 +304,11 @@ impl IndexerService {
             Err(e) => Err(anyhow::anyhow!(e)),
         }
     }
-
-    fn compute_metrics(&self, swap: &SwapEvent) -> CoreResult<PoolMetric> {
-        let reserve_a = swap.reserve_in_after as u128;
-        let reserve_b = swap.reserve_out_after as u128;
-        let amount_in = swap.amount_in as u128;
-
-        let price_q64 = spot_price(reserve_a, reserve_b)?;
-        let imbalance_bps = imbalance(reserve_a, reserve_b).ok().map(|v| v as i32);
-        let price_impact_bps = net_price_impact(reserve_a, reserve_b, amount_in, 25)
-            .ok()
-            .map(|v| v as i32);
-
-        let price_display = price_q64 as f64 / (1u128 << 64) as f64;
-        info!(
-            price_q64,
-            price_display, imbalance_bps, price_impact_bps, "metrics computed"
-        );
-
-        Ok(PoolMetric {
-            pool_address: swap.pool_address,
-            signature: swap.signature.clone(),
-            reserve_a: swap.reserve_in_after,
-            reserve_b: swap.reserve_out_after,
-            price_q64,
-            price_impact_bps,
-            imbalance_bps,
-            current_fee_bps: swap.fee_bps.map(|f| f as i32),
-            fees_collected_a: None,
-            fees_collected_b: None,
-            volume_a: Some(swap.amount_in),
-            volume_b: Some(swap.amount_out),
-            active_bin_id: None,
-            bin_step: None,
-            timestamp: swap.timestamp,
-        })
-    }
 }
+
+// ---------------------------------------------------------------------------
+// Free functions
+// ---------------------------------------------------------------------------
 
 fn protocol_indexer(protocol: &Protocol) -> Arc<dyn PoolIndexer> {
     match protocol {
@@ -318,73 +318,23 @@ fn protocol_indexer(protocol: &Protocol) -> Arc<dyn PoolIndexer> {
     }
 }
 
-/// Extract every `Program log: Instruction: <Name>` entry that appears
-/// within a `Program {program_id} invoke` frame in the transaction logs.
-///
-/// Returns the instruction names in order of appearance. A transaction
-/// that invokes the program three times returns three entries.
-fn extract_program_instructions(
-    tx: &EncodedConfirmedTransactionWithStatusMeta,
-    program_id: &str,
-) -> Vec<String> {
-    let Some(meta) = tx.transaction.meta.as_ref() else {
-        return Vec::new();
-    };
-    let OptionSerializer::Some(logs) = &meta.log_messages else {
-        return Vec::new();
-    };
-
-    let invoke_marker = format!("Program {program_id} invoke");
-    let mut instructions = Vec::new();
-    let mut in_program = false;
-
-    for log in logs {
-        if log.starts_with(&invoke_marker) {
-            in_program = true;
-            continue;
-        }
-        if !in_program {
-            continue;
-        }
-        if let Some(name) = log.strip_prefix("Program log: Instruction: ") {
-            instructions.push(name.to_string());
-        } else if log.starts_with("Program ") && !log.starts_with("Program log:") {
-            // Exiting the program frame (success / failed / return).
-            in_program = false;
-        }
-    }
-
-    instructions
+/// Convert a `RepositoryError` into an `anyhow::Error` for uniform error
+/// handling at the persist site.
+fn into_anyhow<E: std::error::Error + Send + Sync + 'static>(e: E) -> anyhow::Error {
+    anyhow::Error::new(e)
 }
 
-/// Approximate check: does this instruction name correspond to something
-/// one of the detectors actually matched?
-///
-/// Used only to decide whether to increment the "skipped" metric. Relies
-/// on the naming convention of DAMM v2 instructions (`Swap`, `AddLiquidity`,
-/// `RemoveLiquidity`). Imperfect — a colocated Swap + Swap2 will still
-/// mark Swap as matched and Swap2 as skipped, which is the intent.
-fn is_matched_instruction(
-    name: &str,
-    any_handled: bool,
-    indexer: &Arc<dyn PoolIndexer>,
-    tx: &EncodedConfirmedTransactionWithStatusMeta,
-) -> bool {
-    if !any_handled {
-        return false;
-    }
-    match name {
-        "Swap" => indexer.is_swap(tx),
-        "AddLiquidity" => indexer.is_add_liquidity(tx),
-        "RemoveLiquidity" => indexer.is_remove_liquidity(tx),
-        _ => false,
+/// Stable label for an `ExtractionFailure` variant — used as a metric label
+/// so we can distinguish anchor / borsh / translation failures.
+fn failure_kind(f: &ExtractionFailure) -> &'static str {
+    match f {
+        ExtractionFailure::AnchorDecode(_) => "anchor_decode",
+        ExtractionFailure::Borsh { .. } => "borsh",
+        ExtractionFailure::Translation { .. } => "translation",
     }
 }
 
 /// Classify an RPC fetch error into a small set of stable labels.
-///
-/// Keeps cardinality bounded — we want a handful of reason values,
-/// not one per unique error string.
 fn classify_rpc_error(err: &anyhow::Error) -> &'static str {
     let msg = err.to_string().to_lowercase();
     if msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests") {
@@ -400,15 +350,11 @@ fn classify_rpc_error(err: &anyhow::Error) -> &'static str {
     }
 }
 
+// ---------------------------------------------------------------------------
+// ExitGuard
+// ---------------------------------------------------------------------------
+
 /// RAII guard that records the outcome and duration of `index_transaction`.
-///
-/// Increments `index_transaction_entered_total` on construction, and on
-/// drop records both `index_transaction_exited_total{outcome=…}` and
-/// `index_transaction_duration_seconds{outcome=…}`.
-///
-/// If `set` is not called before drop, the outcome is recorded as
-/// `"unknown_exit"` — catches error paths that escape without explicit
-/// tagging (e.g. a `?` propagating a parse or persist error).
 struct ExitGuard {
     protocol: Protocol,
     outcome: Option<&'static str>,

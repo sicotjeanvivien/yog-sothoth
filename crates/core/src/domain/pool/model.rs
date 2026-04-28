@@ -8,8 +8,7 @@ use crate::domain::Protocol;
 ///
 /// Yog-Sothoth observes entire protocols, so pools are discovered on the fly
 /// as they appear in the transaction stream. This struct stores what we know
-/// about a pool independently of its state at any given moment (that's what
-/// [`PoolMetric`] is for).
+/// about a pool independently of its state at any given momen
 ///
 /// Rows are upserted on every parsed event: `first_seen_at` is set once on
 /// first observation, `last_seen_at` is refreshed on every subsequent event.

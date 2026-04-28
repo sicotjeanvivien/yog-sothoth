@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     domain::{Pool, PoolRepository},
@@ -34,6 +35,22 @@ impl PoolRepository for PgPoolRepository {
             pool.token_a_mint.to_string(),
             pool.token_b_mint.to_string(),
             pool.last_seen_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
+    async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()> {
+        sqlx::query!(
+            r#"
+            UPDATE pools
+            SET last_seen_at = NOW()
+            WHERE pool_address = $1
+            "#,
+            pool_address.to_string(),
         )
         .execute(&self.pool)
         .await

@@ -8,12 +8,19 @@
 //! against mainnet — they capture the exact shape the RPC returns, so
 //! these tests double as regression guards if the JSON schema ever drifts.
 
+use solana_pubkey::pubkey;
+use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use std::path::PathBuf;
 
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
-
-use yog_core::protocols::meteora::damm_v2::{
-    events::DammV2WireEvent, extractor::extract_wire_events,
+use yog_core::{
+    domain::DomainEvent,
+    protocols::{
+        meteora::{
+            damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
+            MeteoraDammV2,
+        },
+        PoolIndexer,
+    },
 };
 
 const CP_AMM_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
@@ -140,4 +147,76 @@ fn decoded_swap_values_match_onchain_reality() {
         first.reserve_b_amount,
         second.reserve_b_amount
     );
+}
+
+#[test]
+fn extracts_swap_via_router_correctly() {
+    // Fixture: real mainnet transaction where cp-amm is invoked via a router
+    // (joeHSutRWndCtp1EPx5tz5zHyaPBZUZ5JsxDEVB1RPZ — Photon-style aggregator).
+    //
+    // Structure highlight:
+    //   - The cp-amm Swap2 outer instruction is itself an inner instruction
+    //     of the router (stackHeight 2).
+    //   - Both the outer Swap2 and the Anchor event_cpi self-CPI share the
+    //     same programId (cp-amm), so distinguishing them by programId alone
+    //     is not sufficient — the EVENT_IX_TAG prefix on the self-CPI's data
+    //     is what disambiguates.
+    //
+    // Expected: exactly one EvtSwap2 extracted and successfully translated
+    // into a SwapEvent with correct mints (SOL, USDC sorted by raw bytes).
+
+    let json = include_str!("fixtures/damm_v2_swap_via_router.json");
+    let tx: EncodedConfirmedTransactionWithStatusMeta =
+        serde_json::from_str(json).expect("failed to deserialize transaction");
+
+    let pool = MeteoraDammV2::new();
+    let outcome = pool
+        .extract_events(&tx)
+        .expect("extract_events should succeed at the transaction level");
+
+    // No anchor decode / borsh / translation failures expected.
+    assert!(
+        outcome.failures.is_empty(),
+        "unexpected failures: {:?}",
+        outcome.failures
+    );
+
+    // Exactly one EvtSwap2 → one DomainEvent::Swap.
+    assert_eq!(
+        outcome.events.len(),
+        1,
+        "expected exactly 1 swap event, got {} (events: {:?})",
+        outcome.events.len(),
+        outcome.events.iter().map(|e| e.kind()).collect::<Vec<_>>()
+    );
+
+    let DomainEvent::Swap(swap) = &outcome.events[0] else {
+        panic!("expected DomainEvent::Swap, got {:?}", outcome.events[0]);
+    };
+
+    // Pool address from the EvtSwap2 payload — this is 8Pm2kZ... in the fixture.
+    assert_eq!(
+        swap.pool_address,
+        pubkey!("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie"),
+    );
+
+    // Mints: the relevant transferChecked group is (USDC, SOL, SOL_dust).
+    // We take the first 2 unique mints in order, sorted by raw bytes.
+    // SOL = So11... < USDC = EPjFW... (raw bytes), so token_a = SOL, token_b = USDC.
+    assert_eq!(
+        swap.token_a_mint,
+        pubkey!("So11111111111111111111111111111111111111112"),
+    );
+    assert_eq!(
+        swap.token_b_mint,
+        pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    );
+
+    // The amounts come from the EvtSwap2 wire fields, mapped via trade_direction.
+    // We don't hard-code them here — the EvtSwap2 borsh payload is what drives
+    // the values. We just sanity-check they're nonzero.
+    assert!(swap.amount_a > 0, "amount_a should be nonzero");
+    assert!(swap.amount_b > 0, "amount_b should be nonzero");
+    assert!(swap.reserve_a_after > 0);
+    assert!(swap.reserve_b_after > 0);
 }

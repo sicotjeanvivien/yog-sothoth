@@ -69,3 +69,10 @@ pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
         _ => RepositoryError::Backend(err.to_string()),
     }
 }
+
+/// Convert a `u128` into a `BigDecimal`, lossless. Used when binding u128
+/// values to PostgreSQL `NUMERIC(39, 0)` columns.
+pub(crate) fn convert_u128_to_bigdecimal(v: u128, _field: &str) -> BigDecimal {
+    // u128::to_string is always parseable into BigDecimal — infallible in practice.
+    BigDecimal::from_str(&v.to_string()).expect("u128 string is always valid BigDecimal")
+}

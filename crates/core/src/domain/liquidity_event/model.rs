@@ -5,7 +5,7 @@ use solana_pubkey::Pubkey;
 use crate::domain::Protocol;
 
 /// Whether liquidity was added or removed.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LiquidityEventKind {
     Add,
@@ -15,8 +15,18 @@ pub enum LiquidityEventKind {
 impl LiquidityEventKind {
     pub fn as_str(&self) -> &'static str {
         match self {
-            LiquidityEventKind::Add => "add",
-            LiquidityEventKind::Remove => "remove",
+            Self::Add => "add",
+            Self::Remove => "remove",
+        }
+    }
+
+    /// Decode from the on-chain `u8` field used by Anchor events.
+    /// `0 = Add`, `1 = Remove`.
+    pub fn from_u8(v: u8) -> Result<Self, u8> {
+        match v {
+            0 => Ok(Self::Add),
+            1 => Ok(Self::Remove),
+            other => Err(other),
         }
     }
 }
@@ -32,51 +42,56 @@ impl std::str::FromStr for LiquidityEventKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "add" => Ok(LiquidityEventKind::Add),
-            "remove" => Ok(LiquidityEventKind::Remove),
+            "add" => Ok(Self::Add),
+            "remove" => Ok(Self::Remove),
             _ => Err(()),
         }
     }
 }
 
-/// Raw liquidity add or remove event parsed from a DAMM v2 transaction.
+/// Raw liquidity-change event extracted from an on-chain Anchor event.
 ///
-/// Contains only on-chain data — no derived metrics.
-/// Metrics (TVL, imbalance) are computed by the indexer from this struct
-/// and written separately to `pool_metrics`.
+/// Covers both add-liquidity and remove-liquidity operations, discriminated
+/// by [`liquidity_event_kind`].
 ///
-/// # Amounts and mints
+/// # Conventions
 ///
-/// All amounts are in native units (no decimal scaling).
-/// `amount_a` / `amount_b` are aligned with `token_a_mint` / `token_b_mint`,
-/// which follow the **stable pool convention** (sorted by raw pubkey bytes,
-/// see [`crate::domain::Pool`]).
+/// `amount_a` / `amount_b` and `reserve_a_after` / `reserve_b_after` follow
+/// the canonical pool ordering — see [`crate::domain::SwapEvent`] for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiquidityEvent {
-    /// On-chain address of the AMM pool.
+    // ── Identification ──────────────────────────────────────────────────────
     pub pool_address: Pubkey,
-
-    /// Protocol that emitted this event (used for routing and filtering).
     pub protocol: Protocol,
+    pub signature: String,
+    pub timestamp: DateTime<Utc>,
 
-    /// Mint of token A in **stable order** — see struct-level docs for convention.
+    // ── Pool tokens (canonical order) ───────────────────────────────────────
     pub token_a_mint: Pubkey,
-
-    /// Mint of token B in **stable order** — see struct-level docs for convention.
     pub token_b_mint: Pubkey,
 
-    /// Whether liquidity was added or removed.
+    // ── Operation ───────────────────────────────────────────────────────────
     pub liquidity_event_kind: LiquidityEventKind,
 
-    /// Amount of token A deposited or withdrawn, in native units.
+    /// Amount of token A added or removed (always positive — sign comes from
+    /// `liquidity_event_kind`).
     pub amount_a: u64,
 
-    /// Amount of token B deposited or withdrawn, in native units.
+    /// Amount of token B added or removed.
     pub amount_b: u64,
 
-    /// Transaction signature, base58-encoded.
-    pub signature: String,
+    /// Internal liquidity delta (Q-format). Reflects the share-like quantity
+    /// changed by this operation, distinct from the underlying token amounts.
+    pub liquidity_delta: u128,
 
-    /// Block timestamp at which the transaction was confirmed.
-    pub timestamp: DateTime<Utc>,
+    // ── Post-change pool state (canonical order) ────────────────────────────
+    pub reserve_a_after: u64,
+    pub reserve_b_after: u64,
+
+    // ── LP context ──────────────────────────────────────────────────────────
+    /// On-chain address of the LP position affected.
+    pub position: Pubkey,
+
+    /// Owner of the position.
+    pub owner: Pubkey,
 }

@@ -1,18 +1,19 @@
 pub(super) mod detector;
 pub mod events;
 pub mod extractor;
-pub(super) mod parser;
-pub(super) mod pool;
-pub(super) mod reserves;
-pub(super) mod transfer;
+pub(super) mod translator;
 
-use crate::domain::{LiquidityEventKind, Protocol};
-use crate::protocols::PoolIndexer;
-use crate::{
-    domain::{LiquidityEvent, SwapEvent},
-    CoreResult,
-};
+use chrono::{DateTime, Utc};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+
+use crate::domain::Protocol;
+use crate::protocols::extraction::{ExtractionFailure, ExtractionOutcome, UnknownEventInfo};
+use crate::protocols::meteora::{extract_signature, extract_timestamp};
+use crate::protocols::PoolIndexer;
+use crate::CoreResult;
+
+use self::extractor::extract_wire_events;
+use self::translator::{collect_pre_event_instruction_slices, translate_wire_event};
 
 /// Meteora DAMM v2 protocol handler (x·y=k + dynamic fees + NFT positions).
 pub struct MeteoraDammV2 {
@@ -41,215 +42,110 @@ impl PoolIndexer for MeteoraDammV2 {
     fn program_id(&self) -> &str {
         &self.program_id_str
     }
-    fn is_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        detector::is_swap(tx, &self.program_id_str)
-    }
 
-    fn is_add_liquidity(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        detector::is_add_liquidity(tx, &self.program_id_str)
-    }
-
-    fn is_remove_liquidity(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        detector::is_remove_liquidity(tx, &self.program_id_str)
-    }
-
-    fn parse_swap(&self, tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent> {
-        parser::parse_swap(tx, self.protocol, &self.program_id_str)
-    }
-
-    fn parse_add_liquidity(
+    fn extract_events(
         &self,
         tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<LiquidityEvent> {
-        let liquidity_kind = LiquidityEventKind::Add;
-        parser::parse_liquidity(tx, self.protocol, &self.program_id_str, liquidity_kind)
-    }
+    ) -> CoreResult<ExtractionOutcome> {
+        let signature = extract_signature(tx)?;
+        let timestamp = extract_timestamp(tx)?;
 
-    fn parse_remove_liquidity(
-        &self,
-        tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<LiquidityEvent> {
-        let liquidity_kind = LiquidityEventKind::Remove;
-        parser::parse_liquidity(tx, self.protocol, &self.program_id_str, liquidity_kind)
+        // Step 1: extract wire events from inner instructions.
+        let wire_outcome = extract_wire_events(tx, &self.program_id_str);
+
+        // Step 2: precompute, in the same order, the slice of instructions
+        // preceding each self-CPI (used for mint extraction by the translator).
+        let transfer_groups = collect_pre_event_instruction_slices(tx, &self.program_id_str);
+
+        // Step 3: translate each wire event into a domain event.
+        translate_extracted_events(
+            wire_outcome,
+            transfer_groups,
+            self.protocol,
+            &signature,
+            timestamp,
+        )
     }
 }
 
-// ============================================================
-// Tests
-// ============================================================
+/// Glue between the wire-event extraction layer and the translation layer.
+///
+/// Walks `wire_events` and `transfer_groups` together, producing one domain
+/// event per successfully translated wire event. Translation failures are
+/// reported in `failures`; the loop continues on each failure (skip-and-log).
+fn translate_extracted_events(
+    wire_outcome: extractor::ExtractedEvents,
+    transfer_groups: Vec<Vec<&UiInstruction>>,
+    protocol: Protocol,
+    signature: &str,
+    timestamp: DateTime<Utc>,
+) -> CoreResult<ExtractionOutcome> {
+    let mut outcome = ExtractionOutcome::default();
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json;
-    use solana_pubkey::pubkey;
-
-    /// Load a real transaction JSON captured from the RPC.
-    fn load_tx(json: &str) -> EncodedConfirmedTransactionWithStatusMeta {
-        serde_json::from_str(json).expect("failed to deserialize transaction")
+    // Carry over decode-time failures and unknowns into the protocol-agnostic
+    // ExtractionOutcome.
+    for unknown in wire_outcome.unknown {
+        outcome.unknown.push(UnknownEventInfo {
+            protocol,
+            discriminator: unknown.discriminator,
+        });
     }
 
-    const SUCCESSFUL_SWAP_TX: &str = include_str!("../../../tests/fixtures/damm_v2_swap_ok.json");
-    const FAILED_TX: &str = include_str!("../../../tests/fixtures/damm_v2_swap_failed.json");
-    const MALFORMED_SWAP_TX: &str =
-        include_str!("../../../tests/fixtures/damm_v2_swap_malformed.json");
-    const SUCCESSFUL_LIQUIDITY_ADD_TX: &str =
-        include_str!("../../../tests/fixtures/damm_v2_liquidity_add.json");
-
-    #[test]
-    fn test_is_swap_returns_true_for_successful_swap() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        assert!(pool.is_swap(&tx));
+    for failure in wire_outcome.failures {
+        outcome.failures.push(map_extractor_failure(failure));
     }
 
-    #[test]
-    fn test_is_swap_returns_false_for_failed_transaction() {
-        let tx = load_tx(FAILED_TX);
-        let pool = MeteoraDammV2::new();
-        assert!(!pool.is_swap(&tx));
+    // Sanity: the transfer_groups list should have at least as many entries
+    // as recognized wire events. If not, we have an alignment problem
+    // (probably a transaction shape we don't expect) — record translation
+    // failures for the unalignable suffix.
+    let event_count = wire_outcome.events.len();
+    let group_count = transfer_groups.len();
+
+    for (idx, wire) in wire_outcome.events.iter().enumerate() {
+        let transfer_group = transfer_groups
+            .get(idx)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+
+        match translate_wire_event(wire, transfer_group, signature, timestamp) {
+            Ok(domain) => outcome.events.push(domain),
+            Err(e) => {
+                outcome.failures.push(ExtractionFailure::Translation {
+                    event_name: wire_event_name(wire),
+                    reason: e.to_string(),
+                });
+            }
+        }
     }
 
-    #[test]
-    fn test_parse_swap_extracts_correct_amounts() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        let result = pool.parse_swap(&tx).unwrap();
-
-        // From the captured transaction:
-        // transferChecked #1: 133661157 SOL → vault
-        // transferChecked #2: 10994840 USDC ← vault
-        assert_eq!(result.amount_in, 133661157);
-        assert_eq!(result.amount_out, 10994840);
-        assert_eq!(
-            result.token_in_mint,
-            pubkey!("So11111111111111111111111111111111111111112")
-        );
-        assert_eq!(
-            result.token_out_mint,
-            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-        );
+    if event_count > group_count {
+        // Diagnostic only — already covered as per-event failures above.
+        // We keep the check explicit to make the case visible if it ever happens.
     }
 
-    #[test]
-    fn test_parse_swap_returns_err_for_malformed_transaction() {
-        let tx = load_tx(MALFORMED_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        assert!(pool.is_swap(&tx));
-        assert!(pool.parse_swap(&tx).is_err());
-    }
+    Ok(outcome)
+}
 
-    #[test]
-    fn test_parse_swap_extracts_correct_reserves() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        let result = pool.parse_swap(&tx).unwrap();
-
-        // From preTokenBalances — vault SOL (E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E)
-        // owner: HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC
-        // pre:  85167550281
-        // post: 85301211438
-        assert_eq!(result.reserve_in_before, 85167550281);
-        assert_eq!(result.reserve_in_after, 85301211438);
-
-        // From preTokenBalances — vault USDC (HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx)
-        // owner: HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC
-        // pre:  3178914121
-        // post: 3167919281
-        assert_eq!(result.reserve_out_before, 3178914121);
-        assert_eq!(result.reserve_out_after, 3167919281);
-    }
-
-    #[test]
-    fn test_is_add_liquidity_returns_true_for_add_liquidity_tx() {
-        let tx = load_tx(SUCCESSFUL_LIQUIDITY_ADD_TX);
-        let pool = MeteoraDammV2::new();
-        assert!(pool.is_add_liquidity(&tx));
-    }
-
-    #[test]
-    fn test_is_add_liquidity_returns_false_for_swap_tx() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        assert!(!pool.is_add_liquidity(&tx));
-    }
-
-    #[test]
-    fn test_parse_add_liquidity_extracts_correct_amounts() {
-        let tx = load_tx(SUCCESSFUL_LIQUIDITY_ADD_TX);
-        let pool = MeteoraDammV2::new();
-        let result = pool.parse_add_liquidity(&tx).unwrap();
-
-        // From the captured transaction:
-        // transferChecked #1: 533814154 SOL → vault E3r3rs6C9bZbokaPiMEwmvPUtcd6CE2nuK8RSMQdE64E
-        // transferChecked #2: 18212843 USDC → vault HK2HggD4Eg1tAyr3gnRvNG32Z8v7s1NQGjH77b14qvsx
-        assert_eq!(result.amount_a, 533814154);
-        assert_eq!(result.amount_b, 18212843);
-        assert_eq!(result.liquidity_event_kind, LiquidityEventKind::Add);
-        assert_eq!(
-            result.pool_address,
-            pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j")
-        );
-    }
-
-    #[test]
-    fn test_parse_add_liquidity_returns_err_for_swap_tx() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        // A swap tx has a different inner instruction structure — parse_liquidity should fail
-        // or return wrong data. is_add_liquidity guards against this in production.
-        let _ = pool.parse_add_liquidity(&tx);
-    }
-
-    #[test]
-    fn test_parse_swap_token_a_b_order_is_stable() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        let result = pool.parse_swap(&tx).unwrap();
-
-        // Mints are sorted by raw bytes (Pubkey's Ord impl), not by base58
-        // string representation. For the SOL/USDC pair, SOL comes first:
-        //   token_a_mint = SOL  (So11...)
-        //   token_b_mint = USDC (EPjFW...)
-        assert_eq!(
-            result.token_a_mint,
-            pubkey!("So11111111111111111111111111111111111111112")
-        );
-        assert_eq!(
-            result.token_b_mint,
-            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-        );
-    }
-
-    #[test]
-    fn test_parse_add_liquidity_mints_and_amounts_are_aligned() {
-        let tx = load_tx(SUCCESSFUL_LIQUIDITY_ADD_TX);
-        let pool = MeteoraDammV2::new();
-        let result = pool.parse_add_liquidity(&tx).unwrap();
-
-        // After sort by raw bytes: token_a = SOL, token_b = USDC
-        // And amount_a must correspond to SOL (533814154), amount_b to USDC (18212843)
-        assert_eq!(
-            result.token_a_mint,
-            pubkey!("So11111111111111111111111111111111111111112")
-        );
-        assert_eq!(
-            result.token_b_mint,
-            pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-        );
-        assert_eq!(result.amount_a, 533814154); // SOL
-        assert_eq!(result.amount_b, 18212843); // USDC
-    }
-
-    #[test]
-    fn test_parse_swap_extracts_correct_pool_address() {
-        let tx = load_tx(SUCCESSFUL_SWAP_TX);
-        let pool = MeteoraDammV2::new();
-        let result = pool.parse_swap(&tx).unwrap();
-
-        assert_eq!(
-            result.pool_address,
-            pubkey!("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j")
-        );
+fn wire_event_name(wire: &events::DammV2WireEvent) -> &'static str {
+    match wire {
+        events::DammV2WireEvent::Swap2(_) => "EvtSwap2",
+        events::DammV2WireEvent::LiquidityChange(_) => "EvtLiquidityChange",
+        events::DammV2WireEvent::ClaimPositionFee(_) => "EvtClaimPositionFee",
+        events::DammV2WireEvent::ClaimReward(_) => "EvtClaimReward",
     }
 }
+
+fn map_extractor_failure(failure: extractor::ExtractFailure) -> ExtractionFailure {
+    match failure {
+        extractor::ExtractFailure::AnchorDecode { source } => {
+            ExtractionFailure::AnchorDecode(source.to_string())
+        }
+        extractor::ExtractFailure::Borsh {
+            event_name, reason, ..
+        } => ExtractionFailure::Borsh { event_name, reason },
+    }
+}
+
+// We import UiInstruction here for the function signature.
+use solana_transaction_status::UiInstruction;

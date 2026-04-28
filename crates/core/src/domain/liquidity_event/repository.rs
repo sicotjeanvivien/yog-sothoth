@@ -3,16 +3,10 @@ use solana_pubkey::Pubkey;
 
 use crate::{domain::LiquidityEvent, RepositoryResult};
 
-/// Persistence contract for liquidity events.
-///
-/// Implemented by the infrastructure layer (`infra::db`).
-/// `core` defines the interface, the indexer wires the concrete implementation.
 #[async_trait]
 pub trait LiquidityEventRepository: Send + Sync {
-    /// Persist a liquidity event.
     async fn insert(&self, event: &LiquidityEvent) -> RepositoryResult<()>;
 
-    /// Retrieve the most recent liquidity events for a pool, ordered by timestamp descending.
     async fn find_by_pool(
         &self,
         pool_address: &Pubkey,

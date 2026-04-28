@@ -63,11 +63,11 @@ impl RpcListener {
         }
     }
 
-    pub async fn watch(&self, protocol: Protocol) {
+    pub async fn _watch(&self, protocol: Protocol) {
         self.watched_protocols.lock().await.insert(protocol);
     }
 
-    pub async fn unwatch(&self, protocol: &Protocol) {
+    pub async fn _unwatch(&self, protocol: &Protocol) {
         self.watched_protocols.lock().await.remove(protocol);
     }
 

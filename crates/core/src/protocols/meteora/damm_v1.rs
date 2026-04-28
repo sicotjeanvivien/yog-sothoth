@@ -1,19 +1,14 @@
-use crate::domain::Protocol;
-use crate::protocols::PoolIndexer;
-use crate::{
-    domain::{LiquidityEvent, SwapEvent},
-    CoreResult,
-};
-
-use solana_pubkey::{pubkey, Pubkey};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
-/// Meteora DAMM v2 program ID.
-pub const METEORA_DAMM_V1_PROGRAM_ID: Pubkey =
-    pubkey!("Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB");
+use crate::domain::Protocol;
+use crate::protocols::extraction::ExtractionOutcome;
+use crate::protocols::PoolIndexer;
+use crate::CoreResult;
 
 /// Meteora DAMM v1 protocol handler (x·y=k + dual-yield).
-/// Phase 2 — stub only.
+///
+/// Phase 2 — `extract_events` returns an empty outcome.
+/// To be replaced with real extraction once DAMM v1 wire events are mirrored.
 pub struct MeteoraDammV1 {
     protocol: Protocol,
     program_id_str: String,
@@ -21,7 +16,7 @@ pub struct MeteoraDammV1 {
 
 impl MeteoraDammV1 {
     pub fn new() -> Self {
-        let protocol = Protocol::MeteoraDammV2;
+        let protocol = Protocol::MeteoraDammV1;
         let program_id_str = protocol.program_id().to_string();
         Self {
             protocol,
@@ -41,33 +36,11 @@ impl PoolIndexer for MeteoraDammV1 {
         &self.program_id_str
     }
 
-    fn is_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        unimplemented!("Meteora DAMM v1 — Phase 2")
-    }
-
-    fn is_add_liquidity(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        unimplemented!("Meteora DAMM v1 — Phase 2")
-    }
-
-    fn is_remove_liquidity(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        unimplemented!("Meteora DAMM v1 — Phase 2")
-    }
-
-    fn parse_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent> {
-        unimplemented!("Meteora DAMM v1 — Phase 2")
-    }
-
-    fn parse_add_liquidity(
+    fn extract_events(
         &self,
         _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<LiquidityEvent> {
-        unimplemented!("Meteora DAMM v1 — Phase 2")
-    }
-
-    fn parse_remove_liquidity(
-        &self,
-        _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<LiquidityEvent> {
-        unimplemented!("Meteora DAMM v1 — Phase 2")
+    ) -> CoreResult<ExtractionOutcome> {
+        // Phase 2 stub — no events extracted yet.
+        Ok(ExtractionOutcome::default())
     }
 }

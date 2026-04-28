@@ -7,8 +7,9 @@ use crate::{
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
         db::{
-            repositories::PgWatchedPoolRepository, PgLiquidityEventRepository,
-            PgPoolMetricRepository, PgPoolRepository, PgSwapEventRepository,
+            PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
+            PgLiquidityEventRepository, PgPoolRepository, PgSwapEventRepository,
+            PgWatchedPoolRepository,
         },
         rpc::{
             dispatcher::metrics::DispatcherMetrics, QualifiedSignature, RawLogEvent,
@@ -148,16 +149,19 @@ async fn init_indexer_service(
     info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
     let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
-    let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool()));
-    let pg_pool_metric_repo = Arc::new(PgPoolMetricRepository::new(database.pool()));
     let pg_liquidity_event_repo = Arc::new(PgLiquidityEventRepository::new(database.pool()));
+    let pg_claim_position_fee_repo =
+        Arc::new(PgClaimPositionFeeEventRepository::new(database.pool()));
+    let pg_claim_reward_repo = Arc::new(PgClaimRewardEventRepository::new(database.pool()));
+    let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool()));
 
     Ok(Arc::new(IndexerService::new(
-        pg_liquidity_event_repo,
-        pg_pool_repo,
-        pg_pool_metric_repo,
-        rpc_client,
         pg_swap_event_repo,
+        pg_liquidity_event_repo,
+        pg_claim_position_fee_repo,
+        pg_claim_reward_repo,
+        pg_pool_repo,
+        rpc_client,
     )))
 }
 

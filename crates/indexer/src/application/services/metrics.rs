@@ -62,6 +62,18 @@ impl IndexerServiceMetrics {
             INDEX_TX_DURATION,
             "Total duration of index_transaction in seconds (label: outcome)"
         );
+        describe_counter!(
+            "indexer_unknown_event_total",
+            "Anchor events extracted but not recognized — likely belong to rings not yet implemented"
+        );
+        describe_counter!(
+            "indexer_extraction_failure_total",
+            "Failed extraction attempts (decode / borsh / translation) per protocol and kind"
+        );
+        describe_counter!(
+            "indexer_persist_failure_total",
+            "Failed persistence attempts per protocol and event kind"
+        );
     }
 
     // Counters ────────────────────────────────────────────────────────────────
@@ -137,5 +149,41 @@ impl IndexerServiceMetrics {
             "outcome" => outcome,
         )
         .record(seconds);
+    }
+
+    /// Record an extracted but unrecognized Anchor event.
+    ///
+    /// `discriminator_hex` is the 16-character hex of the 8-byte
+    /// discriminator. Bounded cardinality: the set of distinct
+    /// unknown events is small (cercle 2/3 events not yet implemented).
+    pub fn record_unknown_event(protocol: &Protocol, discriminator_hex: &str) {
+        metrics::counter!(
+            "indexer_unknown_event_total",
+            "protocol" => protocol.as_str().to_string(),
+            "discriminator" => discriminator_hex.to_string(),
+        )
+        .increment(1);
+    }
+
+    /// Record an extraction failure (anchor decode, borsh, translation).
+    ///
+    /// `kind` is one of: "anchor_decode", "borsh", "translation".
+    pub fn record_extraction_failure(protocol: &Protocol, kind: &'static str) {
+        metrics::counter!(
+            "indexer_extraction_failure_total",
+            "protocol" => protocol.as_str().to_string(),
+            "kind" => kind,
+        )
+        .increment(1);
+    }
+
+    /// Record a persistence failure (post-extraction).
+    pub fn record_persist_failure(protocol: &Protocol, event_kind: &'static str) {
+        metrics::counter!(
+            "indexer_persist_failure_total",
+            "protocol" => protocol.as_str().to_string(),
+            "event_kind" => event_kind,
+        )
+        .increment(1);
     }
 }

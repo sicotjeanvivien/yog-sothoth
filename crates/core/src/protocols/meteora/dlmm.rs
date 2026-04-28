@@ -1,13 +1,14 @@
-use crate::domain::Protocol;
-use crate::protocols::PoolIndexer;
-use crate::{
-    domain::{LiquidityEvent, SwapEvent},
-    CoreResult,
-};
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
+use crate::domain::Protocol;
+use crate::protocols::extraction::ExtractionOutcome;
+use crate::protocols::PoolIndexer;
+use crate::CoreResult;
+
 /// Meteora DLMM protocol handler (bin-based liquidity, volatility fees).
-/// Phase 2 — stub only.
+///
+/// Phase 2 — `extract_events` returns an empty outcome.
+/// To be replaced with real extraction once DLMM wire events are mirrored.
 pub struct MeteoraDlmm {
     protocol: Protocol,
     program_id_str: String,
@@ -15,7 +16,7 @@ pub struct MeteoraDlmm {
 
 impl MeteoraDlmm {
     pub fn new() -> Self {
-        let protocol = Protocol::MeteoraDammV2;
+        let protocol = Protocol::MeteoraDlmm;
         let program_id_str = protocol.program_id().to_string();
         Self {
             protocol,
@@ -35,33 +36,11 @@ impl PoolIndexer for MeteoraDlmm {
         &self.program_id_str
     }
 
-    fn is_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        unimplemented!("Meteora DLMM program ID — Phase 2")
-    }
-
-    fn is_add_liquidity(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        unimplemented!("Meteora DLMM program ID — Phase 2")
-    }
-
-    fn is_remove_liquidity(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> bool {
-        unimplemented!("Meteora DLMM program ID — Phase 2")
-    }
-
-    fn parse_swap(&self, _tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<SwapEvent> {
-        unimplemented!("Meteora DLMM — Phase 2")
-    }
-
-    fn parse_add_liquidity(
+    fn extract_events(
         &self,
         _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<LiquidityEvent> {
-        unimplemented!("Meteora DLMM — Phase 2")
-    }
-
-    fn parse_remove_liquidity(
-        &self,
-        _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<LiquidityEvent> {
-        unimplemented!("Meteora DLMM — Phase 2")
+    ) -> CoreResult<ExtractionOutcome> {
+        // Phase 2 stub — no events extracted yet.
+        Ok(ExtractionOutcome::default())
     }
 }
