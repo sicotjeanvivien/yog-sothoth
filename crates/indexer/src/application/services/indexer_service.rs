@@ -18,7 +18,7 @@ use yog_core::{
     },
 };
 
-use crate::application::services::IndexerServiceMetrics;
+use crate::application::services::{errors::FetchError, IndexerServiceMetrics};
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler, persists every domain
@@ -70,17 +70,16 @@ impl IndexerService {
         info!(%signature, protocol = %protocol.as_str(), "received signature");
 
         let tx = match self.fetch_transaction(&protocol, signature).await {
-            Ok(Some(tx)) => tx,
-            Ok(None) => {
+            Ok(tx) => tx,
+            Err(FetchError::NotFound) => {
                 IndexerServiceMetrics::record_fetch_not_found(&protocol);
                 guard.set("fetch_not_found");
                 return Ok(());
             }
             Err(e) => {
-                let reason = classify_rpc_error(&e);
-                IndexerServiceMetrics::record_fetch_failure(&protocol, reason);
+                IndexerServiceMetrics::record_fetch_failure(&protocol, e.metric_label());
                 guard.set("fetch_failure");
-                return Err(e);
+                return Err(e.into());
             }
         };
 
@@ -92,7 +91,7 @@ impl IndexerService {
             Err(e) => {
                 error!(%signature, error = %e, "extraction failed at transaction level");
                 guard.set("extract_failure");
-                return Err(anyhow::anyhow!(e));
+                return Err(e.into());
             }
         };
 
@@ -167,7 +166,10 @@ impl IndexerService {
                 {
                     warn!(error = %err, kind, "pool upsert failed");
                 }
-                self.swap_event_repo.insert(e).await.map_err(into_anyhow)
+                self.swap_event_repo
+                    .insert(e)
+                    .await
+                    .map_err(anyhow::Error::new)
             }
             DomainEvent::Liquidity(e) => {
                 if let Err(err) = self
@@ -185,18 +187,21 @@ impl IndexerService {
                 self.liquidity_event_repo
                     .insert(e)
                     .await
-                    .map_err(into_anyhow)
+                    .map_err(anyhow::Error::new)
             }
             DomainEvent::ClaimPositionFee(e) => {
                 self.touch_pool(protocol, &e.pool_address).await;
                 self.claim_position_fee_repo
                     .insert(e)
                     .await
-                    .map_err(into_anyhow)
+                    .map_err(anyhow::Error::new)
             }
             DomainEvent::ClaimReward(e) => {
                 self.touch_pool(protocol, &e.pool_address).await;
-                self.claim_reward_repo.insert(e).await.map_err(into_anyhow)
+                self.claim_reward_repo
+                    .insert(e)
+                    .await
+                    .map_err(anyhow::Error::new)
             }
         };
 
@@ -272,11 +277,15 @@ impl IndexerService {
     }
 
     /// Fetch a confirmed transaction by signature from the RPC.
+    ///
+    /// Returns the typed `FetchError` so the caller can match on the
+    /// failure mode (e.g. treat `NotFound` as a metric-only outcome
+    /// while propagating other variants as real errors).
     async fn fetch_transaction(
         &self,
         protocol: &Protocol,
         signature: Signature,
-    ) -> anyhow::Result<Option<EncodedConfirmedTransactionWithStatusMeta>> {
+    ) -> Result<EncodedConfirmedTransactionWithStatusMeta, FetchError> {
         let config = RpcTransactionConfig {
             encoding: Some(UiTransactionEncoding::JsonParsed),
             commitment: Some(CommitmentConfig::confirmed()),
@@ -295,14 +304,7 @@ impl IndexerService {
         .await;
         IndexerServiceMetrics::record_fetch_duration(protocol, start.elapsed().as_secs_f64());
 
-        match result {
-            Ok(tx) => Ok(Some(tx)),
-            Err(e) if e.contains("null") => {
-                warn!("transaction not available after retries: {signature}");
-                Ok(None)
-            }
-            Err(e) => Err(anyhow::anyhow!(e)),
-        }
+        result.map_err(FetchError::from_rpc_string)
     }
 }
 
@@ -318,12 +320,6 @@ fn protocol_indexer(protocol: &Protocol) -> Arc<dyn PoolIndexer> {
     }
 }
 
-/// Convert a `RepositoryError` into an `anyhow::Error` for uniform error
-/// handling at the persist site.
-fn into_anyhow<E: std::error::Error + Send + Sync + 'static>(e: E) -> anyhow::Error {
-    anyhow::Error::new(e)
-}
-
 /// Stable label for an `ExtractionFailure` variant — used as a metric label
 /// so we can distinguish anchor / borsh / translation failures.
 fn failure_kind(f: &ExtractionFailure) -> &'static str {
@@ -331,22 +327,6 @@ fn failure_kind(f: &ExtractionFailure) -> &'static str {
         ExtractionFailure::AnchorDecode(_) => "anchor_decode",
         ExtractionFailure::Borsh { .. } => "borsh",
         ExtractionFailure::Translation { .. } => "translation",
-    }
-}
-
-/// Classify an RPC fetch error into a small set of stable labels.
-fn classify_rpc_error(err: &anyhow::Error) -> &'static str {
-    let msg = err.to_string().to_lowercase();
-    if msg.contains("429") || msg.contains("rate limit") || msg.contains("too many requests") {
-        "rate_limited"
-    } else if msg.contains("timeout") || msg.contains("timed out") {
-        "timeout"
-    } else if msg.contains("null") {
-        "null_response"
-    } else if msg.contains("connection") || msg.contains("connect") {
-        "connection_error"
-    } else {
-        "other"
     }
 }
 

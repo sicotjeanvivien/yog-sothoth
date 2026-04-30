@@ -10,16 +10,16 @@ use crate::CoreResult;
 /// Phase 2 — `extract_events` returns an empty outcome.
 /// To be replaced with real extraction once DAMM v1 wire events are mirrored.
 pub struct MeteoraDammV1 {
-    protocol: Protocol,
+    _protocol: Protocol,
     program_id_str: String,
 }
 
 impl MeteoraDammV1 {
     pub fn new() -> Self {
-        let protocol = Protocol::MeteoraDammV1;
-        let program_id_str = protocol.program_id().to_string();
+        let _protocol = Protocol::MeteoraDammV1;
+        let program_id_str = _protocol.program_id().to_string();
         Self {
-            protocol,
+            _protocol,
             program_id_str,
         }
     }

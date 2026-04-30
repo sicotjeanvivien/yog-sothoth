@@ -1,9 +1,6 @@
 use crate::{CoreError, CoreResult};
 use chrono::{DateTime, Utc};
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiMessage,
-    UiTransactionTokenBalance,
-};
+use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction};
 
 /// Extract the first transaction signature.
 pub(crate) fn extract_signature(

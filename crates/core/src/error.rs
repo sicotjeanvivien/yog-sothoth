@@ -1,6 +1,9 @@
-// core/src/error.rs
-mod core_error;
-mod repository_error;
+pub mod anchor_decode_error;
+pub mod core_error;
+pub mod repository_error;
+pub mod translation_error;
 
+pub use anchor_decode_error::AnchorDecodeError;
 pub use core_error::{CoreError, CoreResult};
 pub use repository_error::{RepositoryError, RepositoryResult};
+pub use translation_error::TranslationError;

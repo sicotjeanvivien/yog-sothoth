@@ -10,16 +10,16 @@ use crate::CoreResult;
 /// Phase 2 — `extract_events` returns an empty outcome.
 /// To be replaced with real extraction once DLMM wire events are mirrored.
 pub struct MeteoraDlmm {
-    protocol: Protocol,
+    _protocol: Protocol,
     program_id_str: String,
 }
 
 impl MeteoraDlmm {
     pub fn new() -> Self {
-        let protocol = Protocol::MeteoraDlmm;
-        let program_id_str = protocol.program_id().to_string();
+        let _protocol = Protocol::MeteoraDlmm;
+        let program_id_str = _protocol.program_id().to_string();
         Self {
-            protocol,
+            _protocol,
             program_id_str,
         }
     }

@@ -21,9 +21,12 @@ use solana_transaction_status::{
 };
 use std::str::FromStr;
 
-use crate::domain::{
-    ClaimPositionFeeEvent, ClaimRewardEvent, LiquidityEvent, LiquidityEventKind, Protocol,
-    SwapEvent, TradeDirection,
+use crate::{
+    domain::{
+        ClaimPositionFeeEvent, ClaimRewardEvent, LiquidityEvent, LiquidityEventKind, Protocol,
+        SwapEvent, TradeDirection,
+    },
+    error::TranslationError,
 };
 
 use super::events::{
@@ -186,23 +189,6 @@ pub(super) fn translate_claim_reward(
         reward_index: wire.reward_index,
         total_reward: wire.total_reward,
     }
-}
-
-// ---------------------------------------------------------------------------
-// Translation errors
-// ---------------------------------------------------------------------------
-
-/// Errors a translation can produce.
-///
-/// These are reported via `ExtractionFailure::Translation` and never abort
-/// the whole extraction.
-#[derive(Debug, thiserror::Error)]
-pub(super) enum TranslationError {
-    #[error("invalid {field} value: {value}")]
-    InvalidEnum { field: &'static str, value: u8 },
-
-    #[error("missing transferChecked context: {0}")]
-    MissingTransferContext(String),
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,3 @@
-pub(super) mod detector;
 pub mod events;
 pub mod extractor;
 pub(super) mod translator;

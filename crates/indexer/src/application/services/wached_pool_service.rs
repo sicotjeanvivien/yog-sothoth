@@ -1,9 +1,6 @@
 use std::sync::Arc;
 use tracing::info;
-use yog_core::{
-    domain::{WatchedPool, WatchedPoolRepository},
-    CoreResult,
-};
+use yog_core::domain::WatchedPoolRepository;
 
 use crate::{error::DatabaseError, infra::RpcListener};
 

@@ -15,6 +15,7 @@ use crate::domain::Protocol;
 /// disambiguates within the pool.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClaimRewardEvent {
+    // ── Identification ──────────────────────────────────────────────────────
     pub pool_address: Pubkey,
     pub protocol: Protocol,
     pub signature: String,

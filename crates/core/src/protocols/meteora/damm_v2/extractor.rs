@@ -27,8 +27,11 @@
 use borsh::BorshDeserialize;
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
-use crate::protocols::anchor_event::{
-    decode_anchor_event_cpi, extract_anchor_event_cpis, AnchorDecodeError, DISCRIMINATOR_LEN,
+use crate::{
+    error::AnchorDecodeError,
+    protocols::anchor_event::{
+        decode_anchor_event_cpi, extract_anchor_event_cpis, DISCRIMINATOR_LEN,
+    },
 };
 
 use super::events::{

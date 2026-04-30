@@ -16,6 +16,7 @@ use crate::domain::Protocol;
 /// — see [`crate::domain::SwapEvent`] for details.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClaimPositionFeeEvent {
+    // ── Identification ──────────────────────────────────────────────────────
     pub pool_address: Pubkey,
     pub protocol: Protocol,
     pub signature: String,

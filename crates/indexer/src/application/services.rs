@@ -1,3 +1,4 @@
+pub(super) mod errors;
 pub(crate) mod indexer_service;
 pub(crate) mod metrics;
 pub(crate) mod wached_pool_service;

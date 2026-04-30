@@ -44,6 +44,8 @@ use solana_transaction_status::{
     UiParsedInstruction,
 };
 
+use crate::error::AnchorDecodeError;
+
 /// Length of an Anchor event discriminator, in bytes.
 pub const DISCRIMINATOR_LEN: usize = 8;
 
@@ -58,28 +60,6 @@ pub const EVENT_IX_TAG_LEN: usize = 8;
 /// This tag is identical for every Anchor program — it's part of the
 /// Anchor framework, not specific to any individual program.
 pub const EVENT_IX_TAG: [u8; EVENT_IX_TAG_LEN] = [0xe4, 0x45, 0xa5, 0x2e, 0x51, 0xcb, 0x9a, 0x1d];
-
-// ---------------------------------------------------------------------------
-// Errors
-// ---------------------------------------------------------------------------
-
-/// Errors produced while extracting or decoding Anchor events from a transaction.
-#[derive(Debug, thiserror::Error)]
-pub enum AnchorDecodeError {
-    /// The instruction's `data` field could not be decoded as base58.
-    #[error("invalid base58 in instruction data: {0}")]
-    InvalidBase58(String),
-
-    /// The instruction data is shorter than the minimum required to
-    /// contain the Anchor event tag plus a discriminator.
-    #[error("payload too short: expected at least {min} bytes, got {got}")]
-    PayloadTooShort { min: usize, got: usize },
-
-    /// The first 8 bytes do not match the Anchor `event_cpi` tag — this
-    /// inner instruction is not an Anchor event emission.
-    #[error("not an Anchor event_cpi instruction: tag mismatch")]
-    NotAnAnchorEvent,
-}
 
 // ---------------------------------------------------------------------------
 // Decoding
