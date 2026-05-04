@@ -1,0 +1,11 @@
+{
+  "Brand": {
+    "name": "Yog-Sothoth",
+    "tagline": "Intelligence de la liquidité",
+    "motto": "Voit tout. En temps réel."
+  },
+  "Home": {
+    "greeting": "Bonjour, {name} !",
+    "milestoneTag": "Milestone 0 — fondations"
+  }
+}

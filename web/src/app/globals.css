@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base body styling — dark cosmic background by default.
+   Individual components are free to override these on their own
+   surfaces; only the global page chrome is set here. */
+@layer base {
+  html,
+  body {
+    @apply bg-cosmos-950 text-slate-100 antialiased;
+  }
+
+  body {
+    /* Subtle radial glow that hints at the brand visual without
+       requiring a background image. Replaceable later by the
+       cosmic artwork from the mockups. */
+    background-image: radial-gradient(
+      ellipse at top,
+      rgba(124, 58, 237, 0.12),
+      transparent 60%
+    );
+    background-attachment: fixed;
+  }
+}

@@ -78,15 +78,6 @@ impl IndexerServiceMetrics {
 
     // Counters ────────────────────────────────────────────────────────────────
 
-    pub(crate) fn record_skipped(protocol: &Protocol, instruction: &str) {
-        counter!(
-            INSTRUCTIONS_SKIPPED,
-            "protocol" => protocol.as_str(),
-            "instruction" => instruction.to_string(),
-        )
-        .increment(1);
-    }
-
     pub(crate) fn record_indexed(protocol: &Protocol, instruction: &str) {
         counter!(
             INSTRUCTIONS_INDEXED,

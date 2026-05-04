@@ -1,116 +1,101 @@
-# web/
+# yog-sothoth-web
 
-Next.js application — dashboard UI and backend API for yog-sothoth.
+Next.js 16 frontend for the Yog-Sothoth liquidity intelligence engine.
 
-This is a single Next.js process that covers both the frontend and the backend.
-No separate Node.js server — API Routes handle all data access.
+This is an npm workspace package living next to the Rust crates of the
+project. It is fully independent at the Node.js level and only talks to
+the same TimescaleDB instance that the indexer writes to (read-only
+user, see Milestone 0.2).
 
----
+## Stack
 
-## Structure
+- **Next.js 16** — App Router, Server Components, standalone output, Turbopack by default
+- **React 19.2** — bundled with Next 16
+- **TypeScript** — strict mode enabled, including `noUncheckedIndexedAccess`
+- **Tailwind CSS** — palette extracted from the Yog-Sothoth mockups
+- **next-intl 4** — i18n with always-visible locale prefix (`/en/...`, `/fr/...`)
 
-```
-web/
-├── app/
-│   ├── api/                  ← API Routes (backend, runs server-side)
-│   │   ├── pools/            ← pool registry: list, add, remove watched pools
-│   │   ├── metrics/          ← time-series metrics per pool
-│   │   └── alerts/           ← alert configuration and history
-│   └── (dashboard)/          ← UI pages and components
-├── public/
-│   └── wasm/                 ← compiled WASM module (output of wasm-pack)
-└── lib/
-    └── wasm.ts               ← WASM loader and typed bindings
-```
+## Scripts
 
----
+| Command            | Description                              |
+| ------------------ | ---------------------------------------- |
+| `npm run dev`      | Start the dev server on port 3000        |
+| `npm run build`    | Build the standalone production bundle   |
+| `npm run start`    | Start the built server                   |
+| `npm run lint`     | Run ESLint with the Next.js config       |
+| `npm run typecheck`| Run `tsc --noEmit` against the project   |
 
-## API Routes
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/pools` | GET | List all watched pools |
-| `/api/pools` | POST | Add a pool to watch |
-| `/api/pools/[address]` | DELETE | Remove a pool |
-| `/api/metrics/[address]` | GET | Time-series metrics for a pool |
-| `/api/alerts` | GET | List configured alerts |
-| `/api/alerts` | POST | Create an alert |
-| `/api/alerts/[id]` | DELETE | Remove an alert |
-
-All routes read from TimescaleDB. The indexer writes, Next.js reads — no direct communication between the two processes.
-
----
-
-## WASM integration
-
-AMM calculations (price, slippage, imbalance) run client-side via the `yog-core` WASM module.
-
-The WASM module is built from `crates/wasm/` and placed in `public/wasm/`.
-It is loaded asynchronously on first use via `lib/wasm.ts`.
-
-```ts
-import { loadWasm } from '@/lib/wasm'
-
-const wasm = await loadWasm()
-const price = wasm.current_price(reserve_a, reserve_b)
-```
-
----
-
-## Real-time updates
-
-The dashboard receives live metrics via WebSocket — no polling.
-
-The Next.js server maintains a WebSocket connection to the indexer's notification channel (via TimescaleDB LISTEN/NOTIFY or a dedicated pub/sub) and pushes updates to the browser.
-
----
+Note: Turbopack is the default bundler in Next 16, no `--turbopack`
+flag is required anymore.
 
 ## Environment variables
 
-Create a `.env.local` file at the root of `web/`:
-
-```env
-DATABASE_URL=postgresql://yog:yog@localhost:5433/yog_sothoth
-```
-
----
-
-## Getting started
+Copy `.env.example` to `.env.local` and fill in the values you need:
 
 ```bash
-cd web
+cp .env.example .env.local
+```
+
+Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser bundle.
+Database credentials must **never** carry that prefix.
+
+## Project layout
+
+```
+web/
+├── i18n/                # next-intl routing, request and navigation config
+├── messages/            # locale message bundles (en, fr)
+├── public/              # static assets (favicons, etc.)
+├── src/
+│   ├── app/
+│   │   ├── globals.css
+│   │   ├── layout.tsx           # required root layout (passthrough)
+│   │   └── [locale]/
+│   │       ├── layout.tsx       # html/body, intl provider
+│   │       └── page.tsx         # locale home page
+│   └── proxy.ts                 # locale negotiation (was middleware.ts in Next 15)
+├── Dockerfile
+├── next.config.ts
+├── package.json
+├── postcss.config.mjs
+├── tailwind.config.ts
+└── tsconfig.json
+```
+
+## Local development
+
+```bash
 npm install
 npm run dev
 ```
 
-The dashboard is available at [http://localhost:3000](http://localhost:3000).
+Visit <http://localhost:3000>; you will be redirected to `/en` by the
+locale proxy. Switch to `/fr` in the URL to see the French version.
 
----
+## Docker
 
-## Commands
-
-```bash
-npm run dev       # development server with hot reload
-npm run build     # production build
-npm run start     # start production server
-npm run lint      # ESLint
-npm run typecheck # TypeScript type checking
-```
-
----
-
-## Prerequisites
-
-The WASM module must be built before running the frontend:
+A multi-stage Dockerfile produces a minimal production image based on
+the Next.js standalone output:
 
 ```bash
-# From the repo root
-wasm-pack build crates/wasm --target web --out-dir web/public/wasm
+docker build -t yog-sothoth-web:dev .
+docker run --rm -p 3000:3000 --env-file .env.local yog-sothoth-web:dev
 ```
 
-TimescaleDB must be running:
+## Note on the `proxy.ts` naming
 
-```bash
-# From the repo root
-docker compose up -d
-```
+In Next.js 16, the file convention `middleware.ts` was renamed to
+`proxy.ts` to clarify that this layer sits at the network boundary and
+handles routing concerns rather than Express-style application
+middleware. The exported function is also renamed from `middleware`
+to `proxy`. next-intl still exposes its helper under
+`next-intl/middleware` — only the consumer file name has changed.
+
+## Roadmap
+
+This package was bootstrapped during **Milestone 0** of the v0.1
+roadmap. Subsequent milestones add the database layer (Milestone 1),
+the dashboard skeleton with feature flags (Milestone 2), and polish
+(Milestone 3).
+
+See the project root for the full roadmap.
