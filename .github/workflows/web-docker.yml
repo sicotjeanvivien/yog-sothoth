@@ -1,0 +1,93 @@
+# Build the production Docker image for the /web package and run a
+# smoke test against it. The image is not pushed anywhere; this
+# workflow is a regression guard, not a release pipeline.
+
+name: web-docker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-docker.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-docker.yml"
+
+concurrency:
+  group: web-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke-test:
+    name: Build and smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        # Buildx provides better caching primitives than the legacy
+        # docker build, including the GitHub Actions cache backend
+        # used a few steps below.
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          # Load the resulting image into the local Docker daemon so
+          # that the smoke test in the next step can run it. Pushing
+          # to a registry is intentionally out of scope here.
+          load: true
+          tags: yog-sothoth-web:ci
+          # GHA cache backend — first run populates it, every later
+          # run that touches only application code reuses the npm-ci
+          # layer and shaves ~30 seconds off the build.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container
+        # Detached run so the smoke test can probe it. Naming the
+        # container makes the cleanup step deterministic regardless
+        # of whether the smoke test passes or fails.
+        run: |
+          docker run --rm --detach \
+            --name yog-web-smoke \
+            --publish 3000:3000 \
+            yog-sothoth-web:ci
+
+      - name: Wait for readiness
+        # Poll the locale-prefixed root for up to 30 seconds. The
+        # default route `/` issues a 307 redirect to `/en`; the
+        # smoke test follows it (`-L`) and asserts a final 200.
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsSL --max-time 2 http://localhost:3000/ > /dev/null; then
+              echo "Container is responding on attempt ${i}."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Container did not become ready within 30 seconds." >&2
+          docker logs yog-web-smoke
+          exit 1
+
+      - name: Verify locale routes
+        # Beyond readiness, assert that both locale prefixes are
+        # actually served. Catches a regression where the proxy
+        # would short-circuit one of the two locales.
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:3000/en > /dev/null
+          curl -fsS http://localhost:3000/fr > /dev/null
+          echo "Both /en and /fr respond with 2xx."
+
+      - name: Cleanup
+        if: always()
+        # `if: always()` ensures the container is stopped even when
+        # an earlier step failed, so subsequent runs on the same
+        # runner do not collide on the container name.
+        run: docker stop yog-web-smoke || true
