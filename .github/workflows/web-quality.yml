@@ -1,6 +1,6 @@
 # Static quality checks for the /web Next.js package.
-# Runs typecheck and lint as parallel jobs so a failure in one
-# does not mask issues in the other.
+# Runs typecheck, lint and unit tests as parallel jobs so a failure
+# in one does not mask issues in the others.
 
 name: web-quality
 
@@ -37,9 +37,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          # The action understands lockfiles in subdirectories via this
-          # explicit path; npm cache hits keep the install step under
-          # 10 seconds on warm runners.
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -68,3 +65,23 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test
