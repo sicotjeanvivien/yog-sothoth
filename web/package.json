@@ -16,20 +16,22 @@
   "dependencies": {
     "next": "16",
     "next-intl": "4",
+    "postgres": "3",
     "react": "19",
-    "react-dom": "19"
+    "react-dom": "19",
+    "zod": "3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.4",
     "@types/node": "25",
     "@types/react": "19",
     "@types/react-dom": "19",
+    "autoprefixer": "10.*",
     "eslint": "9.*",
     "eslint-config-next": "16.*",
     "postcss": "8.*",
     "tailwindcss": "^4.2.4",
     "typescript": "6",
-    "vitest": "4.*",
-    "autoprefixer": "10.4.20"
+    "vitest": "4.*"
   }
 }

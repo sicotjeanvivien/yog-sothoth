@@ -29,8 +29,22 @@ BEGIN
 END
 $$;
 
--- Allow the role to enter the database and to use the public schema.
-GRANT CONNECT ON DATABASE CURRENT_DATABASE() TO yog_web;
+-- Grant CONNECT on the *current* database. `GRANT CONNECT ON DATABASE`
+-- requires a literal database identifier, not a function call, so we
+-- build the statement dynamically via `format(... %I ...)` which
+-- properly quotes the identifier returned by `current_database()`.
+-- Doing this in a DO block keeps the migration agnostic of the actual
+-- database name (dev, staging, prod can all reuse the same file).
+DO $$
+BEGIN
+    EXECUTE format(
+        'GRANT CONNECT ON DATABASE %I TO yog_web',
+        current_database()
+    );
+END
+$$;
+
+-- Allow the role to use the public schema.
 GRANT USAGE ON SCHEMA public TO yog_web;
 
 -- Grant SELECT on every existing table and sequence in the public

@@ -39,31 +39,31 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       // ---- Database ----
-      DATABASE_URL: string | undefined;
+      DATABASE_URL?: string;
 
       // ---- Feature flags — pool data ----
-      NEXT_PUBLIC_FEATURE_POOLS_LIST: string | undefined;
-      NEXT_PUBLIC_FEATURE_POOL_DETAIL: string | undefined;
-      NEXT_PUBLIC_FEATURE_POOL_PRICE_IMBALANCE: string | undefined;
-      NEXT_PUBLIC_FEATURE_TRANSACTION_FEED: string | undefined;
+      NEXT_PUBLIC_FEATURE_POOLS_LIST?: string;
+      NEXT_PUBLIC_FEATURE_POOL_DETAIL?: string;
+      NEXT_PUBLIC_FEATURE_POOL_PRICE_IMBALANCE?: string;
+      NEXT_PUBLIC_FEATURE_TRANSACTION_FEED?: string;
 
       // ---- Feature flags — aggregated metrics ----
-      NEXT_PUBLIC_FEATURE_TVL_TOTAL: string | undefined;
-      NEXT_PUBLIC_FEATURE_VOLUME_24H: string | undefined;
-      NEXT_PUBLIC_FEATURE_FEES_24H: string | undefined;
-      NEXT_PUBLIC_FEATURE_TVL_CHART: string | undefined;
-      NEXT_PUBLIC_FEATURE_PAIR_BREAKDOWN: string | undefined;
-      NEXT_PUBLIC_FEATURE_KEY_METRICS: string | undefined;
+      NEXT_PUBLIC_FEATURE_TVL_TOTAL?: string;
+      NEXT_PUBLIC_FEATURE_VOLUME_24H?: string;
+      NEXT_PUBLIC_FEATURE_FEES_24H?: string;
+      NEXT_PUBLIC_FEATURE_TVL_CHART?: string;
+      NEXT_PUBLIC_FEATURE_PAIR_BREAKDOWN?: string;
+      NEXT_PUBLIC_FEATURE_KEY_METRICS?: string;
 
       // ---- Feature flags — visualizations ----
-      NEXT_PUBLIC_FEATURE_LIQUIDITY_MAP: string | undefined;
-      NEXT_PUBLIC_FEATURE_LIQUIDITY_HEATMAP: string | undefined;
-      NEXT_PUBLIC_FEATURE_LIVE_STATUS_BAR: string | undefined;
+      NEXT_PUBLIC_FEATURE_LIQUIDITY_MAP?: string;
+      NEXT_PUBLIC_FEATURE_LIQUIDITY_HEATMAP?: string;
+      NEXT_PUBLIC_FEATURE_LIVE_STATUS_BAR?: string;
 
       // ---- Feature flags — scoring / Signal Engine ----
-      NEXT_PUBLIC_FEATURE_LIQUIDITY_HEALTH_SCORE: string | undefined;
-      NEXT_PUBLIC_FEATURE_ALERTS_PANEL: string | undefined;
-      NEXT_PUBLIC_FEATURE_SIGNALS_FEED: string | undefined;
+      NEXT_PUBLIC_FEATURE_LIQUIDITY_HEALTH_SCORE?: string;
+      NEXT_PUBLIC_FEATURE_ALERTS_PANEL?: string;
+      NEXT_PUBLIC_FEATURE_SIGNALS_FEED?: string;
     }
   }
 }
@@ -74,4 +74,4 @@ declare global {
 // stays a script (no imports/exports) and the `declare global`
 // wrapper above makes the intent explicit.
 
-export {};
+export { };
