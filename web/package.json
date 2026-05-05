@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint --cache --cache-location .next/cache/eslint/",
     "lint:fix": "eslint --fix --cache --cache-location .next/cache/eslint/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "next": "16",
@@ -26,6 +28,8 @@
     "eslint-config-next": "16.*",
     "postcss": "8.*",
     "tailwindcss": "^4.2.4",
-    "typescript": "6"
+    "typescript": "6",
+    "vitest": "4.*",
+    "autoprefixer": "10.4.20"
   }
 }
