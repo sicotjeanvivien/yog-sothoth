@@ -7,14 +7,14 @@ use yog_core::{
     domain::{Protocol, WatchedPool, WatchedPoolRepository},
 };
 
-use crate::infra::db::{convert_string_to_pubkey, repository_utils::map_sqlx_error};
+use crate::repository_utils::{convert_string_to_pubkey, map_sqlx_error};
 
-pub(crate) struct PgWatchedPoolRepository {
+pub struct PgWatchedPoolRepository {
     pool: PgPool,
 }
 
 impl PgWatchedPoolRepository {
-    pub(crate) fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }

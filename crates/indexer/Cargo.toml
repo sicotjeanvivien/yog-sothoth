@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 yog-core = { path = "../core" }
+yog-persistence = { path = "../persistence" }
 
 tokio = { workspace = true }
 futures-util = { workspace = true }

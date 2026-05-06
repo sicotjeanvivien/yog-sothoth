@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO swap_events (\n                pool_address, protocol, signature,\n                token_a_mint, token_b_mint,\n                trade_direction, amount_a, amount_b,\n                reserve_a_after, reserve_b_after, next_sqrt_price,\n                claiming_fee, protocol_fee, compounding_fee, referral_fee,\n                fee_token_is_a,\n                timestamp\n            )\n            VALUES (\n                $1, $2, $3,\n                $4, $5,\n                $6, $7, $8,\n                $9, $10, $11,\n                $12, $13, $14, $15,\n                $16,\n                $17\n            )\n            ON CONFLICT (signature, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Numeric",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40be3623665bcf63490c25df4117cdacfc91b05798d0f6d5308df903000343e7"
+}

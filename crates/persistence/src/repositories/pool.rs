@@ -6,14 +6,14 @@ use yog_core::{
     domain::{Pool, PoolRepository},
 };
 
-use crate::infra::db::repository_utils::map_sqlx_error;
+use crate::repository_utils::map_sqlx_error;
 
-pub(crate) struct PgPoolRepository {
+pub struct PgPoolRepository {
     pool: PgPool,
 }
 
 impl PgPoolRepository {
-    pub(crate) fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }

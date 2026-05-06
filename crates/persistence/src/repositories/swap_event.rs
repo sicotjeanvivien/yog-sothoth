@@ -4,45 +4,46 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{LiquidityEvent, LiquidityEventRepository, Protocol},
+    domain::{Protocol, SwapEvent, SwapEventRepository, TradeDirection},
 };
 
-use crate::infra::db::{
+use crate::repository_utils::{
     convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
-    convert_u128_to_bigdecimal, parse_string_to_liquidity_event_kind,
-    repository_utils::map_sqlx_error,
+    convert_u128_to_bigdecimal, map_sqlx_error,
 };
 
-pub(crate) struct PgLiquidityEventRepository {
+pub struct PgSwapEventRepository {
     pool: PgPool,
 }
 
-impl PgLiquidityEventRepository {
-    pub(crate) fn new(pool: PgPool) -> Self {
+impl PgSwapEventRepository {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl LiquidityEventRepository for PgLiquidityEventRepository {
-    async fn insert(&self, event: &LiquidityEvent) -> RepositoryResult<()> {
+impl SwapEventRepository for PgSwapEventRepository {
+    async fn insert(&self, event: &SwapEvent) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
-            INSERT INTO liquidity_events (
+            INSERT INTO swap_events (
                 pool_address, protocol, signature,
                 token_a_mint, token_b_mint,
-                liquidity_event_kind, amount_a, amount_b, liquidity_delta,
-                reserve_a_after, reserve_b_after,
-                position, owner,
+                trade_direction, amount_a, amount_b,
+                reserve_a_after, reserve_b_after, next_sqrt_price,
+                claiming_fee, protocol_fee, compounding_fee, referral_fee,
+                fee_token_is_a,
                 timestamp
             )
             VALUES (
                 $1, $2, $3,
                 $4, $5,
-                $6, $7, $8, $9,
-                $10, $11,
-                $12, $13,
-                $14
+                $6, $7, $8,
+                $9, $10, $11,
+                $12, $13, $14, $15,
+                $16,
+                $17
             )
             ON CONFLICT (signature, timestamp) DO NOTHING
             "#,
@@ -51,14 +52,17 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             event.signature,
             event.token_a_mint.to_string(),
             event.token_b_mint.to_string(),
-            event.liquidity_event_kind.as_str(),
+            event.trade_direction.as_str(),
             convert_u64_to_i64(event.amount_a, "amount_a")?,
             convert_u64_to_i64(event.amount_b, "amount_b")?,
-            convert_u128_to_bigdecimal(event.liquidity_delta, "liquidity_delta"),
             convert_u64_to_i64(event.reserve_a_after, "reserve_a_after")?,
             convert_u64_to_i64(event.reserve_b_after, "reserve_b_after")?,
-            event.position.to_string(),
-            event.owner.to_string(),
+            convert_u128_to_bigdecimal(event.next_sqrt_price, "next_sqrt_price"),
+            convert_u64_to_i64(event.claiming_fee, "claiming_fee")?,
+            convert_u64_to_i64(event.protocol_fee, "protocol_fee")?,
+            convert_u64_to_i64(event.compounding_fee, "compounding_fee")?,
+            convert_u64_to_i64(event.referral_fee, "referral_fee")?,
+            event.fee_token_is_a,
             event.timestamp,
         )
         .execute(&self.pool)
@@ -72,16 +76,17 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         &self,
         pool_address: &Pubkey,
         limit: i64,
-    ) -> RepositoryResult<Vec<LiquidityEvent>> {
+    ) -> RepositoryResult<Vec<SwapEvent>> {
         let rows = sqlx::query!(
             r#"
             SELECT pool_address, protocol, signature,
                    token_a_mint, token_b_mint,
-                   liquidity_event_kind, amount_a, amount_b, liquidity_delta,
-                   reserve_a_after, reserve_b_after,
-                   position, owner,
+                   trade_direction, amount_a, amount_b,
+                   reserve_a_after, reserve_b_after, next_sqrt_price,
+                   claiming_fee, protocol_fee, compounding_fee, referral_fee,
+                   fee_token_is_a,
                    timestamp
-            FROM liquidity_events
+            FROM swap_events
             WHERE pool_address = $1
             ORDER BY timestamp DESC
             LIMIT $2
@@ -95,7 +100,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
 
         rows.into_iter()
             .map(|row| {
-                Ok(LiquidityEvent {
+                Ok(SwapEvent {
                     pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
                     protocol: Protocol::from_str(&row.protocol).map_err(|e| {
                         RepositoryError::Integrity(format!("invalid protocol: {e}"))
@@ -104,20 +109,27 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
                     timestamp: row.timestamp,
                     token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
                     token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
-                    liquidity_event_kind: parse_string_to_liquidity_event_kind(
-                        row.liquidity_event_kind,
-                        "liquidity_event_kind",
+                    trade_direction: TradeDirection::from_str(&row.trade_direction).map_err(
+                        |_| {
+                            RepositoryError::Integrity(format!(
+                                "invalid trade_direction: {}",
+                                row.trade_direction
+                            ))
+                        },
                     )?,
                     amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
                     amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
-                    liquidity_delta: convert_bigdecimal_to_u128(
-                        row.liquidity_delta,
-                        "liquidity_delta",
-                    )?,
                     reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
                     reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
-                    position: convert_string_to_pubkey(row.position, "position")?,
-                    owner: convert_string_to_pubkey(row.owner, "owner")?,
+                    next_sqrt_price: convert_bigdecimal_to_u128(
+                        row.next_sqrt_price,
+                        "next_sqrt_price",
+                    )?,
+                    claiming_fee: convert_i64_to_u64(row.claiming_fee, "claiming_fee")?,
+                    protocol_fee: convert_i64_to_u64(row.protocol_fee, "protocol_fee")?,
+                    compounding_fee: convert_i64_to_u64(row.compounding_fee, "compounding_fee")?,
+                    referral_fee: convert_i64_to_u64(row.referral_fee, "referral_fee")?,
+                    fee_token_is_a: row.fee_token_is_a,
                 })
             })
             .collect::<RepositoryResult<Vec<_>>>()

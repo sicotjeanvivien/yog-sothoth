@@ -6,12 +6,7 @@ use crate::{
     config::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
-        Database, RpcListener,
-        db::{
-            PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
-            PgLiquidityEventRepository, PgPoolRepository, PgSwapEventRepository,
-            PgWatchedPoolRepository,
-        },
+        RpcListener,
         rpc::{
             QualifiedSignature, RawLogEvent, SignatureDispatcher,
             dispatcher::metrics::DispatcherMetrics,
@@ -24,6 +19,10 @@ use std::sync::Arc;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use yog_persistence::{
+    Database, PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
+    PgLiquidityEventRepository, PgPoolRepository, PgSwapEventRepository, PgWatchedPoolRepository,
+};
 
 /// Top-level process — owns all runtime dependencies and drives the
 /// indexer lifecycle.
@@ -124,8 +123,6 @@ impl Daemon {
 async fn init_db(database_url: &str) -> anyhow::Result<Database> {
     let db = Database::connect(database_url).await?;
     tracing::info!("connected to database");
-    db.run_migrations().await?;
-    tracing::info!("migrations applied");
     Ok(db)
 }
 
@@ -148,12 +145,14 @@ async fn init_indexer_service(
     let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
     info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
-    let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool()));
-    let pg_liquidity_event_repo = Arc::new(PgLiquidityEventRepository::new(database.pool()));
-    let pg_claim_position_fee_repo =
-        Arc::new(PgClaimPositionFeeEventRepository::new(database.pool()));
-    let pg_claim_reward_repo = Arc::new(PgClaimRewardEventRepository::new(database.pool()));
-    let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool()));
+    let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool().clone()));
+    let pg_liquidity_event_repo =
+        Arc::new(PgLiquidityEventRepository::new(database.pool().clone()));
+    let pg_claim_position_fee_repo = Arc::new(PgClaimPositionFeeEventRepository::new(
+        database.pool().clone(),
+    ));
+    let pg_claim_reward_repo = Arc::new(PgClaimRewardEventRepository::new(database.pool().clone()));
+    let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
 
     Ok(Arc::new(IndexerService::new(
         pg_swap_event_repo,
@@ -170,7 +169,8 @@ async fn init_watched_pool_service(
     database: &Database,
     listener: Arc<RpcListener>,
 ) -> anyhow::Result<Arc<WatchedPoolService>> {
-    let pg_watched_pool_repository = Arc::new(PgWatchedPoolRepository::new(database.pool()));
+    let pg_watched_pool_repository =
+        Arc::new(PgWatchedPoolRepository::new(database.pool().clone()));
     Ok(Arc::new(WatchedPoolService::new(
         listener,
         pg_watched_pool_repository,

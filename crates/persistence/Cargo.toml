@@ -1,0 +1,23 @@
+[package]
+name = "yog-persistence"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Workspace deps already declared at root
+yog-core = { path = "../core" }
+
+tokio = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "macros", "chrono", "bigdecimal", "uuid"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+bigdecimal = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+solana-pubkey = { workspace = true }
+
+[dev-dependencies]
+# Integration tests will spin up a real Postgres via docker-compose
+tokio = { workspace = true, features = ["test-util", "macros"] }

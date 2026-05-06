@@ -7,17 +7,16 @@ use yog_core::{
     domain::{ClaimPositionFeeEvent, ClaimPositionFeeEventRepository, Protocol},
 };
 
-use crate::infra::db::{
-    convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
-    repository_utils::map_sqlx_error,
+use crate::repository_utils::{
+    convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64, map_sqlx_error,
 };
 
-pub(crate) struct PgClaimPositionFeeEventRepository {
+pub struct PgClaimPositionFeeEventRepository {
     pool: PgPool,
 }
 
 impl PgClaimPositionFeeEventRepository {
-    pub(crate) fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }

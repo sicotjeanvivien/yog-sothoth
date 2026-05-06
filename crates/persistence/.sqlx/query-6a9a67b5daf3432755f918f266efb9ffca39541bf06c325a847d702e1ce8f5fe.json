@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, protocol, signature,\n                   position, owner,\n                   mint_reward, reward_index, total_reward,\n                   timestamp\n            FROM reward_claims\n            WHERE pool_address = $1\n            ORDER BY timestamp DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "mint_reward",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "reward_index",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "total_reward",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6a9a67b5daf3432755f918f266efb9ffca39541bf06c325a847d702e1ce8f5fe"
+}
