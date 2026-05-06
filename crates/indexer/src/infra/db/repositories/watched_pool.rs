@@ -3,8 +3,8 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use sqlx::PgPool;
 use yog_core::{
-    domain::{Protocol, WatchedPool, WatchedPoolRepository},
     RepositoryError, RepositoryResult,
+    domain::{Protocol, WatchedPool, WatchedPoolRepository},
 };
 
 use crate::infra::db::{convert_string_to_pubkey, repository_utils::map_sqlx_error};

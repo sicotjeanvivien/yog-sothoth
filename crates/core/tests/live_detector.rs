@@ -15,11 +15,11 @@ use std::path::PathBuf;
 use yog_core::{
     domain::DomainEvent,
     protocols::{
-        meteora::{
-            damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
-            MeteoraDammV2,
-        },
         PoolIndexer,
+        meteora::{
+            MeteoraDammV2,
+            damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
+        },
     },
 };
 

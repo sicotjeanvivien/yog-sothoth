@@ -1,5 +1,5 @@
-use crate::amm::common::price_impact;
 use crate::CoreResult;
+use crate::amm::common::price_impact;
 
 /// Apply the DAMM v2 fee to an input amount.
 ///

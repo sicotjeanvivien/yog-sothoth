@@ -1,0 +1,21 @@
+use sqlx::PgPool;
+
+use std::{env, sync::Arc};
+
+#[allow(dead_code)]
+pub(crate) struct Container {}
+impl Container {
+    pub(crate) async fn build() -> Self {
+        // let pg_pool: sqlx::Pool<sqlx::Postgres> = Self::init_db().await;
+        Self {}
+    }
+
+    async fn init_db() -> PgPool {
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("Failed to connect to PgPool");
+        pool
+    }
+}

@@ -3,8 +3,8 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
-    domain::{ClaimRewardEvent, ClaimRewardEventRepository, Protocol},
     RepositoryError, RepositoryResult,
+    domain::{ClaimRewardEvent, ClaimRewardEventRepository, Protocol},
 };
 
 use crate::infra::db::{

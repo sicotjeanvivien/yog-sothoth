@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use solana_pubkey::Pubkey;
 use tokio::{
-    sync::{broadcast, mpsc, Mutex},
+    sync::{Mutex, broadcast, mpsc},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;

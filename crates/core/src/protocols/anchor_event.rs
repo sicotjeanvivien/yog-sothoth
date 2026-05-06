@@ -40,8 +40,8 @@
 
 use bs58::decode as bs58_decode;
 use solana_transaction_status::{
-    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta, UiInstruction,
-    UiParsedInstruction,
+    EncodedConfirmedTransactionWithStatusMeta, UiInstruction, UiParsedInstruction,
+    option_serializer::OptionSerializer,
 };
 
 use crate::error::AnchorDecodeError;

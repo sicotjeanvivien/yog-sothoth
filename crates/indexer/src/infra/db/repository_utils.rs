@@ -1,8 +1,8 @@
 use solana_pubkey::Pubkey;
-use sqlx::types::BigDecimal;
 use sqlx::Error as SqlxError;
+use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::{domain::LiquidityEventKind, RepositoryError, RepositoryResult};
+use yog_core::{RepositoryError, RepositoryResult, domain::LiquidityEventKind};
 
 /// Convert a string read from the database into a `Pubkey`.
 ///

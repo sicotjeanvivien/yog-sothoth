@@ -1,4 +1,4 @@
-use crate::{domain::WatchedPool, RepositoryResult};
+use crate::{RepositoryResult, domain::WatchedPool};
 use async_trait::async_trait;
 
 /// Interface for watched pool persistence.

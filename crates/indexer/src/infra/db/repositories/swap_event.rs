@@ -3,13 +3,13 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
-    domain::{Protocol, SwapEvent, SwapEventRepository, TradeDirection},
     RepositoryError, RepositoryResult,
+    domain::{Protocol, SwapEvent, SwapEventRepository, TradeDirection},
 };
 
 use crate::infra::db::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
-    convert_u128_to_bigdecimal, convert_u64_to_i64, repository_utils::map_sqlx_error,
+    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
+    convert_u128_to_bigdecimal, repository_utils::map_sqlx_error,
 };
 
 pub(crate) struct PgSwapEventRepository {

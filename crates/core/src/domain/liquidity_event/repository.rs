@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use crate::{domain::LiquidityEvent, RepositoryResult};
+use crate::{RepositoryResult, domain::LiquidityEvent};
 
 #[async_trait]
 pub trait LiquidityEventRepository: Send + Sync {

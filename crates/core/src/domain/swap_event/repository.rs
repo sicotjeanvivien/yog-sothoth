@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use crate::{domain::SwapEvent, RepositoryResult};
+use crate::{RepositoryResult, domain::SwapEvent};
 
 /// Persistence contract for swap events.
 #[async_trait]

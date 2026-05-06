@@ -1,9 +1,9 @@
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
-use crate::domain::Protocol;
-use crate::protocols::extraction::ExtractionOutcome;
-use crate::protocols::PoolIndexer;
 use crate::CoreResult;
+use crate::domain::Protocol;
+use crate::protocols::PoolIndexer;
+use crate::protocols::extraction::ExtractionOutcome;
 
 /// Meteora DLMM protocol handler (bin-based liquidity, volatility fees).
 ///

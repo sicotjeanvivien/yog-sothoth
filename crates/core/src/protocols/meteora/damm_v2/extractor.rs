@@ -30,14 +30,14 @@ use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 use crate::{
     error::AnchorDecodeError,
     protocols::anchor_event::{
-        decode_anchor_event_cpi, extract_anchor_event_cpis, DISCRIMINATOR_LEN,
+        DISCRIMINATOR_LEN, decode_anchor_event_cpi, extract_anchor_event_cpis,
     },
 };
 
 use super::events::{
+    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtLiquidityChange, EvtSwap2,
     discriminator_claim_position_fee, discriminator_claim_reward, discriminator_liquidity_change,
-    discriminator_swap2, DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtLiquidityChange,
-    EvtSwap2,
+    discriminator_swap2,
 };
 
 // ---------------------------------------------------------------------------

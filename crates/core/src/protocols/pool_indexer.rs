@@ -1,6 +1,6 @@
 use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
-use crate::{protocols::extraction::ExtractionOutcome, CoreResult};
+use crate::{CoreResult, protocols::extraction::ExtractionOutcome};
 
 /// Common interface for all supported AMM protocols.
 ///

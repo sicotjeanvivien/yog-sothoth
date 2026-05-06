@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use crate::{domain::Pool, RepositoryResult};
+use crate::{RepositoryResult, domain::Pool};
 
 /// Persistence contract for Pool.
 ///

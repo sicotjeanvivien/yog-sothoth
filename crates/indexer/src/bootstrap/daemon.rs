@@ -6,16 +6,16 @@ use crate::{
     config::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
+        Database, RpcListener,
         db::{
             PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
             PgLiquidityEventRepository, PgPoolRepository, PgSwapEventRepository,
             PgWatchedPoolRepository,
         },
         rpc::{
-            dispatcher::metrics::DispatcherMetrics, QualifiedSignature, RawLogEvent,
-            SignatureDispatcher,
+            QualifiedSignature, RawLogEvent, SignatureDispatcher,
+            dispatcher::metrics::DispatcherMetrics,
         },
-        Database, RpcListener,
     },
     utils::redact_api_key,
 };

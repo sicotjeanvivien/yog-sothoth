@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use crate::{domain::ClaimPositionFeeEvent, RepositoryResult};
+use crate::{RepositoryResult, domain::ClaimPositionFeeEvent};
 
 #[async_trait]
 pub trait ClaimPositionFeeEventRepository: Send + Sync {

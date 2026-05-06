@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    domain::{Pool, PoolRepository},
     RepositoryResult,
+    domain::{Pool, PoolRepository},
 };
 
 use crate::infra::db::repository_utils::map_sqlx_error;

@@ -1,6 +1,6 @@
 use crate::CoreError;
 use serde::{Deserialize, Serialize};
-use solana_pubkey::{pubkey, Pubkey};
+use solana_pubkey::{Pubkey, pubkey};
 
 /// Supported AMM protocols.
 ///

@@ -8,6 +8,6 @@ pub(crate) use repositories::{
     PgPoolRepository, PgSwapEventRepository, PgWatchedPoolRepository,
 };
 pub(crate) use repository_utils::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
-    convert_u128_to_bigdecimal, convert_u64_to_i64, parse_string_to_liquidity_event_kind,
+    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
+    convert_u128_to_bigdecimal, parse_string_to_liquidity_event_kind,
 };

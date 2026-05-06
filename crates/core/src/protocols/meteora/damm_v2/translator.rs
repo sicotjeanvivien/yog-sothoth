@@ -16,8 +16,8 @@
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_transaction_status::{
-    option_serializer::OptionSerializer, EncodedConfirmedTransactionWithStatusMeta, UiInstruction,
-    UiParsedInstruction,
+    EncodedConfirmedTransactionWithStatusMeta, UiInstruction, UiParsedInstruction,
+    option_serializer::OptionSerializer,
 };
 use std::str::FromStr;
 
@@ -220,11 +220,7 @@ pub(super) fn extract_mint_pair(
     }
 
     let (m1, m2) = (mints[0], mints[1]);
-    if m1 <= m2 {
-        Ok((m1, m2))
-    } else {
-        Ok((m2, m1))
-    }
+    if m1 <= m2 { Ok((m1, m2)) } else { Ok((m2, m1)) }
 }
 
 /// Try to extract the mint pubkey from a parsed transferChecked instruction.

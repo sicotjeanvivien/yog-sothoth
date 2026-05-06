@@ -4,7 +4,7 @@ use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction:
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio_retry::{strategy::FixedInterval, Retry};
+use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::{debug, error, info, warn};
 use yog_core::{
     domain::{
@@ -12,13 +12,13 @@ use yog_core::{
         LiquidityEventRepository, Pool, PoolRepository, Protocol, SwapEventRepository,
     },
     protocols::{
-        extraction::{discriminator_hex, ExtractionFailure, ExtractionOutcome},
-        meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
         PoolIndexer,
+        extraction::{ExtractionFailure, ExtractionOutcome, discriminator_hex},
+        meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
     },
 };
 
-use crate::application::services::{errors::FetchError, IndexerServiceMetrics};
+use crate::application::services::{IndexerServiceMetrics, errors::FetchError};
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler, persists every domain

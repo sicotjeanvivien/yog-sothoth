@@ -14,7 +14,7 @@
 //!   up to `Daemon::run`.
 
 use std::sync::Arc;
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 

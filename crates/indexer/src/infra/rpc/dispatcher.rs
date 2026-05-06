@@ -2,7 +2,7 @@ pub(crate) mod filters;
 pub(crate) mod metrics;
 use crate::{
     error::DispatcherError,
-    infra::rpc::{dispatcher::metrics::DispatcherMetrics, QualifiedSignature, RawLogEvent},
+    infra::rpc::{QualifiedSignature, RawLogEvent, dispatcher::metrics::DispatcherMetrics},
 };
 pub(crate) use filters::{FailedTransactionFilter, FilterDecision, InvocationFilter, LogFilter};
 
