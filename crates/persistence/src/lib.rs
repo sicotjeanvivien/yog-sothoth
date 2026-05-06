@@ -11,12 +11,10 @@
 //! and schema definitions.
 
 mod database;
-mod error;
 mod repositories;
 mod repository_utils;
 
 pub use database::Database;
-pub use error::PersistenceError;
 pub use repositories::{
     PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository, PgLiquidityEventRepository,
     PgPoolRepository, PgSwapEventRepository, PgWatchedPoolRepository,

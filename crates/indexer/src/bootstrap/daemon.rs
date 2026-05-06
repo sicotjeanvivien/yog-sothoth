@@ -14,6 +14,7 @@ use crate::{
     },
     utils::redact_api_key,
 };
+use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -46,19 +47,26 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = init_db(&config.database_url.expose()).await?;
+        let database = init_db(&config.database_url.expose())
+            .await
+            .context("database initialization failed")?;
         info!("database initialized");
 
         let listener = init_listener(&config);
         info!("RPC listener initialized: {}", config.solana_rpc_ws);
 
-        let indexer_service = init_indexer_service(&config, &database).await?;
+        let indexer_service = init_indexer_service(&config, &database)
+            .await
+            .context("indexer service initialization failed")?;
         info!("indexer service initialized");
 
-        let watched_pool_service = init_watched_pool_service(&database, listener.clone()).await?;
+        let watched_pool_service = init_watched_pool_service(&database, listener.clone())
+            .await
+            .context("watched pool service initialization failed")?;
         info!("watched pool service initialized");
 
-        let dispatcher = SignatureDispatcher::new_default()?;
+        let dispatcher =
+            SignatureDispatcher::new_default().context("dispatcher initialization failed")?;
         info!("dispatcher initialized");
 
         DispatcherMetrics::register_descriptions();
@@ -119,9 +127,15 @@ impl Daemon {
 
 // ── Initialisation helpers ───────────────────────────────────────────────────
 
-/// Connect to the database and apply pending migrations.
+/// Connect to the database.
+///
+/// The database URL is held in `Config::database_url` (a redacted secret),
+/// so we never log it directly — `anyhow::Context` is sufficient to surface
+/// the failure at startup without leaking credentials.
 async fn init_db(database_url: &str) -> anyhow::Result<Database> {
-    let db = Database::connect(database_url).await?;
+    let db = Database::connect(database_url)
+        .await
+        .context("failed to connect to database")?;
     tracing::info!("connected to database");
     Ok(db)
 }

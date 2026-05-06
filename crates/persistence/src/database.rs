@@ -1,8 +1,6 @@
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
 
-use crate::error::PersistenceError;
-
 /// Thin wrapper around `sqlx::PgPool` providing a single entry point for
 /// connecting and a hook for future cross-cutting concerns (metrics, health,
 /// migrations runner if we ever bundle one).
@@ -23,7 +21,11 @@ impl Database {
     ///   - `acquire_timeout = 5s`: fail fast rather than queue indefinitely.
     ///
     /// Callers needing different sizing should use `connect_with_options`.
-    pub async fn connect(url: &str) -> Result<Self, PersistenceError> {
+    ///
+    /// Returns `sqlx::Error` directly: connection failures at boot time are
+    /// best surfaced with their original context (configuration, IO, TLS,
+    /// authentication…) rather than wrapped behind a generic error type.
+    pub async fn connect(url: &str) -> Result<Self, sqlx::Error> {
         Self::connect_with_options(url, 10, Duration::from_secs(5)).await
     }
 
@@ -34,7 +36,7 @@ impl Database {
         url: &str,
         max_connections: u32,
         acquire_timeout: Duration,
-    ) -> Result<Self, PersistenceError> {
+    ) -> Result<Self, sqlx::Error> {
         let pool = PgPoolOptions::new()
             .max_connections(max_connections)
             .acquire_timeout(acquire_timeout)

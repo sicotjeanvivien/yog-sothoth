@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, protocol, token_a_mint, token_b_mint,\n                   first_seen_at, last_seen_at\n            FROM pools\n            WHERE first_seen_at < $1\n               OR (first_seen_at = $1 AND pool_address > $2)\n            ORDER BY first_seen_at DESC, pool_address ASC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_a_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_b_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "first_seen_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "35b6b667f34ab0b6705e42affa9af6a9d04daabe273ef5bb40916086260a3410"
+}
