@@ -48,10 +48,7 @@ pub trait PoolRepository: Send + Sync {
 
     /// Fetch a single pool by its on-chain address.
     /// Returns `Ok(None)` if the pool has never been observed.
-    async fn find_by_address(
-        &self,
-        pool_address: &Pubkey,
-    ) -> RepositoryResult<Option<Pool>>;
+    async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>>;
 
     /// Paginate through known pools in canonical order:
     /// `first_seen_at DESC`, `pool_address ASC` as tiebreaker.

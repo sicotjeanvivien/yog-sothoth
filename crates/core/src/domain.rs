@@ -12,7 +12,7 @@ pub use claim_position_fee_event::{ClaimPositionFeeEvent, ClaimPositionFeeEventR
 pub use claim_reward_event::{ClaimRewardEvent, ClaimRewardEventRepository};
 pub use domain_event::DomainEvent;
 pub use liquidity_event::{LiquidityEvent, LiquidityEventKind, LiquidityEventRepository};
-pub use pool::{Pool, PoolRepository, PoolCursor};
+pub use pool::{Pool, PoolCursor, PoolRepository};
 pub use protocol::Protocol;
 pub use swap_event::{SwapEvent, SwapEventRepository};
 pub use trade_direction::TradeDirection;
