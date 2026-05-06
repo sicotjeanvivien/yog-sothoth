@@ -11,7 +11,8 @@ impl Container {
     }
 
     async fn init_db() -> PgPool {
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
+        let database_url =
+            env::var("DATABASE_URL_API").expect("DATABASE_URL_API must be set in .env");
 
         let pool = PgPool::connect(&database_url)
             .await

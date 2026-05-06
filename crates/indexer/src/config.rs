@@ -27,7 +27,7 @@ impl Config {
         dotenv().ok();
 
         Ok(Self {
-            database_url: SecretUrl::new(required("DATABASE_URL")?),
+            database_url: SecretUrl::new(required("DATABASE_URL_INDEXER")?),
             solana_rpc_ws: SecretUrl::new(required("SOLANA_RPC_WS")?),
             solana_rpc_http: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,

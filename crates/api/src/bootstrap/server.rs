@@ -21,11 +21,11 @@ impl Server {
         let container = Container::build().await;
         let router = bootstrap::build_router(&container).await;
         let limiter = Arc::new(Semaphore::new(100));
-        let app_url = env::var("APP_URL").context("APP_URL must be set in .env")?;
-        let tcp_listener = TcpListener::bind(&app_url)
+        let bind_addr = env::var("API_BIND_ADDR").context("API_BIND_ADDR must be set in .env")?;
+        let tcp_listener = TcpListener::bind(&bind_addr)
             .await
-            .context("app_url is invalid ")?;
-        info!("Server starting on {}", app_url);
+            .with_context(|| format!("failed to bind TCP listener on {bind_addr}"))?;
+        info!(addr = %bind_addr, "API server listening");
         Ok(Server {
             router,
             tcp_listener,
