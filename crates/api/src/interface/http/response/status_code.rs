@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-#[allow(dead_code)]
 pub(crate) enum StatusCode {
     Continue,
     SwitchingProtocol,

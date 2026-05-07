@@ -33,7 +33,6 @@ impl ErrorHandler {
         )
     }
 
-    #[allow(dead_code)]
     pub(crate) fn unprocessable_entity(message: &str) -> HttpResponse {
         error!(code = StatusCode::UnprocessableEntity.to_string(), message);
         HttpResponse::new(

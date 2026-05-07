@@ -1,27 +1,35 @@
-use crate::bootstrap::{Server, config::Config};
-use tracing::error;
-use tracing_subscriber::EnvFilter;
-
 mod bootstrap;
 mod interface;
 
+use tracing::error;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // ── Process-level invariants ──────────────────────────────────────────────
     yog_bootstrap::init_rustls();
     dotenvy::dotenv().ok();
     yog_bootstrap::init_tracing();
 
     // ── Configuration ─────────────────────────────────────────────────────────
-    // `Config::load()` performs explicit validation of all required fields
-    // (RPC URL, DB connection string, pool addresses…).
-    //
-    // SECURITY: Config's Display / Debug implementations MUST redact
-    // credentials (DATABASE_URL password, API keys) before they reach the
-    // log collector. See `utils::redact` for the masking logic.
-    let config =
-        Config::load().inspect_err(|e| error!(error = %e, "Failed to load configuration"))?;
+    let config = bootstrap::Config::load()
+        .inspect_err(|e| error!(error = ?e, "failed to load configuration"))?;
 
-    let server: Server = Server::init().await?;
+    // ── Application app_state ─────────────────────────────────────────────────
+    // Builds the dependency graph: DB pool, repositories, services. Validates
+    // live connections (DB) before returning, so any failure here means the
+    // process cannot run.
+    let app_state = bootstrap::AppState::build(config.clone())
+        .await
+        .inspect_err(|e| error!(error = ?e, "failed to build application app_state"))?;
+
+    // ── HTTP server ───────────────────────────────────────────────────────────
+    // Wires the router from the app_state, binds the TCP listener, then runs
+    // the accept loop until Ctrl-C.
+    let server = bootstrap::Server::init(app_state, config)
+        .await
+        .inspect_err(|e| error!(error = ?e, "failed to initialize server"))?;
+
     server.run().await;
+
     Ok(())
 }
