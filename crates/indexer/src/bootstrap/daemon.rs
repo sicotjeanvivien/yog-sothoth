@@ -3,7 +3,7 @@ use crate::{
         services::{IndexerService, IndexerServiceMetrics, WatchedPoolService},
         workers::IndexerWorker,
     },
-    config::Config,
+    bootstrap::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
         RpcListener,

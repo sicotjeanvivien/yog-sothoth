@@ -1,21 +1,28 @@
 use std::fmt;
 
-/// URL potentiellement porteuse d'un secret (ex: `?api-key=...`).
+/// URL that may carry a secret in its query string (e.g. `?api-key=...`).
 ///
-/// Les impls `Display` et `Debug` **masquent** les paramètres de query
-/// pour éviter toute fuite via les logs ou les erreurs. Pour obtenir
-/// l'URL brute (à passer au client RPC), appeler [`expose`].
+/// The `Display` and `Debug` impls **redact** the query portion to
+/// prevent leaks through logs or error chains. To obtain the raw URL —
+/// for example to pass to an HTTP client or a WebSocket — call
+/// [`SecretUrl::expose`] explicitly.
+///
+/// The redaction is intentionally crude: everything after `?` is
+/// replaced wholesale. Refining this (preserving non-sensitive
+/// parameters) would require a real URL parser; not worth it until a
+/// concrete need appears.
 #[derive(Clone)]
-pub(crate) struct SecretUrl(String);
+pub struct SecretUrl(String);
 
 impl SecretUrl {
-    pub(crate) fn new(raw: impl Into<String>) -> Self {
+    pub fn new(raw: impl Into<String>) -> Self {
         Self(raw.into())
     }
 
-    /// Retourne l'URL brute. À n'appeler qu'au moment de la consommer
-    /// (construction d'un client HTTP, d'un WebSocket, etc.).
-    pub(crate) fn expose(&self) -> &str {
+    /// Return the raw URL. Should only be called at the moment of
+    /// consumption (constructing an HTTP client, opening a WebSocket,
+    /// etc.) — never for logging or error formatting.
+    pub fn expose(&self) -> &str {
         &self.0
     }
 }
@@ -28,17 +35,13 @@ impl fmt::Display for SecretUrl {
 
 impl fmt::Debug for SecretUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Même traitement en Debug — indispensable car `{:?}` est
-        // souvent utilisé dans les macros tracing et les erreurs.
+        // Same treatment in Debug — essential because `{:?}` is
+        // commonly used in tracing macros and error chains.
         write!(f, "SecretUrl({})", redact(&self.0))
     }
 }
 
-/// Remplace la portion `?query_string` par `?***REDACTED***`.
-///
-/// Volontairement simple : on n'essaie pas de préserver les paramètres
-/// non-sensibles. Tout ce qui suit `?` est masqué. Si un jour on a
-/// besoin de conserver certains params, on fera un vrai parsing d'URL.
+/// Replace the `?query_string` portion with `?***REDACTED***`.
 fn redact(url: &str) -> String {
     match url.find('?') {
         Some(idx) => format!("{}?***REDACTED***", &url[..idx]),

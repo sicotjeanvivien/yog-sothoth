@@ -6,7 +6,6 @@ use std::{env, sync::Arc};
 pub(crate) struct Container {}
 impl Container {
     pub(crate) async fn build() -> Self {
-        // let pg_pool: sqlx::Pool<sqlx::Postgres> = Self::init_db().await;
         Self {}
     }
 

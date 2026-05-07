@@ -5388,6 +5388,20 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "yog-bootstrap",
+ "yog-core",
+ "yog-persistence",
+]
+
+[[package]]
+name = "yog-bootstrap"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rustls",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -5421,7 +5435,6 @@ dependencies = [
  "futures-util",
  "metrics",
  "metrics-exporter-prometheus",
- "rustls",
  "serde",
  "serde_json",
  "solana-commitment-config",
@@ -5438,6 +5451,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "yog-bootstrap",
  "yog-core",
  "yog-persistence",
 ]

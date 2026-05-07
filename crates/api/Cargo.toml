@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+yog-core = { path = "../core" }
+yog-persistence = { path = "../persistence" }
+yog-bootstrap = { path = "../bootstrap" }
 tokio = { workspace = true }
 sqlx = { workspace = true }
 serde = { workspace = true }
