@@ -12,7 +12,7 @@ impl MainHandler {
 
     pub(crate) async fn index(&self, _request: HttpRequest) -> Result<HttpResponse, HttpResponse> {
         Ok(HttpResponse::new(
-            StatusCode::InternalServerError,
+            StatusCode::OK,
             Self::build_header(),
             Some("Api conneted".to_string()),
         ))

@@ -5379,10 +5379,13 @@ name = "yog-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
+ "chrono",
  "dotenvy",
  "rustls",
  "serde",
  "serde_json",
+ "solana-pubkey 4.1.0",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",

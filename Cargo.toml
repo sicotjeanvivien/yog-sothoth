@@ -60,4 +60,5 @@ borsh = { version = "1", features = ["derive"] }
 rustls = { version = "0.23", features = ["ring"] }
 
 bs58 = "0.5"
+base64 = "0.22"
 sha2 = "0.11"
