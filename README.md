@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/sicotjeanvivien/yog-sothoth/actions/workflows/ci.yml/badge.svg)
 
-> Real-time liquidity analysis engine for Meteora DEX pools on Solana.
+> Protocol-centric liquidity analytics engine for Meteora on Solana.
 
 *Yog-Sothoth is the entity that sees everything simultaneously — past, present, future, all planes of existence at once. A fitting name for a tool that continuously observes the on-chain transaction stream of a protocol, reconstructs pool state over time, and detects patterns in DeFi liquidity flows.*
 
@@ -10,7 +10,7 @@
 
 ## What it is
 
-yog-sothoth is a **protocol-centric** observer of Meteora's on-chain activity on Solana. It subscribes directly to Meteora program IDs, ingests every transaction that touches them, decodes the Anchor events emitted on-chain, and persists the reconstructed liquidity state in TimescaleDB.
+yog-sothoth is a **protocol-centric** observer of Meteora's on-chain activity on Solana. It subscribes directly to Meteora program IDs, ingests every transaction that touches them, decodes the Anchor events emitted on-chain, and persists the reconstructed liquidity state in TimescaleDB. A separate HTTP API exposes the indexed data for dashboards, alerting, and analytics.
 
 This is **not** a block explorer (≠ Solscan).
 This is **not** an LP position tracker (≠ Ultra LP, TrackLP, MetLab).
@@ -20,25 +20,14 @@ It is a stream observer — pools are discovered dynamically, not configured upf
 
 ## Features
 
-- 🔴 **Real-time indexing** — WebSocket subscription per program, live event extraction
-- 🧬 **Anchor `event_cpi` decoding** — events are read from on-chain emissions, not reconstructed from transfer instructions
-- 📐 **AMM reconstruction** — price, reserves, slippage, imbalance computed from on-chain state
-- 📊 **Time-series storage** — events stored in TimescaleDB hypertables with compression and retention policies
-- ⚡ **WASM in the browser** *(Phase 2)* — same Rust AMM formulas run client-side via WebAssembly
-- 🔔 **Configurable alerts** *(Phase 3)* — threshold-based notifications per pool
-- 🌐 **REST + WebSocket API** *(Phase 3)* — real-time push to the dashboard, no polling
-
----
-
-## Stack
-
-| Layer | Technology | Role |
-|---|---|---|
-| Indexer | **Rust** | WebSocket listener, event decoding, persistence |
-| AMM engine | **Rust → WASM** | Shared `yog-core` crate compiled for both native and browser |
-| Frontend + API | **Next.js / TypeScript** *(scaffold minimal)* | Dashboard UI + API Routes — Phase 2 onwards |
-| Database | **TimescaleDB** | Time-series storage, hypertables, compression, retention |
-| Transport | **WebSocket** | Solana RPC (indexer) + real-time push to browser (Phase 3) |
+- **Real-time indexing** — WebSocket subscription per program, live event extraction
+- **Anchor `event_cpi` decoding** — events read from on-chain emissions, not reconstructed from transfer instructions
+- **AMM reconstruction** — price, reserves, slippage, imbalance computed from on-chain state
+- **Time-series storage** — events stored in TimescaleDB hypertables with compression and retention policies
+- **HTTP API** *(in progress)* — paginated REST endpoints over the indexed data
+- **WASM in the browser** *(Phase 2)* — same Rust AMM formulas run client-side via WebAssembly
+- **Configurable alerts** *(Phase 3)* — threshold-based notifications per pool
+- **Push to dashboard** *(Phase 3)* — Server-Sent Events for low-latency updates without polling
 
 ---
 
@@ -47,25 +36,26 @@ It is a stream observer — pools are discovered dynamically, not configured upf
 ### Two processes, one database
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                    Production                        │
-│                                                      │
-│  process 1 : indexer (Rust)                          │
-│  └── 3-stage pipeline (see below)                    │
-│  └── Writes to TimescaleDB                           │
-│                                                      │
-│  process 2 : web (Next.js)  — Phase 2 onwards        │
-│  └── Dashboard UI                                    │
-│  └── API Routes (read TimescaleDB)                   │
-│  └── WebSocket push → browser                        │
-│                                                      │
-│  TimescaleDB                                         │
-│  └── sole communication channel                      │
-│      between the two processes                       │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                       Production                        │
+│                                                         │
+│  process 1 : yog-indexer (Rust)                         │
+│  └── 3-stage pipeline (see below)                       │
+│  └── Writes to TimescaleDB (role: yog_indexer)          │
+│                                                         │
+│  process 2 : yog-api (Rust, axum)                       │
+│  └── HTTP server, JSON endpoints                        │
+│  └── Reads from TimescaleDB (role: yog_api)             │
+│                                                         │
+│  process 3 : web (Next.js, scaffold)                    │
+│  └── Dashboard UI, calls yog-api                        │
+│                                                         │
+│  TimescaleDB                                            │
+│  └── sole communication channel between processes       │
+└─────────────────────────────────────────────────────────┘
 ```
 
-The two processes communicate **only through the database** — the indexer writes, Next.js reads. No direct inter-process calls.
+The indexer and the api communicate **only through the database** — no direct calls between them. The dashboard talks exclusively to the api over HTTP. This keeps each process small, independently deployable, and substitutable.
 
 ### Indexer — three-stage pipeline
 
@@ -96,6 +86,21 @@ The indexer is structured as three Tokio tasks connected by bounded mpsc channel
 
 This **skip-and-log** semantic also applies inside `IndexerService`: when a transaction yields multiple events, a failure persisting one event never aborts the others.
 
+### API — axum HTTP server
+
+The api is a separate binary built on [axum](https://docs.rs/axum/) (0.8). It exposes JSON endpoints over the indexed data, with cursor-based pagination by default. A single `AppState` instance — built once at startup and clonable for free thanks to `Arc`-wrapped fields — is shared across handlers via axum's `State` extractor.
+
+Currently exposed:
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/healthz` | Liveness probe (200 OK, no DB roundtrip) |
+| `GET` | `/api/pools` | Paginated list of discovered pools (cursor-based, `limit` 1–200, default 50) |
+
+The cursor is opaque to clients: it's a base64(url-safe, no-pad) encoding of a typed `PoolCursor` produced by the previous response. Clients pass it back unchanged via `?cursor=...`. End of pagination is signalled by `next_cursor: null`.
+
+CORS is currently permissive for development; security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`) are applied as router-level middleware.
+
 ### Extraction — Anchor `event_cpi` decoding
 
 Meteora programs emit their events via Anchor's `emit_cpi!` mechanism: a self-CPI to an `event_authority` PDA, with a stable wire format:
@@ -116,27 +121,70 @@ Concrete benefits:
 
 The full pipeline (generic Anchor decoder → DAMM v2 wire events → wire-to-domain translator) is documented in [`crates/README.md`](./crates/README.md#anchor-event_cpi-extraction-pipeline).
 
-### Repository structure
+---
+
+## Workspace
+
+The Rust workspace is split into five library crates and two binaries, each with a single responsibility:
+
+| Crate | Type | Role |
+|---|---|---|
+| `yog-core` | lib | Domain types, repository traits, AMM formulas, Anchor `event_cpi` decoding. Wasm-compatible by design — never depends on I/O. |
+| `yog-persistence` | lib | Postgres adapter. Concrete implementations of the repository traits, sqlx queries, migrations. |
+| `yog-bootstrap` | lib | Shared startup utilities: env-var helpers, `SecretUrl`, `ConfigError`, `init_rustls`, `init_tracing`. Consumed by both binaries. |
+| `yog-indexer` | bin | Long-running ingestion pipeline. Owns the `RpcListener` / `Dispatcher` / `Worker` stack. |
+| `yog-api` | bin | HTTP server (axum). Reads from the database and serves JSON. |
+| `yog-wasm` | bin | Browser-facing wrapper around `yog-core`. Currently a scaffold (see *Feature flags*). |
 
 ```
 yog-sothoth/
 ├── crates/
-│   ├── core/        ← shared Rust crate (domain, AMM formulas, event extraction)
-│   ├── indexer/     ← native binary (Solana RPC, dispatch, persistence)
-│   └── wasm/        ← WASM build of core/ for the browser (scaffold)
-└── web/             ← Next.js dashboard + API Routes (scaffold minimal — Phase 2)
+│   ├── core/
+│   ├── persistence/
+│   ├── bootstrap/
+│   ├── indexer/
+│   ├── api/
+│   └── wasm/
+└── web/             ← Next.js dashboard (scaffold minimal — Phase 2)
 ```
 
-### The `yog-core` crate — dual compilation target
+### Dual compilation target — `yog-core`
 
-The `core` crate contains AMM formulas, the Anchor event decoder, and wire-to-domain translation. It compiles to two targets from the same source:
+The `core` crate compiles to two targets from the same source:
 
-- `cargo build` → native binary used by the indexer
+- `cargo build` → native binary used by the indexer and the api
 - `wasm-pack build` → WASM module loaded by Next.js
 
-Price and slippage calculations are **identical** between backend and frontend — no possible divergence.
+Price and slippage calculations are **identical** between backend and frontend — no possible divergence. The WASM target is currently a scaffold; making it functional requires gating Solana-only modules behind a feature flag. Scheduled for Phase 2 — see [`crates/README.md`](./crates/README.md#wasm-yog-wasm).
 
-> The WASM target is currently a scaffold; making it functional requires gating Solana-only modules behind a feature flag. Scheduled for Phase 2 — see [`crates/README.md`](./crates/README.md#wasm-yog-wasm).
+---
+
+## Database roles
+
+The two processes (`yog-indexer` and `yog-api`) connect to Postgres under **distinct roles** with least-privilege grants:
+
+| Role | Permissions | Used by |
+|---|---|---|
+| `yog_indexer` | `SELECT, INSERT, UPDATE` on event tables; `SELECT` on `watched_pools` | indexer process |
+| `yog_api` | `SELECT` on event tables and `watched_pools` (will gain `INSERT/UPDATE` on user-facing tables in v0.3) | api process |
+| admin (provisioning role) | full DDL — owns the schema, runs migrations, used by `cargo sqlx prepare` | tooling only, never a running service |
+
+The split is enforced at the database level. A bug or compromise in the api cannot corrupt event data — Postgres rejects the operation before the SQL is ever sent. Roles and grants are provisioned once per database via [`crates/persistence/setup_roles.sql`](./crates/persistence/setup_roles.sql).
+
+Future tables that need write access from the api (users, alert subscriptions in v0.3) will require explicit `GRANT` per migration. Default privileges grant `SELECT` to both roles automatically; `INSERT/UPDATE` are intentionally not in defaults to force a conscious decision per table.
+
+---
+
+## Stack
+
+| Layer | Technology | Role |
+|---|---|---|
+| Indexer | Rust, Tokio | WebSocket listener, event decoding, persistence |
+| HTTP API | Rust, axum, tower | JSON endpoints, cursor-based pagination |
+| AMM engine | Rust → WASM | Shared `yog-core` crate compiled for both native and browser |
+| Frontend | Next.js / TypeScript *(scaffold minimal)* | Dashboard UI — Phase 2 onwards |
+| Database | TimescaleDB | Time-series storage, hypertables, compression, retention |
+| Transport | WebSocket (in), HTTP/SSE (out) | Solana RPC inbound; HTTP REST today, SSE planned for Phase 2 push |
 
 ---
 
@@ -234,6 +282,20 @@ For DAMM v2, "Cercle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositi
 
 ---
 
+## Hosting
+
+Production deployment targets **Scaleway** (Paris region):
+
+- **Compute** — single instance (DEV1-M class) running the indexer, the api, and Caddy as reverse proxy, all containerized via Docker Compose
+- **Database** — Scaleway Managed PostgreSQL with the TimescaleDB extension activated
+- **Backups** — Scaleway Object Storage (One Zone IA), daily `pg_dump` uploaded by cron, 30-day rolling retention
+- **TLS** — Caddy handles certificates automatically via Let's Encrypt; processes themselves listen plain HTTP on internal addresses
+- **Monitoring** — Healthchecks.io for the indexer heartbeat, Uptime Kuma for HTTP probes
+
+The full hosting layout, Compose files, and procedure are documented separately in [`Fiche_d_hébergement___Scaleway_full-stack.md`](./Fiche_d_hébergement___Scaleway_full-stack.md). Approximate monthly cost: ~20 € HT.
+
+---
+
 ## Getting started
 
 ### Prerequisites
@@ -242,6 +304,37 @@ For DAMM v2, "Cercle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositi
 - `wasm-pack` — [rustwasm.github.io/wasm-pack](https://rustwasm.github.io/wasm-pack)
 - Node.js LTS — via [nvm](https://github.com/nvm-sh/nvm)
 - Docker (for TimescaleDB)
+- The sqlx CLI for database setup: `cargo install sqlx-cli --no-default-features --features postgres`
+
+### Environment variables
+
+Copy `.env.example` to `.env` and fill in:
+
+```env
+# Three roles, three connection strings
+DATABASE_URL_INDEXER=postgresql://yog_indexer:CHANGE_ME@localhost:5433/yog_sothoth
+DATABASE_URL_API=postgresql://yog_api:CHANGE_ME@localhost:5433/yog_sothoth
+DATABASE_URL_ADMIN=postgresql://postgres:CHANGE_ME@localhost:5433/yog_sothoth
+
+SQLX_OFFLINE=true
+
+# API server bind address (host:port)
+API_BIND_ADDR=127.0.0.1:3000
+
+# Solana RPC
+SOLANA_RPC_WS=wss://api.mainnet-beta.solana.com
+SOLANA_RPC_HTTP=https://api.mainnet-beta.solana.com
+
+# Indexer behavior
+RPC_WORKER_MAX_RETRIES=10
+MODE_PROTOCOL_CENTRIC=true
+
+# Observability
+RUST_LOG=yog_indexer=debug,yog_api=debug,yog_core=debug,yog_persistence=debug,sqlx=warn
+LOG_FORMAT=text
+```
+
+`DATABASE_URL_INDEXER` and `DATABASE_URL_API` are read by the indexer and the api respectively at startup. `DATABASE_URL_ADMIN` is used only by tooling (`sqlx migrate run`, `cargo sqlx prepare`).
 
 ### Run locally
 
@@ -253,16 +346,32 @@ cd yog-sothoth
 # Start TimescaleDB
 docker compose up -d
 
-# Build the Rust workspace
+# Provision the Postgres roles (one-time, runs as the admin user)
+docker compose exec -T timescaledb \
+    psql -U postgres -d yog_sothoth \
+    < crates/persistence/setup_roles.sql
+
+# Apply migrations (uses DATABASE_URL_ADMIN)
+sqlx migrate run --source crates/persistence/migrations \
+                 --database-url "$DATABASE_URL_ADMIN"
+
+# Build the workspace
 cargo build
 
-# Seed the watched-pools allowlist (see "Seed watched pools" below)
+# Seed the watched-pools allowlist
 docker compose exec -T timescaledb \
-    psql -U yog -d yog_sothoth \
+    psql -U yog_indexer -d yog_sothoth \
     < scripts/seed_watched_pools.sql
 
-# Run the indexer
-cargo run --bin yog-indexer
+# Run the indexer (connects as yog_indexer)
+cargo run -p yog-indexer
+
+# Run the api (connects as yog_api) — separate terminal
+cargo run -p yog-api
+
+# Hit the api
+curl http://127.0.0.1:3000/healthz
+curl http://127.0.0.1:3000/api/pools | jq
 
 # Build the WASM module (scaffold — not yet wired to Next.js)
 wasm-pack build crates/wasm --target web
@@ -276,31 +385,6 @@ npm run dev
 docker compose down -v
 ```
 
-### Environment variables
-
-Copy `.env.example` to `.env` and fill in:
-
-```env
-DATABASE_URL=postgresql://yog:yog@localhost:5433/yog_sothoth
-SOLANA_RPC_WS=wss://api.mainnet-beta.solana.com
-SOLANA_RPC_HTTP=https://api.mainnet-beta.solana.com
-```
-
-### Seed watched pools
-
-The indexer only processes pools present in the `watched_pools` allowlist (see *Pool observation model > Current constraint*). For development, a seed script populates the table with the 10 pools selected from recent mainnet activity:
-
-```bash
-# Requires the TimescaleDB container to be running (`docker compose up -d`)
-docker compose exec -T timescaledb \
-    psql -U yog -d yog_sothoth \
-    < scripts/seed_watched_pools.sql
-```
-
-The script is idempotent (`ON CONFLICT DO NOTHING`) — safe to rerun without overwriting manual edits to `active` or `note`. It prints the current active allowlist at the end as a sanity check.
-
-> Replace `timescaledb` with the actual service name declared in your `docker-compose.yml` if different.
-
 ### Debug helpers
 
 ```bash
@@ -308,22 +392,34 @@ The script is idempotent (`ON CONFLICT DO NOTHING`) — safe to rerun without ov
 cargo run --bin debug_sig -- <signature>
 
 # Run the indexer in release mode with logs persisted to disk
-cargo run --release --bin yog-indexer 2>&1 | tee log/indexer.log
+cargo run --release -p yog-indexer 2>&1 | tee log/indexer.log
 ```
 
 ---
 
 ## Development
 
-### Workspace layout
+### Local checks before pushing
 
-The Rust workspace is organized into three crates with clear separation of concerns:
+The CI mirrors these three commands. Run them locally to catch issues before pushing:
 
-- **`yog-core`** — domain logic, AMM formulas, Anchor `event_cpi` decoding, wire-to-domain translation. Compiles native today, WASM in Phase 2.
-- **`yog-indexer`** — native-only binary. Three-stage pipeline (`RpcListener` → `SignatureDispatcher` → `IndexerWorker`) and TimescaleDB persistence via SQLx.
-- **`yog-wasm`** — browser-facing wrapper around `yog-core`. Currently a scaffold (see *Feature flags* below).
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features
+SQLX_OFFLINE=true cargo test --workspace --all-features
+```
 
-For the full per-crate breakdown, see [`crates/README.md`](./crates/README.md).
+### Modifying SQL queries
+
+SQLx compile-time query verification runs in offline mode via `SQLX_OFFLINE=true`, using the committed `.sqlx/` cache. **When you modify an `sqlx::query!` call, regenerate the cache** before committing — using the admin role, since runtime roles don't have introspection privileges on every table:
+
+```bash
+DATABASE_URL="$DATABASE_URL_ADMIN" \
+SQLX_OFFLINE=false \
+cargo sqlx prepare --workspace
+```
+
+Commit the modified files under `.sqlx/` together with the query change.
 
 ### Feature flags
 
@@ -331,16 +427,16 @@ For the full per-crate breakdown, see [`crates/README.md`](./crates/README.md).
 
 | Feature | Default | Purpose |
 |---|---|---|
-| `solana` | ✅ | Pulls in `solana-pubkey`, `solana-transaction-status`. Required by `yog-indexer`. |
+| `solana` | ✅ | Pulls in `solana-pubkey`, `solana-transaction-status`. Required by `yog-indexer` and `yog-api`. |
 | `wasm` | — | Reserved for the browser build. **Not yet functional.** |
 
-The `wasm` feature is currently a placeholder. Activating it will require conditional
-compilation (`#[cfg(feature = "solana")]`) on the `amm` and `protocols` modules, plus
-abstracting `Pubkey` behind a neutral type alias. Scheduled for **Phase 2**.
+The `wasm` feature is currently a placeholder. Activating it will require conditional compilation (`#[cfg(feature = "solana")]`) on the `amm` and `protocols` modules, plus abstracting `Pubkey` behind a neutral type alias. Scheduled for **Phase 2**.
 
 ### Observability
 
-The indexer exposes Prometheus metrics on `:9000/metrics`. The most important families:
+The indexer exposes Prometheus metrics on `:9000/metrics`. The api will expose its own metrics through axum middleware on its HTTP server when needed (different histograms and labels — no symmetry with the indexer worth sharing).
+
+The most important indexer metric families:
 
 - **Pipeline counters** — `raw_log_events_total`, `raw_log_events_rejected_total{filter, reason}`, `qualified_signatures_total`, `downstream_saturated_total`
 - **Service counters** — `index_transaction_entered/exited_total{outcome}`, `events_indexed_total{event_kind}`, `transactions_no_match_total`, `unknown_event_total{discriminator}`, `extraction_failure_total{kind}`
@@ -356,58 +452,38 @@ An `ExitGuard` RAII wrapper ensures every entry into `index_transaction` produce
 GitHub Actions runs on every push and pull request to `main`:
 
 - **Format** — `cargo fmt --all -- --check` (strict)
-- **Lint** — `cargo clippy -p yog-core -p yog-indexer --all-targets --all-features` (warnings non-blocking during initial development)
-- **Tests** — `cargo test -p yog-core -p yog-indexer --all-features` (strict)
-
-SQLx compile-time query verification runs in offline mode via `SQLX_OFFLINE=true`,
-using the committed `.sqlx/` cache. **When you modify an `sqlx::query!` call, regenerate
-the cache** before committing:
-
-```bash
-cd crates/indexer
-cargo sqlx prepare
-```
+- **Lint** — `cargo clippy --workspace --all-targets --all-features` (warnings non-blocking during initial development)
+- **Tests** — `cargo test --workspace --all-features` (strict)
 
 WASM builds are not part of CI yet — see *Feature flags* above.
 
-### Local checks before pushing
-
-The CI mirrors these three commands. Run them locally to catch issues before pushing:
-
-```bash
-cargo fmt --all -- --check
-cargo clippy -p yog-core -p yog-indexer --all-targets --all-features
-SQLX_OFFLINE=true cargo test -p yog-core -p yog-indexer --all-features
-```
-
 ### Lint policy
 
-Clippy warnings are currently **non-blocking** in CI. The project is in an early
-architectural phase with deliberate scaffolding (e.g. unused `program_id_str` fields
-anticipating future protocol support). `-D warnings` will be reactivated once the
-core architecture stabilizes (target: end of Phase 1).
+Clippy warnings are currently **non-blocking** in CI. The project is in an early architectural phase with deliberate scaffolding (e.g. unused fields anticipating future protocol support). `-D warnings` will be reactivated once the core architecture stabilizes (target: end of Phase 1).
 
 ---
 
 ## Roadmap
 
-### v0.1 — Indexer + dashboard MVP *(in progress, target: end of June 2026)*
+### v0.1 — Indexer + API + dashboard MVP *(in progress, target: end of June 2026)*
 
 - [x] Project setup — Rust workspace, TimescaleDB, Next.js scaffold
 - [x] CI pipeline — GitHub Actions (fmt, clippy, tests) with SQLx offline verification
 - [x] Three-stage ingestion pipeline (`RpcListener` → `SignatureDispatcher` → `IndexerWorker`) with Prometheus instrumentation
 - [x] DAMM v2 indexer — Anchor `event_cpi` decoding, Cercle 1 events end-to-end (Swap, Liquidity, ClaimFee, ClaimReward)
-- [ ] minimal Next.js dashboard
-- [ ] Full REST API, time-series persistence, configurable alerts
-- [ ] Production dashboard, CD, Clever Cloud / Scaleway deployment
+- [x] Workspace refondation — `core` / `persistence` / `bootstrap` separation, two-role Postgres setup
+- [🟡] HTTP API on axum — `GET /healthz` and `GET /api/pools` (paginated) live; remaining endpoints (swaps, liquidity events, per-pool detail) pending
+- [ ] Minimal Next.js dashboard consuming `/api/pools`
+- [ ] Configurable alerts (threshold-based)
+- [ ] Production dashboard, CD, Scaleway deployment
 
 ### v0.2 — Signal Engine *(target: end of September 2026)*
 
-Pattern detection on accumulated event data: TVL drain, fee yield spike, imbalance alerts, price impact creep. New `signals` crate, multi-channel alert delivery (webhook / email / Telegram).
+Pattern detection on accumulated event data: TVL drain, fee yield spike, imbalance alerts, price impact creep. New `signals` crate, multi-channel alert delivery (webhook / email / Telegram). Server-Sent Events on the api for low-latency push to the dashboard.
 
 ### v0.3 — Auth and per-user pool watchlists *(target: end of November 2026)*
 
-Multi-channel authentication (email, OAuth, Solana wallet), per-user pool watchlists, tier infrastructure with placeholder quotas.
+Multi-channel authentication (email, OAuth, Solana wallet), per-user pool watchlists, tier infrastructure with placeholder quotas. The `yog_api` Postgres role gains `INSERT/UPDATE` on user-facing tables.
 
 ### v0.4 — Monetization *(target: February-March 2027)*
 
@@ -447,7 +523,7 @@ npm run lint
 ### Before opening a PR
 
 1. Run the three local CI commands listed in *Development > Local checks*
-2. If you modified an `sqlx::query!` call, regenerate `.sqlx/` with `cargo sqlx prepare`
+2. If you modified an `sqlx::query!` call, regenerate `.sqlx/` with the admin role (see *Modifying SQL queries*)
 3. Open your PR against `main` — GitHub Actions will run automatically
 
 ---

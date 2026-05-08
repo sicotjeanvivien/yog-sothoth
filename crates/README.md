@@ -2,97 +2,83 @@
 
 This directory contains the Rust workspace — the core of yog-sothoth.
 
+The workspace follows a **Domain-Driven Design** layout: business logic and contracts live in `core`, infrastructure and I/O live in dedicated adapter crates (`persistence` for Postgres, `bootstrap` for startup utilities). The two binaries (`indexer`, `api`) are thin assembly layers that wire the pieces together.
+
+This README covers the inter-crate architecture and the responsibilities of each crate. For project-wide topics — three-process layout, database roles, pool observation model, hosting — see the [root README](../README.md).
+
 ---
 
 ## Structure
 
 ```
 crates/
-├── core/        ← shared library: domain types, AMM formulas, protocol parsing
-├── indexer/     ← native binary: Solana RPC, transaction dispatch, persistence
-└── wasm/        ← WASM build target (scaffold, not yet functional — see below)
+├── core/          ← shared library: domain types, AMM formulas, protocol parsing
+├── persistence/   ← Postgres adapter: repository impls, migrations, query helpers
+├── bootstrap/    ← shared startup utilities: env helpers, SecretUrl, init_rustls
+├── indexer/       ← native binary: Solana RPC, transaction dispatch, event ingestion
+├── api/           ← native binary: axum HTTP server over the indexed data
+└── wasm/          ← WASM build target (scaffold, not yet functional)
 ```
 
-The workspace follows a **Domain-Driven Design** layout: business logic and contracts
-live in `core`, infrastructure and I/O live in `indexer`. The two are connected through
-traits defined in the domain layer and implemented in the infra layer.
+The dependency graph is strict and one-directional:
+
+```
+                ┌──────────┐
+                │   core   │  no I/O, wasm-compatible
+                └────▲─────┘
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+   ┌────┴─────┐ ┌────┴─────┐ ┌────┴────┐
+   │persistence│ │bootstrap │ │  wasm   │
+   └────▲─────┘ └────▲─────┘ └─────────┘
+        │            │
+        └─────┬──────┘
+              │
+        ┌─────┴──────┐
+        │            │
+   ┌────┴────┐  ┌────┴────┐
+   │ indexer │  │   api   │
+   └─────────┘  └─────────┘
+```
+
+`core` knows nothing about Postgres, axum, or even the standard library's environment. It declares traits; adapters implement them. Both binaries depend only on `core` (for types) and the adapters they need.
 
 ---
 
-## Crates
-
-### `core` (`yog-core`)
+## `core` (`yog-core`)
 
 The shared library. Pure logic and domain types — no I/O, no runtime, no database.
 
-#### Layout
+### Layout
 
 ```
 core/src/
 ├── domain/                           ← business entities + repository contracts
-│   ├── pool/                         (model + repository)
-│   ├── swap_event/                   (model + repository)
-│   ├── liquidity_event/              (model + repository)
-│   ├── claim_position_fee_event/     (model + repository)
-│   ├── claim_reward_event/           (model + repository)
-│   ├── watched_pool/                 (model + repository)
-│   ├── protocol/                     (model only)
-│   ├── domain_event.rs               (enum over all event variants)
-│   └── trade_direction.rs            (AtoB | BtoA)
 ├── protocols/                        ← protocol-specific extraction
 │   ├── anchor_event.rs               ← generic Anchor `event_cpi` decoder
 │   ├── extraction.rs                 ← ExtractionOutcome, ExtractionFailure
 │   ├── pool_indexer.rs               ← the `PoolIndexer` trait
 │   └── meteora/
 │       ├── damm_v2/                  (active — Phase 1)
-│       │   ├── events.rs             ← wire events (borsh mirrors)
-│       │   ├── extractor.rs          ← walks inner_instructions
-│       │   └── translator.rs         ← wire → domain translation
 │       ├── damm_v1.rs                (stub, Phase 2)
 │       └── dlmm.rs                   (stub, Phase 2)
 ├── amm/                              ← pure AMM math (price, slippage, imbalance)
-└── error/                            ← `CoreError`, `RepositoryError`, `CoreResult<T>`
+├── pagination.rs                     ← Page<T>, Cursor enum
+└── error/                            ← CoreError, RepositoryError, CoreResult<T>
 ```
 
-#### Responsibilities
+### Responsibilities
 
-- **Domain models** (`domain/`) — entities (`Pool`, `SwapEvent`, `LiquidityEvent`,
-  `ClaimPositionFeeEvent`, `ClaimRewardEvent`), the `DomainEvent` enum that
-  unifies them, and the repository traits that define persistence contracts.
-- **Protocol extraction** (`protocols/`) — per-protocol implementations of
-  `PoolIndexer` that turn raw Solana transactions into typed domain events
-  via Anchor `event_cpi` decoding.
-- **AMM math** (`amm/`) — formulas for price, reserves, slippage, imbalance.
-  Target: same Rust code runs native and in the browser (via WASM) so
-  computations cannot diverge between backend and frontend.
+- **Domain models** (`domain/`) — entities (`Pool`, `SwapEvent`, `LiquidityEvent`, `ClaimPositionFeeEvent`, `ClaimRewardEvent`), the `DomainEvent` enum that unifies them, and the repository traits that define persistence contracts (`PoolRepository`, `SwapEventRepository`, …).
+- **Protocol extraction** (`protocols/`) — per-protocol implementations of `PoolIndexer` that turn raw Solana transactions into typed domain events via Anchor `event_cpi` decoding.
+- **AMM math** (`amm/`) — formulas for price, reserves, slippage, imbalance. Same Rust code targeted at native (today) and the browser via WASM (Phase 2), so computations cannot diverge between backend and frontend.
+- **Pagination** (`pagination.rs`) — `Page<T>` envelope and discriminated `Cursor` enum used by every paginated repository method.
+- **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.
 
-#### Compilation targets
+### The `PoolIndexer` trait
 
-- `cargo build` → native library, linked into `yog-indexer` ✅
-- `wasm-pack build` → WASM module for the browser 🚧 **not yet functional**
-
-The `wasm` feature flag is declared in `Cargo.toml` but the required code-level
-changes (conditional `#[cfg(feature = "solana")]` on `amm` and `protocols`,
-abstracting `Pubkey`) are planned for Phase 2.
-
-#### Supported protocols
-
-| Protocol | Status |
-|---|---|
-| Meteora DAMM v2 | **Active** — Cercle 1 events (`Swap2`, `LiquidityChange`, `ClaimPositionFee`, `ClaimReward`) implemented end-to-end |
-| Meteora DAMM v1 | Stub — `extract_events` returns empty `ExtractionOutcome` |
-| Meteora DLMM | Stub — `extract_events` returns empty `ExtractionOutcome` |
-
-Cercle 2 events (`CreatePosition`, `ClosePosition`, `InitializePool`, …) and
-Cercle 3 (admin / config) are not yet wired but will fit the same pipeline
-without architectural changes — only new wire-event mirrors and translator
-arms to add.
-
-#### The `PoolIndexer` trait
-
-Every protocol implementation exposes a single extraction entry point. The
-indexer dispatches transactions to the correct implementation based on
-`Protocol` (resolved upstream by the dispatcher).
+Every protocol implementation exposes a single extraction entry point. The indexer dispatches transactions to the correct implementation based on `Protocol` (resolved upstream by the dispatcher).
 
 ```rust
 pub trait PoolIndexer: Send + Sync {
@@ -115,24 +101,17 @@ pub trait PoolIndexer: Send + Sync {
 }
 ```
 
-**Why a single method instead of `is_swap` / `parse_swap` / …?** The previous
-`transferChecked`-based parser needed instruction-type discrimination because
-each variant had a different account ordering. The current pipeline decodes
-Anchor `event_cpi` payloads, which carry their type in an 8-byte discriminator —
-one pass over the inner instructions yields every recognized event in one go.
-Per-instruction multiplexing is no longer the right shape.
+**Why a single method instead of `is_swap` / `parse_swap` / …?** The previous `transferChecked`-based parser needed instruction-type discrimination because each variant had a different account ordering. The current pipeline decodes Anchor `event_cpi` payloads, which carry their type in an 8-byte discriminator — one pass over the inner instructions yields every recognized event in one go. Per-instruction multiplexing is no longer the right shape.
 
-#### Anchor `event_cpi` extraction pipeline
+### Anchor `event_cpi` extraction pipeline
 
-Each Meteora program emits its events via Anchor's `emit_cpi!` mechanism — a
-self-CPI to an `event_authority` PDA, with a stable wire format:
+Each Meteora program emits its events via Anchor's `emit_cpi!` mechanism — a self-CPI to an `event_authority` PDA, with a stable wire format:
 
 ```
 [8 bytes EVENT_IX_TAG][8 bytes event discriminator][borsh payload]
 ```
 
-where `EVENT_IX_TAG = sha256("anchor:event")[..8]` is the fixed prefix injected
-by Anchor.
+where `EVENT_IX_TAG = sha256("anchor:event")[..8]` is the fixed prefix injected by Anchor.
 
 The pipeline runs in three stages, each in its own module:
 
@@ -156,87 +135,190 @@ EncodedConfirmedTransactionWithStatusMeta
 ExtractionOutcome { events, unknown, failures }
 ```
 
-Three failure types are distinguished in `ExtractionFailure` and counted as
-separate metric labels: `AnchorDecode` (prefix or payload-size mismatch),
-`Borsh` (schema mismatch), `Translation` (missing transferChecked context,
-invalid enum value).
+Three failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (prefix or payload-size mismatch), `Borsh` (schema mismatch), `Translation` (missing transferChecked context, invalid enum value).
 
-#### Conventions and invariants
+### Repository traits
 
-These invariants are documented on the affected types and enforced at
-construction time:
-
-- **Mints sorted by raw bytes** — in `Pool`, `SwapEvent`, `LiquidityEvent`,
-  `token_a_mint` and `token_b_mint` are ordered by `Pubkey::Ord` (raw bytes).
-  Stable regardless of swap direction. Differs from the Meteora SDK canonical
-  convention; documented on each affected struct.
-- **Canonical `(token_a, token_b)` exposure** — `SwapEvent` and `LiquidityEvent`
-  expose `amount_a` / `amount_b` and `reserve_a_after` / `reserve_b_after` in
-  canonical order. Swap direction lives in the `TradeDirection` enum
-  (`AtoB` | `BtoA`). Callers reconstruct the trader's perspective by combining
-  the two.
-- **`fee_token_is_a` precomputed** — boolean stored on `SwapEvent`, derived
-  from `(collect_fee_mode, trade_direction)` in the translator. Mirrors
-  `cp-amm::FeeMode::get_fee_mode`. Avoids recomputation at query time.
-- **Four fee components separated** — `claiming_fee`, `protocol_fee`,
-  `compounding_fee`, `referral_fee`. Lets v0.2 signal detectors (e.g. fee
-  yield spike) distinguish LP yield from protocol revenue.
-- **Lossless `u128` in DB** — `next_sqrt_price` (Q64.64) and `liquidity_delta`
-  are stored as `NUMERIC(39, 0)`. Conversion via dedicated helpers in
-  `repository_utils.rs` on the indexer side.
-
-#### Repository traits
-
-Each domain aggregate that needs persistence declares a repository trait in
-its module — e.g. `domain/swap_event/repository.rs`:
+Each domain aggregate that needs persistence declares a repository trait in its module — e.g. `domain/pool/repository.rs`:
 
 ```rust
 #[async_trait]
-pub trait SwapEventRepository: Send + Sync {
-    async fn insert(&self, event: &SwapEvent) -> Result<(), RepositoryError>;
-    // ... query methods added as the dashboard needs them
+pub trait PoolRepository: Send + Sync {
+    // Write side (used by the indexer)
+    async fn upsert(&self, pool: &Pool) -> RepositoryResult<()>;
+    async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()>;
+
+    // Read side (used by the api)
+    async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>>;
+    async fn find_paginated(
+        &self,
+        cursor: Option<PoolCursor>,
+        limit: i64,
+    ) -> RepositoryResult<Page<Pool>>;
 }
 ```
 
-The concrete PostgreSQL/TimescaleDB implementations live in
-`indexer/src/infra/db/repositories/`. The application layer in `indexer`
-depends on the trait, not the implementation — standard dependency inversion.
+The trait covers both write (indexer) and read (api) responsibilities — at runtime, the connected Postgres role determines which methods will actually succeed (the `yog_api` role lacks `INSERT/UPDATE` on event tables, so calling `upsert` from the api fails with `permission denied` from Postgres, by design — see [root README › Database roles](../README.md#database-roles)).
+
+Concrete PostgreSQL implementations live in [`persistence`](#persistence-yog-persistence).
+
+### Conventions and invariants
+
+These invariants are documented on the affected types and enforced at construction time:
+
+- **Mints sorted by raw bytes** — in `Pool`, `SwapEvent`, `LiquidityEvent`, `token_a_mint` and `token_b_mint` are ordered by `Pubkey::Ord` (raw bytes). Stable regardless of swap direction. Differs from the Meteora SDK canonical convention; documented on each affected struct.
+- **Canonical `(token_a, token_b)` exposure** — `SwapEvent` and `LiquidityEvent` expose `amount_a` / `amount_b` and `reserve_a_after` / `reserve_b_after` in canonical order. Swap direction lives in the `TradeDirection` enum (`AtoB` | `BtoA`). Callers reconstruct the trader's perspective by combining the two.
+- **`fee_token_is_a` precomputed** — boolean stored on `SwapEvent`, derived from `(collect_fee_mode, trade_direction)` in the translator. Mirrors `cp-amm::FeeMode::get_fee_mode`. Avoids recomputation at query time.
+- **Four fee components separated** — `claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee`. Lets v0.2 signal detectors (e.g. fee yield spike) distinguish LP yield from protocol revenue.
+- **Lossless `u128` in DB** — `next_sqrt_price` (Q64.64) and `liquidity_delta` are stored as `NUMERIC(39, 0)`. Conversion via dedicated helpers in `persistence::repository_utils`.
+
+### Compilation targets
+
+- `cargo build` → native library, linked into `yog-indexer` and `yog-api` ✅
+- `wasm-pack build` → WASM module for the browser 🚧 **not yet functional**
+
+The `wasm` feature flag is declared in `Cargo.toml` but the required code-level changes (conditional `#[cfg(feature = "solana")]` on `amm` and `protocols`, abstracting `Pubkey`) are planned for Phase 2.
 
 ---
 
-### `indexer` (`yog-indexer`)
+## `persistence` (`yog-persistence`)
 
-The native binary. Runs as a long-lived process in production.
+Postgres adapter. Concrete implementations of the repository traits declared in `core`, plus the migrations and query helpers. No business logic.
 
-#### Layout
+### Layout
+
+```
+persistence/
+├── migrations/                       ← sqlx migrations applied at deployment
+│   └── 001_initial_schema.sql
+├── setup_roles.sql                   ← one-time role provisioning (admin only)
+└── src/
+    ├── database.rs                   ← Database::connect, pool sizing
+    ├── repository_utils.rs           ← string→Pubkey, u64↔i64, u128↔BigDecimal
+    └── repositories/                 ← one impl per domain repository trait
+        ├── pool.rs                   (PgPoolRepository)
+        ├── swap_event.rs             (PgSwapEventRepository)
+        ├── liquidity_event.rs        (PgLiquidityEventRepository)
+        ├── position_fee_claim.rs     (PgPositionFeeClaimRepository)
+        ├── reward_claim.rs           (PgRewardClaimRepository)
+        └── watched_pool.rs           (PgWatchedPoolRepository)
+```
+
+### Responsibilities
+
+- **Repository implementations** — one `Pg*Repository` struct per domain aggregate, each implementing the corresponding trait from `core::domain::*`. Constructors take a `PgPool`; the pool is owned by the consumer (each binary instantiates its own pool with its own role credentials).
+- **Connection management** — `Database::connect(url)` returns a thin wrapper over `sqlx::PgPool` with sensible defaults (max 10 connections, 5s acquire timeout). Larger callers can use `connect_with_options` for explicit sizing.
+- **Conversion helpers** (`repository_utils`) — `convert_string_to_pubkey`, `convert_u64_to_i64`, `convert_bigdecimal_to_u128`, etc. Uniform error mapping via `map_sqlx_error` which translates `sqlx::Error` variants into the right `RepositoryError` semantic (`NotFound`, `Conflict`, `Timeout`, `Backend`).
+- **Schema migrations** — managed via `sqlx migrate`, source-of-truth at deployment time. Run by tooling or CI under the admin role; runtime processes never touch DDL.
+
+### Pattern for repository implementations
+
+Each implementation follows the same structure:
+
+```rust
+pub struct PgPoolRepository {
+    pool: PgPool,
+}
+
+impl PgPoolRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl PoolRepository for PgPoolRepository {
+    // sqlx::query! / query_as! against self.pool, errors mapped via map_sqlx_error,
+    // row → domain conversion via repository_utils helpers.
+}
+```
+
+Decode failures (malformed pubkey, unknown protocol) surface as `RepositoryError::Integrity` — they indicate schema corruption or an out-of-sync migration, not a runtime data issue.
+
+### Why `Database` doesn't own the pool past construction
+
+`Database::connect` builds a `PgPool` and returns a wrapper. Each binary then calls `database.pool().clone()` to hand the pool to repository constructors. `PgPool` is `Arc` internally, so cloning is cheap, and the `Database` wrapper can be dropped after wiring — the pool survives in each `PgXxxRepository` that holds a clone.
+
+This shape makes the connection lifecycle explicit at the binary level. Each binary opens its own pool from its own `DATABASE_URL_*` (which embeds the role credentials), so process boundaries match role boundaries.
+
+### SQLx offline cache
+
+The crate uses `sqlx::query!` macros that verify SQL syntax against the live schema at compile time. The verified query cache is committed at the workspace level (`.sqlx/`), which allows the workspace to build in CI when `SQLX_OFFLINE=true`.
+
+**After modifying any `sqlx::query!` call**, regenerate the cache before committing:
+
+```bash
+DATABASE_URL="$DATABASE_URL_ADMIN" \
+SQLX_OFFLINE=false \
+cargo sqlx prepare --workspace
+```
+
+The admin role is required because runtime roles (`yog_indexer`, `yog_api`) lack the introspection privileges sqlx needs across all tables.
+
+---
+
+## `bootstrap` (`yog-bootstrap`)
+
+Shared startup utilities for the native binaries. Hosts what every binary needs at startup, and only that.
+
+### Layout
+
+```
+bootstrap/src/
+├── env.rs           ← required, parse_required_u32, parse_required_bool
+├── secret.rs        ← SecretUrl (redacted Display/Debug)
+├── error.rs         ← ConfigError (MissingVariable, InvalidValue)
+└── runtime.rs       ← init_rustls, init_tracing
+```
+
+### What goes here
+
+The crate hosts utilities that are **identical across all native binaries**:
+
+- Environment variable reading and parsing — every binary loads its own config from env vars, but the parsing primitives are shared.
+- `SecretUrl` — a wrapper around connection strings whose `Display` and `Debug` impls redact the query string. Both binaries hold credentials in this type to prevent accidental leaks through logs or error chains.
+- `ConfigError` — the canonical error type returned by every binary's `Config::load`. Two variants (`MissingVariable`, `InvalidValue`) cover all failure modes at this stage.
+- `init_rustls()` — installs the rustls crypto provider, required by rustls 0.23+ before any TLS handshake.
+- `init_tracing()` — configures the global tracing subscriber, switching between JSON and text output based on `LOG_FORMAT`.
+
+### What does NOT go here
+
+Things that vary across binaries stay in their respective binaries:
+
+- The `Config` struct itself — the indexer's variables (`SOLANA_RPC_*`, `RPC_WORKER_MAX_RETRIES`, …) and the api's variables (`API_BIND_ADDR`, `DATABASE_URL_API`) don't overlap. A "shared config containing everyone's variables" is a smell, so each binary defines its own struct using the shared parsing helpers.
+- `init_metrics` — the indexer exposes Prometheus on `:9000`; the api will expose its own metrics through axum middleware on its HTTP server with different histograms and labels. No symmetry to share.
+- Process-specific signal handling, shutdown logic, dependency wiring.
+
+The decision rule when adding a new utility: **does this run identically in every binary's `main()`?** If yes, it belongs in `bootstrap`. If it varies even slightly, it stays in the binary.
+
+---
+
+## `indexer` (`yog-indexer`)
+
+Native binary. Long-lived process consuming Solana mainnet WebSocket events and persisting indexed data.
+
+### Layout
 
 ```
 indexer/src/
 ├── application/
 │   ├── services/
-│   │   ├── indexer_service.rs        ← fetch → extract → persist pipeline
+│   │   ├── indexer_service.rs        ← fetch → extract → persist
 │   │   ├── watched_pool_service.rs   ← allowlist management
 │   │   ├── errors.rs                 ← typed internal errors (FetchError)
 │   │   └── metrics.rs                ← Prometheus metric definitions
 │   └── workers/
-│       ├── indexer.rs                ← bounded-concurrency consumer of signatures
+│       ├── indexer.rs                ← bounded-concurrency consumer
 │       └── subscription.rs           ← WebSocket subscription supervisor
 ├── bin/
 │   └── debug_sig.rs                  ← one-shot signature inspection helper
 ├── bootstrap/
+│   ├── config.rs                     ← Config::load() — env-driven configuration
 │   └── daemon.rs                     ← top-level lifecycle, task wiring, shutdown
-├── config/
-│   └── secret_url.rs                 ← redacted URL wrapper for logs
 ├── error/                            ← typed error per layer (5 modules)
 ├── infra/
-│   ├── db/
-│   │   ├── database.rs               ← connection pool
-│   │   ├── repository_utils.rs       ← u128 ↔ NUMERIC helpers
-│   │   └── repositories/             ← impls of core's repository traits
 │   └── rpc/
 │       ├── dispatcher/               ← log-event → qualified-signature filtering
-│       │   ├── filters/              (failed_transaction, invocation, watched_pool)
-│       │   └── metrics.rs
 │       ├── types/                    (qualified_signature, raw_log_event)
 │       └── listener.rs               ← WebSocket subscription client
 ├── utils/
@@ -244,111 +326,142 @@ indexer/src/
 └── main.rs
 ```
 
-#### Three-stage pipeline
+Note that the database layer (`infra/db/` in earlier versions) has moved out — repository implementations now live in `crates/persistence/`, and the indexer consumes them like any other dependency.
 
-The indexer is structured as three Tokio tasks connected by bounded mpsc
-channels. Each stage has a single responsibility and a typed error channel:
+### Three-stage pipeline
 
-```
-┌──────────────┐    raw    ┌──────────────────┐  qualified  ┌────────────────┐
-│ RpcListener  │──────────▶│ SignatureDispat. │────────────▶│ IndexerWorker  │
-│              │  RawLog   │                  │  Signature  │                │
-│ logsSubscribe│  Events   │ filter chain     │  + protocol │ ↓ spawn task   │
-│ + reconnect  │           │ (failed / invoc. │             │ ↓ semaphore-   │
-│              │           │  / watched_pool) │             │   bounded      │
-└──────────────┘           └──────────────────┘             └────────┬───────┘
-                                                                     │
-                                                                     ▼
-                                                            ┌────────────────┐
-                                                            │ IndexerService │
-                                                            │ fetch → extract│
-                                                            │ → persist      │
-                                                            └────────────────┘
-```
+The indexer is structured as three Tokio tasks connected by bounded mpsc channels: `RpcListener` → `SignatureDispatcher` → `IndexerWorker` → `IndexerService`. Each stage has a single responsibility, its own typed error channel, and its own metrics.
 
-**`RpcListener`** owns the WebSocket connection to the Solana RPC, handles
-reconnection with exponential backoff, and forwards raw log events downstream.
+The full diagram and rationale live in [root README › Indexer — three-stage pipeline](../README.md#indexer--three-stage-pipeline). This section covers what is specific to the indexer's internal organization.
 
-**`SignatureDispatcher`** applies a chain of filters that turn raw log events
-into `QualifiedSignature`s — `(protocol, signature)` pairs that have passed the
-failed-transaction check, the protocol-invocation check, and the watched-pool
-allowlist (currently a temporary RPC-throughput constraint, see root README).
+**`IndexerWorker`** is the bridge between the channel-based pipeline and the per-signature processing. It applies bounded concurrency: a `Semaphore` with `MAX_CONCURRENT_INDEX_TASKS = 15` permits gates `tokio::spawn` of the per-signature indexing task. The receive loop applies natural back-pressure when all 15 slots are taken.
 
-**`IndexerWorker`** consumes qualified signatures and drives `IndexerService`
-with bounded concurrency. The cap is `MAX_CONCURRENT_INDEX_TASKS = 15`,
-calibrated against the Helius free tier (10 req/s) with headroom. A semaphore
-gates `tokio::spawn` of the per-signature indexing task; the receive loop
-applies natural back-pressure when all 15 slots are taken.
+**`IndexerService`** drives the actual ingestion: fetch the transaction by signature (HTTP RPC), extract events via the matching `PoolIndexer` (one of `core`'s protocol implementations), persist to TimescaleDB through the repository traits.
 
-#### Skip-and-log error semantics
+### Skip-and-log error semantics
 
 `IndexerService::index_transaction` follows a strict skip-and-log policy:
 
-- **Per-event failures don't abort the others** — when persisting the events
-  extracted from a single transaction, a failure on one event is logged,
-  counted in `persist_failures_total{event_kind}`, and the next event is
-  attempted.
-- **Per-signature failures don't stop the worker** — the `IndexerWorker`
-  catches errors from `index_transaction`, logs and counts them, and keeps
-  draining the channel.
-- **Loop-level failures bubble up** — closed channels, exhausted semaphores,
-  panics in spawned tasks: these reach `Daemon::run` via typed
-  `IndexerWorkerError` and trigger graceful shutdown of all three tasks via
-  the shared `CancellationToken`.
+- **Per-event failures don't abort the others** — when persisting the events extracted from a single transaction, a failure on one event is logged, counted in `persist_failures_total{event_kind}`, and the next event is attempted.
+- **Per-signature failures don't stop the worker** — the `IndexerWorker` catches errors from `index_transaction`, logs and counts them, and keeps draining the channel.
+- **Loop-level failures bubble up** — closed channels, exhausted semaphores, panics in spawned tasks: these reach `Daemon::run` via typed `IndexerWorkerError` and trigger graceful shutdown of all three tasks via the shared `CancellationToken`.
 
-The `ExitGuard` RAII helper in `IndexerService` ensures every entry into
-`index_transaction` produces an exit counter and duration sample — even on
-error paths that return early without explicitly tagging an outcome.
+The `ExitGuard` RAII helper in `IndexerService` ensures every entry into `index_transaction` produces an exit counter and duration sample — even on error paths that return early without explicitly tagging an outcome.
 
-#### Configuration
+### Configuration
 
-Via environment variables (loaded by `dotenvy`):
+Reads its variables from the workspace `.env` (loaded by `dotenvy`):
 
 ```env
-DATABASE_URL=postgresql://user:pasword@localhost:5433/database_name
+DATABASE_URL_INDEXER=postgresql://yog_indexer:...@host:5433/yog_sothoth
 SOLANA_RPC_WS=wss://api.mainnet-beta.solana.com
 SOLANA_RPC_HTTP=https://api.mainnet-beta.solana.com
+RPC_WORKER_MAX_RETRIES=10
+MODE_PROTOCOL_CENTRIC=true
 ```
 
-#### Run
+The env-var helpers (`required`, `parse_required_*`) come from `yog-bootstrap`. `Config::load()` lives in `bootstrap/config.rs` next to `Daemon::new`, grouping all startup concerns.
+
+### Run
 
 ```bash
 cargo run -p yog-indexer
 ```
 
-#### SQLx compile-time verification
-
-The indexer uses `sqlx::query!` macros that verify SQL syntax against the
-live schema at compile time. The verified query cache is committed to
-`crates/indexer/.sqlx/`, which allows the workspace to build in CI (or
-anywhere without a running database) when `SQLX_OFFLINE=true` is set.
-
-**After modifying any `sqlx::query!` call**, regenerate the cache before
-committing:
-
-```bash
-cd crates/indexer
-cargo sqlx prepare
-```
-
-Otherwise CI will fail.
+Connects to Postgres as `yog_indexer` (RW on event tables, RO on `watched_pools`).
 
 ---
 
-### `wasm` (`yog-wasm`)
+## `api` (`yog-api`)
 
-WebAssembly target for the browser. **Currently a scaffold** — the default
-`cargo new --lib` template, not yet wired to `yog-core`.
+Native binary. HTTP server built on axum 0.8 — exposes JSON endpoints over the indexed data.
+
+### Layout
+
+```
+api/src/
+├── bootstrap/
+│   ├── app_state.rs                  ← AppState — dependency container
+│   └── config.rs                     ← Config::load() — env-driven configuration
+├── error/                            ← reserved for future api-specific errors
+├── http/
+│   ├── dto/
+│   │   └── response/
+│   │       ├── page_response.rs      (PageResponse<T> envelope)
+│   │       └── pool_response.rs      (Pool wire shape)
+│   ├── handlers/
+│   │   ├── health.rs                 (/healthz)
+│   │   └── pools.rs                  (/api/pools — list_pools)
+│   ├── middleware.rs                 ← CORS, security headers
+│   └── error.rs                      ← ApiError, IntoResponse, From<RepositoryError>
+└── main.rs
+```
+
+### Responsibilities
+
+- **HTTP routing and serving** (`http/mod.rs`) — builds the axum `Router`, applies the middleware stack, runs the serve loop on the address from `Config::bind_addr`.
+- **Dependency container** (`bootstrap/app_state.rs`) — `AppState` holds shared dependencies as `Arc<dyn Trait>` references. `Clone` is cheap (everything is `Arc`-wrapped), which axum requires for the `State` extractor.
+- **Handlers** (`http/handlers/`) — one module per route family. Handlers are pure async functions taking axum extractors (`State<AppState>`, `Query<T>`) and returning `Result<Json<T>, ApiError>`.
+- **Response DTOs** (`http/dto/response/`) — wire shapes decoupled from the domain. `PoolResponse` formats pubkeys as base58 strings; `PageResponse<T>` is the generic envelope for paginated responses.
+- **Error type** (`http/error.rs`) — `ApiError` with three variants (`BadRequest`, `NotFound`, `Internal`) plus an `IntoResponse` impl. Internal errors are logged with full context but never expose implementation details to the client.
+- **Middleware** (`http/middleware.rs`) — CORS (permissive in dev, to be tightened once the Next.js dashboard is deployed), security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`).
+
+(reste de la section inchangé : Pattern for handlers, Cursor wire format, Configuration, Run)
+### Pattern for handlers
+
+```rust
+pub(crate) async fn list_pools(
+    State(state): State<AppState>,
+    Query(query): Query<PoolsQuery>,
+) -> Result<Json<PageResponse<PoolResponse>>, ApiError> {
+    let cursor = decode_cursor(query.cursor.as_deref())?;
+    let page = state.pool_repository.find_paginated(cursor, query.limit).await?;
+
+    Ok(Json(PageResponse {
+        items: page.items.into_iter().map(PoolResponse::from).collect(),
+        next_cursor: page.next_cursor.as_ref().map(encode_cursor).transpose()?,
+    }))
+}
+```
+
+The handler signature is the contract: extractors describe what the handler needs, the return type describes what it produces. Body content goes through axum's `Json<T>` which sets `Content-Type: application/json` automatically.
+
+### Cursor wire format
+
+Pagination cursors are **opaque to clients**: a base64(url-safe, no-pad) encoding of a JSON-serialized `PoolCursorWire` struct. Clients pass back the `next_cursor` from the previous response without interpreting it. The wire format is intentionally JSON-based to keep cursors debuggable by hand if needed (decode the base64, read the JSON), and to allow extending the cursor structure without breaking compatibility.
+
+The encoding/decoding lives next to the handler that uses it (`handlers/pools.rs`); when more domains become paginated (swap events, liquidity events), each will define its own `XxxCursorWire` struct.
+
+### Configuration
+
+Reads its variables from the workspace `.env`:
+
+```env
+DATABASE_URL_API=postgresql://yog_api:...@host:5433/yog_sothoth
+API_BIND_ADDR=127.0.0.1:3000
+```
+
+`bind_addr` is parsed as `SocketAddr` at load time — typo in the env var fails fast with a clear `ConfigError::InvalidValue`, before any task is spawned.
+
+### Run
+
+```bash
+cargo run -p yog-api
+```
+
+Connects to Postgres as `yog_api` (RO on event tables today; will gain `INSERT/UPDATE` on user-facing tables in v0.3).
+
+---
+
+## `wasm` (`yog-wasm`)
+
+WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not yet wired to `yog-core`.
 
 Making it functional requires:
 
 1. Activating the `wasm` feature on `yog-core` (currently a placeholder).
-2. Conditional compilation (`#[cfg(feature = "solana")]`) on modules that
-   pull Solana-only crates — `solana-pubkey`, `solana-transaction-status`,
-   etc. These do not compile for `wasm32-unknown-unknown` without
-   significant configuration (`getrandom` backend selection, among others).
-3. Abstracting `Pubkey` behind a neutral type alias so the `domain/` layer
-   compiles on both targets.
+2. Conditional compilation (`#[cfg(feature = "solana")]`) on modules that pull Solana-only crates — `solana-pubkey`, `solana-transaction-status`, etc. These do not compile for `wasm32-unknown-unknown` without significant configuration (`getrandom` backend selection, among others).
+3. Abstracting `Pubkey` behind a neutral type alias so the `domain/` layer compiles on both targets.
 
 Scheduled for **Phase 2**.
 
@@ -362,41 +475,90 @@ cargo build
 
 # Build a specific crate
 cargo build -p yog-core
+cargo build -p yog-persistence
 cargo build -p yog-indexer
+cargo build -p yog-api
 
-# Run tests (indexer requires SQLX_OFFLINE unless DATABASE_URL is set)
-SQLX_OFFLINE=true cargo test -p yog-core -p yog-indexer --all-features
+# Run tests (workspace-wide, sqlx in offline mode)
+SQLX_OFFLINE=true cargo test --workspace --all-features
 
 # Lint
-cargo clippy -p yog-core -p yog-indexer --all-targets --all-features
+cargo clippy --workspace --all-targets --all-features
 
 # Format
 cargo fmt --all
 ```
 
-For the full local CI checklist and lint policy, see the
-[root README](../README.md#development).
+For the full local CI checklist, lint policy, and the SQL query regeneration workflow, see the [root README › Development](../README.md#development).
 
 ---
 
 ## Adding a new protocol
 
-The workflow follows the existing Meteora DAMM v2 layout:
+The workflow follows the existing Meteora DAMM v2 layout. A new protocol typically introduces new event types, which means changes in three crates.
 
-1. Create a module under `core/src/protocols/<family>/<protocol>/`
-   (e.g. `protocols/meteora/dlmm/` when you're ready to tackle it).
-2. Split responsibilities across files following the DAMM v2 pattern:
-   `events.rs` for wire events (borsh mirrors of on-chain Anchor events),
-   `extractor.rs` for walking the transaction's inner instructions,
-   `translator.rs` for the wire → domain translation.
-3. Create a top-level struct (e.g. `MeteoraDlmm`) and implement `PoolIndexer`
-   — concretely, `extract_events` chains your extractor and translator.
-4. Register the implementation in `IndexerService::protocol_indexer`
-   (the dispatch site that maps `Protocol` → `Arc<dyn PoolIndexer>`).
-5. Add fixture transactions under `core/tests/fixtures/` and write
-   integration tests in `core/tests/live_detector.rs` against real
-   captured signatures.
+### 1. In `core`
 
-The `PoolIndexer` contract is uniform across protocols, so adding a new one
-is a matter of providing the extractor/translator pair — no central
-dispatch table to maintain.
+- Create a module under `core/src/protocols/<family>/<protocol>/` (e.g. `protocols/meteora/dlmm/`).
+- Split responsibilities across files following the DAMM v2 pattern: `events.rs` for wire events (borsh mirrors of on-chain Anchor events), `extractor.rs` for walking the transaction's inner instructions, `translator.rs` for the wire → domain translation.
+- Create a top-level struct (e.g. `MeteoraDlmm`) and implement `PoolIndexer` — concretely, `extract_events` chains your extractor and translator.
+- If the protocol introduces domain events that don't yet exist (e.g. DLMM bin-specific events), add them to `core/src/domain/` with their model and repository trait.
+
+### 2. In `persistence`
+
+- If the protocol introduces new tables, add a migration under `persistence/migrations/` (numbered after the latest one). Include `GRANT INSERT, UPDATE ON <new_table> TO yog_indexer;` for any table the indexer must write to.
+- Implement the new repository traits in `persistence/src/repositories/` following the existing pattern.
+- Regenerate `.sqlx/` with the admin role.
+
+### 3. In `indexer`
+
+- Register the implementation in `IndexerService::protocol_indexer` (the dispatch site that maps `Protocol` → `Arc<dyn PoolIndexer>`).
+- If new events were added in `core`, wire their persistence in `IndexerService::index_transaction` — the dispatch from `DomainEvent` variant to repository call.
+
+### 4. In `api` (when read access is needed)
+
+- Add new endpoints in `api/src/axum_app/handlers/` (one module per resource family).
+- Add the corresponding repository to `AppState` if it isn't already there.
+- Add request/response DTOs as needed.
+
+### 5. Tests
+
+Add fixture transactions under `core/tests/fixtures/` and write integration tests in `core/tests/live_detector.rs` against real captured signatures.
+
+The `PoolIndexer` contract is uniform across protocols, so adding a new one is mostly a matter of providing the extractor/translator pair — no central dispatch table to maintain.
+
+---
+
+## Adding a new API endpoint
+
+For endpoints that read existing data (no new tables, no new domain types), the workflow is contained in `api`:
+
+### 1. Extend the relevant repository trait in `core`
+
+If the endpoint needs a query that doesn't exist yet (e.g. `find_by_protocol`, `find_active_in_window`), add the method to the trait in `core/src/domain/<aggregate>/repository.rs`. Document the ordering and pagination contract.
+
+### 2. Implement the new method in `persistence`
+
+Add the SQL in the corresponding `Pg*Repository` impl. If you introduce a new query, regenerate `.sqlx/` with the admin role.
+
+### 3. Add the handler in `api`
+
+- Create or extend a module under `api/src/axum_app/handlers/`.
+- Create request/response DTOs in the same module (or a sibling `dto.rs` if the handler grows).
+- Mount the route in `axum_app/mod.rs::build_router`.
+- Reuse `ApiError` for error mapping; the `From<RepositoryError>` impl handles repository failures uniformly.
+
+### 4. Verify
+
+```bash
+cargo run -p yog-api
+curl http://127.0.0.1:3000/api/<your-endpoint> | jq
+```
+
+### Conventions
+
+- **Pagination** — all collection endpoints use cursor-based pagination via `Page<T>` and a domain-specific cursor type. Default `limit = 50`, hard cap `200`.
+- **Error responses** — JSON shape `{ "error": "<message>" }`, HTTP status from `ApiError` variant. Internal errors are logged but the message returned to the client is generic (`"internal server error"`) — never expose query details, schema names, or DB driver errors.
+- **Validation** — client-supplied data is validated at the handler boundary, before any DB call. Limit out of range, malformed cursor, missing required field → `ApiError::BadRequest` with a descriptive message.
+- **Pubkeys** — always serialized as base58 strings in responses (matching `Pubkey::Display`). Accept the same format on input.
+- **Timestamps** — RFC3339 / ISO8601 (matching `chrono::DateTime<Utc>::Serialize` default).

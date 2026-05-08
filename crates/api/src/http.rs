@@ -4,10 +4,10 @@
 //! shared via axum's `State` extractor. Handlers live in `handlers/`,
 //! middleware in `middleware.rs`, the unified error type in `error.rs`.
 
+mod dto;
 mod error;
 mod handlers;
 mod middleware;
-mod dto;
 
 use std::net::SocketAddr;
 

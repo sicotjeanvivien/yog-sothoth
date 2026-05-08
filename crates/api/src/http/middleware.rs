@@ -5,10 +5,7 @@
 //! request ID propagation) will land here as additional layers.
 
 use axum::http::{HeaderName, HeaderValue, header};
-use tower_http::{
-    cors::CorsLayer,
-    set_header::SetResponseHeaderLayer,
-};
+use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
 /// Build the middleware stack applied to the whole router.
 ///
