@@ -1,16 +1,16 @@
 //! Axum stack — transitional module during the migration away from
 //! the custom HTTP layer in `interface/http/`.
 //!
-//! For commit 1, this module exposes a single `/healthz` endpoint on a
-//! separate port (`AXUM_BIND_TRANSITIONAL`) so we can validate that
-//! axum compiles, integrates with our `AppState`, and serves traffic —
-//! all without touching the production endpoint on the main port.
-//!
-//! The custom stack on the main port is unchanged. This whole module
-//! grows over the next commits and eventually replaces the custom
-//! stack entirely.
+//! Endpoints are migrated one at a time. Each commit moves one
+//! endpoint from the custom stack (port 3000) to the axum stack
+//! (port 3001) and validates by side-by-side comparison. When all
+//! endpoints are migrated, axum is promoted to port 3000 and the
+//! custom stack is removed.
 
-use axum::{Router, response::IntoResponse, routing::get};
+mod error;
+mod handlers;
+
+use axum::{Router, routing::get};
 use tracing::info;
 
 use crate::bootstrap::AppState;
@@ -21,27 +21,14 @@ use crate::bootstrap::AppState;
 const AXUM_BIND_TRANSITIONAL: &str = "127.0.0.1:3001";
 
 /// Build the axum router from the application state.
-///
-/// Will grow as endpoints are migrated; for commit 1 it only carries
-/// `/healthz`.
 pub(crate) fn build_router(state: AppState) -> Router {
     Router::new()
-        .route("/healthz", get(healthz))
+        .route("/healthz", get(handlers::health::healthz))
+        .route("/api/pools", get(handlers::pools::list_pools))
         .with_state(state)
 }
 
-/// Liveness probe. Returns 200 OK with a static body. Does NOT touch
-/// the database — that is what readiness probes are for, and we'll
-/// add one when needed.
-async fn healthz() -> impl IntoResponse {
-    "ok"
-}
-
 /// Run the axum server until the process is killed.
-///
-/// Spawned as a separate task in `main` for the duration of the
-/// migration, alongside the custom HTTP server. When commit 3 retires
-/// the custom stack, this function becomes the single entry point.
 pub(crate) async fn run(state: AppState) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(AXUM_BIND_TRANSITIONAL)
         .await
