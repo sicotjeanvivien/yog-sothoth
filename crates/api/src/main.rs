@@ -1,3 +1,4 @@
+mod axum_app;
 mod bootstrap;
 mod interface;
 
@@ -14,22 +15,33 @@ async fn main() -> anyhow::Result<()> {
     let config = bootstrap::Config::load()
         .inspect_err(|e| error!(error = ?e, "failed to load configuration"))?;
 
-    // ── Application app_state ─────────────────────────────────────────────────
-    // Builds the dependency graph: DB pool, repositories, services. Validates
-    // live connections (DB) before returning, so any failure here means the
-    // process cannot run.
+    // ── Application state ─────────────────────────────────────────────────────
     let app_state = bootstrap::AppState::build(config.clone())
         .await
-        .inspect_err(|e| error!(error = ?e, "failed to build application app_state"))?;
+        .inspect_err(|e| error!(error = ?e, "failed to build application state"))?;
 
-    // ── HTTP server ───────────────────────────────────────────────────────────
-    // Wires the router from the app_state, binds the TCP listener, then runs
-    // the accept loop until Ctrl-C.
-    let server = bootstrap::Server::init(app_state, config)
+    // ── Servers ───────────────────────────────────────────────────────────────
+    // Custom HTTP stack on `config.bind_addr` (production endpoint, unchanged)
+    // and the new axum stack on AXUM_BIND_TRANSITIONAL in parallel during
+    // the migration. Both consume the same `AppState`.
+    //
+    // Commit 3 will retire the custom stack and promote axum to
+    // `config.bind_addr`.
+    let custom_server = bootstrap::Server::init(app_state.clone(), config)
         .await
-        .inspect_err(|e| error!(error = ?e, "failed to initialize server"))?;
+        .inspect_err(|e| error!(error = ?e, "failed to initialize custom server"))?;
 
-    server.run().await;
+    let axum_state = app_state.clone();
+    let axum_handle = tokio::spawn(async move {
+        if let Err(e) = axum_app::run(axum_state).await {
+            error!(error = ?e, "axum server stopped unexpectedly");
+        }
+    });
+
+    custom_server.run().await;
+
+    // If the custom server returns (Ctrl-C), stop the axum task too.
+    axum_handle.abort();
 
     Ok(())
 }

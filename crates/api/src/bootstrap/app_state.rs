@@ -1,27 +1,22 @@
-use anyhow::Context;
 use std::sync::Arc;
 use yog_core::domain::PoolRepository;
 use yog_persistence::{Database, PgPoolRepository};
 
 use crate::bootstrap::Config;
+use anyhow::Context;
 
 /// Application-level dependencies shared across HTTP handlers.
 ///
-/// Built once at startup, then handed (via `Arc`) to the route builder
-/// which captures the relevant repositories in its closures. The
-/// container itself doesn't need to live past router construction —
-/// each handler holds the dependencies it actually uses.
+/// `Clone` is cheap because every field is wrapped in `Arc` — axum
+/// requires `Clone + Send + Sync + 'static` for its `State` extractor.
+///
+/// The DB pool is held inside each repository (via `PgPool`, itself an
+/// `Arc` internally), so the `Database` wrapper does not need to live
+/// on `AppState` after construction.
+#[derive(Clone)]
 pub(crate) struct AppState {
-    /// The DB connection pool. Kept here so handlers that need raw
-    /// access (transactions spanning multiple repos) can grab it.
-    /// Most handlers should depend on a specific repository instead.
-    _database: Database,
-
-    /// Pool repository — read access for the api role.
     pub(crate) pool_repository: Arc<dyn PoolRepository>,
     // Future: SwapEventRepository, LiquidityEventRepository, …
-    // Future: SignalService, AlertService, … (v0.2)
-    // Future: UserService, AuthService, … (v0.3)
 }
 
 impl AppState {
@@ -33,9 +28,6 @@ impl AppState {
         let pool_repository: Arc<dyn PoolRepository> =
             Arc::new(PgPoolRepository::new(database.pool().clone()));
 
-        Ok(Self {
-            _database: database,
-            pool_repository,
-        })
+        Ok(Self { pool_repository })
     }
 }
