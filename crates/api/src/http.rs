@@ -2,11 +2,12 @@
 //!
 //! Routes are mounted by `build_router`; the application state is
 //! shared via axum's `State` extractor. Handlers live in `handlers/`,
-//! the unified error type in `error.rs`.
+//! middleware in `middleware.rs`, the unified error type in `error.rs`.
 
-mod dto;
 mod error;
 mod handlers;
+mod middleware;
+mod dto;
 
 use std::net::SocketAddr;
 
@@ -21,6 +22,13 @@ pub(crate) fn build_router(state: AppState) -> Router {
         .route("/healthz", get(handlers::health::healthz))
         .route("/api/pools", get(handlers::pools::list_pools))
         .with_state(state)
+        // Layers are applied in the order they are added. The
+        // outermost layer (last added) sees requests first and
+        // responses last. For headers + CORS, the order is
+        // immaterial; documented for future contributors.
+        .layer(middleware::security_headers_layer())
+        .layer(middleware::frame_options_layer())
+        .layer(middleware::cors_layer())
 }
 
 /// Run the axum server on `bind_addr` until the process is killed.
