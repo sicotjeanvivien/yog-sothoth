@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use yog_core::{Cursor, domain::PoolCursor};
 
-use crate::axum_app::error::ApiError;
 use crate::bootstrap::AppState;
-use crate::interface::http::dto::response::page_response::PageResponse;
-use crate::interface::http::dto::response::pool_response::PoolResponse;
+use crate::http::{
+    dto::{PageResponse, PoolResponse},
+    error::ApiError,
+};
 
 /// Default page size when the client does not specify `limit`.
 const DEFAULT_LIMIT: i64 = 50;
