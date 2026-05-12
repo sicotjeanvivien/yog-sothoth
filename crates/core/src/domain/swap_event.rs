@@ -2,4 +2,4 @@ pub mod model;
 pub mod repository;
 
 pub use model::SwapEvent;
-pub use repository::SwapEventRepository;
+pub use repository::{SwapCursor, SwapEventRepository};

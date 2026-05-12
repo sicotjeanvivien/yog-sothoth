@@ -4,13 +4,19 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{Protocol, SwapEvent, SwapEventRepository, TradeDirection},
+    domain::{Protocol, SwapCursor, SwapEvent, SwapEventRepository, TradeDirection},
+    tools::{Cursor, Page},
 };
 
 use crate::repository_utils::{
     convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
     convert_u128_to_bigdecimal, map_sqlx_error,
 };
+
+/// Maximum number of rows returned in a single page, regardless of the
+/// caller's `limit`. Acts as a backstop against an oversized query if
+/// the API-layer validation is bypassed.
+const MAX_PAGE_SIZE: i64 = 200;
 
 pub struct PgSwapEventRepository {
     pool: PgPool,
@@ -72,11 +78,25 @@ impl SwapEventRepository for PgSwapEventRepository {
         Ok(())
     }
 
-    async fn find_by_pool(
+    /// Paginate swap events for a pool by keyset on `(timestamp, signature)`.
+    ///
+    /// Ordering is `timestamp DESC, signature ASC`. The cursor points to
+    /// the last item of the previous page; the WHERE clause uses
+    /// lexicographic-style comparison to fetch the strictly-next slice:
+    /// "older timestamps", or "same timestamp with a later signature".
+    async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
+        cursor: Option<SwapCursor>,
         limit: i64,
-    ) -> RepositoryResult<Vec<SwapEvent>> {
+    ) -> RepositoryResult<Page<SwapEvent>> {
+        let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
+
+        let (cursor_timestamp, cursor_signature) = match cursor {
+            Some(c) => (Some(c.timestamp), Some(c.signature)),
+            None => (None, None),
+        };
+
         let rows = sqlx::query!(
             r#"
             SELECT pool_address, protocol, signature,
@@ -88,17 +108,25 @@ impl SwapEventRepository for PgSwapEventRepository {
                    timestamp
             FROM swap_events
             WHERE pool_address = $1
-            ORDER BY timestamp DESC
-            LIMIT $2
+              AND (
+                  $2::TIMESTAMPTZ IS NULL
+                  OR timestamp < $2
+                  OR (timestamp = $2 AND signature > $3)
+              )
+            ORDER BY timestamp DESC, signature ASC
+            LIMIT $4
             "#,
             pool_address.to_string(),
-            limit,
+            cursor_timestamp,
+            cursor_signature,
+            effective_limit,
         )
         .fetch_all(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter()
+        let events = rows
+            .into_iter()
             .map(|row| {
                 Ok(SwapEvent {
                     pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
@@ -132,6 +160,13 @@ impl SwapEventRepository for PgSwapEventRepository {
                     fee_token_is_a: row.fee_token_is_a,
                 })
             })
-            .collect::<RepositoryResult<Vec<_>>>()
+            .collect::<RepositoryResult<Vec<_>>>()?;
+
+        Ok(Page::build(events, effective_limit as usize, |last| {
+            Cursor::Swap(SwapCursor {
+                timestamp: last.timestamp,
+                signature: last.signature.clone(),
+            })
+        }))
     }
 }

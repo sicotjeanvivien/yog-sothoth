@@ -20,7 +20,22 @@ use crate::bootstrap::AppState;
 pub(crate) fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(handlers::health::healthz))
+        // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
+        // ── Single-pool resources ───────────────────────────────────────
+        .route("/api/pools/{address}", get(handlers::pools::get_pool))
+        .route(
+            "/api/pools/{address}/latest-state",
+            get(handlers::pools::get_pool_latest_state),
+        )
+        .route(
+            "/api/pools/{address}/swaps",
+            get(handlers::pools::list_pool_swaps),
+        )
+        .route(
+            "/api/pools/{address}/liquidity-events",
+            get(handlers::pools::list_pool_liquidity_events),
+        )
         .with_state(state)
         // Layers are applied in the order they are added. The
         // outermost layer (last added) sees requests first and

@@ -1,6 +1,11 @@
 use std::sync::Arc;
-use yog_core::domain::PoolRepository;
-use yog_persistence::{Database, PgPoolRepository};
+use yog_core::domain::{
+    LiquidityEventRepository, PoolCurrentStateRepository, PoolRepository, SwapEventRepository,
+};
+use yog_persistence::{
+    Database, PgLiquidityEventRepository, PgPoolCurrentStateRepository, PgPoolRepository,
+    PgSwapEventRepository,
+};
 
 use crate::bootstrap::Config;
 use anyhow::Context;
@@ -16,7 +21,9 @@ use anyhow::Context;
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) pool_repository: Arc<dyn PoolRepository>,
-    // Future: SwapEventRepository, LiquidityEventRepository, …
+    pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
+    pub(crate) swap_event_repository: Arc<dyn SwapEventRepository>,
+    pub(crate) liquidity_event_repository: Arc<dyn LiquidityEventRepository>,
 }
 
 impl AppState {
@@ -25,9 +32,25 @@ impl AppState {
             .await
             .context("failed to connect to database")?;
 
-        let pool_repository: Arc<dyn PoolRepository> =
-            Arc::new(PgPoolRepository::new(database.pool().clone()));
+        let db_pool = database.pool().clone();
 
-        Ok(Self { pool_repository })
+        let pool_repository: Arc<dyn PoolRepository> =
+            Arc::new(PgPoolRepository::new(db_pool.clone()));
+
+        let pool_current_state_repository: Arc<dyn PoolCurrentStateRepository> =
+            Arc::new(PgPoolCurrentStateRepository::new(db_pool.clone()));
+
+        let swap_event_repository: Arc<dyn SwapEventRepository> =
+            Arc::new(PgSwapEventRepository::new(db_pool.clone()));
+
+        let liquidity_event_repository: Arc<dyn LiquidityEventRepository> =
+            Arc::new(PgLiquidityEventRepository::new(db_pool));
+
+        Ok(Self {
+            pool_repository,
+            pool_current_state_repository,
+            swap_event_repository,
+            liquidity_event_repository,
+        })
     }
 }
