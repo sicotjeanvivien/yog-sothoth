@@ -7,5 +7,41 @@
   "Home": {
     "greeting": "Bonjour, {name} !",
     "milestoneTag": "Milestone 0 — fondations"
+  },
+  "Dashboard": {
+    "nav": {
+      "pools": "Pools",
+      "phaseLabel": "v0.1 · dashboard"
+    }
+  },
+  "Pools": {
+    "page": {
+      "eyebrow": "Protocoles observés",
+      "title": "Pools",
+      "description": "Toutes les pools de liquidité découvertes par l'indexeur sur les protocoles Meteora actifs. La liste est triée par date de découverte, la plus récente en premier."
+    },
+    "table": {
+      "address": "Adresse",
+      "protocol": "Protocole",
+      "pair": "Paire de tokens",
+      "firstSeen": "Découverte",
+      "lastSeen": "Dernière activité"
+    },
+    "pagination": {
+      "next": "Page suivante",
+      "firstPage": "Première page"
+    },
+    "empty": {
+      "title": "Aucune pool observée pour l'instant",
+      "description": "L'indexeur n'a encore détecté aucune activité sur les pools de la liste d'observation. Les pools apparaîtront ici dès la première transaction on-chain capturée."
+    },
+    "error": {
+      "title": "Impossible de charger les pools",
+      "retry": "Réessayer",
+      "timeout": "Le service amont a mis trop de temps à répondre. Réessaie dans un instant.",
+      "unavailable": "Le service amont est temporairement indisponible. Réessaie dans un instant.",
+      "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré — recommence depuis la première page.",
+      "unexpected": "Une erreur inattendue s'est produite lors du chargement des pools."
+    }
   }
 }
