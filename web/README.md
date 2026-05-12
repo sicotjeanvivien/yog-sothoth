@@ -14,8 +14,6 @@ user, see Milestone 0.2).
 - **TypeScript** — strict mode enabled, including `noUncheckedIndexedAccess`
 - **Tailwind CSS** — palette extracted from the Yog-Sothoth mockups
 - **next-intl 4** — i18n with always-visible locale prefix (`/en/...`, `/fr/...`)
-- **postgres.js** — Postgres driver with tagged-template SQL and a singleton pool
-- **Zod** — runtime validation of database rows
 - **Vitest** — unit tests in Node environment
 
 ## Scripts
@@ -41,46 +39,6 @@ cp .env.example .env.local
 
 Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser bundle.
 Database credentials must **never** carry that prefix.
-
-## Database
-
-The web app connects to the same TimescaleDB instance the indexer
-writes to. It uses the read-only `yog_web` role provisioned by
-[`crates/indexer/migrations/002_web_readonly_user.sql`](../crates/indexer/migrations/002_web_readonly_user.sql).
-
-### Connection pool
-
-A single `postgres.js` client is shared across the entire Node
-process via a `globalThis` singleton. The singleton survives Next.js
-hot reloads in development and reuses module-cached state in
-production. See [`src/lib/db/client.ts`](src/lib/db/client.ts).
-
-### Repository layer
-
-Each table the web app reads from has its own repository module
-under [`src/lib/repositories/`](src/lib/repositories/). Repositories
-own the SQL string, validate every row through a Zod schema, and
-expose a camelCase domain shape. Route Handlers consume that shape
-and never see raw rows.
-
-### Error handling
-
-All database failures are wrapped in `DatabaseError` with one of
-four kinds:
-
-- `connection` — driver could not reach Postgres → API responds 503
-- `query` — SQL ran but returned an error → API responds 500
-- `validation` — row shape diverged from the schema → API responds 500
-- `unknown` — anything else → API responds 500
-
-A 503 keeps the rest of the app running so a transient database
-outage does not break the locale proxy or the home page.
-
-### Endpoints (v0.1)
-
-| Method | Path         | Description                          |
-| ------ | ------------ | ------------------------------------ |
-| GET    | `/api/pools` | List every pool observed by the indexer |
 
 ## Feature flags
 
@@ -145,23 +103,13 @@ web/
 │   │   ├── globals.css
 │   │   ├── layout.tsx               # required root layout (passthrough)
 │   │   ├── [locale]/
-│   │   │   ├── layout.tsx           # html/body, intl provider
-│   │   │   └── page.tsx             # locale home page
-│   │   └── api/
-│   │       └── pools/
-│   │           └── route.ts         # GET /api/pools
+│   │       ├── layout.tsx           # html/body, intl provider
+│   │       └── page.tsx             # locale home page
 │   ├── components/
 │   │   └── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   ├── config/
 │   │   ├── features.ts              # feature flag registry + helpers
 │   │   └── __tests__/
-│   ├── lib/
-│   │   ├── db/
-│   │   │   ├── client.ts            # postgres.js singleton
-│   │   │   └── errors.ts            # DatabaseError type
-│   │   └── repositories/
-│   │       ├── pools.ts             # listPools()
-│   │       └── schemas.ts           # Zod schemas + toPool mapper
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   └── proxy.ts                     # locale negotiation (Next 16)
