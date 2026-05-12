@@ -31,12 +31,12 @@
       {
         "ordinal": 5,
         "name": "reserve_a",
-        "type_info": "Numeric"
+        "type_info": "Int8"
       },
       {
         "ordinal": 6,
         "name": "reserve_b",
-        "type_info": "Numeric"
+        "type_info": "Int8"
       },
       {
         "ordinal": 7,

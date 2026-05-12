@@ -6,9 +6,11 @@
 //!
 //! The domain types here are deliberately decoupled from any persistence
 //! detail (no sqlx attributes, no Postgres types). Conversions to/from the
-//! database row live in `crates/indexer/src/repositories/pool_current_state.rs`.
+//! database row live in `crates/persistence/src/repositories/pool_current_state.rs`.
 
 use chrono::{DateTime, Utc};
+
+use crate::domain::LiquidityEventKind;
 
 /// Kind of the most recent event that touched a pool.
 ///
@@ -50,17 +52,32 @@ impl std::fmt::Display for LastEventKind {
     }
 }
 
+/// Bridge from the liquidity-event domain enum to the projection event kind.
+///
+/// Lives here rather than on `LiquidityEventKind` to keep the latter unaware
+/// of the projection: the projection depends on the event domain, not the
+/// other way around.
+impl From<LiquidityEventKind> for LastEventKind {
+    fn from(kind: LiquidityEventKind) -> Self {
+        match kind {
+            LiquidityEventKind::Add => LastEventKind::LiquidityAdd,
+            LiquidityEventKind::Remove => LastEventKind::LiquidityRemove,
+        }
+    }
+}
+
 /// Latest known state of a pool, materialized from the event stream.
 ///
 /// Field ordering follows the SQL column ordering in
 /// `003_pool_current_state.sql` for ease of cross-reference.
 ///
-/// * `reserve_a` / `reserve_b` are u128 in the protocol's canonical
-///   (token_a, token_b) order; on the wire they map to `NUMERIC(39,0)`.
-/// * `last_sqrt_price` and `last_swap_at` are `None` until the first swap is
-///   observed.
-/// * `liquidity` and `last_liquidity_at` are `None` until the first liquidity
-///   event is observed.
+/// * `reserve_a` / `reserve_b` are u64 in the protocol's canonical
+///   (token_a, token_b) order; on the wire they map to `BIGINT`, matching
+///   the upstream `swap_events` / `liquidity_events` hypertables.
+/// * `last_sqrt_price` is `None` until the first swap is observed
+///   (Q64.64 fixed-point as u128, stored as `NUMERIC(39, 0)`).
+/// * `liquidity` is `None` until the first liquidity event is observed
+///   (concentrated-liquidity L as u128, stored as `NUMERIC(39, 0)`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCurrentState {
     pub pool_address: String,
@@ -70,8 +87,8 @@ pub struct PoolCurrentState {
     pub last_event_kind: LastEventKind,
     pub last_signature: String,
 
-    pub reserve_a: u128,
-    pub reserve_b: u128,
+    pub reserve_a: u64,
+    pub reserve_b: u64,
 
     pub last_sqrt_price: Option<u128>,
     pub last_swap_at: Option<DateTime<Utc>>,
@@ -101,8 +118,8 @@ pub struct PoolCurrentStateUpsert {
     pub event_kind: LastEventKind,
     pub signature: String,
 
-    pub reserve_a: u128,
-    pub reserve_b: u128,
+    pub reserve_a: u64,
+    pub reserve_b: u64,
 
     /// Set only when the upsert originates from a swap event.
     pub sqrt_price: Option<u128>,
@@ -118,8 +135,8 @@ impl PoolCurrentStateUpsert {
         protocol: impl Into<String>,
         event_at: DateTime<Utc>,
         signature: impl Into<String>,
-        reserve_a: u128,
-        reserve_b: u128,
+        reserve_a: u64,
+        reserve_b: u64,
         sqrt_price: u128,
     ) -> Self {
         Self {
@@ -135,29 +152,26 @@ impl PoolCurrentStateUpsert {
         }
     }
 
-    /// Build an upsert payload from a liquidity event. `is_add` toggles
-    /// between [`LastEventKind::LiquidityAdd`] and
-    /// [`LastEventKind::LiquidityRemove`].
+    /// Build an upsert payload from a liquidity event.
+    ///
+    /// `kind` is the domain enum; its mapping to the projection event kind
+    /// goes through the [`From<LiquidityEventKind> for LastEventKind`] impl
+    /// defined above so add/remove sourcing stays in one place.
     pub fn from_liquidity(
         pool_address: impl Into<String>,
         protocol: impl Into<String>,
         event_at: DateTime<Utc>,
         signature: impl Into<String>,
-        is_add: bool,
-        reserve_a: u128,
-        reserve_b: u128,
+        kind: LiquidityEventKind,
+        reserve_a: u64,
+        reserve_b: u64,
         liquidity: u128,
     ) -> Self {
-        let event_kind = if is_add {
-            LastEventKind::LiquidityAdd
-        } else {
-            LastEventKind::LiquidityRemove
-        };
         Self {
             pool_address: pool_address.into(),
             protocol: protocol.into(),
             event_at,
-            event_kind,
+            event_kind: kind.into(),
             signature: signature.into(),
             reserve_a,
             reserve_b,
@@ -189,6 +203,18 @@ mod tests {
     }
 
     #[test]
+    fn last_event_kind_from_liquidity_event_kind() {
+        assert_eq!(
+            LastEventKind::from(LiquidityEventKind::Add),
+            LastEventKind::LiquidityAdd
+        );
+        assert_eq!(
+            LastEventKind::from(LiquidityEventKind::Remove),
+            LastEventKind::LiquidityRemove
+        );
+    }
+
+    #[test]
     fn from_swap_marks_kind_as_swap_and_sets_only_sqrt_price() {
         let now = Utc::now();
         let upsert =
@@ -199,13 +225,27 @@ mod tests {
     }
 
     #[test]
-    fn from_liquidity_picks_kind_from_is_add() {
+    fn from_liquidity_maps_kind_through_domain_enum() {
         let now = Utc::now();
         let add = PoolCurrentStateUpsert::from_liquidity(
-            "pool", "damm_v2", now, "sig", true, 100, 200, 42,
+            "pool",
+            "damm_v2",
+            now,
+            "sig",
+            LiquidityEventKind::Add,
+            100,
+            200,
+            42,
         );
         let remove = PoolCurrentStateUpsert::from_liquidity(
-            "pool", "damm_v2", now, "sig", false, 100, 200, 42,
+            "pool",
+            "damm_v2",
+            now,
+            "sig",
+            LiquidityEventKind::Remove,
+            100,
+            200,
+            42,
         );
         assert_eq!(add.event_kind, LastEventKind::LiquidityAdd);
         assert_eq!(remove.event_kind, LastEventKind::LiquidityRemove);

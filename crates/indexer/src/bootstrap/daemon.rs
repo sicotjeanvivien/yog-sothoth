@@ -22,7 +22,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_persistence::{
     Database, PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
-    PgLiquidityEventRepository, PgPoolRepository, PgSwapEventRepository, PgWatchedPoolRepository,
+    PgLiquidityEventRepository, PgPoolCurrentStateRepository, PgPoolRepository,
+    PgSwapEventRepository, PgWatchedPoolRepository,
 };
 
 /// Top-level process — owns all runtime dependencies and drives the
@@ -167,6 +168,8 @@ async fn init_indexer_service(
     ));
     let pg_claim_reward_repo = Arc::new(PgClaimRewardEventRepository::new(database.pool().clone()));
     let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
+    let pg_pool_current_state_repo =
+        Arc::new(PgPoolCurrentStateRepository::new(database.pool().clone()));
 
     Ok(Arc::new(IndexerService::new(
         pg_swap_event_repo,
@@ -174,6 +177,7 @@ async fn init_indexer_service(
         pg_claim_position_fee_repo,
         pg_claim_reward_repo,
         pg_pool_repo,
+        pg_pool_current_state_repo,
         rpc_client,
     )))
 }

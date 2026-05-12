@@ -10,9 +10,13 @@
 //!   `liquidity` / `last_liquidity_at` on swap events.
 //! * `updated_at` is bumped to `NOW()` on every accepted write.
 //!
-//! u128 columns map to `NUMERIC(39, 0)`; conversions go through the shared
-//! helpers in `repository_utils` to keep the error mapping consistent across
-//! the crate.
+//! Column type mapping (matches the migration and the upstream event tables):
+//!   * `reserve_a` / `reserve_b`                  BIGINT          ↔ u64
+//!   * `last_sqrt_price`                          NUMERIC(39, 0)  ↔ u128
+//!   * `liquidity`                                NUMERIC(39, 0)  ↔ u128
+//!
+//! Conversions go through the shared helpers in `repository_utils` to keep
+//! error mapping consistent across the crate.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -24,7 +28,8 @@ use yog_core::{
 };
 
 use crate::repository_utils::{
-    convert_bigdecimal_to_u128, convert_u128_to_bigdecimal, map_sqlx_error,
+    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_u64_to_i64, convert_u128_to_bigdecimal,
+    map_sqlx_error,
 };
 
 /// sqlx-backed implementation of [`PoolCurrentStateRepository`].
@@ -50,8 +55,8 @@ struct PoolCurrentStateRow {
     last_event_at: DateTime<Utc>,
     last_event_kind: String,
     last_signature: String,
-    reserve_a: sqlx::types::BigDecimal,
-    reserve_b: sqlx::types::BigDecimal,
+    reserve_a: i64,
+    reserve_b: i64,
     last_sqrt_price: Option<sqlx::types::BigDecimal>,
     last_swap_at: Option<DateTime<Utc>>,
     liquidity: Option<sqlx::types::BigDecimal>,
@@ -76,8 +81,8 @@ impl TryFrom<PoolCurrentStateRow> for PoolCurrentState {
             last_event_at: row.last_event_at,
             last_event_kind,
             last_signature: row.last_signature,
-            reserve_a: convert_bigdecimal_to_u128(row.reserve_a, "reserve_a")?,
-            reserve_b: convert_bigdecimal_to_u128(row.reserve_b, "reserve_b")?,
+            reserve_a: convert_i64_to_u64(row.reserve_a, "reserve_a")?,
+            reserve_b: convert_i64_to_u64(row.reserve_b, "reserve_b")?,
             last_sqrt_price: row
                 .last_sqrt_price
                 .map(|v| convert_bigdecimal_to_u128(v, "last_sqrt_price"))
@@ -109,8 +114,8 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
     /// * `Some(_)` — INSERT or UPDATE accepted (`Ok(true)`)
     /// * `None`    — UPDATE guard didn't match → stale write (`Ok(false)`)
     async fn upsert(&self, upsert: &PoolCurrentStateUpsert) -> RepositoryResult<bool> {
-        let reserve_a = convert_u128_to_bigdecimal(upsert.reserve_a, "reserve_a");
-        let reserve_b = convert_u128_to_bigdecimal(upsert.reserve_b, "reserve_b");
+        let reserve_a = convert_u64_to_i64(upsert.reserve_a, "reserve_a")?;
+        let reserve_b = convert_u64_to_i64(upsert.reserve_b, "reserve_b")?;
         let sqrt_price = upsert
             .sqrt_price
             .map(|v| convert_u128_to_bigdecimal(v, "sqrt_price"));

@@ -8,8 +8,9 @@ use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::{debug, error, info, warn};
 use yog_core::{
     domain::{
-        ClaimPositionFeeEventRepository, ClaimRewardEventRepository, DomainEvent,
-        LiquidityEventRepository, Pool, PoolRepository, Protocol, SwapEventRepository,
+        ClaimPositionFeeEventRepository, ClaimRewardEventRepository, DomainEvent, LiquidityEvent,
+        LiquidityEventRepository, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+        PoolRepository, Protocol, SwapEvent, SwapEventRepository,
     },
     protocols::{
         PoolIndexer,
@@ -29,16 +30,19 @@ pub(crate) struct IndexerService {
     claim_position_fee_repo: Arc<dyn ClaimPositionFeeEventRepository>,
     claim_reward_repo: Arc<dyn ClaimRewardEventRepository>,
     pool_repo: Arc<dyn PoolRepository>,
+    pool_current_state_repo: Arc<dyn PoolCurrentStateRepository>,
     rpc_client: Arc<RpcClient>,
 }
 
 impl IndexerService {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         swap_event_repo: Arc<dyn SwapEventRepository>,
         liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
         claim_position_fee_repo: Arc<dyn ClaimPositionFeeEventRepository>,
         claim_reward_repo: Arc<dyn ClaimRewardEventRepository>,
         pool_repo: Arc<dyn PoolRepository>,
+        pool_current_state_repo: Arc<dyn PoolCurrentStateRepository>,
         rpc_client: Arc<RpcClient>,
     ) -> Self {
         Self {
@@ -47,6 +51,7 @@ impl IndexerService {
             claim_position_fee_repo,
             claim_reward_repo,
             pool_repo,
+            pool_current_state_repo,
             rpc_client,
         }
     }
@@ -166,10 +171,17 @@ impl IndexerService {
                 {
                     warn!(error = %err, kind, "pool upsert failed");
                 }
-                self.swap_event_repo
+                let insert_result = self
+                    .swap_event_repo
                     .insert(e)
                     .await
-                    .map_err(anyhow::Error::new)
+                    .map_err(anyhow::Error::new);
+                // Refresh the per-pool projection only if the event actually
+                // landed in the append-only log — keeps current_state honest.
+                if insert_result.is_ok() {
+                    self.update_pool_current_state_from_swap(protocol, e).await;
+                }
+                insert_result
             }
             DomainEvent::Liquidity(e) => {
                 if let Err(err) = self
@@ -184,10 +196,16 @@ impl IndexerService {
                 {
                     warn!(error = %err, kind, "pool upsert failed");
                 }
-                self.liquidity_event_repo
+                let insert_result = self
+                    .liquidity_event_repo
                     .insert(e)
                     .await
-                    .map_err(anyhow::Error::new)
+                    .map_err(anyhow::Error::new);
+                if insert_result.is_ok() {
+                    self.update_pool_current_state_from_liquidity(protocol, e)
+                        .await;
+                }
+                insert_result
             }
             DomainEvent::ClaimPositionFee(e) => {
                 self.touch_pool(protocol, &e.pool_address).await;
@@ -271,6 +289,76 @@ impl IndexerService {
                     protocol = %protocol.as_str(),
                     error = %err,
                     "pool touch_last_seen failed"
+                );
+            }
+        }
+    }
+
+    /// Project a freshly-persisted swap event into `pool_current_state`.
+    ///
+    /// Best-effort: a failure here is logged but never aborts the caller.
+    /// The SQL-side stale-write guard makes replays safe.
+    async fn update_pool_current_state_from_swap(&self, protocol: &Protocol, event: &SwapEvent) {
+        let upsert = PoolCurrentStateUpsert::from_swap(
+            event.pool_address.to_string(),
+            event.protocol.as_str().to_string(),
+            event.timestamp,
+            event.signature.to_string(),
+            event.reserve_a_after,
+            event.reserve_b_after,
+            event.next_sqrt_price,
+        );
+        self.apply_pool_current_state_upsert(protocol, &upsert)
+            .await;
+    }
+
+    /// Project a freshly-persisted liquidity event into `pool_current_state`.
+    async fn update_pool_current_state_from_liquidity(
+        &self,
+        protocol: &Protocol,
+        event: &LiquidityEvent,
+    ) {
+        let upsert = PoolCurrentStateUpsert::from_liquidity(
+            event.pool_address.to_string(),
+            event.protocol.as_str().to_string(),
+            event.timestamp,
+            event.signature.to_string(),
+            event.liquidity_event_kind,
+            event.reserve_a_after,
+            event.reserve_b_after,
+            event.liquidity_delta,
+        );
+        self.apply_pool_current_state_upsert(protocol, &upsert)
+            .await;
+    }
+
+    /// Shared call site for the projection upsert. Records timing and
+    /// classifies the outcome (`applied` vs `stale`) as a metric label so
+    /// stale-write rates can be observed in Prometheus.
+    async fn apply_pool_current_state_upsert(
+        &self,
+        protocol: &Protocol,
+        upsert: &PoolCurrentStateUpsert,
+    ) {
+        let start = Instant::now();
+        match self.pool_current_state_repo.upsert(upsert).await {
+            Ok(applied) => {
+                let label = if applied {
+                    "pool_current_state_applied"
+                } else {
+                    "pool_current_state_stale"
+                };
+                IndexerServiceMetrics::record_persist_duration(
+                    protocol,
+                    label,
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(
+                    protocol = %protocol.as_str(),
+                    error = %err,
+                    "pool_current_state upsert failed"
                 );
             }
         }

@@ -31,7 +31,7 @@ GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api;
 -- Tables the indexer writes to: ingestion pipeline outputs.
 GRANT SELECT, INSERT, UPDATE
     ON pools, swap_events, liquidity_events,
-       position_fee_claims, reward_claims
+       position_fee_claims, reward_claims, pool_current_state
     TO yog_indexer;
 
 -- Tables the indexer only reads: allowlist filter applied at startup.
@@ -45,7 +45,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO yog_indexer;
 -- ---------------------------------------------------------------------------
 GRANT SELECT
     ON pools, swap_events, liquidity_events,
-       position_fee_claims, reward_claims, watched_pools
+       position_fee_claims, reward_claims, watched_pools, pool_current_state
     TO yog_api;
 
 -- ---------------------------------------------------------------------------

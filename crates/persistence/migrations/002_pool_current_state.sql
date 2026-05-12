@@ -1,4 +1,4 @@
--- 003_pool_current_state.sql
+-- 002_pool_current_state.sql
 --
 -- Projection table holding the latest known state of each observed pool.
 --
@@ -21,6 +21,12 @@ BEGIN;
 -- -------------------------------------------------------------------------
 -- Table
 -- -------------------------------------------------------------------------
+--
+-- Column types intentionally mirror their counterparts in swap_events and
+-- liquidity_events:
+--   * reserve_a / reserve_b      BIGINT          (u64 in the domain — SPL amounts)
+--   * last_sqrt_price            NUMERIC(39, 0)  (u128 Q64.64)
+--   * liquidity                  NUMERIC(39, 0)  (u128 concentrated-liquidity L)
 
 CREATE TABLE IF NOT EXISTS pool_current_state (
     pool_address       TEXT PRIMARY KEY
@@ -33,8 +39,8 @@ CREATE TABLE IF NOT EXISTS pool_current_state (
     last_signature     TEXT NOT NULL,
 
     -- Canonical reserves (token_a, token_b ordering as established in pools)
-    reserve_a          NUMERIC(39, 0) NOT NULL,
-    reserve_b          NUMERIC(39, 0) NOT NULL,
+    reserve_a          BIGINT NOT NULL,
+    reserve_b          BIGINT NOT NULL,
 
     -- Price proxy: sqrt_price is updated by swap events only
     last_sqrt_price    NUMERIC(39, 0),
