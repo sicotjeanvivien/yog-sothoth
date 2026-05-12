@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO pool_current_state (\n                pool_address, protocol,\n                last_event_at, last_event_kind, last_signature,\n                reserve_a, reserve_b,\n                last_sqrt_price, last_swap_at,\n                liquidity, last_liquidity_at,\n                updated_at\n            )\n            VALUES (\n                $1, $2,\n                $3, $4, $5,\n                $6, $7,\n                $8, $9,\n                $10, $11,\n                NOW()\n            )\n            ON CONFLICT (pool_address) DO UPDATE SET\n                protocol           = EXCLUDED.protocol,\n                last_event_at      = EXCLUDED.last_event_at,\n                last_event_kind    = EXCLUDED.last_event_kind,\n                last_signature     = EXCLUDED.last_signature,\n                reserve_a          = EXCLUDED.reserve_a,\n                reserve_b          = EXCLUDED.reserve_b,\n                last_sqrt_price    = COALESCE(EXCLUDED.last_sqrt_price,   pool_current_state.last_sqrt_price),\n                last_swap_at       = COALESCE(EXCLUDED.last_swap_at,      pool_current_state.last_swap_at),\n                liquidity          = COALESCE(EXCLUDED.liquidity,         pool_current_state.liquidity),\n                last_liquidity_at  = COALESCE(EXCLUDED.last_liquidity_at, pool_current_state.last_liquidity_at),\n                updated_at         = NOW()\n            WHERE pool_current_state.last_event_at < EXCLUDED.last_event_at\n            RETURNING (xmax = 0) AS \"inserted!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "inserted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Timestamptz",
+        "Numeric",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2604afb5b67909b5987e20cb48e2a1e2acb8c9874ca158b4d550df534bc976c1"
+}
