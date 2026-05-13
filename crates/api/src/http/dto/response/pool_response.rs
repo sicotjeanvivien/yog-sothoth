@@ -10,7 +10,7 @@ use yog_core::domain::Pool;
 /// snake_case (matching its `Serialize` impl).
 #[derive(Debug, Serialize)]
 pub(crate) struct PoolResponse {
-    pub(crate) address: String,
+    pub(crate) pool_address: String,
     pub(crate) protocol: String,
     pub(crate) token_a_mint: String,
     pub(crate) token_b_mint: String,
@@ -21,7 +21,7 @@ pub(crate) struct PoolResponse {
 impl From<Pool> for PoolResponse {
     fn from(p: Pool) -> Self {
         Self {
-            address: p.pool_address.to_string(),
+            pool_address: p.pool_address.to_string(),
             protocol: p.protocol.to_string(),
             token_a_mint: p.token_a_mint.to_string(),
             token_b_mint: p.token_b_mint.to_string(),
