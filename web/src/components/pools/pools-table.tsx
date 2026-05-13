@@ -23,7 +23,7 @@ import { formatAbsolute, formatRelative, type FormatLocale } from "@/lib/format/
 import { shortenPubkey } from "@/lib/format/pubkey";
 
 export type PoolsTableLabels = {
-  address: string;
+  pool_address: string;
   protocol: string;
   pair: string;
   firstSeen: string;
@@ -44,7 +44,7 @@ export function PoolsTable({ pools, labels, locale, now }: PoolsTableProps) {
       <table className="w-full border-collapse text-left text-sm">
         <thead>
           <tr className="border-b border-cosmos-700/60 bg-cosmos-800/40">
-            <Th>{labels.address}</Th>
+            <Th>{labels.pool_address}</Th>
             <Th>{labels.protocol}</Th>
             <Th>{labels.pair}</Th>
             <Th>{labels.firstSeen}</Th>
@@ -54,7 +54,7 @@ export function PoolsTable({ pools, labels, locale, now }: PoolsTableProps) {
         <tbody>
           {pools.map((pool) => (
             <Row
-              key={pool.address}
+              key={pool.pool_address}
               pool={pool}
               locale={locale}
               {...(now !== undefined && { now })}
@@ -94,7 +94,7 @@ function Row({
     <tr className="border-b border-cosmos-700/40 transition-colors last:border-b-0 hover:bg-cosmos-700/30">
       {/* Address — primary identifier, slightly more visual weight */}
       <td className="px-4 py-3 font-mono text-sothoth-400">
-        <span title={pool.address}>{shortenPubkey(pool.address)}</span>
+        <span title={pool.pool_address}>{shortenPubkey(pool.pool_address)}</span>
       </td>
 
       {/* Protocol — discreet pill */}

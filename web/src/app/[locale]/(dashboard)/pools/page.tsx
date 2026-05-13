@@ -137,7 +137,7 @@ export default async function PoolsListingPage({
             pools={outcome.page.items}
             locale={locale as FormatLocale}
             labels={{
-              address: tTable("address"),
+              pool_address: tTable("address"),
               protocol: tTable("protocol"),
               pair: tTable("pair"),
               firstSeen: tTable("firstSeen"),
