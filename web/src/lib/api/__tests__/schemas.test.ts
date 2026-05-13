@@ -17,7 +17,7 @@ import {
 // response shape. Tests mutate this base to exercise each failure mode.
 function validPool() {
   return {
-    address: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
+    pool_address: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
     protocol: "damm_v2",
     token_a_mint: "So11111111111111111111111111111111111111112",
     token_b_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -29,7 +29,7 @@ function validPool() {
 describe("PoolResponseSchema", () => {
   it("accepts a complete valid pool", () => {
     const parsed = PoolResponseSchema.parse(validPool());
-    expect(parsed.address).toBe("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j");
+    expect(parsed.pool_address).toBe("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j");
     expect(parsed.protocol).toBe("damm_v2");
   });
 
@@ -41,9 +41,9 @@ describe("PoolResponseSchema", () => {
     expect(parsed.first_seen_at).toBe("2026-05-01T08:30:00+02:00");
   });
 
-  it("rejects an empty address", () => {
+  it("rejects an empty pool_address", () => {
     expect(() =>
-      PoolResponseSchema.parse({ ...validPool(), address: "" }),
+      PoolResponseSchema.parse({ ...validPool(), pool_address: "" }),
     ).toThrow();
   });
 
@@ -79,7 +79,7 @@ describe("PoolsPageSchema", () => {
   it("rejects items that fail individual validation", () => {
     expect(() =>
       PoolsPageSchema.parse({
-        items: [{ ...validPool(), address: "" }],
+        items: [{ ...validPool(), pool_address: "" }],
         next_cursor: null,
       }),
     ).toThrow();

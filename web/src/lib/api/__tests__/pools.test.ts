@@ -47,7 +47,7 @@ function validPage(nextCursor: string | null = null) {
   return {
     items: [
       {
-        address: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
+        pool_address: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
         protocol: "damm_v2",
         token_a_mint: "So11111111111111111111111111111111111111112",
         token_b_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
