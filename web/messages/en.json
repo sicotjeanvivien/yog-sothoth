@@ -10,6 +10,7 @@
   },
   "Dashboard": {
     "nav": {
+      "overview": "Overview",
       "pools": "Pools",
       "phaseLabel": "v0.1 · dashboard"
     }
@@ -42,6 +43,65 @@
       "unavailable": "The upstream service is temporarily unavailable. Try again in a moment.",
       "bad_request": "The request was rejected by the upstream service. The cursor may have expired — start over from the first page.",
       "unexpected": "An unexpected error occurred while loading the pools."
+    }
+  },
+  "PoolDetail": {
+    "backToList": "Back to pools",
+    "header": {
+      "protocol": "Protocol",
+      "pair": "Token pair",
+      "firstSeen": "First seen",
+      "lastSeen": "Last seen"
+    },
+    "state": {
+      "title": "Latest state",
+      "reserveA": "Reserve A",
+      "reserveB": "Reserve B",
+      "lastEvent": "Last event",
+      "kindSwap": "Swap",
+      "kindLiquidityAdd": "Liquidity added",
+      "kindLiquidityRemove": "Liquidity removed",
+      "sqrtPrice": "Sqrt price (Q64.64)",
+      "liquidity": "Liquidity (L)",
+      "signature": "Signature",
+      "updatedAt": "Updated",
+      "errorTitle": "State unavailable"
+    },
+    "stateEmpty": {
+      "title": "No state observed yet",
+      "description": "This pool exists in the indexer but no swap or liquidity event has been captured for it. The current-state projection is built from those two event types — fee or reward claims alone don't populate it."
+    },
+    "swaps": {
+      "title": "Recent swaps",
+      "time": "Time",
+      "direction": "Direction",
+      "amountIn": "Amount in",
+      "amountOut": "Amount out",
+      "fee": "Fee",
+      "signature": "Signature",
+      "directionAtoB": "A → B",
+      "directionBtoA": "B → A"
+    },
+    "liquidity": {
+      "title": "Recent liquidity changes",
+      "time": "Time",
+      "kind": "Kind",
+      "amountA": "Amount A",
+      "amountB": "Amount B",
+      "owner": "Owner",
+      "signature": "Signature",
+      "kindAdd": "Add",
+      "kindRemove": "Remove"
+    },
+    "feedEmpty": {
+      "noSwaps": "No swap events recorded for this pool yet.",
+      "noLiquidity": "No liquidity events recorded for this pool yet."
+    },
+    "feedError": {
+      "timeout": "The upstream service took too long to respond.",
+      "unavailable": "The upstream service is temporarily unavailable.",
+      "bad_request": "The request was rejected by the upstream service. The cursor may have expired.",
+      "unexpected": "An unexpected error occurred."
     }
   }
 }

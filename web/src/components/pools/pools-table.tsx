@@ -12,6 +12,9 @@
  *     style. Mirrors the temporal hierarchy of the underlying data.
  *   - Subtle hover halo via `hover:bg-cosmos-700/40` for visual
  *     feedback without disrupting the dense layout.
+ *   - Each row is a clickable link to the pool detail page. We anchor
+ *     at the cell level rather than wrapping the <tr> (which would be
+ *     invalid HTML); the user perceives a full-row click affordance.
  *
  * Header labels and the empty cell fallback come from the parent via
  * `next-intl` translations, kept out of the component to keep it
@@ -78,6 +81,36 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   );
 }
 
+/**
+ * Wrap a cell's inner content in an anchor tag. Block-level so the
+ * entire cell becomes the clickable hit target, not just the text.
+ *
+ * Anchoring at the cell level (rather than wrapping the <tr>) keeps
+ * the markup valid HTML while still giving the user a full-row click
+ * affordance.
+ */
+function CellLink({
+  href,
+  className,
+  title,
+  children,
+}: {
+  href: string;
+  className?: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      title={title}
+      className={`block focus:outline-none focus:ring-1 focus:ring-sothoth-500/60 focus:rounded-sm ${className ?? ""}`}
+    >
+      {children}
+    </a>
+  );
+}
+
 function Row({
   pool,
   locale,
@@ -89,37 +122,39 @@ function Row({
 }) {
   const firstSeenRelative = formatRelative(pool.first_seen_at, locale, now);
   const lastSeenAbsolute = formatAbsolute(pool.last_seen_at);
+  const detailHref = `/${locale}/pools/${pool.pool_address}`;
 
   return (
     <tr className="border-b border-cosmos-700/40 transition-colors last:border-b-0 hover:bg-cosmos-700/30">
-      {/* Address — primary identifier, slightly more visual weight */}
       <td className="px-4 py-3 font-mono text-sothoth-400">
-        <span title={pool.pool_address}>{shortenPubkey(pool.pool_address)}</span>
+        <CellLink href={detailHref} title={pool.pool_address}>
+          {shortenPubkey(pool.pool_address)}
+        </CellLink>
       </td>
 
-      {/* Protocol — discreet pill */}
       <td className="px-4 py-3">
-        <ProtocolBadge protocol={pool.protocol} />
+        <CellLink href={detailHref}>
+          <ProtocolBadge protocol={pool.protocol} />
+        </CellLink>
       </td>
 
-      {/* Mint pair — secondary, muted */}
       <td className="px-4 py-3 font-mono text-xs text-slate-400">
-        <div className="flex flex-col">
-          <span title={pool.token_a_mint}>{shortenPubkey(pool.token_a_mint)}</span>
-          <span title={pool.token_b_mint} className="text-slate-500">
-            {shortenPubkey(pool.token_b_mint)}
-          </span>
-        </div>
+        <CellLink href={detailHref}>
+          <div className="flex flex-col">
+            <span title={pool.token_a_mint}>{shortenPubkey(pool.token_a_mint)}</span>
+            <span title={pool.token_b_mint} className="text-slate-500">
+              {shortenPubkey(pool.token_b_mint)}
+            </span>
+          </div>
+        </CellLink>
       </td>
 
-      {/* First seen — relative, with absolute on hover */}
       <td className="px-4 py-3 text-slate-300" title={formatAbsolute(pool.first_seen_at) ?? ""}>
-        {firstSeenRelative ?? "—"}
+        <CellLink href={detailHref}>{firstSeenRelative ?? "—"}</CellLink>
       </td>
 
-      {/* Last seen — absolute UTC, right-aligned for scanning */}
       <td className="px-4 py-3 text-right font-mono text-xs text-slate-400">
-        {lastSeenAbsolute ?? "—"}
+        <CellLink href={detailHref}>{lastSeenAbsolute ?? "—"}</CellLink>
       </td>
     </tr>
   );

@@ -1,5 +1,5 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
-import { routing } from "../../../i18n/routing";
+import { routing } from "../../../../i18n/routing";
 
 type HomePageProps = {
   params: Promise<{ locale: string }>;
