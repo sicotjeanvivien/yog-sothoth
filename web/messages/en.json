@@ -115,5 +115,21 @@
         "unexpected": "An unexpected error occurred."
       }
     }
+  },
+  "Marketing": {
+    "nav": {
+      "overview": "Overview",
+      "support": "Support",
+      "github": "GitHub",
+      "openOverview": "Open Overview"
+    },
+    "hero": {
+      "title": "Real-time liquidity intelligence",
+      "subtitle": "On Meteora · Solana",
+      "lead": "Observe, reconstruct and analyze liquidity movements as they happen. Detect signals, understand flows, and stay ahead of the market.",
+      "ctaPrimary": "Open Overview",
+      "ctaSecondary": "See features",
+      "builtOn": "Built on Solana"
+    }
   }
 }
