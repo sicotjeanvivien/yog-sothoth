@@ -1,6 +1,6 @@
 {
   "Brand": {
-    "name": "Yog-Sothoth",
+    "name": "Yog-Scope",
     "tagline": "Intelligence de la liquidité",
     "motto": "Voit tout. En temps réel."
   },
@@ -9,99 +9,112 @@
     "milestoneTag": "Milestone 0 — fondations"
   },
   "Dashboard": {
-    "nav": {
-      "overview": "Overview",
-      "pools": "Pools",
-      "phaseLabel": "v0.1 · dashboard"
-    }
-  },
-  "Pools": {
-    "page": {
-      "eyebrow": "Protocoles observés",
-      "title": "Pools",
-      "description": "Toutes les pools de liquidité découvertes par l'indexeur sur les protocoles Meteora actifs. La liste est triée par date de découverte, la plus récente en premier."
+    "Sidebar": {
+      "nav": {
+        "overview": "Overview",
+        "pools": "Pools",
+        "liquidity": "Liquidité",
+        "flows": "Flux",
+        "signals": "Signaux",
+        "alerts": "Alertes",
+        "watchlist": "Surveillance",
+        "settings": "Réglages"
+      },
+      "network": {
+        "title": "Solana",
+        "live": "Live",
+        "slot": "Slot",
+        "latency": "Latence"
+      }
     },
-    "table": {
-      "address": "Adresse",
-      "protocol": "Protocole",
-      "pair": "Paire de tokens",
-      "firstSeen": "Découverte",
-      "lastSeen": "Dernière activité"
+    "Pools": {
+      "page": {
+        "eyebrow": "Protocoles observés",
+        "title": "Pools",
+        "description": "Toutes les pools de liquidité découvertes par l'indexeur sur les protocoles Meteora actifs. La liste est triée par date de découverte, la plus récente en premier."
+      },
+      "table": {
+        "address": "Adresse",
+        "protocol": "Protocole",
+        "pair": "Paire de tokens",
+        "firstSeen": "Découverte",
+        "lastSeen": "Dernière activité"
+      },
+      "pagination": {
+        "next": "Page suivante",
+        "firstPage": "Première page"
+      },
+      "empty": {
+        "title": "Aucune pool observée pour l'instant",
+        "description": "L'indexeur n'a encore détecté aucune activité sur les pools de la liste d'observation. Les pools apparaîtront ici dès la première transaction on-chain capturée."
+      },
+      "error": {
+        "title": "Impossible de charger les pools",
+        "retry": "Réessayer",
+        "timeout": "Le service amont a mis trop de temps à répondre. Réessaie dans un instant.",
+        "unavailable": "Le service amont est temporairement indisponible. Réessaie dans un instant.",
+        "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré — recommence depuis la première page.",
+        "unexpected": "Une erreur inattendue s'est produite lors du chargement des pools."
+      }
     },
-    "pagination": {
-      "next": "Page suivante",
-      "firstPage": "Première page"
-    },
-    "empty": {
-      "title": "Aucune pool observée pour l'instant",
-      "description": "L'indexeur n'a encore détecté aucune activité sur les pools de la liste d'observation. Les pools apparaîtront ici dès la première transaction on-chain capturée."
-    },
-    "error": {
-      "title": "Impossible de charger les pools",
-      "retry": "Réessayer",
-      "timeout": "Le service amont a mis trop de temps à répondre. Réessaie dans un instant.",
-      "unavailable": "Le service amont est temporairement indisponible. Réessaie dans un instant.",
-      "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré — recommence depuis la première page.",
-      "unexpected": "Une erreur inattendue s'est produite lors du chargement des pools."
-    }
-  },
-  "PoolDetail": {
-    "backToList": "Retour aux pools",
-    "header": {
-      "protocol": "Protocole",
-      "pair": "Paire de tokens",
-      "firstSeen": "Découverte",
-      "lastSeen": "Dernière activité"
-    },
-    "state": {
-      "title": "État courant",
-      "reserveA": "Réserve A",
-      "reserveB": "Réserve B",
-      "lastEvent": "Dernier événement",
-      "kindSwap": "Swap",
-      "kindLiquidityAdd": "Liquidité ajoutée",
-      "kindLiquidityRemove": "Liquidité retirée",
-      "sqrtPrice": "Prix racine (Q64.64)",
-      "liquidity": "Liquidité (L)",
-      "signature": "Signature",
-      "updatedAt": "Mise à jour",
-      "errorTitle": "État indisponible"
-    },
-    "stateEmpty": {
-      "title": "Aucun état observé pour l'instant",
-      "description": "Cette pool existe dans l'indexeur mais aucun événement de swap ou de liquidité n'a encore été capturé. La projection d'état courant est construite à partir de ces deux types d'événements — les claims de frais ou de récompenses seuls ne l'alimentent pas."
-    },
-    "swaps": {
-      "title": "Swaps récents",
-      "time": "Quand",
-      "direction": "Sens",
-      "amountIn": "Montant entrant",
-      "amountOut": "Montant sortant",
-      "fee": "Frais",
-      "signature": "Signature",
-      "directionAtoB": "A → B",
-      "directionBtoA": "B → A"
-    },
-    "liquidity": {
-      "title": "Changements de liquidité récents",
-      "time": "Quand",
-      "kind": "Type",
-      "amountA": "Montant A",
-      "amountB": "Montant B",
-      "owner": "Détenteur",
-      "signature": "Signature",
-      "kindAdd": "Ajout",
-      "kindRemove": "Retrait"
-    },
-    "feedEmpty": {
-      "noSwaps": "Aucun swap enregistré sur cette pool pour le moment.",
-      "noLiquidity": "Aucun changement de liquidité enregistré sur cette pool pour le moment."
-    },
-    "feedError": {
-      "timeout": "Le service amont a mis trop de temps à répondre.",
-      "unavailable": "Le service amont est temporairement indisponible.",
-      "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré.",
-      "unexpected": "Une erreur inattendue s'est produite."
+    "PoolDetail": {
+      "backToList": "Retour aux pools",
+      "header": {
+        "protocol": "Protocole",
+        "pair": "Paire de tokens",
+        "firstSeen": "Découverte",
+        "lastSeen": "Dernière activité"
+      },
+      "state": {
+        "title": "État courant",
+        "reserveA": "Réserve A",
+        "reserveB": "Réserve B",
+        "lastEvent": "Dernier événement",
+        "kindSwap": "Swap",
+        "kindLiquidityAdd": "Liquidité ajoutée",
+        "kindLiquidityRemove": "Liquidité retirée",
+        "sqrtPrice": "Prix racine (Q64.64)",
+        "liquidity": "Liquidité (L)",
+        "signature": "Signature",
+        "updatedAt": "Mise à jour",
+        "errorTitle": "État indisponible"
+      },
+      "stateEmpty": {
+        "title": "Aucun état observé pour l'instant",
+        "description": "Cette pool existe dans l'indexeur mais aucun événement de swap ou de liquidité n'a encore été capturé. La projection d'état courant est construite à partir de ces deux types d'événements — les claims de frais ou de récompenses seuls ne l'alimentent pas."
+      },
+      "swaps": {
+        "title": "Swaps récents",
+        "time": "Quand",
+        "direction": "Sens",
+        "amountIn": "Montant entrant",
+        "amountOut": "Montant sortant",
+        "fee": "Frais",
+        "signature": "Signature",
+        "directionAtoB": "A → B",
+        "directionBtoA": "B → A"
+      },
+      "liquidity": {
+        "title": "Changements de liquidité récents",
+        "time": "Quand",
+        "kind": "Type",
+        "amountA": "Montant A",
+        "amountB": "Montant B",
+        "owner": "Détenteur",
+        "signature": "Signature",
+        "kindAdd": "Ajout",
+        "kindRemove": "Retrait"
+      },
+      "feedEmpty": {
+        "noSwaps": "Aucun swap enregistré sur cette pool pour le moment.",
+        "noLiquidity": "Aucun changement de liquidité enregistré sur cette pool pour le moment."
+      },
+      "feedError": {
+        "timeout": "Le service amont a mis trop de temps à répondre.",
+        "unavailable": "Le service amont est temporairement indisponible.",
+        "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré.",
+        "unexpected": "Une erreur inattendue s'est produite."
+      }
     }
   }
 }

@@ -53,14 +53,298 @@
   }
 
   body {
-    /* Subtle radial glow that hints at the brand visual without
-       requiring a background image. Replaceable later by the
-       cosmic artwork from the mockups. */
-    background-image: radial-gradient(
-      ellipse at top,
-      rgba(124, 58, 237, 0.12),
-      transparent 60%
-    );
+    /* Cosmic backdrop:
+       1. A primary glow anchored top-right of the viewport — gives
+          the page a directional luminance reminiscent of the mockups.
+       2. A second, dimmer glow bottom-left for visual balance.
+       3. A subtle starfield via repeating radial dots, low contrast
+          so it doesn't compete with the data layer.
+    */
+    background-image:
+      radial-gradient(
+        ellipse at 75% -10%,
+        rgba(124, 58, 237, 0.18),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse at 10% 90%,
+        rgba(8, 145, 178, 0.08),
+        transparent 50%
+      ),
+      radial-gradient(
+        circle at 15% 25%,
+        rgba(167, 139, 250, 0.04) 1px,
+        transparent 1px
+      ),
+      radial-gradient(
+        circle at 85% 60%,
+        rgba(167, 139, 250, 0.03) 1px,
+        transparent 1px
+      ),
+      radial-gradient(
+        circle at 45% 80%,
+        rgba(167, 139, 250, 0.03) 1px,
+        transparent 1px
+      );
+    background-size: auto, auto, 240px 240px, 320px 320px, 280px 280px;
     background-attachment: fixed;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Yog-Sothoth Sidebar                                                */
+/* ------------------------------------------------------------------ */
+
+.ys-sidebar {
+  --ys-bg: #0a0b12;
+  --ys-card: #11121b;
+  --ys-card-border: rgba(255, 255, 255, 0.05);
+  --ys-text: #ffffff;
+  --ys-text-muted: #6b6c80;
+  --ys-text-dim: #4d4e62;
+  --ys-accent: #a78bfa;
+  --ys-accent-strong: #8b5cf6;
+  --ys-accent-soft: rgba(139, 92, 246, 0.12);
+  --ys-accent-border: rgba(139, 92, 246, 0.25);
+  --ys-success: #22c55e;
+
+  width: 220px;
+  min-width: 220px;
+  height: 100vh;
+  background: var(--ys-bg);
+  color: var(--ys-text);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 16px 16px;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  box-sizing: border-box;
+}
+
+.ys-sidebar * {
+  box-sizing: border-box;
+}
+
+/* ---------- brand ---------- */
+
+.ys-sidebar__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 4px 0 28px;
+}
+
+.ys-sidebar__mark {
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  filter: drop-shadow(0 0 24px rgba(139, 92, 246, 0.25));
+}
+
+.ys-sidebar__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: #f5f3ff;
+}
+
+.ys-sidebar__tagline {
+  margin: 6px 0 0;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  color: var(--ys-accent);
+  opacity: 0.75;
+}
+
+/* ---------- nav ---------- */
+
+.ys-sidebar__nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 4px;
+}
+
+.ys-sidebar__nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ys-nav-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ys-text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+  text-align: left;
+}
+
+.ys-nav-item__icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.ys-nav-item__label {
+  line-height: 1;
+}
+
+.ys-nav-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4e0;
+}
+
+.ys-nav-item:focus-visible {
+  outline: none;
+  border-color: var(--ys-accent-border);
+}
+
+.ys-nav-item--active,
+.ys-nav-item--active:hover {
+  background: var(--ys-accent-soft);
+  border-color: var(--ys-accent-border);
+  color: #ffffff;
+}
+
+.ys-nav-item--active .ys-nav-item__icon {
+  color: var(--ys-accent);
+}
+
+/* ---------- network card ---------- */
+
+.ys-network {
+  margin-top: 16px;
+  padding: 14px 14px 12px;
+  background: var(--ys-card);
+  border: 1px solid var(--ys-card-border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ys-network__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ys-network__head-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ys-network__name {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: #f5f3ff;
+}
+
+.ys-network__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ys-text-dim);
+  letter-spacing: 0.02em;
+}
+
+.ys-network__status.is-live {
+  color: var(--ys-success);
+}
+
+.ys-network__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ys-text-dim);
+  box-shadow: 0 0 0 0 currentColor;
+}
+
+.ys-network__status.is-live .ys-network__dot {
+  background: var(--ys-success);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  animation: ys-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ys-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.ys-network__stats {
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ys-network__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11.5px;
+  margin: 0;
+}
+
+.ys-network__row dt {
+  color: var(--ys-text-dim);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.ys-network__row dd {
+  margin: 0;
+  color: #e7e7ef;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+}
+
+.ys-network__spark {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: 4px;
+}
+
+/* ---------- scrollbar polish ---------- */
+
+.ys-sidebar__nav::-webkit-scrollbar {
+  width: 4px;
+}
+.ys-sidebar__nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
 }

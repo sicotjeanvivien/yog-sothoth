@@ -1,6 +1,6 @@
 {
   "Brand": {
-    "name": "Yog-Sothoth",
+    "name": "Yog-Scope",
     "tagline": "Liquidity Intelligence",
     "motto": "See everything. In real time."
   },
@@ -9,99 +9,112 @@
     "milestoneTag": "Milestone 0 — scaffolding"
   },
   "Dashboard": {
-    "nav": {
-      "overview": "Overview",
-      "pools": "Pools",
-      "phaseLabel": "v0.1 · dashboard"
-    }
-  },
-  "Pools": {
-    "page": {
-      "eyebrow": "Observed protocols",
-      "title": "Pools",
-      "description": "Every liquidity pool discovered by the indexer across active Meteora protocols. The list is ordered by discovery time, most recent first."
+    "Sidebar": {
+      "nav": {
+        "overview": "Overview",
+        "pools": "Pools",
+        "liquidity": "Liquidity",
+        "flows": "Flows",
+        "signals": "Signals",
+        "alerts": "Alerts",
+        "watchlist": "Watchlist",
+        "settings": "Settings"
+      },
+      "network": {
+        "title": "Solana",
+        "live": "Live",
+        "slot": "Slot",
+        "latency": "Latency"
+      }
     },
-    "table": {
-      "address": "Address",
-      "protocol": "Protocol",
-      "pair": "Token pair",
-      "firstSeen": "First seen",
-      "lastSeen": "Last seen"
+    "Pools": {
+      "page": {
+        "eyebrow": "Observed protocols",
+        "title": "Pools",
+        "description": "Every liquidity pool discovered by the indexer across active Meteora protocols. The list is ordered by discovery time, most recent first."
+      },
+      "table": {
+        "address": "Address",
+        "protocol": "Protocol",
+        "pair": "Token pair",
+        "firstSeen": "First seen",
+        "lastSeen": "Last seen"
+      },
+      "pagination": {
+        "next": "Next page",
+        "firstPage": "First page"
+      },
+      "empty": {
+        "title": "No pools observed yet",
+        "description": "The indexer hasn't seen any pool activity on the configured allowlist. Pools will appear here as soon as on-chain events are picked up."
+      },
+      "error": {
+        "title": "Unable to load pools",
+        "retry": "Retry",
+        "timeout": "The upstream service took too long to respond. Try again in a moment.",
+        "unavailable": "The upstream service is temporarily unavailable. Try again in a moment.",
+        "bad_request": "The request was rejected by the upstream service. The cursor may have expired — start over from the first page.",
+        "unexpected": "An unexpected error occurred while loading the pools."
+      }
     },
-    "pagination": {
-      "next": "Next page",
-      "firstPage": "First page"
-    },
-    "empty": {
-      "title": "No pools observed yet",
-      "description": "The indexer hasn't seen any pool activity on the configured allowlist. Pools will appear here as soon as on-chain events are picked up."
-    },
-    "error": {
-      "title": "Unable to load pools",
-      "retry": "Retry",
-      "timeout": "The upstream service took too long to respond. Try again in a moment.",
-      "unavailable": "The upstream service is temporarily unavailable. Try again in a moment.",
-      "bad_request": "The request was rejected by the upstream service. The cursor may have expired — start over from the first page.",
-      "unexpected": "An unexpected error occurred while loading the pools."
-    }
-  },
-  "PoolDetail": {
-    "backToList": "Back to pools",
-    "header": {
-      "protocol": "Protocol",
-      "pair": "Token pair",
-      "firstSeen": "First seen",
-      "lastSeen": "Last seen"
-    },
-    "state": {
-      "title": "Latest state",
-      "reserveA": "Reserve A",
-      "reserveB": "Reserve B",
-      "lastEvent": "Last event",
-      "kindSwap": "Swap",
-      "kindLiquidityAdd": "Liquidity added",
-      "kindLiquidityRemove": "Liquidity removed",
-      "sqrtPrice": "Sqrt price (Q64.64)",
-      "liquidity": "Liquidity (L)",
-      "signature": "Signature",
-      "updatedAt": "Updated",
-      "errorTitle": "State unavailable"
-    },
-    "stateEmpty": {
-      "title": "No state observed yet",
-      "description": "This pool exists in the indexer but no swap or liquidity event has been captured for it. The current-state projection is built from those two event types — fee or reward claims alone don't populate it."
-    },
-    "swaps": {
-      "title": "Recent swaps",
-      "time": "Time",
-      "direction": "Direction",
-      "amountIn": "Amount in",
-      "amountOut": "Amount out",
-      "fee": "Fee",
-      "signature": "Signature",
-      "directionAtoB": "A → B",
-      "directionBtoA": "B → A"
-    },
-    "liquidity": {
-      "title": "Recent liquidity changes",
-      "time": "Time",
-      "kind": "Kind",
-      "amountA": "Amount A",
-      "amountB": "Amount B",
-      "owner": "Owner",
-      "signature": "Signature",
-      "kindAdd": "Add",
-      "kindRemove": "Remove"
-    },
-    "feedEmpty": {
-      "noSwaps": "No swap events recorded for this pool yet.",
-      "noLiquidity": "No liquidity events recorded for this pool yet."
-    },
-    "feedError": {
-      "timeout": "The upstream service took too long to respond.",
-      "unavailable": "The upstream service is temporarily unavailable.",
-      "bad_request": "The request was rejected by the upstream service. The cursor may have expired.",
-      "unexpected": "An unexpected error occurred."
+    "PoolDetail": {
+      "backToList": "Back to pools",
+      "header": {
+        "protocol": "Protocol",
+        "pair": "Token pair",
+        "firstSeen": "First seen",
+        "lastSeen": "Last seen"
+      },
+      "state": {
+        "title": "Latest state",
+        "reserveA": "Reserve A",
+        "reserveB": "Reserve B",
+        "lastEvent": "Last event",
+        "kindSwap": "Swap",
+        "kindLiquidityAdd": "Liquidity added",
+        "kindLiquidityRemove": "Liquidity removed",
+        "sqrtPrice": "Sqrt price (Q64.64)",
+        "liquidity": "Liquidity (L)",
+        "signature": "Signature",
+        "updatedAt": "Updated",
+        "errorTitle": "State unavailable"
+      },
+      "stateEmpty": {
+        "title": "No state observed yet",
+        "description": "This pool exists in the indexer but no swap or liquidity event has been captured for it. The current-state projection is built from those two event types — fee or reward claims alone don't populate it."
+      },
+      "swaps": {
+        "title": "Recent swaps",
+        "time": "Time",
+        "direction": "Direction",
+        "amountIn": "Amount in",
+        "amountOut": "Amount out",
+        "fee": "Fee",
+        "signature": "Signature",
+        "directionAtoB": "A → B",
+        "directionBtoA": "B → A"
+      },
+      "liquidity": {
+        "title": "Recent liquidity changes",
+        "time": "Time",
+        "kind": "Kind",
+        "amountA": "Amount A",
+        "amountB": "Amount B",
+        "owner": "Owner",
+        "signature": "Signature",
+        "kindAdd": "Add",
+        "kindRemove": "Remove"
+      },
+      "feedEmpty": {
+        "noSwaps": "No swap events recorded for this pool yet.",
+        "noLiquidity": "No liquidity events recorded for this pool yet."
+      },
+      "feedError": {
+        "timeout": "The upstream service took too long to respond.",
+        "unavailable": "The upstream service is temporarily unavailable.",
+        "bad_request": "The request was rejected by the upstream service. The cursor may have expired.",
+        "unexpected": "An unexpected error occurred."
+      }
     }
   }
 }
