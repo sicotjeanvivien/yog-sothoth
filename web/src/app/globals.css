@@ -20,7 +20,7 @@
   --color-signal-warn: #fbbf24;
   --color-signal-bad: #f87171;
 
-  --font-display: Cinzel, Georgia, serif;
+  --font-display: var(--font-display-cinzel, Cinzel), Georgia, serif;
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }

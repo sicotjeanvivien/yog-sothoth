@@ -1,42 +1,39 @@
 /**
  * Layout for the dashboard route group `(dashboard)`.
  *
- * Owns the persistent shell — sidebar on the left, main content on
- * the right. The route group `(dashboard)` does not appear in the URL,
- * so pages under it keep their natural paths (`/[locale]/pools`,
- * `/[locale]/overview`, etc.) while sharing this chrome.
+ * Owns the persistent shell — sidebar on the left, scrollable content
+ * on the right. The route group `(dashboard)` does not appear in the
+ * URL, so pages under it keep their natural paths (`/[locale]/pools`,
+ * `/[locale]/overview`, …) while sharing this chrome.
  *
- * The marketing routes live in a sibling group `(marketing)` and
- * use their own layout — no sidebar, marketing-style chrome instead.
+ * # Scroll & sticky sidebar
  *
- * # Active nav item
+ * The sidebar is `position: sticky` (set inside the `Sidebar`
+ * component). For sticky to work the scroll must belong to the page
+ * (the document), not to an inner `overflow` container. This layout
+ * therefore deliberately does NOT put `overflow-*` on the flex
+ * wrapper: the wrapper grows with the content, the document scrolls,
+ * and the sidebar sticks to the viewport top.
  *
- * The sidebar receives `activeKey={null}` here. The layout does not
- * know which route is currently rendering — each page is expected
- * to provide its own active state by a mechanism we will pick when
- * the first page lands (Context, route segment introspection, or
- * a small client component reading `usePathname`). Leaving the
- * decision open in this commit avoids locking in a pattern before
- * we know what is most ergonomic.
+ * `items-start` on the flex container is important — without it the
+ * default `stretch` would force the sidebar to the full content
+ * height, and `sticky` would have nothing to scroll against.
+ *
+ * The sidebar is an autonomous Client Component: it reads the route
+ * and its labels itself, so it is mounted here with no props.
  */
-
-import { getTranslations } from "next-intl/server";
 
 import { Sidebar } from "@/components/dashboard/sidebar/sidebar";
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
-  params: Promise<{ locale: string }>;
 };
 
-export default async function DashboardLayout({
-  children,
-  params,
-}: DashboardLayoutProps) {
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen items-start">
       <Sidebar />
-      <main className="flex-1 overflow-x-hidden">{children}</main>
+      <main className="min-w-0 flex-1">{children}</main>
     </div>
   );
 }

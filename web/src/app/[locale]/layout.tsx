@@ -4,6 +4,15 @@ import { notFound } from "next/navigation";
 import { routing } from "../../../i18n/routing";
 import "../globals.css";
 
+import { Cinzel } from "next/font/google";
+
+const cinzel = Cinzel({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-display",  // exposes a CSS variable
+  display: "swap",
+});
+
 // Tells Next.js to statically render every supported locale at build time.
 // Avoids the dynamic-rendering opt-in that next-intl would otherwise
 // trigger as soon as a Server Component reads translations.
@@ -34,7 +43,7 @@ export default async function LocaleLayout({
   setRequestLocale(locale);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className={cinzel.variable}>
       <body>
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>

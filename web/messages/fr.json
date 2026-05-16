@@ -10,15 +10,10 @@
   },
   "Dashboard": {
     "Sidebar": {
+      "caption": "Tableau de bord",
       "nav": {
-        "overview": "Overview",
-        "pools": "Pools",
-        "liquidity": "Liquidité",
-        "flows": "Flux",
-        "signals": "Signaux",
-        "alerts": "Alertes",
-        "watchlist": "Surveillance",
-        "settings": "Réglages"
+        "overview": "Aperçu",
+        "pools": "Pools"
       },
       "network": {
         "title": "Solana",
