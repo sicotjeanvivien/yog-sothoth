@@ -121,13 +121,13 @@
       "overview": "Overview",
       "support": "Support",
       "github": "GitHub",
-      "openOverview": "Open Overview"
+      "openOverview": "Analytics"
     },
     "hero": {
       "title": "Real-time liquidity intelligence",
       "subtitle": "On Meteora · Solana",
       "lead": "Observe, reconstruct and analyze liquidity movements as they happen. Detect signals, understand flows, and stay ahead of the market.",
-      "ctaPrimary": "Open Overview",
+      "ctaPrimary": "Open Analytics",
       "ctaSecondary": "See features",
       "builtOn": "Built on Solana"
     }

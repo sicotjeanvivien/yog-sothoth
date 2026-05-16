@@ -118,16 +118,16 @@
   },
   "Marketing": {
     "nav": {
-      "overview": "Aperçu",
+      "overview": "Analytics",
       "support": "Support",
       "github": "GitHub",
-      "openOverview": "Ouvrir l'aperçu"
+      "openOverview": "Ouvrir Analytics"
     },
     "hero": {
       "title": "Intelligence de la liquidité en temps réel",
       "subtitle": "Sur Meteora · Solana",
       "lead": "Observez, reconstruisez et analysez les mouvements de liquidité en temps réel. Détectez des signaux, comprenez les flux, et gardez une longueur d'avance sur le marché.",
-      "ctaPrimary": "Ouvrir l'aperçu",
+      "ctaPrimary": "Ouvrir Analytics",
       "ctaSecondary": "Voir les fonctionnalités",
       "builtOn": "Propulsé par Solana"
     }

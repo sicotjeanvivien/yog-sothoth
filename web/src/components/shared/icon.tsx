@@ -197,3 +197,23 @@ export const HamburgerIcon: React.FC<IconProps> = ({
     <path d="M4 7h16M4 12h16M4 17h16" />
   </svg>
 );
+
+export const CloseIcon: React.FC<IconProps> = ({
+  size = 20,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+export const ArrowRightIcon: React.FC<IconProps> = ({
+  size = 14,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M4 10h12M11 5l5 5-5 5" />
+  </svg>
+);

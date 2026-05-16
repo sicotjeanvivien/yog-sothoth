@@ -43,8 +43,7 @@ export const MARKETING_NAV_LINKS: readonly MarketingNavLink[] = [
   {
     key: "github",
     labelKey: "github",
-    // TODO: replace with the real repository URL once public.
-    href: "https://github.com/",
+    href: "https://github.com/sicotjeanvivien/yog-sothoth",
     external: true,
   },
 ] as const;

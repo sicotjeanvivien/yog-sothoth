@@ -144,22 +144,24 @@ function BrandBlock() {
   const t = useTranslations("Brand");
 
   return (
-    <div className="flex flex-col items-center px-1 pt-1 pb-2 text-center">
-      <Image
-        src="/logo.png"
-        alt={t("name")}
-        width={168}
-        height={168}
-        priority
-        className="object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
-      />
-      <p className="mt-3 font-display text-[17px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
-        {t("name")}
-      </p>
-      <p className="mt-[7px] text-[9px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
-        {t("tagline")}
-      </p>
-    </div>
+    <Link href="/" className="flex items-center gap-[11px]">
+      <div className="flex flex-col items-center px-1 pt-1 pb-2 text-center">
+        <Image
+          src="/logo.png"
+          alt={t("name")}
+          width={84}
+          height={84}
+          priority
+          className="h-[auto] w-[auto] object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
+        />
+        <p className="mt-3 font-display text-[17px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
+          {t("name")}
+        </p>
+        <p className="mt-[7px] text-[9px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
+          {t("tagline")}
+        </p>
+      </div>
+    </Link>
   );
 }
 
