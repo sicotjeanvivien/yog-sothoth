@@ -1,8 +1,9 @@
 
 export default async function PoolsListingPage() {
   return (
-    <div className="px-6 py-10 lg:px-10 lg:py-12">
-
+    <div>
+      <h1>Pools Page</h1>
+      <p>Welcome to the about page!</p>
     </div>
   );
 }

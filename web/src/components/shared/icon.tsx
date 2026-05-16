@@ -182,3 +182,18 @@ export const SolanaGlyph: React.FC<{ size?: number }> = ({ size = 28 }) => {
     </svg>
   );
 };
+
+/**
+ * Hamburger — three stacked lines. Used by the mobile drawer trigger
+ * in the dashboard shell. Authored on the 24x24 grid like the rest of
+ * the set.
+ */
+export const HamburgerIcon: React.FC<IconProps> = ({
+  size = 20,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </svg>
+);

@@ -1,22 +1,34 @@
 "use client";
 
 /**
- * Dashboard sidebar — persistent left rail.
+ * Dashboard sidebar — the navigation rail.
  *
- * Autonomous Client Component:
+ * Autonomous for routing concerns:
  *   - reads the current route via next-intl's `usePathname` (returns
  *     the path *without* the locale segment, e.g. `/overview`);
  *   - resolves its own labels via `useTranslations`;
  *   - reads the nav structure from `sidebar-nav.ts`.
  *
- * The layout mounts it with no props: `<Sidebar />`.
+ * Responsive state, however, is NOT the sidebar's concern — it is
+ * owned by `DashboardShell`, which passes `isOpen` and `onNavigate`.
  *
- * # Positioning
+ * # Positioning — two modes at the lg breakpoint
  *
- * The root `<aside>` is `sticky top-0 h-screen`. It stays in the flex
- * flow next to `<main>`, but sticks to the viewport top while the
- * page scrolls. For this to work the layout's flex container must not
- * trap the scroll in an `overflow` context — see `(dashboard)/layout`.
+ *   >= lg : a permanent fixed rail. `lg:sticky lg:top-0` keeps it
+ *           pinned while the page scrolls. For sticky to work no
+ *           ancestor may create an `overflow` scroll context.
+ *   <  lg : an off-canvas drawer. `fixed` to the viewport, slid out
+ *           of view by default (`-translate-x-full`) and into view
+ *           when `isOpen` (`translate-x-0`), with a transition.
+ *
+ * The mode is entirely CSS (Tailwind `lg:` variants); the component
+ * only reads `isOpen` to pick the translate class below lg.
+ *
+ * # onNavigate
+ *
+ * Called whenever a nav link is clicked. The shell uses it to close
+ * the drawer so navigation doesn't leave it open on the next page.
+ * On lg+ it still fires but the shell's `close()` is a harmless no-op.
  *
  * # Visual identity
  *
@@ -33,7 +45,7 @@
  * (see the integration notes delivered with this commit).
  */
 
-import type { ReactNode, FC } from "react";
+import type { FC } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 
@@ -55,9 +67,10 @@ import type { SidebarNavKey } from "./sidebar-keys";
 // pure data) or in `icon.tsx` (which stays a neutral icon library
 // with no knowledge of the nav). The sidebar already maps keys to
 // labels via i18n — mapping keys to icons is the same concern.
-
-/** A nav icon is any component accepting the shared `IconProps`. */
-type IconComponent = (props: IconProps) => ReactNode;
+//
+// The map is typed with `FC<IconProps>` — the exact type the icon
+// components already expose — so the two sides agree without a
+// narrower hand-rolled type that would reject `FC`'s return shape.
 
 const NAV_ICONS: Record<SidebarNavKey, FC<IconProps>> = {
   overview: OverviewIcon,
@@ -79,11 +92,30 @@ function isItemActive(pathname: string, href: string): boolean {
 
 // ── Component ─────────────────────────────────────────────────────────
 
-export function Sidebar() {
+type SidebarProps = {
+  /**
+   * Whether the mobile drawer is open. Ignored on lg+ where the
+   * sidebar is a permanent fixed rail.
+   */
+  isOpen: boolean;
+  /** Called when a nav link is clicked — lets the shell close the drawer. */
+  onNavigate: () => void;
+};
+
+export function Sidebar({ isOpen, onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
+  // Base: a fixed-position rail. Below lg it is an off-canvas drawer
+  // translated in/out; on lg+ it switches to sticky and the translate
+  // is neutralised (`lg:translate-x-0`).
+  const positioning =
+    "fixed top-0 left-0 z-40 h-screen transition-transform duration-200 ease-out lg:sticky lg:z-auto lg:translate-x-0";
+  const drawerState = isOpen ? "translate-x-0" : "-translate-x-full";
+
   return (
-    <aside className="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col border-r border-sothoth-700/25 bg-cosmos-900 px-5 pt-8 pb-6">
+    <aside
+      className={`${positioning} ${drawerState} flex w-[248px] shrink-0 flex-col border-r border-sothoth-700/25 bg-cosmos-900 px-5 pt-8 pb-6`}
+    >
       <BrandBlock />
       <Divider />
       <nav className="flex flex-1 flex-col gap-[3px]">
@@ -93,6 +125,7 @@ export function Sidebar() {
             key={item.key}
             item={item}
             active={isItemActive(pathname, item.href)}
+            onNavigate={onNavigate}
           />
         ))}
       </nav>
@@ -156,13 +189,18 @@ function NavCaption() {
  * The active state combines a flat violet fill and a full-height
  * accent bar (`before:`) clipped to the rounded corners by
  * `overflow-hidden`.
+ *
+ * `onNavigate` fires on click so the shell can close the mobile
+ * drawer. On lg+ it is a harmless no-op.
  */
 function SidebarNavLink({
   item,
   active,
+  onNavigate,
 }: {
   item: SidebarNavItem;
   active: boolean;
+  onNavigate: () => void;
 }) {
   const t = useTranslations("Dashboard.Sidebar.nav");
 
@@ -178,6 +216,7 @@ function SidebarNavLink({
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={`${base} ${state}`}
       aria-current={active ? "page" : undefined}
     >

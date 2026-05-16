@@ -22,6 +22,10 @@
         "latency": "Latency"
       }
     },
+    "shell": {
+      "openMenu": "Open navigation menu",
+      "closeMenu": "Close navigation menu"
+    },
     "Pools": {
       "page": {
         "eyebrow": "Observed protocols",
