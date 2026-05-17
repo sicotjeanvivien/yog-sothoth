@@ -7,15 +7,19 @@
  *
  * # Layout
  *
- * Keeps the spirit of the mockup footer but sized to what the
- * product actually has (the mockup's four link columns assume pages
- * that don't exist yet). Three zones in the upper row:
+ * Four zones in the upper row:
  *
  *   1. brand   — logo, wordmark, one-line description, social icons;
- *   2. links   — a single short column (Overview / Features / Support);
- *   3. AWSD    — a "Built by AWSD" credit box, links to awsd.fr.
+ *   2. Product — link column (Overview / Features / Support);
+ *   3. Company — link column (About / Privacy / Terms);
+ *   4. AWSD    — a "Built by AWSD" credit box, links to awsd.fr.
  *
  * A copyright bar sits below, separated by a hairline border.
+ *
+ * The two link columns are driven by `FOOTER_COLUMNS` — the
+ * component renders whatever columns the config lists. Note the
+ * Company links currently 404 (the pages don't exist yet); see the
+ * config file.
  *
  * Static content, Server Component.
  *
@@ -32,8 +36,9 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import {
   FOOTER_AWSD,
-  FOOTER_LINKS,
+  FOOTER_COLUMNS,
   FOOTER_SOCIALS,
+  type FooterColumn,
 } from "./marketing-footer-links";
 import { GithubIcon, XIcon } from "@/components/shared/icon";
 
@@ -45,9 +50,11 @@ export function MarketingFooter() {
     <footer className="border-t border-sothoth-500/15 bg-cosmos-950">
       <div className="mx-auto max-w-[1800px] px-6 lg:px-12">
         {/* Upper row — brand / links / AWSD box */}
-        <div className="grid grid-cols-1 gap-10 py-14 md:grid-cols-2 lg:grid-cols-[2fr_1fr_1.4fr]">
+        <div className="grid grid-cols-1 gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1.4fr]">
           <BrandBlock />
-          <LinksColumn />
+          {FOOTER_COLUMNS.map((column) => (
+            <LinksColumn key={column.key} column={column} />
+          ))}
           <AwsdBox />
         </div>
 
@@ -118,9 +125,8 @@ function BrandBlock() {
  * The single column of footer links. Each entry is a route, an
  * in-page anchor, or an external URL — rendered accordingly.
  */
-function LinksColumn() {
-  const t = useTranslations("Marketing.footer");
-  const tLinks = useTranslations("Marketing.footer.links");
+function LinksColumn({ column }: { column: FooterColumn }) {
+  const t = useTranslations(column.namespace);
 
   const itemClass =
     "text-[17px] font-medium text-slate-100 transition-colors hover:text-sothoth-400";
@@ -128,12 +134,12 @@ function LinksColumn() {
   return (
     <div>
       <h3 className="text-[14px] font-semibold tracking-[0.20em] text-slate-500 uppercase">
-        {t("linksHeading")}
+        {t("heading")}
       </h3>
 
       <ul className="mt-4 flex flex-col gap-2.5">
-        {FOOTER_LINKS.map((link) => {
-          const label = tLinks(link.labelKey);
+        {column.links.map((link) => {
+          const label = t(link.labelKey);
 
           // In-page fragment or external URL — plain anchor.
           if (link.kind === "anchor" || link.kind === "external") {

@@ -155,15 +155,21 @@
     },
     "footer": {
       "description": "Real-time liquidity intelligence on Meteora · Solana.",
-      "linksHeading": "Product",
-      "links": {
-        "overview": "Analytics",
+      "product": {
+        "heading": "Product",
+        "overview": "Overview",
         "features": "Features",
         "support": "Support"
       },
+      "company": {
+        "heading": "Company",
+        "about": "About",
+        "privacy": "Privacy",
+        "terms": "Terms"
+      },
       "awsd": {
         "title": "Built by AWSD",
-        "tagline": "Software Artisan. Crafted in France."
+        "tagline": "Software studio. Crafted in France."
       },
       "copyright": "© {year} Yog-Sothoth. All rights reserved."
     }

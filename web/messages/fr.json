@@ -155,15 +155,21 @@
     },
     "footer": {
       "description": "Intelligence de la liquidité en temps réel sur Meteora · Solana.",
-      "linksHeading": "Produit",
-      "links": {
-        "overview": "Analytics",
+      "product": {
+        "heading": "Produit",
+        "overview": "Aperçu",
         "features": "Fonctionnalités",
         "support": "Support"
       },
+      "company": {
+        "heading": "Entreprise",
+        "about": "À propos",
+        "privacy": "Confidentialité",
+        "terms": "Conditions"
+      },
       "awsd": {
         "title": "Conçu par AWSD",
-        "tagline": "Artisan logiciel. Fait en France."
+        "tagline": "Studio logiciel. Façonné en France."
       },
       "copyright": "© {year} Yog-Sothoth. Tous droits réservés."
     }
