@@ -1,11 +1,12 @@
 @import 'tailwindcss';
+@source '../**/*.{ts,tsx}';
 
 @theme {
   --color-cosmos-600: #1c1838;
   --color-cosmos-700: #15122a;
   --color-cosmos-800: #0f0c1d;
   --color-cosmos-900: #0a0815;
-  --color-cosmos-950: #05030d;
+  --color-cosmos-950: #000310;
 
   --color-sothoth-400: #a78bfa;
   --color-sothoth-500: #8b5cf6;
@@ -34,6 +35,7 @@
   color utility to any element that depends on these defaults.
 */
 @layer base {
+
   *,
   ::after,
   ::before,
@@ -47,6 +49,7 @@
    Individual components are free to override these on their own
    surfaces; only the global page chrome is set here. */
 @layer base {
+
   html,
   body {
     @apply bg-cosmos-950 text-slate-100 antialiased;
@@ -61,31 +64,21 @@
           so it doesn't compete with the data layer.
     */
     background-image:
-      radial-gradient(
-        ellipse at 75% -10%,
+      radial-gradient(ellipse at 75% -10%,
         rgba(124, 58, 237, 0.18),
-        transparent 55%
-      ),
-      radial-gradient(
-        ellipse at 10% 90%,
+        transparent 55%),
+      radial-gradient(ellipse at 10% 90%,
         rgba(8, 145, 178, 0.08),
-        transparent 50%
-      ),
-      radial-gradient(
-        circle at 15% 25%,
+        transparent 50%),
+      radial-gradient(circle at 15% 25%,
         rgba(167, 139, 250, 0.04) 1px,
-        transparent 1px
-      ),
-      radial-gradient(
-        circle at 85% 60%,
+        transparent 1px),
+      radial-gradient(circle at 85% 60%,
         rgba(167, 139, 250, 0.03) 1px,
-        transparent 1px
-      ),
-      radial-gradient(
-        circle at 45% 80%,
+        transparent 1px),
+      radial-gradient(circle at 45% 80%,
         rgba(167, 139, 250, 0.03) 1px,
-        transparent 1px
-      );
+        transparent 1px);
     background-size: auto, auto, 240px 240px, 320px 320px, 280px 280px;
     background-attachment: fixed;
   }
@@ -297,8 +290,13 @@
 }
 
 @keyframes ys-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.45; }
+  0%, 100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .ys-network__stats {
@@ -344,6 +342,7 @@
 .ys-sidebar__nav::-webkit-scrollbar {
   width: 4px;
 }
+
 .ys-sidebar__nav::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 4px;

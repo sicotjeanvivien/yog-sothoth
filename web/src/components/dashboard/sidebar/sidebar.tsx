@@ -149,10 +149,10 @@ function BrandBlock() {
         <Image
           src="/logo.png"
           alt={t("name")}
-          width={84}
-          height={84}
+          width={64}
+          height={64}
           priority
-          className="h-[auto] w-[auto] object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
+          className="h-[64] w-[64] object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
         />
         <p className="mt-3 font-display text-[17px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
           {t("name")}

@@ -121,7 +121,7 @@
       "overview": "Overview",
       "support": "Support",
       "github": "GitHub",
-      "openOverview": "Analytics"
+      "openOverview": "Open Analytics"
     },
     "hero": {
       "title": "Real-time liquidity intelligence",
@@ -130,6 +130,28 @@
       "ctaPrimary": "Open Analytics",
       "ctaSecondary": "See features",
       "builtOn": "Built on Solana"
+    },
+    "pillars": {
+      "eyebrow": "Powerful by design",
+      "title": "All the insights, in real time",
+      "items": {
+        "observe": {
+          "title": "Observe",
+          "body": "Track pools, liquidity changes and market activity across Meteora in real time."
+        },
+        "reconstruct": {
+          "title": "Reconstruct",
+          "body": "Rebuild liquidity history, replay movements and understand what really happened."
+        },
+        "analyze": {
+          "title": "Analyze",
+          "body": "Detect anomalies, identify patterns and get actionable signals instantly."
+        },
+        "signal": {
+          "title": "Signal",
+          "body": "Get real-time alerts on key events, spikes and liquidity imbalances."
+        }
+      }
     }
   }
 }

@@ -20,6 +20,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
+import { ArrowRightIcon, SolanaGlyph } from "@/components/shared/icon";
 
 export function HomeHero() {
   const t = useTranslations("Marketing.hero");
@@ -46,21 +47,25 @@ export function HomeHero() {
             {t("title")}
           </h1>
 
-          <p className="mt-4 font-display text-[16px] font-medium tracking-[0.34em] text-slate-400 uppercase [text-indent:0.34em]">
+          <p className="mt-4 font-display text-[20px] font-medium tracking-[0.34em] text-slate-400 uppercase [text-indent:0.34em]">
             {t("subtitle")}
           </p>
 
-          <p className="mt-6 max-w-[420px] text-[15px] leading-[1.7] text-slate-300">
+          <p className="mt-6 max-w-[420px] text-[17px] leading-[1.7] text-slate-300">
             {t("lead")}
           </p>
 
           <div className="mt-[34px] flex items-center gap-[14px]">
             <HeroButton href="/overview" label={t("ctaPrimary")} withArrow />
-            <HeroButton href="/features" label={t("ctaSecondary")} />
+            {/*
+             * Secondary CTA — an in-page anchor to the feature-pillars
+             * section (`id="features"` on <HomePillars/>), not a route.
+             */}
+            <HeroAnchorButton href="#features" label={t("ctaSecondary")} />
           </div>
 
           <div className="mt-8 flex items-center gap-[9px] text-[11px] font-semibold tracking-[0.16em] text-slate-500 uppercase">
-            <span className="inline-block h-[7px] w-[7px] rounded-full bg-[linear-gradient(135deg,#9945FF,#14F195)]" />
+            <SolanaGlyph />
             {t("builtOn")}
           </div>
         </div>
@@ -71,10 +76,13 @@ export function HomeHero() {
 
 // ── Sub-components ────────────────────────────────────────────────────
 
+const BUTTON_CLASS =
+  "inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[11px] text-[17px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30";
+
 /**
- * Hero call-to-action. Same single button style as the marketing nav
- * — translucent violet fill with a violet border — so every CTA on
- * the marketing surface looks identical.
+ * Hero call-to-action pointing at an internal route. Same single
+ * button style as the marketing nav — translucent violet fill,
+ * violet border — so every CTA on the marketing surface matches.
  */
 function HeroButton({
   href,
@@ -86,30 +94,22 @@ function HeroButton({
   withArrow?: boolean;
 }) {
   return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[11px] text-[13.5px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30"
-    >
+    <Link href={href} className={BUTTON_CLASS}>
       {label}
       {withArrow && <ArrowRightIcon />}
     </Link>
   );
 }
 
-function ArrowRightIcon() {
+/**
+ * Hero call-to-action pointing at an in-page anchor. A plain anchor
+ * rather than next-intl's `Link` — `#features` is a fragment on the
+ * current page, not a locale route, so it needs no locale prefix.
+ */
+function HeroAnchorButton({ href, label }: { href: string; label: string }) {
   return (
-    <svg
-      width={14}
-      height={14}
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 10h12M11 5l5 5-5 5" />
-    </svg>
+    <a href={href} className={BUTTON_CLASS}>
+      {label}
+    </a>
   );
 }

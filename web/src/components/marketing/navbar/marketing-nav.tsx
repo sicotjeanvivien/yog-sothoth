@@ -182,16 +182,16 @@ function BrandMark() {
         <Image
           src="/logo.png"
           alt={t("name")}
-          width={84}
-          height={84}
+          width={40}
+          height={40}
           priority
-          className="h-[auto] w-[auto] object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
+          className="h-[40] w-[40] object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
         />
-        <div className="flex flex-col">
-          <p className="font-display text-[17px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
+        <div className="flex flex-col ml-2">
+          <p className="font-display text-[24px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
             {t("name")}
           </p>
-          <p className="text-[9px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
+          <p className="text-[14px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
             {t("tagline")}
           </p>
         </div>
@@ -219,8 +219,8 @@ export function MarketingNavLinks({
 
   const itemClass =
     orientation === "row"
-      ? "text-[14.5px] font-medium text-slate-400 transition-colors hover:text-[#f1ecff]"
-      : "rounded-[3px] px-3 py-[11px] text-[14px] font-medium text-slate-300 transition-colors hover:bg-sothoth-500/10 hover:text-[#f1ecff]";
+      ? "text-[17px] font-medium text-slate-100 transition-colors hover:text-sothoth-400"
+      : "rounded-[3px] px-3 py-[11px] text-[17px] font-medium text-slate-300 transition-colors hover:bg-sothoth-500/10 hover:text-[#f1ecff]";
 
   return (
     <>
@@ -266,7 +266,7 @@ function NavCta({ onNavigate }: { onNavigate?: () => void }) {
     <Link
       href={MARKETING_NAV_CTA.href}
       onClick={onNavigate}
-      className="inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[9px] text-[13px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30"
+      className="inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[9px] text-[17px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30"
     >
       {t(MARKETING_NAV_CTA.labelKey)}
       <ArrowRightIcon />

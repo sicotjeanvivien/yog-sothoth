@@ -13,6 +13,7 @@
 import { setRequestLocale } from "next-intl/server";
 
 import { HomeHero } from "@/components/marketing/home/home-hero";
+import { HomePillars } from "@/components/marketing/home/home-pillars";
 
 type HomePageProps = {
   params: Promise<{ locale: string }>;
@@ -25,6 +26,7 @@ export default async function HomePage({ params }: HomePageProps) {
   return (
     <main>
       <HomeHero />
+      <HomePillars />
     </main>
   );
 }

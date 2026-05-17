@@ -217,3 +217,32 @@ export const ArrowRightIcon: React.FC<IconProps> = ({
     <path d="M4 10h12M11 5l5 5-5 5" />
   </svg>
 );
+
+/**
+ * Eye — used by the "Observe" feature pillar. A simple almond outline
+ * with a round pupil. Echoes the brand sigil without reproducing it.
+ */
+export const EyeIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M2 12c3-5.5 7-8 10-8s7 2.5 10 8c-3 5.5-7 8-10 8s-7-2.5-10-8z" />
+    <circle cx="12" cy="12" r="3.2" />
+  </svg>
+);
+
+/**
+ * Pulse — used by the "Analyze" feature pillar. A heartbeat / signal
+ * trace: a flat baseline broken by a spike.
+ */
+export const PulseIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M2 12h5l3-7 4 14 3-7h5" />
+  </svg>
+);

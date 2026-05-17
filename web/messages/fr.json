@@ -130,6 +130,28 @@
       "ctaPrimary": "Ouvrir Analytics",
       "ctaSecondary": "Voir les fonctionnalités",
       "builtOn": "Propulsé par Solana"
+    },
+    "pillars": {
+      "eyebrow": "Pensé pour la performance",
+      "title": "Toutes les analyses, en temps réel",
+      "items": {
+        "observe": {
+          "title": "Observer",
+          "body": "Suivez les pools, les mouvements de liquidité et l'activité du marché sur Meteora en temps réel."
+        },
+        "reconstruct": {
+          "title": "Reconstruire",
+          "body": "Reconstituez l'historique de liquidité, rejouez les mouvements et comprenez ce qui s'est réellement passé."
+        },
+        "analyze": {
+          "title": "Analyser",
+          "body": "Détectez les anomalies, identifiez les schémas et obtenez des signaux exploitables instantanément."
+        },
+        "signal": {
+          "title": "Signaler",
+          "body": "Recevez des alertes en temps réel sur les événements clés, les pics et les déséquilibres de liquidité."
+        }
+      }
     }
   }
 }
