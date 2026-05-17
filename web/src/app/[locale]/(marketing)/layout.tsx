@@ -14,6 +14,7 @@
  * the `<MarketingNav />` above `{children}`.
  */
 
+import { MarketingFooter } from "@/components/marketing/footer/marketing-footer";
 import { MarketingNav } from "@/components/marketing/navbar/marketing-nav";
 
 export default function MarketingLayout({
@@ -25,6 +26,7 @@ export default function MarketingLayout({
     <>
       <MarketingNav />
       {children}
+      <MarketingFooter />
     </>
   );
 }

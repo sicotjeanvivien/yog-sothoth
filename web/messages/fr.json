@@ -152,6 +152,20 @@
           "body": "Recevez des alertes en temps réel sur les événements clés, les pics et les déséquilibres de liquidité."
         }
       }
+    },
+    "footer": {
+      "description": "Intelligence de la liquidité en temps réel sur Meteora · Solana.",
+      "linksHeading": "Produit",
+      "links": {
+        "overview": "Analytics",
+        "features": "Fonctionnalités",
+        "support": "Support"
+      },
+      "awsd": {
+        "title": "Conçu par AWSD",
+        "tagline": "Artisan logiciel. Fait en France."
+      },
+      "copyright": "© {year} Yog-Sothoth. Tous droits réservés."
     }
   }
 }

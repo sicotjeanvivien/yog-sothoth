@@ -152,6 +152,20 @@
           "body": "Get real-time alerts on key events, spikes and liquidity imbalances."
         }
       }
+    },
+    "footer": {
+      "description": "Real-time liquidity intelligence on Meteora · Solana.",
+      "linksHeading": "Product",
+      "links": {
+        "overview": "Analytics",
+        "features": "Features",
+        "support": "Support"
+      },
+      "awsd": {
+        "title": "Built by AWSD",
+        "tagline": "Software Artisan. Crafted in France."
+      },
+      "copyright": "© {year} Yog-Sothoth. All rights reserved."
     }
   }
 }
