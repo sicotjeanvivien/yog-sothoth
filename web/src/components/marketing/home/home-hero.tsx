@@ -18,9 +18,8 @@
 
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-
-import { Link } from "@/i18n/navigation";
-import { ArrowRightIcon, SolanaGlyph } from "@/components/shared/icon";
+import { DashboardButton } from "@/components/shared/dashboard-button";
+import { SolanaGlyph } from "@/components/shared/icon";
 
 export function HomeHero() {
   const t = useTranslations("Marketing.hero");
@@ -56,11 +55,7 @@ export function HomeHero() {
           </p>
 
           <div className="mt-[34px] flex items-center gap-[14px]">
-            <HeroButton href="/overview" label={t("ctaPrimary")} withArrow />
-            {/*
-             * Secondary CTA — an in-page anchor to the feature-pillars
-             * section (`id="features"` on <HomePillars/>), not a route.
-             */}
+            <DashboardButton size="lg" />
             <HeroAnchorButton href="#features" label={t("ctaSecondary")} />
           </div>
 
@@ -78,28 +73,6 @@ export function HomeHero() {
 
 const BUTTON_CLASS =
   "inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[11px] text-[17px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30";
-
-/**
- * Hero call-to-action pointing at an internal route. Same single
- * button style as the marketing nav — translucent violet fill,
- * violet border — so every CTA on the marketing surface matches.
- */
-function HeroButton({
-  href,
-  label,
-  withArrow = false,
-}: {
-  href: string;
-  label: string;
-  withArrow?: boolean;
-}) {
-  return (
-    <Link href={href} className={BUTTON_CLASS}>
-      {label}
-      {withArrow && <ArrowRightIcon />}
-    </Link>
-  );
-}
 
 /**
  * Hero call-to-action pointing at an in-page anchor. A plain anchor

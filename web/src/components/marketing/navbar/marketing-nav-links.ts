@@ -47,13 +47,3 @@ export const MARKETING_NAV_LINKS: readonly MarketingNavLink[] = [
     external: true,
   },
 ] as const;
-
-/**
- * The primary call-to-action shown at the end of the nav. Kept
- * separate from `MARKETING_NAV_LINKS` because it is rendered as a
- * button, not a plain link, and is always internal.
- */
-export const MARKETING_NAV_CTA = {
-  labelKey: "openOverview",
-  href: "/overview",
-} as const;

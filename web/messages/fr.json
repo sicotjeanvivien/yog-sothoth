@@ -117,17 +117,16 @@
     }
   },
   "Marketing": {
+    "dashboardButton": "Ouvrir Analytics",
     "nav": {
       "overview": "Analytics",
       "support": "Support",
-      "github": "GitHub",
-      "openOverview": "Ouvrir Analytics"
+      "github": "GitHub"
     },
     "hero": {
       "title": "Intelligence de la liquidité en temps réel",
       "subtitle": "Sur Meteora · Solana",
       "lead": "Observez, reconstruisez et analysez les mouvements de liquidité en temps réel. Détectez des signaux, comprenez les flux, et gardez une longueur d'avance sur le marché.",
-      "ctaPrimary": "Ouvrir Analytics",
       "ctaSecondary": "Voir les fonctionnalités",
       "builtOn": "Propulsé par Solana"
     },
@@ -152,6 +151,10 @@
           "body": "Recevez des alertes en temps réel sur les événements clés, les pics et les déséquilibres de liquidité."
         }
       }
+    },
+    "cta": {
+      "title": "Prêt à tout voir ?",
+      "subtitle": "Rejoignez Yog-Sothoth et exploitez toute la puissance de l'analyse de liquidité."
     },
     "footer": {
       "description": "Intelligence de la liquidité en temps réel sur Meteora · Solana.",

@@ -44,10 +44,10 @@ import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
 import {
-  MARKETING_NAV_CTA,
   MARKETING_NAV_LINKS,
 } from "./marketing-nav-links";
-import { ArrowRightIcon, CloseIcon, HamburgerIcon } from "@/components/shared/icon";
+import { CloseIcon, HamburgerIcon } from "@/components/shared/icon";
+import { DashboardButton } from "@/components/shared/dashboard-button";
 
 // The dropdown/inline switch happens at this width. Kept as a
 // constant for the resize listener; the CSS side uses Tailwind `lg:`.
@@ -101,7 +101,7 @@ export function MarketingNav() {
 
         {/* Desktop CTA — lg+ only. */}
         <div className="hidden lg:block">
-          <NavCta />
+          <DashboardButton />
         </div>
 
         {/* Mobile hamburger — below lg only. */}
@@ -163,7 +163,7 @@ function MobileMenu({
         <div className="flex flex-col gap-1 px-6 py-4">
           <MarketingNavLinks orientation="column" onNavigate={onClose} />
           <div className="mt-3">
-            <NavCta onNavigate={onClose} />
+            <DashboardButton className="w-full justify-center" />
           </div>
         </div>
       </div>
@@ -256,20 +256,5 @@ export function MarketingNavLinks({
         );
       })}
     </>
-  );
-}
-
-/** Primary call-to-action button. Internal, locale-aware. */
-function NavCta({ onNavigate }: { onNavigate?: () => void }) {
-  const t = useTranslations("Marketing.nav");
-  return (
-    <Link
-      href={MARKETING_NAV_CTA.href}
-      onClick={onNavigate}
-      className="inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[9px] text-[17px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30"
-    >
-      {t(MARKETING_NAV_CTA.labelKey)}
-      <ArrowRightIcon />
-    </Link>
   );
 }

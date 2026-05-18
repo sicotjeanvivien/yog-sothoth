@@ -117,17 +117,16 @@
     }
   },
   "Marketing": {
+    "dashboardButton": "Open Analytics",
     "nav": {
       "overview": "Overview",
       "support": "Support",
-      "github": "GitHub",
-      "openOverview": "Open Analytics"
+      "github": "GitHub"
     },
     "hero": {
       "title": "Real-time liquidity intelligence",
       "subtitle": "On Meteora · Solana",
       "lead": "Observe, reconstruct and analyze liquidity movements as they happen. Detect signals, understand flows, and stay ahead of the market.",
-      "ctaPrimary": "Open Analytics",
       "ctaSecondary": "See features",
       "builtOn": "Built on Solana"
     },
@@ -152,6 +151,10 @@
           "body": "Get real-time alerts on key events, spikes and liquidity imbalances."
         }
       }
+    },
+    "cta": {
+      "title": "Ready to see everything?",
+      "subtitle": "Join Yog-Sothoth and unlock the full power of liquidity intelligence."
     },
     "footer": {
       "description": "Real-time liquidity intelligence on Meteora · Solana.",
