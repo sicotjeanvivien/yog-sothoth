@@ -84,8 +84,9 @@ export function NetworkStatusPanel() {
   // Fetch once on mount, then poll. The interval is cleared on
   // unmount so a navigated-away panel stops polling.
   useEffect(() => {
-    void load();
     const timer = setInterval(() => void load(), POLL_INTERVAL_MS);
+    // Appel initial asynchrone
+    setTimeout(() => void load(), 0);
     return () => clearInterval(timer);
   }, [load]);
 

@@ -12,7 +12,7 @@
  * on the API outcome.
  */
 
-import type { PoolCurrentStateResponse } from "@/lib/api/schemas";
+import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-state-response";
 import { formatAbsolute, formatRelative, type FormatLocale } from "@/lib/format/date";
 import { shortenPubkey } from "@/lib/format/pubkey";
 

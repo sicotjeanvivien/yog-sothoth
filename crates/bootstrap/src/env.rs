@@ -48,6 +48,19 @@ pub fn parse_required_bool(key: &str) -> Result<bool, ConfigError> {
     }
 }
 
+/// Read an optional `u64` environment variable, falling back to
+/// `default` when unset. A present-but-unparseable value is an error.
+pub fn duration_var(key: &'static str, default: u64) -> Result<u64, ConfigError> {
+    match std::env::var(key) {
+        Err(_) => Ok(default),
+        Ok(raw) => raw.parse::<u64>().map_err(|_| ConfigError::InvalidValue {
+            key: key.to_string(),
+            value: raw,
+            expected: "a integer (u64)",
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

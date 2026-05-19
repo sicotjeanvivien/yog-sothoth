@@ -21,7 +21,7 @@ mod error;
 mod runtime;
 mod secret;
 
-pub use env::{parse_required_bool, parse_required_u32, required};
+pub use env::{duration_var, parse_required_bool, parse_required_u32, required};
 pub use error::ConfigError;
 pub use runtime::{init_rustls, init_tracing};
 pub use secret::SecretUrl;

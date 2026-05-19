@@ -1,7 +1,7 @@
 [workspace]
 members = [
   "crates/api",
-  "crates/bootstrap",
+  "crates/bootstrap", "crates/context",
   "crates/core",
   "crates/indexer",
   "crates/persistence",
@@ -62,8 +62,11 @@ rustls = { version = "0.23", features = ["ring"] }
 bs58 = "0.5"
 base64 = "0.22"
 sha2 = "0.11"
+rust_decimal = "1"
 
 # Axum 
 axum = "0.8.9"
 tower = "0.5.3"
 tower-http = { version = "0.6.10", features = ["cors", "trace", "set-header"] }
+
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }

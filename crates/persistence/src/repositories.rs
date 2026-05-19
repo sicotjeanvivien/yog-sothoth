@@ -6,6 +6,8 @@ pub mod pool_current_state;
 pub mod position_fee_claim;
 pub mod reward_claim;
 pub mod swap_event;
+pub mod token_metadata;
+pub mod token_price;
 pub mod watched_pool;
 
 pub use event_freshness::PgEventFreshnessRepository;
@@ -16,4 +18,6 @@ pub use pool_current_state::PgPoolCurrentStateRepository;
 pub use position_fee_claim::PgClaimPositionFeeEventRepository;
 pub use reward_claim::PgClaimRewardEventRepository;
 pub use swap_event::PgSwapEventRepository;
+pub use token_metadata::PgTokenMetadataRepository;
+pub use token_price::PgTokenPriceRepository;
 pub use watched_pool::PgWatchedPoolRepository;

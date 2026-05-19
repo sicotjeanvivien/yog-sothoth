@@ -53,7 +53,6 @@ import { Link, usePathname } from "@/i18n/navigation";
 import {
   OverviewIcon,
   PoolsIcon,
-  SolanaGlyph,
   type IconProps,
 } from "@/components/shared/icon";
 

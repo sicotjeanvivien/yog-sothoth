@@ -6,7 +6,7 @@
  * `next-intl`. Server-rendered.
  */
 
-import type { PoolResponse } from "@/lib/api/schemas";
+import type { PoolResponse } from "@/lib/api/schema/pool-response";
 import { formatAbsolute, formatRelative, type FormatLocale } from "@/lib/format/date";
 import { shortenPubkey } from "@/lib/format/pubkey";
 
