@@ -2,6 +2,7 @@ mod claim_position_fee_event;
 mod claim_reward_event;
 mod domain_event;
 mod liquidity_event;
+mod network_status;
 mod pool;
 mod pool_current_state;
 mod protocol;
@@ -15,6 +16,7 @@ pub use domain_event::DomainEvent;
 pub use liquidity_event::{
     LiquidityCursor, LiquidityEvent, LiquidityEventKind, LiquidityEventRepository,
 };
+pub use network_status::{NetworkStatus, NetworkStatusRepository};
 pub use pool::{Pool, PoolCursor, PoolRepository};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,

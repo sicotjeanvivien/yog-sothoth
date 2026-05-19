@@ -1,4 +1,5 @@
 pub mod liquidity_event;
+pub mod network_status;
 pub mod pool;
 pub mod pool_current_state;
 pub mod position_fee_claim;
@@ -7,6 +8,7 @@ pub mod swap_event;
 pub mod watched_pool;
 
 pub use liquidity_event::PgLiquidityEventRepository;
+pub use network_status::PgNetworkStatusRepository;
 pub use pool::PgPoolRepository;
 pub use pool_current_state::PgPoolCurrentStateRepository;
 pub use position_fee_claim::PgClaimPositionFeeEventRepository;

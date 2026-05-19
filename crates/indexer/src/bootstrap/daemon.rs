@@ -1,5 +1,6 @@
 use crate::{
     application::{
+        reporter::{NetworkStatusReporter, NetworkStatusReporterError},
         services::{IndexerService, IndexerServiceMetrics, WatchedPoolService},
         workers::IndexerWorker,
     },
@@ -22,8 +23,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_persistence::{
     Database, PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
-    PgLiquidityEventRepository, PgPoolCurrentStateRepository, PgPoolRepository,
-    PgSwapEventRepository, PgWatchedPoolRepository,
+    PgLiquidityEventRepository, PgNetworkStatusRepository, PgPoolCurrentStateRepository,
+    PgPoolRepository, PgSwapEventRepository, PgWatchedPoolRepository,
 };
 
 /// Top-level process — owns all runtime dependencies and drives the
@@ -39,6 +40,7 @@ pub(crate) struct Daemon {
     watched_pool_service: Arc<WatchedPoolService>,
     listener: Arc<RpcListener>,
     dispatcher: SignatureDispatcher,
+    network_status_reporter: NetworkStatusReporter,
     _database: Database,
 }
 
@@ -56,10 +58,17 @@ impl Daemon {
         let listener = init_listener(&config);
         info!("RPC listener initialized: {}", config.solana_rpc_ws);
 
-        let indexer_service = init_indexer_service(&config, &database)
+        let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
+        info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
+
+        let indexer_service = init_indexer_service(&database, rpc_client.clone())
             .await
             .context("indexer service initialization failed")?;
         info!("indexer service initialized");
+
+        let network_status_reporter = init_network_status_reporter(&database, rpc_client.clone())
+            .await
+            .context("network_status_reporter initialization failed")?;
 
         let watched_pool_service = init_watched_pool_service(&database, listener.clone())
             .await
@@ -81,6 +90,7 @@ impl Daemon {
             watched_pool_service,
             listener,
             dispatcher,
+            network_status_reporter,
             _database: database,
         })
     }
@@ -107,6 +117,9 @@ impl Daemon {
         let indexer_task =
             spawn_indexer_task(Arc::clone(&self.indexer_service), sig_rx, shutdown.clone());
 
+        let reporter_task =
+            spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
+
         tokio::select! {
             result = ws_task => {
                 shutdown.cancel();
@@ -119,6 +132,10 @@ impl Daemon {
             result = indexer_task => {
                 shutdown.cancel();
                 handle_task_result(result, "indexer worker")?
+            }
+            result = reporter_task => {
+                shutdown.cancel();
+                handle_task_result(result, "network status reporter")?
             }
             _ = shutdown.cancelled() => tracing::info!("cancellation received — stopping"),
         }
@@ -154,12 +171,9 @@ fn init_listener(config: &Config) -> Arc<RpcListener> {
 
 /// Initialise the indexer service and its repository dependencies.
 async fn init_indexer_service(
-    config: &Config,
     database: &Database,
+    rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Arc<IndexerService>> {
-    let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
-    info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
-
     let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool().clone()));
     let pg_liquidity_event_repo =
         Arc::new(PgLiquidityEventRepository::new(database.pool().clone()));
@@ -180,6 +194,19 @@ async fn init_indexer_service(
         pg_pool_current_state_repo,
         rpc_client,
     )))
+}
+
+/// Initialise the NetworkStautsReporter and its repository dependency
+async fn init_network_status_reporter(
+    database: &Database,
+    rpc_client: Arc<RpcClient>,
+) -> anyhow::Result<NetworkStatusReporter> {
+    let pg_network_status_reporter_repository =
+        Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
+    Ok(NetworkStatusReporter::new(
+        rpc_client,
+        pg_network_status_reporter_repository,
+    ))
 }
 
 // Initialise the WatchedPoolService and its repository dependency.
@@ -227,6 +254,13 @@ fn spawn_indexer_task(
 ) -> JoinHandle<Result<(), IndexerWorkerError>> {
     let worker = IndexerWorker::new(indexer_service);
     tokio::spawn(async move { worker.run(rx, shutdown).await })
+}
+
+fn spawn_network_status_reporter_task(
+    reporter: NetworkStatusReporter,
+    shutdown: CancellationToken,
+) -> JoinHandle<Result<(), NetworkStatusReporterError>> {
+    tokio::spawn(async move { reporter.run(shutdown).await })
 }
 
 // ── Task result handling ─────────────────────────────────────────────────────
