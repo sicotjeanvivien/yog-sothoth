@@ -1,3 +1,4 @@
+pub mod event_freshness;
 pub mod liquidity_event;
 pub mod network_status;
 pub mod pool;
@@ -7,6 +8,7 @@ pub mod reward_claim;
 pub mod swap_event;
 pub mod watched_pool;
 
+pub use event_freshness::PgEventFreshnessRepository;
 pub use liquidity_event::PgLiquidityEventRepository;
 pub use network_status::PgNetworkStatusRepository;
 pub use pool::PgPoolRepository;

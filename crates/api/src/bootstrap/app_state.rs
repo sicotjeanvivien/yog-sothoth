@@ -1,10 +1,11 @@
 use std::sync::Arc;
 use yog_core::domain::{
-    LiquidityEventRepository, PoolCurrentStateRepository, PoolRepository, SwapEventRepository,
+    EventFreshnessRepository, LiquidityEventRepository, NetworkStatusRepository,
+    PoolCurrentStateRepository, PoolRepository, SwapEventRepository,
 };
 use yog_persistence::{
-    Database, PgLiquidityEventRepository, PgPoolCurrentStateRepository, PgPoolRepository,
-    PgSwapEventRepository,
+    Database, PgEventFreshnessRepository, PgLiquidityEventRepository, PgNetworkStatusRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgSwapEventRepository,
 };
 
 use crate::bootstrap::Config;
@@ -24,6 +25,8 @@ pub(crate) struct AppState {
     pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
     pub(crate) swap_event_repository: Arc<dyn SwapEventRepository>,
     pub(crate) liquidity_event_repository: Arc<dyn LiquidityEventRepository>,
+    pub(crate) network_status_repository: Arc<dyn NetworkStatusRepository>,
+    pub(crate) event_freshness_repository: Arc<dyn EventFreshnessRepository>,
 }
 
 impl AppState {
@@ -44,13 +47,21 @@ impl AppState {
             Arc::new(PgSwapEventRepository::new(db_pool.clone()));
 
         let liquidity_event_repository: Arc<dyn LiquidityEventRepository> =
-            Arc::new(PgLiquidityEventRepository::new(db_pool));
+            Arc::new(PgLiquidityEventRepository::new(db_pool.clone()));
+
+        let network_status_repository: Arc<dyn NetworkStatusRepository> =
+            Arc::new(PgNetworkStatusRepository::new(db_pool.clone()));
+
+        let event_freshness_repository: Arc<dyn EventFreshnessRepository> =
+            Arc::new(PgEventFreshnessRepository::new(db_pool));
 
         Ok(Self {
             pool_repository,
             pool_current_state_repository,
             swap_event_repository,
             liquidity_event_repository,
+            network_status_repository,
+            event_freshness_repository,
         })
     }
 }

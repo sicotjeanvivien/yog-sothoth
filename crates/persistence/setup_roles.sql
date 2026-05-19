@@ -29,9 +29,12 @@ GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api;
 -- Indexer grants
 -- ---------------------------------------------------------------------------
 -- Tables the indexer writes to: ingestion pipeline outputs.
+-- `network_status` is written by the reporter task (slot + latency,
+-- upserted every ~15s) — same RW profile as pool_current_state.
 GRANT SELECT, INSERT, UPDATE
     ON pools, swap_events, liquidity_events,
-       position_fee_claims, reward_claims, pool_current_state
+       position_fee_claims, reward_claims, pool_current_state,
+       network_status
     TO yog_indexer;
 
 -- Tables the indexer only reads: allowlist filter applied at startup.
@@ -43,9 +46,11 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO yog_indexer;
 -- ---------------------------------------------------------------------------
 -- API grants (v0.1 — read-only on event data, read-only on watched_pools)
 -- ---------------------------------------------------------------------------
+-- `network_status` is read by the GET /api/network/status handler.
 GRANT SELECT
     ON pools, swap_events, liquidity_events,
-       position_fee_claims, reward_claims, watched_pools, pool_current_state
+       position_fee_claims, reward_claims, watched_pools, pool_current_state,
+       network_status
     TO yog_api;
 
 -- ---------------------------------------------------------------------------

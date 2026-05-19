@@ -1,6 +1,7 @@
 mod claim_position_fee_event;
 mod claim_reward_event;
 mod domain_event;
+mod freshness_status;
 mod liquidity_event;
 mod network_status;
 mod pool;
@@ -13,6 +14,7 @@ mod watched_pool;
 pub use claim_position_fee_event::{ClaimPositionFeeEvent, ClaimPositionFeeEventRepository};
 pub use claim_reward_event::{ClaimRewardEvent, ClaimRewardEventRepository};
 pub use domain_event::DomainEvent;
+pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use liquidity_event::{
     LiquidityCursor, LiquidityEvent, LiquidityEventKind, LiquidityEventRepository,
 };

@@ -36,6 +36,10 @@ pub(crate) fn build_router(state: AppState) -> Router {
             "/api/pools/{address}/liquidity-events",
             get(handlers::pools::list_pool_liquidity_events),
         )
+        .route(
+            "/api/network/status",
+            axum::routing::get(crate::http::handlers::network_status::get_network_status),
+        )
         .with_state(state)
         // Layers are applied in the order they are added. The
         // outermost layer (last added) sees requests first and
