@@ -17,7 +17,7 @@
 import * as z from "zod";
 
 import { ApiClientError } from "./errors";
-import { ApiErrorBodySchema } from "./schemas";
+import { ApiErrorBodySchema } from "./schema/api-error-body";
 import { loadServerEnv as getServerEnv } from "../config/server-env.schema";
 
 /**

@@ -59,6 +59,7 @@ import {
 
 import { SIDEBAR_NAV, type SidebarNavItem } from "./sidebar-nav";
 import type { SidebarNavKey } from "./sidebar-keys";
+import { NetworkStatusPanel } from "./network-status-panel";
 
 // ── Icon mapping ──────────────────────────────────────────────────────
 //
@@ -129,7 +130,7 @@ export function Sidebar({ isOpen, onNavigate }: SidebarProps) {
           />
         ))}
       </nav>
-      <SolanaLivePanel />
+      <NetworkStatusPanel />
     </aside>
   );
 }
@@ -225,59 +226,5 @@ function SidebarNavLink({
       <Icon size={18} />
       <span className="leading-none">{t(item.labelKey)}</span>
     </Link>
-  );
-}
-
-// ── Solana Live footer ────────────────────────────────────────────────
-
-/**
- * Network status panel pinned to the bottom of the rail.
- *
- * Slot and latency are placeholders in this commit — the panel shows
- * its final visual form, but the values are static. Live data will be
- * wired in a follow-up via a dedicated network-status route.
- */
-function SolanaLivePanel() {
-  const t = useTranslations("Dashboard.Sidebar.network");
-
-  return (
-    <div className="mt-5 rounded-[4px] border border-sothoth-500/15 bg-cosmos-800/65 p-[14px]">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-[7px]">
-          <SolanaGlyph size={20} />
-          <span className="text-[11px] font-semibold tracking-[0.04em] text-slate-300">
-            {t("title")}
-          </span>
-        </div>
-        <span className="flex items-center gap-[5px] text-[9px] font-semibold tracking-[0.18em] text-signal-good uppercase">
-          <LiveDot />
-          {t("live")}
-        </span>
-      </header>
-
-      <dl className="mt-3 flex flex-col gap-[7px]">
-        <StatRow label={t("slot")} value="—" />
-        <StatRow label={t("latency")} value="—" />
-      </dl>
-    </div>
-  );
-}
-
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between">
-      <dt className="text-[10.5px] text-slate-500">{label}</dt>
-      <dd className="font-mono text-[11px] text-slate-300">{value}</dd>
-    </div>
-  );
-}
-
-/** Pulsing status dot — a static dot under a ping-animated clone. */
-function LiveDot() {
-  return (
-    <span className="relative h-1.5 w-1.5">
-      <span className="absolute inset-0 animate-ping rounded-full bg-signal-good" />
-      <span className="absolute inset-0 rounded-full bg-signal-good" />
-    </span>
   );
 }

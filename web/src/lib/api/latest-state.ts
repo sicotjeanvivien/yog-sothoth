@@ -18,7 +18,7 @@ import { isValidPoolAddress } from "./pool";
 import {
   PoolCurrentStateResponseSchema,
   type PoolCurrentStateResponse,
-} from "./schemas";
+} from "./schema/pool-current-state-response";
 
 /**
  * Fetch the latest projected state of a pool.

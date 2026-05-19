@@ -10,7 +10,7 @@
  */
 
 import { apiGet } from "./client";
-import { PoolsPageSchema, type PoolsPage } from "./schemas";
+import { PoolsPageSchema, type PoolsPage } from "./schema/page-response";
 
 /**
  * Defaults mirror the yog-api handler. Kept in sync manually — a

@@ -17,9 +17,13 @@
       },
       "network": {
         "title": "Solana",
-        "live": "Live",
+        "live": "En direct",
         "slot": "Slot",
-        "latency": "Latence"
+        "latency": "Latence",
+        "connecting": "Connexion",
+        "offline": "Hors ligne",
+        "delayed": "Ralenti",
+        "stale": "Obsolète"
       }
     },
     "shell": {

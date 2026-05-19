@@ -14,7 +14,7 @@
  */
 
 import { apiGet } from "./client";
-import { PoolResponseSchema, type PoolResponse } from "./schemas";
+import { PoolResponseSchema, type PoolResponse } from "./schema/pool-response";
 
 /**
  * Validate that the address looks like a Solana base58 pubkey.

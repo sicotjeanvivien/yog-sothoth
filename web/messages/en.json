@@ -19,7 +19,11 @@
         "title": "Solana",
         "live": "Live",
         "slot": "Slot",
-        "latency": "Latency"
+        "latency": "Latency",
+        "connecting": "Connecting",
+        "offline": "Offline",
+        "delayed": "Delayed",
+        "stale": "Stale"
       }
     },
     "shell": {

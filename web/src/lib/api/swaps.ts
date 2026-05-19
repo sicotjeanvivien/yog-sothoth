@@ -14,7 +14,7 @@
 
 import { apiGet } from "./client";
 import { isValidPoolAddress } from "./pool";
-import { SwapEventsPageSchema, type SwapEventsPage } from "./schemas";
+import { SwapEventsPageSchema, type SwapEventsPage } from "./schema/page-response";
 
 /**
  * Bounds mirror yog-api's `MAX_LIMIT` for swap feeds. Kept in sync

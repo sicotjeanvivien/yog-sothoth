@@ -7,11 +7,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  ApiErrorBodySchema,
-  PoolResponseSchema,
-  PoolsPageSchema,
-} from "../schemas";
+import { PoolResponseSchema } from "../schema/pool-response";
+import { PoolsPageSchema } from "../schema/page-response";
+import { ApiErrorBodySchema } from "../schema/api-error-body";
+
 
 // A representative valid pool payload, copied from a real yog-api
 // response shape. Tests mutate this base to exercise each failure mode.

@@ -30,7 +30,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy -p yog-core -p yog-indexer --all-targets --all-features
+      - run: cargo clippy -p yog-api -p yog-core -p yog-indexer -p yog-persistance --all-targets --all-features
 
   # clippy-wasm:
   #   name: Clippy (wasm)
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p yog-core -p yog-indexer --all-features
+      - run: cargo test -p yog-api -p yog-core -p yog-indexer -p yog-persistance --all-features
 
   # wasm-build:
   #   name: WASM Build

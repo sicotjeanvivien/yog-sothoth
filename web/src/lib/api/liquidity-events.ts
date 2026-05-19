@@ -11,7 +11,7 @@ import { isValidPoolAddress } from "./pool";
 import {
   LiquidityEventsPageSchema,
   type LiquidityEventsPage,
-} from "./schemas";
+} from "./schema/page-response";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
