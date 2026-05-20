@@ -24,6 +24,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
+      - ".cargo/audit.toml"
       - ".github/workflows/crates.yml"
   pull_request:
     paths:
@@ -104,16 +105,13 @@ jobs:
   audit:
     name: Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # rustsec/audit-check parses Cargo.lock against the RustSec
-      # advisory database. Reports advisories as GitHub annotations
-      # and fails the job on findings.
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions-rust-lang/audit@v1
+        name: Audit Rust Dependencies
 
   # ── Disabled until v0.3 (WASM activation deferred) ────────────────
   #
