@@ -30,8 +30,10 @@ pub(crate) struct Daemon {
     helius_client: HeliusDasClient,
     /// Jupiter price source client.
     jupiter_client: JupiterPriceClient,
-    /// Context METADATA pool secs
+    /// Context METADATA poll secs
     poll_interval: std::time::Duration,
+    /// context PRICE interval secs
+    price_interval: std::time::Duration,
 }
 
 impl Daemon {
@@ -44,6 +46,7 @@ impl Daemon {
         info!("database initialized");
 
         let poll_interval = config.metadata_poll_interval;
+        let price_interval = config.price_interval;
 
         let db_pool = database.pool().clone();
 
@@ -55,7 +58,10 @@ impl Daemon {
 
         // Two independent HTTP clients — one per external source.
         let helius_client = HeliusDasClient::new(config.helius_url.expose().to_string());
-        let jupiter_client = JupiterPriceClient::new(config.jupiter_url.expose().to_string());
+        let jupiter_client = JupiterPriceClient::new(
+            config.jupiter_url.expose().to_string(),
+            config.jupiter_api_key.expose().to_string(),
+        );
 
         Ok(Self {
             token_metadata_repository,
@@ -63,6 +69,7 @@ impl Daemon {
             helius_client,
             jupiter_client,
             poll_interval,
+            price_interval,
         })
     }
 
@@ -75,7 +82,13 @@ impl Daemon {
             self.poll_interval,
             shutdown.clone(),
         );
-        let price_task = spawn_price_worker(shutdown.clone());
+        let price_task = spawn_price_worker(
+            Arc::clone(&self.token_metadata_repository),
+            Arc::clone(&self.token_price_repository),
+            self.jupiter_client.clone(),
+            self.price_interval,
+            shutdown.clone(),
+        );
 
         tokio::select! {
             result = metadata_task => {
@@ -121,8 +134,14 @@ fn spawn_metadata_worker(
 }
 
 /// Spawn the price worker task.
-fn spawn_price_worker(shutdown: CancellationToken) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PriceWorker::new();
+fn spawn_price_worker(
+    metadata_repository: Arc<dyn TokenMetadataRepository>,
+    price_repository: Arc<dyn TokenPriceRepository>,
+    jupiter: JupiterPriceClient,
+    interval: std::time::Duration,
+    shutdown: CancellationToken,
+) -> JoinHandle<Result<(), WorkerError>> {
+    let worker = PriceWorker::new(metadata_repository, price_repository, jupiter, interval);
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 

@@ -22,10 +22,22 @@ const DEFAULT_METADATA_POLL_SECS: u64 = 10;
 /// Runtime configuration for the `yog-context` daemon.
 #[derive(Debug, Clone)]
 pub(crate) struct Config {
+    /// Postgres connection string.
     pub(crate) database_url: SecretUrl,
+
+    /// Helius RPC base URL (with API key) — used for DAS calls.
     pub(crate) helius_url: SecretUrl,
+
+    /// Jupiter price API base URL (e.g. `https://api.jup.ag/price/v3`).
     pub(crate) jupiter_url: SecretUrl,
+
+    /// Jupiter API key — sent on every request via `x-api-key`.
+    pub(crate) jupiter_api_key: SecretUrl,
+
+    /// How often the price worker fetches from Jupiter.
     pub(crate) price_interval: Duration,
+
+    /// How often the metadata worker polls `pools` for new mints.
     pub(crate) metadata_poll_interval: Duration,
 }
 
@@ -35,6 +47,7 @@ impl Config {
             database_url: SecretUrl::new(required("DATABASE_URL_CONTEXT")?),
             helius_url: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
             jupiter_url: SecretUrl::new(required("JUPITER_URL")?),
+            jupiter_api_key: SecretUrl::new(required("JUPITER_API_KEY")?),
             price_interval: Duration::from_secs(duration_var(
                 "CONTEXT_PRICE_INTERVAL_SECS",
                 DEFAULT_PRICE_INTERVAL_SECS,

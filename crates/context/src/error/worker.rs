@@ -17,8 +17,4 @@ pub enum WorkerError {
     /// A persistence operation failed.
     #[error("worker persistence failure")]
     Persistence(#[from] yog_core::RepositoryError),
-
-    /// An HTTP call to an external source failed.
-    #[error("worker source request failed: {0}")]
-    Source(String),
 }
