@@ -28,12 +28,7 @@ solana-transaction-status = { version = "4", default-features = false }
 solana-transaction-status-client-types = "4"
 
 # Database
-sqlx = { version = "0.8", features = [
-  "postgres",
-  "runtime-tokio-native-tls",
-  "chrono",
-  "bigdecimal",
-] }
+sqlx = { version = "0.8", default-features = false}
 bigdecimal = "0.4"
 
 # Serialization

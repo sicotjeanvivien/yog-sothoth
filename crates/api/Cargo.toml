@@ -26,5 +26,3 @@ rust_decimal = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
-yog-context = { version = "0.1.0", path = "../context" }
-yog-indexer = { version = "0.1.0", path = "../indexer" }
