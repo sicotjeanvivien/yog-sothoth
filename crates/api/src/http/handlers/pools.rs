@@ -6,15 +6,15 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use yog_core::{
-    domain::{LiquidityCursor, PoolCursor, SwapCursor},
+    domain::{LiquidityCursor, Pool, PoolCursor, SwapCursor},
     tools::Cursor,
 };
 
 use crate::bootstrap::AppState;
 use crate::http::{
     dto::{
-        LiquidityEventResponse, PageResponse, PoolCurrentStateResponse, PoolResponse,
-        SwapEventResponse,
+        EmbeddedTokenResponse, LiquidityEventResponse, PageResponse, PoolCurrentStateResponse,
+        PoolResponse, SwapEventResponse,
     },
     error::ApiError,
 };
@@ -72,10 +72,9 @@ fn validate_limit(limit: i64) -> Result<(), ApiError> {
 
 /// `GET /api/pools[?cursor=...&limit=...]`
 ///
-/// Returns a paginated list of discovered pools, ordered by
-/// `first_seen_at DESC`. The cursor is opaque from the client's
-/// perspective — they pass back the `next_cursor` from the previous
-/// response without interpreting it.
+/// Returns a paginated list of discovered pools, each enriched with
+/// its two token sides. The cursor is opaque from the client's
+/// perspective.
 pub(crate) async fn list_pools(
     State(state): State<AppState>,
     Query(query): Query<PageQuery>,
@@ -92,7 +91,14 @@ pub(crate) async fn list_pools(
         .find_paginated(cursor, query.limit)
         .await?;
 
-    let items: Vec<PoolResponse> = page.items.into_iter().map(PoolResponse::from).collect();
+    // Enrich every pool in the page. Sequential awaits — the
+    // per-pool cost is dominated by DB I/O, and at the page size
+    // limit (200 max) the total stays well under 1s.
+    let mut items: Vec<PoolResponse> = Vec::with_capacity(page.items.len());
+    for pool in page.items {
+        items.push(enrich_pool(&state, pool).await?);
+    }
+
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
 
     Ok(Json(PageResponse { items, next_cursor }))
@@ -104,8 +110,8 @@ pub(crate) async fn list_pools(
 
 /// `GET /api/pools/{address}`
 ///
-/// Returns the pool record (identity + discovery metadata). 404 if the
-/// pool has never been observed.
+/// Returns the pool record enriched with its two token sides.
+/// 404 if the pool has never been observed.
 pub(crate) async fn get_pool(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -118,7 +124,7 @@ pub(crate) async fn get_pool(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("pool not found: {address}")))?;
 
-    Ok(Json(PoolResponse::from(pool)))
+    Ok(Json(enrich_pool(&state, pool).await?))
 }
 
 // ===========================================================================
@@ -318,4 +324,44 @@ fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiError> {
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature: wire.signature,
     })
+}
+
+// ===========================================================================
+// Enrichment helper
+// ===========================================================================
+
+/// Compose a `Pool` with its two embedded token sides.
+///
+/// Fetches metadata and latest price for both mints, then builds the
+/// final `PoolResponse`. Missing metadata or price are tolerated —
+/// the corresponding fields will be null in the embedded token, but
+/// the pool itself is always returned (a fresh pool may exist in
+/// `pools` before `yog-context` has enriched its mints).
+///
+/// Sequential awaits keep the code readable; at single-request
+/// latency the 4 indexed lookups are cheap.
+async fn enrich_pool(state: &AppState, pool: Pool) -> Result<PoolResponse, ApiError> {
+    let token_a_meta = state
+        .token_metadata_repository
+        .find_by_mint(&pool.token_a_mint)
+        .await?;
+    let token_a_price = state
+        .token_price_repository
+        .find_latest_by_mint(&pool.token_a_mint)
+        .await?;
+    let token_b_meta = state
+        .token_metadata_repository
+        .find_by_mint(&pool.token_b_mint)
+        .await?;
+    let token_b_price = state
+        .token_price_repository
+        .find_latest_by_mint(&pool.token_b_mint)
+        .await?;
+
+    let token_a =
+        EmbeddedTokenResponse::from_sources(pool.token_a_mint, token_a_meta, token_a_price);
+    let token_b =
+        EmbeddedTokenResponse::from_sources(pool.token_b_mint, token_b_meta, token_b_price);
+
+    Ok(PoolResponse::new(pool, token_a, token_b))
 }

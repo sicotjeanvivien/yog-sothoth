@@ -6,10 +6,11 @@
 //! flagged by Jupiter, or no Jupiter call has succeeded for it).
 
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use serde::Serialize;
 
 use yog_core::domain::{TokenMetadata, TokenPrice};
+
+use crate::http::dto::response::TokenPriceResponse;
 
 /// The token detail payload.
 ///
@@ -45,21 +46,6 @@ pub(crate) struct TokenResponse {
     /// Latest price observation, or `null` if the mint has never
     /// been priced.
     price: Option<TokenPriceResponse>,
-}
-
-/// The price block embedded in `TokenResponse`.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct TokenPriceResponse {
-    /// USD price. Serialised as a JSON number — `rust_decimal`'s
-    /// default Serialize uses an exact decimal representation.
-    usd: Decimal,
-
-    /// Origin tag: "jupiter" | "helius" | "fallback".
-    source: String,
-
-    /// When the price was observed.
-    fetched_at: DateTime<Utc>,
 }
 
 impl TokenResponse {

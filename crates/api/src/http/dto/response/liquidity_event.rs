@@ -9,25 +9,25 @@ use yog_core::domain::{LiquidityEvent, LiquidityEventKind};
 /// `GET /api/pools/{address}/liquidity-events` item.
 #[derive(Debug, Serialize)]
 pub(crate) struct LiquidityEventResponse {
-    pub(crate) pool_address: String,
-    pub(crate) protocol: String,
-    pub(crate) signature: String,
-    pub(crate) timestamp: DateTime<Utc>,
+    pub(super) pool_address: String,
+    pub(super) protocol: String,
+    pub(super) signature: String,
+    pub(super) timestamp: DateTime<Utc>,
 
-    pub(crate) token_a_mint: String,
-    pub(crate) token_b_mint: String,
+    pub(super) token_a_mint: String,
+    pub(super) token_b_mint: String,
 
-    pub(crate) liquidity_event_kind: String,
-    pub(crate) amount_a: u64,
-    pub(crate) amount_b: u64,
+    pub(super) liquidity_event_kind: String,
+    pub(super) amount_a: u64,
+    pub(super) amount_b: u64,
     /// Liquidity delta (Q-format); encoded as a string.
-    pub(crate) liquidity_delta: String,
+    pub(super) liquidity_delta: String,
 
-    pub(crate) reserve_a_after: u64,
-    pub(crate) reserve_b_after: u64,
+    pub(super) reserve_a_after: u64,
+    pub(super) reserve_b_after: u64,
 
-    pub(crate) position: String,
-    pub(crate) owner: String,
+    pub(super) position: String,
+    pub(super) owner: String,
 }
 
 impl From<LiquidityEvent> for LiquidityEventResponse {
