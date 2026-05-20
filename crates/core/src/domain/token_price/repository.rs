@@ -4,6 +4,7 @@
 //! `domain` alongside the other repository traits.
 
 use async_trait::async_trait;
+use solana_pubkey::Pubkey;
 
 use crate::{RepositoryResult, domain::TokenPrice};
 
@@ -17,4 +18,9 @@ pub trait TokenPriceRepository: Send + Sync {
     /// to a single round-trip. `token_prices` is append-only — each
     /// observation is a new row keyed by `(mint, fetched_at)`.
     async fn insert_batch(&self, prices: &[TokenPrice]) -> RepositoryResult<()>;
+
+    /// Fetch the most recent price observation for a mint, or `None`
+    /// if the mint has never been priced. Used by the
+    /// `GET /api/tokens/{mint}` handler.
+    async fn find_latest_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenPrice>>;
 }

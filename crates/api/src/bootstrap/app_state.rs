@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use yog_core::domain::{
     EventFreshnessRepository, LiquidityEventRepository, NetworkStatusRepository,
-    PoolCurrentStateRepository, PoolRepository, SwapEventRepository,
+    PoolCurrentStateRepository, PoolRepository, SwapEventRepository, TokenMetadataRepository,
+    TokenPriceRepository,
 };
 use yog_persistence::{
     Database, PgEventFreshnessRepository, PgLiquidityEventRepository, PgNetworkStatusRepository,
     PgPoolCurrentStateRepository, PgPoolRepository, PgSwapEventRepository,
+    PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::bootstrap::Config;
@@ -27,6 +29,8 @@ pub(crate) struct AppState {
     pub(crate) liquidity_event_repository: Arc<dyn LiquidityEventRepository>,
     pub(crate) network_status_repository: Arc<dyn NetworkStatusRepository>,
     pub(crate) event_freshness_repository: Arc<dyn EventFreshnessRepository>,
+    pub(crate) token_metadata_repository: Arc<dyn TokenMetadataRepository>,
+    pub(crate) token_price_repository: Arc<dyn TokenPriceRepository>,
 }
 
 impl AppState {
@@ -53,7 +57,13 @@ impl AppState {
             Arc::new(PgNetworkStatusRepository::new(db_pool.clone()));
 
         let event_freshness_repository: Arc<dyn EventFreshnessRepository> =
-            Arc::new(PgEventFreshnessRepository::new(db_pool));
+            Arc::new(PgEventFreshnessRepository::new(db_pool.clone()));
+
+        let token_metadata_repository: Arc<dyn TokenMetadataRepository> =
+            Arc::new(PgTokenMetadataRepository::new(db_pool.clone()));
+
+        let token_price_repository: Arc<dyn TokenPriceRepository> =
+            Arc::new(PgTokenPriceRepository::new(db_pool));
 
         Ok(Self {
             pool_repository,
@@ -62,6 +72,8 @@ impl AppState {
             liquidity_event_repository,
             network_status_repository,
             event_freshness_repository,
+            token_metadata_repository,
+            token_price_repository,
         })
     }
 }

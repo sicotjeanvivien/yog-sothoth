@@ -30,4 +30,9 @@ pub trait TokenMetadataRepository: Send + Sync {
     /// reads `pools`, but its purpose is metadata enrichment, so the
     /// method belongs to this repository rather than `PoolRepository`.
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>>;
+
+    /// Fetch the metadata row for a single mint, or `None` if no row
+    /// exists yet for that mint. Used by the `GET /api/tokens/{mint}`
+    /// handler.
+    async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>>;
 }

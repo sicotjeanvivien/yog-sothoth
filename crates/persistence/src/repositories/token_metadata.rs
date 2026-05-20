@@ -8,11 +8,12 @@
 //! read.
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::{
-    RepositoryResult,
+    RepositoryError, RepositoryResult,
     domain::{TokenMetadata, TokenMetadataRepository},
 };
 
@@ -34,8 +35,6 @@ impl PgTokenMetadataRepository {
 #[async_trait]
 impl TokenMetadataRepository for PgTokenMetadataRepository {
     async fn upsert(&self, metadata: &TokenMetadata) -> RepositoryResult<()> {
-        // decimals is u8 in the domain, SMALLINT (i16) in Postgres —
-        // the widening is always safe.
         let decimals = i16::from(metadata.decimals);
 
         sqlx::query(
@@ -54,7 +53,6 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
                 last_refresh_at = EXCLUDED.last_refresh_at
             "#,
         )
-        // Pubkey -> TEXT: base58 string.
         .bind(metadata.mint.to_string())
         .bind(&metadata.symbol)
         .bind(&metadata.name)
@@ -76,16 +74,12 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             .await
             .map_err(map_sqlx_error)?;
 
-        // TEXT -> Pubkey for each row; a malformed value is a data
-        // integrity error, surfaced by `convert_string_to_pubkey`.
         rows.into_iter()
             .map(|(mint,)| convert_string_to_pubkey(mint, "mint"))
             .collect()
     }
 
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        // Every distinct mint seen in `pools` (token A or token B)
-        // that has no `token_metadata` row yet.
         let rows: Vec<(String,)> = sqlx::query_as(
             r#"
             SELECT mint FROM (
@@ -103,5 +97,67 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
         rows.into_iter()
             .map(|(mint,)| convert_string_to_pubkey(mint, "mint"))
             .collect()
+    }
+
+    async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>> {
+        // Fetch the full row by mint. Returns None when no row
+        // exists yet for that mint — not an error, the caller (the
+        // token detail handler) decides what to do about it.
+        let row = sqlx::query_as::<_, TokenMetadataRow>(
+            r#"
+            SELECT mint, symbol, name, decimals, logo_uri,
+                   metadata_source, fetched_at, last_refresh_at
+            FROM token_metadata
+            WHERE mint = $1
+            "#,
+        )
+        .bind(mint.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        row.map(TokenMetadata::try_from).transpose()
+    }
+}
+
+/// Row shape for reading `token_metadata`.
+///
+/// A thin sqlx-facing struct kept separate from the domain model so
+/// the `mint` TEXT -> Pubkey conversion (fallible) can be expressed
+/// via `TryFrom`, and the `decimals` SMALLINT -> u8 narrowing
+/// stays out of the query function.
+#[derive(sqlx::FromRow)]
+struct TokenMetadataRow {
+    mint: String,
+    symbol: Option<String>,
+    name: Option<String>,
+    decimals: i16,
+    logo_uri: Option<String>,
+    metadata_source: String,
+    fetched_at: DateTime<Utc>,
+    last_refresh_at: DateTime<Utc>,
+}
+
+impl TryFrom<TokenMetadataRow> for TokenMetadata {
+    type Error = RepositoryError;
+
+    fn try_from(row: TokenMetadataRow) -> Result<Self, Self::Error> {
+        // decimals is SMALLINT in Postgres (i16) but u8 in the
+        // domain. A negative or out-of-range value would mean the
+        // row was written with a non-conforming source.
+        let decimals = u8::try_from(row.decimals).map_err(|_| {
+            RepositoryError::Integrity(format!("invalid decimals: {}", row.decimals))
+        })?;
+
+        Ok(TokenMetadata {
+            mint: convert_string_to_pubkey(row.mint, "mint")?,
+            symbol: row.symbol,
+            name: row.name,
+            decimals,
+            logo_uri: row.logo_uri,
+            metadata_source: row.metadata_source,
+            fetched_at: row.fetched_at,
+            last_refresh_at: row.last_refresh_at,
+        })
     }
 }

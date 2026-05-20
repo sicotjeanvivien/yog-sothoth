@@ -8,7 +8,15 @@ edition = "2024"
 yog-core = { path = "../core" }
 
 tokio = { workspace = true }
-sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "macros", "chrono", "bigdecimal", "uuid", "rust_decimal"] }
+sqlx = { workspace = true, features = [
+  "postgres",
+  "runtime-tokio-rustls",
+  "macros",
+  "chrono",
+  "bigdecimal",
+  "uuid",
+  "rust_decimal",
+] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -17,6 +25,7 @@ async-trait = { workspace = true }
 bigdecimal = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 solana-pubkey = { workspace = true }
+rust_decimal = { workspace = true }
 
 [dev-dependencies]
 # Integration tests will spin up a real Postgres via docker-compose
