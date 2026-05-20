@@ -16,7 +16,6 @@ use tracing::{debug, info};
 ///
 /// Data errors (malformed signature, filter drop) are not errors:
 /// they are recorded as metrics and the pipeline keeps going.
-
 pub struct SignatureDispatcher {
     filters: Vec<Box<dyn LogFilter>>,
 }
@@ -105,7 +104,7 @@ impl SignatureDispatcher {
         };
 
         let qualified = QualifiedSignature {
-            protocol: event.protocol.clone(),
+            protocol: event.protocol,
             signature,
         };
 

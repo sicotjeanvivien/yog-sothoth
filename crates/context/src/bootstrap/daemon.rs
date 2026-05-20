@@ -40,7 +40,7 @@ impl Daemon {
     /// Connect to the database, build the repositories and the source
     /// clients.
     pub(crate) async fn new(config: &Config) -> anyhow::Result<Self> {
-        let database = init_db(&config.database_url.expose())
+        let database = init_db(config.database_url.expose())
             .await
             .context("database initialization failed")?;
         info!("database initialized");

@@ -17,9 +17,7 @@ pub(crate) fn redact_api_key(msg: &str) -> String {
         result.push_str(&rest[..start]);
         result.push_str("api-key=***REDACTED***");
         let after = &rest[start + "api-key=".len()..];
-        let end = after
-            .find(|c: char| c == '&' || c == ')' || c == ' ' || c == '"')
-            .unwrap_or(after.len());
+        let end = after.find(['&', ')', ' ', '"']).unwrap_or(after.len());
         rest = &after[end..];
     }
     result.push_str(rest);

@@ -72,6 +72,7 @@ impl SubscriptionWorker {
 
         let mut attempt: u32 = 0;
         let mut backoff = INITIAL_BACKOFF_SECS;
+        #[allow(unused_assignments)]
         let mut last_error: Option<String> = None;
 
         loop {
@@ -80,7 +81,7 @@ impl SubscriptionWorker {
                 emit(
                     &events_tx,
                     SubscriptionEvent::ShutdownCompleted {
-                        protocol: target.protocol.clone(),
+                        protocol: target.protocol,
                         mention: target.mention,
                     },
                 );
@@ -95,7 +96,7 @@ impl SubscriptionWorker {
                     emit(
                         &events_tx,
                         SubscriptionEvent::ShutdownCompleted {
-                            protocol: target.protocol.clone(),
+                            protocol: target.protocol,
                             mention: target.mention,
                         },
                     );
@@ -110,7 +111,7 @@ impl SubscriptionWorker {
                     emit(
                         &events_tx,
                         SubscriptionEvent::ShutdownCompleted {
-                            protocol: target.protocol.clone(),
+                            protocol: target.protocol,
                             mention: target.mention,
                         },
                     );
@@ -120,7 +121,7 @@ impl SubscriptionWorker {
                     emit(
                         &events_tx,
                         SubscriptionEvent::StreamClosed {
-                            protocol: target.protocol.clone(),
+                            protocol: target.protocol,
                             mention: target.mention,
                             attempt,
                         },
@@ -131,7 +132,6 @@ impl SubscriptionWorker {
                     // normal churn over a long-lived connection.
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
-                    last_error = None;
                     // Small pause before resubscribing to avoid hammering
                     // the provider right after it closed us.
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
@@ -150,7 +150,7 @@ impl SubscriptionWorker {
                     emit(
                         &events_tx,
                         SubscriptionEvent::RetryFailed {
-                            protocol: target.protocol.clone(),
+                            protocol: target.protocol,
                             mention: target.mention,
                             attempt,
                             error: redacted.clone(),
@@ -163,13 +163,13 @@ impl SubscriptionWorker {
                         emit(
                             &events_tx,
                             SubscriptionEvent::GivingUp {
-                                protocol: target.protocol.clone(),
+                                protocol: target.protocol,
                                 mention: target.mention,
                                 last_error: msg.clone(),
                             },
                         );
                         return Err(SubscriptionWorkerError::RetriesExhausted {
-                            protocol: target.protocol.clone(),
+                            protocol: target.protocol,
                             mention: target.mention,
                             attempts: attempt,
                             last_error: msg,
@@ -230,7 +230,7 @@ async fn connect_and_forward(
     emit(
         events_tx,
         SubscriptionEvent::Subscribed {
-            protocol: target.protocol.clone(),
+            protocol: target.protocol,
             mention: target.mention,
         },
     );
@@ -255,7 +255,7 @@ where
                 match maybe_response {
                     Some(response) => {
                         let event = RawLogEvent {
-                            protocol: target.protocol.clone(),
+                            protocol: target.protocol,
                             signature: response.value.signature,
                             logs: response.value.logs,
                             err: response.value.err.map(Into::into),

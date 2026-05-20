@@ -70,7 +70,7 @@ impl IndexerService {
         protocol: Protocol,
         signature: Signature,
     ) -> anyhow::Result<()> {
-        let mut guard = ExitGuard::new(protocol.clone());
+        let mut guard = ExitGuard::new(protocol);
 
         info!(%signature, protocol = %protocol.as_str(), "received signature");
 

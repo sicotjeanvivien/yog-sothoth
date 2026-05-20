@@ -1,6 +1,5 @@
 pub(crate) mod database_error;
 pub(crate) mod dispatcher_error;
-pub(crate) mod indexer_error;
 pub(crate) mod indexer_worker_errors;
 pub(crate) mod rcp_listener_error;
 pub(crate) mod subscription_worker_error;

@@ -50,7 +50,7 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = init_db(&config.database_url.expose())
+        let database = init_db(config.database_url.expose())
             .await
             .context("database initialization failed")?;
         info!("database initialized");
@@ -160,13 +160,11 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 
 /// Create the RPC WebSocket listener with its watched protocols.
 fn init_listener(config: &Config) -> Arc<RpcListener> {
-    let listener = Arc::new(RpcListener::new(
+    Arc::new(RpcListener::new(
         config.solana_rpc_ws.expose().to_string(),
         config.worker_max_retries,
         config.mode_protocol_centric,
-    ));
-
-    listener
+    ))
 }
 
 /// Initialise the indexer service and its repository dependencies.

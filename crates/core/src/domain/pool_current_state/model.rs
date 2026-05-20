@@ -157,6 +157,9 @@ impl PoolCurrentStateUpsert {
     /// `kind` is the domain enum; its mapping to the projection event kind
     /// goes through the [`From<LiquidityEventKind> for LastEventKind`] impl
     /// defined above so add/remove sourcing stays in one place.
+    // 8 fields, each is a meaningful constructor argument — collapsing
+    // them into a struct would just push the same arity one level up.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_liquidity(
         pool_address: impl Into<String>,
         protocol: impl Into<String>,

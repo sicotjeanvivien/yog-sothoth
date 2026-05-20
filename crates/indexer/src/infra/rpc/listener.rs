@@ -165,7 +165,7 @@ impl RpcListener {
                         "worker task panicked"
                     );
                     gave_up.push(WorkerFailure {
-                        protocol: h.target.protocol.clone(),
+                        protocol: h.target.protocol,
                         mention: h.target.mention,
                         reason: format!("panic: {e}"),
                     });
@@ -233,8 +233,11 @@ impl RpcListener {
 /// Per-worker failure detail — bubbled up in `AllWorkersGaveUp`.
 #[derive(Debug, Clone)]
 pub struct WorkerFailure {
+    #[allow(dead_code)]
     pub protocol: Protocol,
+    #[allow(dead_code)]
     pub mention: Pubkey,
+    #[allow(dead_code)]
     pub reason: String,
 }
 
@@ -330,7 +333,7 @@ fn push_failure(gave_up: &mut Vec<WorkerFailure>, err: &SubscriptionWorkerError)
                 "worker gave up after exhausting retries"
             );
             gave_up.push(WorkerFailure {
-                protocol: protocol.clone(),
+                protocol: *protocol,
                 mention: *mention,
                 reason: format!("retries_exhausted after {attempts}: {last_error}"),
             });

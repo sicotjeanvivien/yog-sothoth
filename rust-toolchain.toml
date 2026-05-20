@@ -1,0 +1,11 @@
+# Pinned Rust toolchain.
+#
+# Both `cargo` locally and `dtolnay/rust-toolchain@stable` in CI pick
+# this file up automatically. Bump the version deliberately when a new
+# stable brings something we want (lints, perf, language features) —
+# never silently inherit "whatever stable is today".
+
+[toolchain]
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

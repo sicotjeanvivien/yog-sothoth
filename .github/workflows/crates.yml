@@ -1,48 +1,89 @@
+# Quality checks for the Rust workspace.
+#
+# Five jobs in parallel:
+#   - check    : `cargo check` across the whole workspace (catches
+#                anything that doesn't compile, including the WASM
+#                crate's host build).
+#   - fmt      : `cargo fmt --check`.
+#   - clippy   : `cargo clippy` over the native crates (WASM target
+#                still disabled until v0.3).
+#   - test     : `cargo test` over the native crates.
+#   - audit    : `cargo audit` on Cargo.lock — vulnerability scan of
+#                the dependency tree.
+#
+# Rust version is pinned by /rust-toolchain.toml — `dtolnay/rust-toolchain@stable`
+# reads it automatically, so we never silently inherit a moving target.
+
 name: crates
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/crates.yml"
   pull_request:
-    branches: [ main ]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/crates.yml"
+
+# Cancel any in-flight run for the same ref when a new commit lands.
+concurrency:
+  group: crates-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  # The .sqlx/ folder is committed; `sqlx::query*!` macros validate
+  # against those snapshots instead of needing a live database.
   SQLX_OFFLINE: "true"
 
 jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # `cargo check --workspace` covers every member (yog-core,
+      # yog-persistence, yog-indexer, yog-api, yog-context, yog-wasm)
+      # without listing them. New crates are picked up automatically.
+      - run: cargo check --workspace --all-targets
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
       - run: cargo fmt --all -- --check
 
-  clippy-native:
-    name: Clippy (native)
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy -p yog-api -p yog-core -p yog-indexer -p yog-persistence --all-targets --all-features
-
-  # clippy-wasm:
-  #   name: Clippy (wasm)
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #       with:
-  #         components: clippy
-  #         targets: wasm32-unknown-unknown
-  #     - uses: Swatinem/rust-cache@v2
-  #     - run: cargo clippy -p yog-wasm --target wasm32-unknown-unknown --all-targets
+      # Native crates only — the WASM crate is a scaffold until v0.3
+      # (kept compiling via `check --workspace` above, but not
+      # clippy-linted to avoid churn from `wasm-bindgen`-emitted code).
+      - run: |
+          cargo clippy \
+            -p yog-api \
+            -p yog-core \
+            -p yog-context \
+            -p yog-indexer \
+            -p yog-persistence \
+            --all-targets --all-features \
+            -- -D warnings
 
   test:
     name: Test
@@ -51,8 +92,42 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p yog-api -p yog-core -p yog-indexer -p yog-persistence --all-features
+      - run: |
+          cargo test \
+            -p yog-api \
+            -p yog-core \
+            -p yog-context \
+            -p yog-indexer \
+            -p yog-persistence \
+            --all-features
 
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # rustsec/audit-check parses Cargo.lock against the RustSec
+      # advisory database. Reports advisories as GitHub annotations
+      # and fails the job on findings.
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Disabled until v0.3 (WASM activation deferred) ────────────────
+  #
+  # clippy-wasm:
+  #   name: Clippy (wasm)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #       with:
+  #         targets: wasm32-unknown-unknown
+  #     - uses: Swatinem/rust-cache@v2
+  #     - run: cargo clippy -p yog-wasm --target wasm32-unknown-unknown --all-targets
+  #
   # wasm-build:
   #   name: WASM Build
   #   runs-on: ubuntu-latest
