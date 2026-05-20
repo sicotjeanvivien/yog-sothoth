@@ -8,7 +8,7 @@ edition = "2024"
 yog-core = { path = "../core" }
 
 tokio = { workspace = true }
-sqlx = { workspace = true, features = [
+sqlx = { workspace = true, default-features = false, features = [
   "postgres",
   "runtime-tokio-rustls",
   "macros",

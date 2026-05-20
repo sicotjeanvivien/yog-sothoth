@@ -1,0 +1,51 @@
+# cargo-audit configuration — read by `rustsec/audit-check@v2` in CI.
+#
+# Each ignore must justify itself. An undocumented entry here will
+# rot into "we don't know why this is ignored anymore" within months;
+# the comment is the contract with the future reader (and with the
+# CI gate that justified adding it).
+
+[advisories]
+ignore = [
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2023-0071 — `rsa` Marvin timing attack
+  #
+  # Status: NOT EXPLOITABLE in this codebase.
+  #
+  # `rsa 0.9.10` appears in Cargo.lock but `cargo tree --invert
+  # --target all` finds NO active path to it — no compiled code in
+  # this workspace exercises the RSA implementation. The crate is a
+  # lockfile artefact, likely from a non-activated feature of one of
+  # the sqlx sub-crates (`sqlx-mysql` is built into the binary but
+  # the MySQL auth path that uses RSA is never taken: we connect to
+  # Postgres only).
+  #
+  # The Marvin attack requires an attacker to observe RSA decryption
+  # timing over the network on inputs they control. With no RSA code
+  # in any execution path, that surface does not exist here.
+  #
+  # No upstream fix available as of 2026-05 (the RustCrypto/RSA team
+  # is migrating to a constant-time implementation; no release yet).
+  #
+  # Revisit when:
+  #   - a patched `rsa` version is published, OR
+  #   - sqlx 0.9+ stops vendoring `sqlx-mysql` unconditionally, OR
+  #   - any code path that actually uses RSA is added to the project.
+  "RUSTSEC-2023-0071",
+
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2025-0141 — `bincode 1.3.3` unmaintained (informational)
+  #
+  # Status: ACCEPTED.
+  #
+  # `bincode 1.3.3` is pulled transitively by the Solana SDK for
+  # transaction serialisation. We cannot drop it without dropping
+  # Solana SDK itself. The crate is functional and feature-complete
+  # at 1.3.3 — the maintainers stopped due to a doxxing incident, not
+  # because the code is broken.
+  #
+  # This is an "informational: unmaintained" advisory, not a
+  # vulnerability. Solana itself will migrate the day the ecosystem
+  # picks a successor; we follow.
+  "RUSTSEC-2025-0141",
+]

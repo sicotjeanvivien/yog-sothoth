@@ -9,7 +9,6 @@ yog-persistence = { path = "../persistence" }
 yog-bootstrap = { path = "../bootstrap" }
 
 tokio = { workspace = true }
-sqlx = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
