@@ -33,7 +33,7 @@ impl Config {
     pub(crate) fn load() -> Result<Self, ConfigError> {
         Ok(Self {
             database_url: SecretUrl::new(required("DATABASE_URL_CONTEXT")?),
-            helius_url: SecretUrl::new(required("HELIUS_URL")?),
+            helius_url: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
             jupiter_url: SecretUrl::new(required("JUPITER_URL")?),
             price_interval: Duration::from_secs(duration_var(
                 "CONTEXT_PRICE_INTERVAL_SECS",

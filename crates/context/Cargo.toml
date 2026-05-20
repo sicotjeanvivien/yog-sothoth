@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
-yog-bootstrap={ path = "../bootstrap"}
+yog-bootstrap = { path = "../bootstrap" }
 
 tokio = { workspace = true }
 tokio-util = { workspace = true }
@@ -25,3 +25,4 @@ dotenvy = { workspace = true }
 rustls = { workspace = true }
 
 chrono = { workspace = true }
+solana-pubkey = { workspace = true }

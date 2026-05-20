@@ -30,6 +30,8 @@ pub(crate) struct Daemon {
     helius_client: HeliusDasClient,
     /// Jupiter price source client.
     jupiter_client: JupiterPriceClient,
+    /// Context METADATA pool secs
+    poll_interval: std::time::Duration,
 }
 
 impl Daemon {
@@ -40,6 +42,8 @@ impl Daemon {
             .await
             .context("database initialization failed")?;
         info!("database initialized");
+
+        let poll_interval = config.metadata_poll_interval;
 
         let db_pool = database.pool().clone();
 
@@ -58,13 +62,19 @@ impl Daemon {
             token_price_repository,
             helius_client,
             jupiter_client,
+            poll_interval,
         })
     }
 
     pub(crate) async fn run(self) -> anyhow::Result<()> {
         let shutdown = CancellationToken::new();
 
-        let metadata_task = spawn_metadata_worker(shutdown.clone());
+        let metadata_task = spawn_metadata_worker(
+            Arc::clone(&self.token_metadata_repository),
+            self.helius_client.clone(),
+            self.poll_interval,
+            shutdown.clone(),
+        );
         let price_task = spawn_price_worker(shutdown.clone());
 
         tokio::select! {
@@ -100,8 +110,13 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 }
 
 /// Spawn the metadata worker task.
-fn spawn_metadata_worker(shutdown: CancellationToken) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = MetadataWorker::new();
+fn spawn_metadata_worker(
+    repository: Arc<dyn TokenMetadataRepository>,
+    helius: HeliusDasClient,
+    poll_interval: std::time::Duration,
+    shutdown: CancellationToken,
+) -> JoinHandle<Result<(), WorkerError>> {
+    let worker = MetadataWorker::new(repository, helius, poll_interval);
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 
