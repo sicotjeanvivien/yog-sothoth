@@ -13,12 +13,11 @@
 //! sitting alongside each Anchor self-CPI in the same inner instruction
 //! group.
 
+use crate::solana_types::{
+    EncodedConfirmedTransactionWithStatusMeta, OptionSerializer, UiInstruction, UiParsedInstruction,
+};
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, UiInstruction, UiParsedInstruction,
-    option_serializer::OptionSerializer,
-};
 use std::str::FromStr;
 
 use crate::{

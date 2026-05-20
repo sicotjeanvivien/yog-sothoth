@@ -9,7 +9,7 @@
 //! these tests double as regression guards if the JSON schema ever drifts.
 
 use solana_pubkey::pubkey;
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 use std::path::PathBuf;
 
 use yog_core::{

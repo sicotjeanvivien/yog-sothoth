@@ -2,8 +2,8 @@ pub mod events;
 pub mod extractor;
 pub(super) mod translator;
 
+use crate::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiInstruction};
 use chrono::{DateTime, Utc};
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 use crate::CoreResult;
 use crate::domain::Protocol;
@@ -145,6 +145,3 @@ fn map_extractor_failure(failure: extractor::ExtractFailure) -> ExtractionFailur
         } => ExtractionFailure::Borsh { event_name, reason },
     }
 }
-
-// We import UiInstruction here for the function signature.
-use solana_transaction_status::UiInstruction;

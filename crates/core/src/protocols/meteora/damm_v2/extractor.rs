@@ -24,8 +24,8 @@
 //! Each failure carries enough structured information for the caller (in
 //! `indexer/`) to log it and emit metrics with appropriate cardinality.
 
+use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 use borsh::BorshDeserialize;
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
 
 use crate::{
     error::AnchorDecodeError,

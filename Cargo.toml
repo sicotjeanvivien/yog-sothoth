@@ -1,7 +1,8 @@
 [workspace]
 members = [
   "crates/api",
-  "crates/bootstrap", "crates/context",
+  "crates/bootstrap",
+  "crates/context",
   "crates/core",
   "crates/indexer",
   "crates/persistence",
@@ -18,12 +19,13 @@ tokio-util = "0.7"
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 
 # Solana
-solana-rpc-client = { version = "3", default-features = false }
-solana-rpc-client-api = { version = "3", default-features = false }
+solana-rpc-client = { version = "4", default-features = false }
+solana-rpc-client-api = { version = "4", default-features = false }
 solana-commitment-config = { version = "3", default-features = false }
-solana-pubsub-client = { version = "3", default-features = false }
+solana-pubsub-client = { version = "4", default-features = false }
 solana-pubkey = { version = "4", default-features = false }
-solana-transaction-status = { version = "3", default-features = false }
+solana-transaction-status = { version = "4", default-features = false }
+solana-transaction-status-client-types = "4"
 
 # Database
 sqlx = { version = "0.8", features = [
@@ -69,4 +71,4 @@ axum = "0.8.9"
 tower = "0.5.3"
 tower-http = { version = "0.6.10", features = ["cors", "trace", "set-header"] }
 
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.13.3", features = ["json", "rustls"] }

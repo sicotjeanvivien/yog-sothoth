@@ -39,7 +39,7 @@
 //! into a known struct.
 
 use bs58::decode as bs58_decode;
-use solana_transaction_status::{
+use solana_transaction_status_client_types::{
     EncodedConfirmedTransactionWithStatusMeta, UiInstruction, UiParsedInstruction,
     option_serializer::OptionSerializer,
 };

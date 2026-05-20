@@ -1,4 +1,6 @@
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+// use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+
+use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 
 use crate::{CoreResult, protocols::extraction::ExtractionOutcome};
 

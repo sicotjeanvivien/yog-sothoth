@@ -1,4 +1,4 @@
-use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 use crate::CoreResult;
 use crate::domain::Protocol;

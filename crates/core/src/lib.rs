@@ -2,6 +2,7 @@ pub mod amm;
 pub mod domain;
 pub mod error;
 pub mod protocols;
+pub mod solana_types;
 pub mod tools;
 
 pub use error::{CoreError, CoreResult, RepositoryError, RepositoryResult};

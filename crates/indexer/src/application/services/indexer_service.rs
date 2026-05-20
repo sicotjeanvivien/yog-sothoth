@@ -1,11 +1,11 @@
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
-use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::{debug, error, info, warn};
+use yog_core::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use yog_core::{
     domain::{
         ClaimPositionFeeEventRepository, ClaimRewardEventRepository, DomainEvent, LiquidityEvent,
