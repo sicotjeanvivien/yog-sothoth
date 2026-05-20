@@ -23,7 +23,7 @@ solana-rpc-client = { version = "4", default-features = false }
 solana-rpc-client-api = { version = "4", default-features = false }
 solana-commitment-config = { version = "3", default-features = false }
 solana-pubsub-client = { version = "4", default-features = false }
-solana-pubkey = { version = "4", default-features = false }
+solana-pubkey = { version = "^4", default-features = false }
 solana-transaction-status = { version = "4", default-features = false }
 solana-transaction-status-client-types = "4"
 

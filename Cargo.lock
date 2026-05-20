@@ -6186,7 +6186,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "yog-bootstrap",
+ "yog-context",
  "yog-core",
+ "yog-indexer",
  "yog-persistence",
 ]
 
