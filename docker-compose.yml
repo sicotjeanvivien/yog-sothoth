@@ -1,15 +1,195 @@
+# docker-compose.yml — yog-sothoth full local stack.
+#
+# The .env file at the repo root is read automatically for variable
+# interpolation in `${VAR}` references below. Each binary reads its
+# own DATABASE_URL_* variable (matching the convention already used
+# by `cargo run`); the compose passes them through unchanged.
+#
+# Profiles
+# --------
+# Postgres has no profile, so it always runs (any other service
+# depends on it). Use profiles to pick what else to bring up:
+#
+#   docker compose up -d
+#       Just Postgres. Useful when running yog-* via `cargo run`.
+#
+#   docker compose --profile backend up -d
+#       Postgres + 3 Rust daemons + the one-shot migrator. Useful
+#       when working on /web with `npm run dev` — point the frontend
+#       at the containerised API on its host port.
+#
+#   docker compose --profile full up -d
+#       The whole stack including yog-web. Useful for end-to-end
+#       validation, or as a rehearsal of the deployment shape.
+#
+# yog-migrate
+# -----------
+# Runs once, applies pending migrations, exits 0. Every runtime
+# service waits for it via `service_completed_successfully`, so we
+# never expose half-migrated schema to the indexer / api / context.
+#
+# DATABASE_URL_* host rewriting
+# ------------------------------
+# The .env file uses `localhost:5433` (the Docker port mapping seen
+# from the host) so that `cargo run` works out of the box. Inside
+# the compose network the hostname is `postgres` and the port is
+# 5432. The `command` overrides on each service rewrite the URL
+# accordingly — no second .env file to maintain.
+#
+# That trick uses a small shell layer at startup (replacing
+# `localhost:5433` with `postgres:5432` in the env var). It only
+# applies to the dockerised services; native `cargo run` is
+# unaffected.
+
 services:
-  timescaledb:
+  # ── Database ───────────────────────────────────────────────────
+  postgres:
     image: timescale/timescaledb:latest-pg16
-    container_name: yog-timescaledb
     environment:
-      POSTGRES_USER: yog
-      POSTGRES_PASSWORD: yog
-      POSTGRES_DB: yog_sothoth
+      POSTGRES_USER: ${POSTGRES_USER:-yog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yog}
+      POSTGRES_DB: ${POSTGRES_DB:-yog_sothoth}
     ports:
-      - "5433:5432"   # port 5433 pour éviter le conflit avec PostgreSQL local
+      - "5433:5432"
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yog} -d ${POSTGRES_DB:-yog_sothoth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Migration (one-shot) ───────────────────────────────────────
+  yog-migrate:
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: docker/migrate.Dockerfile
+    environment:
+      # The binary reads DATABASE_URL_MIGRATE (same convention as
+      # cargo run). We rewrite the host on the fly so the same
+      # value in .env works from both contexts.
+      DATABASE_URL_MIGRATE: ${DATABASE_URL_MIGRATE}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_MIGRATE="$$(echo "$$DATABASE_URL_MIGRATE" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/yog-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Indexer ────────────────────────────────────────────────────
+  yog-indexer:
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: docker/indexer.Dockerfile
+    environment:
+      DATABASE_URL_INDEXER: ${DATABASE_URL_INDEXER}
+      SOLANA_RPC_WS: ${SOLANA_RPC_WS}
+      SOLANA_RPC_HTTP: ${SOLANA_RPC_HTTP}
+      RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}
+      MODE_PROTOCOL_CENTRIC: ${MODE_PROTOCOL_CENTRIC:-true}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_INDEXER="$$(echo "$$DATABASE_URL_INDEXER" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/yog-indexer
+    ports:
+      # Prometheus /metrics — bind to 127.0.0.1 on the host so it's
+      # not exposed on the LAN during local rehearsals.
+      - "127.0.0.1:9000:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      yog-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── API ────────────────────────────────────────────────────────
+  yog-api:
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      DATABASE_URL_API: ${DATABASE_URL_API}
+      # Forced to 0.0.0.0 inside the container so the compose port
+      # mapping reaches it. The .env value (127.0.0.1:5000) only
+      # applies to `cargo run` on the host.
+      API_BIND_ADDR: 0.0.0.0:5000
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_API="$$(echo "$$DATABASE_URL_API" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/yog-api
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      yog-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── Context (token enrichment) ─────────────────────────────────
+  yog-context:
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: docker/context.Dockerfile
+    environment:
+      DATABASE_URL_CONTEXT: ${DATABASE_URL_CONTEXT}
+      SOLANA_RPC_HTTP: ${SOLANA_RPC_HTTP}
+      JUPITER_URL: ${JUPITER_URL}
+      JUPITER_API_KEY: ${JUPITER_API_KEY}
+      CONTEXT_METADATA_POLL_SECS: ${CONTEXT_METADATA_POLL_SECS:-10}
+      CONTEXT_PRICE_INTERVAL_SECS: ${CONTEXT_PRICE_INTERVAL_SECS:-30}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_CONTEXT="$$(echo "$$DATABASE_URL_CONTEXT" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/yog-context
+    # No ports exposed: yog-context is a pure daemon.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      yog-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # ── Web (frontend) ─────────────────────────────────────────────
+  yog-web:
+    profiles: ["full"]
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      # The browser talks to localhost:5000; SSR inside the container
+      # talks to the api service over the compose network.
+      API_INTERNAL_URL: http://yog-api:5000
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      yog-api:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   timescaledb_data:

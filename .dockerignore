@@ -1,0 +1,44 @@
+# Files and folders not sent to the Docker build context.
+#
+# Without this, every `docker build` ships the entire repo to the
+# daemon — including target/ (multi-GB) and node_modules/. The
+# build then runs slower than it should and the image layers can
+# inadvertently capture stuff that should not ship.
+
+# Rust build artefacts — always rebuilt inside the image
+target/
+**/target/
+
+# Node modules — irrelevant for backend Dockerfiles, and web's
+# own Dockerfile installs them inside its own build.
+node_modules/
+**/node_modules/
+
+# Next.js build output
+.next/
+web/.next/
+
+# Git metadata — large and useless inside an image
+.git/
+.gitignore
+.github/
+
+# Local env files — secrets must never end up in an image layer
+.env
+.env.local
+.env.*.local
+
+# IDE / OS clutter
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Test / coverage / cache
+*.profraw
+.coverage/
+coverage/
+
+# Documentation that doesn't need to ship to the build
+*.md
+!crates/persistence/migrations/README.md
