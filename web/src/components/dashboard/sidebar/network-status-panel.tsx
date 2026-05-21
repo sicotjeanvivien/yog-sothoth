@@ -33,7 +33,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { SolanaGlyph } from "@/components/shared/icon";
-import type { Freshness, NetworkStatus } from "@/lib/api/schema/network-status";
+import type { Freshness, NetworkStatusResponse } from "@/lib/api/schema/network-status";
 
 /** How often the panel re-fetches the network status. */
 const POLL_INTERVAL_MS = 10_000;
@@ -46,7 +46,7 @@ const POLL_INTERVAL_MS = 10_000;
  */
 type PanelState =
   | { phase: "loading" }
-  | { phase: "ready"; data: NetworkStatus }
+  | { phase: "ready"; data: NetworkStatusResponse }
   | { phase: "error" };
 
 // ── Component ─────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ export function NetworkStatusPanel() {
         setState({ phase: "error" });
         return;
       }
-      const data = (await response.json()) as NetworkStatus;
+      const data = (await response.json()) as NetworkStatusResponse;
       setState({ phase: "ready", data });
     } catch {
       // Network error reaching our own BFF.

@@ -46,14 +46,36 @@ function jsonResponse(body: unknown, status: number = 200): Response {
 function validPage(nextCursor: string | null = null) {
   return {
     items: [
-      {
-        pool_address: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
-        protocol: "damm_v2",
-        token_a_mint: "So11111111111111111111111111111111111111112",
-        token_b_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-        first_seen_at: "2026-05-01T08:30:00Z",
-        last_seen_at: "2026-05-12T03:18:42.515Z",
+       {
+      "pool_address": "BhVFo9nCA9X45yUUa7QgwUkR4mZcAop2kytSNhmQiS4C",
+      "protocol": "meteora_damm_v2",
+      "token_a": {
+        "mint": "CMButZqQKoRabRAwemmG9gpXKa62KpQByLwjQLbjM1US",
+        "symbol": "SAOS",
+        "name": "Strategic American Oil Supply",
+        "decimals": 6,
+        "logoUri": "https://known-sapphire-boa.myfilebase.com/ipfs/QmQzbdyPhKHR2R8WPda5b3D7WHh55oDednv3ChYYSMRKuy",
+        "price": {
+          "usd": "0.005746334785293797",
+          "source": "jupiter",
+          "fetchedAt": "2026-05-21T10:06:53.095599Z"
+        }
       },
+      "token_b": {
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "decimals": 6,
+        "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+        "price": {
+          "usd": "0.999701032204846900",
+          "source": "jupiter",
+          "fetchedAt": "2026-05-21T10:06:53.095599Z"
+        }
+      },
+      "first_seen_at": "2026-05-21T10:02:09.917733Z",
+      "last_seen_at": "2026-05-21T10:03:09.454266Z"
+    },
     ],
     next_cursor: nextCursor,
   };

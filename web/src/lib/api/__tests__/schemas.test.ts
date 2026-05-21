@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { PoolResponseSchema } from "../schema/pool";
+import { PoolSchema } from "../schema/pool";
 import { PoolsPageSchema } from "../schema/page";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
 
@@ -16,24 +16,46 @@ import { ApiErrorBodySchema } from "../schema/api-error-body";
 // response shape. Tests mutate this base to exercise each failure mode.
 function validPool() {
   return {
-    pool_address: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j",
-    protocol: "damm_v2",
-    token_a_mint: "So11111111111111111111111111111111111111112",
-    token_b_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    first_seen_at: "2026-05-01T08:30:00Z",
-    last_seen_at: "2026-05-12T03:18:42.515Z",
+    "pool_address": "BhVFo9nCA9X45yUUa7QgwUkR4mZcAop2kytSNhmQiS4C",
+    "protocol": "meteora_damm_v2",
+    "token_a": {
+      "mint": "CMButZqQKoRabRAwemmG9gpXKa62KpQByLwjQLbjM1US",
+      "symbol": "SAOS",
+      "name": "Strategic American Oil Supply",
+      "decimals": 6,
+      "logoUri": "https://known-sapphire-boa.myfilebase.com/ipfs/QmQzbdyPhKHR2R8WPda5b3D7WHh55oDednv3ChYYSMRKuy",
+      "price": {
+        "usd": "0.005746334785293797",
+        "source": "jupiter",
+        "fetchedAt": "2026-05-21T10:06:53.095599Z"
+      }
+    },
+    "token_b": {
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6,
+      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+      "price": {
+        "usd": "0.999701032204846900",
+        "source": "jupiter",
+        "fetchedAt": "2026-05-21T10:06:53.095599Z"
+      }
+    },
+    "first_seen_at": "2026-05-21T10:02:09.917733Z",
+    "last_seen_at": "2026-05-21T10:03:09.454266Z"
   };
 }
 
-describe("PoolResponseSchema", () => {
+describe("PoolSchema", () => {
   it("accepts a complete valid pool", () => {
-    const parsed = PoolResponseSchema.parse(validPool());
-    expect(parsed.pool_address).toBe("CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j");
-    expect(parsed.protocol).toBe("damm_v2");
+    const parsed = PoolSchema.parse(validPool());
+    expect(parsed.pool_address).toBe("BhVFo9nCA9X45yUUa7QgwUkR4mZcAop2kytSNhmQiS4C");
+    expect(parsed.protocol).toBe("meteora_damm_v2");
   });
 
   it("accepts RFC3339 with a numeric timezone offset", () => {
-    const parsed = PoolResponseSchema.parse({
+    const parsed = PoolSchema.parse({
       ...validPool(),
       first_seen_at: "2026-05-01T08:30:00+02:00",
     });
@@ -42,20 +64,20 @@ describe("PoolResponseSchema", () => {
 
   it("rejects an empty pool_address", () => {
     expect(() =>
-      PoolResponseSchema.parse({ ...validPool(), pool_address: "" }),
+      PoolSchema.parse({ ...validPool(), pool_address: "" }),
     ).toThrow();
   });
 
   it("rejects a non-RFC3339 timestamp", () => {
     expect(() =>
-      PoolResponseSchema.parse({ ...validPool(), first_seen_at: "yesterday" }),
+      PoolSchema.parse({ ...validPool(), first_seen_at: "yesterday" }),
     ).toThrow();
   });
 
   it("rejects a missing field", () => {
     const { protocol, ...rest } = validPool();
     void protocol;
-    expect(() => PoolResponseSchema.parse(rest)).toThrow();
+    expect(() => PoolSchema.parse(rest)).toThrow();
   });
 });
 
