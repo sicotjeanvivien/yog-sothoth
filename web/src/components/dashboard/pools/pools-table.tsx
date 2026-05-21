@@ -21,7 +21,7 @@
  * locale-agnostic and easy to reuse.
  */
 
-import type { PoolResponse } from "@/lib/api/schema/pool-response";
+import type { PoolResponse } from "@/lib/api/schema/pool";
 import { formatAbsolute, formatRelative, type FormatLocale } from "@/lib/format/date";
 import { shortenPubkey } from "@/lib/format/pubkey";
 

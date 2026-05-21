@@ -9,10 +9,10 @@
  */
 
 import { apiGet } from "./client";
-import { NetworkStatusSchema, type NetworkStatus } from "./schema/network-status";
+import { NetworkStatusSchema, type NetworkStatusResponse } from "./schema/network-status";
 
 /** Fetch the current network status snapshot from `yog-api`. */
-export async function fetchNetworkStatus(): Promise<NetworkStatus> {
+export async function fetchNetworkStatus(): Promise<NetworkStatusResponse> {
   // No query parameters — the empty object keeps the `apiGet`
   // signature satisfied.
   return apiGet("/api/network/status", {}, NetworkStatusSchema);

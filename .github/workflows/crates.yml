@@ -112,6 +112,96 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/audit@v1
         name: Audit Rust Dependencies
+        
+# ─────────────────────────────────────────────────────────────────
+  # sqlx-check — verify .sqlx/ snapshots are up to date
+  # ─────────────────────────────────────────────────────────────────
+  # The `query!()` macros are validated at compile time against the
+  # `.sqlx/` offline metadata (committed). When a query is added or
+  # modified, the developer must regenerate `.sqlx/` locally with
+  # `cargo sqlx prepare` and commit the result. This job ensures that
+  # step is never forgotten: it spins up a real Postgres in CI,
+  # applies the migrations, and compares what the macros WOULD
+  # produce against what `.sqlx/` actually contains.
+  sqlx-check:
+    name: SQLx check
+    runs-on: ubuntu-latest
+ 
+    # TimescaleDB image because migration 001 creates the timescaledb
+    # extension and promotes tables to hypertables — a vanilla
+    # postgres image would fail the migration.
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: yog
+          POSTGRES_PASSWORD: yog
+          POSTGRES_DB: yog_sothoth
+        ports:
+          - 5432:5432
+        # Health check so the next step waits for Postgres to be
+        # ready before applying migrations.
+        options: >-
+          --health-cmd "pg_isready -U yog -d yog_sothoth"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+ 
+    env:
+      # The job connects directly as the admin user (no role split
+      # in CI — we are only checking query metadata, not exercising
+      # the runtime privilege model).
+      DATABASE_URL: postgresql://yog:yog@localhost:5432/yog_sothoth
+ 
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+ 
+      # sqlx-cli provides `cargo sqlx prepare --check` and
+      # `cargo sqlx migrate run`. --locked uses Cargo.lock to avoid
+      # surprise updates; the postgres feature is the only one we
+      # need (no MySQL / SQLite drivers compiled in).
+      - name: Install sqlx-cli
+        run: |
+          cargo install sqlx-cli \
+            --version 0.8.6 \
+            --no-default-features \
+            --features postgres,rustls \
+            --locked
+ 
+      # The CI Postgres has no yog_migrate / yog_indexer / yog_api /
+      # yog_context roles — the migrations 001 emit GRANT statements
+      # against them, which would fail. Create them as bare login
+      # roles (no passwords needed; CI is ephemeral).
+      - name: Pre-create runtime roles
+        env:
+          PGPASSWORD: yog
+        run: |
+          psql -h localhost -U yog -d yog_sothoth -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE yog_migrate;
+          CREATE ROLE yog_indexer;
+          CREATE ROLE yog_api;
+          CREATE ROLE yog_context;
+          SQL
+ 
+      # Apply migrations in the same shape the runtime does, using
+      # the standard sqlx CLI command. yog-migrate is the binary
+      # form of this same call — we do not build it here because
+      # the other jobs already cover it.
+      - name: Apply migrations
+        run: |
+          cargo sqlx migrate run \
+            --source crates/persistence/migrations
+ 
+      # The real check: does `.sqlx/` reflect the queries that the
+      # macros in the source code currently produce, against the
+      # schema we just applied? --check exits non-zero if not.
+      - name: Verify .sqlx/ is up to date
+        run: |
+          cd crates/persistence
+          cargo sqlx prepare --check -- --tests
+ 
 
   # ── Disabled until v0.3 (WASM activation deferred) ────────────────
   #

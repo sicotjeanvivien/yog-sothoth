@@ -21,4 +21,4 @@ export const ApiErrorBodySchema = z.object({
   error: z.string(),
 });
 
-export type ApiErrorBody = z.infer<typeof ApiErrorBodySchema>;
+export type ApiErrorBodyResponse = z.infer<typeof ApiErrorBodySchema>;

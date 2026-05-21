@@ -10,8 +10,8 @@ import { apiGet } from "./client";
 import { isValidPoolAddress } from "./pool";
 import {
   LiquidityEventsPageSchema,
-  type LiquidityEventsPage,
-} from "./schema/page-response";
+  type LiquidityEventsPageResponse,
+} from "./schema/page";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -31,7 +31,7 @@ export type FetchPoolLiquidityEventsParams = {
 export async function fetchPoolLiquidityEvents(
   address: string,
   params: FetchPoolLiquidityEventsParams = {},
-): Promise<LiquidityEventsPage> {
+): Promise<LiquidityEventsPageResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }

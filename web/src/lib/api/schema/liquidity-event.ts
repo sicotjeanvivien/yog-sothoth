@@ -9,7 +9,7 @@ import { Rfc3339, U128String } from "./shared";
  * Wire shape of a single liquidity event (add or remove) in the
  * per-pool feed.
  */
-export const LiquidityEventResponseSchema = z.object({
+export const LiquidityEventSchema = z.object({
   pool_address: z.string().min(1),
   protocol: z.string().min(1),
   signature: z.string().min(1),
@@ -30,4 +30,4 @@ export const LiquidityEventResponseSchema = z.object({
   owner: z.string().min(1),
 });
 
-export type LiquidityEventResponse = z.infer<typeof LiquidityEventResponseSchema>;
+export type LiquidityEventResponse = z.infer<typeof LiquidityEventSchema>;

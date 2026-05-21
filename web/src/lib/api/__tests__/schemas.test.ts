@@ -7,8 +7,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { PoolResponseSchema } from "../schema/pool-response";
-import { PoolsPageSchema } from "../schema/page-response";
+import { PoolResponseSchema } from "../schema/pool";
+import { PoolsPageSchema } from "../schema/page";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
 
 

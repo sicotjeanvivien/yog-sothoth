@@ -39,4 +39,4 @@ export const NetworkStatusSchema = z.object({
 });
 
 /** Validated network status payload. */
-export type NetworkStatus = z.infer<typeof NetworkStatusSchema>;
+export type NetworkStatusResponse = z.infer<typeof NetworkStatusSchema>;

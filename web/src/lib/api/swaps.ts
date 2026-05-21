@@ -14,7 +14,7 @@
 
 import { apiGet } from "./client";
 import { isValidPoolAddress } from "./pool";
-import { SwapEventsPageSchema, type SwapEventsPage } from "./schema/page-response";
+import { SwapEventsPageSchema, type SwapEventsPageResponse } from "./schema/page";
 
 /**
  * Bounds mirror yog-api's `MAX_LIMIT` for swap feeds. Kept in sync
@@ -42,7 +42,7 @@ export type FetchPoolSwapsParams = {
 export async function fetchPoolSwaps(
   address: string,
   params: FetchPoolSwapsParams = {},
-): Promise<SwapEventsPage> {
+): Promise<SwapEventsPageResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }

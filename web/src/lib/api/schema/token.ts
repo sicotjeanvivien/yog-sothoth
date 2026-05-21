@@ -1,0 +1,16 @@
+import * as z from "zod";
+import { Rfc3339, U128String } from "./shared";
+import { PriceSchema } from "./price";
+
+export const TokenSchema = z.object({
+  mint: z.string(),
+  symbol: z.string(),
+  name: z.string(),
+  decimals: z.number(),
+  logoUri: z.url(),
+  price: PriceSchema,
+});
+
+export type TokenResponse = z.infer<typeof TokenSchema>;
+
+

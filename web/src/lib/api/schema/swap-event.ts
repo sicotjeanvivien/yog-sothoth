@@ -8,7 +8,7 @@ import { Rfc3339, U128String } from "./shared";
 /**
  * Wire shape of a single swap event in the per-pool feed.
  */
-export const SwapEventResponseSchema = z.object({
+export const SwapEventSchema = z.object({
   pool_address: z.string().min(1),
   protocol: z.string().min(1),
   signature: z.string().min(1),
@@ -32,4 +32,4 @@ export const SwapEventResponseSchema = z.object({
   fee_token_is_a: z.boolean(),
 });
 
-export type SwapEventResponse = z.infer<typeof SwapEventResponseSchema>;
+export type SwapEventResponse = z.infer<typeof SwapEventSchema>;

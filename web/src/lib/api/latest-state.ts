@@ -16,9 +16,9 @@
 import { apiGet } from "./client";
 import { isValidPoolAddress } from "./pool";
 import {
-  PoolCurrentStateResponseSchema,
+  PoolCurrentStateSchema,
   type PoolCurrentStateResponse,
-} from "./schema/pool-current-state-response";
+} from "./schema/pool-current-state";
 
 /**
  * Fetch the latest projected state of a pool.
@@ -39,6 +39,6 @@ export async function fetchPoolLatestState(
   return apiGet(
     `/api/pools/${address}/latest-state`,
     {},
-    PoolCurrentStateResponseSchema,
+    PoolCurrentStateSchema,
   );
 }

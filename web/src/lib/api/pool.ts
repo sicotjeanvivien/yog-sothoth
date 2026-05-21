@@ -14,7 +14,7 @@
  */
 
 import { apiGet } from "./client";
-import { PoolResponseSchema, type PoolResponse } from "./schema/pool-response";
+import { PoolSchema, type PoolResponse } from "./schema/pool";
 
 /**
  * Validate that the address looks like a Solana base58 pubkey.
@@ -43,5 +43,5 @@ export async function fetchPool(address: string): Promise<PoolResponse> {
     throw new TypeError(`invalid pool address: ${address}`);
   }
 
-  return apiGet(`/api/pools/${address}`, {}, PoolResponseSchema);
+  return apiGet(`/api/pools/${address}`, {}, PoolSchema);
 }

@@ -10,7 +10,7 @@
  */
 
 import { apiGet } from "./client";
-import { PoolsPageSchema, type PoolsPage } from "./schema/page-response";
+import { PoolsPageSchema, type PoolsPageResponse } from "./schema/page";
 
 /**
  * Defaults mirror the yog-api handler. Kept in sync manually — a
@@ -36,7 +36,7 @@ export type FetchPoolsParams = {
  * @throws RangeError if `limit` is outside `[1, MAX_LIMIT]`.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
-export async function fetchPools(params: FetchPoolsParams = {}): Promise<PoolsPage> {
+export async function fetchPools(params: FetchPoolsParams = {}): Promise<PoolsPageResponse> {
   const limit = params.limit ?? DEFAULT_LIMIT;
 
   // Input validation — caller bug, not an HTTP error. Throwing a plain

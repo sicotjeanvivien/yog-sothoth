@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { Rfc3339 } from "./shared";
+import { TokenSchema } from "./token";
 
 // ─────────────────────────────────────────────────────────────────────
 // PoolResponse — mirrors `api::http::dto::response::PoolResponse`
@@ -22,13 +23,13 @@ import { Rfc3339 } from "./shared";
  * }
  * ```
  */
-export const PoolResponseSchema = z.object({
+export const PoolSchema = z.object({
   pool_address: z.string().min(1),
   protocol: z.string().min(1),
-  token_a_mint: z.string().min(1),
-  token_b_mint: z.string().min(1),
+  token_a: TokenSchema,
+  token_b: TokenSchema,
   first_seen_at: Rfc3339,
   last_seen_at: Rfc3339,
 });
 
-export type PoolResponse = z.infer<typeof PoolResponseSchema>;
+export type PoolResponse = z.infer<typeof PoolSchema>;

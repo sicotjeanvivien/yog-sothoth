@@ -14,7 +14,7 @@
  * styles as `pools-table.tsx`.
  */
 
-import type { SwapEventResponse } from "@/lib/api/schema/swap-event-response";
+import type { SwapEventResponse } from "@/lib/api/schema/swap-event";
 import { formatAbsolute, formatRelative, type FormatLocale } from "@/lib/format/date";
 import { shortenPubkey } from "@/lib/format/pubkey";
 

@@ -1,7 +1,7 @@
 import * as z from "zod";
-import { PoolResponseSchema } from "./pool-response";
-import { SwapEventResponseSchema } from "./swap-event-response";
-import { LiquidityEventResponseSchema } from "./liquidity-event-response";
+import { PoolSchema } from "./pool";
+import { SwapEventSchema } from "./swap-event";
+import { LiquidityEventSchema } from "./liquidity-event";
 
 // ─────────────────────────────────────────────────────────────────────
 // PageResponse<T> — mirrors `api::http::dto::response::PageResponse<T>`
@@ -14,7 +14,7 @@ import { LiquidityEventResponseSchema } from "./liquidity-event-response";
  * Defined as a factory because zod 4 schemas are not generic in the
  * TypeScript sense; we compose a fresh schema per item type instead.
  */
-export function pageResponseSchema<T extends z.ZodTypeAny>(item: T) {
+export function pageSchema<T extends z.ZodTypeAny>(item: T) {
   return z.object({
     items: z.array(item),
     next_cursor: z.string().nullable(),
@@ -23,11 +23,11 @@ export function pageResponseSchema<T extends z.ZodTypeAny>(item: T) {
 
 // ── Concrete pages ────────────────────────────────────────────────────
 
-export const PoolsPageSchema = pageResponseSchema(PoolResponseSchema);
-export type PoolsPage = z.infer<typeof PoolsPageSchema>;
+export const PoolsPageSchema = pageSchema(PoolSchema);
+export type PoolsPageResponse = z.infer<typeof PoolsPageSchema>;
 
-export const SwapEventsPageSchema = pageResponseSchema(SwapEventResponseSchema);
-export type SwapEventsPage = z.infer<typeof SwapEventsPageSchema>;
+export const SwapEventsPageSchema = pageSchema(SwapEventSchema);
+export type SwapEventsPageResponse = z.infer<typeof SwapEventsPageSchema>;
 
-export const LiquidityEventsPageSchema = pageResponseSchema(LiquidityEventResponseSchema);
-export type LiquidityEventsPage = z.infer<typeof LiquidityEventsPageSchema>;
+export const LiquidityEventsPageSchema = pageSchema(LiquidityEventSchema);
+export type LiquidityEventsPageResponse = z.infer<typeof LiquidityEventsPageSchema>;

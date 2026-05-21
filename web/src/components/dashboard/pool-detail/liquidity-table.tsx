@@ -15,7 +15,7 @@
  * will surface it.
  */
 
-import type { LiquidityEventResponse } from "@/lib/api/schema/liquidity-event-response";
+import type { LiquidityEventResponse } from "@/lib/api/schema/liquidity-event";
 import { formatAbsolute, formatRelative, type FormatLocale } from "@/lib/format/date";
 import { shortenPubkey } from "@/lib/format/pubkey";
 

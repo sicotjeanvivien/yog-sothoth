@@ -17,7 +17,7 @@ import { Rfc3339, U128String } from "./shared";
  * `last_sqrt_price` and `liquidity` are emitted as digit-only strings;
  * see the file-level note on u128 handling.
  */
-export const PoolCurrentStateResponseSchema = z.object({
+export const PoolCurrentStateSchema = z.object({
   pool_address: z.string().min(1),
   protocol: z.string().min(1),
 
@@ -37,4 +37,4 @@ export const PoolCurrentStateResponseSchema = z.object({
   updated_at: Rfc3339,
 });
 
-export type PoolCurrentStateResponse = z.infer<typeof PoolCurrentStateResponseSchema>;
+export type PoolCurrentStateResponse = z.infer<typeof PoolCurrentStateSchema>;
