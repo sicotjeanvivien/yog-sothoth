@@ -6171,9 +6171,11 @@ dependencies = [
 name = "yog-persistence"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bigdecimal",
  "chrono",
+ "dotenvy",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -6182,6 +6184,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "yog-bootstrap",
  "yog-core",
 ]
 

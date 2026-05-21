@@ -5,19 +5,22 @@
 -- Replace the placeholder passwords with values stored in your secrets manager.
 --
 -- Scope:
+--   yog_migrate  : DDL — owns the schema evolution (CREATE / ALTER tables,
+--                  GRANT statements emitted by migration files). Used by the
+--                  yog-migrate binary; never by runtime services.
 --   yog_indexer  : RW on event tables, RO on user-facing tables
 --   yog_api      : RO on event tables, will gain RW on user-facing tables in v0.3
 --   yog_context  : RW on token enrichment tables, RO on pools (work queue)
 --
--- Note: a separate migration role (yog_migrate) is intentionally NOT created
--- here. For v0.1, migrations are run by the admin role manually or via CI.
--- A dedicated migration role will be introduced when the deployment pipeline
--- justifies the separation (v0.3+).
+-- Least privilege at runtime: none of yog_indexer / yog_api / yog_context can
+-- CREATE or ALTER tables. The day one of them is compromised, the schema
+-- itself stays out of reach.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
 -- Roles
 -- ---------------------------------------------------------------------------
+CREATE ROLE yog_migrate LOGIN PASSWORD 'CHANGE_ME_migrate_password';
 CREATE ROLE yog_indexer LOGIN PASSWORD 'CHANGE_ME_indexer_password';
 CREATE ROLE yog_api     LOGIN PASSWORD 'CHANGE_ME_api_password';
 CREATE ROLE yog_context LOGIN PASSWORD 'CHANGE_ME_context_password';
@@ -25,7 +28,14 @@ CREATE ROLE yog_context LOGIN PASSWORD 'CHANGE_ME_context_password';
 -- ---------------------------------------------------------------------------
 -- Schema access
 -- ---------------------------------------------------------------------------
-GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context;
+GRANT USAGE  ON SCHEMA public TO yog_indexer, yog_api, yog_context;
+
+-- yog_migrate needs USAGE + CREATE on the schema to apply DDL. It must also
+-- be able to GRANT on the tables it creates so that migration files can emit
+-- their own GRANT statements. The simplest way to get a clean ownership chain
+-- is to make yog_migrate own the schema entirely.
+ALTER SCHEMA public OWNER TO yog_migrate;
+GRANT USAGE, CREATE ON SCHEMA public TO yog_migrate;
 
 -- ---------------------------------------------------------------------------
 -- Indexer grants
@@ -76,23 +86,27 @@ GRANT SELECT, INSERT ON token_prices TO yog_context;
 GRANT SELECT ON pools TO yog_context;
 
 -- ---------------------------------------------------------------------------
--- Default privileges for FUTURE tables created by the admin role.
--- This avoids forgetting GRANTs every time a migration adds a table.
+-- Default privileges for FUTURE tables created by yog_migrate.
+--
+-- IMPORTANT: ALTER DEFAULT PRIVILEGES is scoped to the role that creates
+-- the objects. Since yog_migrate now owns the schema and applies all
+-- migrations, the defaults must be set FOR ROLE yog_migrate — otherwise a
+-- table created by a migration would not inherit these grants.
 -- ---------------------------------------------------------------------------
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_api;
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_indexer;
 
 -- yog_context reads enrichment-adjacent tables (e.g. pools); a default
 -- SELECT keeps it consistent with the other roles for future tables.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_context;
 
--- Indexer needs INSERT/UPDATE on event tables — grant explicitly per table
--- in each migration that creates one. Default privileges intentionally keep
--- INSERT/UPDATE narrow.
+-- Indexer needs INSERT/UPDATE on event tables — those are granted explicitly
+-- inside each migration that creates such a table. Default privileges
+-- intentionally keep INSERT/UPDATE narrow.
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO yog_indexer;

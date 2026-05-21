@@ -11,6 +11,7 @@
 //! and schema definitions.
 
 mod database;
+mod error;
 mod repositories;
 mod repository_utils;
 

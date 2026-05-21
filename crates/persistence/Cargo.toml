@@ -3,10 +3,17 @@ name = "yog-persistence"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "yog-migrate"
+path = "src/bin/migrate.rs"
+
 [dependencies]
 # Workspace deps already declared at root
 yog-core = { path = "../core" }
+yog-bootstrap = { path = "../bootstrap" }
 
+anyhow = { workspace = true }
+dotenvy = { workspace = true }
 tokio = { workspace = true }
 sqlx = { workspace = true, default-features = false, features = [
   "postgres",
@@ -16,6 +23,7 @@ sqlx = { workspace = true, default-features = false, features = [
   "bigdecimal",
   "uuid",
   "rust_decimal",
+  "migrate",
 ] }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,6 +1,8 @@
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
 
+use crate::error::MigrationError;
+
 /// Thin wrapper around `sqlx::PgPool` providing a single entry point for
 /// connecting and a hook for future cross-cutting concerns (metrics, health,
 /// migrations runner if we ever bundle one).
@@ -56,5 +58,12 @@ impl Database {
     /// Convenience accessor for code that wants the pool by value.
     pub fn pool_owned(&self) -> PgPool {
         self.pool.clone()
+    }
+
+    pub async fn run_migrations(&self) -> Result<(), MigrationError> {
+        sqlx::migrate!("./migrations")
+            .run(&self.pool)
+            .await
+            .map_err(MigrationError::from)
     }
 }
