@@ -1,3 +1,4 @@
+import { log } from "node:console";
 import * as z from "zod";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -12,3 +13,7 @@ export const U128String = z.string().regex(/^\d+$/, "expected a non-negative dec
 
 /** RFC 3339 timestamp with timezone offset — matches Rust's `chrono::DateTime<Utc>` output. */
 export const Rfc3339 = z.iso.datetime({ offset: true });
+
+export const BigDecimal = z.string().regex(/^\d+(\.\d+)?$/, {
+  message: "Doit être un nombre valide sous forme de string (ex: '86.6384' ou '0.00098')",
+});

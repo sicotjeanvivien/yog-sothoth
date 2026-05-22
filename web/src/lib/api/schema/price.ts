@@ -1,8 +1,8 @@
 import * as z from "zod";
-import { Rfc3339 } from "./shared";
+import { BigDecimal, Rfc3339 } from "./shared";
 
 export const PriceSchema = z.object({
-  usd: z.string(),
+  usd: BigDecimal,
   source: z.string(),
   fetchedAt: Rfc3339
 });

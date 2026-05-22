@@ -1,5 +1,4 @@
 import * as z from "zod";
-import { Rfc3339, U128String } from "./shared";
 import { PriceSchema } from "./price";
 
 export const TokenSchema = z.object({
@@ -12,5 +11,3 @@ export const TokenSchema = z.object({
 });
 
 export type TokenResponse = z.infer<typeof TokenSchema>;
-
-
