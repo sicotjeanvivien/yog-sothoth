@@ -124,7 +124,7 @@
     "dashboardButton": "Open Analytics",
     "nav": {
       "overview": "Overview",
-      "support": "Support",
+      "support-us": "Support Us",
       "github": "GitHub"
     },
     "hero": {
@@ -158,7 +158,7 @@
     },
     "cta": {
       "title": "Ready to see everything?",
-      "subtitle": "Join Yog-Sothoth and unlock the full power of liquidity intelligence."
+      "subtitle": "Join Yog-Scope and unlock the full power of liquidity intelligence."
     },
     "footer": {
       "description": "Real-time liquidity intelligence on Meteora · Solana.",
@@ -166,7 +166,7 @@
         "heading": "Product",
         "overview": "Overview",
         "features": "Features",
-        "support": "Support"
+        "support-us": "Support Us"
       },
       "company": {
         "heading": "Company",
@@ -178,19 +178,19 @@
         "title": "Built by AWSD",
         "tagline": "An independent software company. Crafted in France."
       },
-      "copyright": "© {year} Yog-Sothoth. All rights reserved."
+      "copyright": "© {year}  Yog-Scope. All rights reserved."
     }
   },
   "About": {
     "meta": {
-      "title": "About - Yog-Sothoth",
-      "description": "Yog-Sothoth is an open source real-time observation platform for Meteora liquidity pools on Solana."
+      "title": "About -  Yog-Scope",
+      "description": " Yog-Scope is an open source real-time observation platform for Meteora liquidity pools on Solana."
     },
     "hero": {
-      "eyebrow": "About Yog-Sothoth",
+      "eyebrow": "About  Yog-Scope",
       "titleLine1": "Built to observe.",
       "titleLine2": "Open by design.",
-      "lead": "Yog-Sothoth is an open source platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
+      "lead": " Yog-Scope is an open source platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
       "ctaGithub": "View on GitHub",
       "ctaAWSD": "About AWSD"
     },
@@ -201,7 +201,7 @@
       },
       "approach": {
         "title": "The approach",
-        "body": "Yog-Sothoth sits on a persistent WebSocket connection to a Solana RPC and observes Meteora's events as they are emitted. Each event is decoded from its on-chain format, enriched with token metadata and USD prices, and persisted in a time-series database. The platform is focused on Meteora as a protocol - its decoding is anchored on Meteora's event format rather than a generic multi-DEX adapter - and the historical record accumulates as the platform runs."
+        "body": " Yog-Scope sits on a persistent WebSocket connection to a Solana RPC and observes Meteora's events as they are emitted. Each event is decoded from its on-chain format, enriched with token metadata and USD prices, and persisted in a time-series database. The platform is focused on Meteora as a protocol - its decoding is anchored on Meteora's event format rather than a generic multi-DEX adapter - and the historical record accumulates as the platform runs."
       },
       "audience": {
         "title": "Who it's for",
@@ -213,8 +213,46 @@
       },
       "behind": {
         "title": "Who is behind it",
-        "body": "Yog-Sothoth is built and maintained by <awsd>AWSD</awsd>, an independent software company based in France. The source code lives on <github>GitHub</github>."
+        "body": " Yog-Scope is built and maintained by <awsd>AWSD</awsd>, an independent software company based in France. The source code lives on <github>GitHub</github>."
       }
     }
+  },
+  "Privacy": {
+  "meta": {
+    "title": "Privacy —  Yog-Scope",
+    "description": "How  Yog-Scope handles your data. Short answer: almost nothing is collected."
+  },
+  "header": {
+    "eyebrow": "Privacy policy",
+    "title": "What we do with your data.",
+    "lead": " Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
+    "lastUpdated": "Last updated: [date]"
+  },
+  "prose": {
+    "inShort": {
+      "title": "In short",
+      "body": " Yog-Scope does not require an account, does not use analytics, and does not set non-essential cookies. The only personal data the platform ever sees are technical server logs (kept briefly for security and operations) and any email you choose to send to the contact address. That is the whole list."
+    },
+    "responsible": {
+      "title": "Who is responsible",
+      "body": "The data controller is [AWSD legal name], a company registered in France ([SIREN]), whose registered office is at [registered address]. For any privacy-related question, you can reach out at <email>[contact-email]</email>."
+    },
+    "collected": {
+      "title": "What we collect, and why",
+      "body": "The web server hosting  Yog-Scope records standard technical logs — IP address, user agent, requested URL, response status, timestamp — strictly to keep the service running and to detect abuse. These logs are retained for a maximum of twelve months and are not shared with anyone outside the hosting provider. If you send an email to the contact address, that email and its contents are kept for the time strictly needed to handle your request. No other personal data is collected. There is no account system, no tracking pixel, no third-party analytics, and no advertising."
+    },
+    "cookies": {
+      "title": "Cookies",
+      "body": "The site does not set any cookie that requires consent. A small number of strictly necessary technical cookies may be used to remember your language preference and to make the site work correctly — these are exempt from consent under the ePrivacy directive. The list will be updated if non-essential cookies are ever introduced."
+    },
+    "rights": {
+      "title": "Your rights",
+      "body": "Under the GDPR you have the right to access, rectify, erase, restrict, port, or object to the processing of your personal data, and to define directives about your data after your death. To exercise any of these rights, write to <email>[contact-email]</email>. You also have the right to lodge a complaint with the French data protection authority (CNIL, www.cnil.fr) if you believe your rights are not respected."
+    },
+    "changes": {
+      "title": "Changes to this policy",
+      "body": "This policy may evolve, for instance if the platform starts using analytics or introduces an account system. When it changes, the \"last updated\" date at the top of the page is revised; substantive changes will be highlighted on the site."
+    }
   }
+}
 }

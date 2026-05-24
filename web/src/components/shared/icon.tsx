@@ -289,7 +289,7 @@ export const OpenSourceIcon: React.FC<IconProps> = ({
     <circle cx="11" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
   </svg>
 );
- 
+
 /**
  * Users — two overlapping silhouettes. Used to mark the "Who is
  * behind it" section on the About page. A larger figure on the left
@@ -311,4 +311,87 @@ export const UsersIcon: React.FC<IconProps> = ({
     <path d="M16.5 14h.5a4 4 0 0 1 4 4v1" />
   </svg>
 );
- 
+
+/**
+ * Info — outlined circle with a vertical accent. Used as a "TL;DR"
+ * marker on policy pages.
+ */
+export const InfoIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/**
+ * User card — a single silhouette inside a framed card. Used to
+ * identify the data controller / responsible party. Distinct from
+ * `UsersIcon` (which depicts multiple people) so the same page can
+ * use both without semantic overlap.
+ */
+export const UserCardIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <rect x="3" y="5" width="18" height="14" rx="1.5" />
+    <circle cx="9" cy="11" r="2" />
+    <path d="M6 16.5a3.5 3.5 0 0 1 6 0" />
+    <path d="M14 10h4" />
+    <path d="M14 13h3" />
+  </svg>
+);
+
+/**
+ * Cookie — disc with three "chip" dots. Used to mark cookie-related
+ * sections on policy pages.
+ */
+export const CookieIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-5-5z" />
+    <circle cx="9" cy="11" r="0.8" fill="currentColor" stroke="none" />
+    <circle cx="14" cy="14" r="0.8" fill="currentColor" stroke="none" />
+    <circle cx="10" cy="15.5" r="0.6" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/**
+ * Shield — a closed-loop shield outline. Used to mark
+ * rights / protection sections on policy pages. Distinct from
+ * `OpenSourceIcon` (an opened padlock) since this one signals
+ * protection rather than openness.
+ */
+export const ShieldIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M12 3 4 6v6c0 4.5 3.4 7.8 8 9 4.6-1.2 8-4.5 8-9V6z" />
+  </svg>
+);
+
+/**
+ * Refresh — circular arrow. Used to mark "changes to this policy"
+ * sections — the policy is a living document and may be updated.
+ */
+export const RefreshIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M21 12a9 9 0 1 1-3-6.7" />
+    <path d="M21 4v5h-5" />
+  </svg>
+);

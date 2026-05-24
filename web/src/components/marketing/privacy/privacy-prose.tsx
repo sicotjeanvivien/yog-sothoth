@@ -1,33 +1,34 @@
 /**
- * About — prose section.
+ * Privacy — prose section.
  *
- * Sits directly under the hero. Five stacked cards, each answering
- * one question in plain prose, prefixed with a small icon badge:
+ * Six stacked cards, each answering one question in plain prose,
+ * prefixed with a small icon badge:
  *
- *   1. The problem        — EyeIcon
- *   2. The approach       — PulseIcon
- *   3. Who it's for       — SignalsIcon
- *   4. How it's available — OpenSourceIcon
- *   5. Who is behind it   — UsersIcon
+ *   1. In short        — InfoIcon
+ *   2. Who is responsible — UserCardIcon
+ *   3. What we collect — EyeIcon (reused from About)
+ *   4. Cookies         — CookieIcon
+ *   5. Your rights     — ShieldIcon
+ *   6. Changes         — RefreshIcon
  *
  * Constrained to a comfortable reading width. Copy lives under
- * `About.prose` in `messages/{en,fr}.json`.
+ * `Privacy.prose` in `messages/{en,fr}.json`.
  */
 
 import { getTranslations } from "next-intl/server";
 import type { FC, ReactNode } from "react";
 
 import {
+  CookieIcon,
   EyeIcon,
-  OpenSourceIcon,
-  PulseIcon,
-  SignalsIcon,
-  UsersIcon,
+  InfoIcon,
+  RefreshIcon,
+  ShieldIcon,
+  UserCardIcon,
   type IconProps,
 } from "@/components/shared/icon";
 
-const GITHUB_REPO_URL = "https://github.com/sicotjeanvivien/yog-sothoth";
-const AWSD_URL = "https://awsd.fr/";
+const CONTACT_EMAIL_HREF = "mailto:[contact-email]";
 
 const INLINE_LINK_CLASS =
   "text-sothoth-400 underline decoration-sothoth-500/40 underline-offset-4 transition-colors hover:text-sothoth-300 hover:decoration-sothoth-400";
@@ -45,8 +46,10 @@ const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
 
 // ── Card ordering ─────────────────────────────────────────────────────
 //
-// The reading flow is intentional: problem → approach → audience →
-// access → identity. Reordering breaks the narrative.
+// The reading flow mirrors what a visitor naturally asks:
+// "what's the short version?" → "who is responsible?" →
+// "what do you collect?" → "what about cookies?" → "what are my
+// rights?" → "what happens if this changes?"
 
 type CardConfig = {
   key: string;
@@ -54,40 +57,29 @@ type CardConfig = {
 };
 
 const CARDS: readonly CardConfig[] = [
-  { key: "problem", Icon: EyeIcon },
-  { key: "approach", Icon: PulseIcon },
-  { key: "audience", Icon: SignalsIcon },
-  { key: "availability", Icon: OpenSourceIcon },
-  { key: "behind", Icon: UsersIcon },
+  { key: "inShort", Icon: InfoIcon },
+  { key: "responsible", Icon: UserCardIcon },
+  { key: "collected", Icon: EyeIcon },
+  { key: "cookies", Icon: CookieIcon },
+  { key: "rights", Icon: ShieldIcon },
+  { key: "changes", Icon: RefreshIcon },
 ] as const;
 
-export async function AboutProse() {
-  const t = await getTranslations("About.prose");
+export async function PrivacyProse() {
+  const t = await getTranslations("Privacy.prose");
 
   return (
     <section className="mx-auto max-w-[1800px] px-6 pb-24 lg:px-12">
       <div className="mx-auto max-w-[128ch] space-y-4">
         {CARDS.map(({ key, Icon }) => (
           <ProseCard key={key} Icon={Icon} title={t(`${key}.title`)}>
-            {key === "behind"
+            {/* Cards `responsible` and `rights` need an inline
+                mailto link — handled via t.rich. The other cards
+                are plain prose. */}
+            {key === "responsible" || key === "rights"
               ? t.rich(`${key}.body`, {
-                  awsd: (chunks) => (
-                    <a
-                      href={AWSD_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={INLINE_LINK_CLASS}
-                    >
-                      {chunks}
-                    </a>
-                  ),
-                  github: (chunks) => (
-                    <a
-                      href={GITHUB_REPO_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={INLINE_LINK_CLASS}
-                    >
+                  email: (chunks) => (
+                    <a href={CONTACT_EMAIL_HREF} className={INLINE_LINK_CLASS}>
                       {chunks}
                     </a>
                   ),
@@ -103,9 +95,9 @@ export async function AboutProse() {
 // ── Sub-component ─────────────────────────────────────────────────────
 
 /**
- * One titled prose card with an icon badge on the left. The badge
- * is fixed-size and aligned to the top of the content so paragraphs
- * of different lengths don't push it around.
+ * One titled prose card with an icon badge on the left.
+ * Body accepts arbitrary children so callers can pass plain strings
+ * or rich-text fragments containing links.
  */
 function ProseCard({
   Icon,

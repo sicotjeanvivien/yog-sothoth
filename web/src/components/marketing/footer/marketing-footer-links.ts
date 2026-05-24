@@ -51,7 +51,7 @@ const PRODUCT_COLUMN: FooterColumn = {
   links: [
     { key: "overview", labelKey: "overview", href: "/overview", kind: "route" },
     { key: "features", labelKey: "features", href: "/#features", kind: "anchor" },
-    { key: "support", labelKey: "support", href: "/support", kind: "route" },
+    { key: "support-us", labelKey: "support-us", href: "/support-us", kind: "route" },
   ],
 };
  

@@ -10,7 +10,7 @@
  * Four zones in the upper row:
  *
  *   1. brand   — logo, wordmark, one-line description, social icons;
- *   2. Product — link column (Overview / Features / Support);
+ *   2. Product — link column (Overview / Features / Support-us);
  *   3. Company — link column (About / Privacy / Terms);
  *   4. AWSD    — a "Built by AWSD" credit box, links to awsd.fr.
  *

@@ -3,7 +3,7 @@
  *
  * Mounts the marketing nav above the page content. The route group
  * does not appear in the URL, so pages keep their natural paths
- * (`/[locale]`, `/[locale]/support`, …) while sharing this chrome.
+ * (`/[locale]`, `/[locale]/support-us`, …) while sharing this chrome.
  *
  * Counterpart to `(dashboard)/layout.tsx` — the two route groups
  * have deliberately separate chrome: a sidebar for the dashboard,

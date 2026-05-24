@@ -124,7 +124,7 @@
     "dashboardButton": "Ouvrir Analytics",
     "nav": {
       "overview": "Analytics",
-      "support": "Support",
+      "support-us": "Nous soutenir",
       "github": "GitHub"
     },
     "hero": {
@@ -158,7 +158,7 @@
     },
     "cta": {
       "title": "Prêt à tout voir ?",
-      "subtitle": "Rejoignez Yog-Sothoth et exploitez toute la puissance de l'analyse de liquidité."
+      "subtitle": "Rejoignez  Yog-Scope et exploitez toute la puissance de l'analyse de liquidité."
     },
     "footer": {
       "description": "Intelligence de la liquidité en temps réel sur Meteora · Solana.",
@@ -166,7 +166,7 @@
         "heading": "Produit",
         "overview": "Aperçu",
         "features": "Fonctionnalités",
-        "support": "Support"
+        "support-us": "Nous soutenir"
       },
       "company": {
         "heading": "Entreprise",
@@ -178,19 +178,19 @@
         "title": "Conçu par AWSD",
         "tagline": "Société logicielle indépendante. Façonné en France."
       },
-      "copyright": "© {year} Yog-Sothoth. Tous droits réservés."
+      "copyright": "© {year}  Yog-Scope. Tous droits réservés."
     }
   },
   "About": {
     "meta": {
-      "title": "À propos - Yog-Sothoth",
-      "description": "Yog-Sothoth est une plateforme open source d'observation temps réel des pools de liquidité Meteora sur Solana."
+      "title": "À propos -  Yog-Scope",
+      "description": " Yog-Scope est une plateforme open source d'observation temps réel des pools de liquidité Meteora sur Solana."
     },
     "hero": {
-      "eyebrow": "À propos de Yog-Sothoth",
+      "eyebrow": "À propos de  Yog-Scope",
       "titleLine1": "Conçu pour observer.",
       "titleLine2": "Ouvert par nature.",
-      "lead": "Yog-Sothoth est une plateforme open source qui observe l'activité de liquidité des pools Meteora au moment où elle se produit sur Solana, reconstitue ce qu'il s'est passé, et expose le résultat via une API et un dashboard.",
+      "lead": " Yog-Scope est une plateforme open source qui observe l'activité de liquidité des pools Meteora au moment où elle se produit sur Solana, reconstitue ce qu'il s'est passé, et expose le résultat via une API et un dashboard.",
       "ctaGithub": "Voir sur GitHub",
       "ctaAWSD": "À propos d'AWSD"
     },
@@ -201,7 +201,7 @@
       },
       "approach": {
         "title": "L'approche",
-        "body": "Yog-Sothoth maintient une connexion WebSocket persistante vers un RPC Solana et observe les événements Meteora à mesure qu'ils sont émis. Chaque événement est décodé depuis son format on-chain, enrichi avec les métadonnées de tokens et les prix en USD, puis persisté dans une base de données séries-temporelles. La plateforme est centrée sur Meteora en tant que protocole - le décodage s'appuie sur le format d'événements de Meteora plutôt que sur un adaptateur multi-DEX générique - et l'historique s'accumule à mesure que la plateforme tourne."
+        "body": " Yog-Scope maintient une connexion WebSocket persistante vers un RPC Solana et observe les événements Meteora à mesure qu'ils sont émis. Chaque événement est décodé depuis son format on-chain, enrichi avec les métadonnées de tokens et les prix en USD, puis persisté dans une base de données séries-temporelles. La plateforme est centrée sur Meteora en tant que protocole - le décodage s'appuie sur le format d'événements de Meteora plutôt que sur un adaptateur multi-DEX générique - et l'historique s'accumule à mesure que la plateforme tourne."
       },
       "audience": {
         "title": "À qui ça sert",
@@ -213,7 +213,45 @@
       },
       "behind": {
         "title": "Qui est derrière",
-        "body": "Yog-Sothoth est conçu et maintenu par <awsd>AWSD</awsd>, une société logicielle indépendante basée en France. Le code source est hébergé sur <github>GitHub</github>."
+        "body": " Yog-Scope est conçu et maintenu par <awsd>AWSD</awsd>, une société logicielle indépendante basée en France. Le code source est hébergé sur <github>GitHub</github>."
+      }
+    }
+  },
+  "Privacy": {
+    "meta": {
+      "title": "Confidentialité —  Yog-Scope",
+      "description": "Comment  Yog-Scope traite vos données. Version courte : quasiment rien n'est collecté."
+    },
+    "header": {
+      "eyebrow": "Politique de confidentialité",
+      "title": "Ce que nous faisons de vos données.",
+      "lead": " Yog-Scope est un dashboard public en lecture seule. Aucun compte n'est requis, aucun outil d'analytique n'est utilisé, aucun visiteur n'est tracké. Cette page explique en termes clairs les très rares données que la plateforme manipule.",
+      "lastUpdated": "Dernière mise à jour : [date]"
+    },
+    "prose": {
+      "inShort": {
+        "title": "En bref",
+        "body": " Yog-Scope ne demande pas de compte, n'utilise pas d'outil d'analytique et ne dépose pas de cookies non essentiels. Les seules données personnelles que la plateforme voit jamais sont les logs techniques du serveur (conservés brièvement pour la sécurité et l'exploitation) et les emails que vous nous envoyez. C'est toute la liste."
+      },
+      "responsible": {
+        "title": "Qui est responsable",
+        "body": "Le responsable du traitement est [raison sociale AWSD], une société immatriculée en France ([SIREN]), dont le siège social est situé [adresse du siège]. Pour toute question relative à la vie privée, vous pouvez écrire à <email>[email de contact]</email>."
+      },
+      "collected": {
+        "title": "Ce que nous collectons, et pourquoi",
+        "body": "Le serveur web qui héberge  Yog-Scope enregistre des logs techniques standards — adresse IP, user agent, URL demandée, statut de la réponse, horodatage — strictement pour faire fonctionner le service et détecter les abus. Ces logs sont conservés douze mois maximum et ne sont partagés avec personne en dehors de l'hébergeur. Si vous écrivez à l'adresse de contact, votre email et son contenu sont conservés le temps strictement nécessaire au traitement de votre demande. Aucune autre donnée personnelle n'est collectée. Il n'y a pas de système de compte, pas de pixel de tracking, pas d'analytique tiers, pas de publicité."
+      },
+      "cookies": {
+        "title": "Cookies",
+        "body": "Le site ne dépose aucun cookie soumis à consentement. Quelques cookies techniques strictement nécessaires peuvent être utilisés pour mémoriser votre préférence de langue et faire fonctionner le site correctement — ces cookies sont exemptés de consentement par la directive ePrivacy. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
+      },
+      "rights": {
+        "title": "Vos droits",
+        "body": "Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition au traitement de vos données personnelles, ainsi que du droit de définir des directives sur le sort de vos données après votre décès. Pour exercer l'un de ces droits, écrivez à <email>[email de contact]</email>. Vous pouvez également introduire une réclamation auprès de la CNIL (www.cnil.fr) si vous estimez que vos droits ne sont pas respectés."
+      },
+      "changes": {
+        "title": "Évolutions de cette politique",
+        "body": "Cette politique peut évoluer, par exemple si la plateforme commence à utiliser un outil d'analytique ou introduit un système de compte. Lorsqu'elle change, la date de \"dernière mise à jour\" en haut de la page est actualisée ; les modifications substantielles sont signalées sur le site."
       }
     }
   }

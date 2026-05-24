@@ -16,7 +16,7 @@
  *
  * - `key`      stable identity, also used as the React list key.
  * - `labelKey` i18n key, relative to the `Marketing.nav` namespace.
- * - `href`     for internal links, a locale-free path (`/support`);
+ * - `href`     for internal links, a locale-free path (`/support-us`);
  *              for external links, a full URL (`https://…`).
  * - `external` discriminates the two. Internal links go through
  *              next-intl's `Link` (locale prefix added automatically);
@@ -34,12 +34,12 @@ export type MarketingNavLink = {
  * The nav links, in display order.
  *
  * Kept deliberately short — Overview points at the dashboard,
- * Support at the marketing support page, GitHub at the public repo.
+ * Support us at the marketing support us page, GitHub at the public repo.
  * Pricing / Docs are intentionally absent until they exist.
  */
 export const MARKETING_NAV_LINKS: readonly MarketingNavLink[] = [
   { key: "overview", labelKey: "overview", href: "/overview", external: false },
-  { key: "support", labelKey: "support", href: "/support", external: false },
+  { key: "support-us", labelKey: "support-us", href: "/support-us", external: false },
   {
     key: "github",
     labelKey: "github",
