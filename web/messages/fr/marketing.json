@@ -1,0 +1,64 @@
+{
+  "Marketing": {
+    "dashboardButton": "Ouvrir l'analytique",
+    "nav": {
+      "overview": "Vue d'ensemble",
+      "support-us": "Nous soutenir",
+      "github": "GitHub"
+    },
+    "hero": {
+      "title": "Intelligence de liquidité en temps réel",
+      "subtitle": "Sur Meteora · Solana",
+      "lead": "Observez, reconstituez et analysez les mouvements de liquidité au moment où ils se produisent. Détectez les signaux, comprenez les flux, gardez une longueur d'avance.",
+      "ctaSecondary": "Voir les fonctionnalités",
+      "builtOn": "Construit sur Solana"
+    },
+    "pillars": {
+      "eyebrow": "Puissant par conception",
+      "title": "Toute la lecture du marché, en temps réel",
+      "items": {
+        "observe": {
+          "title": "Observer",
+          "body": "Suivez les pools, les changements de liquidité et l'activité du marché sur Meteora en temps réel."
+        },
+        "reconstruct": {
+          "title": "Reconstituer",
+          "body": "Reconstruisez l'historique de liquidité, rejouez les mouvements et comprenez ce qui s'est vraiment passé."
+        },
+        "analyze": {
+          "title": "Analyser",
+          "body": "Détectez les anomalies, identifiez les patterns et obtenez des signaux actionnables instantanément."
+        },
+        "signal": {
+          "title": "Signaler",
+          "body": "Recevez des alertes temps réel sur les événements clés, les pics et les déséquilibres de liquidité."
+        }
+      }
+    },
+    "cta": {
+      "title": "Prêt à tout voir ?",
+      "subtitle": "Rejoignez Yog-Scope et débloquez toute la puissance de l'intelligence de liquidité."
+    },
+    "footer": {
+      "description": "Intelligence de liquidité en temps réel sur Meteora · Solana.",
+      "product": {
+        "heading": "Produit",
+        "overview": "Vue d'ensemble",
+        "features": "Fonctionnalités",
+        "support-us": "Nous soutenir"
+      },
+      "company": {
+        "heading": "Société",
+        "about": "À propos",
+        "privacy": "Confidentialité",
+        "legal-notice": "Mentions légales",
+        "terms": "CGU"
+      },
+      "awsd": {
+        "title": "Conçu par AWSD",
+        "tagline": "Une société logicielle indépendante. Faite en France."
+      },
+      "copyright": "© {year} Yog-Scope. Tous droits réservés."
+    }
+  }
+}

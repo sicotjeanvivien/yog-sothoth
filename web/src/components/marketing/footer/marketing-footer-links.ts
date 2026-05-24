@@ -73,6 +73,7 @@ const COMPANY_COLUMN: FooterColumn = {
   links: [
     { key: "about", labelKey: "about", href: "/about", kind: "route" },
     { key: "privacy", labelKey: "privacy", href: "/privacy", kind: "route" },
+    { key: "legal-notice", labelKey: "legal-notice", href: "/legal-notice", kind: "route" },
     { key: "terms", labelKey: "terms", href: "/terms", kind: "route" },
   ],
 };

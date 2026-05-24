@@ -1,0 +1,38 @@
+{
+  "About": {
+    "meta": {
+      "title": "About — Yog-Scope",
+      "description": "Yog-Scope is an open source real-time observation platform for Meteora liquidity pools on Solana."
+    },
+    "hero": {
+      "eyebrow": "About Yog-Scope",
+      "titleLine1": "Built to observe.",
+      "titleLine2": "Open by design.",
+      "lead": "Yog-Scope is an open source platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
+      "ctaGithub": "View on GitHub",
+      "ctaAWSD": "About AWSD"
+    },
+    "prose": {
+      "problem": {
+        "title": "The problem",
+        "body": "Meteora's pools are an active piece of Solana DeFi: swaps, liquidity events, fee claims, and rewards happen continuously across hundreds of pools. The on-chain state changes block by block, but reconstructing what actually happened — across time, across pools, with enriched context — is not something the chain offers out of the box. There is no public, real-time, queryable history of Meteora's activity."
+      },
+      "approach": {
+        "title": "The approach",
+        "body": "Yog-Scope sits on a persistent WebSocket connection to a Solana RPC and observes Meteora's events as they are emitted. Each event is decoded from its on-chain format, enriched with token metadata and USD prices, and persisted in a time-series database. The platform is focused on Meteora as a protocol — its decoding is anchored on Meteora's event format rather than a generic multi-DEX adapter — and the historical record accumulates as the platform runs."
+      },
+      "audience": {
+        "title": "Who it's for",
+        "body": "Three audiences. Liquidity providers who want to see, in real time, what is happening on the pools where they hold positions. Analysts and traders who want a queryable history of pool activity to detect patterns, large movements, or imbalances. Developers and builders who want a typed HTTP API exposing Meteora's activity, without having to build their own indexer."
+      },
+      "availability": {
+        "title": "How it's available",
+        "body": "The platform is released under the MIT license. The code is public and the dashboard is free to use; this is intentional and not going to change. The current scope is Meteora's DAMM v2 pools — coverage of the other Meteora products (DLMM, DAMM v1, Stake2Earn) is planned but not yet delivered. Premium features may be added later, but the open infrastructure and the free public access stay."
+      },
+      "behind": {
+        "title": "Who is behind it",
+        "body": "Yog-Scope is built and maintained by <awsd>AWSD</awsd>, an independent software company based in France. The source code lives on <github>GitHub</github>."
+      }
+    }
+  }
+}

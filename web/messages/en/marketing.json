@@ -1,0 +1,64 @@
+{
+  "Marketing": {
+    "dashboardButton": "Open Analytics",
+    "nav": {
+      "overview": "Overview",
+      "support-us": "Support Us",
+      "github": "GitHub"
+    },
+    "hero": {
+      "title": "Real-time liquidity intelligence",
+      "subtitle": "On Meteora · Solana",
+      "lead": "Observe, reconstruct and analyze liquidity movements as they happen. Detect signals, understand flows, and stay ahead of the market.",
+      "ctaSecondary": "See features",
+      "builtOn": "Built on Solana"
+    },
+    "pillars": {
+      "eyebrow": "Powerful by design",
+      "title": "All the insights, in real time",
+      "items": {
+        "observe": {
+          "title": "Observe",
+          "body": "Track pools, liquidity changes and market activity across Meteora in real time."
+        },
+        "reconstruct": {
+          "title": "Reconstruct",
+          "body": "Rebuild liquidity history, replay movements and understand what really happened."
+        },
+        "analyze": {
+          "title": "Analyze",
+          "body": "Detect anomalies, identify patterns and get actionable signals instantly."
+        },
+        "signal": {
+          "title": "Signal",
+          "body": "Get real-time alerts on key events, spikes and liquidity imbalances."
+        }
+      }
+    },
+    "cta": {
+      "title": "Ready to see everything?",
+      "subtitle": "Join Yog-Scope and unlock the full power of liquidity intelligence."
+    },
+    "footer": {
+      "description": "Real-time liquidity intelligence on Meteora · Solana.",
+      "product": {
+        "heading": "Product",
+        "overview": "Overview",
+        "features": "Features",
+        "support-us": "Support Us"
+      },
+      "company": {
+        "heading": "Company",
+        "about": "About",
+        "privacy": "Privacy",
+        "legal-notice": "Legal notice",
+        "terms": "Terms"
+      },
+      "awsd": {
+        "title": "Built by AWSD",
+        "tagline": "An independent software company. Crafted in France."
+      },
+      "copyright": "© {year} Yog-Scope. All rights reserved."
+    }
+  }
+}

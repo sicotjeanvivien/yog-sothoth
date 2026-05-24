@@ -172,6 +172,7 @@
         "heading": "Entreprise",
         "about": "À propos",
         "privacy": "Confidentialité",
+        "legal-notice": "Mentions légales",
         "terms": "Conditions"
       },
       "awsd": {
@@ -252,6 +253,68 @@
       "changes": {
         "title": "Évolutions de cette politique",
         "body": "Cette politique peut évoluer, par exemple si la plateforme commence à utiliser un outil d'analytique ou introduit un système de compte. Lorsqu'elle change, la date de \"dernière mise à jour\" en haut de la page est actualisée ; les modifications substantielles sont signalées sur le site."
+      }
+    }
+  },
+  "LegalNotice": {
+    "meta": {
+      "title": "Mentions légales — Yog-Sothoth",
+      "description": "Informations relatives à l'éditeur, au directeur de publication, au contact et à l'hébergeur du site Yog-Sothoth."
+    },
+    "header": {
+      "eyebrow": "Mentions légales",
+      "title": "Mentions légales.",
+      "lead": "Informations d'identification du site Yog-Sothoth, conformément à la Loi pour la Confiance dans l'Économie Numérique (LCEN, article 6-III).",
+      "lastUpdated": "Dernière mise à jour : [date]"
+    },
+    "cards": {
+      "editor": {
+        "title": "Éditeur",
+        "fields": {
+          "nameLabel": "Raison sociale",
+          "name": "[raison sociale AWSD]",
+          "legalFormLabel": "Forme juridique",
+          "legalForm": "SASU (société par actions simplifiée à associé unique)",
+          "capitalLabel": "Capital social",
+          "capital": "[capital social] €",
+          "registeredOfficeLabel": "Siège social",
+          "registeredOffice": "[adresse du siège]",
+          "sirenLabel": "SIREN",
+          "siren": "[SIREN]",
+          "vatLabel": "N° TVA intracommunautaire",
+          "vat": "[N° TVA]"
+        }
+      },
+      "publishingDirector": {
+        "title": "Directeur de la publication",
+        "fields": {
+          "nameLabel": "Nom",
+          "name": "[nom complet du directeur de publication]"
+        }
+      },
+      "contact": {
+        "title": "Contact",
+        "fields": {
+          "emailLabel": "Email",
+          "email": "[email de contact]"
+        }
+      },
+      "hosting": {
+        "title": "Hébergeur",
+        "fields": {
+          "nameLabel": "Raison sociale",
+          "name": "Scaleway SAS",
+          "addressLabel": "Adresse",
+          "address": "8 rue de la Ville l'Évêque, 75008 Paris, France",
+          "phoneLabel": "Téléphone",
+          "phone": "+33 1 84 13 00 00"
+        }
+      },
+      "intellectualProperty": {
+        "title": "Propriété intellectuelle",
+        "fields": {
+          "body": "Le code source de Yog-Sothoth est publié sous licence MIT et disponible sur GitHub. Les contenus textuels et visuels de ce site — en dehors du code source — sont la propriété de leur éditeur, sauf mentions explicites créditant des éléments tiers. Toute reproduction ou représentation en dehors des termes de la licence MIT nécessite une autorisation écrite préalable."
+        }
       }
     }
   }

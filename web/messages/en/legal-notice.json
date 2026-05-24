@@ -1,0 +1,64 @@
+{
+  "LegalNotice": {
+    "meta": {
+      "title": "Legal notice — Yog-Scope",
+      "description": "Editor, publishing director, contact, and hosting provider information for the Yog-Scope website."
+    },
+    "header": {
+      "eyebrow": "Legal notice",
+      "title": "Legal notice.",
+      "lead": "Identification information for the Yog-Scope website, as required under French law (LCEN, article 6-III).",
+      "lastUpdated": "Last updated: [date]"
+    },
+    "cards": {
+      "editor": {
+        "title": "Editor",
+        "fields": {
+          "nameLabel": "Name",
+          "name": "[AWSD legal name]",
+          "legalFormLabel": "Legal form",
+          "legalForm": "SASU (single-shareholder simplified joint-stock company)",
+          "capitalLabel": "Share capital",
+          "capital": "[share capital] €",
+          "registeredOfficeLabel": "Registered office",
+          "registeredOffice": "[registered address]",
+          "sirenLabel": "SIREN",
+          "siren": "[SIREN]",
+          "vatLabel": "Intra-EU VAT number",
+          "vat": "[VAT number]"
+        }
+      },
+      "publishingDirector": {
+        "title": "Publishing director",
+        "fields": {
+          "nameLabel": "Name",
+          "name": "[publishing director full name]"
+        }
+      },
+      "contact": {
+        "title": "Contact",
+        "fields": {
+          "emailLabel": "Email",
+          "email": "[contact-email]"
+        }
+      },
+      "hosting": {
+        "title": "Hosting provider",
+        "fields": {
+          "nameLabel": "Name",
+          "name": "Scaleway SAS",
+          "addressLabel": "Address",
+          "address": "8 rue de la Ville l'Évêque, 75008 Paris, France",
+          "phoneLabel": "Phone",
+          "phone": "+33 1 84 13 00 00"
+        }
+      },
+      "intellectualProperty": {
+        "title": "Intellectual property",
+        "fields": {
+          "body": "The Yog-Scope source code is released under the MIT license and is available on GitHub. The textual and visual content of this website — outside of the source code — is the property of its editor, except where third-party materials are explicitly credited. Any reproduction or representation outside the terms of the MIT license requires prior written authorisation."
+        }
+      }
+    }
+  }
+}

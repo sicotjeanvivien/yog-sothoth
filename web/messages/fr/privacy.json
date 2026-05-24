@@ -1,0 +1,40 @@
+{
+  "Privacy": {
+    "meta": {
+      "title": "Confidentialité — Yog-Scope",
+      "description": "Comment Yog-Scope traite vos données. Version courte : quasiment rien n'est collecté."
+    },
+    "header": {
+      "eyebrow": "Politique de confidentialité",
+      "title": "Ce que nous faisons de vos données.",
+      "lead": "Yog-Scope est un dashboard public en lecture seule. Aucun compte n'est requis, aucun outil d'analytique n'est utilisé, aucun visiteur n'est tracké. Cette page explique en termes clairs les très rares données que la plateforme manipule.",
+      "lastUpdated": "Dernière mise à jour : [date]"
+    },
+    "prose": {
+      "inShort": {
+        "title": "En bref",
+        "body": "Yog-Scope ne demande pas de compte, n'utilise pas d'outil d'analytique et ne dépose pas de cookies non essentiels. Les seules données personnelles que la plateforme voit jamais sont les logs techniques du serveur (conservés brièvement pour la sécurité et l'exploitation) et les emails que vous nous envoyez. C'est toute la liste."
+      },
+      "responsible": {
+        "title": "Qui est responsable",
+        "body": "Le responsable du traitement est [raison sociale AWSD], une société immatriculée en France ([SIREN]), dont le siège social est situé [adresse du siège]. Pour toute question relative à la vie privée, vous pouvez écrire à <email>[email de contact]</email>."
+      },
+      "collected": {
+        "title": "Ce que nous collectons, et pourquoi",
+        "body": "Le serveur web qui héberge Yog-Scope enregistre des logs techniques standards — adresse IP, user agent, URL demandée, statut de la réponse, horodatage — strictement pour faire fonctionner le service et détecter les abus. Ces logs sont conservés douze mois maximum et ne sont partagés avec personne en dehors de l'hébergeur. Si vous écrivez à l'adresse de contact, votre email et son contenu sont conservés le temps strictement nécessaire au traitement de votre demande. Aucune autre donnée personnelle n'est collectée. Il n'y a pas de système de compte, pas de pixel de tracking, pas d'analytique tiers, pas de publicité."
+      },
+      "cookies": {
+        "title": "Cookies",
+        "body": "Le site ne dépose aucun cookie soumis à consentement. Quelques cookies techniques strictement nécessaires peuvent être utilisés pour mémoriser votre préférence de langue et faire fonctionner le site correctement — ces cookies sont exemptés de consentement par la directive ePrivacy. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
+      },
+      "rights": {
+        "title": "Vos droits",
+        "body": "Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition au traitement de vos données personnelles, ainsi que du droit de définir des directives sur le sort de vos données après votre décès. Pour exercer l'un de ces droits, écrivez à <email>[email de contact]</email>. Vous pouvez également introduire une réclamation auprès de la CNIL (www.cnil.fr) si vous estimez que vos droits ne sont pas respectés."
+      },
+      "changes": {
+        "title": "Évolutions de cette politique",
+        "body": "Cette politique peut évoluer, par exemple si la plateforme commence à utiliser un outil d'analytique ou introduit un système de compte. Lorsqu'elle change, la date de \"dernière mise à jour\" en haut de la page est actualisée ; les modifications substantielles sont signalées sur le site."
+      }
+    }
+  }
+}

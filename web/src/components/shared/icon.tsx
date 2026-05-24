@@ -395,3 +395,38 @@ export const RefreshIcon: React.FC<IconProps> = ({
     <path d="M21 4v5h-5" />
   </svg>
 );
+
+/**
+ * Server — two stacked horizontal racks with a status LED on each.
+ * Used to mark the hosting provider section on legal pages.
+ */
+export const ServerIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <rect x="3" y="5" width="18" height="6" rx="1.5" />
+    <rect x="3" y="13" width="18" height="6" rx="1.5" />
+    <circle cx="7" cy="8" r="0.7" fill="currentColor" stroke="none" />
+    <circle cx="7" cy="16" r="0.7" fill="currentColor" stroke="none" />
+    <path d="M11 8h6" />
+    <path d="M11 16h6" />
+  </svg>
+);
+
+/**
+ * Edit / pen-on-paper — used to mark the publishing director
+ * section on legal pages. A simple sheet with a pen overlay.
+ */
+export const EditIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M4 6a2 2 0 0 1 2-2h7l5 5v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+    <path d="M13 4v5h5" />
+    <path d="m10.5 17 5-5 1.5 1.5-5 5H10.5z" />
+  </svg>
+);

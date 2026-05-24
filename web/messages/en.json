@@ -172,6 +172,7 @@
         "heading": "Company",
         "about": "About",
         "privacy": "Privacy",
+        "legal-notice": "legal-notice",
         "terms": "Terms"
       },
       "awsd": {
@@ -218,41 +219,103 @@
     }
   },
   "Privacy": {
-  "meta": {
-    "title": "Privacy —  Yog-Scope",
-    "description": "How  Yog-Scope handles your data. Short answer: almost nothing is collected."
+    "meta": {
+      "title": "Privacy —  Yog-Scope",
+      "description": "How  Yog-Scope handles your data. Short answer: almost nothing is collected."
+    },
+    "header": {
+      "eyebrow": "Privacy policy",
+      "title": "What we do with your data.",
+      "lead": " Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
+      "lastUpdated": "Last updated: [date]"
+    },
+    "prose": {
+      "inShort": {
+        "title": "In short",
+        "body": " Yog-Scope does not require an account, does not use analytics, and does not set non-essential cookies. The only personal data the platform ever sees are technical server logs (kept briefly for security and operations) and any email you choose to send to the contact address. That is the whole list."
+      },
+      "responsible": {
+        "title": "Who is responsible",
+        "body": "The data controller is [AWSD legal name], a company registered in France ([SIREN]), whose registered office is at [registered address]. For any privacy-related question, you can reach out at <email>[contact-email]</email>."
+      },
+      "collected": {
+        "title": "What we collect, and why",
+        "body": "The web server hosting  Yog-Scope records standard technical logs — IP address, user agent, requested URL, response status, timestamp — strictly to keep the service running and to detect abuse. These logs are retained for a maximum of twelve months and are not shared with anyone outside the hosting provider. If you send an email to the contact address, that email and its contents are kept for the time strictly needed to handle your request. No other personal data is collected. There is no account system, no tracking pixel, no third-party analytics, and no advertising."
+      },
+      "cookies": {
+        "title": "Cookies",
+        "body": "The site does not set any cookie that requires consent. A small number of strictly necessary technical cookies may be used to remember your language preference and to make the site work correctly — these are exempt from consent under the ePrivacy directive. The list will be updated if non-essential cookies are ever introduced."
+      },
+      "rights": {
+        "title": "Your rights",
+        "body": "Under the GDPR you have the right to access, rectify, erase, restrict, port, or object to the processing of your personal data, and to define directives about your data after your death. To exercise any of these rights, write to <email>[contact-email]</email>. You also have the right to lodge a complaint with the French data protection authority (CNIL, www.cnil.fr) if you believe your rights are not respected."
+      },
+      "changes": {
+        "title": "Changes to this policy",
+        "body": "This policy may evolve, for instance if the platform starts using analytics or introduces an account system. When it changes, the \"last updated\" date at the top of the page is revised; substantive changes will be highlighted on the site."
+      }
+    }
   },
-  "header": {
-    "eyebrow": "Privacy policy",
-    "title": "What we do with your data.",
-    "lead": " Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
-    "lastUpdated": "Last updated: [date]"
-  },
-  "prose": {
-    "inShort": {
-      "title": "In short",
-      "body": " Yog-Scope does not require an account, does not use analytics, and does not set non-essential cookies. The only personal data the platform ever sees are technical server logs (kept briefly for security and operations) and any email you choose to send to the contact address. That is the whole list."
+  "LegalNotice": {
+    "meta": {
+      "title": "Legal notice — Yog-Sothoth",
+      "description": "Editor, publishing director, contact, and hosting provider information for the Yog-Sothoth website."
     },
-    "responsible": {
-      "title": "Who is responsible",
-      "body": "The data controller is [AWSD legal name], a company registered in France ([SIREN]), whose registered office is at [registered address]. For any privacy-related question, you can reach out at <email>[contact-email]</email>."
+    "header": {
+      "eyebrow": "Legal notice",
+      "title": "Legal notice.",
+      "lead": "Identification information for the Yog-Sothoth website, as required under French law (LCEN, article 6-III).",
+      "lastUpdated": "Last updated: [date]"
     },
-    "collected": {
-      "title": "What we collect, and why",
-      "body": "The web server hosting  Yog-Scope records standard technical logs — IP address, user agent, requested URL, response status, timestamp — strictly to keep the service running and to detect abuse. These logs are retained for a maximum of twelve months and are not shared with anyone outside the hosting provider. If you send an email to the contact address, that email and its contents are kept for the time strictly needed to handle your request. No other personal data is collected. There is no account system, no tracking pixel, no third-party analytics, and no advertising."
-    },
-    "cookies": {
-      "title": "Cookies",
-      "body": "The site does not set any cookie that requires consent. A small number of strictly necessary technical cookies may be used to remember your language preference and to make the site work correctly — these are exempt from consent under the ePrivacy directive. The list will be updated if non-essential cookies are ever introduced."
-    },
-    "rights": {
-      "title": "Your rights",
-      "body": "Under the GDPR you have the right to access, rectify, erase, restrict, port, or object to the processing of your personal data, and to define directives about your data after your death. To exercise any of these rights, write to <email>[contact-email]</email>. You also have the right to lodge a complaint with the French data protection authority (CNIL, www.cnil.fr) if you believe your rights are not respected."
-    },
-    "changes": {
-      "title": "Changes to this policy",
-      "body": "This policy may evolve, for instance if the platform starts using analytics or introduces an account system. When it changes, the \"last updated\" date at the top of the page is revised; substantive changes will be highlighted on the site."
+    "cards": {
+      "editor": {
+        "title": "Editor",
+        "fields": {
+          "nameLabel": "Name",
+          "name": "[AWSD legal name]",
+          "legalFormLabel": "Legal form",
+          "legalForm": "SASU (single-shareholder simplified joint-stock company)",
+          "capitalLabel": "Share capital",
+          "capital": "[share capital] €",
+          "registeredOfficeLabel": "Registered office",
+          "registeredOffice": "[registered address]",
+          "sirenLabel": "SIREN",
+          "siren": "[SIREN]",
+          "vatLabel": "Intra-EU VAT number",
+          "vat": "[VAT number]"
+        }
+      },
+      "publishingDirector": {
+        "title": "Publishing director",
+        "fields": {
+          "nameLabel": "Name",
+          "name": "[publishing director full name]"
+        }
+      },
+      "contact": {
+        "title": "Contact",
+        "fields": {
+          "emailLabel": "Email",
+          "email": "[contact-email]"
+        }
+      },
+      "hosting": {
+        "title": "Hosting provider",
+        "fields": {
+          "nameLabel": "Name",
+          "name": "Scaleway SAS",
+          "addressLabel": "Address",
+          "address": "8 rue de la Ville l'Évêque, 75008 Paris, France",
+          "phoneLabel": "Phone",
+          "phone": "+33 1 84 13 00 00"
+        }
+      },
+      "intellectualProperty": {
+        "title": "Intellectual property",
+        "fields": {
+          "body": "The Yog-Sothoth source code is released under the MIT license and is available on GitHub. The textual and visual content of this website — outside of the source code — is the property of its editor, except where third-party materials are explicitly credited. Any reproduction or representation outside the terms of the MIT license requires prior written authorisation."
+        }
+      }
     }
   }
-}
 }

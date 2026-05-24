@@ -1,0 +1,6 @@
+{
+  "Home": {
+    "greeting": "Hello, {name}!",
+    "milestoneTag": "Milestone 0 - scaffolding"
+  }
+}
