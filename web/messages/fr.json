@@ -6,7 +6,7 @@
   },
   "Home": {
     "greeting": "Bonjour, {name} !",
-    "milestoneTag": "Milestone 0 — fondations"
+    "milestoneTag": "Milestone 0 - fondations"
   },
   "Dashboard": {
     "Sidebar": {
@@ -56,7 +56,7 @@
         "retry": "Réessayer",
         "timeout": "Le service amont a mis trop de temps à répondre. Réessaie dans un instant.",
         "unavailable": "Le service amont est temporairement indisponible. Réessaie dans un instant.",
-        "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré — recommence depuis la première page.",
+        "bad_request": "La requête a été rejetée par le service amont. Le curseur a peut-être expiré - recommence depuis la première page.",
         "unexpected": "Une erreur inattendue s'est produite lors du chargement des pools."
       }
     },
@@ -84,7 +84,7 @@
       },
       "stateEmpty": {
         "title": "Aucun état observé pour l'instant",
-        "description": "Cette pool existe dans l'indexeur mais aucun événement de swap ou de liquidité n'a encore été capturé. La projection d'état courant est construite à partir de ces deux types d'événements — les claims de frais ou de récompenses seuls ne l'alimentent pas."
+        "description": "Cette pool existe dans l'indexeur mais aucun événement de swap ou de liquidité n'a encore été capturé. La projection d'état courant est construite à partir de ces deux types d'événements - les claims de frais ou de récompenses seuls ne l'alimentent pas."
       },
       "swaps": {
         "title": "Swaps récents",
@@ -176,9 +176,45 @@
       },
       "awsd": {
         "title": "Conçu par AWSD",
-        "tagline": "Studio logiciel. Façonné en France."
+        "tagline": "Société logicielle indépendante. Façonné en France."
       },
       "copyright": "© {year} Yog-Sothoth. Tous droits réservés."
+    }
+  },
+  "About": {
+    "meta": {
+      "title": "À propos - Yog-Sothoth",
+      "description": "Yog-Sothoth est une plateforme open source d'observation temps réel des pools de liquidité Meteora sur Solana."
+    },
+    "hero": {
+      "eyebrow": "À propos de Yog-Sothoth",
+      "titleLine1": "Conçu pour observer.",
+      "titleLine2": "Ouvert par nature.",
+      "lead": "Yog-Sothoth est une plateforme open source qui observe l'activité de liquidité des pools Meteora au moment où elle se produit sur Solana, reconstitue ce qu'il s'est passé, et expose le résultat via une API et un dashboard.",
+      "ctaGithub": "Voir sur GitHub",
+      "ctaAWSD": "À propos d'AWSD"
+    },
+    "prose": {
+      "problem": {
+        "title": "Le problème",
+        "body": "Les pools de Meteora sont une pièce active de la DeFi Solana : des swaps, des événements de liquidité, des claims de frais et des récompenses s'y produisent en continu sur des centaines de pools. L'état on-chain change bloc après bloc, mais reconstituer ce qu'il s'est réellement passé - dans le temps, à travers les pools, avec du contexte enrichi - n'est pas quelque chose que la chaîne offre nativement. Il n'existe pas d'historique public, temps réel et requêtable de l'activité Meteora."
+      },
+      "approach": {
+        "title": "L'approche",
+        "body": "Yog-Sothoth maintient une connexion WebSocket persistante vers un RPC Solana et observe les événements Meteora à mesure qu'ils sont émis. Chaque événement est décodé depuis son format on-chain, enrichi avec les métadonnées de tokens et les prix en USD, puis persisté dans une base de données séries-temporelles. La plateforme est centrée sur Meteora en tant que protocole - le décodage s'appuie sur le format d'événements de Meteora plutôt que sur un adaptateur multi-DEX générique - et l'historique s'accumule à mesure que la plateforme tourne."
+      },
+      "audience": {
+        "title": "À qui ça sert",
+        "body": "Trois publics. Les fournisseurs de liquidité qui veulent voir en temps réel ce qu'il se passe sur les pools où ils ont des positions. Les analystes et traders qui veulent un historique requêtable de l'activité des pools pour détecter des patterns, des mouvements importants ou des déséquilibres. Les développeurs et builders qui veulent une API HTTP typée exposant l'activité de Meteora, sans avoir à construire leur propre indexeur."
+      },
+      "availability": {
+        "title": "Comment elle est accessible",
+        "body": "La plateforme est publiée sous licence MIT. Le code est public et le dashboard est gratuit ; c'est intentionnel et ça ne changera pas. Le périmètre actuel couvre les pools DAMM v2 de Meteora - le support des autres produits Meteora (DLMM, DAMM v1, Stake2Earn) est prévu mais pas encore livré. Des fonctionnalités premium pourront s'ajouter par la suite, mais l'infrastructure ouverte et l'accès public gratuit restent acquis."
+      },
+      "behind": {
+        "title": "Qui est derrière",
+        "body": "Yog-Sothoth est conçu et maintenu par <awsd>AWSD</awsd>, une société logicielle indépendante basée en France. Le code source est hébergé sur <github>GitHub</github>."
+      }
     }
   }
 }

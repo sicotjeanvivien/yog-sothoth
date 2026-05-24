@@ -75,7 +75,7 @@ export function HomePillars() {
   return (
     <section
       id="features"
-      className="mx-auto max-w-[1800px] scroll-mt-24 px-6 py-16 lg:px-12"
+      className="mx-auto max-w-[1800px] scroll-mt-24 px-6 py-10 lg:px-12"
     >
       {/* Section heading */}
       <div className="text-center">
