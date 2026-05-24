@@ -430,3 +430,19 @@ export const EditIcon: React.FC<IconProps> = ({
     <path d="m10.5 17 5-5 1.5 1.5-5 5H10.5z" />
   </svg>
 );
+
+/**
+ * Alert triangle — equilateral triangle with an exclamation mark.
+ * Used to mark warning sections on policy pages.
+ */
+export const AlertTriangleIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M12 3.5 21 19H3z" />
+    <path d="M12 10v4.5" />
+    <circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none" />
+  </svg>
+);

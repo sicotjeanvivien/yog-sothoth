@@ -1,0 +1,48 @@
+{
+  "Terms": {
+    "meta": {
+      "title": "Conditions générales d'utilisation — Yog-Scope",
+      "description": "Conditions générales d'utilisation du site et de l'API Yog-Scope."
+    },
+    "header": {
+      "eyebrow": "Conditions générales d'utilisation",
+      "title": "Conditions d'utilisation.",
+      "lead": "Ces conditions régissent votre utilisation de Yog-Scope. Elles sont rédigées pour être lisibles ; merci de prendre quelques minutes pour les parcourir. En accédant au site ou à l'API, vous acceptez les conditions ci-dessous.",
+      "lastUpdated": "Dernière mise à jour : [date]"
+    },
+    "prose": {
+      "inShort": {
+        "title": "En bref",
+        "body": "Yog-Scope est une plateforme publique et gratuite d'observation des pools de liquidité Meteora sur Solana. Les données affichées sont fournies à titre informatif uniquement et ne doivent pas être considérées comme un conseil financier. Le service est fourni en l'état, sans garantie de disponibilité ni d'exactitude. Le code source est ouvert et réutilisable sous licence MIT, le service hébergé est régi par les présentes conditions, et le droit français s'applique."
+      },
+      "service": {
+        "title": "Le service",
+        "body": "Yog-Scope est une plateforme open source qui observe les pools Meteora sur le mainnet Solana en temps réel, décode les événements on-chain, les enrichit avec les métadonnées de tokens et les prix en USD, puis expose le résultat via une API HTTP publique et un dashboard web. Le service est exploité par [raison sociale AWSD], l'éditeur identifié dans les mentions légales."
+      },
+      "audience": {
+        "title": "Qui peut l'utiliser",
+        "body": "Le site et l'API sont ouverts à tous, sans création de compte requise. En les utilisant, vous confirmez que vous disposez de la capacité de conclure les présentes conditions et que votre accès n'enfreint aucune loi qui vous est applicable. Yog-Scope ne cible pas les mineurs et n'est pas conçu pour être utilisé par des mineurs sans supervision."
+      },
+      "acceptableUse": {
+        "title": "Usage acceptable",
+        "body": "Vous êtes libre d'utiliser les données affichées sur le site à des fins personnelles, professionnelles ou de recherche. Vous pouvez également interroger l'API publique, dans des limites raisonnables — un trafic automatisé qui perturbe le service pour les autres utilisateurs peut être limité ou bloqué. Vous vous engagez à ne pas tenter d'accéder sans autorisation à l'infrastructure, à ne pas en perturber le fonctionnement, à ne pas la scraper de manière abusive, et à ne pas l'utiliser pour faciliter une activité illégale."
+      },
+      "financialAdvice": {
+        "title": "Aucun conseil financier",
+        "body": "Yog-Scope fournit des données et des analyses à titre informatif uniquement. Rien de ce qui est affiché sur le site ou retourné par l'API ne constitue un conseil financier, un conseil en investissement, une offre d'achat ou de vente d'un actif, ni une recommandation d'entrer dans une transaction. L'activité DeFi comporte des risques importants, y compris la perte totale des fonds. Vous êtes seul responsable des décisions que vous prenez sur la base de ces données. Faites vos propres recherches et envisagez de consulter un professionnel qualifié avant toute décision d'investissement."
+      },
+      "availability": {
+        "title": "Disponibilité et exactitude",
+        "body": "Le service est fourni sur la base du meilleur effort, sans aucune garantie de disponibilité, de continuité ou de temps de réponse. L'éditeur peut à tout moment, sans préavis, suspendre, modifier ou interrompre tout ou partie du service, de manière temporaire ou définitive. Les données proviennent d'un RPC Solana tiers et de la blockchain elle-même ; elles peuvent être incomplètes, retardées ou temporairement inexactes en raison d'incidents amont ou des limitations du processus d'indexation. Aucune garantie, expresse ou implicite, n'est donnée quant à l'exactitude, l'exhaustivité ou l'adéquation des données à un usage particulier."
+      },
+      "intellectualProperty": {
+        "title": "Propriété intellectuelle",
+        "body": "Le code source de Yog-Scope est publié sous licence MIT ; vous pouvez le réutiliser dans les termes de cette licence. Les contenus textuels et visuels du site hébergé — en dehors du code source — ainsi que le nom et l'identité visuelle Yog-Scope restent la propriété de l'éditeur. Toute utilisation en dehors des termes de la licence MIT nécessite une autorisation écrite préalable."
+      },
+      "governingLaw": {
+        "title": "Droit applicable et évolutions",
+        "body": "Les présentes conditions sont régies par le droit français. Tout litige relatif à l'utilisation du service relèvera de la compétence exclusive des tribunaux français compétents, sous réserve des dispositions impératives contraires. L'éditeur peut mettre à jour les présentes conditions à tout moment ; la date de \"dernière mise à jour\" en haut de la page est alors actualisée, et la poursuite de l'utilisation après une modification vaut acceptation des conditions mises à jour."
+      }
+    }
+  }
+}

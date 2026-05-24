@@ -1,0 +1,48 @@
+{
+  "Terms": {
+    "meta": {
+      "title": "Terms of service — Yog-Scope",
+      "description": "Terms that govern your use of the Yog-Scope website and API."
+    },
+    "header": {
+      "eyebrow": "Terms of service",
+      "title": "Terms of service.",
+      "lead": "These terms govern your use of Yog-Scope. They are written to be readable; please take a few minutes to go through them. By accessing the website or the API, you accept the terms below.",
+      "lastUpdated": "Last updated: [date]"
+    },
+    "prose": {
+      "inShort": {
+        "title": "In short",
+        "body": "Yog-Scope is a public, free-to-use observation platform for Meteora liquidity pools on Solana. The data shown is informational only and must not be taken as financial advice. The service is provided as-is, without availability or accuracy guarantees. The source code is open and reusable under MIT, the hosted service is governed by these terms, and French law applies."
+      },
+      "service": {
+        "title": "The service",
+        "body": "Yog-Scope is an open source platform that observes Meteora pools on the Solana mainnet in real time, decodes on-chain events, enriches them with token metadata and USD prices, and exposes the result through a public HTTP API and a web dashboard. The service is operated by [AWSD legal name], the editor identified in the legal notice."
+      },
+      "audience": {
+        "title": "Who can use it",
+        "body": "The website and the API are open to anyone, with no account required. By using them, you confirm that you have the capacity to enter into these terms and that your access does not violate any law applicable to you. Yog-Scope does not target minors and is not designed for use by minors without supervision."
+      },
+      "acceptableUse": {
+        "title": "Acceptable use",
+        "body": "You are free to use the data displayed on the website for personal, professional, or research purposes. You are also welcome to query the public API, within reasonable limits — automated traffic that disrupts the service for other users may be rate-limited or blocked. You agree not to attempt to gain unauthorised access to the infrastructure, to interfere with its operation, to scrape it abusively, or to use it to facilitate any illegal activity."
+      },
+      "financialAdvice": {
+        "title": "No financial advice",
+        "body": "Yog-Scope provides data and analytics for informational purposes only. Nothing displayed on the website or returned by the API constitutes financial advice, investment advice, an offer to buy or sell any asset, or a recommendation to enter any transaction. DeFi activity carries significant risk, including total loss of funds. You are solely responsible for any decision you make based on this data. Do your own research, and consider consulting a licensed professional before making investment decisions."
+      },
+      "availability": {
+        "title": "Availability and accuracy",
+        "body": "The service is provided on a best-effort basis, without any guarantee of availability, uptime, or response time. The editor may temporarily or permanently suspend, modify, or discontinue all or part of the service at any time, without prior notice. The data is sourced from a third-party Solana RPC and from the blockchain itself; it may be incomplete, delayed, or temporarily inaccurate due to upstream incidents or to limitations of the indexing process. No warranty, express or implied, is made regarding the accuracy, completeness, or fitness for a particular purpose of the data."
+      },
+      "intellectualProperty": {
+        "title": "Intellectual property",
+        "body": "The Yog-Scope source code is released under the MIT license; you may reuse it under the terms of that license. The textual and visual content of the hosted website — outside of the source code — and the Yog-Scope name and visual identity remain the property of the editor. Using them outside of the MIT license terms requires prior written authorisation."
+      },
+      "governingLaw": {
+        "title": "Governing law and changes",
+        "body": "These terms are governed by French law. Any dispute relating to the use of the service will fall under the exclusive jurisdiction of the competent French courts, subject to mandatory provisions to the contrary. The editor may update these terms at any time; the \"last updated\" date at the top of the page is revised accordingly, and continued use after a change constitutes acceptance of the updated terms."
+      }
+    }
+  }
+}
