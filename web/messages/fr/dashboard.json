@@ -23,91 +23,25 @@
     },
     "Pools": {
       "page": {
-        "eyebrow": "Protocoles observés",
+        "eyebrow": "Observation temps réel",
         "title": "Pools",
-        "description": "Chaque pool de liquidité découverte par l'indexeur sur les protocoles Meteora actifs. La liste est ordonnée par date de découverte, du plus récent au plus ancien."
+        "description": "Toutes les pools de liquidité Meteora observées par l'indexeur. Cliquez sur une ligne pour ouvrir la page détail de la pool."
       },
       "table": {
-        "address": "Adresse",
+        "pair": "Paire",
         "protocol": "Protocole",
-        "pair": "Paire de tokens",
-        "firstSeen": "Première observation",
-        "lastSeen": "Dernière observation"
-      },
-      "pagination": {
-        "next": "Page suivante",
-        "firstPage": "Première page"
+        "lastSeen": "Dernière activité"
       },
       "empty": {
-        "title": "Aucun pool observé pour le moment",
-        "description": "L'indexeur n'a encore vu aucune activité sur l'allowlist configurée. Les pools apparaîtront ici dès que des événements on-chain seront détectés."
+        "title": "Aucune pool observée pour le moment",
+        "description": "L'indexeur tourne mais n'a encore capté aucune activité de pool. Les pools apparaîtront ici dès que des événements on-chain seront détectés."
       },
       "error": {
         "title": "Impossible de charger les pools",
-        "retry": "Réessayer",
-        "timeout": "Le service en amont a mis trop de temps à répondre. Réessayez dans un instant.",
-        "unavailable": "Le service en amont est temporairement indisponible. Réessayez dans un instant.",
-        "bad_request": "La requête a été rejetée par le service en amont. Le curseur a peut-être expiré - reprenez depuis la première page.",
-        "unexpected": "Une erreur inattendue est survenue lors du chargement des pools."
-      }
-    },
-    "PoolDetail": {
-      "backToList": "Retour aux pools",
-      "header": {
-        "protocol": "Protocole",
-        "pair": "Paire de tokens",
-        "firstSeen": "Première observation",
-        "lastSeen": "Dernière observation"
-      },
-      "state": {
-        "title": "Dernier état",
-        "reserveA": "Réserve A",
-        "reserveB": "Réserve B",
-        "lastEvent": "Dernier événement",
-        "kindSwap": "Swap",
-        "kindLiquidityAdd": "Liquidité ajoutée",
-        "kindLiquidityRemove": "Liquidité retirée",
-        "sqrtPrice": "Prix sqrt (Q64.64)",
-        "liquidity": "Liquidité (L)",
-        "signature": "Signature",
-        "updatedAt": "Mis à jour",
-        "errorTitle": "État indisponible"
-      },
-      "stateEmpty": {
-        "title": "Aucun état observé pour le moment",
-        "description": "Cette pool existe dans l'indexeur mais aucun événement de swap ou de liquidité n'a été capturé. La projection d'état courant est construite à partir de ces deux types d'événements - les claims de frais ou de récompense seuls ne la peuplent pas."
-      },
-      "swaps": {
-        "title": "Swaps récents",
-        "time": "Heure",
-        "direction": "Sens",
-        "amountIn": "Montant entrant",
-        "amountOut": "Montant sortant",
-        "fee": "Frais",
-        "signature": "Signature",
-        "directionAtoB": "A → B",
-        "directionBtoA": "B → A"
-      },
-      "liquidity": {
-        "title": "Changements de liquidité récents",
-        "time": "Heure",
-        "kind": "Type",
-        "amountA": "Montant A",
-        "amountB": "Montant B",
-        "owner": "Propriétaire",
-        "signature": "Signature",
-        "kindAdd": "Ajout",
-        "kindRemove": "Retrait"
-      },
-      "feedEmpty": {
-        "noSwaps": "Aucun événement de swap enregistré pour cette pool pour le moment.",
-        "noLiquidity": "Aucun événement de liquidité enregistré pour cette pool pour le moment."
-      },
-      "feedError": {
-        "timeout": "Le service en amont a mis trop de temps à répondre.",
-        "unavailable": "Le service en amont est temporairement indisponible.",
-        "bad_request": "La requête a été rejetée par le service en amont. Le curseur a peut-être expiré.",
-        "unexpected": "Une erreur inattendue est survenue."
+        "timeout": "Le service en amont a mis trop de temps à répondre. Essayez de rafraîchir la page dans un instant.",
+        "network": "Le service en amont est injoignable. Essayez de rafraîchir la page dans un instant.",
+        "http": "Le service en amont a retourné une erreur.",
+        "validation": "Le service en amont a retourné une réponse inattendue."
       }
     }
   }
