@@ -16,55 +16,57 @@ import { ApiErrorBodySchema } from "../schema/api-error-body";
 // response shape. Tests mutate this base to exercise each failure mode.
 function validPool() {
   return {
-    "pool_address": "BhVFo9nCA9X45yUUa7QgwUkR4mZcAop2kytSNhmQiS4C",
+    "poolAddress": "8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie",
     "protocol": "meteora_damm_v2",
-    "token_a": {
-      "mint": "CMButZqQKoRabRAwemmG9gpXKa62KpQByLwjQLbjM1US",
-      "symbol": "SAOS",
-      "name": "Strategic American Oil Supply",
-      "decimals": 6,
-      "logoUri": "https://known-sapphire-boa.myfilebase.com/ipfs/QmQzbdyPhKHR2R8WPda5b3D7WHh55oDednv3ChYYSMRKuy",
+    "tokenA": {
+      "mint": "So11111111111111111111111111111111111111112",
+      "symbol": "SOL",
+      "name": "Wrapped SOL",
+      "decimals": 9,
+      "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
       "price": {
-        "usd": "0.005746334785293797",
+        "usd": "85.819299811880730000",
         "source": "jupiter",
-        "fetchedAt": "2026-05-21T10:06:53.095599Z"
+        "fetchedAt": "2026-05-25T12:17:17.479657Z"
       }
     },
-    "token_b": {
+    "tokenB": {
       "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
       "symbol": "USDC",
       "name": "USD Coin",
       "decimals": 6,
       "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
       "price": {
-        "usd": "0.999701032204846900",
+        "usd": "0.999668653937465800",
         "source": "jupiter",
-        "fetchedAt": "2026-05-21T10:06:53.095599Z"
+        "fetchedAt": "2026-05-25T12:17:17.479657Z"
       }
     },
-    "first_seen_at": "2026-05-21T10:02:09.917733Z",
-    "last_seen_at": "2026-05-21T10:03:09.454266Z"
+    "tvlUsd": "1332007.7148736200400326721044",
+    "volume24hUsd": "47964.973514780605664520660399",
+    "firstSeenAt": "2026-05-21T10:01:35.084596Z",
+    "lastSeenAt": "2026-05-25T12:14:01.715170Z"
   };
 }
 
 describe("PoolSchema", () => {
   it("accepts a complete valid pool", () => {
     const parsed = PoolSchema.parse(validPool());
-    expect(parsed.pool_address).toBe("BhVFo9nCA9X45yUUa7QgwUkR4mZcAop2kytSNhmQiS4C");
+    expect(parsed.poolAddress).toBe("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie");
     expect(parsed.protocol).toBe("meteora_damm_v2");
   });
 
   it("accepts RFC3339 with a numeric timezone offset", () => {
     const parsed = PoolSchema.parse({
       ...validPool(),
-      first_seen_at: "2026-05-01T08:30:00+02:00",
+      firstSeenAt: "2026-05-21T10:01:35.084596Z",
     });
-    expect(parsed.first_seen_at).toBe("2026-05-01T08:30:00+02:00");
+    expect(parsed.firstSeenAt).toBe("2026-05-21T10:01:35.084596Z");
   });
 
-  it("rejects an empty pool_address", () => {
+  it("rejects an empty poolAddress", () => {
     expect(() =>
-      PoolSchema.parse({ ...validPool(), pool_address: "" }),
+      PoolSchema.parse({ ...validPool(), poolAddress: "" }),
     ).toThrow();
   });
 
@@ -100,7 +102,7 @@ describe("PoolsPageSchema", () => {
   it("rejects items that fail individual validation", () => {
     expect(() =>
       PoolsPageSchema.parse({
-        items: [{ ...validPool(), pool_address: "" }],
+        items: [{ ...validPool(), poolAddress: "" }],
         next_cursor: null,
       }),
     ).toThrow();
