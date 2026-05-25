@@ -446,3 +446,36 @@ export const AlertTriangleIcon: React.FC<IconProps> = ({
     <circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none" />
   </svg>
 );
+
+/**
+ * LinkedIn mark — used for share buttons. Authored on the 24x24
+ * grid, fill rather than stroke (the geometry is too dense for the
+ * 1.6px stroke contract).
+ */
+export const LinkedinIcon: React.FC<IconProps> = ({
+  size = 16,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path
+      d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.37V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43A2.06 2.06 0 1 1 5.34 3.3a2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </svg>
+);
+
+/**
+ * Mail — outlined envelope. Used to mark email contact links.
+ */
+export const MailIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <rect x="3" y="5" width="18" height="14" rx="1.5" />
+    <path d="m3.5 6.5 8.5 6 8.5-6" />
+  </svg>
+);

@@ -1,0 +1,40 @@
+{
+  "SupportUs": {
+    "meta": {
+      "title": "Nous soutenir — Yog-Scope",
+      "description": "Comment soutenir Yog-Scope : faire connaître le projet, envoyer un retour, ou parrainer le développement."
+    },
+    "header": {
+      "eyebrow": "Nous soutenir",
+      "title": "Aidez-nous à continuer.",
+      "lead": "Yog-Scope est conçu et maintenu de manière indépendante. Si vous trouvez le projet utile, voici quelques façons d'aider. Aucune ne demande grand-chose, et à ce stade la visibilité et les retours utilisateurs comptent autant que le reste."
+    },
+    "makeKnown": {
+      "shareText": "Yog-Scope — observation open source temps réel des pools de liquidité Meteora sur Solana.",
+      "star": {
+        "title": "Star le dépôt",
+        "body": "Un star sur GitHub se fait en un clic, ne coûte rien, et aide d'autres développeurs à trouver le projet. C'est le signal le plus simple pour montrer que le projet mérite l'attention.",
+        "cta": "Star sur GitHub"
+      },
+      "share": {
+        "title": "Faire connaître",
+        "body": "Si vous connaissez des personnes qui travaillent avec Solana, la DeFi ou l'analyse de liquidité, un partage rapide fait beaucoup. À ce stade, la visibilité est la contribution la plus utile.",
+        "ctaX": "Partager sur X",
+        "ctaLinkedin": "Partager sur LinkedIn"
+      }
+    },
+    "feedback": {
+      "title": "Envoyer un retour",
+      "body": "Bugs, idées de fonctionnalités, ou simple retour sur ce qui marche et ce qui ne marche pas — tout est bon à prendre et oriente ce qui sera construit ensuite. Pour les problèmes techniques, GitHub est le canal le plus efficace ; pour le reste, l'email convient.",
+      "ctaEmail": "Envoyer un email",
+      "ctaIssues": "Ouvrir une issue"
+    },
+    "sponsor": {
+      "title": "Parrainer le projet",
+      "body": "Si vous voulez soutenir Yog-Scope financièrement, GitHub Sponsors et les dons directs en Solana sont disponibles.",
+      "fundsNote": "Les fonds sont consacrés aux coûts d'infrastructure (hébergement, quota RPC) et au développement continu. Le projet reste open source et le dashboard public reste gratuit.",
+      "ctaGithub": "Parrainer sur GitHub",
+      "solanaLabel": "Wallet Solana"
+    }
+  }
+}

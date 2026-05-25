@@ -1,0 +1,40 @@
+{
+  "SupportUs": {
+    "meta": {
+      "title": "Support us — Yog-Scope",
+      "description": "Ways to support Yog-Scope: spread the word, send feedback, or sponsor the project."
+    },
+    "header": {
+      "eyebrow": "Support us",
+      "title": "Help us keep going.",
+      "lead": "Yog-Scope is built and maintained independently. If you find the project useful, there are a few ways to help. None of them require much, and at this stage visibility and feedback matter as much as anything else."
+    },
+    "makeKnown": {
+      "shareText": "Yog-Scope — open source real-time observation of Meteora liquidity pools on Solana.",
+      "star": {
+        "title": "Star the repository",
+        "body": "A GitHub star takes one click, costs nothing, and helps other developers find the project. It is the simplest signal that the project is worth attention.",
+        "cta": "Star on GitHub"
+      },
+      "share": {
+        "title": "Spread the word",
+        "body": "If you know people who work with Solana, DeFi, or liquidity analytics, a quick share goes a long way. At this stage, visibility is the most useful contribution.",
+        "ctaX": "Share on X",
+        "ctaLinkedin": "Share on LinkedIn"
+      }
+    },
+    "feedback": {
+      "title": "Send feedback",
+      "body": "Bug reports, feature ideas, or just a quick note about what works and what doesn't — all of it is welcome and shapes what gets built next. For technical issues, GitHub is the most efficient channel; for anything else, email works.",
+      "ctaEmail": "Send an email",
+      "ctaIssues": "Open an issue"
+    },
+    "sponsor": {
+      "title": "Sponsor the project",
+      "body": "If you want to support Yog-Scope financially, GitHub Sponsors and direct Solana donations are both available.",
+      "fundsNote": "Funds go toward infrastructure costs (hosting, RPC quota) and ongoing development. The project remains open source and the public dashboard remains free.",
+      "ctaGithub": "Sponsor on GitHub",
+      "solanaLabel": "Solana wallet"
+    }
+  }
+}

@@ -32,6 +32,7 @@ import enAbout from "../messages/en/about.json";
 import enPrivacy from "../messages/en/privacy.json";
 import enLegalNotice from "../messages/en/legal-notice.json";
 import enTerms from "../messages/en/terms.json";
+import enSupportUs from "../messages/en/support-us.json"
 
 // ── FR bundle ─────────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ import frAbout from "../messages/fr/about.json";
 import frPrivacy from "../messages/fr/privacy.json";
 import frLegalNotice from "../messages/fr/legal-notice.json";
 import frTerms from "../messages/fr/terms.json";
+import frSupportUs from "../messages/fr/support-us.json"
+
 
 
 // ── Bundle assembly ──────────────────────────────────────────────────
@@ -61,6 +64,7 @@ const BUNDLES: Record<Locale, AbstractIntlMessages> = {
     ...enPrivacy,
     ...enLegalNotice,
     ...enTerms,
+    ...enSupportUs,
   },
   fr: {
     ...frBrand,
@@ -70,7 +74,8 @@ const BUNDLES: Record<Locale, AbstractIntlMessages> = {
     ...frAbout,
     ...frPrivacy,
     ...frLegalNotice,
-    ...frTerms
+    ...frTerms,
+    ...frSupportUs,
   },
 };
 
