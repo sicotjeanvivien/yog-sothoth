@@ -1,12 +1,22 @@
 /**
  * The pools table.
  *
- * Three columns: pair, protocol, last seen. Headers are static
- * text in this commit — sort-on-click will arrive in a separate
- * change together with search and filters.
+ * Rendered as a CSS grid rather than a native `<table>`. The
+ * native option forced us to wrap each row in `<Link>` styled as
+ * `display: table-row`, which produced an `<a>` directly inside a
+ * `<tbody>` — invalid HTML and a guaranteed hydration mismatch.
  *
- * Wrapped in a horizontally scrollable container for narrow
- * viewports; on desktop the table fills its parent.
+ * The grid layout keeps the table semantics through ARIA roles
+ * (`role="table"` / `"rowgroup"` / `"row"` / `"columnheader"` /
+ * `"cell"`) so screen readers still announce the structure, while
+ * allowing each row to be a plain `<a>` element wrapping its
+ * cells.
+ *
+ * Three columns: pair, protocol, last seen. Headers are static in
+ * this commit — sort-on-click will arrive with search and filters.
+ *
+ * The column template is exported so the row component can share
+ * it: any change to widths happens in one place.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -14,6 +24,15 @@ import { getTranslations } from "next-intl/server";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 
 import { PoolsTableRow } from "./pools-table-row";
+
+/**
+ * Column widths. Pair gets the most room because it carries two
+ * logos and two symbols; the other two carry short, predictable
+ * strings. The `minmax(..., Nfr)` form keeps the columns from
+ * collapsing on narrow viewports while still letting them grow.
+ */
+export const GRID_COLS =
+  "grid-cols-[minmax(220px,2fr)_minmax(180px,1fr)_minmax(140px,1fr)]";
 
 const HEAD_CELL_CLASS =
   "px-4 py-3 text-left text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
@@ -29,15 +48,27 @@ export async function PoolsTable({
 
   return (
     <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
-      <table className="w-full border-collapse">
-        <thead className="border-b border-sothoth-500/20 bg-cosmos-900/60">
-          <tr>
-            <th className={HEAD_CELL_CLASS}>{t("pair")}</th>
-            <th className={HEAD_CELL_CLASS}>{t("protocol")}</th>
-            <th className={HEAD_CELL_CLASS}>{t("lastSeen")}</th>
-          </tr>
-        </thead>
-        <tbody>
+      <div role="table" className="min-w-[640px]">
+        {/* Header row */}
+        <div
+          role="rowgroup"
+          className="border-b border-sothoth-500/20 bg-cosmos-900/60"
+        >
+          <div role="row" className={`grid ${GRID_COLS}`}>
+            <div role="columnheader" className={HEAD_CELL_CLASS}>
+              {t("pair")}
+            </div>
+            <div role="columnheader" className={HEAD_CELL_CLASS}>
+              {t("protocol")}
+            </div>
+            <div role="columnheader" className={HEAD_CELL_CLASS}>
+              {t("lastSeen")}
+            </div>
+          </div>
+        </div>
+
+        {/* Body rows */}
+        <div role="rowgroup">
           {pools.map((pool) => (
             <PoolsTableRow
               key={pool.pool_address}
@@ -45,8 +76,8 @@ export async function PoolsTable({
               locale={locale}
             />
           ))}
-        </tbody>
-      </table>
+        </div>
+      </div>
     </div>
   );
 }
