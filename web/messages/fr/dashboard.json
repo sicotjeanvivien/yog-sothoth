@@ -30,6 +30,8 @@
       "table": {
         "pair": "Paire",
         "protocol": "Protocole",
+        "tvl": "TVL",
+        "volume24h": "Volume 24h",
         "lastSeen": "Dernière activité"
       },
       "empty": {
