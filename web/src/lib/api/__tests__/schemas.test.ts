@@ -72,7 +72,7 @@ describe("PoolSchema", () => {
 
   it("rejects a non-RFC3339 timestamp", () => {
     expect(() =>
-      PoolSchema.parse({ ...validPool(), first_seen_at: "yesterday" }),
+      PoolSchema.parse({ ...validPool(), firstSeenAt: "yesterday" }),
     ).toThrow();
   });
 
