@@ -6,7 +6,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use yog_core::{
-    domain::{LiquidityCursor, Pool, PoolCursor, SwapCursor},
+    domain::{LiquidityCursor, Pool, PoolAnalytics, PoolCursor, SwapCursor},
     tools::Cursor,
 };
 
@@ -73,8 +73,8 @@ fn validate_limit(limit: i64) -> Result<(), ApiError> {
 /// `GET /api/pools[?cursor=...&limit=...]`
 ///
 /// Returns a paginated list of discovered pools, each enriched with
-/// its two token sides. The cursor is opaque from the client's
-/// perspective.
+/// its two token sides and its derived analytics (TVL, 24h volume).
+/// The cursor is opaque from the client's perspective.
 pub(crate) async fn list_pools(
     State(state): State<AppState>,
     Query(query): Query<PageQuery>,
@@ -91,12 +91,22 @@ pub(crate) async fn list_pools(
         .find_paginated(cursor, query.limit)
         .await?;
 
-    // Enrich every pool in the page. Sequential awaits — the
-    // per-pool cost is dominated by DB I/O, and at the page size
-    // limit (200 max) the total stays well under 1s.
+    // Compute analytics for the whole page in one round-trip, then
+    // dispatch each pool's analytics during enrichment. Pools absent
+    // from the map (no current state, no swap, etc.) fall back to
+    // `PoolAnalytics::empty()`.
+    let addresses: Vec<solana_pubkey::Pubkey> = page.items.iter().map(|p| p.pool_address).collect();
+    let mut analytics = state
+        .pool_analytics_repository
+        .batch_compute(&addresses)
+        .await?;
+
     let mut items: Vec<PoolResponse> = Vec::with_capacity(page.items.len());
     for pool in page.items {
-        items.push(enrich_pool(&state, pool).await?);
+        let pool_analytics = analytics
+            .remove(&pool.pool_address)
+            .unwrap_or_else(PoolAnalytics::empty);
+        items.push(enrich_pool(&state, pool, pool_analytics).await?);
     }
 
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
@@ -110,8 +120,8 @@ pub(crate) async fn list_pools(
 
 /// `GET /api/pools/{address}`
 ///
-/// Returns the pool record enriched with its two token sides.
-/// 404 if the pool has never been observed.
+/// Returns the pool record enriched with its two token sides and its
+/// derived analytics. 404 if the pool has never been observed.
 pub(crate) async fn get_pool(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -124,7 +134,17 @@ pub(crate) async fn get_pool(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("pool not found: {address}")))?;
 
-    Ok(Json(enrich_pool(&state, pool).await?))
+    // Reuse the batch API with a single element — analytics for a
+    // single pool doesn't justify a dedicated trait method.
+    let mut analytics_map = state
+        .pool_analytics_repository
+        .batch_compute(&[pool_address])
+        .await?;
+    let analytics = analytics_map
+        .remove(&pool_address)
+        .unwrap_or_else(PoolAnalytics::empty);
+
+    Ok(Json(enrich_pool(&state, pool, analytics).await?))
 }
 
 // ===========================================================================
@@ -330,7 +350,8 @@ fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiError> {
 // Enrichment helper
 // ===========================================================================
 
-/// Compose a `Pool` with its two embedded token sides.
+/// Compose a `Pool` with its two embedded token sides and its
+/// pre-computed analytics.
 ///
 /// Fetches metadata and latest price for both mints, then builds the
 /// final `PoolResponse`. Missing metadata or price are tolerated —
@@ -338,9 +359,17 @@ fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiError> {
 /// the pool itself is always returned (a fresh pool may exist in
 /// `pools` before `yog-context` has enriched its mints).
 ///
+/// `analytics` is computed in batch by the caller before this
+/// function is called, so a pool with no current state still gets a
+/// `PoolAnalytics::empty()` rather than a special-case here.
+///
 /// Sequential awaits keep the code readable; at single-request
 /// latency the 4 indexed lookups are cheap.
-async fn enrich_pool(state: &AppState, pool: Pool) -> Result<PoolResponse, ApiError> {
+async fn enrich_pool(
+    state: &AppState,
+    pool: Pool,
+    analytics: PoolAnalytics,
+) -> Result<PoolResponse, ApiError> {
     let token_a_meta = state
         .token_metadata_repository
         .find_by_mint(&pool.token_a_mint)
@@ -363,5 +392,5 @@ async fn enrich_pool(state: &AppState, pool: Pool) -> Result<PoolResponse, ApiEr
     let token_b =
         EmbeddedTokenResponse::from_sources(pool.token_b_mint, token_b_meta, token_b_price);
 
-    Ok(PoolResponse::new(pool, token_a, token_b))
+    Ok(PoolResponse::new(pool, token_a, token_b, analytics))
 }

@@ -18,9 +18,9 @@ mod repository_utils;
 pub use database::Database;
 pub use repositories::{
     PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository, PgEventFreshnessRepository,
-    PgLiquidityEventRepository, PgNetworkStatusRepository, PgPoolCurrentStateRepository,
-    PgPoolRepository, PgSwapEventRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
-    PgWatchedPoolRepository,
+    PgLiquidityEventRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgSwapEventRepository,
+    PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };
 
 /// Re-export `sqlx::PgPool` so consumers don't need to depend on sqlx directly

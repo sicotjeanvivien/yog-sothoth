@@ -5,6 +5,7 @@ mod freshness_status;
 mod liquidity_event;
 mod network_status;
 mod pool;
+mod pool_analytics;
 mod pool_current_state;
 mod protocol;
 mod swap_event;
@@ -22,6 +23,7 @@ pub use liquidity_event::{
 };
 pub use network_status::{NetworkStatus, NetworkStatusRepository};
 pub use pool::{Pool, PoolCursor, PoolRepository};
+pub use pool_analytics::{PoolAnalytics, PoolAnalyticsRepository};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
 };
