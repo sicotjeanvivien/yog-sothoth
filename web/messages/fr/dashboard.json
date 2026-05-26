@@ -69,6 +69,15 @@
         "tvl": "TVL",
         "volume24h": "Volume 24h",
         "composition": "Composition de la pool"
+      },
+      "swaps": {
+        "title": "Swaps récents",
+        "time": "Heure",
+        "direction": "Direction",
+        "amountIn": "Montant envoyé",
+        "amountOut": "Montant reçu",
+        "tx": "Tx",
+        "empty": "Aucun swap observé pour le moment sur cette pool. Ils apparaîtront ici dès que des événements on-chain seront détectés."
       }
     }
   }
