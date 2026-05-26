@@ -89,7 +89,29 @@
         "add": "Add",
         "remove": "Remove",
         "empty": "No liquidity events observed yet for this pool. They will appear here as soon as on-chain add/remove events are picked up."
+      },
+      "meta": {
+        "title": "Pool {address}",
+        "description": "Real-time activity, liquidity, and trade history for a Meteora pool observed by the Yog-Scope indexer."
+      },
+      "notFound": {
+        "title": "Pool not found",
+        "description": "No pool with this address has been observed yet by the indexer. It may not exist, or it may be on a protocol Yog-Scope doesn't track.",
+        "backToList": "Back to pools"
       }
+    },
+    "BlockError": {
+      "timeout": "This section couldn't be loaded — the upstream service took too long to respond.",
+      "network": "This section couldn't be loaded — the upstream service is unreachable.",
+      "http": "This section couldn't be loaded — the upstream service returned an error.",
+      "validation": "This section couldn't be loaded — the upstream service returned an unexpected response."
+    },
+    "PageError": {
+      "title": "Unable to load this page",
+      "timeout": "The upstream service took too long to respond. Try refreshing the page in a moment.",
+      "network": "The upstream service is unreachable. Try refreshing the page in a moment.",
+      "http": "The upstream service returned an error.",
+      "validation": "The upstream service returned an unexpected response."
     }
   }
 }

@@ -89,7 +89,29 @@
         "add": "Ajout",
         "remove": "Retrait",
         "empty": "Aucun événement de liquidité observé pour le moment sur cette pool. Ils apparaîtront ici dès que des ajouts ou retraits seront détectés on-chain."
+      },
+      "meta": {
+        "title": "Pool {address}",
+        "description": "Activité en temps réel, liquidité et historique des trades d'une pool Meteora observée par l'indexeur Yog-Scope."
+      },
+      "notFound": {
+        "title": "Pool introuvable",
+        "description": "Aucune pool avec cette adresse n'a été observée par l'indexeur. Elle n'existe peut-être pas, ou bien elle est sur un protocole que Yog-Scope ne suit pas.",
+        "backToList": "Retour aux pools"
       }
+    },
+     "BlockError": {
+      "timeout": "Cette section n'a pas pu être chargée — le service en amont a mis trop de temps à répondre.",
+      "network": "Cette section n'a pas pu être chargée — le service en amont est injoignable.",
+      "http": "Cette section n'a pas pu être chargée — le service en amont a retourné une erreur.",
+      "validation": "Cette section n'a pas pu être chargée — le service en amont a retourné une réponse inattendue."
+    },
+    "PageError": {
+      "title": "Impossible de charger cette page",
+      "timeout": "Le service en amont a mis trop de temps à répondre. Essayez de rafraîchir la page dans un instant.",
+      "network": "Le service en amont est injoignable. Essayez de rafraîchir la page dans un instant.",
+      "http": "Le service en amont a retourné une erreur.",
+      "validation": "Le service en amont a retourné une réponse inattendue."
     }
   }
 }
