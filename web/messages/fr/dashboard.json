@@ -64,6 +64,11 @@
         "lastActivity": "Dernière activité",
         "copyPoolAddress": "Copier l'adresse de la pool",
         "copyTokenMint": "Copier le mint du token"
+      },
+      "kpis": {
+        "tvl": "TVL",
+        "volume24h": "Volume 24h",
+        "composition": "Composition de la pool"
       }
     }
   }

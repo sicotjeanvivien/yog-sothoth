@@ -22,6 +22,7 @@
 
 import { PoolDetailHeader } from "@/components/dashboard/pool-detail/pool-detail-header";
 import { PoolDetailInfo } from "@/components/dashboard/pool-detail/pool-detail-info";
+import { PoolDetailKpis } from "@/components/dashboard/pool-detail/pool-detail-kpis";
 import { setRequestLocale } from "next-intl/server";
 
 type PoolDetailPageProps = {
@@ -69,10 +70,25 @@ export default async function PoolDetailPage({
     "firstSeenAt": "2026-05-25T13:27:27.630479Z",
     "lastSeenAt": "2026-05-25T13:27:27.630479Z"
   };
+  let state = {
+    "pool_address": "Ft8FD9gg1TdawhWijNzdkpYTiVL8ETfY6gAwS24bwYio",
+    "protocol": "meteora_damm_v2",
+    "last_event_at": "2026-05-25T12:10:57Z",
+    "last_event_kind": "swap",
+    "last_signature": "63JMDNmGEMJ9ajWNXxRUaJzpQeNvLQmpYGtVXH5bvwi5aLF9oAehp86zJnE5UQVZfkaEmXVUo1BBbsHXipw5APB1",
+    "reserve_a": 19249983610,
+    "reserve_b": 1644613564,
+    "last_sqrt_price": "5391824998627663727",
+    "last_swap_at": "2026-05-25T12:10:57Z",
+    "liquidity": null,
+    "last_liquidity_at": null,
+    "updated_at": "2026-05-25T12:10:59.262273Z"
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-10 lg:px-10 lg:py-12">
       <PoolDetailHeader pool={pool} />
+      <PoolDetailKpis pool={pool} state={state} />
       <PoolDetailInfo pool={pool} locale={locale} />
     </div>
   );

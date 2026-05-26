@@ -22,7 +22,8 @@ export const PoolCurrentStateSchema = z.object({
   protocol: z.string().min(1),
 
   last_event_at: Rfc3339,
-  last_event_kind: z.enum(["swap", "liquidity_add", "liquidity_remove"]),
+  // last_event_kind: z.enum(["swap", "liquidity_add", "liquidity_remove"]),
+  last_event_kind: z.string(),
   last_signature: z.string().min(1),
 
   reserve_a: z.number().int().nonnegative(),
