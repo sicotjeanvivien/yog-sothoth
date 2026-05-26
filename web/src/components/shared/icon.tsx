@@ -247,7 +247,6 @@ export const PulseIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-
 /** X (formerly Twitter) glyph. */
 export const XIcon: React.FC<IconProps> = ({
   size = 16,
@@ -258,7 +257,6 @@ export const XIcon: React.FC<IconProps> = ({
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
   </svg>
 );
-
 
 /** GitHub mark. */
 export const GithubIcon: React.FC<IconProps> = ({
@@ -477,5 +475,62 @@ export const MailIcon: React.FC<IconProps> = ({
   <svg {...base(size, strokeWidth)} className={className}>
     <rect x="3" y="5" width="18" height="14" rx="1.5" />
     <path d="m3.5 6.5 8.5 6 8.5-6" />
+  </svg>
+);
+
+/**
+ * Copy — outlined "two squares" copy affordance. 1.6px stroke.
+ */
+export const CopyIcon: React.FC<IconProps> = ({
+  size = 16,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </svg>
+);
+
+/**
+ * Check — outlined tick mark. Used as the copy confirmation state.
+ */
+export const CheckIcon: React.FC<IconProps> = ({
+  size = 16,
+  strokeWidth = 1.8,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M4 12l5 5L20 6" />
+  </svg>
+);
+
+/**
+ * External link — outlined "arrow out of box". Marks links that
+ * leave the site.
+ */
+export const ExternalLinkIcon: React.FC<IconProps> = ({
+  size = 14,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M14 5h5v5" />
+    <path d="M19 5l-9 9" />
+    <path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
+  </svg>
+);
+
+/**
+ * ArrowLeft — used for "back" navigation links.
+ */
+export const ArrowLeftIcon: React.FC<IconProps> = ({
+  size = 16,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M19 12H5" />
+    <path d="M12 5l-7 7 7 7" />
   </svg>
 );

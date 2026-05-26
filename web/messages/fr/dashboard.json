@@ -45,6 +45,26 @@
         "http": "Le service en amont a retourné une erreur.",
         "validation": "Le service en amont a retourné une réponse inattendue."
       }
+    },
+    "PoolDetail": {
+      "header": {
+        "backToList": "Retour aux pools",
+        "copyAddress": "Copier l'adresse de la pool",
+        "viewOnMeteora": "Voir sur Meteora",
+        "viewOnSolscan": "Voir sur Solscan"
+      },
+      "info": {
+        "title": "Informations sur la pool",
+        "poolAddress": "Adresse de la pool",
+        "protocol": "Protocole",
+        "network": "Réseau",
+        "tokenA": "Token A",
+        "tokenB": "Token B",
+        "firstSeen": "Première observation",
+        "lastActivity": "Dernière activité",
+        "copyPoolAddress": "Copier l'adresse de la pool",
+        "copyTokenMint": "Copier le mint du token"
+      }
     }
   }
 }

@@ -45,6 +45,26 @@
         "http": "The upstream service returned an error.",
         "validation": "The upstream service returned an unexpected response."
       }
+    },
+    "PoolDetail": {
+      "header": {
+        "backToList": "Back to pools",
+        "copyAddress": "Copy pool address",
+        "viewOnMeteora": "View on Meteora",
+        "viewOnSolscan": "View on Solscan"
+      },
+      "info": {
+        "title": "Pool info",
+        "poolAddress": "Pool address",
+        "protocol": "Protocol",
+        "network": "Network",
+        "tokenA": "Token A",
+        "tokenB": "Token B",
+        "firstSeen": "First seen",
+        "lastActivity": "Last activity",
+        "copyPoolAddress": "Copy pool address",
+        "copyTokenMint": "Copy token mint"
+      }
     }
   }
 }
