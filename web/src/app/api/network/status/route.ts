@@ -20,16 +20,9 @@
  */
 
 import { NextResponse } from "next/server";
-
 import { ApiClientError } from "@/lib/api/errors";
 import { mapApiClientErrorToHttp } from "@/lib/api/http-mapping";
 import { fetchNetworkStatus } from "@/lib/api/network-status";
-
-/**
- * Force dynamic execution — the response depends on live data from
- * yog-api, never cache the route itself.
- */
-export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
   try {

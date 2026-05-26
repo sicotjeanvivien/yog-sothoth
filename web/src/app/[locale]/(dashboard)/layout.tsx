@@ -1,4 +1,11 @@
 /**
+ * Force dynamic execution — the response depends on live data from
+ * yog-api, never cache the route itself. Caching strategy lives in
+ * `apiGet` (currently `no-store` for every upstream call).
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Layout for the dashboard route group `(dashboard)`.
  *
  * Delegates the whole responsive chrome — sidebar, mobile drawer,
