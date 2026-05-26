@@ -78,6 +78,17 @@
         "amountOut": "Amount out",
         "tx": "Tx",
         "empty": "No swaps observed yet for this pool. They will appear here as soon as on-chain trade events are picked up."
+      },
+      "liquidity": {
+        "title": "Recent liquidity events",
+        "time": "Time",
+        "kind": "Kind",
+        "amountA": "Amount A",
+        "amountB": "Amount B",
+        "tx": "Tx",
+        "add": "Add",
+        "remove": "Remove",
+        "empty": "No liquidity events observed yet for this pool. They will appear here as soon as on-chain add/remove events are picked up."
       }
     }
   }

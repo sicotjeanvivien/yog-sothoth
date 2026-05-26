@@ -78,6 +78,17 @@
         "amountOut": "Montant reçu",
         "tx": "Tx",
         "empty": "Aucun swap observé pour le moment sur cette pool. Ils apparaîtront ici dès que des événements on-chain seront détectés."
+      },
+      "liquidity": {
+        "title": "Événements de liquidité récents",
+        "time": "Heure",
+        "kind": "Type",
+        "amountA": "Montant A",
+        "amountB": "Montant B",
+        "tx": "Tx",
+        "add": "Ajout",
+        "remove": "Retrait",
+        "empty": "Aucun événement de liquidité observé pour le moment sur cette pool. Ils apparaîtront ici dès que des ajouts ou retraits seront détectés on-chain."
       }
     }
   }
