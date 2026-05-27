@@ -79,7 +79,7 @@ function validPage(nextCursor: string | null = null) {
         "lastSeenAt": "2026-05-25T12:14:01.715170Z"
       },
     ],
-    next_cursor: nextCursor,
+    nextCursor: nextCursor,
   };
 }
 
@@ -95,7 +95,7 @@ describe("fetchPools — happy path", () => {
     const page = await fetchPools();
 
     expect(page.items).toHaveLength(1);
-    expect(page.next_cursor).toBeNull();
+    expect(page.nextCursor).toBeNull();
 
     // Verify the URL composition is correct: base + path + default limit.
     expect(fetchSpy).toHaveBeenCalledOnce();
@@ -195,7 +195,7 @@ describe("fetchPools — schema failures", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        jsonResponse({ items: "not an array", next_cursor: null }),
+        jsonResponse({ items: "not an array", nextCursor: null }),
       ),
     );
 

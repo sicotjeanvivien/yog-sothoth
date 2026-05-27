@@ -9,27 +9,27 @@ import { Rfc3339, U128String } from "./shared";
  * Wire shape of a single swap event in the per-pool feed.
  */
 export const SwapEventSchema = z.object({
-  pool_address: z.string().min(1),
+  poolAddress: z.string().min(1),
   protocol: z.string().min(1),
   signature: z.string().min(1),
   timestamp: Rfc3339,
 
-  token_a_mint: z.string().min(1),
-  token_b_mint: z.string().min(1),
+  tokenAMint: z.string().min(1),
+  tokenBMint: z.string().min(1),
 
-  trade_direction: z.enum(["a_to_b", "b_to_a"]),
-  amount_a: z.number().int().nonnegative(),
-  amount_b: z.number().int().nonnegative(),
+  tradeDirection: z.enum(["a_to_b", "b_to_a"]),
+  amountA: z.number().int().nonnegative(),
+  amountB: z.number().int().nonnegative(),
 
-  reserve_a_after: z.number().int().nonnegative(),
-  reserve_b_after: z.number().int().nonnegative(),
-  next_sqrt_price: U128String,
+  reserveAAfter: z.number().int().nonnegative(),
+  reserveBAfter: z.number().int().nonnegative(),
+  nextSqrtPrice: U128String,
 
-  claiming_fee: z.number().int().nonnegative(),
-  protocol_fee: z.number().int().nonnegative(),
-  compounding_fee: z.number().int().nonnegative(),
-  referral_fee: z.number().int().nonnegative(),
-  fee_token_is_a: z.boolean(),
+  claimingFee: z.number().int().nonnegative(),
+  protocolFee: z.number().int().nonnegative(),
+  compoundingFee: z.number().int().nonnegative(),
+  referralFee: z.number().int().nonnegative(),
+  feeTokenIsA: z.boolean(),
 });
 
 export type SwapEventResponse = z.infer<typeof SwapEventSchema>;

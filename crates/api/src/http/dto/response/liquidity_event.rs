@@ -8,6 +8,7 @@ use yog_core::domain::{LiquidityEvent, LiquidityEventKind};
 
 /// `GET /api/pools/{address}/liquidity-events` item.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct LiquidityEventResponse {
     pub(super) pool_address: String,
     pub(super) protocol: String,

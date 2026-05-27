@@ -56,7 +56,7 @@ export async function fetchPoolSwaps(
   }
 
   return apiGet(
-    `/api/pools/${address}/swaps`,
+    `/api/pools/${address}/swap-events`,
     {
       cursor:
         params.cursor && params.cursor.length > 0 ? params.cursor : undefined,

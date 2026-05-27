@@ -7,6 +7,7 @@ use yog_core::domain::{LastEventKind, PoolCurrentState};
 /// `last_sqrt_price` and `liquidity` are emitted as JSON strings to
 /// preserve the full u128 range across the JS bridge.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct PoolCurrentStateResponse {
     pub(crate) pool_address: String,
     pub(crate) protocol: String,

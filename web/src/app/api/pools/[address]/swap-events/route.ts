@@ -97,7 +97,7 @@ export async function GET(
   } catch (err) {
     if (err instanceof ApiClientError) {
       console.error(
-        `[BFF] /api/pools/${address}/swaps failed:`,
+        `[BFF] /api/pools/${address}/swaps-event failed:`,
         err.message,
         err.details,
       );
@@ -106,7 +106,7 @@ export async function GET(
     }
 
     console.error(
-      `[BFF] /api/pools/${address}/swaps unexpected error:`,
+      `[BFF] /api/pools/${address}/swaps-event unexpected error:`,
       err,
     );
     return NextResponse.json(

@@ -10,21 +10,21 @@ import { Rfc3339, U128String } from "./shared";
  * per-pool feed.
  */
 export const LiquidityEventSchema = z.object({
-  pool_address: z.string().min(1),
+  poolAddress: z.string().min(1),
   protocol: z.string().min(1),
   signature: z.string().min(1),
   timestamp: Rfc3339,
 
-  token_a_mint: z.string().min(1),
-  token_b_mint: z.string().min(1),
+  tokenAMint: z.string().min(1),
+  tokenBMint: z.string().min(1),
 
-  liquidity_event_kind: z.enum(["add", "remove"]),
-  amount_a: z.number().int().nonnegative(),
-  amount_b: z.number().int().nonnegative(),
-  liquidity_delta: U128String,
+  liquidityEventKind: z.enum(["add", "remove"]),
+  amountA: z.number().int().nonnegative(),
+  amountB: z.number().int().nonnegative(),
+  liquidityDelta: U128String,
 
-  reserve_a_after: z.number().int().nonnegative(),
-  reserve_b_after: z.number().int().nonnegative(),
+  reserveAAfter: z.number().int().nonnegative(),
+  reserveBAfter: z.number().int().nonnegative(),
 
   position: z.string().min(1),
   owner: z.string().min(1),

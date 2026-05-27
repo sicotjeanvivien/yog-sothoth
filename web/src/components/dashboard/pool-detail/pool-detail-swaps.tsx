@@ -143,12 +143,12 @@ function SwapRow({
   // trade_direction tells us which side was sent (in) vs received (out).
   //   a_to_b → trader sent amount_a (token A in), received amount_b (token B out)
   //   b_to_a → trader sent amount_b (token B in), received amount_a (token A out)
-  const aToB = swap.trade_direction === "a_to_b";
+  const aToB = swap.tradeDirection === "a_to_b";
 
   const inToken = aToB ? tokenA : tokenB;
   const outToken = aToB ? tokenB : tokenA;
-  const inAmount = aToB ? swap.amount_a : swap.amount_b;
-  const outAmount = aToB ? swap.amount_b : swap.amount_a;
+  const inAmount = aToB ? swap.amountA : swap.amountB;
+  const outAmount = aToB ? swap.amountB : swap.amountA;
 
   const solscanUrl = `https://solscan.io/tx/${swap.signature}`;
 

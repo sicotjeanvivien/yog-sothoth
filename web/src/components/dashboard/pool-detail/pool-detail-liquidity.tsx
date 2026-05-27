@@ -155,7 +155,7 @@ function LiquidityRow({
   addLabel: string;
   removeLabel: string;
 }) {
-  const isAdd = event.liquidity_event_kind === "add";
+  const isAdd = event.liquidityEventKind === "add";
   const solscanUrl = `https://solscan.io/tx/${event.signature}`;
 
   return (
@@ -176,11 +176,11 @@ function LiquidityRow({
       </div>
 
       <div role="cell" className={CELL_MONO_CLASS}>
-        {formatTokenAmount(event.amount_a, tokenA.decimals, tokenA.symbol)}
+        {formatTokenAmount(event.amountA, tokenA.decimals, tokenA.symbol)}
       </div>
 
       <div role="cell" className={CELL_MONO_CLASS}>
-        {formatTokenAmount(event.amount_b, tokenB.decimals, tokenB.symbol)}
+        {formatTokenAmount(event.amountB, tokenB.decimals, tokenB.symbol)}
       </div>
 
       <div role="cell" className={CELL_CLASS}>

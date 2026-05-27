@@ -85,30 +85,30 @@ describe("PoolSchema", () => {
 
 describe("PoolsPageSchema", () => {
   it("accepts an empty page with null cursor", () => {
-    const parsed = PoolsPageSchema.parse({ items: [], next_cursor: null });
+    const parsed = PoolsPageSchema.parse({ items: [], nextCursor: null });
     expect(parsed.items).toHaveLength(0);
-    expect(parsed.next_cursor).toBeNull();
+    expect(parsed.nextCursor).toBeNull();
   });
 
   it("accepts a full page with an opaque cursor", () => {
     const parsed = PoolsPageSchema.parse({
       items: [validPool(), validPool()],
-      next_cursor: "eyJmaXJzdF9zZWVuX2F0IjoiMjAyNi0wNS0wMVQwODozMDowMFoifQ",
+      nextCursor: "eyJmaXJzdF9zZWVuX2F0IjoiMjAyNi0wNS0wMVQwODozMDowMFoifQ",
     });
     expect(parsed.items).toHaveLength(2);
-    expect(parsed.next_cursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(parsed.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
   it("rejects items that fail individual validation", () => {
     expect(() =>
       PoolsPageSchema.parse({
         items: [{ ...validPool(), poolAddress: "" }],
-        next_cursor: null,
+        nextCursor: null,
       }),
     ).toThrow();
   });
 
-  it("rejects a missing next_cursor field", () => {
+  it("rejects a missing nextCursor field", () => {
     expect(() => PoolsPageSchema.parse({ items: [] })).toThrow();
   });
 });

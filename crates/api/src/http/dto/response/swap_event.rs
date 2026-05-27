@@ -26,6 +26,7 @@ use yog_core::domain::{SwapEvent, TradeDirection};
 
 /// `GET /api/pools/{address}/swaps` item.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct SwapEventResponse {
     pub(crate) pool_address: String,
     pub(crate) protocol: String,

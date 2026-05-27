@@ -17,7 +17,7 @@ import { LiquidityEventSchema } from "./liquidity-event";
 export function pageSchema<T extends z.ZodTypeAny>(item: T) {
   return z.object({
     items: z.array(item),
-    next_cursor: z.string().nullable(),
+    nextCursor: z.string().nullable(),
   });
 }
 
