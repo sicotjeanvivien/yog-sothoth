@@ -64,3 +64,31 @@ impl<T> Page<T> {
         Self { items, next_cursor }
     }
 }
+
+/// Direction of traversal relative to a cursor.
+///
+/// `Next` moves further into the list (older items if the natural
+/// order is `first_seen_at DESC`); `Prev` moves back toward more
+/// recent items. A cursor is required for both — without one, see
+/// `PagePosition` instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageDirection {
+    Next,
+    Prev,
+}
+
+impl Default for PageDirection {
+    fn default() -> Self {
+        PageDirection::Next
+    }
+}
+
+/// Absolute jump to a boundary of the list, ignoring any cursor.
+///
+/// Mutually exclusive with `cursor` + `PageDirection` at the request
+/// level — the handler is responsible for enforcing that invariant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PagePosition {
+    First,
+    Last,
+}

@@ -1,3 +1,3 @@
 pub mod pagination;
 
-pub use pagination::{Cursor, Page};
+pub use pagination::{Cursor, Page, PageDirection, PagePosition};

@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
+use crate::{PageDirection, PagePosition};
 use crate::{RepositoryResult, domain::Pool};
 
 /// Cursor identifying a position in the canonical pool ordering
@@ -50,16 +51,25 @@ pub trait PoolRepository: Send + Sync {
     /// Returns `Ok(None)` if the pool has never been observed.
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>>;
 
-    /// Paginate through known pools in canonical order:
-    /// `first_seen_at DESC`, `pool_address ASC` as tiebreaker.
+    /// Fetch a page of pools.
     ///
-    /// `cursor` is `None` for the first page; for subsequent pages,
-    /// pass the `next_cursor` returned by the previous call. `limit`
-    /// is the maximum number of items to return; implementations
-    /// may cap it to an upper bound.
+    /// - `cursor` + `direction` cooperate: traverse forward (`Next`)
+    ///   or backward (`Prev`) from the cursor's position. Without a
+    ///   cursor, `direction` is ignored and the natural ordering is
+    ///   used (newest first).
+    /// - `position` jumps to a list boundary (`First` or `Last`),
+    ///   ignoring any cursor. Mutually exclusive with `cursor`.
+    /// - `limit` is the maximum number of items returned; the
+    ///   repository clamps it defensively.
+    ///
+    /// The returned `Page<Pool>` carries enough information for the
+    /// caller to render Previous / Next / First / Last navigation
+    /// without follow-up queries.
     async fn find_paginated(
         &self,
         cursor: Option<PoolCursor>,
+        direction: PageDirection,
+        position: Option<PagePosition>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>>;
 }

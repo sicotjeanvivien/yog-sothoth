@@ -8,4 +8,4 @@ pub mod tools;
 pub use error::{CoreError, CoreResult, RepositoryError, RepositoryResult};
 
 // Existing re-exports likely include this style — match it:
-pub use tools::{Cursor, Page};
+pub use tools::{Cursor, Page, PageDirection, PagePosition};

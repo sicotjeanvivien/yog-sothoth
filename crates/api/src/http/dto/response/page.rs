@@ -10,4 +10,7 @@ use serde::Serialize;
 pub(crate) struct PageResponse<T> {
     pub(crate) items: Vec<T>,
     pub(crate) next_cursor: Option<String>,
+    pub prev_cursor: Option<String>,
+    pub is_first: bool,
+    pub is_last: bool,
 }
