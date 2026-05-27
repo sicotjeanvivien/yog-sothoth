@@ -28,7 +28,7 @@ import type { Metadata } from "next";
 
 import { fetchPool } from "@/lib/api/pool";
 import { fetchPoolLatestState } from "@/lib/api/latest-state";
-import { fetchPoolSwaps } from "@/lib/api/swaps";
+import { fetchPoolSwaps } from "@/lib/api/swap-events";
 import { fetchPoolLiquidityEvents } from "@/lib/api/liquidity-events";
 import { safeFetch, safeFetchOrNotFound } from "@/lib/api/safe-fetch";
 

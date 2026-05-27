@@ -17,7 +17,7 @@ import {
   POOL_SWAPS_QUERY_BOUNDS,
   fetchPoolSwaps,
   type FetchPoolSwapsParams,
-} from "@/lib/api/swaps";
+} from "@/lib/api/swap-events";
 
 export const dynamic = "force-dynamic";
 

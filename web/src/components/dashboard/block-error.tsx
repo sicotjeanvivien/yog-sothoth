@@ -23,6 +23,7 @@ import { getTranslations } from "next-intl/server";
 import { AlertTriangleIcon } from "@/components/shared/icon";
 
 import type { ApiClientErrorKind } from "@/lib/api/errors";
+import { RetryButton } from "../shared/retry-button";
 
 const CARD_CLASS =
   "rounded-[8px] border border-amber-500/30 bg-amber-950/15";
@@ -60,6 +61,9 @@ export async function BlockError({
           <AlertTriangleIcon size={20} />
         </div>
         <p className={MESSAGE_CLASS}>{t(kind)}</p>
+        <div className="py-4">
+          <RetryButton label={t("retry")} pendingLabel={t("retryPending")} variant="block" />
+        </div>
       </div>
     </div>
   );

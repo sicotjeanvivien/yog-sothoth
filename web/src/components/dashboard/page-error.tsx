@@ -16,6 +16,7 @@ import { getTranslations } from "next-intl/server";
 import { AlertTriangleIcon } from "@/components/shared/icon";
 
 import type { ApiClientErrorKind } from "@/lib/api/errors";
+import { RetryButton } from "../shared/retry-button";
 
 export async function PageError({ kind }: { kind: ApiClientErrorKind }) {
   const t = await getTranslations("Dashboard.PageError");
@@ -32,6 +33,9 @@ export async function PageError({ kind }: { kind: ApiClientErrorKind }) {
         <p className="mt-4 max-w-[52ch] text-[14px] leading-[1.6] text-amber-100/80">
           {t(kind)}
         </p>
+        <div className="py-4" >
+          <RetryButton label={t("retry")} pendingLabel={t("retryPending")} />
+        </div>
       </div>
     </div>
   );

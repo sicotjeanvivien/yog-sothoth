@@ -100,18 +100,22 @@
         "backToList": "Retour aux pools"
       }
     },
-     "BlockError": {
+    "BlockError": {
       "timeout": "Cette section n'a pas pu être chargée — le service en amont a mis trop de temps à répondre.",
       "network": "Cette section n'a pas pu être chargée — le service en amont est injoignable.",
       "http": "Cette section n'a pas pu être chargée — le service en amont a retourné une erreur.",
-      "validation": "Cette section n'a pas pu être chargée — le service en amont a retourné une réponse inattendue."
+      "validation": "Cette section n'a pas pu être chargée — le service en amont a retourné une réponse inattendue.",
+      "retry": "Réessayer",
+      "retryPending": "Chargement…"
     },
     "PageError": {
       "title": "Impossible de charger cette page",
       "timeout": "Le service en amont a mis trop de temps à répondre. Essayez de rafraîchir la page dans un instant.",
       "network": "Le service en amont est injoignable. Essayez de rafraîchir la page dans un instant.",
       "http": "Le service en amont a retourné une erreur.",
-      "validation": "Le service en amont a retourné une réponse inattendue."
+      "validation": "Le service en amont a retourné une réponse inattendue.",
+      "retry": "Réessayer",
+      "retryPending": "Chargement…"
     }
   }
 }
