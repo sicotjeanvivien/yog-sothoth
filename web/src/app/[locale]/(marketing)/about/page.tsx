@@ -24,15 +24,7 @@
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
-import type { FC } from "react";
 
-import {
-  EyeIcon,
-  PoolsIcon,
-  PulseIcon,
-  GithubIcon,
-  type IconProps,
-} from "@/components/shared/icon";
 import { AboutHero } from "@/components/marketing/about/about-hero";
 import { AboutProse } from "@/components/marketing/about/about-prose";
 
@@ -52,42 +44,6 @@ export async function generateMetadata({
     description: t("description"),
   };
 }
-
-// ── Principles configuration ──────────────────────────────────────────
-//
-// Mirrors the `PILLARS` table in `HomePillars` so the two pages
-// share a coherent visual vocabulary. Keys map to the
-// `About.principles.items` i18n namespace.
-
-type Principle = {
-  key: string;
-  icon: FC<IconProps>;
-  /** Icon-badge classes — text colour + translucent fill + border. */
-  accent: string;
-};
-
-const PRINCIPLES: readonly Principle[] = [
-  {
-    key: "openSource",
-    icon: GithubIcon,
-    accent: "text-sothoth-400 bg-sothoth-600/15 border-sothoth-500/25",
-  },
-  {
-    key: "realTime",
-    icon: PulseIcon,
-    accent: "text-eldritch-400 bg-eldritch-500/15 border-eldritch-500/25",
-  },
-  {
-    key: "protocolCentric",
-    icon: PoolsIcon,
-    accent: "text-signal-good bg-signal-good/15 border-signal-good/25",
-  },
-  {
-    key: "empirical",
-    icon: EyeIcon,
-    accent: "text-sothoth-400 bg-sothoth-600/15 border-sothoth-500/25",
-  },
-] as const;
 
 // ── Page ──────────────────────────────────────────────────────────────
 

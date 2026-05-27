@@ -1,9 +1,8 @@
 /**
  * High-level fetcher for `GET /api/pools/{address}/liquidity-events`.
  *
- * Paginated feed of liquidity events (add / remove) for a single pool,
- * ordered most-recent first (`timestamp DESC`, `signature ASC` as
- * tiebreaker). Same pagination contract as `fetchPoolSwaps`.
+ * Bidirectional pagination — see `fetchPools` for the full contract.
+ * Display order is most-recent first.
  */
 
 import { apiGet } from "./client";
@@ -12,12 +11,15 @@ import {
   LiquidityEventsPageSchema,
   type LiquidityEventsPageResponse,
 } from "./schema/page";
+import type { PageDir, PagePosition } from "./type/pagination";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 export type FetchPoolLiquidityEventsParams = {
-  cursor?: string;
+  cursor?: string | undefined;
+  dir?: PageDir | undefined;
+  position?: PagePosition | undefined;
   limit?: number;
 };
 
@@ -49,6 +51,8 @@ export async function fetchPoolLiquidityEvents(
     {
       cursor:
         params.cursor && params.cursor.length > 0 ? params.cursor : undefined,
+      dir: params.dir,
+      position: params.position,
       limit,
     },
     LiquidityEventsPageSchema,

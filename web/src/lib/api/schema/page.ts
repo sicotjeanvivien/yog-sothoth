@@ -8,16 +8,21 @@ import { LiquidityEventSchema } from "./liquidity-event";
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Generic paginated envelope. `next_cursor` is `null` when the current
- * page is the last one, an opaque base64 string otherwise.
+ * Wire shape of a paginated response.
  *
- * Defined as a factory because zod 4 schemas are not generic in the
- * TypeScript sense; we compose a fresh schema per item type instead.
+ * Bidirectional pagination: every page carries enough information
+ * to render Previous / Next / First / Last navigation without
+ * follow-up calls. `prevCursor` / `nextCursor` are opaque strings;
+ * `isFirst` / `isLast` are explicit boundary flags (a single-page
+ * result has both cursors null AND both flags true).
  */
 export function pageSchema<T extends z.ZodTypeAny>(item: T) {
   return z.object({
     items: z.array(item),
     nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable(),
+    isFirst: z.boolean(),
+    isLast: z.boolean(),
   });
 }
 

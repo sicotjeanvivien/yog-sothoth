@@ -3,7 +3,7 @@
  * branch on success vs typed failure without writing try/catch in
  * server components.
  *
- *   const outcome = await safeFetch(() => fetchPoolSwaps(address));
+ *   const outcome = await safeFetch(() => fetchPoolSwapEvents(address));
  *   if (outcome.kind === "ok") render(outcome.data);
  *   else                     render(<BlockError kind={outcome.reason} />);
  *

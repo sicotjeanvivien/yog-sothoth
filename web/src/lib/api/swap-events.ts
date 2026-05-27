@@ -1,34 +1,25 @@
 /**
- * High-level fetcher for `GET /api/pools/{address}/swaps`.
+ * High-level fetcher for `GET /api/pools/{address}/swap-events`.
  *
- * Paginated feed of swap events for a single pool, ordered most-recent
- * first (`timestamp DESC`, `signature ASC` as tiebreaker).
- *
- * Pagination is cursor-based: the first call passes no cursor (or
- * leaves it absent), subsequent calls pass back the `next_cursor`
- * returned by the previous call. A `null` `next_cursor` indicates the
- * terminal page; a non-null `next_cursor` on a full page may still
- * yield an empty page on the next call (see the contract on `Page`
- * in `crates/core/src/tools/pagination.rs`).
+ * Bidirectional pagination — see `fetchPools` for the full contract.
+ * Display order is most-recent first.
  */
 
 import { apiGet } from "./client";
 import { isValidPoolAddress } from "./pool";
-import { SwapEventsPageSchema, type SwapEventsPageResponse } from "./schema/page";
+import {
+  SwapEventsPageSchema,
+  type SwapEventsPageResponse,
+} from "./schema/page";
+import type { PageDir, PagePosition } from "./type/pagination";
 
-/**
- * Bounds mirror yog-api's `MAX_LIMIT` for swap feeds. Kept in sync
- * manually — drift surfaces as an `ApiClientError("http", 400)`.
- */
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
-/**
- * Parameters accepted by `fetchPoolSwaps`. `cursor` defaults to absent
- * (first page); `limit` defaults to 50.
- */
-export type FetchPoolSwapsParams = {
-  cursor?: string;
+export type FetchPoolSwapEventsParams = {
+  cursor?: string | undefined;
+  dir?: PageDir | undefined;
+  position?: PagePosition | undefined;
   limit?: number;
 };
 
@@ -39,9 +30,9 @@ export type FetchPoolSwapsParams = {
  * @throws RangeError if `limit` is outside `[1, MAX_LIMIT]`.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
-export async function fetchPoolSwaps(
+export async function fetchPoolSwapEvents(
   address: string,
-  params: FetchPoolSwapsParams = {},
+  params: FetchPoolSwapEventsParams = {},
 ): Promise<SwapEventsPageResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
@@ -60,13 +51,14 @@ export async function fetchPoolSwaps(
     {
       cursor:
         params.cursor && params.cursor.length > 0 ? params.cursor : undefined,
+      dir: params.dir,
+      position: params.position,
       limit,
     },
     SwapEventsPageSchema,
   );
 }
 
-/** Re-export the bounds so route handlers can mirror them. */
 export const POOL_SWAPS_QUERY_BOUNDS = {
   DEFAULT_LIMIT,
   MAX_LIMIT,

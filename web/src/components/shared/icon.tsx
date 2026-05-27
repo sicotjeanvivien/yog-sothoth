@@ -534,3 +534,45 @@ export const ArrowLeftIcon: React.FC<IconProps> = ({
     <path d="M12 5l-7 7 7 7" />
   </svg>
 );
+
+export const ChevronDoubleLeftIcon: React.FC<IconProps> = ({
+  size = 24,
+  strokeWidth = 2,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <polyline points="11 17 6 12 11 7" />
+    <polyline points="18 17 13 12 18 7" />
+  </svg>
+);
+
+export const ChevronDoubleRightIcon: React.FC<IconProps> = ({
+  size = 24,
+  strokeWidth = 2,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <polyline points="13 17 18 12 13 7" />
+    <polyline points="6 17 11 12 6 7" />
+  </svg>
+);
+
+export const ChevronLeftIcon: React.FC<IconProps> = ({
+  size = 24,
+  strokeWidth = 2,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+);
+
+export const ChevronRightIcon: React.FC<IconProps> = ({
+  size = 24,
+  strokeWidth = 2,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);

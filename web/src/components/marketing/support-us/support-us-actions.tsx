@@ -55,7 +55,6 @@ const WALLET_CLASS =
 // ── Component ─────────────────────────────────────────────────────────
 
 export async function SupportUsActions() {
-  const t = await getTranslations("SupportUs");
 
   return (
     <section className="mx-auto max-w-[1800px] px-6 pb-24 lg:px-12">

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { PoolSchema } from "../schema/pool";
 import { PoolsPageSchema } from "../schema/page";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
+import { validPoolsPage } from "./fixtures";
 
 
 // A representative valid pool payload, copied from a real yog-api
@@ -84,32 +85,100 @@ describe("PoolSchema", () => {
 });
 
 describe("PoolsPageSchema", () => {
-  it("accepts an empty page with null cursor", () => {
-    const parsed = PoolsPageSchema.parse({ items: [], nextCursor: null });
+  it("accepts a single-page result (no neighbours)", () => {
+    const parsed = PoolsPageSchema.parse(
+      validPoolsPage({
+        items: [],
+        nextCursor: null,
+        prevCursor: null,
+        isFirst: true,
+        isLast: true,
+      }),
+    );
     expect(parsed.items).toHaveLength(0);
     expect(parsed.nextCursor).toBeNull();
+    expect(parsed.prevCursor).toBeNull();
+    expect(parsed.isFirst).toBe(true);
+    expect(parsed.isLast).toBe(true);
   });
 
-  it("accepts a full page with an opaque cursor", () => {
-    const parsed = PoolsPageSchema.parse({
-      items: [validPool(), validPool()],
-      nextCursor: "eyJmaXJzdF9zZWVuX2F0IjoiMjAyNi0wNS0wMVQwODozMDowMFoifQ",
-    });
+  it("accepts a first page with more data after", () => {
+    const parsed = PoolsPageSchema.parse(validPoolsPage());
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.prevCursor).toBeNull();
+    expect(parsed.nextCursor).not.toBeNull();
+    expect(parsed.isFirst).toBe(true);
+    expect(parsed.isLast).toBe(false);
+  });
+
+  it("accepts a middle page with neighbours on both sides", () => {
+    const parsed = PoolsPageSchema.parse(
+      validPoolsPage({
+        items: [validPool(), validPool()],
+        nextCursor: "next-x",
+        prevCursor: "prev-y",
+        isFirst: false,
+        isLast: false,
+      }),
+    );
     expect(parsed.items).toHaveLength(2);
-    expect(parsed.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(parsed.nextCursor).toBe("next-x");
+    expect(parsed.prevCursor).toBe("prev-y");
+    expect(parsed.isFirst).toBe(false);
+    expect(parsed.isLast).toBe(false);
+  });
+
+  it("accepts a terminal page (last page reached)", () => {
+    const parsed = PoolsPageSchema.parse(
+      validPoolsPage({
+        nextCursor: null,
+        prevCursor: "prev-z",
+        isFirst: false,
+        isLast: true,
+      }),
+    );
+    expect(parsed.nextCursor).toBeNull();
+    expect(parsed.isLast).toBe(true);
   });
 
   it("rejects items that fail individual validation", () => {
     expect(() =>
-      PoolsPageSchema.parse({
-        items: [{ ...validPool(), poolAddress: "" }],
-        nextCursor: null,
-      }),
+      PoolsPageSchema.parse(
+        validPoolsPage({
+          items: [{ ...validPool(), poolAddress: "" }],
+        }),
+      ),
     ).toThrow();
   });
 
   it("rejects a missing nextCursor field", () => {
-    expect(() => PoolsPageSchema.parse({ items: [] })).toThrow();
+    const { nextCursor, ...rest } = validPoolsPage();
+    void nextCursor;
+    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects a missing prevCursor field", () => {
+    const { prevCursor, ...rest } = validPoolsPage();
+    void prevCursor;
+    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects a missing isFirst flag", () => {
+    const { isFirst, ...rest } = validPoolsPage();
+    void isFirst;
+    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects a missing isLast flag", () => {
+    const { isLast, ...rest } = validPoolsPage();
+    void isLast;
+    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+  });
+
+  it("rejects a non-boolean isFirst flag", () => {
+    expect(() =>
+      PoolsPageSchema.parse(validPoolsPage({ isFirst: "true" as unknown as boolean })),
+    ).toThrow();
   });
 });
 

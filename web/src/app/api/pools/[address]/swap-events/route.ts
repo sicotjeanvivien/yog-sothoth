@@ -2,7 +2,7 @@
  * BFF route handler for `GET /api/pools/{address}/swaps`.
  *
  * Validates the path parameter as a base58 pubkey, the query
- * parameters (`cursor`, `limit`), then delegates to `fetchPoolSwaps`.
+ * parameters (`cursor`, `limit`), then delegates to `fetchPoolSwapEvents`.
  * Same pattern as `/api/pools`: bounds are shared via
  * `POOL_SWAPS_QUERY_BOUNDS`, transport / upstream failures funnel
  * through `mapApiClientErrorToHttp`.
@@ -15,8 +15,8 @@ import { mapApiClientErrorToHttp } from "@/lib/api/http-mapping";
 import { isValidPoolAddress } from "@/lib/api/pool";
 import {
   POOL_SWAPS_QUERY_BOUNDS,
-  fetchPoolSwaps,
-  type FetchPoolSwapsParams,
+  fetchPoolSwapEvents,
+  type FetchPoolSwapEventsParams,
 } from "@/lib/api/swap-events";
 
 export const dynamic = "force-dynamic";
@@ -87,12 +87,12 @@ export async function GET(
   }
 
   try {
-    const fetchParams: FetchPoolSwapsParams = { limit: parsed.limit };
+    const fetchParams: FetchPoolSwapEventsParams = { limit: parsed.limit };
     if (parsed.cursor !== undefined) {
       fetchParams.cursor = parsed.cursor;
     }
 
-    const page = await fetchPoolSwaps(address, fetchParams);
+    const page = await fetchPoolSwapEvents(address, fetchParams);
     return NextResponse.json(page);
   } catch (err) {
     if (err instanceof ApiClientError) {

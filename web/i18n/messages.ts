@@ -24,27 +24,29 @@ import type { Locale } from "./routing";
 
 // ── EN bundle ─────────────────────────────────────────────────────────
 
-import enBrand from "../messages/en/brand.json";
-import enHome from "../messages/en/home.json";
-import enDashboard from "../messages/en/dashboard.json";
-import enMarketing from "../messages/en/marketing.json";
-import enAbout from "../messages/en/about.json";
-import enPrivacy from "../messages/en/privacy.json";
-import enLegalNotice from "../messages/en/legal-notice.json";
-import enTerms from "../messages/en/terms.json";
-import enSupportUs from "../messages/en/support-us.json"
+import enBrand from "@/messages/en/brand.json";
+import enHome from "@/messages/en/home.json";
+import enDashboard from "@/messages/en/dashboard.json";
+import enMarketing from "@/messages/en/marketing.json";
+import enAbout from "@/messages/en/about.json";
+import enPrivacy from "@/messages/en/privacy.json";
+import enLegalNotice from "@/messages/en/legal-notice.json";
+import enTerms from "@/messages/en/terms.json";
+import enSupportUs from "@/messages/en/support-us.json";
+import enCommon from "@/messages/en/common.json";
 
 // ── FR bundle ─────────────────────────────────────────────────────────
 
-import frBrand from "../messages/fr/brand.json";
-import frHome from "../messages/fr/home.json";
-import frDashboard from "../messages/fr/dashboard.json";
-import frMarketing from "../messages/fr/marketing.json";
-import frAbout from "../messages/fr/about.json";
-import frPrivacy from "../messages/fr/privacy.json";
-import frLegalNotice from "../messages/fr/legal-notice.json";
-import frTerms from "../messages/fr/terms.json";
-import frSupportUs from "../messages/fr/support-us.json"
+import frBrand from "@/messages/fr/brand.json";
+import frHome from "@/messages/fr/home.json";
+import frDashboard from "@/messages/fr/dashboard.json";
+import frMarketing from "@/messages/fr/marketing.json";
+import frAbout from "@/messages/fr/about.json";
+import frPrivacy from "@/messages/fr/privacy.json";
+import frLegalNotice from "@/messages/fr/legal-notice.json";
+import frTerms from "@/messages/fr/terms.json";
+import frSupportUs from "@/messages/fr/support-us.json";
+import frCommon from "@/messages/fr/common.json";
 
 
 
@@ -65,6 +67,7 @@ const BUNDLES: Record<Locale, AbstractIntlMessages> = {
     ...enLegalNotice,
     ...enTerms,
     ...enSupportUs,
+    ...enCommon,
   },
   fr: {
     ...frBrand,
@@ -76,6 +79,7 @@ const BUNDLES: Record<Locale, AbstractIntlMessages> = {
     ...frLegalNotice,
     ...frTerms,
     ...frSupportUs,
+    ...frCommon,
   },
 };
 

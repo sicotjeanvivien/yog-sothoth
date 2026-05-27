@@ -1,0 +1,11 @@
+{
+  "Common": {
+    "Pagination": {
+      "ariaLabel": "Pagination",
+      "first": "Première page",
+      "previous": "Page précédente",
+      "next": "Page suivante",
+      "last": "Dernière page"
+    }
+  }
+}

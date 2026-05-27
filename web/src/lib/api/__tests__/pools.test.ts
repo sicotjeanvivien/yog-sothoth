@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError } from "../errors";
 import { fetchPools } from "../pools";
 import { __resetServerEnv } from "../../config/server-env.schema";
+import { validPoolsPage } from "./fixtures";
 
 // Configure a deterministic env for the suite. We rebuild the cache by
 // resetting the singleton before each test, after touching process.env.
@@ -42,46 +43,6 @@ function jsonResponse(body: unknown, status: number = 200): Response {
   });
 }
 
-/** Build a representative valid pools page. */
-function validPage(nextCursor: string | null = null) {
-  return {
-    items: [
-      {
-        "poolAddress": "8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie",
-        "protocol": "meteora_damm_v2",
-        "tokenA": {
-          "mint": "So11111111111111111111111111111111111111112",
-          "symbol": "SOL",
-          "name": "Wrapped SOL",
-          "decimals": 9,
-          "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
-          "price": {
-            "usd": "85.819299811880730000",
-            "source": "jupiter",
-            "fetchedAt": "2026-05-25T12:17:17.479657Z"
-          }
-        },
-        "tokenB": {
-          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-          "symbol": "USDC",
-          "name": "USD Coin",
-          "decimals": 6,
-          "logoUri": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
-          "price": {
-            "usd": "0.999668653937465800",
-            "source": "jupiter",
-            "fetchedAt": "2026-05-25T12:17:17.479657Z"
-          }
-        },
-        "tvlUsd": "1332007.7148736200400326721044",
-        "volume24hUsd": "47964.973514780605664520660399",
-        "firstSeenAt": "2026-05-21T10:01:35.084596Z",
-        "lastSeenAt": "2026-05-25T12:14:01.715170Z"
-      },
-    ],
-    nextCursor: nextCursor,
-  };
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // Happy path
@@ -89,7 +50,7 @@ function validPage(nextCursor: string | null = null) {
 
 describe("fetchPools — happy path", () => {
   it("calls yog-api with the default limit and parses the response", async () => {
-    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPage()));
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage({ nextCursor: null })));
     vi.stubGlobal("fetch", fetchSpy);
 
     const page = await fetchPools();
@@ -104,7 +65,7 @@ describe("fetchPools — happy path", () => {
   });
 
   it("forwards a custom limit and cursor", async () => {
-    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPage("abc123")));
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage({ nextCursor: "abc123" })));
     vi.stubGlobal("fetch", fetchSpy);
 
     await fetchPools({ cursor: "abc123", limit: 25 });
@@ -115,13 +76,99 @@ describe("fetchPools — happy path", () => {
   });
 
   it("drops an empty cursor instead of sending an empty string", async () => {
-    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPage()));
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
     vi.stubGlobal("fetch", fetchSpy);
 
     await fetchPools({ cursor: "" });
 
     const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
     expect(calledUrl.searchParams.has("cursor")).toBe(false);
+  });
+
+  it("exposes the full pagination metadata to the caller", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          validPoolsPage({
+            nextCursor: "next-x",
+            prevCursor: "prev-y",
+            isFirst: false,
+            isLast: false,
+          }),
+        ),
+      ),
+    );
+
+    const page = await fetchPools();
+
+    expect(page.nextCursor).toBe("next-x");
+    expect(page.prevCursor).toBe("prev-y");
+    expect(page.isFirst).toBe(false);
+    expect(page.isLast).toBe(false);
+  });
+});
+
+describe("fetchPools — bidirectional pagination params", () => {
+  it("forwards dir=next", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ cursor: "abc", dir: "next" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.get("dir")).toBe("next");
+    expect(calledUrl.searchParams.get("cursor")).toBe("abc");
+  });
+
+  it("forwards dir=prev", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ cursor: "abc", dir: "prev" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.get("dir")).toBe("prev");
+  });
+
+  it("forwards position=first", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ position: "first" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.get("position")).toBe("first");
+  });
+
+  it("forwards position=last", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ position: "last" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.get("position")).toBe("last");
+  });
+
+  it("omits dir when not specified", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ cursor: "abc" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.has("dir")).toBe(false);
+  });
+
+  it("omits position when not specified", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools();
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.has("position")).toBe(false);
   });
 });
 

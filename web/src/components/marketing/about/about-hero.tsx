@@ -16,7 +16,6 @@
  * The hero image lives at `web/public/hero-visual.png`.
  */
 
-import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { GithubIcon } from "@/components/shared/icon";
 import { CtaLink } from "@/components/shared/cta-link";

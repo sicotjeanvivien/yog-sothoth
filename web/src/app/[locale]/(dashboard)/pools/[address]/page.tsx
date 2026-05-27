@@ -10,7 +10,7 @@
  *                                pools observed only through
  *                                Claim* events. null on any error
  *                                or 404, the KPI block adapts.
- *   - `fetchPoolSwaps`        → non-critical. Block-level error
+ *   - `fetchPoolSwapEvents`        → non-critical. Block-level error
  *                                substituted in place of the table.
  *   - `fetchPoolLiquidityEvents` → same as swaps.
  *
@@ -20,6 +20,12 @@
  * carry their own outer `<section>` with padding, so the page
  * only wraps the error fallback in a matching section to keep
  * layout consistent on failure.
+ *
+ * Pagination state for the two paginated blocks (swaps, liquidity)
+ * lives in the URL behind namespaced params: `swapsCursor` / `swapsDir`
+ * / `swapsPosition` and `liqCursor` / `liqDir` / `liqPosition`.
+ * The two paginations are fully independent — paginating swaps
+ * preserves the liquidity cursor and vice versa.
  */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
@@ -28,9 +34,13 @@ import type { Metadata } from "next";
 
 import { fetchPool } from "@/lib/api/pool";
 import { fetchPoolLatestState } from "@/lib/api/latest-state";
-import { fetchPoolSwaps } from "@/lib/api/swap-events";
+import { fetchPoolSwapEvents } from "@/lib/api/swap-events";
 import { fetchPoolLiquidityEvents } from "@/lib/api/liquidity-events";
 import { safeFetch, safeFetchOrNotFound } from "@/lib/api/safe-fetch";
+import type {
+  PageDir,
+  PagePosition,
+} from "@/lib/api/type/pagination";
 
 import { PoolDetailHeader } from "@/components/dashboard/pool-detail/pool-detail-header";
 import { PoolDetailKpis } from "@/components/dashboard/pool-detail/pool-detail-kpis";
@@ -39,11 +49,13 @@ import { PoolDetailSwaps } from "@/components/dashboard/pool-detail/pool-detail-
 import { PoolDetailLiquidity } from "@/components/dashboard/pool-detail/pool-detail-liquidity";
 import { BlockError } from "@/components/dashboard/block-error";
 import { PageError } from "@/components/dashboard/page-error";
+import { Pagination } from "@/components/shared/pagination";
 
 // ── Page metadata ─────────────────────────────────────────────────────
 
 type PoolDetailPageProps = {
   params: Promise<{ locale: string; address: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export async function generateMetadata({
@@ -66,9 +78,37 @@ export async function generateMetadata({
   };
 }
 
+// ── Search params parsing ─────────────────────────────────────────────
+//
+// Accept anything and narrow defensively. Out-of-vocabulary values
+// (e.g. `swapsDir=sideways`) are silently dropped rather than
+// rejected — the URL is user-editable and a stale link shouldn't
+// crash the page.
+
+function parseDir(raw: string | string[] | undefined): PageDir | undefined {
+  if (raw === "next" || raw === "prev") return raw;
+  return undefined;
+}
+
+function parsePosition(
+  raw: string | string[] | undefined,
+): PagePosition | undefined {
+  if (raw === "first" || raw === "last") return raw;
+  return undefined;
+}
+
+function parseCursor(raw: string | string[] | undefined): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  if (raw.length === 0) return undefined;
+  return raw;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────
 
-export default async function PoolDetailPage({ params }: PoolDetailPageProps) {
+export default async function PoolDetailPage({
+  params,
+  searchParams,
+}: PoolDetailPageProps) {
   const { locale, address } = await params;
   setRequestLocale(locale);
 
@@ -88,23 +128,39 @@ export default async function PoolDetailPage({ params }: PoolDetailPageProps) {
 
   const pool = poolOutcome.data;
 
+  // Pagination params, one namespace per block.
+  const sp = await searchParams;
+  const swapsPagination = {
+    cursor: parseCursor(sp['swapsCursor']),
+    dir: parseDir(sp['swapsDir']),
+    position: parsePosition(sp['swapsPosition']),
+    limit: 20,
+  };
+  const liqPagination = {
+    cursor: parseCursor(sp['liqCursor']),
+    dir: parseDir(sp['liqDir']),
+    position: parsePosition(sp['liqPosition']),
+    limit: 20,
+  };
+
   // Three non-critical fetches in parallel. Failures are isolated
   // and rendered as block-level error states.
   const [stateOutcome, swapsOutcome, liquidityOutcome] = await Promise.all([
     safeFetchOrNotFound(() => fetchPoolLatestState(address)),
-    safeFetch(() => fetchPoolSwaps(address, { limit: 20 })),
-    safeFetch(() => fetchPoolLiquidityEvents(address, { limit: 20 })),
+    safeFetch(() => fetchPoolSwapEvents(address, swapsPagination)),
+    safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination)),
   ]);
 
   // "Latest state" 404 is expected (pool observed via Claim*
   // events only) — collapse it to null so the KPI block adapts.
   // Any other error also collapses to null: TVL + 24h volume stay
   // visible, the composition card simply doesn't render.
-  const state =
-    stateOutcome.kind === "ok" ? stateOutcome.data : null;
+  const state = stateOutcome.kind === "ok" ? stateOutcome.data : null;
 
   const tSwaps = await getTranslations("Dashboard.PoolDetail.swaps");
   const tLiquidity = await getTranslations("Dashboard.PoolDetail.liquidity");
+
+  const basePath = `/pools/${address}`;
 
   return (
     <div className="pb-16">
@@ -115,11 +171,21 @@ export default async function PoolDetailPage({ params }: PoolDetailPageProps) {
       <PoolDetailInfo pool={pool} locale={locale} />
 
       {swapsOutcome.kind === "ok" ? (
-        <PoolDetailSwaps
-          pool={pool}
-          swaps={swapsOutcome.data.items}
-          locale={locale}
-        />
+        <>
+          <PoolDetailSwaps
+            pool={pool}
+            swaps={swapsOutcome.data.items}
+            locale={locale}
+          />
+          {swapsOutcome.data.items.length > 0 && (
+            <Pagination
+              page={swapsOutcome.data}
+              searchParams={sp}
+              paramPrefix="swaps"
+              basePath={basePath}
+            />
+          )}
+        </>
       ) : (
         <section className="mt-6 px-6 lg:px-10">
           <BlockError title={tSwaps("title")} kind={swapsOutcome.reason} />
@@ -127,11 +193,21 @@ export default async function PoolDetailPage({ params }: PoolDetailPageProps) {
       )}
 
       {liquidityOutcome.kind === "ok" ? (
-        <PoolDetailLiquidity
-          pool={pool}
-          events={liquidityOutcome.data.items}
-          locale={locale}
-        />
+        <>
+          <PoolDetailLiquidity
+            pool={pool}
+            events={liquidityOutcome.data.items}
+            locale={locale}
+          />
+          {liquidityOutcome.data.items.length > 0 && (
+            <Pagination
+              page={liquidityOutcome.data}
+              searchParams={sp}
+              paramPrefix="liq"
+              basePath={basePath}
+            />
+          )}
+        </>
       ) : (
         <section className="mt-6 px-6 lg:px-10">
           <BlockError
