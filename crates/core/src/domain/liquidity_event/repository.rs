@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
+use crate::{PageDirection, PagePosition};
 use crate::{RepositoryResult, domain::LiquidityEvent};
 
 /// Cursor identifying a position in the canonical liquidity-event
@@ -33,6 +34,8 @@ pub trait LiquidityEventRepository: Send + Sync {
         &self,
         pool_address: &Pubkey,
         cursor: Option<LiquidityCursor>,
+        direction: PageDirection,
+        position: Option<PagePosition>,
         limit: i64,
     ) -> RepositoryResult<Page<LiquidityEvent>>;
 }

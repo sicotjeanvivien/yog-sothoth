@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
+use crate::{PageDirection, PagePosition};
 use crate::{RepositoryResult, domain::SwapEvent};
 
 /// Cursor identifying a position in the canonical swap-event ordering
@@ -36,6 +37,8 @@ pub trait SwapEventRepository: Send + Sync {
         &self,
         pool_address: &Pubkey,
         cursor: Option<SwapCursor>,
+        direction: PageDirection,
+        position: Option<PagePosition>,
         limit: i64,
     ) -> RepositoryResult<Page<SwapEvent>>;
 }

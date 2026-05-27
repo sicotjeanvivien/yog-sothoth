@@ -1,0 +1,121 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT pool_address, protocol, signature,\n                       token_a_mint, token_b_mint,\n                       trade_direction, amount_a, amount_b,\n                       reserve_a_after, reserve_b_after, next_sqrt_price,\n                       claiming_fee, protocol_fee, compounding_fee, referral_fee,\n                       fee_token_is_a,\n                       timestamp\n                FROM swap_events\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp < $2\n                      OR (timestamp = $2 AND signature > $3)\n                  )\n                ORDER BY timestamp DESC, signature ASC\n                LIMIT $4\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_a_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "token_b_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "trade_direction",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "amount_a",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "amount_b",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "reserve_a_after",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "reserve_b_after",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "next_sqrt_price",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 11,
+        "name": "claiming_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "protocol_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "compounding_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 14,
+        "name": "referral_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "fee_token_is_a",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "timestamp",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9d2842736a880d1c6b7262eeb10b3c7fb3c166d7d7cd106811cf6820eb1eb0da"
+}

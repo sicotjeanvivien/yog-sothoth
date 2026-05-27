@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, protocol, signature,\n                   token_a_mint, token_b_mint,\n                   liquidity_event_kind, amount_a, amount_b, liquidity_delta,\n                   reserve_a_after, reserve_b_after,\n                   position, owner,\n                   timestamp\n            FROM liquidity_events\n            WHERE pool_address = $1\n              AND (\n                  $2::TIMESTAMPTZ IS NULL\n                  OR timestamp < $2\n                  OR (timestamp = $2 AND signature > $3)\n              )\n            ORDER BY timestamp DESC, signature ASC\n            LIMIT $4\n            ",
+  "query": "\n                SELECT pool_address, protocol, signature,\n                       token_a_mint, token_b_mint,\n                       liquidity_event_kind, amount_a, amount_b, liquidity_delta,\n                       reserve_a_after, reserve_b_after,\n                       position, owner,\n                       timestamp\n                FROM liquidity_events\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp > $2\n                      OR (timestamp = $2 AND signature < $3)\n                  )\n                ORDER BY timestamp ASC, signature DESC\n                LIMIT $4\n                ",
   "describe": {
     "columns": [
       {
@@ -99,5 +99,5 @@
       false
     ]
   },
-  "hash": "a185f890fd48f2d677140dd8d3383e218d12ffda0fbbe4393ee50a857da3f24e"
+  "hash": "e924e1a7e672579a450e98ad4525704857ab1de031d2f3eec826f0678a2a94b8"
 }

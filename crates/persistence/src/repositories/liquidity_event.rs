@@ -5,12 +5,16 @@ use std::str::FromStr;
 use yog_core::{
     RepositoryError, RepositoryResult,
     domain::{LiquidityCursor, LiquidityEvent, LiquidityEventRepository, Protocol},
-    tools::{Cursor, Page},
+    tools::{Cursor, Page, PageDirection, PagePosition},
 };
 
-use crate::repository_utils::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64,
-    convert_u128_to_bigdecimal, map_sqlx_error, parse_string_to_liquidity_event_kind,
+use crate::{
+    repositories::tool::{QueryMode, resolve_query_mode},
+    repository_utils::{
+        convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
+        convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error,
+        parse_string_to_liquidity_event_kind,
+    },
 };
 
 /// Maximum number of rows returned in a single page, regardless of the
@@ -73,53 +77,61 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         Ok(())
     }
 
-    /// Paginate liquidity events for a pool by keyset on
-    /// `(timestamp, signature)`.
+    /// Paginate liquidity events for a pool with bidirectional navigation.
     ///
-    /// Ordering is `timestamp DESC, signature ASC`. The cursor points to
-    /// the last item of the previous page; the WHERE clause uses
-    /// lexicographic-style comparison to fetch the strictly-next slice.
+    /// See `PgSwapEventRepository::find_by_pool_paginated` for the full
+    /// design notes — the implementation is structurally identical, only
+    /// the row mapping differs.
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
         cursor: Option<LiquidityCursor>,
+        direction: PageDirection,
+        position: Option<PagePosition>,
         limit: i64,
     ) -> RepositoryResult<Page<LiquidityEvent>> {
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
+        let fetch_limit = effective_limit + 1;
 
-        let (cursor_timestamp, cursor_signature) = match cursor {
+        let mode = resolve_query_mode(position, &cursor, direction);
+
+        let active_cursor = if position.is_some() { None } else { cursor };
+        let had_cursor = active_cursor.is_some();
+        let (cursor_timestamp, cursor_signature) = match active_cursor {
             Some(c) => (Some(c.timestamp), Some(c.signature)),
             None => (None, None),
         };
 
-        let rows = sqlx::query!(
-            r#"
-            SELECT pool_address, protocol, signature,
-                   token_a_mint, token_b_mint,
-                   liquidity_event_kind, amount_a, amount_b, liquidity_delta,
-                   reserve_a_after, reserve_b_after,
-                   position, owner,
-                   timestamp
-            FROM liquidity_events
-            WHERE pool_address = $1
-              AND (
-                  $2::TIMESTAMPTZ IS NULL
-                  OR timestamp < $2
-                  OR (timestamp = $2 AND signature > $3)
-              )
-            ORDER BY timestamp DESC, signature ASC
-            LIMIT $4
-            "#,
-            pool_address.to_string(),
-            cursor_timestamp,
-            cursor_signature,
-            effective_limit,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        let events = rows
+        // Two SQL paths — one per traversal mode. Each branch maps
+        // to Vec<LiquidityEvent> in place; see PgSwapEventRepository
+        // for the rationale (sqlx Record types are not mergeable).
+        let mut events: Vec<LiquidityEvent> = match mode {
+            QueryMode::Forward => sqlx::query!(
+                r#"
+                SELECT pool_address, protocol, signature,
+                       token_a_mint, token_b_mint,
+                       liquidity_event_kind, amount_a, amount_b, liquidity_delta,
+                       reserve_a_after, reserve_b_after,
+                       position, owner,
+                       timestamp
+                FROM liquidity_events
+                WHERE pool_address = $1
+                  AND (
+                      $2::TIMESTAMPTZ IS NULL
+                      OR timestamp < $2
+                      OR (timestamp = $2 AND signature > $3)
+                  )
+                ORDER BY timestamp DESC, signature ASC
+                LIMIT $4
+                "#,
+                pool_address.to_string(),
+                cursor_timestamp,
+                cursor_signature,
+                fetch_limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
             .into_iter()
             .map(|row| {
                 Ok(LiquidityEvent {
@@ -147,13 +159,110 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
                     owner: convert_string_to_pubkey(row.owner, "owner")?,
                 })
             })
-            .collect::<RepositoryResult<Vec<_>>>()?;
+            .collect::<RepositoryResult<Vec<_>>>()?,
 
-        Ok(Page::build(events, effective_limit as usize, |last| {
-            Cursor::Liquidity(LiquidityCursor {
-                timestamp: last.timestamp,
-                signature: last.signature.clone(),
+            QueryMode::Backward => sqlx::query!(
+                r#"
+                SELECT pool_address, protocol, signature,
+                       token_a_mint, token_b_mint,
+                       liquidity_event_kind, amount_a, amount_b, liquidity_delta,
+                       reserve_a_after, reserve_b_after,
+                       position, owner,
+                       timestamp
+                FROM liquidity_events
+                WHERE pool_address = $1
+                  AND (
+                      $2::TIMESTAMPTZ IS NULL
+                      OR timestamp > $2
+                      OR (timestamp = $2 AND signature < $3)
+                  )
+                ORDER BY timestamp ASC, signature DESC
+                LIMIT $4
+                "#,
+                pool_address.to_string(),
+                cursor_timestamp,
+                cursor_signature,
+                fetch_limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?
+            .into_iter()
+            .map(|row| {
+                Ok(LiquidityEvent {
+                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
+                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
+                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
+                    })?,
+                    signature: row.signature,
+                    timestamp: row.timestamp,
+                    token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
+                    token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
+                    liquidity_event_kind: parse_string_to_liquidity_event_kind(
+                        row.liquidity_event_kind,
+                        "liquidity_event_kind",
+                    )?,
+                    amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
+                    amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
+                    liquidity_delta: convert_bigdecimal_to_u128(
+                        row.liquidity_delta,
+                        "liquidity_delta",
+                    )?,
+                    reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
+                    reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
+                    position: convert_string_to_pubkey(row.position, "position")?,
+                    owner: convert_string_to_pubkey(row.owner, "owner")?,
+                })
             })
-        }))
+            .collect::<RepositoryResult<Vec<_>>>()?,
+        };
+
+        let has_more = events.len() as i64 > effective_limit;
+        if has_more {
+            events.truncate(effective_limit as usize);
+        }
+
+        if matches!(mode, QueryMode::Backward) {
+            events.reverse();
+        }
+
+        let (is_first, is_last) = match mode {
+            QueryMode::Forward => (!had_cursor, !has_more),
+            QueryMode::Backward => (!has_more, !had_cursor),
+        };
+
+        let (prev_cursor, next_cursor) = if events.is_empty() {
+            (None, None)
+        } else {
+            let prev = if is_first {
+                None
+            } else {
+                events.first().map(|e| {
+                    Cursor::Liquidity(LiquidityCursor {
+                        timestamp: e.timestamp,
+                        signature: e.signature.clone(),
+                    })
+                })
+            };
+            let next = if is_last {
+                None
+            } else {
+                events.last().map(|e| {
+                    Cursor::Liquidity(LiquidityCursor {
+                        timestamp: e.timestamp,
+                        signature: e.signature.clone(),
+                    })
+                })
+            };
+            (prev, next)
+        };
+
+        Ok(Page {
+            items: events,
+            next_cursor,
+            prev_cursor,
+            is_first,
+            is_last,
+        })
     }
 }

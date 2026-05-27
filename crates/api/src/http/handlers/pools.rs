@@ -6,6 +6,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use yog_core::{
+    PageDirection, PagePosition,
     domain::{LiquidityCursor, Pool, PoolAnalytics, PoolCursor, SwapCursor},
     tools::Cursor,
 };
@@ -31,15 +32,62 @@ const MAX_LIMIT: i64 = 200;
 // Query parameters
 // ===========================================================================
 
-/// Shared query shape for every paginated endpoint in this module.
+/// Query parameters for the bidirectional pagination of `/api/pools`.
 ///
-/// A missing `limit` defaults to `DEFAULT_LIMIT`; an out-of-range value
-/// is rejected at the handler with a 400.
+/// - `cursor` + `dir` cooperate: traverse forward or backward from
+///   the cursor's position.
+/// - `position` jumps to a list boundary (`first` or `last`),
+///   ignoring any cursor.
+/// - The three params are validated for mutual exclusivity at the
+///   handler entry: `position` must not be combined with `cursor`
+///   or `dir`.
 #[derive(Debug, Deserialize)]
 pub(crate) struct PageQuery {
     cursor: Option<String>,
+    #[serde(default)]
+    dir: PageDirectionParam,
+    position: Option<PagePositionParam>,
     #[serde(default = "default_limit")]
     limit: i64,
+}
+
+/// Wire-level enum for the `dir` query parameter.
+///
+/// Kept separate from the domain `PageDirection` so the wire format
+/// (lowercase strings) is not coupled to the domain enum's
+/// representation. Serde renames the variants to match what the
+/// client will send.
+#[derive(Debug, Default, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PageDirectionParam {
+    #[default]
+    Next,
+    Prev,
+}
+
+impl From<PageDirectionParam> for PageDirection {
+    fn from(value: PageDirectionParam) -> Self {
+        match value {
+            PageDirectionParam::Next => PageDirection::Next,
+            PageDirectionParam::Prev => PageDirection::Prev,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PagePositionParam {
+    First,
+    Last,
+}
+
+impl From<PagePositionParam> for PagePosition {
+    fn from(value: PagePositionParam) -> Self {
+        match value {
+            PagePositionParam::First => PagePosition::First,
+            PagePositionParam::Last => PagePosition::Last,
+        }
+    }
 }
 
 fn default_limit() -> i64 {
@@ -80,15 +128,18 @@ pub(crate) async fn list_pools(
     Query(query): Query<PageQuery>,
 ) -> Result<Json<PageResponse<PoolResponse>>, ApiError> {
     validate_limit(query.limit)?;
+    validate_pagination_query(&query)?;
 
     let cursor = match query.cursor.as_deref() {
         Some(raw) if !raw.is_empty() => Some(decode_pool_cursor(raw)?),
         _ => None,
     };
+    let direction: PageDirection = query.dir.into();
+    let position: Option<PagePosition> = query.position.map(Into::into);
 
     let page = state
         .pool_repository
-        .find_paginated(cursor, query.limit)
+        .find_paginated(cursor, direction, position, query.limit)
         .await?;
 
     // Compute analytics for the whole page in one round-trip, then
@@ -110,8 +161,15 @@ pub(crate) async fn list_pools(
     }
 
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
+    let prev_cursor = encode_cursor_opt(page.prev_cursor.as_ref())?;
 
-    Ok(Json(PageResponse { items, next_cursor }))
+    Ok(Json(PageResponse {
+        items,
+        next_cursor,
+        prev_cursor,
+        is_first: page.is_first,
+        is_last: page.is_last,
+    }))
 }
 
 // ===========================================================================
@@ -185,10 +243,14 @@ pub(crate) async fn get_pool_latest_state(
 // GET /api/pools/{address}/swaps
 // ===========================================================================
 
-/// `GET /api/pools/{address}/swaps[?cursor=...&limit=...]`
+/// `GET /api/pools/{address}/swaps[?cursor=...&dir=...&position=...&limit=...]`
 ///
 /// Paginated feed of swap events for a single pool, ordered
-/// `timestamp DESC, signature ASC`.
+/// `timestamp DESC, signature ASC` (newest first).
+///
+/// Supports the same bidirectional pagination model as `/api/pools`:
+/// `cursor` + `dir` to traverse, `position=first|last` to jump to a
+/// list boundary.
 pub(crate) async fn list_pool_swaps(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -196,15 +258,18 @@ pub(crate) async fn list_pool_swaps(
 ) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
     let pool_address = parse_pool_address(&address)?;
     validate_limit(query.limit)?;
+    validate_pagination_query(&query)?;
 
     let cursor = match query.cursor.as_deref() {
         Some(raw) if !raw.is_empty() => Some(decode_swap_cursor(raw)?),
         _ => None,
     };
+    let direction: PageDirection = query.dir.into();
+    let position: Option<PagePosition> = query.position.map(Into::into);
 
     let page = state
         .swap_event_repository
-        .find_by_pool_paginated(&pool_address, cursor, query.limit)
+        .find_by_pool_paginated(&pool_address, cursor, direction, position, query.limit)
         .await?;
 
     let items: Vec<SwapEventResponse> = page
@@ -213,18 +278,27 @@ pub(crate) async fn list_pool_swaps(
         .map(SwapEventResponse::from)
         .collect();
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
+    let prev_cursor = encode_cursor_opt(page.prev_cursor.as_ref())?;
 
-    Ok(Json(PageResponse { items, next_cursor }))
+    Ok(Json(PageResponse {
+        items,
+        next_cursor,
+        prev_cursor,
+        is_first: page.is_first,
+        is_last: page.is_last,
+    }))
 }
 
 // ===========================================================================
 // GET /api/pools/{address}/liquidity-events
 // ===========================================================================
 
-/// `GET /api/pools/{address}/liquidity-events[?cursor=...&limit=...]`
+/// `GET /api/pools/{address}/liquidity-events[?cursor=...&dir=...&position=...&limit=...]`
 ///
-/// Paginated feed of liquidity events (add / remove) for a single pool,
-/// ordered `timestamp DESC, signature ASC`.
+/// Paginated feed of liquidity events (add / remove) for a single
+/// pool, ordered `timestamp DESC, signature ASC` (newest first).
+///
+/// Supports the same bidirectional pagination model as `/api/pools`.
 pub(crate) async fn list_pool_liquidity_events(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -232,15 +306,18 @@ pub(crate) async fn list_pool_liquidity_events(
 ) -> Result<Json<PageResponse<LiquidityEventResponse>>, ApiError> {
     let pool_address = parse_pool_address(&address)?;
     validate_limit(query.limit)?;
+    validate_pagination_query(&query)?;
 
     let cursor = match query.cursor.as_deref() {
         Some(raw) if !raw.is_empty() => Some(decode_liquidity_cursor(raw)?),
         _ => None,
     };
+    let direction: PageDirection = query.dir.into();
+    let position: Option<PagePosition> = query.position.map(Into::into);
 
     let page = state
         .liquidity_event_repository
-        .find_by_pool_paginated(&pool_address, cursor, query.limit)
+        .find_by_pool_paginated(&pool_address, cursor, direction, position, query.limit)
         .await?;
 
     let items: Vec<LiquidityEventResponse> = page
@@ -249,8 +326,15 @@ pub(crate) async fn list_pool_liquidity_events(
         .map(LiquidityEventResponse::from)
         .collect();
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
+    let prev_cursor = encode_cursor_opt(page.prev_cursor.as_ref())?;
 
-    Ok(Json(PageResponse { items, next_cursor }))
+    Ok(Json(PageResponse {
+        items,
+        next_cursor,
+        prev_cursor,
+        is_first: page.is_first,
+        is_last: page.is_last,
+    }))
 }
 
 // ===========================================================================
@@ -393,4 +477,18 @@ async fn enrich_pool(
         EmbeddedTokenResponse::from_sources(pool.token_b_mint, token_b_meta, token_b_price);
 
     Ok(PoolResponse::new(pool, token_a, token_b, analytics))
+}
+
+/// Validate that pagination parameters are not combined in
+/// contradictory ways: `position` must be the only directive.
+fn validate_pagination_query(query: &PageQuery) -> Result<(), ApiError> {
+    if query.position.is_some() && query.cursor.is_some() {
+        return Err(ApiError::BadRequest(
+            "`position` cannot be combined with `cursor`".to_string(),
+        ));
+    }
+    // `dir` has a serde default of `Next`, so we can't distinguish
+    // "client sent dir=next" from "client sent nothing". We only
+    // reject the unambiguous conflict (cursor + position).
+    Ok(())
 }

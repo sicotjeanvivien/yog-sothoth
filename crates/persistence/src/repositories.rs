@@ -9,6 +9,7 @@ pub mod reward_claim;
 pub mod swap_event;
 pub mod token_metadata;
 pub mod token_price;
+pub(super) mod tool;
 pub mod watched_pool;
 
 pub use event_freshness::PgEventFreshnessRepository;

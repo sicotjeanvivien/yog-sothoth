@@ -5,11 +5,14 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    Cursor, Page, RepositoryError, RepositoryResult,
+    Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{Pool, PoolCursor, PoolRepository, Protocol},
 };
 
-use crate::repository_utils::{convert_string_to_pubkey, map_sqlx_error};
+use crate::{
+    repositories::tool::{QueryMode, resolve_query_mode},
+    repository_utils::{convert_string_to_pubkey, map_sqlx_error},
+};
 
 pub struct PgPoolRepository {
     pool: PgPool,
@@ -93,40 +96,65 @@ impl PoolRepository for PgPoolRepository {
         .transpose()
     }
 
+    /// Paginate pools with bidirectional navigation.
+    ///
+    /// Natural display order is `first_seen_at DESC, pool_address ASC`
+    /// (newest pools first, deterministic tie-break on address).
+    ///
+    /// - `cursor` + `direction` cooperate: traverse forward (older
+    ///   pools) or backward (newer pools) from the cursor position.
+    /// - `position` jumps to a list boundary (`First` = newest pools,
+    ///   `Last` = oldest pools), ignoring any cursor.
+    /// - Peek N+1 detects whether more rows exist on the queried side
+    ///   in a single query.
+    ///
+    /// Backward queries (Prev / Last) reverse the SQL ORDER BY and the
+    /// resulting vector before returning, so the caller always observes
+    /// the page in display order.
     async fn find_paginated(
         &self,
         cursor: Option<PoolCursor>,
+        direction: PageDirection,
+        position: Option<PagePosition>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
-        // Defensive clamp: callers should validate, but the repo is the
-        // last line of defense before the DB.
-        let limit = limit.clamp(1, MAX_PAGE_SIZE);
+        let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
+        let fetch_limit = effective_limit + 1; // peek N+1
 
-        // Two SQL paths to keep both branches simple and statically
-        // checkable by sqlx. Each branch maps its rows to `Vec<Pool>`
-        // before merging back, because `sqlx::query!` generates a
-        // distinct anonymous struct per call site — the `match` arms
-        // would otherwise have incompatible types.
-        //
-        // Cursor predicate: lexicographic ordering on
-        // (first_seen_at DESC, pool_address ASC):
-        //
-        //   first_seen_at  <  cursor.first_seen_at
-        //   OR (first_seen_at = cursor.first_seen_at
-        //       AND pool_address > cursor.pool_address)
-        //
-        // The strict inequality on the first column is what makes the
-        // pagination skip the cursor row itself.
-        let pools: Vec<Pool> = match cursor {
-            None => sqlx::query!(
+        // Resolve effective query mode. `position` overrides
+        // `cursor` + `direction`; the handler enforces mutual
+        // exclusivity but the repo defends in depth.
+        let mode = resolve_query_mode(position, &cursor, direction);
+
+        // Cursor is meaningful only relative to a position; ignored
+        // when jumping to a boundary.
+        let active_cursor = if position.is_some() { None } else { cursor };
+        let had_cursor = active_cursor.is_some();
+        let (cursor_first_seen_at, cursor_pool_address) = match active_cursor {
+            Some(c) => (Some(c.first_seen_at), Some(c.pool_address.to_string())),
+            None => (None, None),
+        };
+
+        // Two SQL paths — one per traversal mode. Each maps to
+        // Vec<Pool> in its own branch because sqlx generates a
+        // distinct anonymous Record struct per query! invocation,
+        // which prevents merging the rows in a single Vec after
+        // the match.
+        let mut pools: Vec<Pool> = match mode {
+            QueryMode::Forward => sqlx::query!(
                 r#"
-            SELECT pool_address, protocol, token_a_mint, token_b_mint,
-                   first_seen_at, last_seen_at
-            FROM pools
-            ORDER BY first_seen_at DESC, pool_address ASC
-            LIMIT $1
-            "#,
-                limit
+                SELECT pool_address, protocol, token_a_mint, token_b_mint,
+                       first_seen_at, last_seen_at
+                FROM pools
+                WHERE $1::TIMESTAMPTZ IS NULL
+                   OR first_seen_at < $1
+                   OR (first_seen_at = $1 AND pool_address > $2)
+                ORDER BY first_seen_at DESC, pool_address ASC
+                LIMIT $3
+                "#,
+                cursor_first_seen_at,
+                cursor_pool_address,
+                fetch_limit,
             )
             .fetch_all(&self.pool)
             .await
@@ -144,19 +172,20 @@ impl PoolRepository for PgPoolRepository {
             })
             .collect::<Result<_, _>>()?,
 
-            Some(cursor) => sqlx::query!(
+            QueryMode::Backward => sqlx::query!(
                 r#"
-            SELECT pool_address, protocol, token_a_mint, token_b_mint,
-                   first_seen_at, last_seen_at
-            FROM pools
-            WHERE first_seen_at < $1
-               OR (first_seen_at = $1 AND pool_address > $2)
-            ORDER BY first_seen_at DESC, pool_address ASC
-            LIMIT $3
-            "#,
-                cursor.first_seen_at,
-                cursor.pool_address.to_string(),
-                limit
+                SELECT pool_address, protocol, token_a_mint, token_b_mint,
+                       first_seen_at, last_seen_at
+                FROM pools
+                WHERE $1::TIMESTAMPTZ IS NULL
+                   OR first_seen_at > $1
+                   OR (first_seen_at = $1 AND pool_address < $2)
+                ORDER BY first_seen_at ASC, pool_address DESC
+                LIMIT $3
+                "#,
+                cursor_first_seen_at,
+                cursor_pool_address,
+                fetch_limit,
             )
             .fetch_all(&self.pool)
             .await
@@ -175,21 +204,64 @@ impl PoolRepository for PgPoolRepository {
             .collect::<Result<_, _>>()?,
         };
 
-        // Build the next cursor only when the page is full.
-        let next_cursor = if pools.len() as i64 >= limit {
-            pools.last().map(|p| {
-                Cursor::Pool(PoolCursor {
-                    first_seen_at: p.first_seen_at,
-                    pool_address: p.pool_address,
-                })
-            })
+        // Peek N+1 outcome.
+        let has_more = pools.len() as i64 > effective_limit;
+        if has_more {
+            pools.truncate(effective_limit as usize);
+        }
+
+        // Restore natural display order for backward queries.
+        if matches!(mode, QueryMode::Backward) {
+            pools.reverse();
+        }
+
+        // Compute boundary flags.
+        //
+        // Forward query: has_more means more rows exist further
+        // (older pools) → is_last = false. is_first inferred from
+        // "no cursor" → we started at the natural top.
+        //
+        // Backward query: has_more means more rows exist on the
+        // newer side → is_first = false. is_last inferred from
+        // "no cursor" → we jumped to the bottom (or were already there).
+        let (is_first, is_last) = match mode {
+            QueryMode::Forward => (!had_cursor, !has_more),
+            QueryMode::Backward => (!has_more, !had_cursor),
+        };
+
+        // Empty page: both boundaries simultaneously.
+        let (prev_cursor, next_cursor) = if pools.is_empty() {
+            (None, None)
         } else {
-            None
+            let prev = if is_first {
+                None
+            } else {
+                pools.first().map(|p| {
+                    Cursor::Pool(PoolCursor {
+                        first_seen_at: p.first_seen_at,
+                        pool_address: p.pool_address,
+                    })
+                })
+            };
+            let next = if is_last {
+                None
+            } else {
+                pools.last().map(|p| {
+                    Cursor::Pool(PoolCursor {
+                        first_seen_at: p.first_seen_at,
+                        pool_address: p.pool_address,
+                    })
+                })
+            };
+            (prev, next)
         };
 
         Ok(Page {
             items: pools,
             next_cursor,
+            prev_cursor,
+            is_first,
+            is_last,
         })
     }
 }

@@ -1,23 +1,33 @@
 //! Pagination primitives shared across domains.
 //!
 //! Repositories return `Page<T>` objects carrying the items of the
-//! current page along with an opaque cursor used to fetch the next one.
-//! Cursors themselves are domain-specific (each domain knows what its
-//! ordering key looks like) and live next to their repository trait.
+//! current page along with cursors and boundary flags used to drive
+//! Previous / Next / First / Last navigation. Cursors themselves are
+//! domain-specific (each domain knows what its ordering key looks
+//! like) and live next to their repository trait.
 
-/// A page of results plus the cursor needed to fetch the next page.
+/// A page of results with bidirectional navigation hints.
 ///
-/// `next_cursor` is `None` when the current page is the last one — i.e.
-/// the repository returned strictly fewer items than the requested limit.
-/// When the page is exactly full, `next_cursor` is `Some` even if no
-/// further items exist; the next call will then return an empty page
-/// with `next_cursor = None`. This is intentional: detecting "no more
-/// data" reliably from a full page would require an extra row probe,
-/// which is not worth the cost.
+/// `prev_cursor` is the key of the FIRST item of the current page
+/// (used to navigate backward); `next_cursor` is the key of the LAST
+/// item (used to navigate forward). Either may be `None` when the
+/// page sits at the corresponding boundary of the list.
+///
+/// `is_first` / `is_last` are explicit flags rather than inferred
+/// from cursor nullity: a single-page result set has both cursors
+/// `None` AND both flags `true`, which the client needs to
+/// distinguish from "we're on one boundary but the other end exists".
+///
+/// All four hints are expected to be computed by the repository in a
+/// single query (typically via a "peek N+1" trick): no follow-up
+/// round-trip is required to render the navigation.
 #[derive(Debug, Clone)]
 pub struct Page<T> {
     pub items: Vec<T>,
     pub next_cursor: Option<Cursor>,
+    pub prev_cursor: Option<Cursor>,
+    pub is_first: bool,
+    pub is_last: bool,
 }
 
 /// Discriminated cursor type.
@@ -39,29 +49,19 @@ pub enum Cursor {
 
 impl<T> Page<T> {
     /// Convenience constructor for the empty terminal page.
+    ///
+    /// An empty page sits at both boundaries simultaneously, hence
+    /// `is_first = is_last = true` and both cursors `None`. This is
+    /// the natural state when a cursor points past the end of the
+    /// list, or when the underlying table is empty.
     pub fn empty() -> Self {
         Self {
             items: Vec::new(),
             next_cursor: None,
+            prev_cursor: None,
+            is_first: true,
+            is_last: true,
         }
-    }
-
-    /// Build a page from raw items, computing whether a next cursor is
-    /// warranted from the requested limit.
-    ///
-    /// `cursor_extractor` is called on the last item only when the page
-    /// is full, deferring the cursor construction to the caller (which
-    /// knows the domain-specific cursor shape).
-    pub fn build<F>(items: Vec<T>, requested_limit: usize, cursor_extractor: F) -> Self
-    where
-        F: FnOnce(&T) -> Cursor,
-    {
-        let next_cursor = if items.len() >= requested_limit {
-            items.last().map(cursor_extractor)
-        } else {
-            None
-        };
-        Self { items, next_cursor }
     }
 }
 
@@ -71,16 +71,11 @@ impl<T> Page<T> {
 /// order is `first_seen_at DESC`); `Prev` moves back toward more
 /// recent items. A cursor is required for both — without one, see
 /// `PagePosition` instead.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PageDirection {
+    #[default]
     Next,
     Prev,
-}
-
-impl Default for PageDirection {
-    fn default() -> Self {
-        PageDirection::Next
-    }
 }
 
 /// Absolute jump to a boundary of the list, ignoring any cursor.
