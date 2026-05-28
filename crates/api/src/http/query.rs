@@ -81,12 +81,12 @@ pub(crate) fn validate_pagination_query(query: &PageQuery) -> Result<(), ApiErro
 
 /// Reject an over-long search term (cheap DoS guard on `ILIKE`).
 pub(crate) fn validate_search(q: Option<&str>) -> Result<(), ApiError> {
-    if let Some(raw) = q {
-        if raw.chars().count() > MAX_SEARCH_LEN {
-            return Err(ApiError::BadRequest(format!(
-                "`q` must be at most {MAX_SEARCH_LEN} characters"
-            )));
-        }
+    if let Some(raw) = q
+        && raw.chars().count() > MAX_SEARCH_LEN
+    {
+        return Err(ApiError::BadRequest(format!(
+            "`q` must be at most {MAX_SEARCH_LEN} characters"
+        )));
     }
     Ok(())
 }

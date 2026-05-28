@@ -56,8 +56,8 @@ pub(crate) fn make_metadata(mint: Pubkey, symbol: &str) -> TokenMetadata {
         decimals: 9,
         logo_uri: None,
         metadata_source: "Helius".to_string(),
-        fetched_at: DateTime::from_timestamp_nanos(1662921288_000_000_000),
-        last_refresh_at: DateTime::from_timestamp_nanos(1662921288_000_000_000),
+        fetched_at: DateTime::from_timestamp_nanos(61_864_918_973_511),
+        last_refresh_at: DateTime::from_timestamp_nanos(61_864_918_973_511),
     }
 }
 
