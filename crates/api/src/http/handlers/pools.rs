@@ -62,7 +62,7 @@ pub(crate) async fn list_pools(
         cursor,
         direction: query.dir.into(),
         position: query.position.map(Into::into),
-        sort: sort,
+        sort,
         search: normalize_search(query.q),
         limit: query.limit,
     };

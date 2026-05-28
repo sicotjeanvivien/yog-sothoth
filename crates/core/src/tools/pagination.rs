@@ -105,18 +105,13 @@ pub enum PoolSortColumn {
 ///
 /// The default (`FirstSeenDesc`) preserves the historical ordering
 /// (newest pools first) used before sorting was configurable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PoolSort {
     FirstSeenAsc,
+    #[default]
     FirstSeenDesc,
     LastSeenAsc,
     LastSeenDesc,
-}
-
-impl Default for PoolSort {
-    fn default() -> Self {
-        PoolSort::FirstSeenDesc
-    }
 }
 
 impl PoolSort {

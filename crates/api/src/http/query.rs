@@ -122,13 +122,14 @@ pub(crate) fn validate_cursor_sort_consistency(
     cursor: Option<&PoolCursor>,
     sort: PoolSort,
 ) -> Result<(), ApiError> {
-    if let Some(c) = cursor {
-        if c.sort_column != sort.column() {
-            return Err(ApiError::BadRequest(
-                "cursor does not match the requested sort".to_string(),
-            ));
-        }
+    if let Some(c) = cursor
+        && c.sort_column != sort.column()
+    {
+        return Err(ApiError::BadRequest(
+            "cursor does not match the requested sort".to_string(),
+        ));
     }
+
     Ok(())
 }
 
