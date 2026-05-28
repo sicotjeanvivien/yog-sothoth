@@ -100,7 +100,6 @@ jobs:
             -p yog-context \
             -p yog-indexer \
             -p yog-persistence \
-            --all-features
 
   # ─────────────────────────────────────────────────────────────────
   # test-integration — DB-backed tests behind the integration-tests
@@ -131,8 +130,6 @@ jobs:
       # the runtime privilege model. sqlx::test uses this URL to spin
       # up an isolated database per test.
       DATABASE_URL: postgresql://yog:yog@localhost:5432/yog_sothoth
-      # Integration tests need a live DB, not the offline cache.
-      SQLX_OFFLINE: "false"
 
     steps:
       - uses: actions/checkout@v4
