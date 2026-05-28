@@ -3,7 +3,7 @@
 //! strings into clean inputs, with no business logic.
 
 use serde::Deserialize;
-use yog_core::{PageDirection, PagePosition};
+use yog_core::{PageDirection, PagePosition, PoolSort, domain::PoolCursor};
 
 use crate::http::error::ApiError;
 
@@ -17,6 +17,8 @@ pub(crate) struct PageQuery {
     #[serde(default)]
     pub(crate) dir: PageDirectionParam,
     pub(crate) position: Option<PagePositionParam>,
+    #[serde(default)]
+    pub(crate) sort: PoolSortParam,
     pub(crate) q: Option<String>,
     #[serde(default = "default_limit")]
     pub(crate) limit: i64,
@@ -59,6 +61,27 @@ impl From<PagePositionParam> for PagePosition {
     }
 }
 
+#[derive(Debug, Default, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PoolSortParam {
+    #[default]
+    FirstSeenDesc,
+    FirstSeenAsc,
+    LastSeenDesc,
+    LastSeenAsc,
+}
+
+impl From<PoolSortParam> for PoolSort {
+    fn from(value: PoolSortParam) -> Self {
+        match value {
+            PoolSortParam::FirstSeenDesc => PoolSort::FirstSeenDesc,
+            PoolSortParam::FirstSeenAsc => PoolSort::FirstSeenAsc,
+            PoolSortParam::LastSeenDesc => PoolSort::LastSeenDesc,
+            PoolSortParam::LastSeenAsc => PoolSort::LastSeenAsc,
+        }
+    }
+}
+
 /// Validate the `limit` query param against the accepted range.
 pub(crate) fn validate_limit(limit: i64) -> Result<(), ApiError> {
     if !(1..=MAX_LIMIT).contains(&limit) {
@@ -87,6 +110,24 @@ pub(crate) fn validate_search(q: Option<&str>) -> Result<(), ApiError> {
         return Err(ApiError::BadRequest(format!(
             "`q` must be at most {MAX_SEARCH_LEN} characters"
         )));
+    }
+    Ok(())
+}
+
+/// Reject a cursor whose embedded sort column disagrees with the
+/// active `sort` param. This catches a tampered or stale URL where a
+/// cursor built under one sort is replayed under another — which
+/// would otherwise produce a silently wrong page.
+pub(crate) fn validate_cursor_sort_consistency(
+    cursor: Option<&PoolCursor>,
+    sort: PoolSort,
+) -> Result<(), ApiError> {
+    if let Some(c) = cursor {
+        if c.sort_column != sort.column() {
+            return Err(ApiError::BadRequest(
+                "cursor does not match the requested sort".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -135,6 +176,7 @@ mod tests {
         let q = PageQuery {
             cursor: Some("x".into()),
             dir: PageDirectionParam::Next,
+            sort: PoolSortParam::FirstSeenAsc,
             position: Some(PagePositionParam::Last),
             q: None,
             limit: 50,
@@ -147,6 +189,7 @@ mod tests {
         let q = PageQuery {
             cursor: Some("x".into()),
             dir: PageDirectionParam::Next,
+            sort: PoolSortParam::FirstSeenAsc,
             position: None,
             q: None,
             limit: 50,

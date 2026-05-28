@@ -87,3 +87,50 @@ pub enum PagePosition {
     First,
     Last,
 }
+
+/// Column on which the pool listing can be sorted.
+///
+/// Restricted to materialized columns of the `pools` table — values
+/// that exist at rest and can anchor a stable keyset cursor. Derived
+/// metrics (TVL, 24h volume) are computed at read time and cannot be
+/// sorted on until they are materialized into a dedicated analytics
+/// table; they are deliberately absent here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolSortColumn {
+    FirstSeen,
+    LastSeen,
+}
+
+/// Sort order for the pool listing: a column plus a direction.
+///
+/// The default (`FirstSeenDesc`) preserves the historical ordering
+/// (newest pools first) used before sorting was configurable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolSort {
+    FirstSeenAsc,
+    FirstSeenDesc,
+    LastSeenAsc,
+    LastSeenDesc,
+}
+
+impl Default for PoolSort {
+    fn default() -> Self {
+        PoolSort::FirstSeenDesc
+    }
+}
+
+impl PoolSort {
+    /// The column this sort operates on. Used to stamp the cursor so
+    /// it can be validated against the active sort on the next page.
+    pub fn column(self) -> PoolSortColumn {
+        match self {
+            PoolSort::FirstSeenAsc | PoolSort::FirstSeenDesc => PoolSortColumn::FirstSeen,
+            PoolSort::LastSeenAsc | PoolSort::LastSeenDesc => PoolSortColumn::LastSeen,
+        }
+    }
+
+    /// Whether the natural (forward) direction is ascending.
+    pub fn is_ascending(self) -> bool {
+        matches!(self, PoolSort::FirstSeenAsc | PoolSort::LastSeenAsc)
+    }
+}

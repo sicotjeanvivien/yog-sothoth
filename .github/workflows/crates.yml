@@ -102,6 +102,66 @@ jobs:
             -p yog-persistence \
             --all-features
 
+  # ─────────────────────────────────────────────────────────────────
+  # test-integration — DB-backed tests behind the integration-tests
+  # feature. Kept separate from `test` so the pure unit tests stay
+  # fast and DB-free; only this job pays the Postgres setup cost.
+  # ─────────────────────────────────────────────────────────────────
+  test-integration:
+    name: Test (integration, DB)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: yog
+          POSTGRES_PASSWORD: yog
+          POSTGRES_DB: yog_sothoth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yog -d yog_sothoth"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Admin connection: these tests exercise query correctness, not
+      # the runtime privilege model. sqlx::test uses this URL to spin
+      # up an isolated database per test.
+      DATABASE_URL: postgresql://yog:yog@localhost:5432/yog_sothoth
+      # Integration tests need a live DB, not the offline cache.
+      SQLX_OFFLINE: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # The migrations 001 emit GRANTs against the runtime roles;
+      # create them as bare login roles so the migration applies.
+      # sqlx::test re-runs migrations per test database, so the roles
+      # must exist at the cluster level (they do — roles are cluster-
+      # wide, not per-database).
+      - name: Pre-create runtime roles
+        env:
+          PGPASSWORD: yog
+        run: |
+          psql -h localhost -U yog -d yog_sothoth -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE yog_migrate;
+          CREATE ROLE yog_indexer;
+          CREATE ROLE yog_api;
+          CREATE ROLE yog_context;
+          SQL
+
+      - name: Run integration tests
+        run: |
+          cargo test \
+            -p yog-persistence \
+            --features integration-tests \
+            -- --include-ignored
+
   audit:
     name: Audit
     runs-on: ubuntu-latest
@@ -113,7 +173,7 @@ jobs:
       - uses: actions-rust-lang/audit@v1
         name: Audit Rust Dependencies
         
-# ─────────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────
   # sqlx-check — verify .sqlx/ snapshots are up to date
   # ─────────────────────────────────────────────────────────────────
   # The `query!()` macros are validated at compile time against the
@@ -202,7 +262,6 @@ jobs:
           cd crates/persistence
           cargo sqlx prepare --check -- --tests
  
-
   # ── Disabled until v0.3 (WASM activation deferred) ────────────────
   #
   # clippy-wasm:
@@ -226,3 +285,5 @@ jobs:
   #         targets: wasm32-unknown-unknown
   #     - uses: Swatinem/rust-cache@v2
   #     - run: cargo build -p yog-wasm --target wasm32-unknown-unknown --release
+
+  

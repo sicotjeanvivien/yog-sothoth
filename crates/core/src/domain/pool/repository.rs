@@ -3,17 +3,24 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
-use crate::{PageDirection, PagePosition};
+use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
 use crate::{RepositoryResult, domain::Pool};
 
-/// Cursor identifying a position in the canonical pool ordering
-/// (`first_seen_at DESC`, `pool_address ASC` as tiebreaker).
+/// Cursor identifying a position in a pool ordering.
 ///
-/// A cursor points to the *last item of the current page*; the next
-/// page contains items strictly after this position in the ordering.
+/// Carries the sort column it was built for, so the API layer can
+/// reject a cursor that is replayed under a different sort (a
+/// tampered or stale URL) rather than silently producing an
+/// inconsistent page.
+///
+/// `sort_value` is the value of the active sort column for the anchor
+/// row; `pool_address` is the unique tiebreaker. Both `first_seen_at`
+/// and `last_seen_at` are `TIMESTAMPTZ`, so a single `DateTime<Utc>`
+/// covers every supported column.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCursor {
-    pub first_seen_at: DateTime<Utc>,
+    pub sort_column: PoolSortColumn,
+    pub sort_value: DateTime<Utc>,
     pub pool_address: Pubkey,
 }
 
@@ -59,6 +66,8 @@ pub trait PoolRepository: Send + Sync {
     ///   used (newest first).
     /// - `position` jumps to a list boundary (`First` or `Last`),
     ///   ignoring any cursor. Mutually exclusive with `cursor`.
+    /// - `PoolSort`
+    /// - `search`
     /// - `limit` is the maximum number of items returned; the
     ///   repository clamps it defensively.
     ///
@@ -70,6 +79,7 @@ pub trait PoolRepository: Send + Sync {
         cursor: Option<PoolCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
+        sort: PoolSort,
         search: Option<String>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>>;

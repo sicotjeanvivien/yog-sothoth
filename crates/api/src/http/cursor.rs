@@ -10,19 +10,19 @@
 // Decoding is variant-specific (the handler knows which kind it expects
 // for its endpoint); encoding goes through a single `encode_cursor`
 // dispatch on the Cursor enum.
+use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use yog_core::{
-    Cursor,
+    Cursor, PoolSortColumn,
     domain::{LiquidityCursor, PoolCursor, SwapCursor},
 };
 
-use crate::http::error::ApiError;
-
 #[derive(Debug, Serialize, Deserialize)]
 struct PoolCursorWire {
-    first_seen_at: String,
+    sort_column: String,
+    sort_value: String,
     pool_address: String,
 }
 
@@ -39,7 +39,8 @@ pub(crate) fn encode_cursor_opt(cursor: Option<&Cursor>) -> Result<Option<String
 pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
     match cursor {
         Cursor::Pool(c) => encode_b64_json(&PoolCursorWire {
-            first_seen_at: c.first_seen_at.to_rfc3339(),
+            sort_column: sort_column_to_wire(c.sort_column).to_string(),
+            sort_value: c.sort_value.to_rfc3339(),
             pool_address: c.pool_address.to_string(),
         }),
         Cursor::Swap(c) => encode_b64_json(&EventCursorWire {
@@ -75,11 +76,13 @@ pub(crate) fn parse_rfc3339(raw: &str) -> Result<chrono::DateTime<chrono::Utc>, 
 
 pub(crate) fn decode_pool_cursor(raw: &str) -> Result<PoolCursor, ApiError> {
     let wire: PoolCursorWire = decode_b64_json(raw)?;
-    let first_seen_at = parse_rfc3339(&wire.first_seen_at)?;
+    let sort_column = sort_column_from_wire(&wire.sort_column)?;
+    let sort_value = parse_rfc3339(&wire.sort_value)?;
     let pool_address = solana_pubkey::Pubkey::from_str(&wire.pool_address)
         .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool address".to_string()))?;
     Ok(PoolCursor {
-        first_seen_at,
+        sort_column,
+        sort_value,
         pool_address,
     })
 }
@@ -98,6 +101,23 @@ pub(crate) fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiE
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature: wire.signature,
     })
+}
+
+fn sort_column_to_wire(c: PoolSortColumn) -> &'static str {
+    match c {
+        PoolSortColumn::FirstSeen => "first_seen",
+        PoolSortColumn::LastSeen => "last_seen",
+    }
+}
+
+fn sort_column_from_wire(raw: &str) -> Result<PoolSortColumn, ApiError> {
+    match raw {
+        "first_seen" => Ok(PoolSortColumn::FirstSeen),
+        "last_seen" => Ok(PoolSortColumn::LastSeen),
+        _ => Err(ApiError::BadRequest(
+            "invalid cursor: unknown sort column".to_string(),
+        )),
+    }
 }
 
 #[cfg(test)]

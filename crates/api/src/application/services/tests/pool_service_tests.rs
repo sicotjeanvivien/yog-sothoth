@@ -10,8 +10,8 @@ use crate::testing::{
     make_pool, make_price, pk,
 };
 
-use yog_core::PageDirection;
 use yog_core::domain::PoolAnalytics;
+use yog_core::{PageDirection, PoolSort};
 
 fn service(
     pool_repo: PoolRepoOnce,
@@ -32,6 +32,7 @@ fn default_params() -> PoolListParams {
         cursor: None,
         direction: PageDirection::Next,
         position: None,
+        sort: PoolSort::FirstSeenAsc,
         search: None,
         limit: 50,
     }

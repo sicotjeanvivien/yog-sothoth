@@ -1,4 +1,4 @@
-use yog_core::{PageDirection, PagePosition, domain::PoolCursor};
+use yog_core::{PageDirection, PagePosition, PoolSort, domain::PoolCursor};
 
 /// Input parameters for `PoolService::list_pools`.
 ///
@@ -9,8 +9,7 @@ pub(crate) struct PoolListParams {
     pub(crate) cursor: Option<PoolCursor>,
     pub(crate) direction: PageDirection,
     pub(crate) position: Option<PagePosition>,
-    /// Already normalized: trimmed, and `None` if blank. The service
-    /// passes it straight to the repository.
+    pub(crate) sort: PoolSort,
     pub(crate) search: Option<String>,
     pub(crate) limit: i64,
 }

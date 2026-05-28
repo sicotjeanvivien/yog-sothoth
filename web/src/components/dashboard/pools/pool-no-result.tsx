@@ -6,6 +6,8 @@
  * match anything. We echo the query back and offer a way out.
  */
 
+import { CtaLink } from "@/components/shared/cta-link";
+import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 
 export async function PoolsNoResults({ query }: { query: string }) {
@@ -17,6 +19,9 @@ export async function PoolsNoResults({ query }: { query: string }) {
         {t("title", { query })}
       </p>
       <p className="mt-2 text-[14px] text-slate-500">{t("hint")}</p>
+      <div className="my-5">
+        <CtaLink href="/pools" label={t("clearSearch")} />
+      </div>
     </div>
   );
 }

@@ -1,18 +1,19 @@
-use std::str::FromStr;
+mod query;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
+use std::str::FromStr;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
+    Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
     domain::{Pool, PoolCursor, PoolRepository, Protocol},
 };
 
-use crate::{
-    repositories::tool::{QueryMode, resolve_query_mode},
-    repository_utils::{convert_string_to_pubkey, map_sqlx_error},
-};
+use crate::repositories::tool::{QueryMode, resolve_query_mode};
+use crate::repository_utils::{convert_string_to_pubkey, map_sqlx_error};
+
+use query::{PaginatedPoolsQuery, PoolRow, build};
 
 pub struct PgPoolRepository {
     pool: PgPool,
@@ -24,8 +25,6 @@ impl PgPoolRepository {
     }
 }
 
-/// Hard upper bound on page size, regardless of what the caller asks for.
-/// Prevents pathological queries from slipping through API validation.
 const MAX_PAGE_SIZE: i64 = 200;
 
 #[async_trait]
@@ -49,23 +48,17 @@ impl PoolRepository for PgPoolRepository {
         .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
-
         Ok(())
     }
 
     async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()> {
         sqlx::query!(
-            r#"
-            UPDATE pools
-            SET last_seen_at = NOW()
-            WHERE pool_address = $1
-            "#,
+            r#"UPDATE pools SET last_seen_at = NOW() WHERE pool_address = $1"#,
             pool_address.to_string(),
         )
         .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
-
         Ok(())
     }
 
@@ -96,74 +89,45 @@ impl PoolRepository for PgPoolRepository {
         .transpose()
     }
 
-    /// Paginate pools with bidirectional navigation.
-    ///
-    /// Natural display order is `first_seen_at DESC, pool_address ASC`
-    /// (newest pools first, deterministic tie-break on address).
-    ///
-    /// - `cursor` + `direction` cooperate: traverse forward (older
-    ///   pools) or backward (newer pools) from the cursor position.
-    /// - `position` jumps to a list boundary (`First` = newest pools,
-    ///   `Last` = oldest pools), ignoring any cursor.
-    /// - Peek N+1 detects whether more rows exist on the queried side
-    ///   in a single query.
-    ///
-    /// Backward queries (Prev / Last) reverse the SQL ORDER BY and the
-    /// resulting vector before returning, so the caller always observes
-    /// the page in display order.
     async fn find_paginated(
         &self,
         cursor: Option<PoolCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
+        sort: PoolSort,
         search: Option<String>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
-        let fetch_limit = effective_limit + 1; // peek N+1
+        let fetch_limit = effective_limit + 1;
 
         let mode = resolve_query_mode(position, &cursor, direction);
 
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
-        let (cursor_first_seen_at, cursor_pool_address) = match active_cursor {
-            Some(c) => (Some(c.first_seen_at), Some(c.pool_address.to_string())),
+        let (cursor_sort_value, cursor_pool_address) = match active_cursor {
+            Some(c) => (Some(c.sort_value), Some(c.pool_address.to_string())),
             None => (None, None),
         };
 
-        // Two SQL paths — one per traversal mode. The search predicate is
-        // identical in both and injected via `$N::TEXT IS NULL OR ...`,
-        // matching the existing cursor null-handling style. EXISTS is used
-        // rather than a JOIN on token_metadata to avoid row duplication
-        // when both token sides match the query.
-        let mut pools: Vec<Pool> = match mode {
-            QueryMode::Forward => sqlx::query!(
-                r#"
-            SELECT p.pool_address, p.protocol, p.token_a_mint, p.token_b_mint,
-                   p.first_seen_at, p.last_seen_at
-            FROM pools p
-            WHERE ($1::TIMESTAMPTZ IS NULL
-                   OR p.first_seen_at < $1
-                   OR (p.first_seen_at = $1 AND p.pool_address > $2))
-              AND ($4::TEXT IS NULL
-                   OR p.pool_address = $4
-                   OR EXISTS (
-                       SELECT 1 FROM token_metadata tm
-                       WHERE tm.mint IN (p.token_a_mint, p.token_b_mint)
-                         AND (tm.symbol ILIKE '%' || $4 || '%'
-                              OR tm.name ILIKE '%' || $4 || '%')
-                   ))
-            ORDER BY p.first_seen_at DESC, p.pool_address ASC
-            LIMIT $3
-            "#,
-                cursor_first_seen_at,
-                cursor_pool_address,
-                fetch_limit,
-                search,
-            )
+        // Build the dynamic query (ORDER BY + keyset + search) and run
+        // it. Mapping goes through PoolRow (FromRow) then row_to_pool.
+        let mut qb = build(PaginatedPoolsQuery {
+            mode,
+            sort,
+            cursor_sort_value,
+            cursor_pool_address,
+            search,
+            fetch_limit,
+        });
+
+        let rows: Vec<PoolRow> = qb
+            .build_query_as::<PoolRow>()
             .fetch_all(&self.pool)
             .await
-            .map_err(map_sqlx_error)?
+            .map_err(map_sqlx_error)?;
+
+        let mut pools: Vec<Pool> = rows
             .into_iter()
             .map(|r| {
                 row_to_pool(
@@ -175,50 +139,8 @@ impl PoolRepository for PgPoolRepository {
                     r.last_seen_at,
                 )
             })
-            .collect::<Result<_, _>>()?,
+            .collect::<Result<_, _>>()?;
 
-            QueryMode::Backward => sqlx::query!(
-                r#"
-            SELECT p.pool_address, p.protocol, p.token_a_mint, p.token_b_mint,
-                   p.first_seen_at, p.last_seen_at
-            FROM pools p
-            WHERE ($1::TIMESTAMPTZ IS NULL
-                   OR p.first_seen_at > $1
-                   OR (p.first_seen_at = $1 AND p.pool_address < $2))
-              AND ($4::TEXT IS NULL
-                   OR p.pool_address = $4
-                   OR EXISTS (
-                       SELECT 1 FROM token_metadata tm
-                       WHERE tm.mint IN (p.token_a_mint, p.token_b_mint)
-                         AND (tm.symbol ILIKE '%' || $4 || '%'
-                              OR tm.name ILIKE '%' || $4 || '%')
-                   ))
-            ORDER BY p.first_seen_at ASC, p.pool_address DESC
-            LIMIT $3
-            "#,
-                cursor_first_seen_at,
-                cursor_pool_address,
-                fetch_limit,
-                search,
-            )
-            .fetch_all(&self.pool)
-            .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|r| {
-                row_to_pool(
-                    r.pool_address,
-                    r.protocol,
-                    r.token_a_mint,
-                    r.token_b_mint,
-                    r.first_seen_at,
-                    r.last_seen_at,
-                )
-            })
-            .collect::<Result<_, _>>()?,
-        };
-
-        // Peek N+1, reverse for backward, flags, cursors — all unchanged.
         let has_more = pools.len() as i64 > effective_limit;
         if has_more {
             pools.truncate(effective_limit as usize);
@@ -233,28 +155,33 @@ impl PoolRepository for PgPoolRepository {
             QueryMode::Backward => (!has_more, !had_cursor),
         };
 
+        // Cursor construction now stamps the sort column so the next
+        // request can be validated against the active sort.
+        let sort_column = sort.column();
+        let cursor_for = |p: &Pool| -> Cursor {
+            let sort_value = match sort_column {
+                yog_core::PoolSortColumn::FirstSeen => p.first_seen_at,
+                yog_core::PoolSortColumn::LastSeen => p.last_seen_at,
+            };
+            Cursor::Pool(PoolCursor {
+                sort_column,
+                sort_value,
+                pool_address: p.pool_address,
+            })
+        };
+
         let (prev_cursor, next_cursor) = if pools.is_empty() {
             (None, None)
         } else {
             let prev = if is_first {
                 None
             } else {
-                pools.first().map(|p| {
-                    Cursor::Pool(PoolCursor {
-                        first_seen_at: p.first_seen_at,
-                        pool_address: p.pool_address,
-                    })
-                })
+                pools.first().map(cursor_for)
             };
             let next = if is_last {
                 None
             } else {
-                pools.last().map(|p| {
-                    Cursor::Pool(PoolCursor {
-                        first_seen_at: p.first_seen_at,
-                        pool_address: p.pool_address,
-                    })
-                })
+                pools.last().map(cursor_for)
             };
             (prev, next)
         };
@@ -269,22 +196,6 @@ impl PoolRepository for PgPoolRepository {
     }
 }
 
-// ---- Row mapping helpers ---------------------------------------------------
-
-/// Map a database row to a domain `Pool`.
-///
-/// All fields use canonical string representations:
-///   - Pubkeys: base58
-///   - Protocol: snake_case (see `Protocol::as_str`)
-///   - Timestamps: TIMESTAMPTZ (mapped directly to `DateTime<Utc>`)
-///
-/// Decode failures (malformed pubkey, unknown protocol) are surfaced as
-/// `RepositoryError::Integrity` — they indicate either schema corruption
-/// or an out-of-sync migration, never a runtime data issue.
-///
-/// Takes owned `String`s because that is what `sqlx::query!` produces
-/// for `TEXT` columns; passing them by value avoids needless borrows
-/// at every call site.
 fn row_to_pool(
     pool_address: String,
     protocol: String,

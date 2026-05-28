@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
+    Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
     domain::{
         Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCursor, PoolRepository, Protocol,
         TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
@@ -78,7 +78,8 @@ pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> Page
     } else {
         pools.first().map(|p| {
             Cursor::Pool(PoolCursor {
-                first_seen_at: p.first_seen_at,
+                sort_column: yog_core::PoolSortColumn::FirstSeen,
+                sort_value: ts(1_700_000_000),
                 pool_address: p.pool_address,
             })
         })
@@ -88,7 +89,8 @@ pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> Page
     } else {
         pools.last().map(|p| {
             Cursor::Pool(PoolCursor {
-                first_seen_at: p.first_seen_at,
+                sort_column: yog_core::PoolSortColumn::FirstSeen,
+                sort_value: ts(1_700_000_000),
                 pool_address: p.pool_address,
             })
         })
@@ -153,6 +155,7 @@ impl PoolRepository for PoolRepoOnce {
         _cursor: Option<PoolCursor>,
         _direction: PageDirection,
         _position: Option<PagePosition>,
+        _sort: PoolSort,
         _search: Option<String>,
         _limit: i64,
     ) -> RepositoryResult<Page<Pool>> {

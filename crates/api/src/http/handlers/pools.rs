@@ -3,9 +3,8 @@ use axum::{
     extract::{Path, Query, State},
 };
 use std::str::FromStr;
-use yog_core::{PageDirection, PagePosition};
+use yog_core::{PageDirection, PagePosition, PoolSort};
 
-use crate::bootstrap::AppState;
 use crate::http::{
     cursor::{decode_pool_cursor, encode_cursor_opt},
     dto::{PageResponse, PoolResponse},
@@ -21,6 +20,7 @@ use crate::{
         dto::{LiquidityEventResponse, PoolCurrentStateResponse, SwapEventResponse},
     },
 };
+use crate::{bootstrap::AppState, http::query::validate_cursor_sort_consistency};
 
 // ===========================================================================
 // Path parameter parsing
@@ -53,15 +53,19 @@ pub(crate) async fn list_pools(
         Some(raw) if !raw.is_empty() => Some(decode_pool_cursor(raw)?),
         _ => None,
     };
+    let sort: PoolSort = query.sort.into();
+
+    // Option B payoff: reject a cursor built for a different sort.
+    validate_cursor_sort_consistency(cursor.as_ref(), sort)?;
 
     let params = PoolListParams {
         cursor,
         direction: query.dir.into(),
         position: query.position.map(Into::into),
+        sort: sort,
         search: normalize_search(query.q),
         limit: query.limit,
     };
-
     let page = state.pool_service.list_pools(params).await?;
 
     let items: Vec<PoolResponse> = page.items.into_iter().map(PoolResponse::from).collect();

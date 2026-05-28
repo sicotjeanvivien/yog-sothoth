@@ -26,7 +26,8 @@ fn pk(seed: u8) -> Pubkey {
 
 fn pool_cursor() -> PoolCursor {
     PoolCursor {
-        first_seen_at: ts(1_700_000_000),
+        sort_column: yog_core::PoolSortColumn::FirstSeen,
+        sort_value: ts(1_700_000_000),
         pool_address: pk(7),
     }
 }

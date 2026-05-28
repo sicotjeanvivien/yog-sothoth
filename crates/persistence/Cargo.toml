@@ -7,6 +7,12 @@ edition = "2024"
 name = "yog-migrate"
 path = "src/bin/migrate.rs"
 
+[features]
+# Enables DB-backed integration tests (sqlx::test). Off by default so
+# a plain `cargo test` stays fast and DB-free; the CI job
+# `test-integration` turns it on against a real Postgres.
+integration-tests = []
+
 [dependencies]
 # Workspace deps already declared at root
 yog-core = { path = "../core" }

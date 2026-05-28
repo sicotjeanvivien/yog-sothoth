@@ -77,6 +77,7 @@ impl PoolService {
                 params.cursor,
                 params.direction,
                 params.position,
+                params.sort,
                 params.search,
                 params.limit,
             )
