@@ -34,6 +34,7 @@ export type FetchPoolsParams = {
   cursor?: string | undefined;
   dir?: PageDir | undefined;
   position?: PagePosition | undefined;
+  q?: string | undefined;
   limit?: number;
 };
 
@@ -61,6 +62,7 @@ export async function fetchPools(
         params.cursor && params.cursor.length > 0 ? params.cursor : undefined,
       dir: params.dir,
       position: params.position,
+      q: params.q && params.q.length > 0 ? params.q : undefined,
       limit,
     },
     PoolsPageSchema,

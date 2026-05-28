@@ -44,6 +44,16 @@
         "network": "The upstream service is unreachable. Try refreshing the page in a moment.",
         "http": "The upstream service returned an error.",
         "validation": "The upstream service returned an unexpected response."
+      },
+      "search": {
+        "placeholder": "Search by address or token…",
+        "ariaLabel": "Search pools",
+        "clear": "Clear search"
+      },
+      "noResults": {
+        "title": "No pool matches \"{query}\"",
+        "hint": "Check the spelling or try another term.",
+        "clearSearch": "Clear search"
       }
     },
     "PoolDetail": {

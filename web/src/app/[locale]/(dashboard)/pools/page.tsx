@@ -37,6 +37,7 @@ import type {
   PagePosition,
 } from "@/lib/api/type/pagination";
 import type { PoolsPageResponse } from "@/lib/api/schema/page";
+import { PoolsNoResults } from "@/components/dashboard/pools/pool-no-result";
 
 // ── Page metadata ─────────────────────────────────────────────────────
 
@@ -85,6 +86,12 @@ function parseCursor(raw: string | string[] | undefined): string | undefined {
   return raw;
 }
 
+function parseSearch(raw: string | string[] | undefined): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 // ── Fetch result type ────────────────────────────────────────────────
 
 type FetchOutcome =
@@ -95,9 +102,15 @@ async function load(args: {
   cursor: string | undefined;
   dir: PageDir | undefined;
   position: PagePosition | undefined;
+  search: string | undefined;
 }): Promise<FetchOutcome> {
   try {
-    const data = await fetchPools(args);
+    const data = await fetchPools({
+      cursor: args.cursor,
+      dir: args.dir,
+      position: args.position,
+      q: args.search,
+    });
     return { kind: "ok", data };
   } catch (err) {
     if (err instanceof ApiClientError) {
@@ -109,10 +122,7 @@ async function load(args: {
 
 // ── Page ──────────────────────────────────────────────────────────────
 
-export default async function PoolsPage({
-  params,
-  searchParams,
-}: PoolsPageProps) {
+export default async function PoolsPage({ params, searchParams }: PoolsPageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
@@ -120,8 +130,11 @@ export default async function PoolsPage({
   const cursor = parseCursor(sp['cursor']);
   const dir = parseDir(sp['dir']);
   const position = parsePosition(sp['position']);
+  const search = parseSearch(sp['q']);
 
-  const outcome = await load({ cursor, dir, position });
+  const outcome = await load({ cursor, dir, position, search });
+
+  const hasActiveSearch = search !== undefined;
 
   return (
     <div className="pb-16">
@@ -130,15 +143,15 @@ export default async function PoolsPage({
       {outcome.kind === "error" ? (
         <PoolsError kind={outcome.reason} />
       ) : outcome.data.items.length === 0 ? (
-        <PoolsEmpty />
+        hasActiveSearch ? (
+          <PoolsNoResults query={search} />
+        ) : (
+          <PoolsEmpty />
+        )
       ) : (
         <>
           <PoolsTable pools={outcome.data.items} locale={locale} />
-          <Pagination
-            page={outcome.data}
-            searchParams={sp}
-            basePath="/pools"
-          />
+          <Pagination page={outcome.data} searchParams={sp} basePath="/pools" />
         </>
       )}
     </div>

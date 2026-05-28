@@ -44,6 +44,16 @@
         "network": "Le service en amont est injoignable. Essayez de rafraîchir la page dans un instant.",
         "http": "Le service en amont a retourné une erreur.",
         "validation": "Le service en amont a retourné une réponse inattendue."
+      },
+      "search": {
+        "placeholder": "Rechercher par adresse ou token…",
+        "ariaLabel": "Rechercher des pools",
+        "clear": "Effacer la recherche"
+      },
+      "noResults": {
+        "title": "Aucun pool ne correspond à « {query} »",
+        "hint": "Vérifiez l'orthographe ou essayez un autre terme.",
+        "clearSearch": "Effacer la recherche"
       }
     },
     "PoolDetail": {

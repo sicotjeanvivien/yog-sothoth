@@ -9,6 +9,7 @@
  */
 
 import { getTranslations } from "next-intl/server";
+import { PoolsSearch } from "./pools-search";
 
 export async function PoolsHeader() {
   const t = await getTranslations("Dashboard.Pools.page");
@@ -28,8 +29,9 @@ export async function PoolsHeader() {
           </p>
         </div>
 
-        {/* Right slot — reserved for search + filters. Empty in
-            this commit. */}
+        <div className="flex justify-start lg:justify-end">
+          <PoolsSearch />
+        </div>
         <div />
       </div>
     </header>
