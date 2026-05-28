@@ -10,7 +10,7 @@ use yog_persistence::{
     PgSwapEventRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
-use crate::bootstrap::Config;
+use crate::{application::PoolService, bootstrap::Config};
 use anyhow::Context;
 
 /// Application-level dependencies shared across HTTP handlers.
@@ -23,7 +23,8 @@ use anyhow::Context;
 /// on `AppState` after construction.
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub(crate) pool_repository: Arc<dyn PoolRepository>,
+    pub(crate) pool_service: Arc<PoolService>,
+
     pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
     pub(crate) swap_event_repository: Arc<dyn SwapEventRepository>,
     pub(crate) liquidity_event_repository: Arc<dyn LiquidityEventRepository>,
@@ -31,7 +32,6 @@ pub(crate) struct AppState {
     pub(crate) event_freshness_repository: Arc<dyn EventFreshnessRepository>,
     pub(crate) token_metadata_repository: Arc<dyn TokenMetadataRepository>,
     pub(crate) token_price_repository: Arc<dyn TokenPriceRepository>,
-    pub(crate) pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
 }
 
 impl AppState {
@@ -69,8 +69,15 @@ impl AppState {
         let pool_analytics_repository: Arc<dyn PoolAnalyticsRepository> =
             Arc::new(PgPoolAnalyticsRepository::new(db_pool));
 
+        let pool_service = Arc::new(PoolService::new(
+            pool_repository.clone(),
+            pool_analytics_repository.clone(),
+            token_metadata_repository.clone(),
+            token_price_repository.clone(),
+        ));
+
         Ok(Self {
-            pool_repository,
+            pool_service,
             pool_current_state_repository,
             swap_event_repository,
             liquidity_event_repository,
@@ -78,7 +85,6 @@ impl AppState {
             event_freshness_repository,
             token_metadata_repository,
             token_price_repository,
-            pool_analytics_repository,
         })
     }
 }

@@ -2,97 +2,25 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use yog_core::{
-    PageDirection, PagePosition,
-    domain::{LiquidityCursor, Pool, PoolAnalytics, PoolCursor, SwapCursor},
-    tools::Cursor,
-};
+use yog_core::{PageDirection, PagePosition};
 
 use crate::bootstrap::AppState;
 use crate::http::{
-    dto::{
-        EmbeddedTokenResponse, LiquidityEventResponse, PageResponse, PoolCurrentStateResponse,
-        PoolResponse, SwapEventResponse,
-    },
+    cursor::{decode_pool_cursor, encode_cursor_opt},
+    dto::{PageResponse, PoolResponse},
     error::ApiError,
+    query::{
+        PageQuery, normalize_search, validate_limit, validate_pagination_query, validate_search,
+    },
 };
-
-/// Default page size when the client does not specify `limit`.
-const DEFAULT_LIMIT: i64 = 50;
-
-/// Maximum value accepted from the client. The repository clamps to
-/// the same upper bound, but rejecting at the parsing layer gives the
-/// client a clearer 400 instead of silent truncation.
-const MAX_LIMIT: i64 = 200;
-
-// ===========================================================================
-// Query parameters
-// ===========================================================================
-
-/// Query parameters for the bidirectional pagination of `/api/pools`.
-///
-/// - `cursor` + `dir` cooperate: traverse forward or backward from
-///   the cursor's position.
-/// - `position` jumps to a list boundary (`first` or `last`),
-///   ignoring any cursor.
-/// - The three params are validated for mutual exclusivity at the
-///   handler entry: `position` must not be combined with `cursor`
-///   or `dir`.
-#[derive(Debug, Deserialize)]
-pub(crate) struct PageQuery {
-    cursor: Option<String>,
-    #[serde(default)]
-    dir: PageDirectionParam,
-    position: Option<PagePositionParam>,
-    #[serde(default = "default_limit")]
-    limit: i64,
-}
-
-/// Wire-level enum for the `dir` query parameter.
-///
-/// Kept separate from the domain `PageDirection` so the wire format
-/// (lowercase strings) is not coupled to the domain enum's
-/// representation. Serde renames the variants to match what the
-/// client will send.
-#[derive(Debug, Default, Deserialize, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum PageDirectionParam {
-    #[default]
-    Next,
-    Prev,
-}
-
-impl From<PageDirectionParam> for PageDirection {
-    fn from(value: PageDirectionParam) -> Self {
-        match value {
-            PageDirectionParam::Next => PageDirection::Next,
-            PageDirectionParam::Prev => PageDirection::Prev,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum PagePositionParam {
-    First,
-    Last,
-}
-
-impl From<PagePositionParam> for PagePosition {
-    fn from(value: PagePositionParam) -> Self {
-        match value {
-            PagePositionParam::First => PagePosition::First,
-            PagePositionParam::Last => PagePosition::Last,
-        }
-    }
-}
-
-fn default_limit() -> i64 {
-    DEFAULT_LIMIT
-}
+use crate::{
+    application::PoolListParams,
+    http::{
+        cursor::{decode_liquidity_cursor, decode_swap_cursor},
+        dto::{LiquidityEventResponse, PoolCurrentStateResponse, SwapEventResponse},
+    },
+};
 
 // ===========================================================================
 // Path parameter parsing
@@ -102,16 +30,6 @@ fn default_limit() -> i64 {
 fn parse_pool_address(raw: &str) -> Result<solana_pubkey::Pubkey, ApiError> {
     solana_pubkey::Pubkey::from_str(raw)
         .map_err(|_| ApiError::BadRequest(format!("invalid pool address: {raw}")))
-}
-
-/// Validate the `limit` query param.
-fn validate_limit(limit: i64) -> Result<(), ApiError> {
-    if !(1..=MAX_LIMIT).contains(&limit) {
-        return Err(ApiError::BadRequest(format!(
-            "`limit` must be between 1 and {MAX_LIMIT}, got {limit}"
-        )));
-    }
-    Ok(())
 }
 
 // ===========================================================================
@@ -129,37 +47,24 @@ pub(crate) async fn list_pools(
 ) -> Result<Json<PageResponse<PoolResponse>>, ApiError> {
     validate_limit(query.limit)?;
     validate_pagination_query(&query)?;
+    validate_search(query.q.as_deref())?;
 
     let cursor = match query.cursor.as_deref() {
         Some(raw) if !raw.is_empty() => Some(decode_pool_cursor(raw)?),
         _ => None,
     };
-    let direction: PageDirection = query.dir.into();
-    let position: Option<PagePosition> = query.position.map(Into::into);
 
-    let page = state
-        .pool_repository
-        .find_paginated(cursor, direction, position, query.limit)
-        .await?;
+    let params = PoolListParams {
+        cursor,
+        direction: query.dir.into(),
+        position: query.position.map(Into::into),
+        search: normalize_search(query.q),
+        limit: query.limit,
+    };
 
-    // Compute analytics for the whole page in one round-trip, then
-    // dispatch each pool's analytics during enrichment. Pools absent
-    // from the map (no current state, no swap, etc.) fall back to
-    // `PoolAnalytics::empty()`.
-    let addresses: Vec<solana_pubkey::Pubkey> = page.items.iter().map(|p| p.pool_address).collect();
-    let mut analytics = state
-        .pool_analytics_repository
-        .batch_compute(&addresses)
-        .await?;
+    let page = state.pool_service.list_pools(params).await?;
 
-    let mut items: Vec<PoolResponse> = Vec::with_capacity(page.items.len());
-    for pool in page.items {
-        let pool_analytics = analytics
-            .remove(&pool.pool_address)
-            .unwrap_or_else(PoolAnalytics::empty);
-        items.push(enrich_pool(&state, pool, pool_analytics).await?);
-    }
-
+    let items: Vec<PoolResponse> = page.items.into_iter().map(PoolResponse::from).collect();
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
     let prev_cursor = encode_cursor_opt(page.prev_cursor.as_ref())?;
 
@@ -186,23 +91,13 @@ pub(crate) async fn get_pool(
 ) -> Result<Json<PoolResponse>, ApiError> {
     let pool_address = parse_pool_address(&address)?;
 
-    let pool = state
-        .pool_repository
-        .find_by_address(&pool_address)
+    let enriched = state
+        .pool_service
+        .get_pool(&pool_address)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("pool not found: {address}")))?;
 
-    // Reuse the batch API with a single element — analytics for a
-    // single pool doesn't justify a dedicated trait method.
-    let mut analytics_map = state
-        .pool_analytics_repository
-        .batch_compute(&[pool_address])
-        .await?;
-    let analytics = analytics_map
-        .remove(&pool_address)
-        .unwrap_or_else(PoolAnalytics::empty);
-
-    Ok(Json(enrich_pool(&state, pool, analytics).await?))
+    Ok(Json(PoolResponse::from(enriched)))
 }
 
 // ===========================================================================
@@ -335,160 +230,4 @@ pub(crate) async fn list_pool_liquidity_events(
         is_first: page.is_first,
         is_last: page.is_last,
     }))
-}
-
-// ===========================================================================
-// Cursor wire format
-// ===========================================================================
-//
-// Each cursor variant has its own wire shape so the encoded blob is
-// self-describing — a SwapCursor can't be mis-decoded as a PoolCursor
-// because the JSON structure won't match. The encoded blob is
-// base64(url-safe, no-pad) over a JSON object.
-//
-// Decoding is variant-specific (the handler knows which kind it expects
-// for its endpoint); encoding goes through a single `encode_cursor`
-// dispatch on the Cursor enum.
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PoolCursorWire {
-    first_seen_at: String,
-    pool_address: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EventCursorWire {
-    timestamp: String,
-    signature: String,
-}
-
-fn encode_cursor_opt(cursor: Option<&Cursor>) -> Result<Option<String>, ApiError> {
-    cursor.map(encode_cursor).transpose()
-}
-
-fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
-    match cursor {
-        Cursor::Pool(c) => encode_b64_json(&PoolCursorWire {
-            first_seen_at: c.first_seen_at.to_rfc3339(),
-            pool_address: c.pool_address.to_string(),
-        }),
-        Cursor::Swap(c) => encode_b64_json(&EventCursorWire {
-            timestamp: c.timestamp.to_rfc3339(),
-            signature: c.signature.clone(),
-        }),
-        Cursor::Liquidity(c) => encode_b64_json(&EventCursorWire {
-            timestamp: c.timestamp.to_rfc3339(),
-            signature: c.signature.clone(),
-        }),
-    }
-}
-
-fn encode_b64_json<T: Serialize>(value: &T) -> Result<String, ApiError> {
-    let json = serde_json::to_vec(value)
-        .map_err(|e| ApiError::Internal(format!("failed to encode cursor: {e}")))?;
-    Ok(URL_SAFE_NO_PAD.encode(json))
-}
-
-fn decode_b64_json<T: for<'de> Deserialize<'de>>(raw: &str) -> Result<T, ApiError> {
-    let bytes = URL_SAFE_NO_PAD
-        .decode(raw)
-        .map_err(|_| ApiError::BadRequest("invalid cursor: not valid base64".to_string()))?;
-    serde_json::from_slice(&bytes)
-        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed payload".to_string()))
-}
-
-fn parse_rfc3339(raw: &str) -> Result<chrono::DateTime<chrono::Utc>, ApiError> {
-    chrono::DateTime::parse_from_rfc3339(raw)
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed timestamp".to_string()))
-}
-
-fn decode_pool_cursor(raw: &str) -> Result<PoolCursor, ApiError> {
-    let wire: PoolCursorWire = decode_b64_json(raw)?;
-    let first_seen_at = parse_rfc3339(&wire.first_seen_at)?;
-    let pool_address = solana_pubkey::Pubkey::from_str(&wire.pool_address)
-        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool address".to_string()))?;
-    Ok(PoolCursor {
-        first_seen_at,
-        pool_address,
-    })
-}
-
-fn decode_swap_cursor(raw: &str) -> Result<SwapCursor, ApiError> {
-    let wire: EventCursorWire = decode_b64_json(raw)?;
-    Ok(SwapCursor {
-        timestamp: parse_rfc3339(&wire.timestamp)?,
-        signature: wire.signature,
-    })
-}
-
-fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiError> {
-    let wire: EventCursorWire = decode_b64_json(raw)?;
-    Ok(LiquidityCursor {
-        timestamp: parse_rfc3339(&wire.timestamp)?,
-        signature: wire.signature,
-    })
-}
-
-// ===========================================================================
-// Enrichment helper
-// ===========================================================================
-
-/// Compose a `Pool` with its two embedded token sides and its
-/// pre-computed analytics.
-///
-/// Fetches metadata and latest price for both mints, then builds the
-/// final `PoolResponse`. Missing metadata or price are tolerated —
-/// the corresponding fields will be null in the embedded token, but
-/// the pool itself is always returned (a fresh pool may exist in
-/// `pools` before `yog-context` has enriched its mints).
-///
-/// `analytics` is computed in batch by the caller before this
-/// function is called, so a pool with no current state still gets a
-/// `PoolAnalytics::empty()` rather than a special-case here.
-///
-/// Sequential awaits keep the code readable; at single-request
-/// latency the 4 indexed lookups are cheap.
-async fn enrich_pool(
-    state: &AppState,
-    pool: Pool,
-    analytics: PoolAnalytics,
-) -> Result<PoolResponse, ApiError> {
-    let token_a_meta = state
-        .token_metadata_repository
-        .find_by_mint(&pool.token_a_mint)
-        .await?;
-    let token_a_price = state
-        .token_price_repository
-        .find_latest_by_mint(&pool.token_a_mint)
-        .await?;
-    let token_b_meta = state
-        .token_metadata_repository
-        .find_by_mint(&pool.token_b_mint)
-        .await?;
-    let token_b_price = state
-        .token_price_repository
-        .find_latest_by_mint(&pool.token_b_mint)
-        .await?;
-
-    let token_a =
-        EmbeddedTokenResponse::from_sources(pool.token_a_mint, token_a_meta, token_a_price);
-    let token_b =
-        EmbeddedTokenResponse::from_sources(pool.token_b_mint, token_b_meta, token_b_price);
-
-    Ok(PoolResponse::new(pool, token_a, token_b, analytics))
-}
-
-/// Validate that pagination parameters are not combined in
-/// contradictory ways: `position` must be the only directive.
-fn validate_pagination_query(query: &PageQuery) -> Result<(), ApiError> {
-    if query.position.is_some() && query.cursor.is_some() {
-        return Err(ApiError::BadRequest(
-            "`position` cannot be combined with `cursor`".to_string(),
-        ));
-    }
-    // `dir` has a serde default of `Next`, so we can't distinguish
-    // "client sent dir=next" from "client sent nothing". We only
-    // reject the unambiguous conflict (cursor + position).
-    Ok(())
 }

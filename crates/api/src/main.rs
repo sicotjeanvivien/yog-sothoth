@@ -1,5 +1,9 @@
+mod application;
 mod bootstrap;
 mod http;
+
+#[cfg(test)]
+mod testing;
 
 use tracing::error;
 

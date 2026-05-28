@@ -3,7 +3,10 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 use yog_core::domain::{Pool, PoolAnalytics};
 
-use crate::http::dto::EmbeddedTokenResponse;
+use crate::{
+    application::{EnrichedPool, EnrichedToken},
+    http::dto::EmbeddedTokenResponse,
+};
 
 /// Wire shape of a pool in API responses.
 ///
@@ -52,5 +55,17 @@ impl PoolResponse {
             first_seen_at: pool.first_seen_at,
             last_seen_at: pool.last_seen_at,
         }
+    }
+}
+
+impl From<EnrichedToken> for EmbeddedTokenResponse {
+    fn from(t: EnrichedToken) -> Self {
+        EmbeddedTokenResponse::from_sources(t.mint, t.metadata, t.price)
+    }
+}
+
+impl From<EnrichedPool> for PoolResponse {
+    fn from(e: EnrichedPool) -> Self {
+        PoolResponse::new(e.pool, e.token_a.into(), e.token_b.into(), e.analytics)
     }
 }

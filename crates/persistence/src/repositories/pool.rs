@@ -116,18 +116,14 @@ impl PoolRepository for PgPoolRepository {
         cursor: Option<PoolCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
+        search: Option<String>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
         let fetch_limit = effective_limit + 1; // peek N+1
 
-        // Resolve effective query mode. `position` overrides
-        // `cursor` + `direction`; the handler enforces mutual
-        // exclusivity but the repo defends in depth.
         let mode = resolve_query_mode(position, &cursor, direction);
 
-        // Cursor is meaningful only relative to a position; ignored
-        // when jumping to a boundary.
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
         let (cursor_first_seen_at, cursor_pool_address) = match active_cursor {
@@ -135,26 +131,35 @@ impl PoolRepository for PgPoolRepository {
             None => (None, None),
         };
 
-        // Two SQL paths — one per traversal mode. Each maps to
-        // Vec<Pool> in its own branch because sqlx generates a
-        // distinct anonymous Record struct per query! invocation,
-        // which prevents merging the rows in a single Vec after
-        // the match.
+        // Two SQL paths — one per traversal mode. The search predicate is
+        // identical in both and injected via `$N::TEXT IS NULL OR ...`,
+        // matching the existing cursor null-handling style. EXISTS is used
+        // rather than a JOIN on token_metadata to avoid row duplication
+        // when both token sides match the query.
         let mut pools: Vec<Pool> = match mode {
             QueryMode::Forward => sqlx::query!(
                 r#"
-                SELECT pool_address, protocol, token_a_mint, token_b_mint,
-                       first_seen_at, last_seen_at
-                FROM pools
-                WHERE $1::TIMESTAMPTZ IS NULL
-                   OR first_seen_at < $1
-                   OR (first_seen_at = $1 AND pool_address > $2)
-                ORDER BY first_seen_at DESC, pool_address ASC
-                LIMIT $3
-                "#,
+            SELECT p.pool_address, p.protocol, p.token_a_mint, p.token_b_mint,
+                   p.first_seen_at, p.last_seen_at
+            FROM pools p
+            WHERE ($1::TIMESTAMPTZ IS NULL
+                   OR p.first_seen_at < $1
+                   OR (p.first_seen_at = $1 AND p.pool_address > $2))
+              AND ($4::TEXT IS NULL
+                   OR p.pool_address = $4
+                   OR EXISTS (
+                       SELECT 1 FROM token_metadata tm
+                       WHERE tm.mint IN (p.token_a_mint, p.token_b_mint)
+                         AND (tm.symbol ILIKE '%' || $4 || '%'
+                              OR tm.name ILIKE '%' || $4 || '%')
+                   ))
+            ORDER BY p.first_seen_at DESC, p.pool_address ASC
+            LIMIT $3
+            "#,
                 cursor_first_seen_at,
                 cursor_pool_address,
                 fetch_limit,
+                search,
             )
             .fetch_all(&self.pool)
             .await
@@ -174,18 +179,27 @@ impl PoolRepository for PgPoolRepository {
 
             QueryMode::Backward => sqlx::query!(
                 r#"
-                SELECT pool_address, protocol, token_a_mint, token_b_mint,
-                       first_seen_at, last_seen_at
-                FROM pools
-                WHERE $1::TIMESTAMPTZ IS NULL
-                   OR first_seen_at > $1
-                   OR (first_seen_at = $1 AND pool_address < $2)
-                ORDER BY first_seen_at ASC, pool_address DESC
-                LIMIT $3
-                "#,
+            SELECT p.pool_address, p.protocol, p.token_a_mint, p.token_b_mint,
+                   p.first_seen_at, p.last_seen_at
+            FROM pools p
+            WHERE ($1::TIMESTAMPTZ IS NULL
+                   OR p.first_seen_at > $1
+                   OR (p.first_seen_at = $1 AND p.pool_address < $2))
+              AND ($4::TEXT IS NULL
+                   OR p.pool_address = $4
+                   OR EXISTS (
+                       SELECT 1 FROM token_metadata tm
+                       WHERE tm.mint IN (p.token_a_mint, p.token_b_mint)
+                         AND (tm.symbol ILIKE '%' || $4 || '%'
+                              OR tm.name ILIKE '%' || $4 || '%')
+                   ))
+            ORDER BY p.first_seen_at ASC, p.pool_address DESC
+            LIMIT $3
+            "#,
                 cursor_first_seen_at,
                 cursor_pool_address,
                 fetch_limit,
+                search,
             )
             .fetch_all(&self.pool)
             .await
@@ -204,32 +218,21 @@ impl PoolRepository for PgPoolRepository {
             .collect::<Result<_, _>>()?,
         };
 
-        // Peek N+1 outcome.
+        // Peek N+1, reverse for backward, flags, cursors — all unchanged.
         let has_more = pools.len() as i64 > effective_limit;
         if has_more {
             pools.truncate(effective_limit as usize);
         }
 
-        // Restore natural display order for backward queries.
         if matches!(mode, QueryMode::Backward) {
             pools.reverse();
         }
 
-        // Compute boundary flags.
-        //
-        // Forward query: has_more means more rows exist further
-        // (older pools) → is_last = false. is_first inferred from
-        // "no cursor" → we started at the natural top.
-        //
-        // Backward query: has_more means more rows exist on the
-        // newer side → is_first = false. is_last inferred from
-        // "no cursor" → we jumped to the bottom (or were already there).
         let (is_first, is_last) = match mode {
             QueryMode::Forward => (!had_cursor, !has_more),
             QueryMode::Backward => (!has_more, !had_cursor),
         };
 
-        // Empty page: both boundaries simultaneously.
         let (prev_cursor, next_cursor) = if pools.is_empty() {
             (None, None)
         } else {

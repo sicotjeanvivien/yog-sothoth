@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.pool_address, p.protocol, p.token_a_mint, p.token_b_mint,\n                   p.first_seen_at, p.last_seen_at\n            FROM pools p\n            WHERE ($1::TIMESTAMPTZ IS NULL\n                   OR p.first_seen_at < $1\n                   OR (p.first_seen_at = $1 AND p.pool_address > $2))\n              AND ($4::TEXT IS NULL\n                   OR p.pool_address = $4\n                   OR EXISTS (\n                       SELECT 1 FROM token_metadata tm\n                       WHERE tm.mint IN (p.token_a_mint, p.token_b_mint)\n                         AND (tm.symbol ILIKE '%' || $4 || '%'\n                              OR tm.name ILIKE '%' || $4 || '%')\n                   ))\n            ORDER BY p.first_seen_at DESC, p.pool_address ASC\n            LIMIT $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_a_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_b_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "first_seen_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f490a41e7ef24e61f3a3c2fb27478e71b3654d42e0c09fcdbc55c299d5a56523"
+}

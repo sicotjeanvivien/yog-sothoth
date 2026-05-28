@@ -70,6 +70,7 @@ pub trait PoolRepository: Send + Sync {
         cursor: Option<PoolCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
+        search: Option<String>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>>;
 }
