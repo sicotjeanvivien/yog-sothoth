@@ -1,8 +1,13 @@
-//! HTTP layer powered by axum.
-//!
-//! Routes are mounted by `build_router`; the application state is
-//! shared via axum's `State` extractor. Handlers live in `handlers/`,
-//! middleware in `middleware.rs`, the unified error type in `error.rs`.
+use std::net::SocketAddr;
+
+use axum::{Router, http::HeaderName, routing::get};
+use tower_http::{
+    request_id::{PropagateRequestIdLayer, SetRequestIdLayer},
+    trace::TraceLayer,
+};
+use tracing::info;
+
+use crate::bootstrap::AppState;
 
 mod cursor;
 mod dto;
@@ -11,20 +16,12 @@ mod handlers;
 mod middleware;
 mod query;
 
-use std::net::SocketAddr;
-
-use axum::{Router, routing::get};
-use tracing::info;
-
-use crate::bootstrap::AppState;
-
-/// Build the axum router from the application state.
 pub(crate) fn build_router(state: AppState) -> Router {
+    let request_id_header = HeaderName::from_static(middleware::tracing::REQUEST_ID_HEADER);
+
     Router::new()
         .route("/healthz", get(handlers::health::healthz))
-        // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
-        // ── Single-pool resources ───────────────────────────────────────
         .route("/api/pools/{address}", get(handlers::pools::get_pool))
         .route(
             "/api/pools/{address}/latest-state",
@@ -40,23 +37,27 @@ pub(crate) fn build_router(state: AppState) -> Router {
         )
         .route(
             "/api/network/status",
-            axum::routing::get(crate::http::handlers::network_status::get_network_status),
+            get(handlers::network_status::get_network_status),
         )
-        .route(
-            "/api/tokens/{mint}",
-            axum::routing::get(crate::http::handlers::token::get_token),
-        )
+        .route("/api/tokens/{mint}", get(handlers::token::get_token))
         .with_state(state)
-        // Layers are applied in the order they are added. The
-        // outermost layer (last added) sees requests first and
-        // responses last. For headers + CORS, the order is
-        // immaterial; documented for future contributors.
+        .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(middleware::tracing::make_request_span)
+                .on_request(middleware::tracing::on_request)
+                .on_response(middleware::tracing::on_response)
+                .on_failure(middleware::tracing::on_failure),
+        )
+        .layer(SetRequestIdLayer::new(
+            request_id_header,
+            middleware::tracing::GenerateRequestId,
+        ))
         .layer(middleware::security_headers_layer())
         .layer(middleware::frame_options_layer())
         .layer(middleware::cors_layer())
 }
 
-/// Run the axum server on `bind_addr` until the process is killed.
 pub(crate) async fn run(state: AppState, bind_addr: SocketAddr) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await

@@ -3,6 +3,7 @@
 //! Currently configures CORS and a small set of security headers.
 //! Future cross-cutting concerns (request tracing, rate limiting,
 //! request ID propagation) will land here as additional layers.
+pub(crate) mod tracing;
 
 use axum::http::{HeaderName, HeaderValue, header};
 use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};

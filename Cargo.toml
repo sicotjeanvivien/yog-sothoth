@@ -28,7 +28,7 @@ solana-transaction-status = { version = "4", default-features = false }
 solana-transaction-status-client-types = "4"
 
 # Database
-sqlx = { version = "0.8", default-features = false}
+sqlx = { version = "0.8", default-features = false }
 bigdecimal = "0.4"
 
 # Serialization
@@ -63,7 +63,13 @@ rust_decimal = "1"
 
 # Axum 
 axum = "0.8.9"
-tower = "0.5.3"
-tower-http = { version = "0.6.10", features = ["cors", "trace", "set-header"] }
+tower = "0.5"
+tower-http = { version = "0.6.10", features = [
+  "cors",
+  "trace",
+  "request-id",
+  "set-header",
+] }
+uuid = { version = "1", features = ["v4"] }
 
-reqwest = { version = "0.13.3", features = ["json", "rustls"] }
+reqwest = { version = "0.13", features = ["json", "rustls"] }
