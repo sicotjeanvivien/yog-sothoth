@@ -61,6 +61,11 @@ export function PoolsTableRow({
         {formatUsdCompact(pool.volume24hUsd)}
       </div>
       <div role="cell" className={CELL_CLASS}>
+        <time dateTime={pool.firstSeenAt} className="text-slate-400">
+          {formatRelativeTime(pool.firstSeenAt, locale)}
+        </time>
+      </div>
+      <div role="cell" className={CELL_CLASS}>
         <time dateTime={pool.lastSeenAt} className="text-slate-400">
           {formatRelativeTime(pool.lastSeenAt, locale)}
         </time>

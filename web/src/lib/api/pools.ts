@@ -15,7 +15,7 @@
 
 import { apiGet } from "./client";
 import { PoolsPageSchema, type PoolsPageResponse } from "./schema/page";
-import type { PageDir, PagePosition } from "./type/pagination";
+import type { PageDir, PagePosition, PoolSort } from "./type/pagination";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -35,6 +35,7 @@ export type FetchPoolsParams = {
   dir?: PageDir | undefined;
   position?: PagePosition | undefined;
   q?: string | undefined;
+  sort?: PoolSort | undefined;
   limit?: number;
 };
 
@@ -63,6 +64,7 @@ export async function fetchPools(
       dir: params.dir,
       position: params.position,
       q: params.q && params.q.length > 0 ? params.q : undefined,
+      sort: params.sort,
       limit,
     },
     PoolsPageSchema,

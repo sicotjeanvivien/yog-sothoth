@@ -587,3 +587,23 @@ export const SearchIcon: React.FC<IconProps> = ({
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
+
+export const ChevronUpSortableIcon: React.FC<IconProps> = ({
+  size = 14,
+  strokeWidth = 1.8,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <polyline points="18 15 12 9 6 15" />
+  </svg>
+);
+
+export const ChevronDownSortableIcon: React.FC<IconProps> = ({
+  size = 14,
+  strokeWidth = 1.8,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);

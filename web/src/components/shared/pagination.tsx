@@ -94,16 +94,16 @@ export async function Pagination({
 
   const goPrev = !page.isFirst && page.prevCursor !== null
     ? buildHref(basePath, searchParams, paramPrefix, {
-        cursor: page.prevCursor,
-        dir: "prev",
-      })
+      cursor: page.prevCursor,
+      dir: "prev",
+    })
     : null;
 
   const goNext = !page.isLast && page.nextCursor !== null
     ? buildHref(basePath, searchParams, paramPrefix, {
-        cursor: page.nextCursor,
-        dir: "next",
-      })
+      cursor: page.nextCursor,
+      dir: "next",
+    })
     : null;
 
   const goLast = !page.isLast

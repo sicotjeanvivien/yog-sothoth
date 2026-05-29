@@ -35,6 +35,7 @@ import { ApiClientError, type ApiClientErrorKind } from "@/lib/api/errors";
 import type {
   PageDir,
   PagePosition,
+  PoolSort,
 } from "@/lib/api/type/pagination";
 import type { PoolsPageResponse } from "@/lib/api/schema/page";
 import { PoolsNoResults } from "@/components/dashboard/pools/pool-no-result";
@@ -92,6 +93,18 @@ function parseSearch(raw: string | string[] | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function parseSort(raw: string | string[] | undefined): PoolSort | undefined {
+  if (
+    raw === "first_seen_asc" ||
+    raw === "first_seen_desc" ||
+    raw === "last_seen_asc" ||
+    raw === "last_seen_desc"
+  ) {
+    return raw;
+  }
+  return undefined;
+}
+
 // ── Fetch result type ────────────────────────────────────────────────
 
 type FetchOutcome =
@@ -103,6 +116,7 @@ async function load(args: {
   dir: PageDir | undefined;
   position: PagePosition | undefined;
   search: string | undefined;
+  sort: PoolSort | undefined;
 }): Promise<FetchOutcome> {
   try {
     const data = await fetchPools({
@@ -110,6 +124,7 @@ async function load(args: {
       dir: args.dir,
       position: args.position,
       q: args.search,
+      sort: args.sort,
     });
     return { kind: "ok", data };
   } catch (err) {
@@ -122,17 +137,26 @@ async function load(args: {
 
 // ── Page ──────────────────────────────────────────────────────────────
 
-export default async function PoolsPage({ params, searchParams }: PoolsPageProps) {
+export default async function PoolsPage({
+  params,
+  searchParams,
+}: PoolsPageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const sp = await searchParams;
-  const cursor = parseCursor(sp['cursor']);
-  const dir = parseDir(sp['dir']);
-  const position = parsePosition(sp['position']);
-  const search = parseSearch(sp['q']);
+  const cursor = parseCursor(sp["cursor"]);
+  const dir = parseDir(sp["dir"]);
+  const position = parsePosition(sp["position"]);
+  const search = parseSearch(sp["q"]);
+  const sort = parseSort(sp["sort"]);
 
-  const outcome = await load({ cursor, dir, position, search });
+  const outcome = await load({ cursor, dir, position, search, sort });
+
+  // Resolve the effective sort for the header indicators: defaults to
+  // first_seen_desc when the URL doesn't specify one (matches the
+  // backend default).
+  const effectiveSort: PoolSort = sort ?? "first_seen_desc";
 
   const hasActiveSearch = search !== undefined;
 
@@ -144,14 +168,23 @@ export default async function PoolsPage({ params, searchParams }: PoolsPageProps
         <PoolsError kind={outcome.reason} />
       ) : outcome.data.items.length === 0 ? (
         hasActiveSearch ? (
-          <PoolsNoResults query={search} />
+          <PoolsNoResults query={search!} />
         ) : (
           <PoolsEmpty />
         )
       ) : (
         <>
-          <PoolsTable pools={outcome.data.items} locale={locale} />
-          <Pagination page={outcome.data} searchParams={sp} basePath="/pools" />
+          <PoolsTable
+            pools={outcome.data.items}
+            locale={locale}
+            currentSort={effectiveSort}
+            searchParams={sp}
+          />
+          <Pagination
+            page={outcome.data}
+            searchParams={sp}
+            basePath="/pools"
+          />
         </>
       )}
     </div>

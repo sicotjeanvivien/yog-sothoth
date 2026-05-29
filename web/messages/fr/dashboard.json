@@ -32,7 +32,11 @@
         "protocol": "Protocole",
         "tvl": "TVL",
         "volume24h": "Volume 24h",
-        "lastSeen": "Dernière activité"
+        "lastSeen": "Dernière activité",
+        "firstSeen": "Première observation",
+        "sortBy": "Trier par {column}",
+        "sortedAscending": "{column} (trié croissant)",
+        "sortedDescending": "{column} (trié décroissant)"
       },
       "empty": {
         "title": "Aucune pool observée pour le moment",
