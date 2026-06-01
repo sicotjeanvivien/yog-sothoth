@@ -21,6 +21,7 @@ pub(crate) fn build_router(state: AppState) -> Router {
 
     Router::new()
         .route("/healthz", get(handlers::health::healthz))
+        .route("/readyz", get(handlers::health::readyz))
         .route("/api/pools", get(handlers::pools::list_pools))
         .route("/api/pools/{address}", get(handlers::pools::get_pool))
         .route(

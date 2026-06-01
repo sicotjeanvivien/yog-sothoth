@@ -6,9 +6,9 @@ use yog_core::domain::{
     TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
-    Database, PgEventFreshnessRepository, PgLiquidityEventRepository, PgNetworkStatusRepository,
-    PgPoolAnalyticsRepository, PgPoolCurrentStateRepository, PgPoolRepository,
-    PgSwapEventRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
+    Database, PgEventFreshnessRepository, PgHealthChecker, PgLiquidityEventRepository,
+    PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
+    PgPoolRepository, PgSwapEventRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::application::{
@@ -32,6 +32,9 @@ pub(crate) struct AppState {
     pub(crate) liquidity_service: Arc<LiquidityService>,
     pub(crate) network_status_service: Arc<NetworkStatusService>,
     pub(crate) token_service: Arc<TokenService>,
+    /// Infra probe — exposed directly because no application logic
+    /// surrounds it. See `yog-persistence/health.rs`.
+    pub(crate) health_checker: Arc<PgHealthChecker>,
 }
 
 impl AppState {
@@ -59,7 +62,7 @@ impl AppState {
         let token_price_repo: Arc<dyn TokenPriceRepository> =
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
         let pool_analytics_repo: Arc<dyn PoolAnalyticsRepository> =
-            Arc::new(PgPoolAnalyticsRepository::new(db_pool));
+            Arc::new(PgPoolAnalyticsRepository::new(db_pool.clone()));
 
         // ── Services ────────────────────────────────────────────────────
         Ok(Self {
@@ -77,6 +80,7 @@ impl AppState {
                 event_freshness_repo,
             )),
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
+            health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         })
     }
 }
