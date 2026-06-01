@@ -92,3 +92,7 @@ impl From<TokenPrice> for EmbeddedPriceResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/embedded_token_tests.rs"]
+mod tests;

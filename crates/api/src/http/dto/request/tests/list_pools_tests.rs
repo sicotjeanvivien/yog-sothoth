@@ -8,7 +8,7 @@
 use crate::http::dto::request::ListPoolsRequest;
 use crate::http::dto::request::test_common::valid_page_query;
 use crate::http::error::ApiError;
-use crate::http::query::{PageDirectionParam, PagePositionParam, PoolSortParam};
+use crate::http::query::{PageDirectionParam, PagePositionParam};
 use yog_core::{PageDirection, PoolSort};
 
 // ── Happy path ───────────────────────────────────────────────────────

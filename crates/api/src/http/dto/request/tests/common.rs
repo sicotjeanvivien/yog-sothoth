@@ -5,7 +5,7 @@
 //! about. Avoids 8-line boilerplate per test and keeps the intent
 //! visible.
 
-use crate::http::query::{PageDirectionParam, PagePositionParam, PageQuery, PoolSortParam};
+use crate::http::query::{PageDirectionParam, PageQuery, PoolSortParam};
 
 /// A valid `PageQuery` baseline: no cursor, default direction, no
 /// position, default sort, no search, default limit.
