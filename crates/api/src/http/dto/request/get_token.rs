@@ -4,6 +4,7 @@ use solana_pubkey::Pubkey;
 
 use crate::http::{error::ApiError, query::parse_token_mint};
 
+#[derive(Debug)]
 pub(crate) struct GetTokenRequest {
     pub(crate) mint: Pubkey,
 }
@@ -15,3 +16,7 @@ impl GetTokenRequest {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/get_token_tests.rs"]
+mod tests;

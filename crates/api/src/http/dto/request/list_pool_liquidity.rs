@@ -11,6 +11,7 @@ use crate::http::{
     query::{PageQuery, parse_pool_address, validate_limit, validate_pagination_query},
 };
 
+#[derive(Debug)]
 pub(crate) struct ListPoolLiquidityRequest {
     pool_address: Pubkey,
     cursor: Option<LiquidityCursor>,
@@ -49,3 +50,7 @@ impl ListPoolLiquidityRequest {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/list_pool_liquidity_tests.rs"]
+mod tests;

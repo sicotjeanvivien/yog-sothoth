@@ -27,3 +27,7 @@ pub(crate) use get_token::GetTokenRequest;
 pub(crate) use list_pool_liquidity::ListPoolLiquidityRequest;
 pub(crate) use list_pool_swaps::ListPoolSwapsRequest;
 pub(crate) use list_pools::ListPoolsRequest;
+
+#[cfg(test)]
+#[path = "request/tests/common.rs"]
+pub(super) mod test_common;

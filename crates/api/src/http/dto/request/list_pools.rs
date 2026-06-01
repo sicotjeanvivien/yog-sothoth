@@ -19,6 +19,7 @@ use crate::http::{
     },
 };
 
+#[derive(Debug)]
 pub(crate) struct ListPoolsRequest {
     cursor: Option<PoolCursor>,
     direction: PageDirection,
@@ -67,3 +68,7 @@ impl ListPoolsRequest {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/list_pools_tests.rs"]
+mod tests;

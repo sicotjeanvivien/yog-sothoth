@@ -4,6 +4,7 @@ use solana_pubkey::Pubkey;
 
 use crate::http::{error::ApiError, query::parse_pool_address};
 
+#[derive(Debug)]
 /// Validated input for the single-pool endpoint.
 pub(crate) struct GetPoolRequest {
     pub(crate) pool_address: Pubkey,
@@ -17,3 +18,7 @@ impl GetPoolRequest {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/get_pool_tests.rs"]
+mod tests;

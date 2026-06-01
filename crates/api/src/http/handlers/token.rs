@@ -17,7 +17,7 @@ pub(crate) async fn get_token(
 ) -> Result<Json<TokenResponse>, ApiError> {
     let request = GetTokenRequest::parse(mint)?;
 
-    let agg = state
+    let agg: crate::application::TokenAggregate = state
         .token_service
         .get_token(&request.mint)
         .await?

@@ -11,6 +11,7 @@ use crate::http::{
     query::{PageQuery, parse_pool_address, validate_limit, validate_pagination_query},
 };
 
+#[derive(Debug)]
 pub(crate) struct ListPoolSwapsRequest {
     pool_address: Pubkey,
     cursor: Option<SwapCursor>,
@@ -54,3 +55,7 @@ impl ListPoolSwapsRequest {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/list_pool_swaps_tests.rs"]
+mod tests;

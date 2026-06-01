@@ -69,7 +69,7 @@ pub(crate) async fn get_pool_latest_state(
     State(state): State<AppState>,
     Path(address): Path<String>,
 ) -> Result<Json<PoolCurrentStateResponse>, ApiError> {
-    let request = GetPoolLatestStateRequest::parse(address)?;
+    let request: GetPoolLatestStateRequest = GetPoolLatestStateRequest::parse(address)?;
 
     let state_row = state
         .pool_service

@@ -14,7 +14,9 @@ use crate::http::{error::ApiError, query::parse_pool_address};
 /// Carries the address both as a `Pubkey` (for downstream typed use)
 /// and as a `String` (the projection table is keyed by string in
 /// persistence, and the service signature matches that).
+#[derive(Debug)]
 pub(crate) struct GetPoolLatestStateRequest {
+    #[allow(unused)]
     pub(crate) pool_address: Pubkey,
     pub(crate) raw_address: String,
 }
@@ -28,3 +30,7 @@ impl GetPoolLatestStateRequest {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "tests/get_pool_latest_state_tests.rs"]
+mod tests;
