@@ -3,6 +3,8 @@
 //! strings into clean inputs, with no business logic.
 
 use serde::Deserialize;
+use solana_pubkey::Pubkey;
+use std::str::FromStr;
 use yog_core::{PageDirection, PagePosition, PoolSort, domain::PoolCursor};
 
 use crate::http::error::ApiError;
@@ -139,6 +141,26 @@ pub(crate) fn validate_cursor_sort_consistency(
 /// `%%`).
 pub(crate) fn normalize_search(raw: Option<String>) -> Option<String> {
     raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// Parse a base58 pool address from the path, or return a 400.
+///
+/// Centralised here because three endpoints share the same path
+/// shape (`GET /api/pools/{address}`, `…/latest-state`, `…/swaps`,
+/// `…/liquidity-events`). Keeping a single source of the error
+/// message guarantees clients see a uniform string across all of
+/// them.
+pub(crate) fn parse_pool_address(raw: &str) -> Result<Pubkey, ApiError> {
+    Pubkey::from_str(raw).map_err(|_| ApiError::BadRequest(format!("invalid pool address: {raw}")))
+}
+
+/// Parse a base58 SPL mint address from the path, or return a 400.
+///
+/// Mirrors `parse_pool_address` for the `/api/tokens/{mint}` route —
+/// kept separate because the error message names the right concept
+/// (mint vs pool address) which matters for client debugging.
+pub(crate) fn parse_token_mint(raw: &str) -> Result<Pubkey, ApiError> {
+    Pubkey::from_str(raw).map_err(|_| ApiError::BadRequest(format!("invalid mint address: {raw}")))
 }
 
 #[cfg(test)]
