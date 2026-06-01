@@ -508,6 +508,48 @@ api/src/
 | `GET` | `/api/pools` | Paginated list of discovered pools (cursor-based, `limit` 1–200, default 50). `PoolResponse` embeds `tokenA` and `tokenB` as `EmbeddedTokenResponse` |
 | `GET` | `/api/tokens/{mint}` | Single token (metadata + latest price). 404 if metadata unknown; 200 with `price: null` if metadata exists but no price yet |
 
+### Error responses
+
+Errors are returned using the [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) format.
+
+**Content-Type**: `application/problem+json` (distinct from the
+`application/json` content type used for success responses).
+
+**Wire shape**:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "invalid pool address: foo"
+}
+```
+
+**Field semantics**:
+
+| Field    | Type   | Description |
+|----------|--------|-------------|
+| `type`   | string | URI reference identifying the problem type. Currently always `"about:blank"`; will gain specific URIs as the API matures. Clients should use `(type, title)` together for branching. |
+| `title`  | string | Short, human-readable summary. Stable across occurrences of the same problem type. |
+| `status` | number | The HTTP status code, mirrored from the response line for clients that log only the body. |
+| `detail` | string | Human-readable, per-occurrence message describing this specific failure. |
+
+**Current types** (matching the HTTP status semantically):
+
+| Status | `title`                 | Common causes |
+|--------|-------------------------|---------------|
+| 400    | `Bad Request`           | Invalid pool address, malformed cursor, limit out of range, mutually exclusive query params |
+| 404    | `Not Found`             | Pool or token unknown, no observed state yet for a known pool |
+| 500    | `Internal Server Error` | Database failure, encoding bug. The `detail` is always the generic message `"internal server error"`; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
+
+**Forward compatibility**: when finer-grained problem types are
+introduced, `type` will move from `"about:blank"` to a specific URI
+(e.g. `https://api.yog-sothoth.fr/errors/invalid-cursor`) and `title`
+will be updated to match. Existing clients that branch on the HTTP
+status code keep working; clients that want finer discrimination
+gain it by inspecting `type`.
+
 ### Pattern for handlers
 
 ```rust
