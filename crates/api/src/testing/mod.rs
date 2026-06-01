@@ -19,8 +19,11 @@ use std::sync::Mutex;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
     domain::{
-        Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCursor, PoolRepository, Protocol,
-        TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+        EventFreshnessRepository, LiquidityCursor, LiquidityEvent, LiquidityEventRepository,
+        NetworkStatus, NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository,
+        PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor,
+        PoolRepository, Protocol, SwapCursor, SwapEvent, SwapEventRepository, TokenMetadata,
+        TokenMetadataRepository, TokenPrice, TokenPriceRepository,
     },
 };
 
@@ -211,17 +214,26 @@ impl PoolAnalyticsRepository for MockAnalyticsRepo {
 
 pub(crate) struct MockMetadataRepo {
     by_mint: HashMap<Pubkey, TokenMetadata>,
+    fail: bool,
 }
 
 impl MockMetadataRepo {
     pub(crate) fn with(entries: Vec<(Pubkey, TokenMetadata)>) -> Self {
         Self {
             by_mint: entries.into_iter().collect(),
+            fail: false,
         }
     }
     pub(crate) fn empty() -> Self {
         Self {
             by_mint: HashMap::new(),
+            fail: false,
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            by_mint: HashMap::new(),
+            fail: true,
         }
     }
 }
@@ -238,6 +250,9 @@ impl TokenMetadataRepository for MockMetadataRepo {
         unreachable!()
     }
     async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>> {
+        if self.fail {
+            return Err(RepositoryError::Integrity("metadata boom".into()));
+        }
         Ok(self.by_mint.get(mint).cloned())
     }
 }
@@ -246,17 +261,26 @@ impl TokenMetadataRepository for MockMetadataRepo {
 
 pub(crate) struct MockPriceRepo {
     by_mint: HashMap<Pubkey, TokenPrice>,
+    fail: bool,
 }
 
 impl MockPriceRepo {
     pub(crate) fn with(entries: Vec<(Pubkey, TokenPrice)>) -> Self {
         Self {
             by_mint: entries.into_iter().collect(),
+            fail: false,
         }
     }
     pub(crate) fn empty() -> Self {
         Self {
             by_mint: HashMap::new(),
+            fail: false,
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            by_mint: HashMap::new(),
+            fail: true,
         }
     }
 }
@@ -267,6 +291,349 @@ impl TokenPriceRepository for MockPriceRepo {
         unreachable!()
     }
     async fn find_latest_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenPrice>> {
+        if self.fail {
+            return Err(RepositoryError::Integrity("price boom".into()));
+        }
         Ok(self.by_mint.get(mint).cloned())
+    }
+}
+
+// ── Mock: PoolCurrentStateRepository ───────────────────────────────
+
+pub(crate) struct MockPoolCurrentStateRepo {
+    by_address: Mutex<Option<RepositoryResult<Option<PoolCurrentState>>>>,
+}
+
+impl MockPoolCurrentStateRepo {
+    pub(crate) fn found(state: PoolCurrentState) -> Self {
+        Self {
+            by_address: Mutex::new(Some(Ok(Some(state)))),
+        }
+    }
+    pub(crate) fn not_found() -> Self {
+        Self {
+            by_address: Mutex::new(Some(Ok(None))),
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            by_address: Mutex::new(Some(Err(RepositoryError::Integrity("state boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl PoolCurrentStateRepository for MockPoolCurrentStateRepo {
+    async fn upsert(&self, _: &PoolCurrentStateUpsert) -> RepositoryResult<bool> {
+        unreachable!("upsert not used by api services")
+    }
+    async fn get_by_address(&self, _: &str) -> RepositoryResult<Option<PoolCurrentState>> {
+        take(&self.by_address)
+    }
+    async fn list_most_recent(
+        &self,
+        _limit: u32,
+        _before: Option<DateTime<Utc>>,
+    ) -> RepositoryResult<Vec<PoolCurrentState>> {
+        unreachable!()
+    }
+}
+
+// ── Mock: SwapEventRepository ────────────────────────────────────────
+
+pub(crate) struct MockSwapEventRepo {
+    find_paginated: Mutex<Option<RepositoryResult<Page<SwapEvent>>>>,
+}
+
+impl MockSwapEventRepo {
+    pub(crate) fn with_page(page: Page<SwapEvent>) -> Self {
+        Self {
+            find_paginated: Mutex::new(Some(Ok(page))),
+        }
+    }
+    pub(crate) fn empty() -> Self {
+        Self::with_page(Page {
+            items: vec![],
+            next_cursor: None,
+            prev_cursor: None,
+            is_first: true,
+            is_last: true,
+        })
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            find_paginated: Mutex::new(Some(Err(RepositoryError::Integrity("swap boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl SwapEventRepository for MockSwapEventRepo {
+    async fn insert(&self, _: &SwapEvent) -> RepositoryResult<()> {
+        unreachable!()
+    }
+    async fn find_by_pool_paginated(
+        &self,
+        _pool_address: &Pubkey,
+        _cursor: Option<SwapCursor>,
+        _direction: PageDirection,
+        _position: Option<PagePosition>,
+        _limit: i64,
+    ) -> RepositoryResult<Page<SwapEvent>> {
+        take(&self.find_paginated)
+    }
+}
+
+// ── Mock: LiquidityEventRepository ──────────────────────────────────
+
+pub(crate) struct MockLiquidityEventRepo {
+    find_paginated: Mutex<Option<RepositoryResult<Page<LiquidityEvent>>>>,
+}
+
+impl MockLiquidityEventRepo {
+    pub(crate) fn with_page(page: Page<LiquidityEvent>) -> Self {
+        Self {
+            find_paginated: Mutex::new(Some(Ok(page))),
+        }
+    }
+    pub(crate) fn empty() -> Self {
+        Self::with_page(Page {
+            items: vec![],
+            next_cursor: None,
+            prev_cursor: None,
+            is_first: true,
+            is_last: true,
+        })
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            find_paginated: Mutex::new(Some(Err(RepositoryError::Integrity("liq boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl LiquidityEventRepository for MockLiquidityEventRepo {
+    async fn insert(&self, _: &LiquidityEvent) -> RepositoryResult<()> {
+        unreachable!()
+    }
+    async fn find_by_pool_paginated(
+        &self,
+        _pool_address: &Pubkey,
+        _cursor: Option<LiquidityCursor>,
+        _direction: PageDirection,
+        _position: Option<PagePosition>,
+        _limit: i64,
+    ) -> RepositoryResult<Page<LiquidityEvent>> {
+        take(&self.find_paginated)
+    }
+}
+
+// ── Mock: NetworkStatusRepository ───────────────────────────────────
+
+pub(crate) struct MockNetworkStatusRepo {
+    get: Mutex<Option<RepositoryResult<Option<NetworkStatus>>>>,
+}
+
+impl MockNetworkStatusRepo {
+    pub(crate) fn found(status: NetworkStatus) -> Self {
+        Self {
+            get: Mutex::new(Some(Ok(Some(status)))),
+        }
+    }
+    pub(crate) fn missing() -> Self {
+        Self {
+            get: Mutex::new(Some(Ok(None))),
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            get: Mutex::new(Some(Err(RepositoryError::Integrity("ns boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl NetworkStatusRepository for MockNetworkStatusRepo {
+    async fn upsert(&self, _: &NetworkStatus) -> RepositoryResult<()> {
+        unreachable!()
+    }
+    async fn get(&self) -> RepositoryResult<Option<NetworkStatus>> {
+        take(&self.get)
+    }
+}
+
+// ── Mock: EventFreshnessRepository ──────────────────────────────────
+
+pub(crate) struct MockEventFreshnessRepo {
+    last_event_at: Mutex<Option<RepositoryResult<Option<DateTime<Utc>>>>>,
+}
+
+impl MockEventFreshnessRepo {
+    pub(crate) fn at(ts: DateTime<Utc>) -> Self {
+        Self {
+            last_event_at: Mutex::new(Some(Ok(Some(ts)))),
+        }
+    }
+    pub(crate) fn never() -> Self {
+        Self {
+            last_event_at: Mutex::new(Some(Ok(None))),
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            last_event_at: Mutex::new(Some(Err(RepositoryError::Integrity("fresh boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl EventFreshnessRepository for MockEventFreshnessRepo {
+    async fn last_event_at(&self) -> RepositoryResult<Option<DateTime<Utc>>> {
+        take(&self.last_event_at)
+    }
+}
+
+// ── Additional fixtures ──────────────────────────────────────────────
+
+pub(crate) fn make_swap_event(pool_address: Pubkey) -> SwapEvent {
+    use yog_core::domain::TradeDirection;
+
+    SwapEvent {
+        pool_address,
+        protocol: Protocol::MeteoraDammV2,
+        signature: format!("swapsig{}", pool_address),
+        timestamp: ts(1_500),
+        token_a_mint: pk(10),
+        token_b_mint: pk(11),
+        trade_direction: TradeDirection::AtoB,
+        amount_a: 1_000_000,
+        amount_b: 2_000_000,
+        reserve_a_after: 10_000_000,
+        reserve_b_after: 20_000_000,
+        next_sqrt_price: 1_000_000_000_000_000_000u128,
+        claiming_fee: 0,
+        protocol_fee: 100,
+        compounding_fee: 50,
+        referral_fee: 0,
+        fee_token_is_a: true,
+    }
+}
+
+pub(crate) fn make_liquidity_event(pool_address: Pubkey) -> LiquidityEvent {
+    use yog_core::domain::LiquidityEventKind;
+
+    LiquidityEvent {
+        pool_address,
+        protocol: Protocol::MeteoraDammV2,
+        signature: format!("liqsig{}", pool_address),
+        timestamp: ts(1_600),
+        token_a_mint: pk(10),
+        token_b_mint: pk(11),
+        liquidity_event_kind: LiquidityEventKind::Add,
+        amount_a: 5_000_000,
+        amount_b: 10_000_000,
+        reserve_a_after: 15_000_000,
+        reserve_b_after: 30_000_000,
+        liquidity_delta: 30_000_000,
+        position: pool_address,
+        owner: pool_address,
+    }
+}
+
+pub(crate) fn make_network_status() -> NetworkStatus {
+    NetworkStatus {
+        slot: 300_000_000,
+        rpc_latency_ms: 42,
+        observed_at: ts(2_000),
+    }
+}
+
+pub(crate) fn make_swap_page(
+    events: Vec<SwapEvent>,
+    is_first: bool,
+    is_last: bool,
+) -> Page<SwapEvent> {
+    use yog_core::domain::SwapCursor;
+
+    let prev = if is_first {
+        None
+    } else {
+        events.first().map(|e| {
+            Cursor::Swap(SwapCursor {
+                timestamp: e.timestamp,
+                signature: e.signature.clone(),
+            })
+        })
+    };
+    let next = if is_last {
+        None
+    } else {
+        events.last().map(|e| {
+            Cursor::Swap(SwapCursor {
+                timestamp: e.timestamp,
+                signature: e.signature.clone(),
+            })
+        })
+    };
+    Page {
+        items: events,
+        next_cursor: next,
+        prev_cursor: prev,
+        is_first,
+        is_last,
+    }
+}
+
+pub(crate) fn make_liquidity_page(
+    events: Vec<LiquidityEvent>,
+    is_first: bool,
+    is_last: bool,
+) -> Page<LiquidityEvent> {
+    use yog_core::domain::LiquidityCursor;
+
+    let prev = if is_first {
+        None
+    } else {
+        events.first().map(|e| {
+            Cursor::Liquidity(LiquidityCursor {
+                timestamp: e.timestamp,
+                signature: e.signature.clone(),
+            })
+        })
+    };
+    let next = if is_last {
+        None
+    } else {
+        events.last().map(|e| {
+            Cursor::Liquidity(LiquidityCursor {
+                timestamp: e.timestamp,
+                signature: e.signature.clone(),
+            })
+        })
+    };
+    Page {
+        items: events,
+        next_cursor: next,
+        prev_cursor: prev,
+        is_first,
+        is_last,
+    }
+}
+
+pub(crate) fn make_pool_current_state(pool_address: Pubkey) -> PoolCurrentState {
+    PoolCurrentState {
+        pool_address: pool_address.to_string(),
+        reserve_a: 10_000_000,
+        reserve_b: 20_000_000,
+        last_sqrt_price: Some(1_000_000_000_000_000_000u128),
+        liquidity: Some(500_000_000u128),
+        last_swap_at: Some(ts(1_500)),
+        last_liquidity_at: Some(ts(1_600)),
+        last_event_at: ts(1_600),
+        last_event_kind: yog_core::domain::LastEventKind::LiquidityAdd,
+        last_signature: pool_address.to_string(),
+        protocol: "damm_v2".to_string(),
+        updated_at: ts(1_600),
     }
 }

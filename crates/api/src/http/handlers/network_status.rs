@@ -10,12 +10,9 @@
 //! (thresholds) lives in `core` (`FreshnessStatus`), keeping the
 //! handler free of business logic.
 
-use axum::{Json, extract::State};
-
-use yog_core::domain::FreshnessStatus;
-
 use crate::bootstrap::AppState;
 use crate::http::{dto::NetworkStatusResponse, error::ApiError};
+use axum::{Json, extract::State};
 
 /// `GET /api/network/status`
 ///
@@ -26,10 +23,9 @@ use crate::http::{dto::NetworkStatusResponse, error::ApiError};
 pub(crate) async fn get_network_status(
     State(state): State<AppState>,
 ) -> Result<Json<NetworkStatusResponse>, ApiError> {
-    // Source 1 — the persisted slot + latency snapshot.
-    let status = state
-        .network_status_repository
-        .get()
+    let agg: crate::application::NetworkStatusAggregate = state
+        .network_status_service
+        .get_status()
         .await?
         .ok_or_else(|| {
             ApiError::Internal(
@@ -37,15 +33,9 @@ pub(crate) async fn get_network_status(
             )
         })?;
 
-    // Source 2 — the freshness signal: timestamp of the last event.
-    let last_event_at = state.event_freshness_repository.last_event_at().await?;
-
-    // Business rule (thresholds) lives in core.
-    let freshness = FreshnessStatus::from_last_event(last_event_at, chrono::Utc::now());
-
     Ok(Json(NetworkStatusResponse::new(
-        status,
-        freshness,
-        last_event_at,
+        agg.status,
+        agg.freshness,
+        agg.last_event_at,
     )))
 }

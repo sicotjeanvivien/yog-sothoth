@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use yog_core::domain::{
     EventFreshnessRepository, LiquidityEventRepository, NetworkStatusRepository,
     PoolAnalyticsRepository, PoolCurrentStateRepository, PoolRepository, SwapEventRepository,
@@ -10,28 +11,27 @@ use yog_persistence::{
     PgSwapEventRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
-use crate::{application::PoolService, bootstrap::Config};
+use crate::application::{
+    LiquidityService, NetworkStatusService, PoolService, SwapService, TokenService,
+};
+use crate::bootstrap::Config;
 use anyhow::Context;
 
 /// Application-level dependencies shared across HTTP handlers.
 ///
-/// `Clone` is cheap because every field is wrapped in `Arc` — axum
-/// requires `Clone + Send + Sync + 'static` for its `State` extractor.
+/// Every field is a service (`Arc<XxxService>`). Handlers never
+/// access repositories directly — all orchestration lives in the
+/// application layer.
 ///
-/// The DB pool is held inside each repository (via `PgPool`, itself an
-/// `Arc` internally), so the `Database` wrapper does not need to live
-/// on `AppState` after construction.
+/// `Clone` is cheap: `Arc` clones are reference-count bumps.
+/// axum requires `Clone + Send + Sync + 'static` on its `State`.
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) pool_service: Arc<PoolService>,
-
-    pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
-    pub(crate) swap_event_repository: Arc<dyn SwapEventRepository>,
-    pub(crate) liquidity_event_repository: Arc<dyn LiquidityEventRepository>,
-    pub(crate) network_status_repository: Arc<dyn NetworkStatusRepository>,
-    pub(crate) event_freshness_repository: Arc<dyn EventFreshnessRepository>,
-    pub(crate) token_metadata_repository: Arc<dyn TokenMetadataRepository>,
-    pub(crate) token_price_repository: Arc<dyn TokenPriceRepository>,
+    pub(crate) swap_service: Arc<SwapService>,
+    pub(crate) liquidity_service: Arc<LiquidityService>,
+    pub(crate) network_status_service: Arc<NetworkStatusService>,
+    pub(crate) token_service: Arc<TokenService>,
 }
 
 impl AppState {
@@ -42,49 +42,41 @@ impl AppState {
 
         let db_pool = database.pool().clone();
 
-        let pool_repository: Arc<dyn PoolRepository> =
-            Arc::new(PgPoolRepository::new(db_pool.clone()));
-
-        let pool_current_state_repository: Arc<dyn PoolCurrentStateRepository> =
+        // ── Repositories ────────────────────────────────────────────────
+        let pool_repo: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool.clone()));
+        let pool_current_state_repo: Arc<dyn PoolCurrentStateRepository> =
             Arc::new(PgPoolCurrentStateRepository::new(db_pool.clone()));
-
-        let swap_event_repository: Arc<dyn SwapEventRepository> =
+        let swap_event_repo: Arc<dyn SwapEventRepository> =
             Arc::new(PgSwapEventRepository::new(db_pool.clone()));
-
-        let liquidity_event_repository: Arc<dyn LiquidityEventRepository> =
+        let liquidity_event_repo: Arc<dyn LiquidityEventRepository> =
             Arc::new(PgLiquidityEventRepository::new(db_pool.clone()));
-
-        let network_status_repository: Arc<dyn NetworkStatusRepository> =
+        let network_status_repo: Arc<dyn NetworkStatusRepository> =
             Arc::new(PgNetworkStatusRepository::new(db_pool.clone()));
-
-        let event_freshness_repository: Arc<dyn EventFreshnessRepository> =
+        let event_freshness_repo: Arc<dyn EventFreshnessRepository> =
             Arc::new(PgEventFreshnessRepository::new(db_pool.clone()));
-
-        let token_metadata_repository: Arc<dyn TokenMetadataRepository> =
+        let token_metadata_repo: Arc<dyn TokenMetadataRepository> =
             Arc::new(PgTokenMetadataRepository::new(db_pool.clone()));
-
-        let token_price_repository: Arc<dyn TokenPriceRepository> =
+        let token_price_repo: Arc<dyn TokenPriceRepository> =
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
-
-        let pool_analytics_repository: Arc<dyn PoolAnalyticsRepository> =
+        let pool_analytics_repo: Arc<dyn PoolAnalyticsRepository> =
             Arc::new(PgPoolAnalyticsRepository::new(db_pool));
 
-        let pool_service = Arc::new(PoolService::new(
-            pool_repository.clone(),
-            pool_analytics_repository.clone(),
-            token_metadata_repository.clone(),
-            token_price_repository.clone(),
-        ));
-
+        // ── Services ────────────────────────────────────────────────────
         Ok(Self {
-            pool_service,
-            pool_current_state_repository,
-            swap_event_repository,
-            liquidity_event_repository,
-            network_status_repository,
-            event_freshness_repository,
-            token_metadata_repository,
-            token_price_repository,
+            pool_service: Arc::new(PoolService::new(
+                pool_repo,
+                pool_current_state_repo,
+                pool_analytics_repo,
+                token_metadata_repo.clone(),
+                token_price_repo.clone(),
+            )),
+            swap_service: Arc::new(SwapService::new(swap_event_repo)),
+            liquidity_service: Arc::new(LiquidityService::new(liquidity_event_repo)),
+            network_status_service: Arc::new(NetworkStatusService::new(
+                network_status_repo,
+                event_freshness_repo,
+            )),
+            token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
         })
     }
 }

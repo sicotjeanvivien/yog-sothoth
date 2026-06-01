@@ -14,14 +14,14 @@
 use std::sync::Arc;
 
 use yog_core::{
-    Page, RepositoryResult,
+    Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
     domain::{
-        Pool, PoolAnalytics, PoolAnalyticsRepository, PoolRepository, TokenMetadataRepository,
-        TokenPriceRepository,
+        Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCurrentState, PoolCurrentStateRepository,
+        PoolCursor, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
     },
 };
 
-use crate::application::{EnrichedPool, EnrichedToken, PoolListParams};
+use crate::application::{EnrichedPool, EnrichedToken};
 
 // ^ if you keep PoolListParams in its own file; otherwise define it here.
 
@@ -34,9 +34,28 @@ pub(crate) struct EnrichedPoolPage {
     pub(crate) is_first: bool,
     pub(crate) is_last: bool,
 }
+// ---------------------------------------------------------------------------
+// Params
+// ---------------------------------------------------------------------------
 
+/// All fields are domain types — the HTTP layer is responsible for
+/// parsing query params, decoding the cursor, converting wire enums,
+/// and normalizing the search term before constructing this.
+pub(crate) struct PoolListParams {
+    pub(crate) cursor: Option<PoolCursor>,
+    pub(crate) direction: PageDirection,
+    pub(crate) position: Option<PagePosition>,
+    pub(crate) sort: PoolSort,
+    pub(crate) search: Option<String>,
+    pub(crate) limit: i64,
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
 pub(crate) struct PoolService {
     pool_repository: Arc<dyn PoolRepository>,
+    pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
     pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
     token_metadata_repository: Arc<dyn TokenMetadataRepository>,
     token_price_repository: Arc<dyn TokenPriceRepository>,
@@ -45,12 +64,14 @@ pub(crate) struct PoolService {
 impl PoolService {
     pub(crate) fn new(
         pool_repository: Arc<dyn PoolRepository>,
+        pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
         pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
         token_metadata_repository: Arc<dyn TokenMetadataRepository>,
         token_price_repository: Arc<dyn TokenPriceRepository>,
     ) -> Self {
         Self {
             pool_repository,
+            pool_current_state_repository,
             pool_analytics_repository,
             token_metadata_repository,
             token_price_repository,
@@ -126,6 +147,15 @@ impl PoolService {
             .unwrap_or_else(PoolAnalytics::empty);
 
         Ok(Some(self.enrich(pool, analytics).await?))
+    }
+
+    pub(crate) async fn get_latest_state(
+        &self,
+        address: &str,
+    ) -> RepositoryResult<Option<PoolCurrentState>> {
+        self.pool_current_state_repository
+            .get_by_address(address)
+            .await
     }
 
     /// Compose a pool with both enriched token sides and its analytics.

@@ -1,10 +1,3 @@
-use axum::{
-    Json,
-    extract::{Path, Query, State},
-};
-use std::str::FromStr;
-use yog_core::{PageDirection, PagePosition, PoolSort};
-
 use crate::http::{
     cursor::{decode_pool_cursor, encode_cursor_opt},
     dto::{PageResponse, PoolResponse},
@@ -14,13 +7,19 @@ use crate::http::{
     },
 };
 use crate::{
-    application::PoolListParams,
+    application::{LiquidityListParams, PoolListParams, SwapListParams},
     http::{
         cursor::{decode_liquidity_cursor, decode_swap_cursor},
         dto::{LiquidityEventResponse, PoolCurrentStateResponse, SwapEventResponse},
     },
 };
 use crate::{bootstrap::AppState, http::query::validate_cursor_sort_consistency};
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+};
+use std::str::FromStr;
+use yog_core::PoolSort;
 
 // ===========================================================================
 // Path parameter parsing
@@ -119,15 +118,11 @@ pub(crate) async fn get_pool_latest_state(
     State(state): State<AppState>,
     Path(address): Path<String>,
 ) -> Result<Json<PoolCurrentStateResponse>, ApiError> {
-    // We validate the address syntactically even though the projection
-    // is keyed by `String`: an invalid pubkey would just return None,
-    // but rejecting at parse time gives the client a 400 instead of a
-    // misleading 404.
     let _ = parse_pool_address(&address)?;
 
     let state_row = state
-        .pool_current_state_repository
-        .get_by_address(&address)
+        .pool_service
+        .get_latest_state(&address)
         .await?
         .ok_or_else(|| {
             ApiError::NotFound(format!(
@@ -163,12 +158,16 @@ pub(crate) async fn list_pool_swaps(
         Some(raw) if !raw.is_empty() => Some(decode_swap_cursor(raw)?),
         _ => None,
     };
-    let direction: PageDirection = query.dir.into();
-    let position: Option<PagePosition> = query.position.map(Into::into);
 
     let page = state
-        .swap_event_repository
-        .find_by_pool_paginated(&pool_address, cursor, direction, position, query.limit)
+        .swap_service
+        .list_swaps_for_pool(SwapListParams {
+            pool_address,
+            cursor,
+            direction: query.dir.into(),
+            position: query.position.map(Into::into),
+            limit: query.limit,
+        })
         .await?;
 
     let items: Vec<SwapEventResponse> = page
@@ -211,12 +210,16 @@ pub(crate) async fn list_pool_liquidity_events(
         Some(raw) if !raw.is_empty() => Some(decode_liquidity_cursor(raw)?),
         _ => None,
     };
-    let direction: PageDirection = query.dir.into();
-    let position: Option<PagePosition> = query.position.map(Into::into);
 
     let page = state
-        .liquidity_event_repository
-        .find_by_pool_paginated(&pool_address, cursor, direction, position, query.limit)
+        .liquidity_service
+        .list_liquidity_for_pool(LiquidityListParams {
+            pool_address,
+            cursor,
+            direction: query.dir.into(),
+            position: query.position.map(Into::into),
+            limit: query.limit,
+        })
         .await?;
 
     let items: Vec<LiquidityEventResponse> = page
