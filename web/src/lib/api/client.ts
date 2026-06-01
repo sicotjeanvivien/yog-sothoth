@@ -58,7 +58,7 @@ async function readRemoteErrorMessage(response: Response): Promise<string | null
   try {
     const body: unknown = await response.json();
     const parsed = ApiErrorBodySchema.safeParse(body);
-    return parsed.success ? parsed.data.error : null;
+    return parsed.success ? parsed.data.detail : null;
   } catch {
     // Body was not JSON, or the stream was already consumed. Either
     // way, we can't surface a remote message — return null and let

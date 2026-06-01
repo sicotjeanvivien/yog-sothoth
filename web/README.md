@@ -41,6 +41,12 @@ The frontend has two consumers of `yog-api`:
 - **The browser** — never calls `yog-api` directly. It calls **route handlers**
   under `app/api/` that act as a BFF (Backend For Frontend), proxying the request
   and translating HTTP errors into a stable, frontend-friendly shape.
+- **`schema/api-error-body.ts`** — zod schema for the RFC 9457 Problem
+  Details envelope returned by `yog-api` on errors. Used internally by
+  `client.ts` to extract the `detail` field as the remote message
+  attached to `ApiClientError.http(...)`. The BFF route handlers do
+  not see this format — they see `ApiClientError` and produce their
+  own browser-facing envelope.
 
 This split protects the browser from internal details: 5xx responses from
 `yog-api` are collapsed into a generic 502 by the BFF (no leakage of stack

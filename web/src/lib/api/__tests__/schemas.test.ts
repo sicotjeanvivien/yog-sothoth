@@ -183,16 +183,41 @@ describe("PoolsPageSchema", () => {
 });
 
 describe("ApiErrorBodySchema", () => {
-  it("accepts a valid error envelope", () => {
-    const parsed = ApiErrorBodySchema.parse({ error: "limit out of range" });
-    expect(parsed.error).toBe("limit out of range");
+  function validProblem() {
+    return {
+      type: "about:blank",
+      title: "Bad Request",
+      status: 400,
+      detail: "limit must be between 1 and 200",
+    };
+  }
+
+  it("accepts a well-formed RFC 9457 problem", () => {
+    const parsed = ApiErrorBodySchema.parse(validProblem());
+    expect(parsed.type).toBe("about:blank");
+    expect(parsed.title).toBe("Bad Request");
+    expect(parsed.status).toBe(400);
+    expect(parsed.detail).toBe("limit must be between 1 and 200");
   });
 
-  it("rejects a missing error field", () => {
-    expect(() => ApiErrorBodySchema.parse({})).toThrow();
+  it("accepts a future type URI", () => {
+    // Forward compat: when yog-api moves off `about:blank`, the schema
+    // must still parse.
+    const parsed = ApiErrorBodySchema.parse({
+      ...validProblem(),
+      type: "https://api.yog-sothoth.fr/errors/invalid-cursor",
+    });
+    expect(parsed.type).toBe("https://api.yog-sothoth.fr/errors/invalid-cursor");
   });
 
-  it("rejects a non-string error field", () => {
-    expect(() => ApiErrorBodySchema.parse({ error: 42 })).toThrow();
+  it("rejects a body missing required RFC 9457 fields", () => {
+    expect(() => ApiErrorBodySchema.parse({ error: "old format" })).toThrow();
+    expect(() => ApiErrorBodySchema.parse({ detail: "no other fields" })).toThrow();
+  });
+
+  it("rejects a non-numeric status", () => {
+    expect(() =>
+      ApiErrorBodySchema.parse({ ...validProblem(), status: "400" }),
+    ).toThrow();
   });
 });
