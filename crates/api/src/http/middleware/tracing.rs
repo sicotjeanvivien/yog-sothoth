@@ -6,8 +6,13 @@
 //! is generated. The id is echoed back on the response for
 //! correlation.
 //!
-//! Health-check requests (`/healthz`) are excluded from span creation
-//! to keep the log clean under load-balancer polling.
+//! Probe endpoints (`/healthz`, `/readyz`) are NOT routed through
+//! this layer — see `http::build_router`. Filtering them here at the
+//! span/event level would not work reliably: `debug_span!` only
+//! lowers the span itself, not the `info!` events created within it,
+//! so an event-level `info!` would still surface in the logs. The
+//! cleaner answer is to mount this layer only on the application
+//! sub-router and keep the probe routes free of tracing.
 
 use std::time::Duration;
 
@@ -31,8 +36,8 @@ impl MakeRequestId for GenerateRequestId {
     }
 }
 
-/// Build the per-request span. Returns `None` for `/healthz` so the
-/// load balancer's polling doesn't flood the log.
+/// Build the per-request span carrying method, URI, request_id and
+/// the soon-to-be-recorded `status` / `latency_ms` fields.
 pub(crate) fn make_request_span(request: &Request<Body>) -> Span {
     let method = request.method();
     let uri = request.uri();
@@ -42,25 +47,14 @@ pub(crate) fn make_request_span(request: &Request<Body>) -> Span {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown");
 
-    if uri.path() == "/healthz" {
-        tracing::debug_span!(
-            "http_request",
-            method = %method,
-            uri = %uri,
-            request_id = %request_id,
-            status = field::Empty,
-            latency_ms = field::Empty,
-        )
-    } else {
-        tracing::info_span!(
-            "http_request",
-            method = %method,
-            uri = %uri,
-            request_id = %request_id,
-            status = field::Empty,
-            latency_ms = field::Empty,
-        )
-    }
+    tracing::info_span!(
+        "http_request",
+        method = %method,
+        uri = %uri,
+        request_id = %request_id,
+        status = field::Empty,
+        latency_ms = field::Empty,
+    )
 }
 
 pub(crate) fn on_request(_request: &Request<Body>, _span: &Span) {
