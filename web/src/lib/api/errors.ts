@@ -1,23 +1,27 @@
 /**
  * Typed error surface for BFF → yog-api calls.
  *
- * Every failure between the Next.js server and the Rust API funnels
- * through `ApiClientError`. The `kind` field is a discriminated union
- * so consumers can branch on the failure type without parsing the
- * message string.
+ * `ApiClientError` is an INTERNAL TypeScript class. It never crosses
+ * a network boundary — it lives in the Next.js runtime, instantiated
+ * by `apiGet` when an upstream call fails, caught by Server Components
+ * or BFF route handlers downstream.
  *
- * Mapping to HTTP responses (handled in the route handlers, not here):
+ * The browser-facing wire format is RFC 9457 Problem Details
+ * (`{ type, title, status, detail }`), produced by `mapApiClientErrorToHttp`
+ * The two layers aredeliberately distinct: this class can carry information that has
+ * no HTTP counterpart (a timeout has no response body, a network
+ * failure has no status code), and aligning it on RFC 9457 would
+ * force inventing artificial titles for things that aren't HTTP
+ * problems in the first place.
  *
- *   | kind          | route handler returns       |
- *   |---------------|-----------------------------|
- *   | timeout       | 504 Gateway Timeout         |
- *   | network       | 502 Bad Gateway             |
- *   | http (4xx)    | passthrough (400, 404, ...) |
- *   | http (5xx)    | 502 Bad Gateway             |
- *   | validation    | 502 Bad Gateway             |
+ * | ApiClientError kind | mapping to HTTP             |
+ * |---------------------|-----------------------------|
+ * | timeout             | 504 Gateway Timeout         |
+ * | network             | 502 Bad Gateway             |
+ * | http (4xx)          | passthrough (400, 404, ...) |
+ * | http (5xx)          | 502 Bad Gateway             |
+ * | validation          | 502 Bad Gateway             |
  *
- * The mapping lives in the route handler because that is where the
- * client-facing HTTP shape is decided.
  */
 
 /**

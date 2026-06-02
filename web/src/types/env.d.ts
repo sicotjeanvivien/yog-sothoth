@@ -39,7 +39,7 @@ declare global {
   namespace NodeJS {
     interface ProcessEnv {
       // ---- Server-only configuration (see lib/config/server-env.ts) ----
-      YOG_API_BASE_URL?: string;
+      YOG_API_INTERNAL_URL?: string;
       YOG_API_TIMEOUT_MS?: string;
 
       // ---- Database ----

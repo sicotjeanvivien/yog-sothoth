@@ -21,14 +21,18 @@ import * as z from "zod";
  */
 const ServerEnvSchema = z.object({
   /**
-   * Base URL of the yog-api Rust service. Must be a valid URL and
-   * must not end with a trailing slash — `url + "/api/pools"` is the
-   * concatenation pattern used downstream.
-   */
-  YOG_API_BASE_URL: z
-    .url({ message: "YOG_API_BASE_URL must be a valid URL" })
+  * Internal URL of yog-api, used by Server Components and other
+  * server-side code to reach the Rust API directly. Never exposed to
+  * the browser — the browser talks to yog-api through the public
+  * gateway (api.yog-scope.xyz) configured at the Caddy layer.
+  *
+  * In Docker: `http://yog-api:5000` (the service hostname on the
+  * compose network). In local dev outside Docker: `http://127.0.0.1:5000`.
+  */
+  YOG_API_INTERNAL_URL: z
+    .url({ message: "YOG_API_INTERNAL_URL must be a valid URL" })
     .refine((u) => !u.endsWith("/"), {
-      message: "YOG_API_BASE_URL must not end with a trailing slash",
+      message: "YOG_API_INTERNAL_URL must not end with a trailing slash",
     }),
 
   /**
@@ -73,7 +77,7 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
     // one at a time.
     throw new Error(
       `Invalid server-only environment configuration:\n${issues}\n` +
-        `See web/.env.example for the expected shape.`,
+      `See web/.env.example for the expected shape.`,
     );
   }
 

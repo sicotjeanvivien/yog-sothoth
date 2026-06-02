@@ -18,7 +18,7 @@ import { parseServerEnv } from "../server-env.schema";
 // individual cases short and focused on the field they exercise.
 function validInput(): Record<string, string | undefined> {
   return {
-    YOG_API_BASE_URL: "http://127.0.0.1:3001",
+    YOG_API_INTERNAL_URL: "http://127.0.0.1:3001",
   };
 }
 
@@ -26,7 +26,7 @@ describe("parseServerEnv — happy path", () => {
   it("parses a minimal valid input and applies the timeout default", () => {
     const env = parseServerEnv(validInput());
 
-    expect(env.YOG_API_BASE_URL).toBe("http://127.0.0.1:3001");
+    expect(env.YOG_API_INTERNAL_URL).toBe("http://127.0.0.1:3001");
     expect(env.YOG_API_TIMEOUT_MS).toBe(5000);
   });
 
@@ -41,27 +41,27 @@ describe("parseServerEnv — happy path", () => {
 
   it("accepts an https URL", () => {
     const env = parseServerEnv({
-      YOG_API_BASE_URL: "https://api.yog-sothoth.fr",
+      YOG_API_INTERNAL_URL: "https://api.yog-sothoth.fr",
     });
 
-    expect(env.YOG_API_BASE_URL).toBe("https://api.yog-sothoth.fr");
+    expect(env.YOG_API_INTERNAL_URL).toBe("https://api.yog-sothoth.fr");
   });
 });
 
 describe("parseServerEnv — failure modes", () => {
   it("rejects a missing base URL", () => {
-    expect(() => parseServerEnv({})).toThrow(/YOG_API_BASE_URL/);
+    expect(() => parseServerEnv({})).toThrow(/YOG_API_INTERNAL_URL/);
   });
 
   it("rejects a base URL that is not a URL", () => {
     expect(() =>
-      parseServerEnv({ YOG_API_BASE_URL: "not-a-url" }),
-    ).toThrow(/YOG_API_BASE_URL must be a valid URL/);
+      parseServerEnv({ YOG_API_INTERNAL_URL: "not-a-url" }),
+    ).toThrow(/YOG_API_INTERNAL_URL must be a valid URL/);
   });
 
   it("rejects a base URL that ends with a trailing slash", () => {
     expect(() =>
-      parseServerEnv({ YOG_API_BASE_URL: "http://127.0.0.1:3001/" }),
+      parseServerEnv({ YOG_API_INTERNAL_URL: "http://127.0.0.1:3001/" }),
     ).toThrow(/trailing slash/);
   });
 
@@ -96,7 +96,7 @@ describe("parseServerEnv — failure modes", () => {
     let caught: unknown = null;
     try {
       parseServerEnv({
-        YOG_API_BASE_URL: "not-a-url",
+        YOG_API_INTERNAL_URL: "not-a-url",
         YOG_API_TIMEOUT_MS: "-1",
       });
     } catch (e) {
@@ -105,7 +105,7 @@ describe("parseServerEnv — failure modes", () => {
 
     expect(caught).toBeInstanceOf(Error);
     const message = (caught as Error).message;
-    expect(message).toMatch(/YOG_API_BASE_URL/);
+    expect(message).toMatch(/YOG_API_INTERNAL_URL/);
     expect(message).toMatch(/YOG_API_TIMEOUT_MS/);
   });
 });

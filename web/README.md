@@ -82,47 +82,29 @@ export default async function PoolsPage() {
 }
 ```
 
-## Conventions for the BFF
+## Talking to yog-api
 
-The BFF lives under `src/app/api/`. Each route handler proxies an endpoint
-of `yog-api` for the browser. The conventions are deliberately strict:
+The integration layer lives under `src/lib/api/`:
 
-- **One BFF route per public `yog-api` endpoint.** If the browser needs
-  `/api/pools`, the route handler at `app/api/pools/route.ts` proxies
-  `GET ${API_INTERNAL_URL}/api/pools`. The browser never sees `API_INTERNAL_URL`.
-- **HTTP error mapping is uniform.**
-  - `4xx` → passed through unchanged. The client made a mistake (bad cursor,
-    invalid limit) and needs to know.
-  - `5xx` → collapsed into `502 Bad Gateway` with a generic body. Internal
-    details from `yog-api` (DB errors, stack traces, query plans) must
-    never reach the browser.
-- **Validation at the boundary.** Inbound query parameters are validated with
-  zod before the fetch goes out. A malformed `limit` triggers a `400` from
-  the BFF, no upstream call.
-- **Server-only secrets.** Anything the browser must not see (auth tokens,
-  internal hosts) stays in non-`NEXT_PUBLIC_*` env vars and is read inside
-  the route handler.
-- **`http-mapping.ts`** — translates `ApiClientError` instances into
-  RFC 9457 Problem Details bodies (`{ type, title, status, detail }`)
-  served with Content-Type `application/problem+json`. Matches the
-  format `yog-api` itself uses for errors, so the dashboard speaks a
-  single error dialect across its whole API surface. Exposes
-  `problemResponse(body, init)` and the helpers `badRequestProblem`,
-  `internalErrorProblem` for local validation failures and unexpected
-  errors inside the route handler.
-- **`errors.ts`** — `ApiClientError` discriminated union with four
-  variants: `timeout`, `network`, `http`, `validation`. The BFF
-  internals use this typed surface; the browser-facing wire shape is
-  the Problem Details produced by `http-mapping`.
+- **`client.ts`** — server-side fetch wrapper with timeout, AbortController,
+  and zod schema validation. Reads `YOG_API_INTERNAL_URL` from the server env
+  to reach yog-api over the internal network.
+- **`errors.ts`** — `ApiClientError` discriminated union with four variants:
+  `timeout`, `network`, `http`, `validation`. Server Components catch and
+  pattern-match on `details.kind` to render the right state.
+- **`pools.ts`, `tokens.ts`, …** — one module per resource, exposing typed
+  `fetchXxx()` calls used directly by Server Components.
 
-When `yog-api` gains a new endpoint that the dashboard needs, the workflow is:
+The browser does not call yog-api through Next.js. It talks to it directly
+through the public gateway `api.yog-scope.xyz` (Caddy reverse proxy →
+yog-api). The previous BFF route handlers under `app/api/` have been
+removed: they were pure proxies with no added value, and their removal
+collapses one network hop, one error format, and one set of duplicated
+validations.
 
-1. Add a typed `fetchXxx()` / `safeFetchXxx()` in `src/lib/api/<resource>.ts`,
-   with a zod schema for the response.
-2. Add a BFF route handler in `src/app/api/<resource>/route.ts` that calls it
-   and applies the error mapping above.
-3. Consume `safeFetchXxx()` from a Server Component (preferred), or call the
-   BFF route via `fetch()` from a Client Component when interactivity requires it.
+If a future Client Component needs to call yog-api from the browser, it
+talks directly to `https://api.yog-scope.xyz/...`. yog-api's CORS layer
+authorises the dashboard origin.
 
 ## Error responses (browser-facing)
 

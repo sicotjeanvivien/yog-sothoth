@@ -2,12 +2,16 @@
  * Low-level fetch wrapper for `yog-api`.
  *
  * Every higher-level call (`fetchPools`, future `fetchSwaps`, etc.)
- * routes through `apiGet`. Responsibilities centralised here:
+ * routes through `apiGet`. Server-side only — Server Components and
+ * other server-side code import this directly. The browser never
+ * reaches yog-api through this client.
  *
- *   - URL composition from the validated `YOG_API_BASE_URL`
+ * Responsibilities centralised here:
+ *
+ *   - URL composition from the validated `YOG_API_INTERNAL_URL`
  *   - Request timeout via `AbortSignal.timeout`
  *   - Classification of failures into `ApiClientError` variants
- *   - Best-effort parsing of the remote error envelope
+ *   - Best-effort parsing of the remote RFC 9457 error envelope
  *   - Schema validation of successful responses
  *
  * Higher-level functions describe *which* endpoint and *which* schema;
@@ -27,17 +31,12 @@ import { loadServerEnv as getServerEnv } from "../config/server-env.schema";
  */
 type QueryValue = string | number | boolean;
 
-/**
- * Build a fully qualified URL against `YOG_API_BASE_URL`, appending
- * the given query parameters. Undefined values are dropped so callers
- * can pass optional fields without a conditional spread.
- */
 function buildUrl(path: string, query: Record<string, QueryValue | undefined>): string {
-  const { YOG_API_BASE_URL } = getServerEnv();
+  const { YOG_API_INTERNAL_URL } = getServerEnv();
 
   // The schema validates that the base URL has no trailing slash, so
   // a single forward concat is safe and readable.
-  const url = new URL(`${YOG_API_BASE_URL}${path}`);
+  const url = new URL(`${YOG_API_INTERNAL_URL}${path}`);
 
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined) {

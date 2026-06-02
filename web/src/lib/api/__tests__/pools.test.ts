@@ -21,7 +21,7 @@ const TEST_API_BASE_URL = "http://api.test";
 const TEST_API_TIMEOUT_MS = "5000";
 
 beforeEach(() => {
-  process.env.YOG_API_BASE_URL = TEST_API_BASE_URL;
+  process.env.YOG_API_INTERNAL_URL = TEST_API_BASE_URL;
   process.env.YOG_API_TIMEOUT_MS = TEST_API_TIMEOUT_MS;
   __resetServerEnv();
 });
