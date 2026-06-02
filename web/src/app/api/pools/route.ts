@@ -5,24 +5,30 @@
  *
  *   1. Parse and validate query parameters (`cursor`, `limit`).
  *   2. Delegate to `fetchPools` for the actual upstream call.
- *   3. Return the typed page on success, or a translated HTTP error
- *      via `mapApiClientErrorToHttp` on failure.
+ *   3. Return the typed page on success, or a translated RFC 9457
+ *      Problem Details error via `mapApiClientErrorToHttp` on failure.
  *
  * The handler is intentionally thin — every reusable piece of logic
- * (URL building, timeout, schema validation, error classification)
- * lives in `src/lib/api/`. Future endpoints follow the same shape.
+ * (URL building, timeout, schema validation, error classification,
+ * Problem Details construction) lives in `src/lib/api/`. Future
+ * endpoints follow the same shape.
  *
  * Live under `app/api/pools/route.ts` (not `app/[locale]/api/...`):
  * API resources are locale-agnostic — the browser always fetches the
  * same `/api/pools` regardless of the active locale. Error message
  * localisation happens in React via next-intl, keyed on the typed
- * `kind` field returned in the error body.
+ * `title` field returned in the Problem Details body.
  */
 
 import { NextResponse } from "next/server";
 
 import { ApiClientError } from "@/lib/api/errors";
-import { mapApiClientErrorToHttp } from "@/lib/api/http-mapping";
+import {
+  badRequestProblem,
+  internalErrorProblem,
+  mapApiClientErrorToHttp,
+  problemResponse,
+} from "@/lib/api/http-mapping";
 import { POOLS_QUERY_BOUNDS, fetchPools, type FetchPoolsParams } from "@/lib/api/pools";
 
 /**
@@ -96,10 +102,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const parsed = parseQuery(url.searchParams);
 
   if (!parsed.ok) {
-    return NextResponse.json(
-      { error: parsed.error, kind: "bad_request" as const },
-      { status: 400 },
-    );
+    return problemResponse(badRequestProblem(parsed.error));
   }
 
   try {
@@ -116,19 +119,16 @@ export async function GET(request: Request): Promise<NextResponse> {
   } catch (err) {
     if (err instanceof ApiClientError) {
       // Log the full internal detail server-side; the response body
-      // returned to the browser is the sanitised version.
+      // returned to the browser is the sanitised Problem Details.
       console.error("[BFF] /api/pools failed:", err.message, err.details);
       const { status, body } = mapApiClientErrorToHttp(err);
-      return NextResponse.json(body, { status });
+      return problemResponse(body, { status });
     }
 
     // RangeError from `fetchPools` — should not happen since we
     // validated bounds above, but if it does it's a programmer error
     // in the BFF itself, not a 4xx for the browser.
     console.error("[BFF] /api/pools unexpected error:", err);
-    return NextResponse.json(
-      { error: "internal server error", kind: "bad_gateway" as const },
-      { status: 500 },
-    );
+    return problemResponse(internalErrorProblem());
   }
 }

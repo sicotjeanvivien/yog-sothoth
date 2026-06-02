@@ -102,6 +102,18 @@ of `yog-api` for the browser. The conventions are deliberately strict:
 - **Server-only secrets.** Anything the browser must not see (auth tokens,
   internal hosts) stays in non-`NEXT_PUBLIC_*` env vars and is read inside
   the route handler.
+- **`http-mapping.ts`** — translates `ApiClientError` instances into
+  RFC 9457 Problem Details bodies (`{ type, title, status, detail }`)
+  served with Content-Type `application/problem+json`. Matches the
+  format `yog-api` itself uses for errors, so the dashboard speaks a
+  single error dialect across its whole API surface. Exposes
+  `problemResponse(body, init)` and the helpers `badRequestProblem`,
+  `internalErrorProblem` for local validation failures and unexpected
+  errors inside the route handler.
+- **`errors.ts`** — `ApiClientError` discriminated union with four
+  variants: `timeout`, `network`, `http`, `validation`. The BFF
+  internals use this typed surface; the browser-facing wire shape is
+  the Problem Details produced by `http-mapping`.
 
 When `yog-api` gains a new endpoint that the dashboard needs, the workflow is:
 
@@ -112,18 +124,44 @@ When `yog-api` gains a new endpoint that the dashboard needs, the workflow is:
 3. Consume `safeFetchXxx()` from a Server Component (preferred), or call the
    BFF route via `fetch()` from a Client Component when interactivity requires it.
 
+## Error responses (browser-facing)
+
+Every BFF route handler returns errors as RFC 9457 Problem Details,
+served with `Content-Type: application/problem+json`. The format
+mirrors what `yog-api` returns for its own errors, so the dashboard
+parses a single shape regardless of whether the failure originates
+in `yog-api` or in the BFF itself.
+
+Wire shape:
+
+    {
+      "type": "about:blank",
+      "title": "Bad Gateway",
+      "status": 502,
+      "detail": "upstream API unreachable"
+    }
+
+The `title` is the discriminator React branches on for localised
+error messages via next-intl. Stable titles in this BFF:
+
+  - "Bad Request"          — local validation or 4xx passthrough from yog-api
+  - "Not Found"            — 404 passthrough from yog-api
+  - "Bad Gateway"          — yog-api unreachable, returned 5xx, or violated its schema
+  - "Gateway Timeout"      — upstream call exceeded the configured timeout
+  - "Internal Server Error" — unexpected failure inside the BFF route itself
+
 ## Scripts
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `npm run dev`        | Start the dev server on port 3000        |
-| `npm run build`      | Build the standalone production bundle   |
-| `npm run start`      | Start the built server                   |
-| `npm run lint`       | Run ESLint with the Next.js config       |
-| `npm run lint:fix`   | Run ESLint and fix what it can           |
-| `npm run typecheck`  | Run `tsc --noEmit` against the project   |
-| `npm test`           | Run the Vitest suite once                |
-| `npm run test:watch` | Run Vitest in watch mode                 |
+| Command              | Description                            |
+| -------------------- | -------------------------------------- |
+| `npm run dev`        | Start the dev server on port 3000      |
+| `npm run build`      | Build the standalone production bundle |
+| `npm run start`      | Start the built server                 |
+| `npm run lint`       | Run ESLint with the Next.js config     |
+| `npm run lint:fix`   | Run ESLint and fix what it can         |
+| `npm run typecheck`  | Run `tsc --noEmit` against the project |
+| `npm test`           | Run the Vitest suite once              |
+| `npm run test:watch` | Run Vitest in watch mode               |
 
 ## Environment variables
 
@@ -139,11 +177,11 @@ the client bundle.
 
 Notable variables:
 
-| Variable | Where it's read | Purpose |
-|---|---|---|
-| `API_INTERNAL_URL` | Server-side only (Server Components, route handlers) | Base URL the BFF uses to reach `yog-api`. In Docker, `http://yog-api:5000`; locally, `http://127.0.0.1:5000`. |
-| `NEXT_PUBLIC_APP_URL` | Both | Public URL of the app, used for Open Graph metadata and absolute links. |
-| `NEXT_PUBLIC_FEATURE_*` | Both | Feature flags (see below). |
+| Variable                | Where it's read                                      | Purpose                                                                                                       |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `API_INTERNAL_URL`      | Server-side only (Server Components, route handlers) | Base URL the BFF uses to reach `yog-api`. In Docker, `http://yog-api:5000`; locally, `http://127.0.0.1:5000`. |
+| `NEXT_PUBLIC_APP_URL`   | Both                                                 | Public URL of the app, used for Open Graph metadata and absolute links.                                       |
+| `NEXT_PUBLIC_FEATURE_*` | Both                                                 | Feature flags (see below).                                                                                    |
 
 Database credentials must **never** appear in this file — the frontend has no
 business knowing about them.

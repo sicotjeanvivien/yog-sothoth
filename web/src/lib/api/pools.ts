@@ -49,7 +49,6 @@ export async function fetchPools(
   params: FetchPoolsParams = {},
 ): Promise<PoolsPageResponse> {
   const limit = params.limit ?? DEFAULT_LIMIT;
-
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
     throw new RangeError(
       `\`limit\` must be an integer in [1, ${MAX_LIMIT}], got ${limit}`,

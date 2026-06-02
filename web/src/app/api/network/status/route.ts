@@ -21,7 +21,7 @@
 
 import { NextResponse } from "next/server";
 import { ApiClientError } from "@/lib/api/errors";
-import { mapApiClientErrorToHttp } from "@/lib/api/http-mapping";
+import { internalErrorProblem, mapApiClientErrorToHttp, problemResponse } from "@/lib/api/http-mapping";
 import { fetchNetworkStatus } from "@/lib/api/network-status";
 
 export async function GET(): Promise<NextResponse> {
@@ -38,15 +38,12 @@ export async function GET(): Promise<NextResponse> {
         err.details,
       );
       const { status, body } = mapApiClientErrorToHttp(err);
-      return NextResponse.json(body, { status });
+      return problemResponse(body, { status });
     }
 
     // Anything not an ApiClientError is an unexpected programmer
     // error in the BFF itself, not a 4xx for the browser.
     console.error("[BFF] /api/network/status unexpected error:", err);
-    return NextResponse.json(
-      { error: "internal server error", kind: "bad_gateway" as const },
-      { status: 500 },
-    );
+    return problemResponse(internalErrorProblem());
   }
 }

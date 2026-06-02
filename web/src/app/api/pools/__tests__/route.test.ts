@@ -7,6 +7,8 @@
  *   - query string parsing (limit out of range, non-integer, etc.)
  *   - happy path passthrough of the typed page
  *   - error mapping via `mapApiClientErrorToHttp`
+ *   - RFC 9457 wire contract on every error response (four required
+ *     fields, correct Content-Type)
  *
  * `vi.mock` is hoisted by vitest to the top of the file, *before*
  * any const declarations. To share a mock function between the
@@ -17,6 +19,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError } from "@/lib/api/errors";
+import { PROBLEM_CONTENT_TYPE } from "@/lib/api/http-mapping";
 
 // Hoisted alongside vi.mock — available inside both the factory and
 // the test bodies.
@@ -62,6 +65,8 @@ describe("GET /api/pools — happy path", () => {
 
     const response = await GET(makeRequest());
     expect(response.status).toBe(200);
+    // Success uses application/json, NOT application/problem+json.
+    expect(response.headers.get("content-type")).toMatch(/application\/json/);
     expect(await response.json()).toEqual(page);
 
     // Default limit was applied, no cursor key emitted (the handler
@@ -94,17 +99,20 @@ describe("GET /api/pools — happy path", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// Input validation — returns 400 without calling fetchPools
+// Input validation — returns 400 Problem Details without calling fetchPools
 // ─────────────────────────────────────────────────────────────────────
 
 describe("GET /api/pools — input validation", () => {
-  it("returns 400 when limit is not an integer", async () => {
+  it("returns 400 Problem Details when limit is not an integer", async () => {
     const response = await GET(makeRequest("limit=abc"));
     expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toBe(PROBLEM_CONTENT_TYPE);
 
     const body = await response.json();
-    expect(body.kind).toBe("bad_request");
-    expect(body.error).toMatch(/integer/);
+    expect(body.title).toBe("Bad Request");
+    expect(body.status).toBe(400);
+    expect(body.type).toBe("about:blank");
+    expect(body.detail).toMatch(/integer/);
     expect(fetchPoolsMock).not.toHaveBeenCalled();
   });
 
@@ -119,7 +127,7 @@ describe("GET /api/pools — input validation", () => {
     expect(response.status).toBe(400);
 
     const body = await response.json();
-    expect(body.error).toMatch(/between 1 and 200/);
+    expect(body.detail).toMatch(/between 1 and 200/);
   });
 
   it("returns 400 when limit is above the maximum", async () => {
@@ -133,22 +141,28 @@ describe("GET /api/pools — input validation", () => {
 // ─────────────────────────────────────────────────────────────────────
 
 describe("GET /api/pools — error mapping", () => {
-  it("maps a timeout to 504", async () => {
+  it("maps a timeout to 504 Gateway Timeout Problem Details", async () => {
     fetchPoolsMock.mockRejectedValue(ApiClientError.timeout(5000));
 
     const response = await GET(makeRequest());
     expect(response.status).toBe(504);
-    expect((await response.json()).kind).toBe("gateway_timeout");
+    expect(response.headers.get("content-type")).toBe(PROBLEM_CONTENT_TYPE);
+
+    const body = await response.json();
+    expect(body.title).toBe("Gateway Timeout");
+    expect(body.status).toBe(504);
   });
 
-  it("maps a network failure to 502", async () => {
+  it("maps a network failure to 502 Bad Gateway", async () => {
     fetchPoolsMock.mockRejectedValue(
       ApiClientError.network(new TypeError("fetch failed")),
     );
 
     const response = await GET(makeRequest());
     expect(response.status).toBe(502);
-    expect((await response.json()).kind).toBe("bad_gateway");
+
+    const body = await response.json();
+    expect(body.title).toBe("Bad Gateway");
   });
 
   it("passes through a 4xx from yog-api", async () => {
@@ -160,8 +174,8 @@ describe("GET /api/pools — error mapping", () => {
     expect(response.status).toBe(400);
 
     const body = await response.json();
-    expect(body.kind).toBe("bad_request");
-    expect(body.error).toBe("invalid cursor");
+    expect(body.title).toBe("Bad Request");
+    expect(body.detail).toBe("invalid cursor");
   });
 
   it("collapses a 5xx from yog-api into 502", async () => {
@@ -173,8 +187,9 @@ describe("GET /api/pools — error mapping", () => {
     expect(response.status).toBe(502);
 
     const body = await response.json();
+    expect(body.title).toBe("Bad Gateway");
     // The internal yog-api 500 message must NOT leak to the browser.
-    expect(body.error).not.toMatch(/internal server error/);
+    expect(body.detail).not.toMatch(/internal server error/);
   });
 
   it("maps a schema validation failure to 502", async () => {
@@ -186,14 +201,22 @@ describe("GET /api/pools — error mapping", () => {
     expect(response.status).toBe(502);
 
     const body = await response.json();
+    expect(body.title).toBe("Bad Gateway");
     // Internal zod issues must NOT leak.
-    expect(body.error).not.toMatch(/items/);
+    expect(body.detail).not.toMatch(/items/);
   });
 
-  it("returns 500 on an unexpected non-ApiClientError throw", async () => {
+  it("returns 500 Internal Server Error on an unexpected non-ApiClientError throw", async () => {
     fetchPoolsMock.mockRejectedValue(new Error("boom"));
 
     const response = await GET(makeRequest());
+    // Was 500 with kind: "bad_gateway" before (inconsistent) — now
+    // 500 with title: "Internal Server Error" (coherent).
     expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toBe(PROBLEM_CONTENT_TYPE);
+
+    const body = await response.json();
+    expect(body.title).toBe("Internal Server Error");
+    expect(body.status).toBe(500);
   });
 });

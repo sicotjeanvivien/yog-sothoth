@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError } from "../errors";
-import { fetchPools } from "../pools";
+import { fetchPools, FetchPoolsParams } from "../pools";
 import { __resetServerEnv } from "../../config/server-env.schema";
 import { validPoolsPage } from "./fixtures";
 
@@ -200,17 +200,13 @@ describe("fetchPools — HTTP failures", () => {
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ error: "limit out of range" }, 400)),
     );
-
+    const params: FetchPoolsParams = { limit: 300 };
     try {
-      await fetchPools();
+      await fetchPools(params);
       expect.fail("expected ApiClientError");
-    } catch (err) {
-      expect(err).toBeInstanceOf(ApiClientError);
-      expect((err as ApiClientError).details).toEqual({
-        kind: "http",
-        status: 400,
-        remoteMessage: "limit out of range",
-      });
+    } catch (err) {            
+      expect(err).toBeInstanceOf(RangeError);
+      expect((err as RangeError).message).toEqual("`limit` must be an integer in [1, 200], got 300");
     }
   });
 

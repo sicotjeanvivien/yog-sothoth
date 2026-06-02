@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiClientError } from "@/lib/api/errors";
-import { mapApiClientErrorToHttp } from "@/lib/api/http-mapping";
+import { badRequestProblem, internalErrorProblem, mapApiClientErrorToHttp, problemResponse } from "@/lib/api/http-mapping";
 import {
   POOL_LIQUIDITY_EVENTS_QUERY_BOUNDS,
   fetchPoolLiquidityEvents,
@@ -69,10 +69,7 @@ export async function GET(
   const { address } = await params;
 
   if (!isValidPoolAddress(address)) {
-    return NextResponse.json(
-      { error: `invalid pool address: ${address}`, kind: "bad_request" as const },
-      { status: 400 },
-    );
+    return problemResponse(badRequestProblem(`invalid pool address: ${address}`));
   }
 
   const url = new URL(request.url);
@@ -101,16 +98,13 @@ export async function GET(
         err.details,
       );
       const { status, body } = mapApiClientErrorToHttp(err);
-      return NextResponse.json(body, { status });
+      return problemResponse(body, { status });
     }
 
     console.error(
       `[BFF] /api/pools/${address}/liquidity-events unexpected error:`,
       err,
     );
-    return NextResponse.json(
-      { error: "internal server error", kind: "bad_gateway" as const },
-      { status: 500 },
-    );
+    return problemResponse(internalErrorProblem());
   }
 }
