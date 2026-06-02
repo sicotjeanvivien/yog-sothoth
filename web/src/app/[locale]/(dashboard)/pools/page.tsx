@@ -30,7 +30,7 @@ import { PoolsEmpty } from "@/components/dashboard/pools/pools-empty";
 import { PoolsError } from "@/components/dashboard/pools/pools-error";
 import { Pagination } from "@/components/shared/pagination";
 
-import { fetchPools } from "@/lib/api/pools";
+import { fetchPools } from "@/lib/api/server/pools";
 import { ApiClientError, type ApiClientErrorKind } from "@/lib/api/errors";
 import type {
   PageDir,
@@ -150,7 +150,6 @@ export default async function PoolsPage({
   const position = parsePosition(sp["position"]);
   const search = parseSearch(sp["q"]);
   const sort = parseSort(sp["sort"]);
-
   const outcome = await load({ cursor, dir, position, search, sort });
 
   // Resolve the effective sort for the header indicators: defaults to

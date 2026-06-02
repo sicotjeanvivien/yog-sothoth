@@ -32,10 +32,10 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
-import { fetchPool } from "@/lib/api/pool";
-import { fetchPoolLatestState } from "@/lib/api/latest-state";
-import { fetchPoolSwapEvents } from "@/lib/api/swap-events";
-import { fetchPoolLiquidityEvents } from "@/lib/api/liquidity-events";
+import { fetchPool } from "@/lib/api/server/pool";
+import { fetchPoolLatestState } from "@/lib/api/server/latest-state";
+import { fetchPoolSwapEvents } from "@/lib/api/server/swap-events";
+import { fetchPoolLiquidityEvents } from "@/lib/api/server/liquidity-events";
 import { safeFetch, safeFetchOrNotFound } from "@/lib/api/safe-fetch";
 import type {
   PageDir,

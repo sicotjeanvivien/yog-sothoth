@@ -13,8 +13,8 @@
  * the public path parameter before calling this function.
  */
 
-import { apiGet } from "./client";
-import { PoolSchema, type PoolResponse } from "./schema/pool";
+import { apiGet } from "../client/server";
+import { PoolSchema, type PoolResponse } from "../schema/pool";
 
 /**
  * Validate that the address looks like a Solana base58 pubkey.

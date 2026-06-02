@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError } from "../errors";
-import { fetchPools, FetchPoolsParams } from "../pools";
+import { fetchPools, FetchPoolsParams } from "../server/pools";
 import { __resetServerEnv } from "../../config/server-env.schema";
 import { validPoolsPage } from "./fixtures";
 
@@ -204,7 +204,7 @@ describe("fetchPools — HTTP failures", () => {
     try {
       await fetchPools(params);
       expect.fail("expected ApiClientError");
-    } catch (err) {            
+    } catch (err) {
       expect(err).toBeInstanceOf(RangeError);
       expect((err as RangeError).message).toEqual("`limit` must be an integer in [1, 200], got 300");
     }

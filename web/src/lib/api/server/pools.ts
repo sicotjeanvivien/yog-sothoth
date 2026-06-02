@@ -13,9 +13,9 @@
  * `ApiClientError`.
  */
 
-import { apiGet } from "./client";
-import { PoolsPageSchema, type PoolsPageResponse } from "./schema/page";
-import type { PageDir, PagePosition, PoolSort } from "./type/pagination";
+import { apiGet } from "../client/server";
+import { PoolsPageSchema, type PoolsPageResponse } from "../schema/page";
+import type { PageDir, PagePosition, PoolSort } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;

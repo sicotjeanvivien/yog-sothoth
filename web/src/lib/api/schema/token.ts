@@ -4,7 +4,7 @@ import { PriceSchema } from "./price";
 export const TokenSchema = z.object({
   mint: z.string(),
   symbol: z.string(),
-  name: z.string(),
+  name: z.string().nullable(),
   decimals: z.number(),
   logoUri: z.url().nullable(),
   price: PriceSchema.nullable(),

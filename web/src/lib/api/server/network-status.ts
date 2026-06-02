@@ -8,8 +8,8 @@
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 
-import { apiGet } from "./client";
-import { NetworkStatusSchema, type NetworkStatusResponse } from "./schema/network-status";
+import { apiGet } from "../client/server";
+import { NetworkStatusSchema, type NetworkStatusResponse } from "../schema/network-status";
 
 /** Fetch the current network status snapshot from `yog-api`. */
 export async function fetchNetworkStatus(): Promise<NetworkStatusResponse> {

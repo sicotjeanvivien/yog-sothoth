@@ -13,12 +13,12 @@
  * `crates/core/src/domain/pool_current_state.rs`.
  */
 
-import { apiGet } from "./client";
+import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "./pool";
 import {
   PoolCurrentStateSchema,
   type PoolCurrentStateResponse,
-} from "./schema/pool-current-state";
+} from "../schema/pool-current-state";
 
 /**
  * Fetch the latest projected state of a pool.

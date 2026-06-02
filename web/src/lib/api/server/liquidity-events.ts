@@ -5,13 +5,13 @@
  * Display order is most-recent first.
  */
 
-import { apiGet } from "./client";
+import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "./pool";
 import {
   LiquidityEventsPageSchema,
   type LiquidityEventsPageResponse,
-} from "./schema/page";
-import type { PageDir, PagePosition } from "./type/pagination";
+} from "../schema/page";
+import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
