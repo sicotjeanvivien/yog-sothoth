@@ -563,7 +563,7 @@ pub(crate) fn make_swap_page(
         events.first().map(|e| {
             Cursor::Swap(SwapCursor {
                 timestamp: e.timestamp,
-                signature: e.signature.clone(),
+                signature: e.signature,
             })
         })
     };
@@ -573,7 +573,7 @@ pub(crate) fn make_swap_page(
         events.last().map(|e| {
             Cursor::Swap(SwapCursor {
                 timestamp: e.timestamp,
-                signature: e.signature.clone(),
+                signature: e.signature,
             })
         })
     };
@@ -599,7 +599,7 @@ pub(crate) fn make_liquidity_page(
         events.first().map(|e| {
             Cursor::Liquidity(LiquidityCursor {
                 timestamp: e.timestamp,
-                signature: e.signature.clone(),
+                signature: e.signature,
             })
         })
     };
@@ -609,7 +609,7 @@ pub(crate) fn make_liquidity_page(
         events.last().map(|e| {
             Cursor::Liquidity(LiquidityCursor {
                 timestamp: e.timestamp,
-                signature: e.signature.clone(),
+                signature: e.signature,
             })
         })
     };
@@ -624,7 +624,7 @@ pub(crate) fn make_liquidity_page(
 
 pub(crate) fn make_pool_current_state(pool_address: Pubkey) -> PoolCurrentState {
     PoolCurrentState {
-        pool_address: pool_address,
+        pool_address,
         protocol: Protocol::MeteoraDammV2,
         reserve_a: 10_000_000,
         reserve_b: 20_000_000,
