@@ -20,6 +20,7 @@ rustls = { workspace = true }
 chrono = { workspace = true }
 base64 = { workspace = true }
 solana-pubkey = { workspace = true }
+solana-signature = { workspace = true }
 rust_decimal = { workspace = true }
 
 axum = { workspace = true }

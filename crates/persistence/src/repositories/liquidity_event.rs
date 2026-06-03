@@ -64,7 +64,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             "#,
             event.pool_address.to_string(),
             event.protocol.as_str(),
-            event.signature,
+            event.signature.to_string(),
             event.token_a_mint.to_string(),
             event.token_b_mint.to_string(),
             event.liquidity_event_kind.as_str(),
@@ -105,7 +105,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
         let (cursor_timestamp, cursor_signature) = match active_cursor {
-            Some(c) => (Some(c.timestamp), Some(c.signature)),
+            Some(c) => (Some(c.timestamp), Some(c.signature.to_string())),
             None => (None, None),
         };
 
@@ -198,7 +198,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
                 events.first().map(|e| {
                     Cursor::Liquidity(LiquidityCursor {
                         timestamp: e.timestamp,
-                        signature: e.signature.clone(),
+                        signature: e.signature,
                     })
                 })
             };
@@ -208,7 +208,7 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
                 events.last().map(|e| {
                     Cursor::Liquidity(LiquidityCursor {
                         timestamp: e.timestamp,
-                        signature: e.signature.clone(),
+                        signature: e.signature,
                     })
                 })
             };

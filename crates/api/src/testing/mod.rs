@@ -13,6 +13,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -502,7 +503,7 @@ pub(crate) fn make_swap_event(pool_address: Pubkey) -> SwapEvent {
     SwapEvent {
         pool_address,
         protocol: Protocol::MeteoraDammV2,
-        signature: format!("swapsig{}", pool_address),
+        signature: sig_for_pool(pool_address, 1),
         timestamp: ts(1_500),
         token_a_mint: pk(10),
         token_b_mint: pk(11),
@@ -526,7 +527,7 @@ pub(crate) fn make_liquidity_event(pool_address: Pubkey) -> LiquidityEvent {
     LiquidityEvent {
         pool_address,
         protocol: Protocol::MeteoraDammV2,
-        signature: format!("liqsig{}", pool_address),
+        signature: sig_for_pool(pool_address, 1),
         timestamp: ts(1_600),
         token_a_mint: pk(10),
         token_b_mint: pk(11),
@@ -623,7 +624,8 @@ pub(crate) fn make_liquidity_page(
 
 pub(crate) fn make_pool_current_state(pool_address: Pubkey) -> PoolCurrentState {
     PoolCurrentState {
-        pool_address: pool_address.to_string(),
+        pool_address: pool_address,
+        protocol: Protocol::MeteoraDammV2,
         reserve_a: 10_000_000,
         reserve_b: 20_000_000,
         last_sqrt_price: Some(1_000_000_000_000_000_000u128),
@@ -632,8 +634,18 @@ pub(crate) fn make_pool_current_state(pool_address: Pubkey) -> PoolCurrentState 
         last_liquidity_at: Some(ts(1_600)),
         last_event_at: ts(1_600),
         last_event_kind: yog_core::domain::LastEventKind::LiquidityAdd,
-        last_signature: pool_address.to_string(),
-        protocol: "damm_v2".to_string(),
+        last_signature: sig_for_pool(pool_address, 1),
         updated_at: ts(1_600),
     }
+}
+
+/// Build a deterministic, valid `Signature` for fixtures. The first 32
+/// bytes come from the pool's pubkey so distinct pools get distinct
+/// signatures; the last byte is a tag to distinguish event kinds for
+/// the same pool (e.g. swap vs liquidity).
+pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
+    let mut bytes = [0u8; 64];
+    bytes[..32].copy_from_slice(&pool_address.to_bytes());
+    bytes[63] = tag;
+    Signature::from(bytes)
 }

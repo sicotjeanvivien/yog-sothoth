@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 use crate::domain::{ClaimPositionFeeEvent, ClaimRewardEvent, LiquidityEvent, Protocol, SwapEvent};
 
@@ -32,12 +33,12 @@ impl DomainEvent {
     }
 
     /// Transaction signature this event came from.
-    pub fn signature(&self) -> &str {
+    pub fn signature(&self) -> Signature {
         match self {
-            Self::Swap(e) => &e.signature,
-            Self::Liquidity(e) => &e.signature,
-            Self::ClaimPositionFee(e) => &e.signature,
-            Self::ClaimReward(e) => &e.signature,
+            Self::Swap(e) => e.signature,
+            Self::Liquidity(e) => e.signature,
+            Self::ClaimPositionFee(e) => e.signature,
+            Self::ClaimReward(e) => e.signature,
         }
     }
 

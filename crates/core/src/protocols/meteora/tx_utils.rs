@@ -1,21 +1,28 @@
+use std::str::FromStr;
+
 use crate::solana_types::{EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction};
 use crate::{CoreError, CoreResult};
 use chrono::{DateTime, Utc};
+use solana_signature::Signature;
 
 /// Extract the first transaction signature.
 pub(crate) fn extract_signature(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
-) -> CoreResult<String> {
+) -> CoreResult<Signature> {
     match &tx.transaction.transaction {
         EncodedTransaction::Json(ui_tx) => {
-            ui_tx
+            let sig_str = ui_tx
                 .signatures
                 .first()
-                .cloned()
                 .ok_or_else(|| CoreError::MissingField {
                     signature: String::new(),
                     field: "signatures".to_string(),
-                })
+                })?;
+
+            Signature::from_str(sig_str).map_err(|e| CoreError::ParseError {
+                signature: String::new(),
+                reason: format!("invalid signature {sig_str}: {e}"),
+            })
         }
         _ => Err(CoreError::ParseError {
             signature: String::new(),

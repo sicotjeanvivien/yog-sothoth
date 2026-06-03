@@ -66,7 +66,7 @@ impl SwapEventRepository for PgSwapEventRepository {
             "#,
             event.pool_address.to_string(),
             event.protocol.as_str(),
-            event.signature,
+            event.signature.to_string(),
             event.token_a_mint.to_string(),
             event.token_b_mint.to_string(),
             event.trade_direction.as_str(),
@@ -122,7 +122,7 @@ impl SwapEventRepository for PgSwapEventRepository {
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
         let (cursor_timestamp, cursor_signature) = match active_cursor {
-            Some(c) => (Some(c.timestamp), Some(c.signature)),
+            Some(c) => (Some(c.timestamp), Some(c.signature.to_string())),
             None => (None, None),
         };
 

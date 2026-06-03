@@ -17,6 +17,7 @@
 //!
 //! Conversions go through the shared helpers in `repository_utils` to keep
 //! error mapping consistent across the crate.
+mod rows;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -27,9 +28,9 @@ use yog_core::{
     domain::{LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert},
 };
 
-use crate::repository_utils::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_u64_to_i64, convert_u128_to_bigdecimal,
-    map_sqlx_error,
+use crate::{
+    repositories::pool_current_state::rows::PoolCurrentStateRow,
+    repository_utils::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error},
 };
 
 /// sqlx-backed implementation of [`PoolCurrentStateRepository`].
@@ -42,65 +43,6 @@ impl PgPoolCurrentStateRepository {
         Self { pool }
     }
 }
-
-// -------------------------------------------------------------------------
-// Row -> domain mapping
-// -------------------------------------------------------------------------
-
-/// Raw row mirror — mirrors the SELECT column order below.
-#[derive(sqlx::FromRow)]
-struct PoolCurrentStateRow {
-    pool_address: String,
-    protocol: String,
-    last_event_at: DateTime<Utc>,
-    last_event_kind: String,
-    last_signature: String,
-    reserve_a: i64,
-    reserve_b: i64,
-    last_sqrt_price: Option<sqlx::types::BigDecimal>,
-    last_swap_at: Option<DateTime<Utc>>,
-    liquidity: Option<sqlx::types::BigDecimal>,
-    last_liquidity_at: Option<DateTime<Utc>>,
-    updated_at: DateTime<Utc>,
-}
-
-impl TryFrom<PoolCurrentStateRow> for PoolCurrentState {
-    type Error = RepositoryError;
-
-    fn try_from(row: PoolCurrentStateRow) -> Result<Self, Self::Error> {
-        let last_event_kind = LastEventKind::from_wire(&row.last_event_kind).ok_or_else(|| {
-            RepositoryError::Integrity(format!(
-                "invalid last_event_kind in pool_current_state: {}",
-                row.last_event_kind
-            ))
-        })?;
-
-        Ok(PoolCurrentState {
-            pool_address: row.pool_address,
-            protocol: row.protocol,
-            last_event_at: row.last_event_at,
-            last_event_kind,
-            last_signature: row.last_signature,
-            reserve_a: convert_i64_to_u64(row.reserve_a, "reserve_a")?,
-            reserve_b: convert_i64_to_u64(row.reserve_b, "reserve_b")?,
-            last_sqrt_price: row
-                .last_sqrt_price
-                .map(|v| convert_bigdecimal_to_u128(v, "last_sqrt_price"))
-                .transpose()?,
-            last_swap_at: row.last_swap_at,
-            liquidity: row
-                .liquidity
-                .map(|v| convert_bigdecimal_to_u128(v, "liquidity"))
-                .transpose()?,
-            last_liquidity_at: row.last_liquidity_at,
-            updated_at: row.updated_at,
-        })
-    }
-}
-
-// -------------------------------------------------------------------------
-// Trait impl
-// -------------------------------------------------------------------------
 
 #[async_trait]
 impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
@@ -168,11 +110,11 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
             WHERE pool_current_state.last_event_at < EXCLUDED.last_event_at
             RETURNING (xmax = 0) AS "inserted!"
             "#,
-            upsert.pool_address,
-            upsert.protocol,
+            upsert.pool_address.to_string(),
+            &upsert.protocol.as_str(),
             upsert.event_at,
             upsert.event_kind.as_str(),
-            upsert.signature,
+            upsert.signature.to_string(),
             reserve_a,
             reserve_b,
             sqrt_price,

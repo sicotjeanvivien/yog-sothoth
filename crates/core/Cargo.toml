@@ -12,6 +12,7 @@ wasm = []
 serde = { workspace = true }
 serde_json = { workspace = true }
 solana-pubkey = { workspace = true, optional = true, default-features = false }
+solana-signature = { workspace = true }
 solana-transaction-status = { workspace = true, optional = true, default-features = false }
 chrono = { workspace = true }
 thiserror = { workspace = true }

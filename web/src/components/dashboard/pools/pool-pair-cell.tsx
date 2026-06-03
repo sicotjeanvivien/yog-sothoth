@@ -66,7 +66,7 @@ function TokenLogo({ token }: { token: TokenResponse }) {
       aria-hidden="true"
       className={`${sharedClass} flex items-center justify-center text-[10px] font-bold tracking-wide text-sothoth-300 uppercase`}
     >
-      {token.symbol.charAt(0)}
+      {token.symbol ? token.symbol.charAt(0) : "-"}
     </div>
   );
 }

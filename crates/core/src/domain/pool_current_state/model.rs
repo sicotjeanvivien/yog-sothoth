@@ -9,8 +9,10 @@
 //! database row live in `crates/persistence/src/repositories/pool_current_state.rs`.
 
 use chrono::{DateTime, Utc};
+use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
-use crate::domain::LiquidityEventKind;
+use crate::domain::{LiquidityEventKind, Protocol};
 
 /// Kind of the most recent event that touched a pool.
 ///
@@ -80,12 +82,12 @@ impl From<LiquidityEventKind> for LastEventKind {
 ///   (concentrated-liquidity L as u128, stored as `NUMERIC(39, 0)`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCurrentState {
-    pub pool_address: String,
-    pub protocol: String,
+    pub pool_address: Pubkey,
+    pub protocol: Protocol,
 
     pub last_event_at: DateTime<Utc>,
     pub last_event_kind: LastEventKind,
-    pub last_signature: String,
+    pub last_signature: Signature,
 
     pub reserve_a: u64,
     pub reserve_b: u64,
@@ -111,12 +113,12 @@ pub struct PoolCurrentState {
 /// guard.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCurrentStateUpsert {
-    pub pool_address: String,
-    pub protocol: String,
+    pub pool_address: Pubkey,
+    pub protocol: Protocol,
 
     pub event_at: DateTime<Utc>,
     pub event_kind: LastEventKind,
-    pub signature: String,
+    pub signature: Signature,
 
     pub reserve_a: u64,
     pub reserve_b: u64,
@@ -131,20 +133,20 @@ pub struct PoolCurrentStateUpsert {
 impl PoolCurrentStateUpsert {
     /// Build an upsert payload from a swap event.
     pub fn from_swap(
-        pool_address: impl Into<String>,
-        protocol: impl Into<String>,
+        pool_address: Pubkey,
+        protocol: Protocol,
         event_at: DateTime<Utc>,
-        signature: impl Into<String>,
+        signature: Signature,
         reserve_a: u64,
         reserve_b: u64,
         sqrt_price: u128,
     ) -> Self {
         Self {
-            pool_address: pool_address.into(),
-            protocol: protocol.into(),
+            pool_address: pool_address,
+            protocol: protocol,
             event_at,
             event_kind: LastEventKind::Swap,
-            signature: signature.into(),
+            signature: signature,
             reserve_a,
             reserve_b,
             sqrt_price: Some(sqrt_price),
@@ -161,18 +163,18 @@ impl PoolCurrentStateUpsert {
     // them into a struct would just push the same arity one level up.
     #[allow(clippy::too_many_arguments)]
     pub fn from_liquidity(
-        pool_address: impl Into<String>,
-        protocol: impl Into<String>,
+        pool_address: Pubkey,
+        protocol: Protocol,
         event_at: DateTime<Utc>,
-        signature: impl Into<String>,
+        signature: Signature,
         kind: LiquidityEventKind,
         reserve_a: u64,
         reserve_b: u64,
         liquidity: u128,
     ) -> Self {
         Self {
-            pool_address: pool_address.into(),
-            protocol: protocol.into(),
+            pool_address: pool_address,
+            protocol: protocol,
             event_at,
             event_kind: kind.into(),
             signature: signature.into(),
@@ -187,6 +189,14 @@ impl PoolCurrentStateUpsert {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sig(seed: u8) -> Signature {
+        Signature::from([seed; 64])
+    }
+
+    fn pk(seed: u8) -> Pubkey {
+        Pubkey::new_from_array([seed; 32])
+    }
 
     #[test]
     fn last_event_kind_roundtrip() {
@@ -220,8 +230,15 @@ mod tests {
     #[test]
     fn from_swap_marks_kind_as_swap_and_sets_only_sqrt_price() {
         let now = Utc::now();
-        let upsert =
-            PoolCurrentStateUpsert::from_swap("pool", "damm_v2", now, "sig", 100, 200, 9_999);
+        let upsert = PoolCurrentStateUpsert::from_swap(
+            pk(1),
+            Protocol::MeteoraDammV2,
+            now,
+            sig(1),
+            100,
+            200,
+            9_999,
+        );
         assert_eq!(upsert.event_kind, LastEventKind::Swap);
         assert_eq!(upsert.sqrt_price, Some(9_999));
         assert_eq!(upsert.liquidity, None);
@@ -231,20 +248,20 @@ mod tests {
     fn from_liquidity_maps_kind_through_domain_enum() {
         let now = Utc::now();
         let add = PoolCurrentStateUpsert::from_liquidity(
-            "pool",
-            "damm_v2",
+            pk(1),
+            Protocol::MeteoraDammV2,
             now,
-            "sig",
+            sig(1),
             LiquidityEventKind::Add,
             100,
             200,
             42,
         );
         let remove = PoolCurrentStateUpsert::from_liquidity(
-            "pool",
-            "damm_v2",
+            pk(1),
+            Protocol::MeteoraDammV2,
             now,
-            "sig",
+            sig(1),
             LiquidityEventKind::Remove,
             100,
             200,

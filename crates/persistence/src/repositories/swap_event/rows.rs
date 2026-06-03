@@ -8,6 +8,7 @@ use yog_core::{
 
 use crate::repository_utils::{
     convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
+    convert_string_to_signature,
 };
 
 /// Row shape returned by SELECTs on `swap_events`. Mirrors every
@@ -42,7 +43,7 @@ impl TryFrom<SwapEventRow> for SwapEvent {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             protocol: Protocol::from_str(&row.protocol)
                 .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
-            signature: row.signature,
+            signature: convert_string_to_signature(row.signature, "signature")?,
             timestamp: row.timestamp,
             token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
             token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,

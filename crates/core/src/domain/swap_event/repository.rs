@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition};
@@ -14,7 +15,7 @@ use crate::{RepositoryResult, domain::SwapEvent};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SwapCursor {
     pub timestamp: DateTime<Utc>,
-    pub signature: String,
+    pub signature: Signature,
 }
 
 /// Persistence contract for swap events.

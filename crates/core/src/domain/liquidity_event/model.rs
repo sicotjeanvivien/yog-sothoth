@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 use crate::domain::Protocol;
 
@@ -63,7 +64,7 @@ pub struct LiquidityEvent {
     // ── Identification ──────────────────────────────────────────────────────
     pub pool_address: Pubkey,
     pub protocol: Protocol,
-    pub signature: String,
+    pub signature: Signature,
     pub timestamp: DateTime<Utc>,
 
     // ── Pool tokens (canonical order) ───────────────────────────────────────

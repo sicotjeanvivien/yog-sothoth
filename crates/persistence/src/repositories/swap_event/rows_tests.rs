@@ -6,6 +6,7 @@
 //! `RepositoryError::Integrity`.
 
 use chrono::{Duration, Utc};
+use solana_signature::Signature;
 use sqlx::types::BigDecimal;
 use yog_core::{
     RepositoryError,
@@ -24,7 +25,7 @@ fn valid_row() -> SwapEventRow {
     SwapEventRow {
         pool_address: VALID_POOL.into(),
         protocol: Protocol::MeteoraDammV2.as_str().to_string(),
-        signature: "sig_5xY3Z".into(),
+        signature: sig(1).to_string(),
         timestamp: Utc::now(),
         token_a_mint: VALID_TOKEN_A.into(),
         token_b_mint: VALID_TOKEN_B.into(),
@@ -40,6 +41,10 @@ fn valid_row() -> SwapEventRow {
         referral_fee: 400,
         fee_token_is_a: true,
     }
+}
+
+fn sig(seed: u8) -> Signature {
+    Signature::from([seed; 64])
 }
 
 // ── Happy path ───────────────────────────────────────────────────────
@@ -67,7 +72,7 @@ fn try_from_valid_row_returns_event_with_all_fields_mapped() {
 
 #[test]
 fn try_from_preserves_signature_and_timestamp() {
-    let signature = "abc123def456".to_string();
+    let signature = sig(1).to_string();
     let timestamp = Utc::now() + Duration::seconds(123);
     let row = SwapEventRow {
         signature: signature.clone(),
@@ -77,7 +82,7 @@ fn try_from_preserves_signature_and_timestamp() {
 
     let event = SwapEvent::try_from(row).expect("valid row should convert");
 
-    assert_eq!(event.signature, signature);
+    assert_eq!(event.signature.to_string(), signature);
     assert_eq!(event.timestamp, timestamp);
 }
 

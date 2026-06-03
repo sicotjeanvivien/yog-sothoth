@@ -1,4 +1,5 @@
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
@@ -75,4 +76,9 @@ pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
 pub(crate) fn convert_u128_to_bigdecimal(v: u128, _field: &str) -> BigDecimal {
     // u128::to_string is always parseable into BigDecimal — infallible in practice.
     BigDecimal::from_str(&v.to_string()).expect("u128 string is always valid BigDecimal")
+}
+
+pub(crate) fn convert_string_to_signature(key: String, field: &str) -> RepositoryResult<Signature> {
+    Signature::from_str(&key)
+        .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
 }

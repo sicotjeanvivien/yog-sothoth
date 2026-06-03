@@ -8,7 +8,8 @@ use yog_core::{
 };
 
 use crate::repository_utils::{
-    convert_i64_to_u64, convert_string_to_pubkey, convert_u64_to_i64, map_sqlx_error,
+    convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature, convert_u64_to_i64,
+    map_sqlx_error,
 };
 
 pub struct PgClaimRewardEventRepository {
@@ -37,7 +38,7 @@ impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
             "#,
             event.pool_address.to_string(),
             event.protocol.as_str(),
-            event.signature,
+            event.signature.to_string(),
             event.position.to_string(),
             event.owner.to_string(),
             event.mint_reward.to_string(),
@@ -88,7 +89,7 @@ impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
                     protocol: Protocol::from_str(&row.protocol).map_err(|e| {
                         RepositoryError::Integrity(format!("invalid protocol: {e}"))
                     })?,
-                    signature: row.signature,
+                    signature: convert_string_to_signature(row.signature, "signature")?,
                     timestamp: row.timestamp,
                     position: convert_string_to_pubkey(row.position, "position")?,
                     owner: convert_string_to_pubkey(row.owner, "owner")?,

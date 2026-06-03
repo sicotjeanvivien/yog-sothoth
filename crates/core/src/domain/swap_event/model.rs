@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 use crate::domain::{Protocol, TradeDirection};
 
@@ -52,7 +53,7 @@ pub struct SwapEvent {
     pub protocol: Protocol,
 
     /// Transaction signature, base58-encoded.
-    pub signature: String,
+    pub signature: Signature,
 
     /// Block timestamp at which the transaction was confirmed.
     pub timestamp: DateTime<Utc>,

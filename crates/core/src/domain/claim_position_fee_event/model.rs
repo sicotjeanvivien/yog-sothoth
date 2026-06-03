@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 use crate::domain::Protocol;
 
@@ -19,7 +20,7 @@ pub struct ClaimPositionFeeEvent {
     // ── Identification ──────────────────────────────────────────────────────
     pub pool_address: Pubkey,
     pub protocol: Protocol,
-    pub signature: String,
+    pub signature: Signature,
     pub timestamp: DateTime<Utc>,
 
     pub position: Pubkey,

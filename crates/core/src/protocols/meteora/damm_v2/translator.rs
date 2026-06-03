@@ -18,6 +18,7 @@ use crate::solana_types::{
 };
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 use std::str::FromStr;
 
 use crate::{
@@ -40,7 +41,7 @@ use super::events::{
 pub(super) struct EventContext {
     pub token_a_mint: Pubkey,
     pub token_b_mint: Pubkey,
-    pub signature: String,
+    pub signature: Signature,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -85,11 +86,10 @@ pub(super) fn translate_swap(
             wire.included_transfer_fee_amount_in,
         ),
     };
-
     Ok(SwapEvent {
         pool_address: wire.pool,
         protocol: Protocol::MeteoraDammV2,
-        signature: ctx.signature.clone(),
+        signature: ctx.signature,
         timestamp: ctx.timestamp,
 
         token_a_mint: ctx.token_a_mint,
@@ -126,7 +126,7 @@ pub(super) fn translate_liquidity(
     Ok(LiquidityEvent {
         pool_address: wire.pool,
         protocol: Protocol::MeteoraDammV2,
-        signature: ctx.signature.clone(),
+        signature: ctx.signature,
         timestamp: ctx.timestamp,
 
         token_a_mint: ctx.token_a_mint,
@@ -150,7 +150,7 @@ pub(super) fn translate_liquidity(
 /// This translation is infallible — every field maps directly.
 pub(super) fn translate_claim_position_fee(
     wire: &EvtClaimPositionFee,
-    signature: String,
+    signature: Signature,
     timestamp: DateTime<Utc>,
 ) -> ClaimPositionFeeEvent {
     ClaimPositionFeeEvent {
@@ -158,10 +158,8 @@ pub(super) fn translate_claim_position_fee(
         protocol: Protocol::MeteoraDammV2,
         signature,
         timestamp,
-
         position: wire.position,
         owner: wire.owner,
-
         fee_a_claimed: wire.fee_a_claimed,
         fee_b_claimed: wire.fee_b_claimed,
     }
@@ -172,7 +170,7 @@ pub(super) fn translate_claim_position_fee(
 /// This translation is infallible — every field maps directly.
 pub(super) fn translate_claim_reward(
     wire: &EvtClaimReward,
-    signature: String,
+    signature: Signature,
     timestamp: DateTime<Utc>,
 ) -> ClaimRewardEvent {
     ClaimRewardEvent {
@@ -180,10 +178,8 @@ pub(super) fn translate_claim_reward(
         protocol: Protocol::MeteoraDammV2,
         signature,
         timestamp,
-
         position: wire.position,
         owner: wire.owner,
-
         mint_reward: wire.mint_reward,
         reward_index: wire.reward_index,
         total_reward: wire.total_reward,
@@ -362,7 +358,7 @@ fn compute_fee_token_is_a(
 pub(super) fn translate_wire_event(
     wire: &DammV2WireEvent,
     transfer_checked_group: &[&UiInstruction],
-    signature: &str,
+    signature: Signature,
     timestamp: DateTime<Utc>,
 ) -> Result<crate::domain::DomainEvent, TranslationError> {
     use crate::domain::DomainEvent;
@@ -373,7 +369,7 @@ pub(super) fn translate_wire_event(
             let ctx = EventContext {
                 token_a_mint,
                 token_b_mint,
-                signature: signature.to_string(),
+                signature: signature,
                 timestamp,
             };
             translate_swap(e, &ctx).map(DomainEvent::Swap)
@@ -383,18 +379,16 @@ pub(super) fn translate_wire_event(
             let ctx = EventContext {
                 token_a_mint,
                 token_b_mint,
-                signature: signature.to_string(),
+                signature: signature,
                 timestamp,
             };
             translate_liquidity(e, &ctx).map(DomainEvent::Liquidity)
         }
         DammV2WireEvent::ClaimPositionFee(e) => Ok(DomainEvent::ClaimPositionFee(
-            translate_claim_position_fee(e, signature.to_string(), timestamp),
+            translate_claim_position_fee(e, signature, timestamp),
         )),
         DammV2WireEvent::ClaimReward(e) => Ok(DomainEvent::ClaimReward(translate_claim_reward(
-            e,
-            signature.to_string(),
-            timestamp,
+            e, signature, timestamp,
         ))),
     }
 }

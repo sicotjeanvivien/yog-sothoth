@@ -3,6 +3,7 @@
 
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 use super::{
     decode_liquidity_cursor, decode_pool_cursor, decode_swap_cursor, encode_cursor,
@@ -24,6 +25,10 @@ fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
+fn sig(seed: u8) -> Signature {
+    Signature::from([seed; 64])
+}
+
 fn pool_cursor() -> PoolCursor {
     PoolCursor {
         sort_column: yog_core::PoolSortColumn::FirstSeen,
@@ -35,14 +40,14 @@ fn pool_cursor() -> PoolCursor {
 fn swap_cursor() -> SwapCursor {
     SwapCursor {
         timestamp: ts(1_700_000_500),
-        signature: "5xSig".to_string(),
+        signature: sig(1),
     }
 }
 
 fn liquidity_cursor() -> LiquidityCursor {
     LiquidityCursor {
         timestamp: ts(1_700_000_900),
-        signature: "3zLiq".to_string(),
+        signature: sig(1),
     }
 }
 
@@ -88,7 +93,7 @@ fn timestamp_survives_round_trip_to_the_second() {
     // for a timestamp with a non-zero offset from a round number.
     let original = SwapCursor {
         timestamp: Utc.timestamp_opt(1_700_000_123, 0).unwrap(),
-        signature: "sig".to_string(),
+        signature: sig(1),
     };
     let encoded = encode_cursor(&Cursor::Swap(original.clone())).unwrap();
     let decoded = decode_swap_cursor(&encoded).unwrap();

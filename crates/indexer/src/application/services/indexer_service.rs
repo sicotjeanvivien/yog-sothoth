@@ -300,10 +300,10 @@ impl IndexerService {
     /// The SQL-side stale-write guard makes replays safe.
     async fn update_pool_current_state_from_swap(&self, protocol: &Protocol, event: &SwapEvent) {
         let upsert = PoolCurrentStateUpsert::from_swap(
-            event.pool_address.to_string(),
-            event.protocol.as_str().to_string(),
+            event.pool_address,
+            event.protocol,
             event.timestamp,
-            event.signature.to_string(),
+            event.signature,
             event.reserve_a_after,
             event.reserve_b_after,
             event.next_sqrt_price,
@@ -319,10 +319,10 @@ impl IndexerService {
         event: &LiquidityEvent,
     ) {
         let upsert = PoolCurrentStateUpsert::from_liquidity(
-            event.pool_address.to_string(),
-            event.protocol.as_str().to_string(),
+            event.pool_address,
+            event.protocol,
             event.timestamp,
-            event.signature.to_string(),
+            event.signature,
             event.liquidity_event_kind,
             event.reserve_a_after,
             event.reserve_b_after,

@@ -13,6 +13,7 @@
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
+use solana_signature::Signature;
 use std::str::FromStr;
 use yog_core::{
     Cursor, PoolSortColumn,
@@ -45,11 +46,11 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
         }),
         Cursor::Swap(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
-            signature: c.signature.clone(),
+            signature: c.signature.to_string(),
         }),
         Cursor::Liquidity(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
-            signature: c.signature.clone(),
+            signature: c.signature.to_string(),
         }),
     }
 }
@@ -89,17 +90,21 @@ pub(crate) fn decode_pool_cursor(raw: &str) -> Result<PoolCursor, ApiError> {
 
 pub(crate) fn decode_swap_cursor(raw: &str) -> Result<SwapCursor, ApiError> {
     let wire: EventCursorWire = decode_b64_json(raw)?;
+    let signature = Signature::from_str(&wire.signature)
+        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?;
     Ok(SwapCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
-        signature: wire.signature,
+        signature,
     })
 }
 
 pub(crate) fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiError> {
     let wire: EventCursorWire = decode_b64_json(raw)?;
+    let signature = Signature::from_str(&wire.signature)
+        .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?;
     Ok(LiquidityCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
-        signature: wire.signature,
+        signature,
     })
 }
 

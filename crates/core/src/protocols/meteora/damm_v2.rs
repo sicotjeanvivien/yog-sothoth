@@ -4,6 +4,7 @@ pub(super) mod translator;
 
 use crate::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiInstruction};
 use chrono::{DateTime, Utc};
+use solana_signature::Signature;
 
 use crate::CoreResult;
 use crate::domain::Protocol;
@@ -61,7 +62,7 @@ impl PoolIndexer for MeteoraDammV2 {
             wire_outcome,
             transfer_groups,
             self.protocol,
-            &signature,
+            signature,
             timestamp,
         )
     }
@@ -76,7 +77,7 @@ fn translate_extracted_events(
     wire_outcome: extractor::ExtractedEvents,
     transfer_groups: Vec<Vec<&UiInstruction>>,
     protocol: Protocol,
-    signature: &str,
+    signature: Signature,
     timestamp: DateTime<Utc>,
 ) -> CoreResult<ExtractionOutcome> {
     let mut outcome = ExtractionOutcome::default();

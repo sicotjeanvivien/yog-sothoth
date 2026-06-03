@@ -36,7 +36,7 @@ impl From<LiquidityEvent> for LiquidityEventResponse {
         Self {
             pool_address: event.pool_address.to_string(),
             protocol: event.protocol.as_str().to_string(),
-            signature: event.signature,
+            signature: event.signature.to_string(),
             timestamp: event.timestamp,
             token_a_mint: event.token_a_mint.to_string(),
             token_b_mint: event.token_b_mint.to_string(),

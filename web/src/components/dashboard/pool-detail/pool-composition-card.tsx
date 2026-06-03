@@ -53,6 +53,11 @@ export function PoolCompositionCard({
   composition: PoolComposition;
   tvlUsd: string | null;
 }) {
+  console.log(tokenA);
+  console.log(tokenB);
+  console.log(composition);
+  
+  
   return (
     <div className={CARD_CLASS}>
       <p className={LABEL_CLASS}>{label}</p>

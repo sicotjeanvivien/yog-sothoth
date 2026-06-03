@@ -33,11 +33,11 @@ pub(crate) struct PoolCurrentStateResponse {
 impl From<PoolCurrentState> for PoolCurrentStateResponse {
     fn from(state: PoolCurrentState) -> Self {
         Self {
-            pool_address: state.pool_address,
-            protocol: state.protocol,
+            pool_address: state.pool_address.to_string(),
+            protocol: state.protocol.as_str().to_string(),
             last_event_at: state.last_event_at,
             last_event_kind: last_event_kind_str(state.last_event_kind),
-            last_signature: state.last_signature,
+            last_signature: state.last_signature.to_string(),
             reserve_a: state.reserve_a,
             reserve_b: state.reserve_b,
             last_sqrt_price: state.last_sqrt_price.map(|v| v.to_string()),
