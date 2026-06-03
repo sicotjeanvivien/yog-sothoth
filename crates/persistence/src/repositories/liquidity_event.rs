@@ -1,25 +1,32 @@
+//! Liquidity events repository: inserts new events and paginates
+//! existing ones by pool.
+//!
+//! Both reads are static SQL (one query per traversal mode); the row
+//! shape and the mapping to domain are shared. No dynamic SQL here,
+//! so the layout stays single-file: `LiquidityEventRow` and its
+//! `TryFrom` to domain live at the bottom of this module.
+mod rows;
+
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use std::str::FromStr;
 use yog_core::{
-    RepositoryError, RepositoryResult,
-    domain::{LiquidityCursor, LiquidityEvent, LiquidityEventRepository, Protocol},
+    RepositoryResult,
+    domain::{LiquidityCursor, LiquidityEvent, LiquidityEventRepository},
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
 
 use crate::{
-    repositories::tool::{QueryMode, resolve_query_mode},
-    repository_utils::{
-        convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
-        convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error,
-        parse_string_to_liquidity_event_kind,
+    repositories::{
+        liquidity_event::rows::LiquidityEventRow,
+        tool::{QueryMode, resolve_query_mode},
     },
+    repository_utils::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error},
 };
 
 /// Maximum number of rows returned in a single page, regardless of the
-/// caller's `limit`. Acts as a backstop against an oversized query if
-/// the API-layer validation is bypassed.
+/// caller's `limit`. Backstop against an oversized query if the
+/// API-layer validation is bypassed.
 const MAX_PAGE_SIZE: i64 = 200;
 
 pub struct PgLiquidityEventRepository {
@@ -102,11 +109,12 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             None => (None, None),
         };
 
-        // Two SQL paths — one per traversal mode. Each branch maps
-        // to Vec<LiquidityEvent> in place; see PgSwapEventRepository
-        // for the rationale (sqlx Record types are not mergeable).
-        let mut events: Vec<LiquidityEvent> = match mode {
-            QueryMode::Forward => sqlx::query!(
+        // Two static SQL paths — one per traversal mode. Both produce
+        // Vec<LiquidityEventRow>; the mapping to domain runs once after
+        // the match, no duplication.
+        let rows: Vec<LiquidityEventRow> = match mode {
+            QueryMode::Forward => sqlx::query_as!(
+                LiquidityEventRow,
                 r#"
                 SELECT pool_address, protocol, signature,
                        token_a_mint, token_b_mint,
@@ -131,37 +139,10 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             )
             .fetch_all(&self.pool)
             .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                Ok(LiquidityEvent {
-                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
-                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
-                    })?,
-                    signature: row.signature,
-                    timestamp: row.timestamp,
-                    token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
-                    token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
-                    liquidity_event_kind: parse_string_to_liquidity_event_kind(
-                        row.liquidity_event_kind,
-                        "liquidity_event_kind",
-                    )?,
-                    amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
-                    amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
-                    liquidity_delta: convert_bigdecimal_to_u128(
-                        row.liquidity_delta,
-                        "liquidity_delta",
-                    )?,
-                    reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
-                    reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
-                    position: convert_string_to_pubkey(row.position, "position")?,
-                    owner: convert_string_to_pubkey(row.owner, "owner")?,
-                })
-            })
-            .collect::<RepositoryResult<Vec<_>>>()?,
+            .map_err(map_sqlx_error)?,
 
-            QueryMode::Backward => sqlx::query!(
+            QueryMode::Backward => sqlx::query_as!(
+                LiquidityEventRow,
                 r#"
                 SELECT pool_address, protocol, signature,
                        token_a_mint, token_b_mint,
@@ -186,36 +167,13 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             )
             .fetch_all(&self.pool)
             .await
-            .map_err(map_sqlx_error)?
-            .into_iter()
-            .map(|row| {
-                Ok(LiquidityEvent {
-                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
-                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
-                    })?,
-                    signature: row.signature,
-                    timestamp: row.timestamp,
-                    token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
-                    token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
-                    liquidity_event_kind: parse_string_to_liquidity_event_kind(
-                        row.liquidity_event_kind,
-                        "liquidity_event_kind",
-                    )?,
-                    amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
-                    amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
-                    liquidity_delta: convert_bigdecimal_to_u128(
-                        row.liquidity_delta,
-                        "liquidity_delta",
-                    )?,
-                    reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
-                    reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
-                    position: convert_string_to_pubkey(row.position, "position")?,
-                    owner: convert_string_to_pubkey(row.owner, "owner")?,
-                })
-            })
-            .collect::<RepositoryResult<Vec<_>>>()?,
+            .map_err(map_sqlx_error)?,
         };
+
+        let mut events: Vec<LiquidityEvent> = rows
+            .into_iter()
+            .map(LiquidityEvent::try_from)
+            .collect::<Result<_, _>>()?;
 
         let has_more = events.len() as i64 > effective_limit;
         if has_more {
