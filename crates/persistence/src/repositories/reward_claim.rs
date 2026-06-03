@@ -1,15 +1,21 @@
+//! Reward claim events repository: inserts new claims and lists
+//! them by pool.
+//!
+//! Static SQL on the read; the row shape and the mapping to domain
+//! live at the bottom of the module.
+mod rows;
+
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use std::str::FromStr;
 use yog_core::{
-    RepositoryError, RepositoryResult,
-    domain::{ClaimRewardEvent, ClaimRewardEventRepository, Protocol},
+    RepositoryResult,
+    domain::{ClaimRewardEvent, ClaimRewardEventRepository},
 };
 
-use crate::repository_utils::{
-    convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature, convert_u64_to_i64,
-    map_sqlx_error,
+use crate::{
+    repositories::reward_claim::rows::ClaimRewardEventRow,
+    repository_utils::{convert_u64_to_i64, map_sqlx_error},
 };
 
 pub struct PgClaimRewardEventRepository {
@@ -58,7 +64,8 @@ impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
         pool_address: &Pubkey,
         limit: i64,
     ) -> RepositoryResult<Vec<ClaimRewardEvent>> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            ClaimRewardEventRow,
             r#"
             SELECT pool_address, protocol, signature,
                    position, owner,
@@ -76,28 +83,6 @@ impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter()
-            .map(|row| {
-                let reward_index: u8 = u8::try_from(row.reward_index).map_err(|_| {
-                    RepositoryError::Integrity(format!(
-                        "invalid reward_index: {}",
-                        row.reward_index
-                    ))
-                })?;
-                Ok(ClaimRewardEvent {
-                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
-                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
-                    })?,
-                    signature: convert_string_to_signature(row.signature, "signature")?,
-                    timestamp: row.timestamp,
-                    position: convert_string_to_pubkey(row.position, "position")?,
-                    owner: convert_string_to_pubkey(row.owner, "owner")?,
-                    mint_reward: convert_string_to_pubkey(row.mint_reward, "mint_reward")?,
-                    reward_index,
-                    total_reward: convert_i64_to_u64(row.total_reward, "total_reward")?,
-                })
-            })
-            .collect::<RepositoryResult<Vec<_>>>()
+        rows.into_iter().map(ClaimRewardEvent::try_from).collect()
     }
 }

@@ -1,15 +1,20 @@
+//! Position fee claim events repository: inserts new claims and lists
+//! them by pool.
+//!
+//! Static SQL on the read (single query, no traversal mode); the row
+//! shape and the mapping to domain live at the bottom of the module.
+mod rows;
+
+use crate::{
+    repositories::position_fee_claim::rows::ClaimPositionFeeEventRow,
+    repository_utils::{convert_u64_to_i64, map_sqlx_error},
+};
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use std::str::FromStr;
 use yog_core::{
-    RepositoryError, RepositoryResult,
-    domain::{ClaimPositionFeeEvent, ClaimPositionFeeEventRepository, Protocol},
-};
-
-use crate::repository_utils::{
-    convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature, convert_u64_to_i64,
-    map_sqlx_error,
+    RepositoryResult,
+    domain::{ClaimPositionFeeEvent, ClaimPositionFeeEventRepository},
 };
 
 pub struct PgClaimPositionFeeEventRepository {
@@ -57,7 +62,8 @@ impl ClaimPositionFeeEventRepository for PgClaimPositionFeeEventRepository {
         pool_address: &Pubkey,
         limit: i64,
     ) -> RepositoryResult<Vec<ClaimPositionFeeEvent>> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            ClaimPositionFeeEventRow,
             r#"
             SELECT pool_address, protocol, signature,
                    position, owner,
@@ -76,20 +82,7 @@ impl ClaimPositionFeeEventRepository for PgClaimPositionFeeEventRepository {
         .map_err(map_sqlx_error)?;
 
         rows.into_iter()
-            .map(|row| {
-                Ok(ClaimPositionFeeEvent {
-                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
-                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
-                    })?,
-                    signature: convert_string_to_signature(row.signature, "signature")?,
-                    timestamp: row.timestamp,
-                    position: convert_string_to_pubkey(row.position, "position")?,
-                    owner: convert_string_to_pubkey(row.owner, "owner")?,
-                    fee_a_claimed: convert_i64_to_u64(row.fee_a_claimed, "fee_a_claimed")?,
-                    fee_b_claimed: convert_i64_to_u64(row.fee_b_claimed, "fee_b_claimed")?,
-                })
-            })
-            .collect::<RepositoryResult<Vec<_>>>()
+            .map(ClaimPositionFeeEvent::try_from)
+            .collect()
     }
 }

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT mint,\n                  price_usd AS \"price_usd!: rust_decimal::Decimal\",\n                  price_source, confidence, fetched_at\n            FROM token_prices\n            WHERE mint = $1\n            ORDER BY fetched_at DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "price_usd!: rust_decimal::Decimal",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "price_source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "confidence",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 4,
+        "name": "fetched_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "88c60022312e423fb09174912e340eb043edc3cc97b54416b39dbfcda57e5a66"
+}

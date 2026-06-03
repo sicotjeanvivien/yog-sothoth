@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT mint, symbol, name, decimals, logo_uri,\n                   metadata_source, fetched_at, last_refresh_at\n            FROM token_metadata\n            WHERE mint = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "symbol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "decimals",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "logo_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "metadata_source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "fetched_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_refresh_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b4144ec64feb22cedd84f5d3934debce2ae7d2ef36578be7bab8f03d57f268c0"
+}

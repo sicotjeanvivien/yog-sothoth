@@ -1,19 +1,17 @@
 //! Postgres implementation of `TokenPriceRepository`.
 //!
 //! Backed by the `token_prices` hypertable (migration 004).
+mod rows;
 
+use crate::repository_utils::map_sqlx_error;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
+use rows::TokenPriceRow;
 use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
-
 use yog_core::{
-    RepositoryError, RepositoryResult,
-    domain::{PriceSource, TokenPrice, TokenPriceRepository},
+    RepositoryResult,
+    domain::{TokenPrice, TokenPriceRepository},
 };
-
-use crate::repository_utils::{convert_string_to_pubkey, map_sqlx_error};
 
 /// Postgres-backed token price repository.
 #[derive(Clone)]
@@ -35,6 +33,9 @@ impl TokenPriceRepository for PgTokenPriceRepository {
             return Ok(());
         }
 
+        // Variable-arity bulk insert: QueryBuilder is the right tool
+        // here, the `query!` macros can't generate VALUES tuples at
+        // a runtime-determined arity.
         let mut builder = QueryBuilder::new(
             "INSERT INTO token_prices (mint, price_usd, price_source, confidence, fetched_at) ",
         );
@@ -59,65 +60,23 @@ impl TokenPriceRepository for PgTokenPriceRepository {
     }
 
     async fn find_latest_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenPrice>> {
-        // The (mint, fetched_at DESC) index from migration 004 makes
-        // this a fast lookup: it picks the most recent fetch for the
-        // given mint.
-        let row = sqlx::query_as::<_, TokenPriceRow>(
+        let row = sqlx::query_as!(
+            TokenPriceRow,
             r#"
-            SELECT mint, price_usd, price_source, confidence, fetched_at
+            SELECT mint,
+                  price_usd AS "price_usd!: rust_decimal::Decimal",
+                  price_source, confidence, fetched_at
             FROM token_prices
             WHERE mint = $1
             ORDER BY fetched_at DESC
             LIMIT 1
             "#,
+            mint.to_string(),
         )
-        .bind(mint.to_string())
         .fetch_optional(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
         row.map(TokenPrice::try_from).transpose()
-    }
-}
-
-/// Row shape for reading `token_prices`. Kept separate so the
-/// fallible Pubkey + PriceSource conversions live in `TryFrom`
-/// rather than scattered in the query function.
-#[derive(sqlx::FromRow)]
-struct TokenPriceRow {
-    mint: String,
-    price_usd: Decimal,
-    price_source: String,
-    confidence: Option<f32>,
-    fetched_at: DateTime<Utc>,
-}
-
-impl TryFrom<TokenPriceRow> for TokenPrice {
-    type Error = RepositoryError;
-
-    fn try_from(row: TokenPriceRow) -> Result<Self, Self::Error> {
-        let price_source = parse_price_source(&row.price_source)?;
-
-        Ok(TokenPrice {
-            mint: convert_string_to_pubkey(row.mint, "mint")?,
-            price_usd: row.price_usd,
-            price_source,
-            confidence: row.confidence,
-            fetched_at: row.fetched_at,
-        })
-    }
-}
-
-/// Reverse of `PriceSource::as_str`. A value the domain does not
-/// know about is a data integrity issue — the schema lets any
-/// string in, only the writer side guards against that.
-fn parse_price_source(raw: &str) -> RepositoryResult<PriceSource> {
-    match raw {
-        "jupiter" => Ok(PriceSource::Jupiter),
-        "helius" => Ok(PriceSource::Helius),
-        "fallback" => Ok(PriceSource::Fallback),
-        other => Err(RepositoryError::Integrity(format!(
-            "invalid price_source: {other}"
-        ))),
     }
 }
