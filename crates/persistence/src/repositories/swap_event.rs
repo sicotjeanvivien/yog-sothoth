@@ -236,7 +236,7 @@ impl SwapEventRepository for PgSwapEventRepository {
                 events.first().map(|e| {
                     Cursor::Swap(SwapCursor {
                         timestamp: e.timestamp,
-                        signature: e.signature.clone(),
+                        signature: e.signature,
                     })
                 })
             };
@@ -246,7 +246,7 @@ impl SwapEventRepository for PgSwapEventRepository {
                 events.last().map(|e| {
                     Cursor::Swap(SwapCursor {
                         timestamp: e.timestamp,
-                        signature: e.signature.clone(),
+                        signature: e.signature,
                     })
                 })
             };

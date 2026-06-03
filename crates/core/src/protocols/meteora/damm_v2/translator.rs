@@ -369,7 +369,7 @@ pub(super) fn translate_wire_event(
             let ctx = EventContext {
                 token_a_mint,
                 token_b_mint,
-                signature: signature,
+                signature,
                 timestamp,
             };
             translate_swap(e, &ctx).map(DomainEvent::Swap)
@@ -379,7 +379,7 @@ pub(super) fn translate_wire_event(
             let ctx = EventContext {
                 token_a_mint,
                 token_b_mint,
-                signature: signature,
+                signature,
                 timestamp,
             };
             translate_liquidity(e, &ctx).map(DomainEvent::Liquidity)

@@ -142,11 +142,11 @@ impl PoolCurrentStateUpsert {
         sqrt_price: u128,
     ) -> Self {
         Self {
-            pool_address: pool_address,
-            protocol: protocol,
+            pool_address,
+            protocol,
             event_at,
             event_kind: LastEventKind::Swap,
-            signature: signature,
+            signature,
             reserve_a,
             reserve_b,
             sqrt_price: Some(sqrt_price),
@@ -173,11 +173,11 @@ impl PoolCurrentStateUpsert {
         liquidity: u128,
     ) -> Self {
         Self {
-            pool_address: pool_address,
-            protocol: protocol,
+            pool_address,
+            protocol,
             event_at,
             event_kind: kind.into(),
-            signature: signature.into(),
+            signature,
             reserve_a,
             reserve_b,
             sqrt_price: None,
