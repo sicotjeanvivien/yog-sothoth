@@ -21,7 +21,7 @@ export const SwapEventSchema = z.object({
   amountA: z.number().int().nonnegative(),
   amountB: z.number().int().nonnegative(),
 
-  reserveAAfter: z.number().int().nonnegative(),
+  reserveAAfter: z.coerce.bigint(),
   reserveBAfter: z.number().int().nonnegative(),
   nextSqrtPrice: U128String,
 

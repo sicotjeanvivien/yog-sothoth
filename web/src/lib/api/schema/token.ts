@@ -3,7 +3,7 @@ import { PriceSchema } from "./price";
 
 export const TokenSchema = z.object({
   mint: z.string(),
-  symbol: z.string(),
+  symbol: z.string().nullable(),
   name: z.string().nullable(),
   decimals: z.number(),
   logoUri: z.url().nullable(),

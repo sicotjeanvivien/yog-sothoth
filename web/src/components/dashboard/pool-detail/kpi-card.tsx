@@ -14,21 +14,27 @@ const CARD_CLASS =
   "rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 px-5 py-4 lg:px-6 lg:py-5";
 
 const LABEL_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+  "text-[21px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+
+const VALUE_COMPACT_CLASS =
+  "mt-2 font-display text-[28px] text-right font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[32px]";
 
 const VALUE_CLASS =
-  "mt-2 font-display text-[28px] font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[32px]";
+  "mt-2 font-display text-[14px] text-right font-bold tracking-[0.02em] text-slate-400 lg:text-[17px]";
 
 export function KpiCard({
   label,
+  valueCompact,
   value,
 }: {
   label: string;
+  valueCompact: string;
   value: string;
 }) {
   return (
     <div className={CARD_CLASS}>
       <p className={LABEL_CLASS}>{label}</p>
+      <p className={VALUE_COMPACT_CLASS}>{valueCompact}</p>
       <p className={VALUE_CLASS}>{value}</p>
     </div>
   );

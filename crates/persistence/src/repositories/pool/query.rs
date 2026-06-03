@@ -1,9 +1,11 @@
 //! SQL construction for the paginated pool listing.
 //!
-//! Isolated from the repository so `pool/mod.rs` stays an orchestrator
+//! Isolated from the repository so `pool.rs` stays an orchestrator
 //! (build → execute → map → assemble Page) rather than a wall of
 //! inline SQL. This module owns the dynamic `ORDER BY`, the keyset
-//! cursor predicate, and the optional search filter.
+//! cursor predicate, and the optional search filter. The row type
+//! produced by this query lives in `rows.rs`; the repository binds
+//! the two together.
 //!
 //! Trade-off: dynamic ORDER BY rules out `sqlx::query!`, so these
 //! queries are NOT verified at compile time against the schema.
@@ -18,19 +20,6 @@ use sqlx::{Postgres, QueryBuilder};
 use yog_core::{PoolSort, PoolSortColumn};
 
 use crate::repositories::tool::QueryMode;
-
-/// Row shape returned by the paginated query. Mirrors the columns of
-/// `pools`; converted to the domain `Pool` by the repository via
-/// `row_to_pool`. Kept here next to the query that produces it.
-#[derive(sqlx::FromRow)]
-pub(super) struct PoolRow {
-    pub(super) pool_address: String,
-    pub(super) protocol: String,
-    pub(super) token_a_mint: String,
-    pub(super) token_b_mint: String,
-    pub(super) first_seen_at: DateTime<Utc>,
-    pub(super) last_seen_at: DateTime<Utc>,
-}
 
 /// Everything the query needs, resolved by the repository.
 pub(super) struct PaginatedPoolsQuery {

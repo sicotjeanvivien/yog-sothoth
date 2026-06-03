@@ -1,0 +1,120 @@
+//! Unit tests for `TryFrom<PoolRow> for Pool`.
+//!
+//! Pure parser tests, no DB. Build rows by hand, assert that valid
+//! ones produce the right `Pool`, that each individual field has its
+//! own validation path, and that errors surface as
+//! `RepositoryError::Integrity`.
+
+use chrono::{Duration, Utc};
+use yog_core::{
+    RepositoryError,
+    domain::{Pool, Protocol},
+};
+
+use super::PoolRow;
+
+// Three distinct, valid base58-encoded Solana pubkeys. Using distinct
+// values for pool / token_a / token_b is intentional: it catches any
+// future field swap in the `TryFrom` impl.
+const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
+const VALID_TOKEN_A: &str = "So11111111111111111111111111111111111111112";
+const VALID_TOKEN_B: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+fn valid_row() -> PoolRow {
+    let now = Utc::now();
+    PoolRow {
+        pool_address: VALID_POOL.into(),
+        protocol: Protocol::MeteoraDammV2.as_str().to_string(),
+        token_a_mint: VALID_TOKEN_A.into(),
+        token_b_mint: VALID_TOKEN_B.into(),
+        first_seen_at: now,
+        last_seen_at: now,
+    }
+}
+
+#[test]
+fn try_from_valid_row_returns_pool_with_all_fields_mapped() {
+    let pool = Pool::try_from(valid_row()).expect("valid row should convert");
+
+    assert_eq!(pool.pool_address.to_string(), VALID_POOL);
+    assert_eq!(pool.protocol, Protocol::MeteoraDammV2);
+    assert_eq!(pool.token_a_mint.to_string(), VALID_TOKEN_A);
+    assert_eq!(pool.token_b_mint.to_string(), VALID_TOKEN_B);
+}
+
+#[test]
+fn try_from_preserves_timestamps_in_correct_fields() {
+    // Two distinct timestamps so a field swap would be caught.
+    let first = Utc::now();
+    let last = first + Duration::seconds(42);
+    let row = PoolRow {
+        first_seen_at: first,
+        last_seen_at: last,
+        ..valid_row()
+    };
+
+    let pool = Pool::try_from(row).expect("valid row should convert");
+
+    assert_eq!(pool.first_seen_at, first);
+    assert_eq!(pool.last_seen_at, last);
+}
+
+#[test]
+fn try_from_invalid_pool_address_returns_integrity() {
+    let row = PoolRow {
+        pool_address: "not-a-real-pubkey".into(),
+        ..valid_row()
+    };
+
+    let err = Pool::try_from(row).expect_err("invalid pubkey should fail");
+    assert!(
+        matches!(err, RepositoryError::Integrity(_)),
+        "expected Integrity, got {err:?}"
+    );
+}
+
+#[test]
+fn try_from_invalid_protocol_returns_integrity_with_message() {
+    let row = PoolRow {
+        protocol: "definitely_not_a_protocol".into(),
+        ..valid_row()
+    };
+
+    let err = Pool::try_from(row).expect_err("unknown protocol should fail");
+    let msg = match err {
+        RepositoryError::Integrity(m) => m,
+        other => panic!("expected Integrity, got {other:?}"),
+    };
+    assert!(
+        msg.contains("invalid protocol"),
+        "expected message to mention the failure context, got: {msg}"
+    );
+}
+
+#[test]
+fn try_from_invalid_token_a_mint_returns_integrity() {
+    let row = PoolRow {
+        token_a_mint: "garbage".into(),
+        ..valid_row()
+    };
+
+    let err = Pool::try_from(row).expect_err("invalid token_a should fail");
+    assert!(
+        matches!(err, RepositoryError::Integrity(_)),
+        "expected Integrity, got {err:?}"
+    );
+}
+
+#[test]
+fn try_from_invalid_token_b_mint_returns_integrity() {
+    let row = PoolRow {
+        token_b_mint: "garbage".into(),
+        ..valid_row()
+    };
+
+    let err = Pool::try_from(row).expect_err("invalid token_b should fail");
+    assert!(
+        matches!(err, RepositoryError::Integrity(_)),
+        "expected Integrity, got {err:?}"
+    );
+}

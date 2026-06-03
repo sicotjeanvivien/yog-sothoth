@@ -23,6 +23,13 @@ const COMPACT_FORMATTER = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+const FORMATTER = new Intl.NumberFormat("en-US", {
+  notation: "standard",
+  maximumFractionDigits: 2,
+  style: "currency",
+  currency: "USD",
+});
+
 const EMPTY = "—";
 
 export function formatUsdCompact(value: string | null | undefined): string {
@@ -34,4 +41,15 @@ export function formatUsdCompact(value: string | null | undefined): string {
     return EMPTY;
   }
   return COMPACT_FORMATTER.format(parsed);
+}
+
+export function formatUsd(value: string | null | undefined): string {
+  if (value === null || value === undefined) {
+    return EMPTY;
+  }
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) {
+    return EMPTY;
+  }
+  return FORMATTER.format(parsed);
 }

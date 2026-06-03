@@ -26,7 +26,7 @@ export const PoolCurrentStateSchema = z.object({
   lastEventKind: z.string(),
   lastSignature: z.string().min(1),
 
-  reserveA: z.number().int().nonnegative(),
+  reserveA: z.coerce.bigint(),
   reserveB: z.number().int().nonnegative(),
 
   lastSqrtPrice: U128String.nullable(),

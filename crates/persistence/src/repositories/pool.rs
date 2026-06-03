@@ -1,19 +1,19 @@
 mod query;
+mod rows;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use std::str::FromStr;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
-    domain::{Pool, PoolCursor, PoolRepository, Protocol},
+    Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
+    domain::{Pool, PoolCursor, PoolRepository},
 };
 
 use crate::repositories::tool::{QueryMode, resolve_query_mode};
-use crate::repository_utils::{convert_string_to_pubkey, map_sqlx_error};
+use crate::repository_utils::map_sqlx_error;
 
-use query::{PaginatedPoolsQuery, PoolRow, build};
+use query::{PaginatedPoolsQuery, build};
+use rows::PoolRow;
 
 pub struct PgPoolRepository {
     pool: PgPool,
@@ -63,7 +63,8 @@ impl PoolRepository for PgPoolRepository {
     }
 
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>> {
-        let row = sqlx::query!(
+        let row = sqlx::query_as!(
+            PoolRow,
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    first_seen_at, last_seen_at
@@ -76,17 +77,7 @@ impl PoolRepository for PgPoolRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(|r| {
-            row_to_pool(
-                r.pool_address,
-                r.protocol,
-                r.token_a_mint,
-                r.token_b_mint,
-                r.first_seen_at,
-                r.last_seen_at,
-            )
-        })
-        .transpose()
+        row.map(Pool::try_from).transpose()
     }
 
     async fn find_paginated(
@@ -111,7 +102,7 @@ impl PoolRepository for PgPoolRepository {
         };
 
         // Build the dynamic query (ORDER BY + keyset + search) and run
-        // it. Mapping goes through PoolRow (FromRow) then row_to_pool.
+        // it. Mapping goes through PoolRow (FromRow) then Pool::try_from.
         let mut qb = build(PaginatedPoolsQuery {
             mode,
             sort,
@@ -129,16 +120,7 @@ impl PoolRepository for PgPoolRepository {
 
         let mut pools: Vec<Pool> = rows
             .into_iter()
-            .map(|r| {
-                row_to_pool(
-                    r.pool_address,
-                    r.protocol,
-                    r.token_a_mint,
-                    r.token_b_mint,
-                    r.first_seen_at,
-                    r.last_seen_at,
-                )
-            })
+            .map(Pool::try_from)
             .collect::<Result<_, _>>()?;
 
         let has_more = pools.len() as i64 > effective_limit;
@@ -194,23 +176,4 @@ impl PoolRepository for PgPoolRepository {
             is_last,
         })
     }
-}
-
-fn row_to_pool(
-    pool_address: String,
-    protocol: String,
-    token_a_mint: String,
-    token_b_mint: String,
-    first_seen_at: DateTime<Utc>,
-    last_seen_at: DateTime<Utc>,
-) -> RepositoryResult<Pool> {
-    Ok(Pool {
-        pool_address: convert_string_to_pubkey(pool_address, "pool_address")?,
-        protocol: Protocol::from_str(&protocol)
-            .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
-        token_a_mint: convert_string_to_pubkey(token_a_mint, "token_a_mint")?,
-        token_b_mint: convert_string_to_pubkey(token_b_mint, "token_b_mint")?,
-        first_seen_at,
-        last_seen_at,
-    })
 }

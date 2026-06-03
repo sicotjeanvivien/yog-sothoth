@@ -102,6 +102,8 @@ export async function apiGetWithUrl<T>(
 
   // ── Validate against the schema ────────────────────────────────────
   const parsed = schema.safeParse(body);
+  console.log(parsed.error);
+  
   if (!parsed.success) {
     throw ApiClientError.validation(formatZodIssues(parsed.error));
   }

@@ -25,7 +25,7 @@ import { getTranslations } from "next-intl/server";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-state";
 
-import { formatUsdCompact } from "@/lib/format/format-usd";
+import { formatUsd, formatUsdCompact } from "@/lib/format/format-usd";
 import { computePoolComposition } from "@/lib/format/pool-composition";
 
 import { KpiCard } from "./kpi-card";
@@ -45,13 +45,13 @@ export async function PoolDetailKpis({
   const composition =
     state !== null
       ? computePoolComposition({
-          reserveA: String(state.reserveA),
-          reserveB: String(state.reserveB),
-          decimalsA: pool.tokenA.decimals,
-          decimalsB: pool.tokenB.decimals,
-          priceAUsd: pool.tokenA.price?.usd ?? null,
-          priceBUsd: pool.tokenB.price?.usd ?? null,
-        })
+        reserveA: String(state.reserveA),
+        reserveB: String(state.reserveB),
+        decimalsA: pool.tokenA.decimals,
+        decimalsB: pool.tokenB.decimals,
+        priceAUsd: pool.tokenA.price?.usd ?? null,
+        priceBUsd: pool.tokenB.price?.usd ?? null,
+      })
       : null;
 
   // Grid layout: 1 column on mobile, 2 cols when only KPIs, 3
@@ -64,10 +64,15 @@ export async function PoolDetailKpis({
   return (
     <section className="px-6 lg:px-10">
       <div className={gridClass}>
-        <KpiCard label={t("tvl")} value={formatUsdCompact(pool.tvlUsd)} />
+        <KpiCard
+          label={t("tvl")}
+          valueCompact={formatUsdCompact(pool.tvlUsd)}
+          value={formatUsd(pool.tvlUsd)}
+        />
         <KpiCard
           label={t("volume24h")}
-          value={formatUsdCompact(pool.volume24hUsd)}
+          valueCompact={formatUsdCompact(pool.volume24hUsd)}
+          value={formatUsd(pool.volume24hUsd)}
         />
         {composition && (
           <PoolCompositionCard
