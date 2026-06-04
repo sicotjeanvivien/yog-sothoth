@@ -29,20 +29,20 @@ impl EventFreshnessRepository for PgEventFreshnessRepository {
     async fn last_event_at(&self) -> RepositoryResult<Option<DateTime<Utc>>> {
         // GREATEST over the two per-table maxima. Each MAX is NULL on
         // an empty table; GREATEST ignores NULLs unless every argument
-        // is NULL, in which case the whole expression is NULL — which
-        // maps cleanly to `None` via the Option column type.
-        let row: (Option<DateTime<Utc>>,) = sqlx::query_as(
+        // is NULL, in which case the whole expression is NULL — hence
+        // the `?` annotation forcing the column to nullable.
+        let last_event_at = sqlx::query_scalar!(
             r#"
             SELECT GREATEST(
                 (SELECT MAX(timestamp) FROM swap_events),
                 (SELECT MAX(timestamp) FROM liquidity_events)
-            )
-            "#,
+            ) AS "last_event_at?: chrono::DateTime<chrono::Utc>"
+            "#
         )
         .fetch_one(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(row.0)
+        Ok(last_event_at)
     }
 }
