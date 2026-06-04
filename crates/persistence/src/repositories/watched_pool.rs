@@ -1,13 +1,13 @@
-use std::str::FromStr;
+mod rows;
 
+use crate::{repositories::watched_pool::rows::WatchedPoolRow, repository_utils::map_sqlx_error};
 use async_trait::async_trait;
+use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    RepositoryError, RepositoryResult,
-    domain::{Protocol, WatchedPool, WatchedPoolRepository},
+    RepositoryResult,
+    domain::{WatchedPool, WatchedPoolRepository},
 };
-
-use crate::repository_utils::{convert_string_to_pubkey, map_sqlx_error};
 
 pub struct PgWatchedPoolRepository {
     pool: PgPool,
@@ -42,10 +42,10 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
         Ok(())
     }
 
-    async fn exists(&self, address: &str) -> RepositoryResult<bool> {
+    async fn exists(&self, address: Pubkey) -> RepositoryResult<bool> {
         let result = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM watched_pools WHERE pool_address = $1)",
-            address
+            address.to_string()
         )
         .fetch_one(&self.pool)
         .await
@@ -55,7 +55,8 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
     }
 
     async fn find_all(&self) -> RepositoryResult<Vec<WatchedPool>> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            WatchedPoolRow,
             r#"
             SELECT pool_address, protocol, active, added_at, note
             FROM watched_pools
@@ -65,25 +66,13 @@ impl WatchedPoolRepository for PgWatchedPoolRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter()
-            .map(|row| {
-                Ok(WatchedPool {
-                    pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-                    protocol: Protocol::from_str(&row.protocol).map_err(|e| {
-                        RepositoryError::Integrity(format!("invalid protocol: {e}"))
-                    })?,
-                    active: row.active,
-                    added_at: row.added_at,
-                    note: row.note,
-                })
-            })
-            .collect()
+        rows.into_iter().map(WatchedPool::try_from).collect()
     }
 
-    async fn remove(&self, pool_address: &str) -> RepositoryResult<()> {
+    async fn remove(&self, pool_address: Pubkey) -> RepositoryResult<()> {
         sqlx::query!(
             "DELETE FROM watched_pools WHERE pool_address = $1",
-            pool_address
+            pool_address.to_string()
         )
         .execute(&self.pool)
         .await
