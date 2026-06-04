@@ -1,12 +1,11 @@
+use crate::repositories::helper::{
+    convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature,
+};
 use chrono::{DateTime, Utc};
 use std::str::FromStr;
 use yog_core::{
     RepositoryError,
     domain::{ClaimPositionFeeEvent, Protocol},
-};
-
-use crate::repository_utils::{
-    convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature,
 };
 
 /// Row shape returned by SELECTs on `position_fee_claims`. Mirrors

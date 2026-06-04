@@ -5,17 +5,14 @@
 //! live at the bottom of the module.
 mod rows;
 
+use crate::repositories::helper::{convert_u64_to_i64, map_sqlx_error};
 use async_trait::async_trait;
+use rows::ClaimRewardEventRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{ClaimRewardEvent, ClaimRewardEventRepository},
-};
-
-use crate::{
-    repositories::reward_claim::rows::ClaimRewardEventRow,
-    repository_utils::{convert_u64_to_i64, map_sqlx_error},
 };
 
 pub struct PgClaimRewardEventRepository {

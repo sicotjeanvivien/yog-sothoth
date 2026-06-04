@@ -1,20 +1,10 @@
-//! Row structs for `pools` reads + their `TryFrom` to domain.
-//!
-//! `PoolRow` mirrors the columns of `pools` as raw SQL types
-//! (`String` for Pubkey/enum, `DateTime<Utc>` for timestamps). The
-//! conversion to the domain `Pool` (which uses `Pubkey` and
-//! `Protocol`) lives here as the canonical parser. Repositories own
-//! the orchestration; this module owns the raw shape and its safe
-//! conversion. Parse failures bubble up as `RepositoryError::Integrity`.
-
+use crate::repositories::helper::convert_string_to_pubkey;
 use chrono::{DateTime, Utc};
 use std::str::FromStr;
 use yog_core::{
     RepositoryError,
     domain::{Pool, Protocol},
 };
-
-use crate::repository_utils::convert_string_to_pubkey;
 
 /// Row shape returned by SELECTs on `pools`. Mirrors every column of
 /// the table. Used by `find_by_address` and `find_paginated`.

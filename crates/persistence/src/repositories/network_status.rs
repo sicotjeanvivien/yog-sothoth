@@ -4,7 +4,7 @@
 //! 003). Both operations target the single row `id = 1`.
 mod rows;
 
-use crate::repository_utils::{convert_u64_to_i64, map_sqlx_error};
+use crate::repositories::helper::{convert_u64_to_i64, map_sqlx_error};
 use async_trait::async_trait;
 use rows::NetworkStatusRow;
 use sqlx::PgPool;

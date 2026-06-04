@@ -1,5 +1,5 @@
 use super::*;
-use crate::repositories::tool::QueryMode;
+use crate::repositories::helper::QueryMode;
 use yog_core::PoolSort;
 
 // The reference truth table, transcribed from the validated spec.

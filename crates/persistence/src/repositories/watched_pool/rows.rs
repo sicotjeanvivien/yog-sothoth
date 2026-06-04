@@ -1,4 +1,4 @@
-use crate::repository_utils::convert_string_to_pubkey;
+use crate::repositories::helper::convert_string_to_pubkey;
 use chrono::{DateTime, Utc};
 use std::str::FromStr;
 use yog_core::{

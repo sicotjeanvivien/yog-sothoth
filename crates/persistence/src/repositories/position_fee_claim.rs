@@ -5,11 +5,9 @@
 //! shape and the mapping to domain live at the bottom of the module.
 mod rows;
 
-use crate::{
-    repositories::position_fee_claim::rows::ClaimPositionFeeEventRow,
-    repository_utils::{convert_u64_to_i64, map_sqlx_error},
-};
+use crate::repositories::helper::{convert_u64_to_i64, map_sqlx_error};
 use async_trait::async_trait;
+use rows::ClaimPositionFeeEventRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{

@@ -3,7 +3,7 @@
 //! Backed by the `token_prices` hypertable (migration 004).
 mod rows;
 
-use crate::repository_utils::map_sqlx_error;
+use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
 use rows::TokenPriceRow;
 use solana_pubkey::Pubkey;

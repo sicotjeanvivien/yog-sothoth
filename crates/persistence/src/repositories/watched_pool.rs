@@ -1,7 +1,8 @@
 mod rows;
 
-use crate::{repositories::watched_pool::rows::WatchedPoolRow, repository_utils::map_sqlx_error};
+use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
+use rows::WatchedPoolRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{

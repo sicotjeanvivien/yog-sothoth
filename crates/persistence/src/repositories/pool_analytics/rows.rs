@@ -1,4 +1,4 @@
-use crate::repository_utils::{bigdecimal_to_decimal, convert_string_to_pubkey};
+use crate::repositories::helper::{convert_bigdecimal_to_decimal, convert_string_to_pubkey};
 use bigdecimal::BigDecimal;
 use solana_pubkey::Pubkey;
 use yog_core::{RepositoryError, domain::PoolAnalytics};
@@ -22,11 +22,11 @@ impl TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics) {
         let analytics = PoolAnalytics {
             tvl_usd: row
                 .tvl_usd
-                .map(|v| bigdecimal_to_decimal(v, "tvl_usd"))
+                .map(|v| convert_bigdecimal_to_decimal(v, "tvl_usd"))
                 .transpose()?,
             volume_24h_usd: row
                 .volume_24h_usd
-                .map(|v| bigdecimal_to_decimal(v, "volume_24h_usd"))
+                .map(|v| convert_bigdecimal_to_decimal(v, "volume_24h_usd"))
                 .transpose()?,
         };
         Ok((pool_address, analytics))

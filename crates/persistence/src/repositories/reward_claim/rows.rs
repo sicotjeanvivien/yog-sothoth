@@ -5,7 +5,7 @@ use yog_core::{
     domain::{ClaimRewardEvent, Protocol},
 };
 
-use crate::repository_utils::{
+use crate::repositories::helper::{
     convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature,
 };
 

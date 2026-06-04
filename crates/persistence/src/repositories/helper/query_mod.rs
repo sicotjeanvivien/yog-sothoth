@@ -7,12 +7,12 @@ use yog_core::{PageDirection, PagePosition};
 /// repository reverses the result before returning so the caller
 /// always sees rows in display order.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum QueryMode {
+pub(crate) enum QueryMode {
     Forward,
     Backward,
 }
 
-pub(super) fn resolve_query_mode<C>(
+pub(crate) fn resolve_query_mode<C>(
     position: Option<PagePosition>,
     cursor: &Option<C>,
     direction: PageDirection,
@@ -27,3 +27,7 @@ pub(super) fn resolve_query_mode<C>(
         },
     }
 }
+
+#[cfg(test)]
+#[path = "tests/query_mod_tests.rs"]
+mod tests;

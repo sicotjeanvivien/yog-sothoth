@@ -7,21 +7,18 @@
 //! `TryFrom` to domain live at the bottom of this module.
 mod rows;
 
+use crate::repositories::helper::{
+    PageBuilder, QueryMode, convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error,
+    resolve_query_mode,
+};
 use async_trait::async_trait;
+use rows::LiquidityEventRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{LiquidityCursor, LiquidityEvent, LiquidityEventRepository},
     tools::{Cursor, Page, PageDirection, PagePosition},
-};
-
-use crate::{
-    repositories::{
-        liquidity_event::rows::LiquidityEventRow,
-        tool::{QueryMode, resolve_query_mode},
-    },
-    repository_utils::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error},
 };
 
 /// Maximum number of rows returned in a single page, regardless of the
@@ -170,57 +167,18 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             .map_err(map_sqlx_error)?,
         };
 
-        let mut events: Vec<LiquidityEvent> = rows
+        let events: Vec<LiquidityEvent> = rows
             .into_iter()
             .map(LiquidityEvent::try_from)
             .collect::<Result<_, _>>()?;
 
-        let has_more = events.len() as i64 > effective_limit;
-        if has_more {
-            events.truncate(effective_limit as usize);
-        }
-
-        if matches!(mode, QueryMode::Backward) {
-            events.reverse();
-        }
-
-        let (is_first, is_last) = match mode {
-            QueryMode::Forward => (!had_cursor, !has_more),
-            QueryMode::Backward => (!has_more, !had_cursor),
-        };
-
-        let (prev_cursor, next_cursor) = if events.is_empty() {
-            (None, None)
-        } else {
-            let prev = if is_first {
-                None
-            } else {
-                events.first().map(|e| {
-                    Cursor::Liquidity(LiquidityCursor {
-                        timestamp: e.timestamp,
-                        signature: e.signature,
-                    })
+        Ok(
+            PageBuilder::new(events, effective_limit, mode, had_cursor).finalize(|e| {
+                Cursor::Liquidity(LiquidityCursor {
+                    timestamp: e.timestamp,
+                    signature: e.signature,
                 })
-            };
-            let next = if is_last {
-                None
-            } else {
-                events.last().map(|e| {
-                    Cursor::Liquidity(LiquidityCursor {
-                        timestamp: e.timestamp,
-                        signature: e.signature,
-                    })
-                })
-            };
-            (prev, next)
-        };
-
-        Ok(Page {
-            items: events,
-            next_cursor,
-            prev_cursor,
-            is_first,
-            is_last,
-        })
+            }),
+        )
     }
 }

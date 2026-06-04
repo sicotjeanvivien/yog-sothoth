@@ -37,7 +37,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 bigdecimal = { workspace = true }
-chrono = { workspace = true, features = ["serde"] }
+chrono = { workspace = true }
 solana-pubkey = { workspace = true }
 solana-signature = { workspace = true }
 rust_decimal = { workspace = true }

@@ -14,7 +14,6 @@ mod database;
 mod error;
 mod health;
 mod repositories;
-mod repository_utils;
 
 pub use database::Database;
 pub use health::{HealthError, PgHealthChecker};

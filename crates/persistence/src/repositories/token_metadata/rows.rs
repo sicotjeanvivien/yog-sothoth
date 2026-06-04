@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use yog_core::{RepositoryError, domain::TokenMetadata};
 
-use crate::repository_utils::convert_string_to_pubkey;
+use crate::repositories::helper::convert_string_to_pubkey;
 
 /// Row shape for reading `token_metadata`.
 ///

@@ -3,10 +3,9 @@
 //! [keep the existing module-level doc as-is]
 mod rows;
 
-use crate::{
-    repositories::pool_analytics::rows::PoolAnalyticsRow, repository_utils::map_sqlx_error,
-};
+use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
+use rows::PoolAnalyticsRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use std::collections::HashMap;

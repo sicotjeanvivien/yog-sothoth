@@ -1,15 +1,13 @@
-use std::str::FromStr;
-
+use crate::repositories::helper::{
+    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
+    convert_string_to_signature,
+};
 use chrono::{DateTime, Utc};
 use sqlx::types::BigDecimal;
+use std::str::FromStr;
 use yog_core::{
     RepositoryError,
     domain::{LastEventKind, PoolCurrentState, Protocol},
-};
-
-use crate::repository_utils::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
-    convert_string_to_signature,
 };
 
 /// Raw row mirror — mirrors the SELECT column order below.

@@ -19,7 +19,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{Postgres, QueryBuilder};
 use yog_core::{PoolSort, PoolSortColumn};
 
-use crate::repositories::tool::QueryMode;
+use crate::repositories::helper::QueryMode;
 
 /// Everything the query needs, resolved by the repository.
 pub(super) struct PaginatedPoolsQuery {

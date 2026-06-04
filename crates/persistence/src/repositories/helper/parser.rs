@@ -84,10 +84,17 @@ pub(crate) fn convert_string_to_signature(key: String, field: &str) -> Repositor
         .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
 }
 
-pub(crate) fn bigdecimal_to_decimal(value: BigDecimal, field: &str) -> RepositoryResult<Decimal> {
+pub(crate) fn convert_bigdecimal_to_decimal(
+    value: BigDecimal,
+    field: &str,
+) -> RepositoryResult<Decimal> {
     Decimal::from_str(&value.to_string()).map_err(|e| {
         RepositoryError::Integrity(format!(
             "failed to convert {field} from BigDecimal to Decimal: {e}"
         ))
     })
 }
+
+#[cfg(test)]
+#[path = "tests/parser_tests.rs"]
+mod tests;

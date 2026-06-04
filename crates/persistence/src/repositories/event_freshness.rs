@@ -3,13 +3,11 @@
 //! A single query: the greatest `timestamp` across `swap_events` and
 //! `liquidity_events`.
 
+use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
-
 use yog_core::{RepositoryResult, domain::EventFreshnessRepository};
-
-use crate::repository_utils::map_sqlx_error;
 
 /// Postgres-backed event freshness repository.
 #[derive(Clone)]

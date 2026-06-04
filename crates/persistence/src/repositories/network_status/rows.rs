@@ -1,4 +1,4 @@
-use crate::repository_utils::convert_i64_to_u64;
+use crate::repositories::helper::convert_i64_to_u64;
 use chrono::{DateTime, Utc};
 use yog_core::{RepositoryError, domain::NetworkStatus};
 

@@ -1,19 +1,16 @@
 mod query;
 mod rows;
 
+use crate::repositories::helper::{PageBuilder, map_sqlx_error, resolve_query_mode};
 use async_trait::async_trait;
+use query::{PaginatedPoolsQuery, build};
+use rows::PoolRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
+    Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryResult,
     domain::{Pool, PoolCursor, PoolRepository},
 };
-
-use crate::repositories::tool::{QueryMode, resolve_query_mode};
-use crate::repository_utils::map_sqlx_error;
-
-use query::{PaginatedPoolsQuery, build};
-use rows::PoolRow;
 
 pub struct PgPoolRepository {
     pool: PgPool,
@@ -118,62 +115,26 @@ impl PoolRepository for PgPoolRepository {
             .await
             .map_err(map_sqlx_error)?;
 
-        let mut pools: Vec<Pool> = rows
+        let pools: Vec<Pool> = rows
             .into_iter()
             .map(Pool::try_from)
             .collect::<Result<_, _>>()?;
 
-        let has_more = pools.len() as i64 > effective_limit;
-        if has_more {
-            pools.truncate(effective_limit as usize);
-        }
-
-        if matches!(mode, QueryMode::Backward) {
-            pools.reverse();
-        }
-
-        let (is_first, is_last) = match mode {
-            QueryMode::Forward => (!had_cursor, !has_more),
-            QueryMode::Backward => (!has_more, !had_cursor),
-        };
-
-        // Cursor construction now stamps the sort column so the next
-        // request can be validated against the active sort.
         let sort_column = sort.column();
-        let cursor_for = |p: &Pool| -> Cursor {
-            let sort_value = match sort_column {
-                yog_core::PoolSortColumn::FirstSeen => p.first_seen_at,
-                yog_core::PoolSortColumn::LastSeen => p.last_seen_at,
-            };
-            Cursor::Pool(PoolCursor {
-                sort_column,
-                sort_value,
-                pool_address: p.pool_address,
-            })
-        };
 
-        let (prev_cursor, next_cursor) = if pools.is_empty() {
-            (None, None)
-        } else {
-            let prev = if is_first {
-                None
-            } else {
-                pools.first().map(cursor_for)
-            };
-            let next = if is_last {
-                None
-            } else {
-                pools.last().map(cursor_for)
-            };
-            (prev, next)
-        };
+        Ok(
+            PageBuilder::new(pools, effective_limit, mode, had_cursor).finalize(|p| {
+                let sort_value = match sort_column {
+                    PoolSortColumn::FirstSeen => p.first_seen_at,
+                    PoolSortColumn::LastSeen => p.last_seen_at,
+                };
 
-        Ok(Page {
-            items: pools,
-            next_cursor,
-            prev_cursor,
-            is_first,
-            is_last,
-        })
+                Cursor::Pool(PoolCursor {
+                    sort_column,
+                    sort_value,
+                    pool_address: p.pool_address,
+                })
+            }),
+        )
     }
 }
