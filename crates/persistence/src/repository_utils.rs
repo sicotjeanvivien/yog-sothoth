@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::Error as SqlxError;
@@ -81,4 +82,12 @@ pub(crate) fn convert_u128_to_bigdecimal(v: u128, _field: &str) -> BigDecimal {
 pub(crate) fn convert_string_to_signature(key: String, field: &str) -> RepositoryResult<Signature> {
     Signature::from_str(&key)
         .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
+}
+
+pub(crate) fn bigdecimal_to_decimal(value: BigDecimal, field: &str) -> RepositoryResult<Decimal> {
+    Decimal::from_str(&value.to_string()).map_err(|e| {
+        RepositoryError::Integrity(format!(
+            "failed to convert {field} from BigDecimal to Decimal: {e}"
+        ))
+    })
 }

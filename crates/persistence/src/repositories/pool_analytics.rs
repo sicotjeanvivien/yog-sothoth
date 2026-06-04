@@ -1,49 +1,19 @@
 //! PostgreSQL implementation of [`PoolAnalyticsRepository`].
 //!
-//! The interesting work is in the SQL. Two metrics are computed
-//! per pool in a single round-trip:
-//!
-//! ## TVL
-//!
-//! `(reserve_a / 10^decimals_a) * latest_price_a
-//!  + (reserve_b / 10^decimals_b) * latest_price_b`
-//!
-//! using the reserves from `pool_current_state` and the most recent
-//! price for each mint in `token_prices`. If either side has no
-//! known price, the pool's TVL is NULL — partial TVL would be
-//! actively misleading.
-//!
-//! ## Volume 24h
-//!
-//! For every swap of the pool in the last 24h, the trader-sent side
-//! is multiplied by the price *as of that swap's timestamp*. The
-//! `JOIN LATERAL ... LIMIT 1` pattern keeps the price lookup bounded
-//! by the index `(mint, fetched_at DESC)`. Swaps whose token had no
-//! known price at swap time contribute NULL, which `SUM` ignores —
-//! the resulting volume is therefore "partial but never wrong", as
-//! agreed upstream.
-//!
-//! ## Batching
-//!
-//! Both calculations are wrapped in CTEs filtered by `pool_address
-//! = ANY($1)`, so a single execution computes analytics for the
-//! whole page of pools handed in by the caller.
+//! [keep the existing module-level doc as-is]
+mod rows;
 
-use std::collections::HashMap;
-use std::str::FromStr;
-
+use crate::{
+    repositories::pool_analytics::rows::PoolAnalyticsRow, repository_utils::map_sqlx_error,
+};
 use async_trait::async_trait;
-use bigdecimal::BigDecimal;
-use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-
+use std::collections::HashMap;
 use yog_core::{
-    RepositoryError, RepositoryResult,
+    RepositoryResult,
     domain::{PoolAnalytics, PoolAnalyticsRepository},
 };
-
-use crate::repository_utils::map_sqlx_error;
 
 pub struct PgPoolAnalyticsRepository {
     pool: PgPool,
@@ -68,24 +38,9 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         // sqlx needs string-typed addresses to bind a `TEXT[]` array.
         let addresses: Vec<String> = pool_addresses.iter().map(|p| p.to_string()).collect();
 
-        // Two CTEs feed the final SELECT.
-        //
-        // - `tvl_per_pool` walks the requested pools through
-        //   pool_current_state and resolves the latest price per
-        //   token. The product is `NULL` whenever either side lacks
-        //   a price, which carries through to the SUM.
-        //
-        // - `volume_per_pool` aggregates swap_events from the last
-        //   24h. For each row, two LATERAL joins fetch the token A
-        //   and token B latest known price *as of the swap's
-        //   timestamp* — the `<=` filter plus `ORDER BY fetched_at
-        //   DESC LIMIT 1` makes the lookup an index seek.
-        //
-        // The outer SELECT yields one row per requested pool,
-        // including pools for which no analytics row exists (LEFT
-        // JOIN). Rows with NULL aggregates are returned with NULL
-        // values; the caller resolves them to PoolAnalytics::empty().
-        let rows = sqlx::query!(
+        // [keep the existing CTE doc-comment block]
+        let rows = sqlx::query_as!(
+            PoolAnalyticsRow,
             r#"
             WITH
             requested AS (
@@ -168,40 +123,8 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        let mut out = HashMap::with_capacity(rows.len());
-        for row in rows {
-            let address = Pubkey::from_str(&row.pool_address).map_err(|e| {
-                RepositoryError::Integrity(format!(
-                    "invalid pool_address from analytics query: {e}"
-                ))
-            })?;
-
-            out.insert(
-                address,
-                PoolAnalytics {
-                    tvl_usd: row
-                        .tvl_usd
-                        .map(|v| bigdecimal_to_decimal(v, "tvl_usd"))
-                        .transpose()?,
-                    volume_24h_usd: row
-                        .volume_24h_usd
-                        .map(|v| bigdecimal_to_decimal(v, "volume_24h_usd"))
-                        .transpose()?,
-                },
-            );
-        }
-
-        Ok(out)
+        rows.into_iter()
+            .map(<(Pubkey, PoolAnalytics)>::try_from)
+            .collect()
     }
-}
-
-/// Local converter — `rust_decimal::Decimal` is the domain currency
-/// type, sqlx hands us a `bigdecimal::BigDecimal`. Going through a
-/// string round-trip is dull but correct.
-fn bigdecimal_to_decimal(value: BigDecimal, field: &str) -> RepositoryResult<Decimal> {
-    Decimal::from_str(&value.to_string()).map_err(|e| {
-        RepositoryError::Integrity(format!(
-            "failed to convert {field} from BigDecimal to Decimal: {e}"
-        ))
-    })
 }
