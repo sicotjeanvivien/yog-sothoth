@@ -29,3 +29,6 @@ solana-pubkey = { workspace = true }
 rust_decimal = { workspace = true }
 
 async-trait = { workspace = true }
+
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }

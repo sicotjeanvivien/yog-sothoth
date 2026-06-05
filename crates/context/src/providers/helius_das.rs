@@ -13,10 +13,13 @@
 //! missing — much friendlier on Helius rate limits than `getAsset`
 //! per mint.
 
+use super::metrics::ProviderMetrics;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use std::time::Instant;
 use tracing::warn;
+
 use yog_core::domain::MetadataProvider;
 
 use crate::{
@@ -29,6 +32,7 @@ use crate::{
 /// means a single chunk always suffices, but the worker still chunks
 /// just in case the allowlist is later lifted.
 const DAS_BATCH_MAX: usize = 1000;
+const PROVIDER_LABEL: &str = "helius_das";
 
 // ── Wire types ────────────────────────────────────────────────────────
 
@@ -127,7 +131,27 @@ impl HeliusDasClient {
             return Ok(Vec::new());
         }
         debug_assert!(mints.len() <= DAS_BATCH_MAX);
+        let start = Instant::now();
+        let result = self.fetch_chunk_inner(mints).await;
+        let elapsed = start.elapsed().as_secs_f64();
 
+        let outcome = match &result {
+            Ok(_) => "ok",
+            Err(SourceError::Http(_)) => "http",
+            Err(SourceError::Decode(_)) => "decode",
+        };
+        ProviderMetrics::record_call(PROVIDER_LABEL, outcome, elapsed);
+
+        result
+    }
+
+    /// Inner method that does the actual HTTP work. Kept separate so the
+    /// outer `fetch_chunk` can wrap it with metrics without duplicating
+    /// the `?`/error mapping logic.
+    async fn fetch_chunk_inner(
+        &self,
+        mints: &[Pubkey],
+    ) -> Result<Vec<FetchedMetadata>, SourceError> {
         let ids: Vec<String> = mints.iter().map(|m| m.to_string()).collect();
         let request = DasRequest {
             jsonrpc: "2.0",

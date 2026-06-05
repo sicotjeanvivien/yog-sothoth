@@ -6,7 +6,9 @@
 //! their heuristics) are silently dropped: this is documented V3
 //! behaviour and not an error.
 
+use super::metrics::ProviderMetrics;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -76,7 +78,21 @@ impl JupiterPriceClient {
             return Ok(Vec::new());
         }
         debug_assert!(mints.len() <= JUPITER_BATCH_MAX);
+        let start = Instant::now();
+        let result = self.fetch_chunk_inner(mints).await;
+        let elapsed = start.elapsed().as_secs_f64();
 
+        let outcome = match &result {
+            Ok(_) => "ok",
+            Err(SourceError::Http(_)) => "http",
+            Err(SourceError::Decode(_)) => "decode",
+        };
+        ProviderMetrics::record_call(PriceProvider::Jupiter.as_str(), outcome, elapsed);
+
+        result
+    }
+
+    async fn fetch_chunk_inner(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
         let ids: String = mints
             .iter()
             .map(|m| m.to_string())

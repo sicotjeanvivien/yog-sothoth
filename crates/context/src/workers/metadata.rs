@@ -28,6 +28,7 @@
 //! does not.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
@@ -35,6 +36,7 @@ use tracing::{debug, info, warn};
 
 use yog_core::domain::{TokenMetadata, TokenMetadataRepository};
 
+use super::metadata_metrics::MetadataWorkerMetrics;
 use crate::error::WorkerError;
 use crate::source::{FetchedMetadata, MetadataSource};
 
@@ -77,16 +79,20 @@ impl MetadataWorker {
     }
 
     async fn run_one_cycle(&self) {
+        let start = Instant::now();
         let missing = match self.repository.list_missing_mints().await {
             Ok(missing) => missing,
             Err(e) => {
                 warn!(error = %e, "metadata worker: list_missing_mints failed");
+                MetadataWorkerMetrics::record_tick("list_failed", start.elapsed().as_secs_f64());
                 return;
             }
         };
-
+        MetadataWorkerMetrics::set_missing_mints(missing.len());
         if missing.is_empty() {
             debug!("metadata worker: no missing mints — sleeping");
+            MetadataWorkerMetrics::record_tick("no_work", start.elapsed().as_secs_f64());
+
             return;
         }
 
@@ -100,11 +106,16 @@ impl MetadataWorker {
                 // Reserved for hard failures (misconfiguration etc.).
                 // Best-effort partial results don't go through this path.
                 warn!(error = %e, "metadata worker: source returned a hard error");
+                MetadataWorkerMetrics::record_tick(
+                    "source_hard_error",
+                    start.elapsed().as_secs_f64(),
+                );
                 return;
             }
         };
 
         self.upsert_all(fetched).await;
+        MetadataWorkerMetrics::record_tick("ok", start.elapsed().as_secs_f64());
     }
 
     /// Upsert every fetched metadata row, logging individual failures
@@ -124,16 +135,20 @@ impl MetadataWorker {
                 last_refresh_at: now,
             };
 
-            if let Err(e) = self.repository.upsert(&metadata).await {
-                warn!(
-                    mint = %metadata.mint,
-                    error = %e,
-                    "metadata worker: upsert failed",
-                );
-                continue;
+            match self.repository.upsert(&metadata).await {
+                Ok(()) => {
+                    MetadataWorkerMetrics::record_upsert("ok");
+                    debug!(mint = %metadata.mint, "metadata worker: upserted");
+                }
+                Err(e) => {
+                    MetadataWorkerMetrics::record_upsert("error");
+                    warn!(
+                        mint = %metadata.mint,
+                        error = %e,
+                        "metadata worker: upsert failed",
+                    );
+                }
             }
-
-            debug!(mint = %metadata.mint, "metadata worker: upserted");
         }
     }
 }

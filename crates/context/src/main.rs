@@ -19,6 +19,7 @@ mod providers;
 mod source;
 mod workers;
 
+use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -27,6 +28,8 @@ async fn main() -> anyhow::Result<()> {
     yog_bootstrap::init_rustls();
     dotenvy::dotenv().ok();
     yog_bootstrap::init_tracing();
+
+    init_metrics().inspect_err(|e| error!(error = %e, "failed to install metrics exporter"))?;
 
     let config = bootstrap::Config::load()?;
     info!("configuration loaded");
@@ -37,4 +40,16 @@ async fn main() -> anyhow::Result<()> {
     info!("daemon state initialized");
 
     daemon.run().await
+}
+
+/// Install the Prometheus exporter as the global `metrics` recorder.
+///
+/// Exposes `http://0.0.0.0:9000/metrics` in Prometheus text format.
+/// Must be called before any metric is emitted, in particular before
+/// `Daemon::new` which registers metric descriptions.
+fn init_metrics() -> anyhow::Result<()> {
+    PrometheusBuilder::new()
+        .with_http_listener(([0, 0, 0, 0], 9000))
+        .install()
+        .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))
 }

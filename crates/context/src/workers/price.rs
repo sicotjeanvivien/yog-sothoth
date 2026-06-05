@@ -16,7 +16,9 @@
 //! 30-second sample — invisible at the dashboard level. The daemon
 //! must not fall over on a Jupiter hiccup.
 
+use super::price_metrics::PriceWorkerMetrics;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
@@ -77,16 +79,21 @@ impl PriceWorker {
     /// One pricing cycle. Absorbs every recoverable error so a hiccup
     /// never stops the worker.
     async fn run_one_cycle(&self) {
+        let start = Instant::now();
         let mints = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
             Err(e) => {
                 warn!(error = %e, "price worker: list_known_mints failed");
+                PriceWorkerMetrics::record_tick("list_failed", start.elapsed().as_secs_f64());
+
                 return;
             }
         };
+        PriceWorkerMetrics::set_known_mints(mints.len());
 
         if mints.is_empty() {
             debug!("price worker: no known mints yet — sleeping");
+            PriceWorkerMetrics::record_tick("no_work", start.elapsed().as_secs_f64());
             return;
         }
 
@@ -96,6 +103,7 @@ impl PriceWorker {
             Ok(fetched) => fetched,
             Err(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
+                PriceWorkerMetrics::record_tick("source_hard_error", start.elapsed().as_secs_f64());
                 return;
             }
         };
@@ -126,10 +134,13 @@ impl PriceWorker {
         let inserted = to_insert.len();
         if let Err(e) = self.price_repository.insert_batch(&to_insert).await {
             warn!(error = %e, "price worker: insert_batch failed");
+            PriceWorkerMetrics::record_tick("insert_failed", start.elapsed().as_secs_f64());
             return;
         }
 
+        PriceWorkerMetrics::record_inserted(inserted);
         debug!(count = inserted, "price worker: prices inserted");
+        PriceWorkerMetrics::record_tick("ok", start.elapsed().as_secs_f64());
     }
 }
 

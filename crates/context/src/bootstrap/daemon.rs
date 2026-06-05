@@ -16,8 +16,11 @@ use yog_persistence::{Database, PgTokenMetadataRepository, PgTokenPriceRepositor
 
 use crate::bootstrap::Config;
 use crate::error::WorkerError;
+use crate::providers::ProviderMetrics;
 use crate::providers::{HeliusDasClient, JupiterPriceClient};
 use crate::source::{MetadataSource, PriceSource};
+use crate::workers::MetadataWorkerMetrics;
+use crate::workers::PriceWorkerMetrics;
 use crate::workers::{MetadataWorker, PriceWorker};
 
 /// Dependencies shared by the daemon's workers.
@@ -64,6 +67,10 @@ impl Daemon {
             config.jupiter_url.expose().to_string(),
             config.jupiter_api_key.expose().to_string(),
         ));
+
+        MetadataWorkerMetrics::register_descriptions();
+        PriceWorkerMetrics::register_descriptions();
+        ProviderMetrics::register_descriptions();
 
         Ok(Self {
             token_metadata_repository,

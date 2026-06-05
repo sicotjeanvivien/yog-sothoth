@@ -6105,6 +6105,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "dotenvy",
+ "metrics",
+ "metrics-exporter-prometheus",
  "reqwest 0.13.3",
  "rust_decimal",
  "rustls",
