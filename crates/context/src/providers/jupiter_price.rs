@@ -8,15 +8,21 @@
 
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
+use tracing::warn;
+use yog_core::domain::PriceProvider;
 
-use crate::error::SourceError;
+use crate::{
+    error::SourceError,
+    source::{FetchedPrice, PriceSource},
+};
 
 /// Maximum number of `ids` accepted by Price API V3 in a single
 /// call. Documented limit: 50.
-pub const JUPITER_BATCH_MAX: usize = 50;
+const JUPITER_BATCH_MAX: usize = 50;
 
 // ── Wire types ────────────────────────────────────────────────────────
 
@@ -36,16 +42,6 @@ pub const JUPITER_BATCH_MAX: usize = 50;
 struct JupiterPriceEntry {
     #[serde(rename = "usdPrice", default)]
     usd_price: Option<Decimal>,
-}
-
-// ── Returned shape ────────────────────────────────────────────────────
-
-/// A successfully fetched price, ready to be turned into the domain
-/// `TokenPrice` by the worker.
-#[derive(Debug, Clone)]
-pub struct FetchedPrice {
-    pub mint: Pubkey,
-    pub price_usd: Decimal,
 }
 
 // ── Client ────────────────────────────────────────────────────────────
@@ -74,27 +70,13 @@ impl JupiterPriceClient {
         }
     }
 
-    /// Fetch USD prices for a batch of mints.
-    ///
-    /// `mints` must not exceed `JUPITER_BATCH_MAX`; the worker
-    /// chunks the queue before calling.
-    ///
-    /// Returns the subset of mints that Jupiter actually priced.
-    /// Mints whose entry has no usable `usdPrice` are dropped —
-    /// they will be retried on the next tick, with the same likely
-    /// outcome until they become tradable again.
-    pub async fn fetch_prices_batch(
-        &self,
-        mints: &[Pubkey],
-    ) -> Result<Vec<FetchedPrice>, SourceError> {
+    /// Single HTTP call. Caller guarantees `mints.len() <= JUPITER_BATCH_MAX`.
+    async fn fetch_chunk(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
         if mints.is_empty() {
             return Ok(Vec::new());
         }
         debug_assert!(mints.len() <= JUPITER_BATCH_MAX);
 
-        // Build the `ids=mint1,mint2,...` query string. reqwest's
-        // `.query()` would percent-encode the commas; the V3 API
-        // expects them raw, so we build the URL ourselves.
         let ids: String = mints
             .iter()
             .map(|m| m.to_string())
@@ -115,18 +97,51 @@ impl JupiterPriceClient {
             .await
             .map_err(|e| SourceError::Decode(e.to_string()))?;
 
-        // Project: drop entries without a usable price, parse the
-        // mint string back into a Pubkey.
         Ok(response
             .into_iter()
-            .filter_map(|(mint_str, entry)| {
-                let price = entry.usd_price?;
-                let mint = Pubkey::try_from(mint_str.as_str()).ok()?;
-                Some(FetchedPrice {
-                    mint,
-                    price_usd: price,
-                })
-            })
+            .filter_map(into_fetched_price)
             .collect())
     }
 }
+
+#[async_trait]
+impl PriceSource for JupiterPriceClient {
+    /// Fetches USD prices for an arbitrary number of mints, chunking
+    /// internally on Jupiter's 50-id limit. Chunk-level failures are
+    /// logged and skipped.
+    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
+        let mut all = Vec::with_capacity(mints.len());
+        for chunk in mints.chunks(JUPITER_BATCH_MAX) {
+            match self.fetch_chunk(chunk).await {
+                Ok(fetched) => all.extend(fetched),
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        chunk_size = chunk.len(),
+                        "jupiter_price: chunk failed, continuing",
+                    );
+                }
+            }
+        }
+        Ok(all)
+    }
+}
+
+/// Project one HashMap entry from Jupiter's response into the
+/// worker's view, or drop it. Drops when:
+///   - the entry has no usable `usdPrice` (null or absent);
+///   - the mint string cannot be parsed back into a Pubkey
+///     (unlikely — Jupiter would have to return a malformed id).
+fn into_fetched_price((mint_str, entry): (String, JupiterPriceEntry)) -> Option<FetchedPrice> {
+    let price_usd = entry.usd_price?;
+    let mint = Pubkey::try_from(mint_str.as_str()).ok()?;
+    Some(FetchedPrice {
+        mint,
+        price_provider: PriceProvider::Jupiter,
+        price_usd,
+    })
+}
+
+#[cfg(test)]
+#[path = "jupiter_price_tests.rs"]
+mod tests;

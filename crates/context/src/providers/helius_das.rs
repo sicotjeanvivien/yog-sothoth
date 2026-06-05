@@ -13,16 +13,22 @@
 //! missing — much friendlier on Helius rate limits than `getAsset`
 //! per mint.
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
+use tracing::warn;
 
-use crate::error::SourceError;
+use crate::{
+    error::SourceError,
+    source::{FetchedMetadata, MetadataSource},
+};
 
 /// Maximum number of IDs accepted by `getAssetBatch` in a single
 /// call. Helius documents this as 1000. Currently a small allowlist
 /// means a single chunk always suffices, but the worker still chunks
 /// just in case the allowlist is later lifted.
-pub const DAS_BATCH_MAX: usize = 1000;
+const DAS_BATCH_MAX: usize = 1000;
+const METADATA_SOURCE_TAG: &str = "helius_das";
 
 // ── Wire types ────────────────────────────────────────────────────────
 
@@ -101,39 +107,13 @@ struct DasTokenInfo {
     decimals: Option<u8>,
 }
 
-// ── Returned shape ────────────────────────────────────────────────────
-
-/// A successfully fetched piece of metadata, ready to be turned into
-/// the domain `TokenMetadata` by the worker.
-///
-/// This is the source-layer view: it carries the bits the worker
-/// needs, but does NOT carry timestamps or the `metadata_source` tag
-/// — those are added by the worker when building the domain object.
-#[derive(Debug, Clone)]
-pub struct FetchedMetadata {
-    pub mint: Pubkey,
-    pub symbol: Option<String>,
-    pub name: Option<String>,
-    pub decimals: u8,
-    pub logo_uri: Option<String>,
-}
-
-// ── Client ────────────────────────────────────────────────────────────
-
-/// Client for the Helius Digital Asset Standard (DAS) API.
-///
-/// Owns its own `reqwest::Client`, separate from the Jupiter client
-/// and from the indexer's RPC client.
 #[derive(Clone)]
 pub struct HeliusDasClient {
     http: reqwest::Client,
-    /// Full Helius RPC URL, with API key — the same endpoint used for
-    /// JSON-RPC calls (`getAssetBatch` is one of them).
     rpc_url: String,
 }
 
 impl HeliusDasClient {
-    /// Build the client against the given Helius RPC URL.
     pub fn new(rpc_url: String) -> Self {
         Self {
             http: reqwest::Client::new(),
@@ -141,26 +121,14 @@ impl HeliusDasClient {
         }
     }
 
-    /// Fetch metadata for a batch of mints.
-    ///
-    /// `mints` must not exceed `DAS_BATCH_MAX`; the worker chunks the
-    /// queue before calling.
-    ///
-    /// Returns the subset of mints that yielded usable metadata
-    /// (decimals present). Mints unknown to DAS or missing decimals
-    /// are silently dropped.
-    pub async fn fetch_asset_batch(
-        &self,
-        mints: &[Pubkey],
-    ) -> Result<Vec<FetchedMetadata>, SourceError> {
+    /// Single HTTP call. Caller guarantees `mints.len() <= DAS_BATCH_MAX`.
+    async fn fetch_chunk(&self, mints: &[Pubkey]) -> Result<Vec<FetchedMetadata>, SourceError> {
         if mints.is_empty() {
             return Ok(Vec::new());
         }
         debug_assert!(mints.len() <= DAS_BATCH_MAX);
 
-        // Pubkey -> base58 string at the HTTP boundary.
         let ids: Vec<String> = mints.iter().map(|m| m.to_string()).collect();
-
         let request = DasRequest {
             jsonrpc: "2.0",
             id: "yog-context",
@@ -168,8 +136,6 @@ impl HeliusDasClient {
             params: DasParams { ids: &ids },
         };
 
-        // Wrap transport failures in SourceError::Http — the worker
-        // will log and retry on the next tick.
         let response = self
             .http
             .post(&self.rpc_url)
@@ -186,9 +152,33 @@ impl HeliusDasClient {
         Ok(response
             .result
             .into_iter()
-            .flatten() // drop nulls (mints unknown to DAS)
+            .flatten()
             .filter_map(into_fetched_metadata)
             .collect())
+    }
+}
+
+#[async_trait]
+impl MetadataSource for HeliusDasClient {
+    /// Fetches metadata for an arbitrary number of mints, chunking
+    /// internally to respect Helius' `getAssetBatch` 1000-id limit.
+    /// Chunk-level failures are logged and skipped — the call returns
+    /// whatever was successfully fetched.
+    async fn fetch_metadata(&self, mints: &[Pubkey]) -> Result<Vec<FetchedMetadata>, SourceError> {
+        let mut all = Vec::with_capacity(mints.len());
+        for chunk in mints.chunks(DAS_BATCH_MAX) {
+            match self.fetch_chunk(chunk).await {
+                Ok(fetched) => all.extend(fetched),
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        chunk_size = chunk.len(),
+                        "helius_das: chunk failed, continuing",
+                    );
+                }
+            }
+        }
+        Ok(all)
     }
 }
 
@@ -203,7 +193,6 @@ fn into_fetched_metadata(asset: DasAsset) -> Option<FetchedMetadata> {
     let mint = Pubkey::try_from(asset.id.as_str()).ok()?;
     let decimals = asset.token_info.as_ref().and_then(|ti| ti.decimals)?;
 
-    // Symbol / name from metadata, if any.
     let (symbol, name) = asset
         .content
         .as_ref()
@@ -211,7 +200,6 @@ fn into_fetched_metadata(asset: DasAsset) -> Option<FetchedMetadata> {
         .map(|m| (m.symbol.clone(), m.name.clone()))
         .unwrap_or((None, None));
 
-    // Logo: prefer `content.links.image`, fall back to first file.
     let logo_uri = asset.content.as_ref().and_then(|c| {
         c.links
             .as_ref()
@@ -225,5 +213,10 @@ fn into_fetched_metadata(asset: DasAsset) -> Option<FetchedMetadata> {
         name,
         decimals,
         logo_uri,
+        metadata_source: METADATA_SOURCE_TAG.to_string(),
     })
 }
+
+#[cfg(test)]
+#[path = "helius_das_tests.rs"]
+mod tests;

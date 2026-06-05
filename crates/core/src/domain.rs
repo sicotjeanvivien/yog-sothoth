@@ -30,6 +30,6 @@ pub use pool_current_state::{
 pub use protocol::Protocol;
 pub use swap_event::{SwapCursor, SwapEvent, SwapEventRepository};
 pub use token_metadata::{TokenMetadata, TokenMetadataRepository};
-pub use token_price::{PriceSource, TokenPrice, TokenPriceRepository};
+pub use token_price::{PriceProvider, TokenPrice, TokenPriceRepository};
 pub use trade_direction::TradeDirection;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

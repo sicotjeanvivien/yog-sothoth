@@ -6102,6 +6102,7 @@ name = "yog-context"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "dotenvy",
  "reqwest 0.13.3",

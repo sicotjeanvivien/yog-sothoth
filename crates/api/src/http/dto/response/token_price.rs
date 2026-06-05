@@ -11,7 +11,7 @@ pub(crate) struct TokenPriceResponse {
     pub(super) usd: Decimal,
 
     /// Origin tag: "jupiter" | "helius" | "fallback".
-    pub(super) source: String,
+    pub(super) provider: String,
 
     /// When the price was observed.
     pub(super) fetched_at: DateTime<Utc>,

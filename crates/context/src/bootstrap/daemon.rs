@@ -16,7 +16,8 @@ use yog_persistence::{Database, PgTokenMetadataRepository, PgTokenPriceRepositor
 
 use crate::bootstrap::Config;
 use crate::error::WorkerError;
-use crate::source::{HeliusDasClient, JupiterPriceClient};
+use crate::providers::{HeliusDasClient, JupiterPriceClient};
+use crate::source::{MetadataSource, PriceSource};
 use crate::workers::{MetadataWorker, PriceWorker};
 
 /// Dependencies shared by the daemon's workers.
@@ -27,9 +28,9 @@ pub(crate) struct Daemon {
     /// Price persistence.
     token_price_repository: Arc<dyn TokenPriceRepository>,
     /// Helius DAS source client (metadata).
-    helius_client: HeliusDasClient,
+    metadata_source: Arc<dyn MetadataSource>,
     /// Jupiter price source client.
-    jupiter_client: JupiterPriceClient,
+    price_source: Arc<dyn PriceSource>,
     /// Context METADATA poll secs
     poll_interval: std::time::Duration,
     /// context PRICE interval secs
@@ -57,17 +58,18 @@ impl Daemon {
             Arc::new(PgTokenPriceRepository::new(db_pool));
 
         // Two independent HTTP clients — one per external source.
-        let helius_client = HeliusDasClient::new(config.helius_url.expose().to_string());
-        let jupiter_client = JupiterPriceClient::new(
+        let metadata_source =
+            Arc::new(HeliusDasClient::new(config.helius_url.expose().to_string()));
+        let price_source = Arc::new(JupiterPriceClient::new(
             config.jupiter_url.expose().to_string(),
             config.jupiter_api_key.expose().to_string(),
-        );
+        ));
 
         Ok(Self {
             token_metadata_repository,
             token_price_repository,
-            helius_client,
-            jupiter_client,
+            metadata_source,
+            price_source,
             poll_interval,
             price_interval,
         })
@@ -78,14 +80,14 @@ impl Daemon {
 
         let metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),
-            self.helius_client.clone(),
+            self.metadata_source.clone(),
             self.poll_interval,
             shutdown.clone(),
         );
         let price_task = spawn_price_worker(
             Arc::clone(&self.token_metadata_repository),
             Arc::clone(&self.token_price_repository),
-            self.jupiter_client.clone(),
+            self.price_source.clone(),
             self.price_interval,
             shutdown.clone(),
         );
@@ -125,11 +127,11 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 /// Spawn the metadata worker task.
 fn spawn_metadata_worker(
     repository: Arc<dyn TokenMetadataRepository>,
-    helius: HeliusDasClient,
+    metadata_source: Arc<dyn MetadataSource>,
     poll_interval: std::time::Duration,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = MetadataWorker::new(repository, helius, poll_interval);
+    let worker = MetadataWorker::new(repository, metadata_source, poll_interval);
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 
@@ -137,11 +139,16 @@ fn spawn_metadata_worker(
 fn spawn_price_worker(
     metadata_repository: Arc<dyn TokenMetadataRepository>,
     price_repository: Arc<dyn TokenPriceRepository>,
-    jupiter: JupiterPriceClient,
+    price_source: Arc<dyn PriceSource>,
     interval: std::time::Duration,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PriceWorker::new(metadata_repository, price_repository, jupiter, interval);
+    let worker = PriceWorker::new(
+        metadata_repository,
+        price_repository,
+        price_source,
+        interval,
+    );
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 

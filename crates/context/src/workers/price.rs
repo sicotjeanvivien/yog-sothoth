@@ -22,32 +22,31 @@ use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use yog_core::domain::{PriceSource, TokenMetadataRepository, TokenPrice, TokenPriceRepository};
+use yog_core::domain::{TokenMetadataRepository, TokenPrice, TokenPriceRepository};
 
 use crate::error::WorkerError;
-use crate::source::{FetchedPrice, JUPITER_BATCH_MAX, JupiterPriceClient};
+use crate::source::{FetchedPrice, PriceSource};
 
 /// Worker that records a USD price for every known mint on a fixed
 /// interval.
 pub struct PriceWorker {
     metadata_repository: Arc<dyn TokenMetadataRepository>,
     price_repository: Arc<dyn TokenPriceRepository>,
-    jupiter: JupiterPriceClient,
+    source: Arc<dyn PriceSource>,
     interval: std::time::Duration,
 }
 
 impl PriceWorker {
-    /// Build the worker.
     pub fn new(
         metadata_repository: Arc<dyn TokenMetadataRepository>,
         price_repository: Arc<dyn TokenPriceRepository>,
-        jupiter: JupiterPriceClient,
+        source: Arc<dyn PriceSource>,
         interval: std::time::Duration,
     ) -> Self {
         Self {
             metadata_repository,
             price_repository,
-            jupiter,
+            source,
             interval,
         }
     }
@@ -93,42 +92,36 @@ impl PriceWorker {
 
         debug!(count = mints.len(), "price worker: pricing mints");
 
-        // Collect fetched prices across all chunks, then insert the
-        // whole batch in one DB round-trip at the end.
-        let now = Utc::now();
-        let mut to_insert: Vec<TokenPrice> = Vec::with_capacity(mints.len());
-
-        for chunk in mints.chunks(JUPITER_BATCH_MAX) {
-            let fetched = match self.jupiter.fetch_prices_batch(chunk).await {
-                Ok(fetched) => fetched,
-                Err(e) => {
-                    // Jupiter hiccup: log, drop this chunk, try the
-                    // next one. The unfetched mints will be retried
-                    // on the next tick.
-                    warn!(error = %e, "price worker: Jupiter fetch failed");
-                    continue;
-                }
-            };
-
-            for FetchedPrice { mint, price_usd } in fetched {
-                to_insert.push(TokenPrice {
-                    mint,
-                    price_usd,
-                    price_source: PriceSource::Jupiter,
-                    // Jupiter V3 does not expose a confidence value.
-                    confidence: None,
-                    fetched_at: now,
-                });
+        let fetched = match self.source.fetch_prices(&mints).await {
+            Ok(fetched) => fetched,
+            Err(e) => {
+                warn!(error = %e, "price worker: source returned a hard error");
+                return;
             }
-        }
+        };
 
-        if to_insert.is_empty() {
-            // Every chunk failed, or Jupiter priced none of the
-            // known mints (very fresh launches, no recent trades).
-            // Either way, nothing to write this tick.
+        if fetched.is_empty() {
             debug!("price worker: no prices to insert");
             return;
         }
+
+        let now = Utc::now();
+        let to_insert: Vec<TokenPrice> = fetched
+            .into_iter()
+            .map(
+                |FetchedPrice {
+                     mint,
+                     price_provider,
+                     price_usd,
+                 }| TokenPrice {
+                    mint,
+                    price_usd,
+                    price_provider,
+                    confidence: None,
+                    fetched_at: now,
+                },
+            )
+            .collect();
 
         let inserted = to_insert.len();
         if let Err(e) = self.price_repository.insert_batch(&to_insert).await {
@@ -139,3 +132,7 @@ impl PriceWorker {
         debug!(count = inserted, "price worker: prices inserted");
     }
 }
+
+#[cfg(test)]
+#[path = "price_tests.rs"]
+mod tests;

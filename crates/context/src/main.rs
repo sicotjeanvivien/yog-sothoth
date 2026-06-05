@@ -15,6 +15,7 @@
 
 mod bootstrap;
 mod error;
+mod providers;
 mod source;
 mod workers;
 

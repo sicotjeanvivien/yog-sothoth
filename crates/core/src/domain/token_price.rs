@@ -1,5 +1,5 @@
 pub mod model;
 pub mod repository;
 
-pub use model::{PriceSource, TokenPrice};
+pub use model::{PriceProvider, TokenPrice};
 pub use repository::TokenPriceRepository;

@@ -8,7 +8,7 @@
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
-use yog_core::domain::{PriceSource, TokenMetadata, TokenPrice};
+use yog_core::domain::{PriceProvider, TokenMetadata, TokenPrice};
 
 use super::EmbeddedTokenResponse;
 
@@ -41,7 +41,7 @@ fn sample_price(m: Pubkey) -> TokenPrice {
     TokenPrice {
         mint: m,
         price_usd: Decimal::new(100, 0),
-        price_source: PriceSource::Helius,
+        price_provider: PriceProvider::Helius,
         fetched_at: Utc.timestamp_opt(1_700_000_500, 0).unwrap(),
         confidence: Some(6.0),
     }
@@ -136,7 +136,7 @@ fn price_is_attached_when_present() {
 
     assert!(j["price"].is_object());
     assert!(j["price"]["usd"].is_string() || j["price"]["usd"].is_number());
-    assert!(j["price"]["source"].is_string());
+    assert!(j["price"]["provider"].is_string());
     // `fetched_at` — camelCase guard on the nested DTO too.
     assert!(j["price"]["fetchedAt"].is_string());
 }

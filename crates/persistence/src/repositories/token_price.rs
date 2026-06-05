@@ -37,13 +37,13 @@ impl TokenPriceRepository for PgTokenPriceRepository {
         // here, the `query!` macros can't generate VALUES tuples at
         // a runtime-determined arity.
         let mut builder = QueryBuilder::new(
-            "INSERT INTO token_prices (mint, price_usd, price_source, confidence, fetched_at) ",
+            "INSERT INTO token_prices (mint, price_usd, price_provider, confidence, fetched_at) ",
         );
 
         builder.push_values(prices, |mut row, price| {
             row.push_bind(price.mint.to_string())
                 .push_bind(price.price_usd)
-                .push_bind(price.price_source.as_str())
+                .push_bind(price.price_provider.as_str())
                 .push_bind(price.confidence)
                 .push_bind(price.fetched_at);
         });
@@ -65,7 +65,7 @@ impl TokenPriceRepository for PgTokenPriceRepository {
             r#"
             SELECT mint,
                   price_usd AS "price_usd!: rust_decimal::Decimal",
-                  price_source, confidence, fetched_at
+                  price_provider, confidence, fetched_at
             FROM token_prices
             WHERE mint = $1
             ORDER BY fetched_at DESC

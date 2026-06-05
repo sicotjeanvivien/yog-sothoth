@@ -70,7 +70,7 @@ pub(crate) fn make_price(mint: Pubkey) -> TokenPrice {
         mint,
         // adapt: rust_decimal::Decimal, source, fetched_at, etc.
         price_usd: rust_decimal::Decimal::new(100, 0),
-        price_source: yog_core::domain::PriceSource::Helius,
+        price_provider: yog_core::domain::PriceProvider::Helius,
         fetched_at: ts(1_500),
         confidence: Some(6.0),
     }

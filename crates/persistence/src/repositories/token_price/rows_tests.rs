@@ -2,14 +2,14 @@
 //!
 //! Pure parser tests, no DB. Build rows by hand, assert that valid
 //! ones produce the right price, that each fallible field has its
-//! own validation path (mint Pubkey, price_source enum), and that
+//! own validation path (mint Pubkey, price_provider enum), and that
 //! errors surface as `RepositoryError::Integrity`.
 
 use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
-    domain::{PriceSource, TokenPrice},
+    domain::{PriceProvider, TokenPrice},
 };
 
 use super::TokenPriceRow;
@@ -20,7 +20,7 @@ fn valid_row() -> TokenPriceRow {
     TokenPriceRow {
         mint: VALID_MINT.into(),
         price_usd: Decimal::new(12345, 2), // 123.45
-        price_source: "jupiter".into(),
+        price_provider: "jupiter".into(),
         confidence: Some(0.95),
         fetched_at: Utc::now(),
     }
@@ -37,7 +37,7 @@ fn try_from_valid_row_returns_price_with_all_fields_mapped() {
 
     assert_eq!(price.mint.to_string(), VALID_MINT);
     assert_eq!(price.price_usd, Decimal::new(12345, 2));
-    assert_eq!(price.price_source, PriceSource::Jupiter);
+    assert_eq!(price.price_provider, PriceProvider::Jupiter);
     assert_eq!(price.confidence, Some(0.95));
     assert_eq!(price.fetched_at, fetched_at);
 }
@@ -87,40 +87,40 @@ fn try_from_invalid_mint_returns_integrity() {
     );
 }
 
-// ── PriceSource enum mapping ─────────────────────────────────────────
+// ── PriceProvider enum mapping ─────────────────────────────────────────
 
 #[test]
-fn try_from_maps_all_known_price_sources() {
+fn try_from_maps_all_known_price_providers() {
     for (raw, expected) in [
-        ("jupiter", PriceSource::Jupiter),
-        ("helius", PriceSource::Helius),
-        ("fallback", PriceSource::Fallback),
+        ("jupiter", PriceProvider::Jupiter),
+        ("helius", PriceProvider::Helius),
+        ("fallback", PriceProvider::Fallback),
     ] {
         let row = TokenPriceRow {
-            price_source: raw.into(),
+            price_provider: raw.into(),
             ..valid_row()
         };
         let price = TokenPrice::try_from(row).expect("known source should convert");
         assert_eq!(
-            price.price_source, expected,
+            price.price_provider, expected,
             "wire value {raw} should map to {expected:?}"
         );
     }
 }
 
 #[test]
-fn try_from_invalid_price_source_returns_integrity_with_value() {
+fn try_from_invalid_price_provider_returns_integrity_with_value() {
     let row = TokenPriceRow {
-        price_source: "definitely_not_a_source".into(),
+        price_provider: "definitely_not_a_source".into(),
         ..valid_row()
     };
-    let err = TokenPrice::try_from(row).expect_err("unknown price_source should fail");
+    let err = TokenPrice::try_from(row).expect_err("unknown price_provider should fail");
     let msg = match err {
         RepositoryError::Integrity(m) => m,
         other => panic!("expected Integrity, got {other:?}"),
     };
     assert!(
-        msg.contains("invalid price_source") && msg.contains("definitely_not_a_source"),
+        msg.contains("invalid price_provider") && msg.contains("definitely_not_a_source"),
         "expected message to mention the field and the bad value, got: {msg}"
     );
 }

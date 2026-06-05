@@ -9,7 +9,7 @@ use solana_pubkey::Pubkey;
 
 /// Origin of a price observation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PriceSource {
+pub enum PriceProvider {
     /// Fetched from the Jupiter price API.
     Jupiter,
     /// Fetched from Helius (DAS `price_info`).
@@ -18,14 +18,14 @@ pub enum PriceSource {
     Fallback,
 }
 
-impl PriceSource {
+impl PriceProvider {
     /// Stable lowercase tag, as persisted in the `price_source`
     /// column.
     pub fn as_str(&self) -> &'static str {
         match self {
-            PriceSource::Jupiter => "jupiter",
-            PriceSource::Helius => "helius",
-            PriceSource::Fallback => "fallback",
+            PriceProvider::Jupiter => "jupiter",
+            PriceProvider::Helius => "helius",
+            PriceProvider::Fallback => "fallback",
         }
     }
 }
@@ -50,7 +50,7 @@ pub struct TokenPrice {
     pub price_usd: Decimal,
 
     /// Which source produced this price.
-    pub price_source: PriceSource,
+    pub price_provider: PriceProvider,
 
     /// Optional confidence value, when the source provides one.
     pub confidence: Option<f32>,

@@ -36,17 +36,11 @@ use tracing::{debug, info, warn};
 use yog_core::domain::{TokenMetadata, TokenMetadataRepository};
 
 use crate::error::WorkerError;
-use crate::source::{DAS_BATCH_MAX, FetchedMetadata, HeliusDasClient};
+use crate::source::{FetchedMetadata, MetadataSource};
 
-/// Tag stored in `token_metadata.metadata_source` for rows produced
-/// by this worker.
-const METADATA_SOURCE_TAG: &str = "helius_das";
-
-/// Worker that keeps `token_metadata` in sync with the mints seen in
-/// `pools`.
 pub struct MetadataWorker {
     repository: Arc<dyn TokenMetadataRepository>,
-    helius: HeliusDasClient,
+    source: Arc<dyn MetadataSource>,
     poll_interval: std::time::Duration,
 }
 
@@ -54,22 +48,16 @@ impl MetadataWorker {
     /// Build the worker.
     pub fn new(
         repository: Arc<dyn TokenMetadataRepository>,
-        helius: HeliusDasClient,
+        source: Arc<dyn MetadataSource>,
         poll_interval: std::time::Duration,
     ) -> Self {
         Self {
             repository,
-            helius,
+            source,
             poll_interval,
         }
     }
 
-    /// Run the poll/fetch/upsert loop until the shutdown token is
-    /// triggered.
-    ///
-    /// The first tick fires immediately (tokio's `interval` yields at
-    /// once), so the first batch of missing mints is enriched as soon
-    /// as the daemon starts.
     pub async fn run(self, shutdown: CancellationToken) -> Result<(), WorkerError> {
         info!("MetadataWorker started");
 
@@ -88,15 +76,10 @@ impl MetadataWorker {
         }
     }
 
-    /// One poll cycle. Absorbs every recoverable error so a hiccup
-    /// never stops the worker.
     async fn run_one_cycle(&self) {
         let missing = match self.repository.list_missing_mints().await {
             Ok(missing) => missing,
             Err(e) => {
-                // A DB read failure here is unusual (the API is
-                // already reading the same DB) — log and retry next
-                // tick.
                 warn!(error = %e, "metadata worker: list_missing_mints failed");
                 return;
             }
@@ -109,23 +92,19 @@ impl MetadataWorker {
 
         debug!(count = missing.len(), "metadata worker: enriching mints");
 
-        // Chunk to respect the DAS batch limit. At the v0.1 scale the
-        // queue fits in one chunk, but the loop is here for the day
-        // the allowlist is lifted.
-        for chunk in missing.chunks(DAS_BATCH_MAX) {
-            let fetched = match self.helius.fetch_asset_batch(chunk).await {
-                Ok(fetched) => fetched,
-                Err(e) => {
-                    // Helius failure: log and move on. The unfetched
-                    // mints stay in the "missing" set and will be
-                    // retried on the next tick.
-                    warn!(error = %e, "metadata worker: DAS fetch failed");
-                    continue;
-                }
-            };
+        // Single call — the source handles chunking and partial failures
+        // internally.
+        let fetched = match self.source.fetch_metadata(&missing).await {
+            Ok(fetched) => fetched,
+            Err(e) => {
+                // Reserved for hard failures (misconfiguration etc.).
+                // Best-effort partial results don't go through this path.
+                warn!(error = %e, "metadata worker: source returned a hard error");
+                return;
+            }
+        };
 
-            self.upsert_all(fetched).await;
-        }
+        self.upsert_all(fetched).await;
     }
 
     /// Upsert every fetched metadata row, logging individual failures
@@ -140,7 +119,7 @@ impl MetadataWorker {
                 name: item.name,
                 decimals: item.decimals,
                 logo_uri: item.logo_uri,
-                metadata_source: METADATA_SOURCE_TAG.to_string(),
+                metadata_source: item.metadata_source,
                 fetched_at: now,
                 last_refresh_at: now,
             };
@@ -158,3 +137,7 @@ impl MetadataWorker {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "metadata_tests.rs"]
+mod tests;

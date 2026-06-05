@@ -19,7 +19,7 @@ export function validPool() {
         "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
       price: {
         usd: "85.819299811880730000",
-        source: "jupiter",
+        provider: "jupiter",
         fetchedAt: "2026-05-25T12:17:17.479657Z",
       },
     },
@@ -32,7 +32,7 @@ export function validPool() {
         "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
       price: {
         usd: "0.999668653937465800",
-        source: "jupiter",
+        provider: "jupiter",
         fetchedAt: "2026-05-25T12:17:17.479657Z",
       },
     },
