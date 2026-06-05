@@ -59,7 +59,7 @@ pub(crate) fn make_metadata(mint: Pubkey, symbol: &str) -> TokenMetadata {
         name: format!("{symbol} token").into(),
         decimals: 9,
         logo_uri: None,
-        metadata_source: "Helius".to_string(),
+        metadata_provider: yog_core::domain::MetadataProvider::HeliusDas,
         fetched_at: DateTime::from_timestamp_nanos(61_864_918_973_511),
         last_refresh_at: DateTime::from_timestamp_nanos(61_864_918_973_511),
     }

@@ -8,7 +8,7 @@
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
-use yog_core::domain::{PriceProvider, TokenMetadata, TokenPrice};
+use yog_core::domain::{MetadataProvider, PriceProvider, TokenMetadata, TokenPrice};
 
 use super::EmbeddedTokenResponse;
 
@@ -31,7 +31,7 @@ fn full_metadata(m: Pubkey) -> TokenMetadata {
         name: Some("USD Coin".to_string()),
         decimals: 6,
         logo_uri: Some("https://example.test/usdc.png".to_string()),
-        metadata_source: "helius_das".to_string(),
+        metadata_provider: MetadataProvider::HeliusDas,
         fetched_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         last_refresh_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
     }

@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 use tracing::warn;
+use yog_core::domain::MetadataProvider;
 
 use crate::{
     error::SourceError,
@@ -28,7 +29,6 @@ use crate::{
 /// means a single chunk always suffices, but the worker still chunks
 /// just in case the allowlist is later lifted.
 const DAS_BATCH_MAX: usize = 1000;
-const METADATA_SOURCE_TAG: &str = "helius_das";
 
 // ── Wire types ────────────────────────────────────────────────────────
 
@@ -213,7 +213,7 @@ fn into_fetched_metadata(asset: DasAsset) -> Option<FetchedMetadata> {
         name,
         decimals,
         logo_uri,
-        metadata_source: METADATA_SOURCE_TAG.to_string(),
+        metadata_provider: MetadataProvider::HeliusDas,
     })
 }
 

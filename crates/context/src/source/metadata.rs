@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
+use yog_core::domain::MetadataProvider;
 
 use crate::error::SourceError;
 
@@ -16,7 +17,7 @@ pub(crate) struct FetchedMetadata {
     pub(crate) name: Option<String>,
     pub(crate) decimals: u8,
     pub(crate) logo_uri: Option<String>,
-    pub(crate) metadata_source: String,
+    pub(crate) metadata_provider: MetadataProvider,
 }
 
 /// Abstraction over a source of token metadata.

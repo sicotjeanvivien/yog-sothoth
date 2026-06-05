@@ -6,7 +6,10 @@
 //! that errors surface as `RepositoryError::Integrity`.
 
 use chrono::{Duration, Utc};
-use yog_core::{RepositoryError, domain::TokenMetadata};
+use yog_core::{
+    RepositoryError,
+    domain::{MetadataProvider, TokenMetadata},
+};
 
 use super::TokenMetadataRow;
 
@@ -20,7 +23,7 @@ fn valid_row() -> TokenMetadataRow {
         name: Some("Wrapped SOL".into()),
         decimals: 9,
         logo_uri: Some("https://example.com/sol.png".into()),
-        metadata_source: "test".into(),
+        metadata_provider: "helius_das".into(),
         fetched_at: now,
         last_refresh_at: now + Duration::seconds(30),
     }
@@ -44,7 +47,7 @@ fn try_from_valid_row_returns_metadata_with_all_fields_mapped() {
         metadata.logo_uri.as_deref(),
         Some("https://example.com/sol.png")
     );
-    assert_eq!(metadata.metadata_source, "test");
+    assert_eq!(metadata.metadata_provider, MetadataProvider::HeliusDas);
     assert_eq!(metadata.fetched_at, fetched_at);
     assert_eq!(metadata.last_refresh_at, last_refresh_at);
 }

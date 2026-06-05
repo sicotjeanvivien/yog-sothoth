@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT mint, symbol, name, decimals, logo_uri,\n                   metadata_source, fetched_at, last_refresh_at\n            FROM token_metadata\n            WHERE mint = $1\n            ",
+  "query": "\n            SELECT mint, symbol, name, decimals, logo_uri,\n                   metadata_provider, fetched_at, last_refresh_at\n            FROM token_metadata\n            WHERE mint = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 5,
-        "name": "metadata_source",
+        "name": "metadata_provider",
         "type_info": "Text"
       },
       {
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "b4144ec64feb22cedd84f5d3934debce2ae7d2ef36578be7bab8f03d57f268c0"
+  "hash": "02e76b94d119102a797ae77beb0549ecaa33d4786ed8ba95a417c7920d1f940a"
 }

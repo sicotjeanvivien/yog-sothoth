@@ -21,7 +21,7 @@ use solana_pubkey::Pubkey;
 
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{TokenMetadata, TokenMetadataRepository},
+    domain::{MetadataProvider, TokenMetadata, TokenMetadataRepository},
 };
 
 use super::*;
@@ -41,7 +41,7 @@ fn fetched(mint: Pubkey, symbol: &str, decimals: u8) -> FetchedMetadata {
         name: Some(format!("{symbol} Token")),
         decimals,
         logo_uri: None,
-        metadata_source: "helius_das".to_string(),
+        metadata_provider: yog_core::domain::MetadataProvider::HeliusDas,
     }
 }
 
@@ -212,7 +212,11 @@ async fn enriches_all_mints_in_single_chunk() {
     assert!(drift.num_seconds().abs() < 5);
 
     // Tag is set correctly.
-    assert!(upserts.iter().all(|m| m.metadata_source == "helius_das"));
+    assert!(
+        upserts
+            .iter()
+            .all(|m| m.metadata_provider == MetadataProvider::HeliusDas)
+    );
 }
 
 #[tokio::test]

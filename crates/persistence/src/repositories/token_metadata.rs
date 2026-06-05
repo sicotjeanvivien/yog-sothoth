@@ -40,7 +40,7 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             r#"
             INSERT INTO token_metadata (
                 mint, symbol, name, decimals, logo_uri,
-                metadata_source, fetched_at, last_refresh_at
+                metadata_provider, fetched_at, last_refresh_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (mint) DO UPDATE
@@ -48,7 +48,7 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
                 name            = EXCLUDED.name,
                 decimals        = EXCLUDED.decimals,
                 logo_uri        = EXCLUDED.logo_uri,
-                metadata_source = EXCLUDED.metadata_source,
+                metadata_provider = EXCLUDED.metadata_provider,
                 last_refresh_at = EXCLUDED.last_refresh_at
             "#,
             metadata.mint.to_string(),
@@ -56,7 +56,7 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             metadata.name.as_deref(),
             decimals,
             metadata.logo_uri.as_deref(),
-            metadata.metadata_source.as_str(),
+            metadata.metadata_provider.as_str(),
             metadata.fetched_at,
             metadata.last_refresh_at,
         )
@@ -108,7 +108,7 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             TokenMetadataRow,
             r#"
             SELECT mint, symbol, name, decimals, logo_uri,
-                   metadata_source, fetched_at, last_refresh_at
+                   metadata_provider, fetched_at, last_refresh_at
             FROM token_metadata
             WHERE mint = $1
             "#,

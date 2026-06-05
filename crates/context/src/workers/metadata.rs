@@ -119,7 +119,7 @@ impl MetadataWorker {
                 name: item.name,
                 decimals: item.decimals,
                 logo_uri: item.logo_uri,
-                metadata_source: item.metadata_source,
+                metadata_provider: item.metadata_provider,
                 fetched_at: now,
                 last_refresh_at: now,
             };
