@@ -5,6 +5,7 @@ mod indexer_service;
 mod indexer_service_metrics;
 mod watched_pool_service;
 
+pub(crate) use event_persistor::EventPersistor;
 pub(crate) use event_persistor_metrics::EventPersistorMetrics;
 pub(crate) use indexer_service::IndexerService;
 pub(crate) use indexer_service_metrics::IndexerServiceMetrics;

@@ -1,4 +1,3 @@
-// crates/indexer/src/application/services/event_persistor_metrics.rs
 //! Metrics emitted by the EventPersistor.
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};

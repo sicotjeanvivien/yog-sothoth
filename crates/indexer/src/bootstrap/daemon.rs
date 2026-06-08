@@ -2,7 +2,8 @@ use crate::{
     application::{
         reporter::{NetworkStatusReporter, NetworkStatusReporterError},
         services::{
-            EventPersistorMetrics, IndexerService, IndexerServiceMetrics, WatchedPoolService,
+            EventPersistor, EventPersistorMetrics, IndexerService, IndexerServiceMetrics,
+            WatchedPoolService,
         },
         workers::IndexerWorker,
     },
@@ -170,11 +171,8 @@ fn init_listener(config: &Config) -> Arc<RpcListener> {
     ))
 }
 
-/// Initialise the indexer service and its repository dependencies.
-async fn init_indexer_service(
-    database: &Database,
-    rpc_client: Arc<RpcClient>,
-) -> anyhow::Result<Arc<IndexerService>> {
+/// Build the EventPersistor with its six repositories.
+fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
     let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool().clone()));
     let pg_liquidity_event_repo =
         Arc::new(PgLiquidityEventRepository::new(database.pool().clone()));
@@ -186,15 +184,31 @@ async fn init_indexer_service(
     let pg_pool_current_state_repo =
         Arc::new(PgPoolCurrentStateRepository::new(database.pool().clone()));
 
-    Ok(Arc::new(IndexerService::new(
+    Arc::new(EventPersistor::new(
         pg_swap_event_repo,
         pg_liquidity_event_repo,
         pg_claim_position_fee_repo,
         pg_claim_reward_repo,
         pg_pool_repo,
         pg_pool_current_state_repo,
-        rpc_client,
-    )))
+    ))
+}
+
+/// Initialise the indexer service and its repository dependencies.
+async fn init_indexer_service(
+    database: &Database,
+    rpc_client: Arc<RpcClient>,
+) -> anyhow::Result<Arc<IndexerService>> {
+    let event_persistor = init_event_persistor(database);
+    info!("event persistor initialized");
+
+    let indexer_service = Arc::new(IndexerService::new(
+        Arc::clone(&event_persistor),
+        rpc_client.clone(),
+    ));
+    info!("indexer service initialized");
+
+    Ok(indexer_service)
 }
 
 /// Initialise the NetworkStautsReporter and its repository dependency
