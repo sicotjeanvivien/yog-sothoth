@@ -1,5 +1,4 @@
-// crates/indexer/src/application/services/indexer_service_metrics.rs
-//! Metrics emitted by the IndexerService.
+//! Metrics emitted by the TransactionProcessorMetrics.
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 use yog_core::domain::Protocol;
@@ -13,9 +12,9 @@ const INDEX_TX_EXITED: &str = "yog_indexer_index_transaction_exited_total";
 const FETCH_DURATION: &str = "yog_indexer_fetch_duration_seconds";
 const INDEX_TX_DURATION: &str = "yog_indexer_index_transaction_duration_seconds";
 
-pub(crate) struct IndexerServiceMetrics;
+pub(crate) struct TransactionProcessorMetrics;
 
-impl IndexerServiceMetrics {
+impl TransactionProcessorMetrics {
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TRANSACTIONS_NO_MATCH,

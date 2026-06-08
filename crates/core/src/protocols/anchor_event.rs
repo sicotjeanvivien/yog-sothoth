@@ -74,7 +74,7 @@ pub const EVENT_IX_TAG: [u8; EVENT_IX_TAG_LEN] = [0xe4, 0x45, 0xa5, 0x2e, 0x51, 
 /// Returns `Err(NotAnAnchorEvent)` if the tag does not match — the caller
 /// can use this to filter out cp-amm inner instructions that aren't events
 /// (regular CPI calls performed by the program for other reasons).
-pub fn decode_anchor_event_cpi(
+pub(crate) fn decode_anchor_event_cpi(
     data: &[u8],
 ) -> Result<([u8; DISCRIMINATOR_LEN], Vec<u8>), AnchorDecodeError> {
     let min_len = EVENT_IX_TAG_LEN + DISCRIMINATOR_LEN;
@@ -119,7 +119,7 @@ pub fn decode_anchor_event_cpi(
 /// skipped, because parsed instructions are produced for instructions the
 /// RPC's transaction parser recognizes (SPL Token, etc.) — Anchor self-CPI
 /// instructions never fall into that category.
-pub fn extract_anchor_event_cpis(
+pub(crate) fn extract_anchor_event_cpis(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
     target_program_id: &str,
 ) -> Vec<Vec<u8>> {

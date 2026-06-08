@@ -11,20 +11,20 @@ use yog_core::{
 };
 
 use crate::{
-    application::services::{EventPersistor, IndexerServiceMetrics},
+    application::services::{EventPersistor, TransactionProcessorMetrics},
     infra::rpc::{FetchError, TransactionFetcher},
 };
 
 /// Core pipeline — receives a signature, fetches the full transaction via
 /// the TransactionFetcher, dispatches to the appropriate protocol handler,
 /// hands each extracted domain event to the EventPersistor.
-pub(crate) struct IndexerService {
+pub(crate) struct TransactionProcessor {
     fetcher: Arc<TransactionFetcher>,
     extractor: Arc<EventExtractor>,
     persistor: Arc<EventPersistor>,
 }
 
-impl IndexerService {
+impl TransactionProcessor {
     pub(crate) fn new(
         fetcher: Arc<TransactionFetcher>,
         extractor: Arc<EventExtractor>,
@@ -57,17 +57,20 @@ impl IndexerService {
 
         let start = Instant::now();
         let result = self.fetcher.fetch(signature).await;
-        IndexerServiceMetrics::record_fetch_duration(&protocol, start.elapsed().as_secs_f64());
+        TransactionProcessorMetrics::record_fetch_duration(
+            &protocol,
+            start.elapsed().as_secs_f64(),
+        );
 
         let tx = match result {
             Ok(tx) => tx,
             Err(FetchError::NotFound) => {
-                IndexerServiceMetrics::record_fetch_not_found(&protocol);
+                TransactionProcessorMetrics::record_fetch_not_found(&protocol);
                 guard.set("fetch_not_found");
                 return Ok(());
             }
             Err(e) => {
-                IndexerServiceMetrics::record_fetch_failure(&protocol, e.metric_label());
+                TransactionProcessorMetrics::record_fetch_failure(&protocol, e.metric_label());
                 guard.set("fetch_failure");
                 return Err(e.into());
             }
@@ -85,7 +88,7 @@ impl IndexerService {
         self.report_diagnostics(&protocol, &signature, &outcome);
 
         if outcome.events.is_empty() {
-            IndexerServiceMetrics::record_no_match(&protocol);
+            TransactionProcessorMetrics::record_no_match(&protocol);
             debug!(%signature, "no recognized events in transaction");
             guard.set("no_events");
             return Ok(());
@@ -115,7 +118,7 @@ impl IndexerService {
                 discriminator = %hex,
                 "unknown anchor event"
             );
-            IndexerServiceMetrics::record_unknown_event(protocol, &hex);
+            TransactionProcessorMetrics::record_unknown_event(protocol, &hex);
         }
 
         for failure in &outcome.failures {
@@ -127,7 +130,7 @@ impl IndexerService {
                 error = %failure,
                 "extraction failure"
             );
-            IndexerServiceMetrics::record_extraction_failure(protocol, kind);
+            TransactionProcessorMetrics::record_extraction_failure(protocol, kind);
         }
     }
 }
@@ -157,7 +160,7 @@ struct ExitGuard {
 
 impl ExitGuard {
     fn new(protocol: Protocol) -> Self {
-        IndexerServiceMetrics::record_entered(&protocol);
+        TransactionProcessorMetrics::record_entered(&protocol);
         Self {
             protocol,
             outcome: None,
@@ -173,8 +176,8 @@ impl ExitGuard {
 impl Drop for ExitGuard {
     fn drop(&mut self) {
         let outcome = self.outcome.unwrap_or("unknown_exit");
-        IndexerServiceMetrics::record_exited(&self.protocol, outcome);
-        IndexerServiceMetrics::record_index_tx_duration(
+        TransactionProcessorMetrics::record_exited(&self.protocol, outcome);
+        TransactionProcessorMetrics::record_index_tx_duration(
             &self.protocol,
             outcome,
             self.start.elapsed().as_secs_f64(),

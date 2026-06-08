@@ -2,8 +2,8 @@ use crate::{
     application::{
         reporter::{NetworkStatusReporter, NetworkStatusReporterError},
         services::{
-            EventPersistor, EventPersistorMetrics, IndexerService, IndexerServiceMetrics,
-            WatchedPoolService,
+            EventPersistor, EventPersistorMetrics, TransactionProcessor,
+            TransactionProcessorMetrics, WatchedPoolService,
         },
         workers::IndexerWorker,
     },
@@ -40,7 +40,7 @@ use yog_persistence::{
 /// - run the WebSocket listener, the dispatcher and the indexer worker
 /// - handle graceful shutdown on SIGTERM / Ctrl-C
 pub(crate) struct Daemon {
-    indexer_service: Arc<IndexerService>,
+    indexer_service: Arc<TransactionProcessor>,
     watched_pool_service: Arc<WatchedPoolService>,
     listener: Arc<RpcListener>,
     dispatcher: SignatureDispatcher,
@@ -84,7 +84,7 @@ impl Daemon {
         info!("dispatcher initialized");
 
         DispatcherMetrics::register_descriptions();
-        IndexerServiceMetrics::register_descriptions();
+        TransactionProcessorMetrics::register_descriptions();
         EventPersistorMetrics::register_descriptions();
         info!("Metrics initialized");
 
@@ -199,7 +199,7 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 async fn init_indexer_service(
     database: &Database,
     rpc_client: Arc<RpcClient>,
-) -> anyhow::Result<Arc<IndexerService>> {
+) -> anyhow::Result<Arc<TransactionProcessor>> {
     let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone()));
     info!("transaction fetcher initialized");
     let event_extractor = Arc::new(EventExtractor::new());
@@ -207,7 +207,7 @@ async fn init_indexer_service(
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
 
-    let indexer_service = Arc::new(IndexerService::new(
+    let indexer_service = Arc::new(TransactionProcessor::new(
         Arc::clone(&transaction_fetcher),
         Arc::clone(&event_extractor),
         Arc::clone(&event_persistor),
@@ -269,7 +269,7 @@ fn spawn_dispatcher_task(
 /// propagated). Only loop-level failures reach the returned `JoinHandle`
 /// and bubble up to `Daemon::run`.
 fn spawn_indexer_task(
-    indexer_service: Arc<IndexerService>,
+    indexer_service: Arc<TransactionProcessor>,
     rx: mpsc::Receiver<QualifiedSignature>,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), IndexerWorkerError>> {

@@ -1,5 +1,5 @@
 //! Indexer worker — consumes qualified signatures from the dispatcher and
-//! drives `IndexerService::index_transaction` with bounded concurrency.
+//! drives `TransactionProcessor::index_transaction` with bounded concurrency.
 //!
 //! Responsibility split:
 //! - `run` owns the receive loop and the shutdown semantics.
@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::{
-    application::services::IndexerService, error::IndexerWorkerError,
+    application::services::TransactionProcessor, error::IndexerWorkerError,
     infra::rpc::QualifiedSignature, utils::redact_api_key,
 };
 
@@ -31,12 +31,12 @@ const MAX_CONCURRENT_INDEX_TASKS: usize = 15;
 /// Worker that consumes qualified signatures and indexes them with
 /// bounded concurrency.
 pub(crate) struct IndexerWorker {
-    service: Arc<IndexerService>,
+    service: Arc<TransactionProcessor>,
     semaphore: Arc<Semaphore>,
 }
 
 impl IndexerWorker {
-    pub(crate) fn new(service: Arc<IndexerService>) -> Self {
+    pub(crate) fn new(service: Arc<TransactionProcessor>) -> Self {
         Self {
             service,
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_INDEX_TASKS)),
@@ -105,7 +105,7 @@ impl IndexerWorker {
 
 /// Index a single signature. Per-signature errors are logged and counted,
 /// never propagated — they must not stop the pipeline.
-async fn index_one(service: Arc<IndexerService>, qs: QualifiedSignature) {
+async fn index_one(service: Arc<TransactionProcessor>, qs: QualifiedSignature) {
     let QualifiedSignature {
         protocol,
         signature,
