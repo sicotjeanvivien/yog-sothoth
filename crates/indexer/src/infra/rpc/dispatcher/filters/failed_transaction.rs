@@ -1,7 +1,7 @@
 use super::{FilterDecision, LogFilter};
 use crate::infra::rpc::RawLogEvent;
 
-pub struct FailedTransactionFilter;
+pub(crate) struct FailedTransactionFilter;
 
 impl LogFilter for FailedTransactionFilter {
     fn name(&self) -> &'static str {

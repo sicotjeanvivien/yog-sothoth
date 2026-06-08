@@ -12,13 +12,13 @@ use yog_core::domain::Protocol;
 /// RPC path is upgraded, targets will revert to program IDs for full
 /// protocol-centric coverage.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SubscriptionTarget {
+pub(crate) struct SubscriptionTarget {
     pub protocol: Protocol,
     pub mention: Pubkey,
 }
 
 impl SubscriptionTarget {
-    pub fn new(protocol: Protocol, mention: Pubkey) -> Self {
+    pub(crate) fn new(protocol: Protocol, mention: Pubkey) -> Self {
         Self { protocol, mention }
     }
 }

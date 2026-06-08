@@ -10,7 +10,7 @@ use yog_core::domain::Protocol;
 ///
 /// Broadcast-friendly: cheap to clone, small payloads, no references.
 #[derive(Debug, Clone)]
-pub enum SubscriptionEvent {
+pub(crate) enum SubscriptionEvent {
     /// The worker has an active subscription streaming logs.
     /// Emitted on first successful subscribe and on every successful resubscribe.
     Subscribed { protocol: Protocol, mention: Pubkey },

@@ -2,7 +2,7 @@ use thiserror::Error;
 use yog_core::RepositoryError;
 
 #[derive(Debug, Error)]
-pub enum DatabaseError {
+pub(crate) enum DatabaseError {
     #[error("backend failure: {0}")]
     Backend(String),
 

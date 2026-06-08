@@ -20,7 +20,7 @@ use tracing::{debug, error, info};
 
 use crate::{
     application::services::TransactionProcessor, error::IndexerWorkerError,
-    infra::rpc::QualifiedSignature, utils::redact_api_key,
+    infra::QualifiedSignature, utils::redact_api_key,
 };
 
 /// Maximum number of `index_transaction` calls running concurrently.
@@ -31,14 +31,14 @@ const MAX_CONCURRENT_INDEX_TASKS: usize = 15;
 /// Worker that consumes qualified signatures and indexes them with
 /// bounded concurrency.
 pub(crate) struct IndexerWorker {
-    service: Arc<TransactionProcessor>,
+    processor: Arc<TransactionProcessor>,
     semaphore: Arc<Semaphore>,
 }
 
 impl IndexerWorker {
-    pub(crate) fn new(service: Arc<TransactionProcessor>) -> Self {
+    pub(crate) fn new(processor: Arc<TransactionProcessor>) -> Self {
         Self {
-            service,
+            processor,
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_INDEX_TASKS)),
         }
     }
@@ -93,9 +93,9 @@ impl IndexerWorker {
             "dispatching signature to indexer service"
         );
 
-        let service = Arc::clone(&self.service);
+        let processor = Arc::clone(&self.processor);
         tokio::spawn(async move {
-            index_one(service, qs).await;
+            index_one(processor, qs).await;
             drop(permit);
         });
 
@@ -105,19 +105,19 @@ impl IndexerWorker {
 
 /// Index a single signature. Per-signature errors are logged and counted,
 /// never propagated — they must not stop the pipeline.
-async fn index_one(service: Arc<TransactionProcessor>, qs: QualifiedSignature) {
+async fn index_one(processor: Arc<TransactionProcessor>, qs: QualifiedSignature) {
     let QualifiedSignature {
         protocol,
         signature,
     } = qs;
 
-    match service.index_transaction(protocol, signature).await {
+    match processor.process(protocol, signature).await {
         Ok(()) => {
-            debug!(%signature, "index_transaction ok");
+            debug!(%signature, "process ok");
         }
         Err(e) => {
             let msg = redact_api_key(&e.to_string());
-            error!(error = %msg, %signature, "index_transaction failed");
+            error!(error = %msg, %signature, "process failed");
         }
     }
 }

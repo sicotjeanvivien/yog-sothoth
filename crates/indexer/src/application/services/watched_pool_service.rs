@@ -9,7 +9,7 @@ use crate::{error::DatabaseError, infra::RpcListener};
 /// Single responsibility : keep the database and the WebSocket listener
 /// in sync — a pool persisted in the database must always have an active
 /// WebSocket subscription, and vice versa.
-pub struct WatchedPoolService {
+pub(crate) struct WatchedPoolService {
     listener: Arc<RpcListener>,
     repository: Arc<dyn WatchedPoolRepository>,
 }
@@ -27,7 +27,7 @@ impl WatchedPoolService {
 
     /// On daemon startup, resubscribe to all pools persisted in the database.
     /// Ensures no subscription is lost across restarts.
-    pub async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
+    pub(crate) async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
         let pools = self.repository.find_all().await?;
         let count = pools.len();
         for pool in pools {

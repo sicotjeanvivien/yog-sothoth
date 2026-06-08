@@ -13,8 +13,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     error::SubscriptionWorkerError,
-    infra::rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
-    utils::redact::redact_api_key,
+    infra::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+    utils::redact_api_key,
 };
 
 /// Bounds for the worker's internal retry loop.
@@ -36,14 +36,14 @@ const MAX_BACKOFF_SECS: u64 = 60;
 ///
 /// The worker emits `SubscriptionEvent`s on a broadcast channel so the
 /// listener (and any future observer) can track its state.
-pub struct SubscriptionWorker {
+pub(crate) struct SubscriptionWorker {
     ws_url: String,
     target: SubscriptionTarget,
     max_attempts: u32,
 }
 
 impl SubscriptionWorker {
-    pub fn new(ws_url: String, target: SubscriptionTarget, max_attempts: u32) -> Self {
+    pub(crate) fn new(ws_url: String, target: SubscriptionTarget, max_attempts: u32) -> Self {
         Self {
             ws_url,
             target,
@@ -55,7 +55,7 @@ impl SubscriptionWorker {
     /// - the retry budget is exhausted (→ `GivingUp`),
     /// - the cancel token is triggered (→ `ShutdownCompleted`),
     /// - the dispatcher channel is closed (→ `ShutdownCompleted`).
-    pub async fn run(
+    pub(crate) async fn run(
         self,
         dispatcher_tx: mpsc::Sender<RawLogEvent>,
         events_tx: broadcast::Sender<SubscriptionEvent>,

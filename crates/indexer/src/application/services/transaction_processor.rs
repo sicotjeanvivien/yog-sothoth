@@ -12,7 +12,7 @@ use yog_core::{
 
 use crate::{
     application::services::{EventPersistor, TransactionProcessorMetrics},
-    infra::rpc::{FetchError, TransactionFetcher},
+    infra::{FetchError, TransactionFetcher},
 };
 
 /// Core pipeline — receives a signature, fetches the full transaction via
@@ -46,7 +46,7 @@ impl TransactionProcessor {
     ///      on one event never abort the others.
     ///   4. Surface unknown discriminators and extraction failures as
     ///      metrics + structured logs.
-    pub(crate) async fn index_transaction(
+    pub(crate) async fn process(
         &self,
         protocol: Protocol,
         signature: Signature,

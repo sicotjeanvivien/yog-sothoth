@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum DispatcherError {
+pub(crate) enum DispatcherError {
     #[error("dispatcher configured with no filters")]
     NoFilters,
 }

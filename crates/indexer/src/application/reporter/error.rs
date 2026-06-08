@@ -12,7 +12,7 @@ use thiserror::Error;
 /// either variant terminates the task and bubbles up to `Daemon::run`
 /// via `handle_task_result`.
 #[derive(Debug, Error)]
-pub enum NetworkStatusReporterError {
+pub(crate) enum NetworkStatusReporterError {
     /// The `getSlot` RPC call failed (RPC unreachable, transport
     /// error, malformed response).
     #[error("network status reporter: getSlot RPC call failed: {0}")]

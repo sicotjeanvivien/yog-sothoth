@@ -9,7 +9,7 @@ use yog_core::domain::Protocol;
 /// `Ok(())`. This keeps the listener's decision trivial: an `Err` from
 /// a worker means "this target is dead".
 #[derive(Debug, Error, Clone)]
-pub enum SubscriptionWorkerError {
+pub(crate) enum SubscriptionWorkerError {
     #[error("worker for {protocol} / {mention} gave up after {attempts} attempts: {last_error}")]
     RetriesExhausted {
         protocol: Protocol,

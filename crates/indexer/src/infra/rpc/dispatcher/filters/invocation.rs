@@ -1,7 +1,7 @@
 use super::{FilterDecision, LogFilter};
 use crate::infra::rpc::RawLogEvent;
 
-pub struct InvocationFilter;
+pub(crate) struct InvocationFilter;
 
 impl LogFilter for InvocationFilter {
     fn name(&self) -> &'static str {

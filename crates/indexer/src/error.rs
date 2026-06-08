@@ -1,8 +1,8 @@
-pub(crate) mod database_error;
-pub(crate) mod dispatcher_error;
-pub(crate) mod indexer_worker_errors;
-pub(crate) mod rpc_listener_error;
-pub(crate) mod subscription_worker_error;
+mod database_error;
+mod dispatcher_error;
+mod indexer_worker_errors;
+mod rpc_listener_error;
+mod subscription_worker_error;
 
 pub(crate) use database_error::DatabaseError;
 pub(crate) use dispatcher_error::DispatcherError;

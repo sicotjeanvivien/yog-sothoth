@@ -13,7 +13,7 @@ pub(crate) enum FilterDecision {
     Reject { reason: &'static str },
 }
 
-pub trait LogFilter: Send + Sync {
+pub(crate) trait LogFilter: Send + Sync {
     fn name(&self) -> &'static str;
     fn accept(&self, event: &RawLogEvent) -> FilterDecision;
 }

@@ -11,9 +11,10 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, warn};
 use yog_core::domain::{
-    ClaimPositionFeeEventRepository, ClaimRewardEventRepository, DomainEvent, LiquidityEvent,
-    LiquidityEventRepository, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-    PoolRepository, Protocol, SwapEvent, SwapEventRepository,
+    ClaimPositionFeeEvent, ClaimPositionFeeEventRepository, ClaimRewardEvent,
+    ClaimRewardEventRepository, DomainEvent, LiquidityEvent, LiquidityEventRepository, Pool,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, Protocol, SwapEvent,
+    SwapEventRepository,
 };
 
 use crate::application::services::EventPersistorMetrics;
@@ -55,69 +56,10 @@ impl EventPersistor {
         let start = Instant::now();
 
         let result = match event {
-            DomainEvent::Swap(e) => {
-                if let Err(err) = self
-                    .upsert_pool_full(
-                        protocol,
-                        e.pool_address,
-                        e.protocol,
-                        e.token_a_mint,
-                        e.token_b_mint,
-                    )
-                    .await
-                {
-                    warn!(error = %err, kind, "pool upsert failed");
-                }
-                let insert_result = self
-                    .swap_event_repo
-                    .insert(e)
-                    .await
-                    .map_err(anyhow::Error::new);
-                // Refresh the per-pool projection only if the event actually
-                // landed in the append-only log — keeps current_state honest.
-                if insert_result.is_ok() {
-                    self.update_pool_current_state_from_swap(protocol, e).await;
-                }
-                insert_result
-            }
-            DomainEvent::Liquidity(e) => {
-                if let Err(err) = self
-                    .upsert_pool_full(
-                        protocol,
-                        e.pool_address,
-                        e.protocol,
-                        e.token_a_mint,
-                        e.token_b_mint,
-                    )
-                    .await
-                {
-                    warn!(error = %err, kind, "pool upsert failed");
-                }
-                let insert_result = self
-                    .liquidity_event_repo
-                    .insert(e)
-                    .await
-                    .map_err(anyhow::Error::new);
-                if insert_result.is_ok() {
-                    self.update_pool_current_state_from_liquidity(protocol, e)
-                        .await;
-                }
-                insert_result
-            }
-            DomainEvent::ClaimPositionFee(e) => {
-                self.touch_pool(protocol, &e.pool_address).await;
-                self.claim_position_fee_repo
-                    .insert(e)
-                    .await
-                    .map_err(anyhow::Error::new)
-            }
-            DomainEvent::ClaimReward(e) => {
-                self.touch_pool(protocol, &e.pool_address).await;
-                self.claim_reward_repo
-                    .insert(e)
-                    .await
-                    .map_err(anyhow::Error::new)
-            }
+            DomainEvent::Swap(e) => self.persist_swap(protocol, e).await,
+            DomainEvent::Liquidity(e) => self.persist_liquidity(protocol, e).await,
+            DomainEvent::ClaimPositionFee(e) => self.persist_claim_position_fee(protocol, e).await,
+            DomainEvent::ClaimReward(e) => self.persist_claim_reward(protocol, e).await,
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -137,6 +79,93 @@ impl EventPersistor {
                 EventPersistorMetrics::record_persist_failure(protocol, kind);
             }
         }
+    }
+
+    /// Persist a swap event: upsert the pool, insert the event, refresh the
+    /// per-pool projection if the event landed.
+    async fn persist_swap(&self, protocol: &Protocol, event: &SwapEvent) -> anyhow::Result<()> {
+        if let Err(err) = self
+            .upsert_pool_full(
+                protocol,
+                event.pool_address,
+                event.protocol,
+                event.token_a_mint,
+                event.token_b_mint,
+            )
+            .await
+        {
+            warn!(error = %err, kind = "swap", "pool upsert failed");
+        }
+        let insert_result = self
+            .swap_event_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new);
+        // Refresh the per-pool projection only if the event actually
+        // landed in the append-only log — keeps current_state honest.
+        if insert_result.is_ok() {
+            self.update_pool_current_state_from_swap(protocol, event)
+                .await;
+        }
+        insert_result
+    }
+
+    /// Persist a liquidity event: same shape as `persist_swap`.
+    async fn persist_liquidity(
+        &self,
+        protocol: &Protocol,
+        event: &LiquidityEvent,
+    ) -> anyhow::Result<()> {
+        if let Err(err) = self
+            .upsert_pool_full(
+                protocol,
+                event.pool_address,
+                event.protocol,
+                event.token_a_mint,
+                event.token_b_mint,
+            )
+            .await
+        {
+            warn!(error = %err, kind = "liquidity", "pool upsert failed");
+        }
+        let insert_result = self
+            .liquidity_event_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new);
+        if insert_result.is_ok() {
+            self.update_pool_current_state_from_liquidity(protocol, event)
+                .await;
+        }
+        insert_result
+    }
+
+    /// Persist a claim-position-fee event: refresh the pool's last_seen_at
+    /// and insert the event.
+    async fn persist_claim_position_fee(
+        &self,
+        protocol: &Protocol,
+        event: &ClaimPositionFeeEvent,
+    ) -> anyhow::Result<()> {
+        self.touch_pool(protocol, &event.pool_address).await;
+        self.claim_position_fee_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Persist a claim-reward event: refresh the pool's last_seen_at and
+    /// insert the event.
+    async fn persist_claim_reward(
+        &self,
+        protocol: &Protocol,
+        event: &ClaimRewardEvent,
+    ) -> anyhow::Result<()> {
+        self.touch_pool(protocol, &event.pool_address).await;
+        self.claim_reward_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
     }
 
     /// Upsert the pool with full information (mints known).

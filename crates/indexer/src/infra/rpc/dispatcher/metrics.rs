@@ -21,7 +21,7 @@ pub struct DispatcherMetrics;
 impl DispatcherMetrics {
     /// À appeler une fois au démarrage pour enregistrer les descriptions
     /// auprès de l'exporter Prometheus.
-    pub fn register_descriptions() {
+    pub(crate) fn register_descriptions() {
         describe_counter!(EVENTS_RECEIVED, "Raw log events received from the listener");
         describe_counter!(EVENTS_REJECTED, "Raw log events rejected by a filter");
         describe_counter!(
@@ -38,11 +38,15 @@ impl DispatcherMetrics {
         );
     }
 
-    pub fn record_received(protocol: &Protocol) {
+    pub(crate) fn record_received(protocol: &Protocol) {
         counter!(EVENTS_RECEIVED, "protocol" => protocol.as_str()).increment(1);
     }
 
-    pub fn record_rejected(protocol: &Protocol, filter_name: &'static str, reason: &'static str) {
+    pub(crate) fn record_rejected(
+        protocol: &Protocol,
+        filter_name: &'static str,
+        reason: &'static str,
+    ) {
         counter!(
             EVENTS_REJECTED,
             "protocol" => protocol.as_str(),
@@ -52,15 +56,15 @@ impl DispatcherMetrics {
         .increment(1);
     }
 
-    pub fn record_malformed(protocol: &Protocol) {
+    pub(crate) fn record_malformed(protocol: &Protocol) {
         counter!(EVENTS_MALFORMED, "protocol" => protocol.as_str()).increment(1);
     }
 
-    pub fn record_emitted(protocol: &Protocol) {
+    pub(crate) fn record_emitted(protocol: &Protocol) {
         counter!(SIGNATURES_EMITTED, "protocol" => protocol.as_str()).increment(1);
     }
 
-    pub fn record_downstream_saturated(protocol: &Protocol) {
+    pub(crate) fn record_downstream_saturated(protocol: &Protocol) {
         counter!(DOWNSTREAM_SATURATED, "protocol" => protocol.as_str()).increment(1);
     }
 }

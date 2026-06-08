@@ -10,11 +10,8 @@ use crate::{
     bootstrap::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
-        RpcListener,
-        rpc::{
-            DispatcherMetrics, QualifiedSignature, RawLogEvent, SignatureDispatcher,
-            TransactionFetcher,
-        },
+        DispatcherMetrics, QualifiedSignature, RawLogEvent, RpcListener, SignatureDispatcher,
+        TransactionFetcher,
     },
     utils::redact_api_key,
 };
@@ -40,7 +37,7 @@ use yog_persistence::{
 /// - run the WebSocket listener, the dispatcher and the indexer worker
 /// - handle graceful shutdown on SIGTERM / Ctrl-C
 pub(crate) struct Daemon {
-    indexer_service: Arc<TransactionProcessor>,
+    processor: Arc<TransactionProcessor>,
     watched_pool_service: Arc<WatchedPoolService>,
     listener: Arc<RpcListener>,
     dispatcher: SignatureDispatcher,
@@ -65,7 +62,7 @@ impl Daemon {
         let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
         info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
-        let indexer_service = init_indexer_service(&database, rpc_client.clone())
+        let processor = init_processor(&database, rpc_client.clone())
             .await
             .context("indexer service initialization failed")?;
         info!("indexer service initialized");
@@ -91,7 +88,7 @@ impl Daemon {
         info!("daemon initialized");
 
         Ok(Self {
-            indexer_service,
+            processor,
             watched_pool_service,
             listener,
             dispatcher,
@@ -120,7 +117,7 @@ impl Daemon {
         let dispatcher_task =
             spawn_dispatcher_task(self.dispatcher, raw_rx, sig_tx, shutdown.clone());
         let indexer_task =
-            spawn_indexer_task(Arc::clone(&self.indexer_service), sig_rx, shutdown.clone());
+            spawn_indexer_task(Arc::clone(&self.processor), sig_rx, shutdown.clone());
 
         let reporter_task =
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
@@ -196,7 +193,7 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 }
 
 /// Initialise the indexer service and its repository dependencies.
-async fn init_indexer_service(
+async fn init_processor(
     database: &Database,
     rpc_client: Arc<RpcClient>,
 ) -> anyhow::Result<Arc<TransactionProcessor>> {
@@ -207,14 +204,14 @@ async fn init_indexer_service(
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
 
-    let indexer_service = Arc::new(TransactionProcessor::new(
+    let processor = Arc::new(TransactionProcessor::new(
         Arc::clone(&transaction_fetcher),
         Arc::clone(&event_extractor),
         Arc::clone(&event_persistor),
     ));
     info!("indexer service initialized");
 
-    Ok(indexer_service)
+    Ok(processor)
 }
 
 /// Initialise the NetworkStautsReporter and its repository dependency
@@ -269,11 +266,11 @@ fn spawn_dispatcher_task(
 /// propagated). Only loop-level failures reach the returned `JoinHandle`
 /// and bubble up to `Daemon::run`.
 fn spawn_indexer_task(
-    indexer_service: Arc<TransactionProcessor>,
+    processor: Arc<TransactionProcessor>,
     rx: mpsc::Receiver<QualifiedSignature>,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), IndexerWorkerError>> {
-    let worker = IndexerWorker::new(indexer_service);
+    let worker = IndexerWorker::new(processor);
     tokio::spawn(async move { worker.run(rx, shutdown).await })
 }
 

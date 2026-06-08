@@ -17,13 +17,13 @@ use tracing::{debug, info};
 ///
 /// Data errors (malformed signature, filter drop) are not errors:
 /// they are recorded as metrics and the pipeline keeps going.
-pub struct SignatureDispatcher {
+pub(crate) struct SignatureDispatcher {
     filters: Vec<Box<dyn LogFilter>>,
 }
 
 impl SignatureDispatcher {
     /// Dispatcher with the standard filter chain.
-    pub fn new_default() -> Result<Self, DispatcherError> {
+    pub(crate) fn new_default() -> Result<Self, DispatcherError> {
         Self::new_with_filters(vec![
             Box::new(InvocationFilter),
             Box::new(FailedTransactionFilter),
@@ -31,7 +31,9 @@ impl SignatureDispatcher {
     }
 
     /// Dispatcher with arbitrary filters (tests, alternative configurations).
-    pub fn new_with_filters(filters: Vec<Box<dyn LogFilter>>) -> Result<Self, DispatcherError> {
+    pub(crate) fn new_with_filters(
+        filters: Vec<Box<dyn LogFilter>>,
+    ) -> Result<Self, DispatcherError> {
         if filters.is_empty() {
             return Err(DispatcherError::NoFilters);
         }
@@ -40,7 +42,7 @@ impl SignatureDispatcher {
 
     /// Main loop: consumes raw events until shutdown
     /// or upstream channel closure.
-    pub async fn run(
+    pub(crate) async fn run(
         self,
         mut rx: mpsc::Receiver<RawLogEvent>,
         tx: mpsc::Sender<QualifiedSignature>,

@@ -33,7 +33,7 @@ const EVENTS_CHANNEL_CAPACITY: usize = 256;
 /// - manage retries (each worker owns its retry budget)
 /// - force a global reconnect when one worker dies (siblings keep running)
 /// - respawn dead workers (future work — see roadmap)
-pub struct RpcListener {
+pub(crate) struct RpcListener {
     ws_url: String,
     watched_protocols: Mutex<HashSet<Protocol>>,
     watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
@@ -50,7 +50,11 @@ pub struct RpcListener {
 }
 
 impl RpcListener {
-    pub fn new(ws_url: String, worker_max_retries: u32, mode_protocol_centric: bool) -> Self {
+    pub(crate) fn new(
+        ws_url: String,
+        worker_max_retries: u32,
+        mode_protocol_centric: bool,
+    ) -> Self {
         Self {
             ws_url,
             watched_protocols: Mutex::new(HashSet::new()),
@@ -60,15 +64,15 @@ impl RpcListener {
         }
     }
 
-    pub async fn _watch(&self, protocol: Protocol) {
+    pub(crate) async fn _watch(&self, protocol: Protocol) {
         self.watched_protocols.lock().await.insert(protocol);
     }
 
-    pub async fn _unwatch(&self, protocol: &Protocol) {
+    pub(crate) async fn _unwatch(&self, protocol: &Protocol) {
         self.watched_protocols.lock().await.remove(protocol);
     }
 
-    pub async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey) {
+    pub(crate) async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey) {
         self.watched_pools
             .lock()
             .await
@@ -80,7 +84,7 @@ impl RpcListener {
     /// Returns `Err(AllWorkersGaveUp)` with per-worker details when every
     /// spawned worker has exhausted its retry budget. Returns `Ok(())` when
     /// the shutdown token was cancelled before that happened.
-    pub async fn run(
+    pub(crate) async fn run(
         self: Arc<Self>,
         dispatcher_tx: mpsc::Sender<RawLogEvent>,
         shutdown: CancellationToken,
@@ -229,7 +233,7 @@ impl RpcListener {
 
 /// Per-worker failure detail — bubbled up in `AllWorkersGaveUp`.
 #[derive(Debug, Clone)]
-pub struct WorkerFailure {
+pub(crate) struct WorkerFailure {
     #[allow(dead_code)]
     pub protocol: Protocol,
     #[allow(dead_code)]
