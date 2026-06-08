@@ -4,7 +4,6 @@
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 use yog_core::domain::Protocol;
 
-const INSTRUCTIONS_SKIPPED: &str = "yog_indexer_instructions_skipped_total";
 const TRANSACTIONS_NO_MATCH: &str = "yog_indexer_transactions_no_match_total";
 const FETCH_FAILURES: &str = "yog_indexer_fetch_failures_total";
 const FETCH_NOT_FOUND: &str = "yog_indexer_fetch_not_found_total";
@@ -18,10 +17,6 @@ pub(crate) struct IndexerServiceMetrics;
 
 impl IndexerServiceMetrics {
     pub(crate) fn register_descriptions() {
-        describe_counter!(
-            INSTRUCTIONS_SKIPPED,
-            "Instructions detected in a transaction but not matched by any parser"
-        );
         describe_counter!(
             TRANSACTIONS_NO_MATCH,
             "Transactions where no instruction was matched by any parser"
@@ -49,11 +44,11 @@ impl IndexerServiceMetrics {
             "Total duration of index_transaction in seconds (label: outcome)"
         );
         describe_counter!(
-            "indexer_unknown_event_total",
+            "yog_indexer_unknown_event_total",
             "Anchor events extracted but not recognized — likely belong to rings not yet implemented"
         );
         describe_counter!(
-            "indexer_extraction_failure_total",
+            "yog_indexer_extraction_failure_total",
             "Failed extraction attempts (decode / borsh / translation) per protocol and kind"
         );
     }

@@ -1,11 +1,7 @@
-use solana_commitment_config::CommitmentConfig;
-use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
+use solana_rpc_client_api::response::transaction::Signature;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::{debug, error, info, warn};
-use yog_core::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
 use yog_core::{
     domain::Protocol,
     protocols::{
@@ -15,28 +11,28 @@ use yog_core::{
     },
 };
 
-use crate::application::services::{EventPersistor, IndexerServiceMetrics, errors::FetchError};
+use crate::{
+    application::services::{EventPersistor, IndexerServiceMetrics},
+    infra::rpc::{FetchError, TransactionFetcher},
+};
 
-/// Core pipeline — receives a signature, fetches the full transaction,
-/// dispatches to the appropriate protocol handler, hands each extracted
-/// domain event to the EventPersistor.
+/// Core pipeline — receives a signature, fetches the full transaction via
+/// the TransactionFetcher, dispatches to the appropriate protocol handler,
+/// hands each extracted domain event to the EventPersistor.
 pub(crate) struct IndexerService {
     persistor: Arc<EventPersistor>,
-    rpc_client: Arc<RpcClient>,
+    fetcher: Arc<TransactionFetcher>,
 }
 
 impl IndexerService {
-    pub(crate) fn new(persistor: Arc<EventPersistor>, rpc_client: Arc<RpcClient>) -> Self {
-        Self {
-            persistor,
-            rpc_client,
-        }
+    pub(crate) fn new(persistor: Arc<EventPersistor>, fetcher: Arc<TransactionFetcher>) -> Self {
+        Self { persistor, fetcher }
     }
 
     /// Handle a transaction signature received from the WebSocket.
     ///
     /// Pipeline:
-    ///   1. Fetch the full transaction from RPC.
+    ///   1. Fetch the full transaction via the TransactionFetcher.
     ///   2. Delegate event extraction to the protocol-specific handler.
     ///   3. Hand each extracted event to the EventPersistor — failures
     ///      on one event never abort the others.
@@ -51,7 +47,11 @@ impl IndexerService {
 
         info!(%signature, protocol = %protocol.as_str(), "received signature");
 
-        let tx = match self.fetch_transaction(&protocol, signature).await {
+        let start = Instant::now();
+        let result = self.fetcher.fetch(signature).await;
+        IndexerServiceMetrics::record_fetch_duration(&protocol, start.elapsed().as_secs_f64());
+
+        let tx = match result {
             Ok(tx) => tx,
             Err(FetchError::NotFound) => {
                 IndexerServiceMetrics::record_fetch_not_found(&protocol);
@@ -123,33 +123,6 @@ impl IndexerService {
             );
             IndexerServiceMetrics::record_extraction_failure(protocol, kind);
         }
-    }
-
-    /// Fetch a confirmed transaction by signature from the RPC.
-    async fn fetch_transaction(
-        &self,
-        protocol: &Protocol,
-        signature: Signature,
-    ) -> Result<EncodedConfirmedTransactionWithStatusMeta, FetchError> {
-        let config = RpcTransactionConfig {
-            encoding: Some(UiTransactionEncoding::JsonParsed),
-            commitment: Some(CommitmentConfig::confirmed()),
-            max_supported_transaction_version: Some(0),
-        };
-
-        let strategy = FixedInterval::from_millis(500).take(5);
-        let result = Retry::spawn(strategy, || async {
-            self.rpc_client
-                .get_transaction_with_config(&signature, config)
-                .await
-                .map_err(|e| e.to_string())
-        })
-        .await;
-
-        let start = Instant::now();
-        IndexerServiceMetrics::record_fetch_duration(protocol, start.elapsed().as_secs_f64());
-
-        result.map_err(FetchError::from_rpc_string)
     }
 }
 

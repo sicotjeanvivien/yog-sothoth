@@ -13,10 +13,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     error::SubscriptionWorkerError,
-    infra::rpc::types::{
-        raw_log_event::RawLogEvent, subscription_event::SubscriptionEvent,
-        subscription_target::SubscriptionTarget,
-    },
+    infra::rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
     utils::redact::redact_api_key,
 };
 

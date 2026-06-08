@@ -5,7 +5,7 @@ use yog_core::domain::Protocol;
 
 const INSTRUCTIONS_INDEXED: &str = "yog_indexer_instructions_indexed_total";
 const PERSIST_DURATION: &str = "yog_indexer_persist_duration_seconds";
-const PERSIST_FAILURE: &str = "indexer_persist_failure_total";
+const PERSIST_FAILURE: &str = "yog_indexer_persist_failure_total";
 
 pub(crate) struct EventPersistorMetrics;
 

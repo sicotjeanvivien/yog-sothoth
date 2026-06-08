@@ -12,10 +12,7 @@ use yog_core::domain::Protocol;
 use crate::{
     application::workers::SubscriptionWorker,
     error::{RpcListenerError, SubscriptionWorkerError},
-    infra::rpc::types::{
-        raw_log_event::RawLogEvent, subscription_event::SubscriptionEvent,
-        subscription_target::SubscriptionTarget,
-    },
+    infra::rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
 };
 
 /// Default size of the broadcast channel carrying `SubscriptionEvent`s.

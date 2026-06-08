@@ -12,8 +12,8 @@ use crate::{
     infra::{
         RpcListener,
         rpc::{
-            QualifiedSignature, RawLogEvent, SignatureDispatcher,
-            dispatcher::metrics::DispatcherMetrics,
+            DispatcherMetrics, QualifiedSignature, RawLogEvent, SignatureDispatcher,
+            TransactionFetcher,
         },
     },
     utils::redact_api_key,
@@ -201,10 +201,12 @@ async fn init_indexer_service(
 ) -> anyhow::Result<Arc<IndexerService>> {
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
+    let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone()));
+    info!("transaction fetcher initialized");
 
     let indexer_service = Arc::new(IndexerService::new(
         Arc::clone(&event_persistor),
-        rpc_client.clone(),
+        Arc::clone(&transaction_fetcher),
     ));
     info!("indexer service initialized");
 

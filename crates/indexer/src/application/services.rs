@@ -1,4 +1,3 @@
-mod errors;
 mod event_persistor;
 mod event_persistor_metrics;
 mod indexer_service;
