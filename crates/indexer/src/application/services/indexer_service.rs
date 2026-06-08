@@ -19,7 +19,9 @@ use yog_core::{
     },
 };
 
-use crate::application::services::{IndexerServiceMetrics, errors::FetchError};
+use crate::application::services::{
+    EventPersistorMetrics, IndexerServiceMetrics, errors::FetchError,
+};
 
 /// Core pipeline — receives a signature, fetches the full transaction,
 /// dispatches to the appropriate protocol handler, persists every domain
@@ -35,7 +37,6 @@ pub(crate) struct IndexerService {
 }
 
 impl IndexerService {
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         swap_event_repo: Arc<dyn SwapEventRepository>,
         liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
@@ -224,11 +225,11 @@ impl IndexerService {
         };
 
         let elapsed = start.elapsed().as_secs_f64();
-        IndexerServiceMetrics::record_persist_duration(protocol, kind, elapsed);
+        EventPersistorMetrics::record_persist_duration(protocol, kind, elapsed);
 
         match result {
             Ok(()) => {
-                IndexerServiceMetrics::record_indexed(protocol, kind);
+                EventPersistorMetrics::record_indexed(protocol, kind);
             }
             Err(err) => {
                 error!(
@@ -237,7 +238,7 @@ impl IndexerService {
                     error = %err,
                     "persist event failed"
                 );
-                IndexerServiceMetrics::record_persist_failure(protocol, kind);
+                EventPersistorMetrics::record_persist_failure(protocol, kind);
             }
         }
     }
@@ -263,7 +264,7 @@ impl IndexerService {
         };
         let start = Instant::now();
         self.pool_repo.upsert(&pool).await?;
-        IndexerServiceMetrics::record_persist_duration(
+        EventPersistorMetrics::record_persist_duration(
             protocol,
             "pool_upsert",
             start.elapsed().as_secs_f64(),
@@ -278,7 +279,7 @@ impl IndexerService {
         let start = Instant::now();
         match self.pool_repo.touch_last_seen(pool_address).await {
             Ok(()) => {
-                IndexerServiceMetrics::record_persist_duration(
+                EventPersistorMetrics::record_persist_duration(
                     protocol,
                     "pool_touch",
                     start.elapsed().as_secs_f64(),
@@ -348,7 +349,7 @@ impl IndexerService {
                 } else {
                     "pool_current_state_stale"
                 };
-                IndexerServiceMetrics::record_persist_duration(
+                EventPersistorMetrics::record_persist_duration(
                     protocol,
                     label,
                     start.elapsed().as_secs_f64(),
@@ -381,8 +382,6 @@ impl IndexerService {
         };
 
         let strategy = FixedInterval::from_millis(500).take(5);
-
-        let start = Instant::now();
         let result = Retry::spawn(strategy, || async {
             self.rpc_client
                 .get_transaction_with_config(&signature, config)
@@ -390,6 +389,8 @@ impl IndexerService {
                 .map_err(|e| e.to_string())
         })
         .await;
+
+        let start = Instant::now();
         IndexerServiceMetrics::record_fetch_duration(protocol, start.elapsed().as_secs_f64());
 
         result.map_err(FetchError::from_rpc_string)

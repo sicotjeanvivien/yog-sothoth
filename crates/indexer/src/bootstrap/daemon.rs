@@ -1,7 +1,9 @@
 use crate::{
     application::{
         reporter::{NetworkStatusReporter, NetworkStatusReporterError},
-        services::{IndexerService, IndexerServiceMetrics, WatchedPoolService},
+        services::{
+            EventPersistorMetrics, IndexerService, IndexerServiceMetrics, WatchedPoolService,
+        },
         workers::IndexerWorker,
     },
     bootstrap::Config,
@@ -81,6 +83,7 @@ impl Daemon {
 
         DispatcherMetrics::register_descriptions();
         IndexerServiceMetrics::register_descriptions();
+        EventPersistorMetrics::register_descriptions();
         info!("Metrics initialized");
 
         info!("daemon initialized");

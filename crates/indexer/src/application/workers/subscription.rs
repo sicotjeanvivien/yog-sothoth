@@ -76,7 +76,6 @@ impl SubscriptionWorker {
         let mut last_error: Option<String> = None;
 
         loop {
-            // Cooperative shutdown check at the top of each attempt.
             if shutdown.is_cancelled() {
                 emit(
                     &events_tx,
