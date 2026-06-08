@@ -2,7 +2,7 @@
 
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 
-use crate::{CoreResult, protocols::extraction::ExtractionOutcome};
+use crate::{CoreResult, application::extraction::ExtractionOutcome};
 
 /// Common interface for all supported AMM protocols.
 ///
@@ -21,7 +21,7 @@ use crate::{CoreResult, protocols::extraction::ExtractionOutcome};
 /// Those go into `unknown` or `failures`. A returned `Err` is reserved
 /// for transaction-level malformations (no log messages, no inner
 /// instructions when they were required, etc.).
-pub trait PoolIndexer: Send + Sync {
+pub trait EventExtractor: Send + Sync {
     /// Program ID this indexer handles, as base58 string.
     fn program_id(&self) -> &str;
 

@@ -28,10 +28,10 @@ use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 use borsh::BorshDeserialize;
 
 use crate::{
-    error::AnchorDecodeError,
-    protocols::anchor_event::{
+    application::extraction::{
         DISCRIMINATOR_LEN, decode_anchor_event_cpi, extract_anchor_event_cpis,
     },
+    error::AnchorDecodeError,
 };
 
 use super::events::{

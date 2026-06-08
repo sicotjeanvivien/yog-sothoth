@@ -2,15 +2,15 @@ pub mod events;
 pub mod extractor;
 pub(super) mod translator;
 
-use crate::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiInstruction};
 use chrono::{DateTime, Utc};
 use solana_signature::Signature;
 
 use crate::CoreResult;
+use crate::application::extraction::meteora::{extract_signature, extract_timestamp};
+use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
+use crate::application::extraction::{EventExtractor, ExtractionOutcome};
 use crate::domain::Protocol;
-use crate::protocols::PoolIndexer;
-use crate::protocols::extraction::{ExtractionFailure, ExtractionOutcome, UnknownEventInfo};
-use crate::protocols::meteora::{extract_signature, extract_timestamp};
+use crate::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiInstruction};
 
 use self::extractor::extract_wire_events;
 use self::translator::{collect_pre_event_instruction_slices, translate_wire_event};
@@ -38,7 +38,7 @@ impl Default for MeteoraDammV2 {
     }
 }
 
-impl PoolIndexer for MeteoraDammV2 {
+impl EventExtractor for MeteoraDammV2 {
     fn program_id(&self) -> &str {
         &self.program_id_str
     }

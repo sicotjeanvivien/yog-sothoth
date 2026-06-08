@@ -1,7 +1,7 @@
-pub mod anchor_decode_error;
-pub mod core_error;
-pub mod repository_error;
-pub mod translation_error;
+mod anchor_decode_error;
+mod core_error;
+mod repository_error;
+mod translation_error;
 
 pub use anchor_decode_error::AnchorDecodeError;
 pub use core_error::{CoreError, CoreResult};

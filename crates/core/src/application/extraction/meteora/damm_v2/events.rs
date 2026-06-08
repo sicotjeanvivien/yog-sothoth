@@ -47,7 +47,7 @@ use borsh::BorshDeserialize;
 use sha2::{Digest, Sha256};
 use solana_pubkey::Pubkey;
 
-use crate::protocols::anchor_event::DISCRIMINATOR_LEN;
+use crate::application::extraction::DISCRIMINATOR_LEN;
 
 // ---------------------------------------------------------------------------
 // Discriminator helpers

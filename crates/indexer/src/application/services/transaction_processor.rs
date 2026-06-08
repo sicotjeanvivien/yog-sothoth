@@ -3,11 +3,10 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, error, info, warn};
 use yog_core::{
-    domain::Protocol,
-    protocols::{
-        EventExtractor,
-        extraction::{ExtractionFailure, ExtractionOutcome, discriminator_hex},
+    application::extraction::{
+        ExtractionFailure, ExtractionOutcome, ExtrationDispacher, discriminator_hex,
     },
+    domain::Protocol,
 };
 
 use crate::{
@@ -20,14 +19,14 @@ use crate::{
 /// hands each extracted domain event to the EventPersistor.
 pub(crate) struct TransactionProcessor {
     fetcher: Arc<TransactionFetcher>,
-    extractor: Arc<EventExtractor>,
+    extractor: Arc<ExtrationDispacher>,
     persistor: Arc<EventPersistor>,
 }
 
 impl TransactionProcessor {
     pub(crate) fn new(
         fetcher: Arc<TransactionFetcher>,
-        extractor: Arc<EventExtractor>,
+        extractor: Arc<ExtrationDispacher>,
         persistor: Arc<EventPersistor>,
     ) -> Self {
         Self {

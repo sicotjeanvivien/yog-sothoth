@@ -13,14 +13,11 @@ use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatu
 use std::path::PathBuf;
 
 use yog_core::{
-    domain::DomainEvent,
-    protocols::{
-        PoolIndexer,
-        meteora::{
-            MeteoraDammV2,
-            damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
-        },
+    application::extraction::{
+        EventExtractor, MeteoraDammV2,
+        meteora::damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
     },
+    domain::DomainEvent,
 };
 
 const CP_AMM_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";

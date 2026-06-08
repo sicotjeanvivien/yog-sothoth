@@ -6,20 +6,22 @@
 //! cheap enum match — no dyn dispatch, no allocation per call.
 
 use crate::CoreResult;
+use crate::application::extraction::EventExtractor;
+use crate::application::extraction::{
+    ExtractionOutcome,
+    meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
+};
 use crate::domain::Protocol;
-use crate::protocols::PoolIndexer;
-use crate::protocols::extraction::ExtractionOutcome;
-use crate::protocols::meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm};
 use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Routes extraction calls to the appropriate per-protocol handler.
-pub struct EventExtractor {
+pub struct ExtrationDispacher {
     damm_v2: MeteoraDammV2,
     damm_v1: MeteoraDammV1,
     dlmm: MeteoraDlmm,
 }
 
-impl EventExtractor {
+impl ExtrationDispacher {
     pub fn new() -> Self {
         Self {
             damm_v2: MeteoraDammV2::new(),
@@ -43,7 +45,7 @@ impl EventExtractor {
     }
 }
 
-impl Default for EventExtractor {
+impl Default for ExtrationDispacher {
     fn default() -> Self {
         Self::new()
     }

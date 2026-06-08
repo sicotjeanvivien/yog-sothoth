@@ -1,22 +1,21 @@
+use crate::application::extraction::{EventExtractor, ExtractionOutcome};
 use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 use crate::CoreResult;
 use crate::domain::Protocol;
-use crate::protocols::PoolIndexer;
-use crate::protocols::extraction::ExtractionOutcome;
 
-/// Meteora DAMM v1 protocol handler (x·y=k + dual-yield).
+/// Meteora DLMM protocol handler (bin-based liquidity, volatility fees).
 ///
 /// Phase 2 — `extract_events` returns an empty outcome.
-/// To be replaced with real extraction once DAMM v1 wire events are mirrored.
-pub struct MeteoraDammV1 {
+/// To be replaced with real extraction once DLMM wire events are mirrored.
+pub struct MeteoraDlmm {
     _protocol: Protocol,
     program_id_str: String,
 }
 
-impl MeteoraDammV1 {
+impl MeteoraDlmm {
     pub fn new() -> Self {
-        let _protocol = Protocol::MeteoraDammV1;
+        let _protocol = Protocol::MeteoraDlmm;
         let program_id_str = _protocol.program_id().to_string();
         Self {
             _protocol,
@@ -25,13 +24,13 @@ impl MeteoraDammV1 {
     }
 }
 
-impl Default for MeteoraDammV1 {
+impl Default for MeteoraDlmm {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PoolIndexer for MeteoraDammV1 {
+impl EventExtractor for MeteoraDlmm {
     fn program_id(&self) -> &str {
         &self.program_id_str
     }
