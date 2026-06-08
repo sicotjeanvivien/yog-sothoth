@@ -5,9 +5,8 @@ use tracing::{debug, error, info, warn};
 use yog_core::{
     domain::Protocol,
     protocols::{
-        PoolIndexer,
+        EventExtractor,
         extraction::{ExtractionFailure, ExtractionOutcome, discriminator_hex},
-        meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
     },
 };
 
@@ -20,13 +19,22 @@ use crate::{
 /// the TransactionFetcher, dispatches to the appropriate protocol handler,
 /// hands each extracted domain event to the EventPersistor.
 pub(crate) struct IndexerService {
-    persistor: Arc<EventPersistor>,
     fetcher: Arc<TransactionFetcher>,
+    extractor: Arc<EventExtractor>,
+    persistor: Arc<EventPersistor>,
 }
 
 impl IndexerService {
-    pub(crate) fn new(persistor: Arc<EventPersistor>, fetcher: Arc<TransactionFetcher>) -> Self {
-        Self { persistor, fetcher }
+    pub(crate) fn new(
+        fetcher: Arc<TransactionFetcher>,
+        extractor: Arc<EventExtractor>,
+        persistor: Arc<EventPersistor>,
+    ) -> Self {
+        Self {
+            fetcher,
+            extractor,
+            persistor,
+        }
     }
 
     /// Handle a transaction signature received from the WebSocket.
@@ -65,9 +73,7 @@ impl IndexerService {
             }
         };
 
-        let indexer = protocol_indexer(&protocol);
-
-        let outcome = match indexer.extract_events(&tx) {
+        let outcome = match self.extractor.extract(protocol, &tx) {
             Ok(o) => o,
             Err(e) => {
                 error!(%signature, error = %e, "extraction failed at transaction level");
@@ -129,14 +135,6 @@ impl IndexerService {
 // ---------------------------------------------------------------------------
 // Free functions
 // ---------------------------------------------------------------------------
-
-fn protocol_indexer(protocol: &Protocol) -> Arc<dyn PoolIndexer> {
-    match protocol {
-        Protocol::MeteoraDammV2 => Arc::new(MeteoraDammV2::new()),
-        Protocol::MeteoraDammV1 => Arc::new(MeteoraDammV1::new()),
-        Protocol::MeteoraDlmm => Arc::new(MeteoraDlmm::new()),
-    }
-}
 
 fn failure_kind(f: &ExtractionFailure) -> &'static str {
     match f {
