@@ -1,10 +1,10 @@
 //! Request DTO for `GET /api/pools/{address}/liquidity-events`.
 
 use solana_pubkey::Pubkey;
-use yog_core::domain::LiquidityCursor;
+use yog_core::domain::MeteoraDammV2LiquidityEventCursor;
 use yog_core::{PageDirection, PagePosition};
 
-use crate::application::LiquidityListParams;
+use crate::application::MeteoraDammV2LiquidityListParams;
 use crate::http::{
     cursor::decode_liquidity_cursor,
     error::ApiError,
@@ -14,7 +14,7 @@ use crate::http::{
 #[derive(Debug)]
 pub(crate) struct ListPoolLiquidityRequest {
     pool_address: Pubkey,
-    cursor: Option<LiquidityCursor>,
+    cursor: Option<MeteoraDammV2LiquidityEventCursor>,
     direction: PageDirection,
     position: Option<PagePosition>,
     limit: i64,
@@ -40,8 +40,8 @@ impl ListPoolLiquidityRequest {
         })
     }
 
-    pub(crate) fn into_params(self) -> LiquidityListParams {
-        LiquidityListParams {
+    pub(crate) fn into_params(self) -> MeteoraDammV2LiquidityListParams {
+        MeteoraDammV2LiquidityListParams {
             pool_address: self.pool_address,
             cursor: self.cursor,
             direction: self.direction,

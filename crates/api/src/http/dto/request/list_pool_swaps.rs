@@ -1,10 +1,10 @@
 //! Request DTO for `GET /api/pools/{address}/swaps`.
 
 use solana_pubkey::Pubkey;
-use yog_core::domain::SwapCursor;
+use yog_core::domain::MeteoraDammV2SwapEventCursor;
 use yog_core::{PageDirection, PagePosition};
 
-use crate::application::SwapListParams;
+use crate::application::MeteoraDammV2SwapListParams;
 use crate::http::{
     cursor::decode_swap_cursor,
     error::ApiError,
@@ -14,7 +14,7 @@ use crate::http::{
 #[derive(Debug)]
 pub(crate) struct ListPoolSwapsRequest {
     pool_address: Pubkey,
-    cursor: Option<SwapCursor>,
+    cursor: Option<MeteoraDammV2SwapEventCursor>,
     direction: PageDirection,
     position: Option<PagePosition>,
     limit: i64,
@@ -45,8 +45,8 @@ impl ListPoolSwapsRequest {
         })
     }
 
-    pub(crate) fn into_params(self) -> SwapListParams {
-        SwapListParams {
+    pub(crate) fn into_params(self) -> MeteoraDammV2SwapListParams {
+        MeteoraDammV2SwapListParams {
             pool_address: self.pool_address,
             cursor: self.cursor,
             direction: self.direction,

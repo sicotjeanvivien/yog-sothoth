@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use yog_core::{PageDirection, PagePosition, RepositoryError};
 
-use super::super::{LiquidityListParams, LiquidityService};
+use super::super::{MeteoraDammV2LiquidityListParams, MeteoraDammV2LiquidityService};
 use crate::testing::{MockLiquidityEventRepo, make_liquidity_event, make_liquidity_page, pk};
 
-fn default_params(pool: solana_pubkey::Pubkey) -> LiquidityListParams {
-    LiquidityListParams {
+fn default_params(pool: solana_pubkey::Pubkey) -> MeteoraDammV2LiquidityListParams {
+    MeteoraDammV2LiquidityListParams {
         pool_address: pool,
         cursor: None,
         direction: PageDirection::Next,
@@ -23,7 +23,7 @@ async fn returns_page_items_from_repo() {
     let event = make_liquidity_event(addr);
     let page = make_liquidity_page(vec![event.clone()], true, true);
 
-    let svc = LiquidityService::new(Arc::new(MockLiquidityEventRepo::with_page(page)));
+    let svc = MeteoraDammV2LiquidityService::new(Arc::new(MockLiquidityEventRepo::with_page(page)));
 
     let result = svc
         .list_liquidity_for_pool(default_params(addr))
@@ -37,7 +37,7 @@ async fn returns_page_items_from_repo() {
 #[tokio::test]
 async fn empty_page_is_not_an_error() {
     let addr = pk(1);
-    let svc = LiquidityService::new(Arc::new(MockLiquidityEventRepo::empty()));
+    let svc = MeteoraDammV2LiquidityService::new(Arc::new(MockLiquidityEventRepo::empty()));
 
     let result = svc
         .list_liquidity_for_pool(default_params(addr))
@@ -54,7 +54,7 @@ async fn pagination_metadata_is_preserved() {
     let event = make_liquidity_event(addr);
     let page = make_liquidity_page(vec![event], false, false);
 
-    let svc = LiquidityService::new(Arc::new(MockLiquidityEventRepo::with_page(page)));
+    let svc = MeteoraDammV2LiquidityService::new(Arc::new(MockLiquidityEventRepo::with_page(page)));
 
     let result = svc
         .list_liquidity_for_pool(default_params(addr))
@@ -73,7 +73,7 @@ async fn last_page_has_no_next_cursor() {
     let event = make_liquidity_event(addr);
     let page = make_liquidity_page(vec![event], false, true);
 
-    let svc = LiquidityService::new(Arc::new(MockLiquidityEventRepo::with_page(page)));
+    let svc = MeteoraDammV2LiquidityService::new(Arc::new(MockLiquidityEventRepo::with_page(page)));
 
     let result = svc
         .list_liquidity_for_pool(default_params(addr))
@@ -88,9 +88,9 @@ async fn last_page_has_no_next_cursor() {
 #[tokio::test]
 async fn position_param_is_threaded_to_repo() {
     let addr = pk(1);
-    let svc = LiquidityService::new(Arc::new(MockLiquidityEventRepo::empty()));
+    let svc = MeteoraDammV2LiquidityService::new(Arc::new(MockLiquidityEventRepo::empty()));
 
-    let params = LiquidityListParams {
+    let params = MeteoraDammV2LiquidityListParams {
         pool_address: addr,
         cursor: None,
         direction: PageDirection::Prev,
@@ -104,7 +104,7 @@ async fn position_param_is_threaded_to_repo() {
 #[tokio::test]
 async fn repo_error_propagates() {
     let addr = pk(1);
-    let svc = LiquidityService::new(Arc::new(MockLiquidityEventRepo::failing()));
+    let svc = MeteoraDammV2LiquidityService::new(Arc::new(MockLiquidityEventRepo::failing()));
 
     let err = svc
         .list_liquidity_for_pool(default_params(addr))

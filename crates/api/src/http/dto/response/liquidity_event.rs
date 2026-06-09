@@ -4,7 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use yog_core::domain::{LiquidityEvent, LiquidityEventKind};
+use yog_core::domain::{MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind, Protocol};
 
 /// `GET /api/pools/{address}/liquidity-events` item.
 #[derive(Debug, Serialize)]
@@ -21,7 +21,6 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) liquidity_event_kind: String,
     pub(super) amount_a: u64,
     pub(super) amount_b: u64,
-    /// Liquidity delta (Q-format); encoded as a string.
     pub(super) liquidity_delta: String,
 
     pub(super) reserve_a_after: u64,
@@ -31,11 +30,11 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) owner: String,
 }
 
-impl From<LiquidityEvent> for LiquidityEventResponse {
-    fn from(event: LiquidityEvent) -> Self {
+impl From<MeteoraDammV2LiquidityEvent> for LiquidityEventResponse {
+    fn from(event: MeteoraDammV2LiquidityEvent) -> Self {
         Self {
             pool_address: event.pool_address.to_string(),
-            protocol: event.protocol.as_str().to_string(),
+            protocol: Protocol::MeteoraDammV2.to_string(),
             signature: event.signature.to_string(),
             timestamp: event.timestamp,
             token_a_mint: event.token_a_mint.to_string(),
@@ -52,6 +51,6 @@ impl From<LiquidityEvent> for LiquidityEventResponse {
     }
 }
 
-fn liquidity_event_kind_str(k: LiquidityEventKind) -> String {
+fn liquidity_event_kind_str(k: MeteoraDammV2LiquidityEventKind) -> String {
     k.as_str().to_string()
 }

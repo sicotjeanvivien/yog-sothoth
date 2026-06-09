@@ -20,11 +20,12 @@ use std::sync::Mutex;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
     domain::{
-        EventFreshnessRepository, LiquidityCursor, LiquidityEvent, LiquidityEventRepository,
-        NetworkStatus, NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository,
-        PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor,
-        PoolRepository, Protocol, SwapCursor, SwapEvent, SwapEventRepository, TokenMetadata,
-        TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+        EventFreshnessRepository, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
+        MeteoraDammV2LiquidityEventRepository, MeteoraDammV2SwapEvent,
+        MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository, NetworkStatus,
+        NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCurrentState,
+        PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor, PoolRepository, Protocol,
+        TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
     },
 };
 
@@ -343,11 +344,11 @@ impl PoolCurrentStateRepository for MockPoolCurrentStateRepo {
 // ── Mock: SwapEventRepository ────────────────────────────────────────
 
 pub(crate) struct MockSwapEventRepo {
-    find_paginated: Mutex<Option<RepositoryResult<Page<SwapEvent>>>>,
+    find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2SwapEvent>>>>,
 }
 
 impl MockSwapEventRepo {
-    pub(crate) fn with_page(page: Page<SwapEvent>) -> Self {
+    pub(crate) fn with_page(page: Page<MeteoraDammV2SwapEvent>) -> Self {
         Self {
             find_paginated: Mutex::new(Some(Ok(page))),
         }
@@ -369,18 +370,18 @@ impl MockSwapEventRepo {
 }
 
 #[async_trait]
-impl SwapEventRepository for MockSwapEventRepo {
-    async fn insert(&self, _: &SwapEvent) -> RepositoryResult<()> {
+impl MeteoraDammV2SwapEventRepository for MockSwapEventRepo {
+    async fn insert(&self, _: &MeteoraDammV2SwapEvent) -> RepositoryResult<()> {
         unreachable!()
     }
     async fn find_by_pool_paginated(
         &self,
         _pool_address: &Pubkey,
-        _cursor: Option<SwapCursor>,
+        _cursor: Option<MeteoraDammV2SwapEventCursor>,
         _direction: PageDirection,
         _position: Option<PagePosition>,
         _limit: i64,
-    ) -> RepositoryResult<Page<SwapEvent>> {
+    ) -> RepositoryResult<Page<MeteoraDammV2SwapEvent>> {
         take(&self.find_paginated)
     }
 }
@@ -388,11 +389,11 @@ impl SwapEventRepository for MockSwapEventRepo {
 // ── Mock: LiquidityEventRepository ──────────────────────────────────
 
 pub(crate) struct MockLiquidityEventRepo {
-    find_paginated: Mutex<Option<RepositoryResult<Page<LiquidityEvent>>>>,
+    find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2LiquidityEvent>>>>,
 }
 
 impl MockLiquidityEventRepo {
-    pub(crate) fn with_page(page: Page<LiquidityEvent>) -> Self {
+    pub(crate) fn with_page(page: Page<MeteoraDammV2LiquidityEvent>) -> Self {
         Self {
             find_paginated: Mutex::new(Some(Ok(page))),
         }
@@ -414,18 +415,18 @@ impl MockLiquidityEventRepo {
 }
 
 #[async_trait]
-impl LiquidityEventRepository for MockLiquidityEventRepo {
-    async fn insert(&self, _: &LiquidityEvent) -> RepositoryResult<()> {
+impl MeteoraDammV2LiquidityEventRepository for MockLiquidityEventRepo {
+    async fn insert(&self, _: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()> {
         unreachable!()
     }
     async fn find_by_pool_paginated(
         &self,
         _pool_address: &Pubkey,
-        _cursor: Option<LiquidityCursor>,
+        _cursor: Option<MeteoraDammV2LiquidityEventCursor>,
         _direction: PageDirection,
         _position: Option<PagePosition>,
         _limit: i64,
-    ) -> RepositoryResult<Page<LiquidityEvent>> {
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>> {
         take(&self.find_paginated)
     }
 }
@@ -497,12 +498,11 @@ impl EventFreshnessRepository for MockEventFreshnessRepo {
 
 // ── Additional fixtures ──────────────────────────────────────────────
 
-pub(crate) fn make_swap_event(pool_address: Pubkey) -> SwapEvent {
+pub(crate) fn make_swap_event(pool_address: Pubkey) -> MeteoraDammV2SwapEvent {
     use yog_core::domain::TradeDirection;
 
-    SwapEvent {
+    MeteoraDammV2SwapEvent {
         pool_address,
-        protocol: Protocol::MeteoraDammV2,
         signature: sig_for_pool(pool_address, 1),
         timestamp: ts(1_500),
         token_a_mint: pk(10),
@@ -521,17 +521,16 @@ pub(crate) fn make_swap_event(pool_address: Pubkey) -> SwapEvent {
     }
 }
 
-pub(crate) fn make_liquidity_event(pool_address: Pubkey) -> LiquidityEvent {
-    use yog_core::domain::LiquidityEventKind;
+pub(crate) fn make_liquidity_event(pool_address: Pubkey) -> MeteoraDammV2LiquidityEvent {
+    use yog_core::domain::MeteoraDammV2LiquidityEventKind;
 
-    LiquidityEvent {
+    MeteoraDammV2LiquidityEvent {
         pool_address,
-        protocol: Protocol::MeteoraDammV2,
         signature: sig_for_pool(pool_address, 1),
         timestamp: ts(1_600),
         token_a_mint: pk(10),
         token_b_mint: pk(11),
-        liquidity_event_kind: LiquidityEventKind::Add,
+        liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
         amount_a: 5_000_000,
         amount_b: 10_000_000,
         reserve_a_after: 15_000_000,
@@ -551,17 +550,17 @@ pub(crate) fn make_network_status() -> NetworkStatus {
 }
 
 pub(crate) fn make_swap_page(
-    events: Vec<SwapEvent>,
+    events: Vec<MeteoraDammV2SwapEvent>,
     is_first: bool,
     is_last: bool,
-) -> Page<SwapEvent> {
-    use yog_core::domain::SwapCursor;
+) -> Page<MeteoraDammV2SwapEvent> {
+    use yog_core::domain::MeteoraDammV2SwapEventCursor;
 
     let prev = if is_first {
         None
     } else {
         events.first().map(|e| {
-            Cursor::Swap(SwapCursor {
+            Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
             })
@@ -571,7 +570,7 @@ pub(crate) fn make_swap_page(
         None
     } else {
         events.last().map(|e| {
-            Cursor::Swap(SwapCursor {
+            Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
             })
@@ -587,17 +586,17 @@ pub(crate) fn make_swap_page(
 }
 
 pub(crate) fn make_liquidity_page(
-    events: Vec<LiquidityEvent>,
+    events: Vec<MeteoraDammV2LiquidityEvent>,
     is_first: bool,
     is_last: bool,
-) -> Page<LiquidityEvent> {
-    use yog_core::domain::LiquidityCursor;
+) -> Page<MeteoraDammV2LiquidityEvent> {
+    use yog_core::domain::MeteoraDammV2LiquidityEventCursor;
 
     let prev = if is_first {
         None
     } else {
         events.first().map(|e| {
-            Cursor::Liquidity(LiquidityCursor {
+            Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
             })
@@ -607,7 +606,7 @@ pub(crate) fn make_liquidity_page(
         None
     } else {
         events.last().map(|e| {
-            Cursor::Liquidity(LiquidityCursor {
+            Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
             })

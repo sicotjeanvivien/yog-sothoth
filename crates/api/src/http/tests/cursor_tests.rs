@@ -12,7 +12,7 @@ use super::{
 use crate::http::error::ApiError;
 use yog_core::{
     Cursor,
-    domain::{LiquidityCursor, PoolCursor, SwapCursor},
+    domain::{MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor},
 };
 
 // ── Fixtures ────────────────────────────────────────────────────────
@@ -37,15 +37,15 @@ fn pool_cursor() -> PoolCursor {
     }
 }
 
-fn swap_cursor() -> SwapCursor {
-    SwapCursor {
+fn swap_cursor() -> MeteoraDammV2SwapEventCursor {
+    MeteoraDammV2SwapEventCursor {
         timestamp: ts(1_700_000_500),
         signature: sig(1),
     }
 }
 
-fn liquidity_cursor() -> LiquidityCursor {
-    LiquidityCursor {
+fn liquidity_cursor() -> MeteoraDammV2LiquidityEventCursor {
+    MeteoraDammV2LiquidityEventCursor {
         timestamp: ts(1_700_000_900),
         signature: sig(1),
     }
@@ -72,7 +72,7 @@ fn pool_cursor_round_trip() {
 #[test]
 fn swap_cursor_round_trip() {
     let original = swap_cursor();
-    let encoded = encode_cursor(&Cursor::Swap(original.clone())).unwrap();
+    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(original.clone())).unwrap();
     let decoded = decode_swap_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
     assert_eq!(decoded.signature, original.signature);
@@ -81,7 +81,7 @@ fn swap_cursor_round_trip() {
 #[test]
 fn liquidity_cursor_round_trip() {
     let original = liquidity_cursor();
-    let encoded = encode_cursor(&Cursor::Liquidity(original.clone())).unwrap();
+    let encoded = encode_cursor(&Cursor::MeteoraDammV2LiquidityEvent(original.clone())).unwrap();
     let decoded = decode_liquidity_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
     assert_eq!(decoded.signature, original.signature);
@@ -91,11 +91,11 @@ fn liquidity_cursor_round_trip() {
 fn timestamp_survives_round_trip_to_the_second() {
     // RFC3339 carries sub-second precision; verify nothing is lost
     // for a timestamp with a non-zero offset from a round number.
-    let original = SwapCursor {
+    let original = MeteoraDammV2SwapEventCursor {
         timestamp: Utc.timestamp_opt(1_700_000_123, 0).unwrap(),
         signature: sig(1),
     };
-    let encoded = encode_cursor(&Cursor::Swap(original.clone())).unwrap();
+    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(original.clone())).unwrap();
     let decoded = decode_swap_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
 }
@@ -148,7 +148,7 @@ fn pool_blob_does_not_decode_as_swap() {
 
 #[test]
 fn swap_blob_does_not_decode_as_pool() {
-    let encoded = encode_cursor(&Cursor::Swap(swap_cursor())).unwrap();
+    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(swap_cursor())).unwrap();
     // EventCursorWire has no `first_seen_at`/`pool_address` → serde rejects.
     assert_bad_request(decode_pool_cursor(&encoded));
 }
@@ -164,7 +164,7 @@ fn swap_blob_does_not_decode_as_pool() {
 fn swap_blob_decodes_as_liquidity_by_shape() {
     // Documents the intentional shape-sharing rather than guarding
     // against it: both event cursors use EventCursorWire.
-    let encoded = encode_cursor(&Cursor::Swap(swap_cursor())).unwrap();
+    let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(swap_cursor())).unwrap();
     let decoded = decode_liquidity_cursor(&encoded).unwrap();
     assert_eq!(decoded.signature, swap_cursor().signature);
 }

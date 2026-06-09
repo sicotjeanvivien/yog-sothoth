@@ -17,7 +17,7 @@ use solana_signature::Signature;
 use std::str::FromStr;
 use yog_core::{
     Cursor, PoolSortColumn,
-    domain::{LiquidityCursor, PoolCursor, SwapCursor},
+    domain::{MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,11 +44,11 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             sort_value: c.sort_value.to_rfc3339(),
             pool_address: c.pool_address.to_string(),
         }),
-        Cursor::Swap(c) => encode_b64_json(&EventCursorWire {
+        Cursor::MeteoraDammV2SwapEvent(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
             signature: c.signature.to_string(),
         }),
-        Cursor::Liquidity(c) => encode_b64_json(&EventCursorWire {
+        Cursor::MeteoraDammV2LiquidityEvent(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
             signature: c.signature.to_string(),
         }),
@@ -88,21 +88,23 @@ pub(crate) fn decode_pool_cursor(raw: &str) -> Result<PoolCursor, ApiError> {
     })
 }
 
-pub(crate) fn decode_swap_cursor(raw: &str) -> Result<SwapCursor, ApiError> {
+pub(crate) fn decode_swap_cursor(raw: &str) -> Result<MeteoraDammV2SwapEventCursor, ApiError> {
     let wire: EventCursorWire = decode_b64_json(raw)?;
     let signature = Signature::from_str(&wire.signature)
         .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?;
-    Ok(SwapCursor {
+    Ok(MeteoraDammV2SwapEventCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature,
     })
 }
 
-pub(crate) fn decode_liquidity_cursor(raw: &str) -> Result<LiquidityCursor, ApiError> {
+pub(crate) fn decode_liquidity_cursor(
+    raw: &str,
+) -> Result<MeteoraDammV2LiquidityEventCursor, ApiError> {
     let wire: EventCursorWire = decode_b64_json(raw)?;
     let signature = Signature::from_str(&wire.signature)
         .map_err(|_| ApiError::BadRequest("invalid cursor: malformed signature".to_string()))?;
-    Ok(LiquidityCursor {
+    Ok(MeteoraDammV2LiquidityEventCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature,
     })

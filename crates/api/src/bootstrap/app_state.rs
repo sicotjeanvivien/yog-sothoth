@@ -1,18 +1,20 @@
 use std::sync::Arc;
 
 use yog_core::domain::{
-    EventFreshnessRepository, LiquidityEventRepository, NetworkStatusRepository,
-    PoolAnalyticsRepository, PoolCurrentStateRepository, PoolRepository, SwapEventRepository,
-    TokenMetadataRepository, TokenPriceRepository,
+    EventFreshnessRepository, MeteoraDammV2LiquidityEventRepository,
+    MeteoraDammV2SwapEventRepository, NetworkStatusRepository, PoolAnalyticsRepository,
+    PoolCurrentStateRepository, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
-    Database, PgEventFreshnessRepository, PgHealthChecker, PgLiquidityEventRepository,
-    PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
-    PgPoolRepository, PgSwapEventRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
+    Database, PgEventFreshnessRepository, PgHealthChecker, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2SwapEventRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository,
 };
 
 use crate::application::{
-    LiquidityService, NetworkStatusService, PoolService, SwapService, TokenService,
+    MeteoraDammV2LiquidityService, MeteoraDammV2SwapService, NetworkStatusService, PoolService,
+    TokenService,
 };
 use crate::bootstrap::Config;
 use anyhow::Context;
@@ -28,8 +30,8 @@ use anyhow::Context;
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) pool_service: Arc<PoolService>,
-    pub(crate) swap_service: Arc<SwapService>,
-    pub(crate) liquidity_service: Arc<LiquidityService>,
+    pub(crate) swap_service: Arc<MeteoraDammV2SwapService>,
+    pub(crate) liquidity_service: Arc<MeteoraDammV2LiquidityService>,
     pub(crate) network_status_service: Arc<NetworkStatusService>,
     pub(crate) token_service: Arc<TokenService>,
     /// Infra probe — exposed directly because no application logic
@@ -49,10 +51,11 @@ impl AppState {
         let pool_repo: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool.clone()));
         let pool_current_state_repo: Arc<dyn PoolCurrentStateRepository> =
             Arc::new(PgPoolCurrentStateRepository::new(db_pool.clone()));
-        let swap_event_repo: Arc<dyn SwapEventRepository> =
-            Arc::new(PgSwapEventRepository::new(db_pool.clone()));
-        let liquidity_event_repo: Arc<dyn LiquidityEventRepository> =
-            Arc::new(PgLiquidityEventRepository::new(db_pool.clone()));
+        let swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository> =
+            Arc::new(PgMeteoraDammV2SwapEventRepository::new(db_pool.clone()));
+        let liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository> = Arc::new(
+            PgMeteoraDammV2LiquidityEventRepository::new(db_pool.clone()),
+        );
         let network_status_repo: Arc<dyn NetworkStatusRepository> =
             Arc::new(PgNetworkStatusRepository::new(db_pool.clone()));
         let event_freshness_repo: Arc<dyn EventFreshnessRepository> =
@@ -73,8 +76,8 @@ impl AppState {
                 token_metadata_repo.clone(),
                 token_price_repo.clone(),
             )),
-            swap_service: Arc::new(SwapService::new(swap_event_repo)),
-            liquidity_service: Arc::new(LiquidityService::new(liquidity_event_repo)),
+            swap_service: Arc::new(MeteoraDammV2SwapService::new(swap_event_repo)),
+            liquidity_service: Arc::new(MeteoraDammV2LiquidityService::new(liquidity_event_repo)),
             network_status_service: Arc::new(NetworkStatusService::new(
                 network_status_repo,
                 event_freshness_repo,

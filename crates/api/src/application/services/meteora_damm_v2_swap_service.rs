@@ -9,7 +9,9 @@ use std::sync::Arc;
 use solana_pubkey::Pubkey;
 use yog_core::{
     PageDirection, PagePosition, RepositoryError,
-    domain::{SwapCursor, SwapEvent, SwapEventRepository},
+    domain::{
+        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
+    },
     tools::Page,
 };
 
@@ -18,9 +20,9 @@ use yog_core::{
 // ---------------------------------------------------------------------------
 
 /// Input to [`SwapService::list_swaps_for_pool`].
-pub(crate) struct SwapListParams {
+pub(crate) struct MeteoraDammV2SwapListParams {
     pub pool_address: Pubkey,
-    pub cursor: Option<SwapCursor>,
+    pub cursor: Option<MeteoraDammV2SwapEventCursor>,
     pub direction: PageDirection,
     pub position: Option<PagePosition>,
     pub limit: i64,
@@ -31,20 +33,20 @@ pub(crate) struct SwapListParams {
 // ---------------------------------------------------------------------------
 
 /// Application service for swap event queries.
-pub(crate) struct SwapService {
-    repo: Arc<dyn SwapEventRepository>,
+pub(crate) struct MeteoraDammV2SwapService {
+    repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
 }
 
-impl SwapService {
-    pub(crate) fn new(repo: Arc<dyn SwapEventRepository>) -> Self {
+impl MeteoraDammV2SwapService {
+    pub(crate) fn new(repo: Arc<dyn MeteoraDammV2SwapEventRepository>) -> Self {
         Self { repo }
     }
 
     /// Paginate swap events for a pool.
     pub(crate) async fn list_swaps_for_pool(
         &self,
-        params: SwapListParams,
-    ) -> Result<Page<SwapEvent>, RepositoryError> {
+        params: MeteoraDammV2SwapListParams,
+    ) -> Result<Page<MeteoraDammV2SwapEvent>, RepositoryError> {
         self.repo
             .find_by_pool_paginated(
                 &params.pool_address,

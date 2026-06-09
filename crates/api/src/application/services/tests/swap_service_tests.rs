@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use yog_core::{PageDirection, PagePosition, RepositoryError};
 
-use super::super::{SwapListParams, SwapService};
+use super::super::{MeteoraDammV2SwapListParams, MeteoraDammV2SwapService};
 use crate::testing::{MockSwapEventRepo, make_swap_event, make_swap_page, pk};
 
-fn default_params(pool: solana_pubkey::Pubkey) -> SwapListParams {
-    SwapListParams {
+fn default_params(pool: solana_pubkey::Pubkey) -> MeteoraDammV2SwapListParams {
+    MeteoraDammV2SwapListParams {
         pool_address: pool,
         cursor: None,
         direction: PageDirection::Next,
@@ -25,7 +25,7 @@ async fn returns_page_items_from_repo() {
     let event = make_swap_event(addr);
     let page = make_swap_page(vec![event.clone()], true, true);
 
-    let svc = SwapService::new(Arc::new(MockSwapEventRepo::with_page(page)));
+    let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::with_page(page)));
 
     let result = svc.list_swaps_for_pool(default_params(addr)).await.unwrap();
 
@@ -36,7 +36,7 @@ async fn returns_page_items_from_repo() {
 #[tokio::test]
 async fn empty_page_is_not_an_error() {
     let addr = pk(1);
-    let svc = SwapService::new(Arc::new(MockSwapEventRepo::empty()));
+    let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::empty()));
 
     let result = svc.list_swaps_for_pool(default_params(addr)).await.unwrap();
 
@@ -52,7 +52,7 @@ async fn pagination_metadata_is_preserved() {
     // middle page: neither first nor last, both cursors present
     let page = make_swap_page(vec![event], false, false);
 
-    let svc = SwapService::new(Arc::new(MockSwapEventRepo::with_page(page)));
+    let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::with_page(page)));
 
     let result = svc.list_swaps_for_pool(default_params(addr)).await.unwrap();
 
@@ -68,7 +68,7 @@ async fn last_page_has_no_next_cursor() {
     let event = make_swap_event(addr);
     let page = make_swap_page(vec![event], false, true);
 
-    let svc = SwapService::new(Arc::new(MockSwapEventRepo::with_page(page)));
+    let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::with_page(page)));
 
     let result = svc.list_swaps_for_pool(default_params(addr)).await.unwrap();
 
@@ -83,9 +83,9 @@ async fn prev_position_is_threaded_to_repo() {
     // swallowing it. We verify indirectly: the mock is consumed once,
     // so if the call reaches it, the param was not dropped.
     let addr = pk(1);
-    let svc = SwapService::new(Arc::new(MockSwapEventRepo::empty()));
+    let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::empty()));
 
-    let params = SwapListParams {
+    let params = MeteoraDammV2SwapListParams {
         pool_address: addr,
         cursor: None,
         direction: PageDirection::Prev,
@@ -102,7 +102,7 @@ async fn prev_position_is_threaded_to_repo() {
 #[tokio::test]
 async fn repo_error_propagates() {
     let addr = pk(1);
-    let svc = SwapService::new(Arc::new(MockSwapEventRepo::failing()));
+    let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::failing()));
 
     let err = svc
         .list_swaps_for_pool(default_params(addr))

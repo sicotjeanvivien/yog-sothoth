@@ -8,7 +8,10 @@ use std::sync::Arc;
 use solana_pubkey::Pubkey;
 use yog_core::{
     PageDirection, PagePosition, RepositoryError,
-    domain::{LiquidityCursor, LiquidityEvent, LiquidityEventRepository},
+    domain::{
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
+        MeteoraDammV2LiquidityEventRepository,
+    },
     tools::Page,
 };
 
@@ -17,9 +20,9 @@ use yog_core::{
 // ---------------------------------------------------------------------------
 
 /// Input to [`LiquidityService::list_liquidity_for_pool`].
-pub(crate) struct LiquidityListParams {
+pub(crate) struct MeteoraDammV2LiquidityListParams {
     pub pool_address: Pubkey,
-    pub cursor: Option<LiquidityCursor>,
+    pub cursor: Option<MeteoraDammV2LiquidityEventCursor>,
     pub direction: PageDirection,
     pub position: Option<PagePosition>,
     pub limit: i64,
@@ -30,20 +33,20 @@ pub(crate) struct LiquidityListParams {
 // ---------------------------------------------------------------------------
 
 /// Application service for liquidity event queries.
-pub(crate) struct LiquidityService {
-    repo: Arc<dyn LiquidityEventRepository>,
+pub(crate) struct MeteoraDammV2LiquidityService {
+    repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
 }
 
-impl LiquidityService {
-    pub(crate) fn new(repo: Arc<dyn LiquidityEventRepository>) -> Self {
+impl MeteoraDammV2LiquidityService {
+    pub(crate) fn new(repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>) -> Self {
         Self { repo }
     }
 
     /// Paginate liquidity events for a pool.
     pub(crate) async fn list_liquidity_for_pool(
         &self,
-        params: LiquidityListParams,
-    ) -> Result<Page<LiquidityEvent>, RepositoryError> {
+        params: MeteoraDammV2LiquidityListParams,
+    ) -> Result<Page<MeteoraDammV2LiquidityEvent>, RepositoryError> {
         self.repo
             .find_by_pool_paginated(
                 &params.pool_address,

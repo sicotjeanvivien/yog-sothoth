@@ -18,7 +18,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use yog_core::domain::{SwapEvent, TradeDirection};
+use yog_core::domain::{MeteoraDammV2SwapEvent, Protocol, TradeDirection};
 
 // ---------------------------------------------------------------------------
 // Swap event
@@ -42,7 +42,6 @@ pub(crate) struct SwapEventResponse {
 
     pub(crate) reserve_a_after: u64,
     pub(crate) reserve_b_after: u64,
-    /// Q64.64 fixed-point; encoded as a string.
     pub(crate) next_sqrt_price: String,
 
     pub(crate) claiming_fee: u64,
@@ -52,11 +51,11 @@ pub(crate) struct SwapEventResponse {
     pub(crate) fee_token_is_a: bool,
 }
 
-impl From<SwapEvent> for SwapEventResponse {
-    fn from(event: SwapEvent) -> Self {
+impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
+    fn from(event: MeteoraDammV2SwapEvent) -> Self {
         Self {
             pool_address: event.pool_address.to_string(),
-            protocol: event.protocol.as_str().to_string(),
+            protocol: Protocol::MeteoraDammV2.to_string(),
             signature: event.signature.to_string(),
             timestamp: event.timestamp,
             token_a_mint: event.token_a_mint.to_string(),
