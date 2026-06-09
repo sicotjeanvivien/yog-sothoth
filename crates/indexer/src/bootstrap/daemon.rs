@@ -2,8 +2,8 @@ use crate::{
     application::{
         reporter::{NetworkStatusReporter, NetworkStatusReporterError},
         services::{
-            EventPersistor, EventPersistorMetrics, TransactionProcessor,
-            TransactionProcessorMetrics, WatchedPoolService,
+            EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor, PoolMaintenance,
+            TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
         },
         workers::IndexerWorker,
     },
@@ -172,30 +172,40 @@ fn init_listener(config: &Config) -> Arc<RpcListener> {
 
 /// Build the EventPersistor with its six repositories.
 fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
-    let pg_swap_event_repo = Arc::new(PgMeteoraDammV2SwapEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_liquidity_event_repo = Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_claim_position_fee_repo = Arc::new(PgMeteoraDammV2ClaimPositionFeeEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_claim_reward_repo = Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(
-        database.pool().clone(),
-    ));
+    // Cross-protocol repositories
     let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
     let pg_pool_current_state_repo =
         Arc::new(PgPoolCurrentStateRepository::new(database.pool().clone()));
 
-    Arc::new(EventPersistor::new(
-        pg_swap_event_repo,
-        pg_liquidity_event_repo,
-        pg_claim_position_fee_repo,
-        pg_claim_reward_repo,
+    // Shared pool maintenance helper — reused by every per-protocol sub-persistor.
+    let pool_maintenance = Arc::new(PoolMaintenance::new(
         pg_pool_repo,
         pg_pool_current_state_repo,
-    ))
+    ));
+
+    // Meteora DAMM v2 sub-persistor and its repositories.
+    let pg_damm_v2_swap_repo = Arc::new(PgMeteoraDammV2SwapEventRepository::new(
+        database.pool().clone(),
+    ));
+    let pg_damm_v2_liquidity_repo = Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(
+        database.pool().clone(),
+    ));
+    let pg_damm_v2_claim_position_fee_repo = Arc::new(
+        PgMeteoraDammV2ClaimPositionFeeEventRepository::new(database.pool().clone()),
+    );
+    let pg_damm_v2_claim_reward_repo = Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(
+        database.pool().clone(),
+    ));
+
+    let meteora_damm_v2 = Arc::new(MeteoraDammV2EventPersistor::new(
+        pg_damm_v2_swap_repo,
+        pg_damm_v2_liquidity_repo,
+        pg_damm_v2_claim_position_fee_repo,
+        pg_damm_v2_claim_reward_repo,
+        Arc::clone(&pool_maintenance),
+    ));
+
+    Arc::new(EventPersistor::new(meteora_damm_v2))
 }
 
 /// Initialise the indexer service and its repository dependencies.

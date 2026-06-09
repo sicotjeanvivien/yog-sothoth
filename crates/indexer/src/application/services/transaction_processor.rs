@@ -94,7 +94,7 @@ impl TransactionProcessor {
         }
 
         for event in &outcome.events {
-            self.persistor.persist(&protocol, event).await;
+            self.persistor.persist(event).await;
         }
 
         guard.set("ok");
