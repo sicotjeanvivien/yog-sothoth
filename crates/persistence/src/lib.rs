@@ -18,10 +18,11 @@ mod repositories;
 pub use database::Database;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
-    PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository, PgEventFreshnessRepository,
-    PgLiquidityEventRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
-    PgPoolCurrentStateRepository, PgPoolRepository, PgSwapEventRepository,
-    PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
+    PgEventFreshnessRepository, PgMeteoraDammV2ClaimPositionFeeEventRepository,
+    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2SwapEventRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository, PgWatchedPoolRepository,
 };
 
 /// Re-export `sqlx::PgPool` so consumers don't need to depend on sqlx directly

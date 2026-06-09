@@ -12,12 +12,15 @@ use crate::repositories::helper::{
     resolve_query_mode,
 };
 use async_trait::async_trait;
-use rows::LiquidityEventRow;
+use rows::MeteoraDammV2LiquidityEventRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{LiquidityCursor, LiquidityEvent, LiquidityEventRepository},
+    domain::{
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
+        MeteoraDammV2LiquidityEventRepository,
+    },
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
 
@@ -26,23 +29,23 @@ use yog_core::{
 /// API-layer validation is bypassed.
 const MAX_PAGE_SIZE: i64 = 200;
 
-pub struct PgLiquidityEventRepository {
+pub struct PgMeteoraDammV2LiquidityEventRepository {
     pool: PgPool,
 }
 
-impl PgLiquidityEventRepository {
+impl PgMeteoraDammV2LiquidityEventRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl LiquidityEventRepository for PgLiquidityEventRepository {
-    async fn insert(&self, event: &LiquidityEvent) -> RepositoryResult<()> {
+impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepository {
+    async fn insert(&self, event: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
-            INSERT INTO liquidity_events (
-                pool_address, protocol, signature,
+            INSERT INTO meteora_damm_v2_liquidity_events (
+                pool_address, signature,
                 token_a_mint, token_b_mint,
                 liquidity_event_kind, amount_a, amount_b, liquidity_delta,
                 reserve_a_after, reserve_b_after,
@@ -54,13 +57,11 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
                 $4, $5,
                 $6, $7, $8, $9,
                 $10, $11,
-                $12, $13,
-                $14
+                $12, $13
             )
             ON CONFLICT (signature, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
-            event.protocol.as_str(),
             event.signature.to_string(),
             event.token_a_mint.to_string(),
             event.token_b_mint.to_string(),
@@ -89,11 +90,11 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
-        cursor: Option<LiquidityCursor>,
+        cursor: Option<MeteoraDammV2LiquidityEventCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
         limit: i64,
-    ) -> RepositoryResult<Page<LiquidityEvent>> {
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>> {
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
         let fetch_limit = effective_limit + 1;
 
@@ -109,17 +110,17 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
         // Two static SQL paths — one per traversal mode. Both produce
         // Vec<LiquidityEventRow>; the mapping to domain runs once after
         // the match, no duplication.
-        let rows: Vec<LiquidityEventRow> = match mode {
+        let rows: Vec<MeteoraDammV2LiquidityEventRow> = match mode {
             QueryMode::Forward => sqlx::query_as!(
-                LiquidityEventRow,
+                MeteoraDammV2LiquidityEventRow,
                 r#"
-                SELECT pool_address, protocol, signature,
+                SELECT pool_address, signature,
                        token_a_mint, token_b_mint,
                        liquidity_event_kind, amount_a, amount_b, liquidity_delta,
                        reserve_a_after, reserve_b_after,
                        position, owner,
                        timestamp
-                FROM liquidity_events
+                FROM meteora_damm_v2_liquidity_events
                 WHERE pool_address = $1
                   AND (
                       $2::TIMESTAMPTZ IS NULL
@@ -139,15 +140,15 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             .map_err(map_sqlx_error)?,
 
             QueryMode::Backward => sqlx::query_as!(
-                LiquidityEventRow,
+                MeteoraDammV2LiquidityEventRow,
                 r#"
-                SELECT pool_address, protocol, signature,
+                SELECT pool_address, signature,
                        token_a_mint, token_b_mint,
                        liquidity_event_kind, amount_a, amount_b, liquidity_delta,
                        reserve_a_after, reserve_b_after,
                        position, owner,
                        timestamp
-                FROM liquidity_events
+                FROM meteora_damm_v2_liquidity_events
                 WHERE pool_address = $1
                   AND (
                       $2::TIMESTAMPTZ IS NULL
@@ -167,14 +168,14 @@ impl LiquidityEventRepository for PgLiquidityEventRepository {
             .map_err(map_sqlx_error)?,
         };
 
-        let events: Vec<LiquidityEvent> = rows
+        let events: Vec<MeteoraDammV2LiquidityEvent> = rows
             .into_iter()
-            .map(LiquidityEvent::try_from)
+            .map(MeteoraDammV2LiquidityEvent::try_from)
             .collect::<Result<_, _>>()?;
 
         Ok(
             PageBuilder::new(events, effective_limit, mode, had_cursor).finalize(|e| {
-                Cursor::Liquidity(LiquidityCursor {
+                Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
                     timestamp: e.timestamp,
                     signature: e.signature,
                 })

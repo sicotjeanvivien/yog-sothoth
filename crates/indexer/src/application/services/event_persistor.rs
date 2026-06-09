@@ -11,29 +11,30 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, warn};
 use yog_core::domain::{
-    ClaimPositionFeeEvent, ClaimPositionFeeEventRepository, ClaimRewardEvent,
-    ClaimRewardEventRepository, DomainEvent, LiquidityEvent, LiquidityEventRepository, Pool,
-    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, Protocol, SwapEvent,
-    SwapEventRepository,
+    DomainEvent, MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
+    MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
+    MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository, MeteoraDammV2SwapEvent,
+    MeteoraDammV2SwapEventRepository, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+    PoolRepository, Protocol,
 };
 
 use crate::application::services::EventPersistorMetrics;
 
 pub(crate) struct EventPersistor {
-    swap_event_repo: Arc<dyn SwapEventRepository>,
-    liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
-    claim_position_fee_repo: Arc<dyn ClaimPositionFeeEventRepository>,
-    claim_reward_repo: Arc<dyn ClaimRewardEventRepository>,
+    swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
+    liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
+    claim_position_fee_repo: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
+    claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
     pool_repo: Arc<dyn PoolRepository>,
     pool_current_state_repo: Arc<dyn PoolCurrentStateRepository>,
 }
 
 impl EventPersistor {
     pub(crate) fn new(
-        swap_event_repo: Arc<dyn SwapEventRepository>,
-        liquidity_event_repo: Arc<dyn LiquidityEventRepository>,
-        claim_position_fee_repo: Arc<dyn ClaimPositionFeeEventRepository>,
-        claim_reward_repo: Arc<dyn ClaimRewardEventRepository>,
+        swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
+        liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
+        claim_position_fee_repo: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
+        claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
         pool_repo: Arc<dyn PoolRepository>,
         pool_current_state_repo: Arc<dyn PoolCurrentStateRepository>,
     ) -> Self {
@@ -83,7 +84,11 @@ impl EventPersistor {
 
     /// Persist a swap event: upsert the pool, insert the event, refresh the
     /// per-pool projection if the event landed.
-    async fn persist_swap(&self, protocol: &Protocol, event: &SwapEvent) -> anyhow::Result<()> {
+    async fn persist_swap(
+        &self,
+        protocol: &Protocol,
+        event: &MeteoraDammV2SwapEvent,
+    ) -> anyhow::Result<()> {
         if let Err(err) = self
             .upsert_pool_full(
                 protocol,

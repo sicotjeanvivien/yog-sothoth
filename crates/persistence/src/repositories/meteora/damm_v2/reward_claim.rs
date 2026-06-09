@@ -7,40 +7,39 @@ mod rows;
 
 use crate::repositories::helper::{convert_u64_to_i64, map_sqlx_error};
 use async_trait::async_trait;
-use rows::ClaimRewardEventRow;
+use rows::MeteoraDammV2ClaimRewardEventRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{ClaimRewardEvent, ClaimRewardEventRepository},
+    domain::{MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository},
 };
 
-pub struct PgClaimRewardEventRepository {
+pub struct PgMeteoraDammV2ClaimRewardEventRepository {
     pool: PgPool,
 }
 
-impl PgClaimRewardEventRepository {
+impl PgMeteoraDammV2ClaimRewardEventRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait]
-impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
-    async fn insert(&self, event: &ClaimRewardEvent) -> RepositoryResult<()> {
+impl MeteoraDammV2ClaimRewardEventRepository for PgMeteoraDammV2ClaimRewardEventRepository {
+    async fn insert(&self, event: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
-            INSERT INTO reward_claims (
-                pool_address, protocol, signature,
+            INSERT INTO meteora_damm_v2_claim_reward_events (
+                pool_address, signature,
                 position, owner,
                 mint_reward, reward_index, total_reward,
                 timestamp
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (signature, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
-            event.protocol.as_str(),
             event.signature.to_string(),
             event.position.to_string(),
             event.owner.to_string(),
@@ -60,15 +59,15 @@ impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
         &self,
         pool_address: &Pubkey,
         limit: i64,
-    ) -> RepositoryResult<Vec<ClaimRewardEvent>> {
+    ) -> RepositoryResult<Vec<MeteoraDammV2ClaimRewardEvent>> {
         let rows = sqlx::query_as!(
-            ClaimRewardEventRow,
+            MeteoraDammV2ClaimRewardEventRow,
             r#"
-            SELECT pool_address, protocol, signature,
+            SELECT pool_address, signature,
                    position, owner,
                    mint_reward, reward_index, total_reward,
                    timestamp
-            FROM reward_claims
+            FROM meteora_damm_v2_claim_reward_events
             WHERE pool_address = $1
             ORDER BY timestamp DESC
             LIMIT $2
@@ -80,6 +79,8 @@ impl ClaimRewardEventRepository for PgClaimRewardEventRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        rows.into_iter().map(ClaimRewardEvent::try_from).collect()
+        rows.into_iter()
+            .map(MeteoraDammV2ClaimRewardEvent::try_from)
+            .collect()
     }
 }

@@ -17,8 +17,8 @@ pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository, MeteoraDammV2Event,
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
-    MeteoraDammV2SwapCursor, MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository,
+    MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository, MeteoraDammV2SwapEvent,
+    MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
 };
 pub use network_status::{NetworkStatus, NetworkStatusRepository};
 pub use pool::{Pool, PoolCursor, PoolRepository};

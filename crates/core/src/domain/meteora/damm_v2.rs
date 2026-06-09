@@ -18,7 +18,7 @@ pub use liquidity_event::{
     MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
 };
 pub use swap_event::{
-    MeteoraDammV2SwapCursor, MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository,
+    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
 };
 
 /// Every kind of event the Meteora DAMM v2 extractor can produce, grouped

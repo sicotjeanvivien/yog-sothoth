@@ -4,7 +4,7 @@ use solana_signature::Signature;
 use sqlx::Error as SqlxError;
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
-use yog_core::{RepositoryError, RepositoryResult, domain::LiquidityEventKind};
+use yog_core::{RepositoryError, RepositoryResult, domain::MeteoraDammV2LiquidityEventKind};
 
 /// Convert a string read from the database into a `Pubkey`.
 ///
@@ -41,13 +41,13 @@ pub(crate) fn convert_bigdecimal_to_u128(
         .map_err(|e| RepositoryError::Integrity(format!("{field} parse error: {e}")))
 }
 
-/// Parse a string column into a `LiquidityEventKind` enum value.
+/// Parse a string column into a `MeteoraDammV2LiquidityEventKind` enum value.
 pub(crate) fn parse_string_to_liquidity_event_kind(
     liquidity_event_kind: String,
     field: &str,
-) -> RepositoryResult<LiquidityEventKind> {
+) -> RepositoryResult<MeteoraDammV2LiquidityEventKind> {
     liquidity_event_kind
-        .parse::<LiquidityEventKind>()
+        .parse::<MeteoraDammV2LiquidityEventKind>()
         .map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {liquidity_event_kind}")))
 }
 

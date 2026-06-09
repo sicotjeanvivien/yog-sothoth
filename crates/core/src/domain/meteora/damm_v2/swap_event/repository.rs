@@ -14,7 +14,7 @@ use crate::{PageDirection, PagePosition};
 /// A cursor points to the *last item of the current page*; the next
 /// page contains items strictly after this position in the ordering.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MeteoraDammV2SwapCursor {
+pub struct MeteoraDammV2SwapEventCursor {
     pub timestamp: DateTime<Utc>,
     pub signature: Signature,
 }
@@ -38,7 +38,7 @@ pub trait MeteoraDammV2SwapEventRepository: Send + Sync {
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
-        cursor: Option<MeteoraDammV2SwapCursor>,
+        cursor: Option<MeteoraDammV2SwapEventCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
         limit: i64,

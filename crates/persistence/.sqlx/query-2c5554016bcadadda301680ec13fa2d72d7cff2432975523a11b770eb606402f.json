@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, protocol, signature,\n                   position, owner,\n                   fee_a_claimed, fee_b_claimed,\n                   timestamp\n            FROM position_fee_claims\n            WHERE pool_address = $1\n            ORDER BY timestamp DESC\n            LIMIT $2\n            ",
+  "query": "\n            SELECT pool_address, signature,\n                   position, owner,\n                   fee_a_claimed, fee_b_claimed,\n                   timestamp\n            FROM meteora_damm_v2_claim_position_fee_events\n            WHERE pool_address = $1\n            ORDER BY timestamp DESC\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -10,36 +10,31 @@
       },
       {
         "ordinal": 1,
-        "name": "protocol",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 2,
         "name": "signature",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "position",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "owner",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "fee_a_claimed",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "fee_b_claimed",
         "type_info": "Int8"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "timestamp",
         "type_info": "Timestamptz"
       }
@@ -57,9 +52,8 @@
       false,
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "496c1040a5672cb5aa2b0781faa367cdee69b390f9b29cab2b8b11c6e1ec05b7"
+  "hash": "2c5554016bcadadda301680ec13fa2d72d7cff2432975523a11b770eb606402f"
 }

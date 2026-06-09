@@ -1,9 +1,5 @@
 use chrono::{DateTime, Utc};
-use std::str::FromStr;
-use yog_core::{
-    RepositoryError,
-    domain::{ClaimRewardEvent, Protocol},
-};
+use yog_core::{RepositoryError, domain::MeteoraDammV2ClaimRewardEvent};
 
 use crate::repositories::helper::{
     convert_i64_to_u64, convert_string_to_pubkey, convert_string_to_signature,
@@ -16,9 +12,8 @@ use crate::repositories::helper::{
 /// no native u8; the domain narrows it back to u8 via `TryFrom`,
 /// surfacing out-of-range values as `Integrity`.
 #[derive(sqlx::FromRow)]
-pub(super) struct ClaimRewardEventRow {
+pub(super) struct MeteoraDammV2ClaimRewardEventRow {
     pub(super) pool_address: String,
-    pub(super) protocol: String,
     pub(super) signature: String,
     pub(super) timestamp: DateTime<Utc>,
     pub(super) position: String,
@@ -28,18 +23,16 @@ pub(super) struct ClaimRewardEventRow {
     pub(super) total_reward: i64,
 }
 
-impl TryFrom<ClaimRewardEventRow> for ClaimRewardEvent {
+impl TryFrom<MeteoraDammV2ClaimRewardEventRow> for MeteoraDammV2ClaimRewardEvent {
     type Error = RepositoryError;
 
-    fn try_from(row: ClaimRewardEventRow) -> Result<Self, Self::Error> {
+    fn try_from(row: MeteoraDammV2ClaimRewardEventRow) -> Result<Self, Self::Error> {
         let reward_index = u8::try_from(row.reward_index).map_err(|_| {
             RepositoryError::Integrity(format!("invalid reward_index: {}", row.reward_index))
         })?;
 
-        Ok(ClaimRewardEvent {
+        Ok(MeteoraDammV2ClaimRewardEvent {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-            protocol: Protocol::from_str(&row.protocol)
-                .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
             signature: convert_string_to_signature(row.signature, "signature")?,
             timestamp: row.timestamp,
             position: convert_string_to_pubkey(row.position, "position")?,

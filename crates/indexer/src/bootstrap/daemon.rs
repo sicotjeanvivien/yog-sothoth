@@ -23,9 +23,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_core::application::extraction::ExtrationDispacher;
 use yog_persistence::{
-    Database, PgClaimPositionFeeEventRepository, PgClaimRewardEventRepository,
-    PgLiquidityEventRepository, PgNetworkStatusRepository, PgPoolCurrentStateRepository,
-    PgPoolRepository, PgSwapEventRepository, PgWatchedPoolRepository,
+    Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
+    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2SwapEventRepository, PgNetworkStatusRepository, PgPoolCurrentStateRepository,
+    PgPoolRepository, PgWatchedPoolRepository,
 };
 
 /// Top-level process — owns all runtime dependencies and drives the
@@ -171,13 +172,18 @@ fn init_listener(config: &Config) -> Arc<RpcListener> {
 
 /// Build the EventPersistor with its six repositories.
 fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
-    let pg_swap_event_repo = Arc::new(PgSwapEventRepository::new(database.pool().clone()));
-    let pg_liquidity_event_repo =
-        Arc::new(PgLiquidityEventRepository::new(database.pool().clone()));
-    let pg_claim_position_fee_repo = Arc::new(PgClaimPositionFeeEventRepository::new(
+    let pg_swap_event_repo = Arc::new(PgMeteoraDammV2SwapEventRepository::new(
         database.pool().clone(),
     ));
-    let pg_claim_reward_repo = Arc::new(PgClaimRewardEventRepository::new(database.pool().clone()));
+    let pg_liquidity_event_repo = Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(
+        database.pool().clone(),
+    ));
+    let pg_claim_position_fee_repo = Arc::new(PgMeteoraDammV2ClaimPositionFeeEventRepository::new(
+        database.pool().clone(),
+    ));
+    let pg_claim_reward_repo = Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(
+        database.pool().clone(),
+    ));
     let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
     let pg_pool_current_state_repo =
         Arc::new(PgPoolCurrentStateRepository::new(database.pool().clone()));
