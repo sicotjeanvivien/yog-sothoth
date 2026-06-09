@@ -17,7 +17,7 @@ use yog_core::{
         EventExtractor, MeteoraDammV2,
         meteora::damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
     },
-    domain::DomainEvent,
+    domain::{DomainEvent, MeteoraDammV2Event},
 };
 
 const CP_AMM_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
@@ -187,7 +187,7 @@ fn extracts_swap_via_router_correctly() {
         outcome.events.iter().map(|e| e.kind()).collect::<Vec<_>>()
     );
 
-    let DomainEvent::Swap(swap) = &outcome.events[0] else {
+    let DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(swap)) = &outcome.events[0] else {
         panic!("expected DomainEvent::Swap, got {:?}", outcome.events[0]);
     };
 

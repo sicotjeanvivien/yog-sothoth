@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-use crate::domain::{Protocol, TradeDirection};
+use crate::domain::TradeDirection;
 
 /// Raw swap event extracted from an on-chain Anchor event.
 ///
@@ -44,66 +44,26 @@ use crate::domain::{Protocol, TradeDirection};
 /// by token A or token B depending on `fee_token_is_a` (which itself is a
 /// function of the pool's `collect_fee_mode` and the swap's direction).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SwapEvent {
-    // ── Identification ──────────────────────────────────────────────────────
-    /// On-chain address of the AMM pool.
+pub struct MeteoraDammV2SwapEvent {
     pub pool_address: Pubkey,
-
-    /// Protocol that emitted this swap.
-    pub protocol: Protocol,
-
-    /// Transaction signature, base58-encoded.
     pub signature: Signature,
-
-    /// Block timestamp at which the transaction was confirmed.
     pub timestamp: DateTime<Utc>,
-
-    // ── Pool tokens (canonical order) ───────────────────────────────────────
-    /// Mint of token A in the canonical ordering — see struct-level docs.
     pub token_a_mint: Pubkey,
-
-    /// Mint of token B in the canonical ordering — see struct-level docs.
     pub token_b_mint: Pubkey,
-
-    // ── Trade direction and amounts ─────────────────────────────────────────
-    /// Direction of the swap relative to the canonical mint ordering.
     pub trade_direction: TradeDirection,
-
-    /// Amount that moved on the token A side (in or out depending on direction).
     pub amount_a: u64,
-
-    /// Amount that moved on the token B side (in or out depending on direction).
     pub amount_b: u64,
-
-    // ── Post-swap pool state (canonical order) ──────────────────────────────
-    /// Pool's accounting reserve of token A immediately after the swap.
     pub reserve_a_after: u64,
-
-    /// Pool's accounting reserve of token B immediately after the swap.
     pub reserve_b_after: u64,
-
-    /// Pool's `sqrt_price` after the swap, as a Q64.64 fixed-point integer.
-    /// Useful for high-precision price calculations.
     pub next_sqrt_price: u128,
-
-    // ── Fee breakdown ───────────────────────────────────────────────────────
-    /// Portion of the fee claimable by LPs (per-position fees).
     pub claiming_fee: u64,
-
-    /// Portion of the fee collected by the protocol (Meteora treasury).
     pub protocol_fee: u64,
-
-    /// Portion of the fee re-added to pool liquidity (compounding mode only).
     pub compounding_fee: u64,
-
-    /// Portion of the fee paid to a referrer (zero unless the swap had one).
     pub referral_fee: u64,
-
-    /// Whether the fee was charged in token A (`true`) or token B (`false`).
     pub fee_token_is_a: bool,
 }
 
-impl SwapEvent {
+impl MeteoraDammV2SwapEvent {
     /// Convenience: total fee charged on this swap, in the unit of whichever
     /// token bore the fee (see `fee_token_is_a`).
     pub fn fee_total(&self) -> u64 {

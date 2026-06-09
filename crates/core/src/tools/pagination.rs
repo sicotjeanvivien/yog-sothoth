@@ -43,8 +43,8 @@ pub struct Page<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cursor {
     Pool(crate::domain::PoolCursor),
-    Swap(crate::domain::SwapCursor),
-    Liquidity(crate::domain::LiquidityCursor),
+    Swap(crate::domain::MeteoraDammV2SwapCursor),
+    Liquidity(crate::domain::MeteoraDammV2LiquidityEventCursor),
 }
 
 impl<T> Page<T> {

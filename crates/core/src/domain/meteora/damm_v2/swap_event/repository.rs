@@ -3,28 +3,32 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
+use crate::RepositoryResult;
+use crate::domain::MeteoraDammV2SwapEvent;
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition};
-use crate::{RepositoryResult, domain::LiquidityEvent};
 
-/// Cursor identifying a position in the canonical liquidity-event
-/// ordering (`timestamp DESC`, `signature ASC` as tiebreaker).
+/// Cursor identifying a position in the canonical swap-event ordering
+/// (`timestamp DESC`, `signature ASC` as tiebreaker).
+///
+/// A cursor points to the *last item of the current page*; the next
+/// page contains items strictly after this position in the ordering.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiquidityCursor {
+pub struct MeteoraDammV2SwapCursor {
     pub timestamp: DateTime<Utc>,
     pub signature: Signature,
 }
 
-/// Persistence contract for liquidity events.
+/// Persistence contract for swap events.
 #[async_trait]
-pub trait LiquidityEventRepository: Send + Sync {
+pub trait MeteoraDammV2SwapEventRepository: Send + Sync {
     // ---- Write-side (indexer) -------------------------------------------
 
-    async fn insert(&self, event: &LiquidityEvent) -> RepositoryResult<()>;
+    async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<()>;
 
     // ---- Read-side (api) ------------------------------------------------
 
-    /// Paginate liquidity events for a given pool, ordered by
+    /// Paginate swap events for a given pool, ordered by
     /// `timestamp DESC`, `signature ASC` as tiebreaker.
     ///
     /// `cursor` is `None` for the first page; for subsequent pages,
@@ -34,9 +38,9 @@ pub trait LiquidityEventRepository: Send + Sync {
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
-        cursor: Option<LiquidityCursor>,
+        cursor: Option<MeteoraDammV2SwapCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
         limit: i64,
-    ) -> RepositoryResult<Page<LiquidityEvent>>;
+    ) -> RepositoryResult<Page<MeteoraDammV2SwapEvent>>;
 }

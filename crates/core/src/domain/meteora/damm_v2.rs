@@ -1,0 +1,71 @@
+mod claim_position_fee_event;
+mod claim_reward_event;
+mod liquidity_event;
+mod swap_event;
+
+use chrono::{DateTime, Utc};
+use solana_pubkey::Pubkey;
+use solana_signature::Signature;
+
+pub use claim_position_fee_event::{
+    MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
+};
+pub use claim_reward_event::{
+    MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
+};
+pub use liquidity_event::{
+    MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
+    MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
+};
+pub use swap_event::{
+    MeteoraDammV2SwapCursor, MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository,
+};
+
+/// Every kind of event the Meteora DAMM v2 extractor can produce, grouped
+/// under a single sub-enum so [`crate::domain::DomainEvent`] can dispatch
+/// at the protocol level first.
+#[derive(Debug, Clone)]
+pub enum MeteoraDammV2Event {
+    Swap(MeteoraDammV2SwapEvent),
+    Liquidity(MeteoraDammV2LiquidityEvent),
+    ClaimPositionFee(MeteoraDammV2ClaimPositionFeeEvent),
+    ClaimReward(MeteoraDammV2ClaimRewardEvent),
+}
+
+impl MeteoraDammV2Event {
+    pub fn pool_address(&self) -> Pubkey {
+        match self {
+            Self::Swap(e) => e.pool_address,
+            Self::Liquidity(e) => e.pool_address,
+            Self::ClaimPositionFee(e) => e.pool_address,
+            Self::ClaimReward(e) => e.pool_address,
+        }
+    }
+
+    pub fn signature(&self) -> Signature {
+        match self {
+            Self::Swap(e) => e.signature,
+            Self::Liquidity(e) => e.signature,
+            Self::ClaimPositionFee(e) => e.signature,
+            Self::ClaimReward(e) => e.signature,
+        }
+    }
+
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        match self {
+            Self::Swap(e) => e.timestamp,
+            Self::Liquidity(e) => e.timestamp,
+            Self::ClaimPositionFee(e) => e.timestamp,
+            Self::ClaimReward(e) => e.timestamp,
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Swap(_) => "swap",
+            Self::Liquidity(_) => "liquidity",
+            Self::ClaimPositionFee(_) => "claim_position_fee",
+            Self::ClaimReward(_) => "claim_reward",
+        }
+    }
+}

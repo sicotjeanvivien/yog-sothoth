@@ -5,29 +5,26 @@ use solana_signature::Signature;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition};
-use crate::{RepositoryResult, domain::SwapEvent};
+use crate::{RepositoryResult, domain::MeteoraDammV2LiquidityEvent};
 
-/// Cursor identifying a position in the canonical swap-event ordering
-/// (`timestamp DESC`, `signature ASC` as tiebreaker).
-///
-/// A cursor points to the *last item of the current page*; the next
-/// page contains items strictly after this position in the ordering.
+/// Cursor identifying a position in the canonical liquidity-event
+/// ordering (`timestamp DESC`, `signature ASC` as tiebreaker).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SwapCursor {
+pub struct MeteoraDammV2LiquidityEventCursor {
     pub timestamp: DateTime<Utc>,
     pub signature: Signature,
 }
 
-/// Persistence contract for swap events.
+/// Persistence contract for liquidity events.
 #[async_trait]
-pub trait SwapEventRepository: Send + Sync {
+pub trait MeteoraDammV2LiquidityEventRepository: Send + Sync {
     // ---- Write-side (indexer) -------------------------------------------
 
-    async fn insert(&self, event: &SwapEvent) -> RepositoryResult<()>;
+    async fn insert(&self, event: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()>;
 
     // ---- Read-side (api) ------------------------------------------------
 
-    /// Paginate swap events for a given pool, ordered by
+    /// Paginate liquidity events for a given pool, ordered by
     /// `timestamp DESC`, `signature ASC` as tiebreaker.
     ///
     /// `cursor` is `None` for the first page; for subsequent pages,
@@ -37,9 +34,9 @@ pub trait SwapEventRepository: Send + Sync {
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
-        cursor: Option<SwapCursor>,
+        cursor: Option<MeteoraDammV2LiquidityEventCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
         limit: i64,
-    ) -> RepositoryResult<Page<SwapEvent>>;
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>>;
 }

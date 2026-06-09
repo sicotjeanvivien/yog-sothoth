@@ -23,8 +23,9 @@ use std::str::FromStr;
 
 use crate::{
     domain::{
-        ClaimPositionFeeEvent, ClaimRewardEvent, LiquidityEvent, LiquidityEventKind, Protocol,
-        SwapEvent, TradeDirection,
+        MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimRewardEvent,
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SwapEvent,
+        TradeDirection,
     },
     error::TranslationError,
 };
@@ -49,13 +50,13 @@ pub(super) struct EventContext {
 // Per-variant translators (option C)
 // ---------------------------------------------------------------------------
 
-/// Translate an [`EvtSwap2`] into a [`SwapEvent`].
+/// Translate an [`EvtSwap2`] into a [`MeteoraDammV2SwapEvent`].
 ///
 /// Returns `Err` only if `trade_direction` is invalid (out of range).
 pub(super) fn translate_swap(
     wire: &EvtSwap2,
     ctx: &EventContext,
-) -> Result<SwapEvent, TranslationError> {
+) -> Result<MeteoraDammV2SwapEvent, TranslationError> {
     let trade_direction = TradeDirection::from_u8(wire.trade_direction).map_err(|raw| {
         TranslationError::InvalidEnum {
             field: "trade_direction",
@@ -86,9 +87,8 @@ pub(super) fn translate_swap(
             wire.included_transfer_fee_amount_in,
         ),
     };
-    Ok(SwapEvent {
+    Ok(MeteoraDammV2SwapEvent {
         pool_address: wire.pool,
-        protocol: Protocol::MeteoraDammV2,
         signature: ctx.signature,
         timestamp: ctx.timestamp,
 
@@ -111,21 +111,21 @@ pub(super) fn translate_swap(
     })
 }
 
-/// Translate an [`EvtLiquidityChange`] into a [`LiquidityEvent`].
+/// Translate an [`EvtLiquidityChange`] into a [`MeteoraDammV2LiquidityEvent`].
 pub(super) fn translate_liquidity(
     wire: &EvtLiquidityChange,
     ctx: &EventContext,
-) -> Result<LiquidityEvent, TranslationError> {
-    let liquidity_event_kind = LiquidityEventKind::from_u8(wire.change_type).map_err(|raw| {
-        TranslationError::InvalidEnum {
-            field: "change_type",
-            value: raw,
-        }
-    })?;
+) -> Result<MeteoraDammV2LiquidityEvent, TranslationError> {
+    let liquidity_event_kind =
+        MeteoraDammV2LiquidityEventKind::from_u8(wire.change_type).map_err(|raw| {
+            TranslationError::InvalidEnum {
+                field: "change_type",
+                value: raw,
+            }
+        })?;
 
-    Ok(LiquidityEvent {
+    Ok(MeteoraDammV2LiquidityEvent {
         pool_address: wire.pool,
-        protocol: Protocol::MeteoraDammV2,
         signature: ctx.signature,
         timestamp: ctx.timestamp,
 
@@ -145,17 +145,16 @@ pub(super) fn translate_liquidity(
     })
 }
 
-/// Translate an [`EvtClaimPositionFee`] into a [`ClaimPositionFeeEvent`].
+/// Translate an [`EvtClaimPositionFee`] into a [`MeteoraDammV2ClaimPositionFeeEvent`].
 ///
 /// This translation is infallible — every field maps directly.
 pub(super) fn translate_claim_position_fee(
     wire: &EvtClaimPositionFee,
     signature: Signature,
     timestamp: DateTime<Utc>,
-) -> ClaimPositionFeeEvent {
-    ClaimPositionFeeEvent {
+) -> MeteoraDammV2ClaimPositionFeeEvent {
+    MeteoraDammV2ClaimPositionFeeEvent {
         pool_address: wire.pool,
-        protocol: Protocol::MeteoraDammV2,
         signature,
         timestamp,
         position: wire.position,
@@ -165,17 +164,16 @@ pub(super) fn translate_claim_position_fee(
     }
 }
 
-/// Translate an [`EvtClaimReward`] into a [`ClaimRewardEvent`].
+/// Translate an [`EvtClaimReward`] into a [`MeteoraDammV2ClaimRewardEvent`].
 ///
 /// This translation is infallible — every field maps directly.
 pub(super) fn translate_claim_reward(
     wire: &EvtClaimReward,
     signature: Signature,
     timestamp: DateTime<Utc>,
-) -> ClaimRewardEvent {
-    ClaimRewardEvent {
+) -> MeteoraDammV2ClaimRewardEvent {
+    MeteoraDammV2ClaimRewardEvent {
         pool_address: wire.pool,
-        protocol: Protocol::MeteoraDammV2,
         signature,
         timestamp,
         position: wire.position,
@@ -362,8 +360,9 @@ pub(super) fn translate_wire_event(
     timestamp: DateTime<Utc>,
 ) -> Result<crate::domain::DomainEvent, TranslationError> {
     use crate::domain::DomainEvent;
+    use crate::domain::MeteoraDammV2Event;
 
-    match wire {
+    let damm_v2_event = match wire {
         DammV2WireEvent::Swap2(e) => {
             let (token_a_mint, token_b_mint) = extract_mint_pair_from_refs(transfer_checked_group)?;
             let ctx = EventContext {
@@ -372,7 +371,7 @@ pub(super) fn translate_wire_event(
                 signature,
                 timestamp,
             };
-            translate_swap(e, &ctx).map(DomainEvent::Swap)
+            MeteoraDammV2Event::Swap(translate_swap(e, &ctx)?)
         }
         DammV2WireEvent::LiquidityChange(e) => {
             let (token_a_mint, token_b_mint) = extract_mint_pair_from_refs(transfer_checked_group)?;
@@ -382,15 +381,17 @@ pub(super) fn translate_wire_event(
                 signature,
                 timestamp,
             };
-            translate_liquidity(e, &ctx).map(DomainEvent::Liquidity)
+            MeteoraDammV2Event::Liquidity(translate_liquidity(e, &ctx)?)
         }
-        DammV2WireEvent::ClaimPositionFee(e) => Ok(DomainEvent::ClaimPositionFee(
+        DammV2WireEvent::ClaimPositionFee(e) => MeteoraDammV2Event::ClaimPositionFee(
             translate_claim_position_fee(e, signature, timestamp),
-        )),
-        DammV2WireEvent::ClaimReward(e) => Ok(DomainEvent::ClaimReward(translate_claim_reward(
-            e, signature, timestamp,
-        ))),
-    }
+        ),
+        DammV2WireEvent::ClaimReward(e) => {
+            MeteoraDammV2Event::ClaimReward(translate_claim_reward(e, signature, timestamp))
+        }
+    };
+
+    Ok(DomainEvent::MeteoraDammV2(damm_v2_event))
 }
 
 /// Adapter: extract the mint pair from a slice of `&UiInstruction`s

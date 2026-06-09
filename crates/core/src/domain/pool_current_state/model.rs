@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-use crate::domain::{LiquidityEventKind, Protocol};
+use crate::domain::{MeteoraDammV2LiquidityEventKind, Protocol};
 
 /// Kind of the most recent event that touched a pool.
 ///
@@ -56,14 +56,14 @@ impl std::fmt::Display for LastEventKind {
 
 /// Bridge from the liquidity-event domain enum to the projection event kind.
 ///
-/// Lives here rather than on `LiquidityEventKind` to keep the latter unaware
+/// Lives here rather than on `MeteoraDammV2LiquidityEventKind` to keep the latter unaware
 /// of the projection: the projection depends on the event domain, not the
 /// other way around.
-impl From<LiquidityEventKind> for LastEventKind {
-    fn from(kind: LiquidityEventKind) -> Self {
+impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
+    fn from(kind: MeteoraDammV2LiquidityEventKind) -> Self {
         match kind {
-            LiquidityEventKind::Add => LastEventKind::LiquidityAdd,
-            LiquidityEventKind::Remove => LastEventKind::LiquidityRemove,
+            MeteoraDammV2LiquidityEventKind::Add => LastEventKind::LiquidityAdd,
+            MeteoraDammV2LiquidityEventKind::Remove => LastEventKind::LiquidityRemove,
         }
     }
 }
@@ -157,7 +157,7 @@ impl PoolCurrentStateUpsert {
     /// Build an upsert payload from a liquidity event.
     ///
     /// `kind` is the domain enum; its mapping to the projection event kind
-    /// goes through the [`From<LiquidityEventKind> for LastEventKind`] impl
+    /// goes through the [`From<MeteoraDammV2LiquidityEventKind> for LastEventKind`] impl
     /// defined above so add/remove sourcing stays in one place.
     // 8 fields, each is a meaningful constructor argument — collapsing
     // them into a struct would just push the same arity one level up.
@@ -167,7 +167,7 @@ impl PoolCurrentStateUpsert {
         protocol: Protocol,
         event_at: DateTime<Utc>,
         signature: Signature,
-        kind: LiquidityEventKind,
+        kind: MeteoraDammV2LiquidityEventKind,
         reserve_a: u64,
         reserve_b: u64,
         liquidity: u128,
@@ -218,11 +218,11 @@ mod tests {
     #[test]
     fn last_event_kind_from_liquidity_event_kind() {
         assert_eq!(
-            LastEventKind::from(LiquidityEventKind::Add),
+            LastEventKind::from(MeteoraDammV2LiquidityEventKind::Add),
             LastEventKind::LiquidityAdd
         );
         assert_eq!(
-            LastEventKind::from(LiquidityEventKind::Remove),
+            LastEventKind::from(MeteoraDammV2LiquidityEventKind::Remove),
             LastEventKind::LiquidityRemove
         );
     }
@@ -252,7 +252,7 @@ mod tests {
             Protocol::MeteoraDammV2,
             now,
             sig(1),
-            LiquidityEventKind::Add,
+            MeteoraDammV2LiquidityEventKind::Add,
             100,
             200,
             42,
@@ -262,7 +262,7 @@ mod tests {
             Protocol::MeteoraDammV2,
             now,
             sig(1),
-            LiquidityEventKind::Remove,
+            MeteoraDammV2LiquidityEventKind::Remove,
             100,
             200,
             42,
