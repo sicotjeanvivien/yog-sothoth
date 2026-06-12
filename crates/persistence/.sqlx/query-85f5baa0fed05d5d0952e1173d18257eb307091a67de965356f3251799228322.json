@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_close_position_events (\n                pool_address, signature,\n                owner, position, position_nft_mint,\n                timestamp\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (signature, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "85f5baa0fed05d5d0952e1173d18257eb307091a67de965356f3251799228322"
+}

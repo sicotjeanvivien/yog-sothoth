@@ -40,6 +40,7 @@
 //! - [`EvtClaimPositionFee`] — LP claims accumulated trading fees
 //! - [`EvtClaimReward`] — LP claims farming rewards
 //! - [`EvtCreatePosition`] — LP opens a new (empty) position
+//! - [`EvtClosePosition`] — LP closes a position
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
@@ -90,6 +91,11 @@ pub fn discriminator_claim_reward() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtCreatePosition`].
 pub fn discriminator_create_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtCreatePosition")
+}
+
+/// Discriminator for [`EvtClosePosition`].
+pub fn discriminator_close_position() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtClosePosition")
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +247,19 @@ pub struct EvtCreatePosition {
     pub position_nft_mint: Pubkey,
 }
 
+/// Mirror of `cp-amm::EvtClosePosition`.
+///
+/// Emitted when an LP closes a position and the position account is torn
+/// down on-chain. Same field shape as [`EvtCreatePosition`]; any remaining
+/// liquidity/fees are withdrawn through separate events prior to closing.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtClosePosition {
+    pub pool: Pubkey,
+    pub owner: Pubkey,
+    pub position: Pubkey,
+    pub position_nft_mint: Pubkey,
+}
+
 // ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
@@ -255,6 +274,7 @@ pub enum DammV2WireEvent {
     ClaimPositionFee(EvtClaimPositionFee),
     ClaimReward(EvtClaimReward),
     CreatePosition(EvtCreatePosition),
+    ClosePosition(EvtClosePosition),
 }
 
 impl DammV2WireEvent {
@@ -267,6 +287,7 @@ impl DammV2WireEvent {
             Self::ClaimPositionFee(e) => e.pool,
             Self::ClaimReward(e) => e.pool,
             Self::CreatePosition(e) => e.pool,
+            Self::ClosePosition(e) => e.pool,
         }
     }
 }
@@ -287,6 +308,7 @@ mod tests {
         assert_eq!(discriminator_claim_position_fee().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_claim_reward().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_create_position().len(), DISCRIMINATOR_LEN);
+        assert_eq!(discriminator_close_position().len(), DISCRIMINATOR_LEN);
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -300,6 +322,7 @@ mod tests {
             discriminator_claim_position_fee(),
             discriminator_claim_reward(),
             discriminator_create_position(),
+            discriminator_close_position(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

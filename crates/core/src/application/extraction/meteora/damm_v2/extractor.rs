@@ -35,9 +35,10 @@ use crate::{
 };
 
 use super::events::{
-    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtCreatePosition, EvtLiquidityChange,
-    EvtSwap2, discriminator_claim_position_fee, discriminator_claim_reward,
-    discriminator_create_position, discriminator_liquidity_change, discriminator_swap2,
+    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
+    EvtLiquidityChange, EvtSwap2, discriminator_claim_position_fee, discriminator_claim_reward,
+    discriminator_close_position, discriminator_create_position, discriminator_liquidity_change,
+    discriminator_swap2,
 };
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,7 @@ pub fn extract_wire_events(
         claim_pos_fee: discriminator_claim_position_fee(),
         claim_reward: discriminator_claim_reward(),
         create_position: discriminator_create_position(),
+        close_position: discriminator_close_position(),
     };
     let mut out = ExtractedEvents::default();
 
@@ -173,6 +175,7 @@ struct KnownDiscriminators {
     claim_pos_fee: [u8; DISCRIMINATOR_LEN],
     claim_reward: [u8; DISCRIMINATOR_LEN],
     create_position: [u8; DISCRIMINATOR_LEN],
+    close_position: [u8; DISCRIMINATOR_LEN],
 }
 
 /// Outcome of dispatching a single decoded event by its discriminator.
@@ -219,6 +222,13 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
             .map(|e| Dispatch::Recognized(DammV2WireEvent::CreatePosition(e)))
             .unwrap_or_else(|reason| Dispatch::BorshFailed {
                 event_name: "EvtCreatePosition",
+                reason,
+            })
+    } else if disc == &known.close_position {
+        deserialize::<EvtClosePosition>(body, "EvtClosePosition")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::ClosePosition(e)))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtClosePosition",
                 reason,
             })
     } else {

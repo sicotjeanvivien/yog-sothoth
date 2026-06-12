@@ -1,5 +1,6 @@
 mod claim_position_fee_event;
 mod claim_reward_event;
+mod close_position_event;
 mod create_position_event;
 mod liquidity_event;
 mod swap_event;
@@ -13,6 +14,9 @@ pub use claim_position_fee_event::{
 };
 pub use claim_reward_event::{
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
+};
+pub use close_position_event::{
+    MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
 };
 pub use create_position_event::{
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
@@ -35,6 +39,7 @@ pub enum MeteoraDammV2Event {
     ClaimPositionFee(MeteoraDammV2ClaimPositionFeeEvent),
     ClaimReward(MeteoraDammV2ClaimRewardEvent),
     CreatePosition(MeteoraDammV2CreatePositionEvent),
+    ClosePosition(MeteoraDammV2ClosePositionEvent),
 }
 
 impl MeteoraDammV2Event {
@@ -45,6 +50,7 @@ impl MeteoraDammV2Event {
             Self::ClaimPositionFee(e) => e.pool_address,
             Self::ClaimReward(e) => e.pool_address,
             Self::CreatePosition(e) => e.pool_address,
+            Self::ClosePosition(e) => e.pool_address,
         }
     }
 
@@ -55,6 +61,7 @@ impl MeteoraDammV2Event {
             Self::ClaimPositionFee(e) => e.signature,
             Self::ClaimReward(e) => e.signature,
             Self::CreatePosition(e) => e.signature,
+            Self::ClosePosition(e) => e.signature,
         }
     }
 
@@ -65,6 +72,7 @@ impl MeteoraDammV2Event {
             Self::ClaimPositionFee(e) => e.timestamp,
             Self::ClaimReward(e) => e.timestamp,
             Self::CreatePosition(e) => e.timestamp,
+            Self::ClosePosition(e) => e.timestamp,
         }
     }
 
@@ -75,6 +83,7 @@ impl MeteoraDammV2Event {
             Self::ClaimPositionFee(_) => "claim_position_fee",
             Self::ClaimReward(_) => "claim_reward",
             Self::CreatePosition(_) => "create_position",
+            Self::ClosePosition(_) => "close_position",
         }
     }
 }

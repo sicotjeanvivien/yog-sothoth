@@ -24,15 +24,16 @@ use std::str::FromStr;
 use crate::{
     domain::{
         MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimRewardEvent,
-        MeteoraDammV2CreatePositionEvent, MeteoraDammV2LiquidityEvent,
-        MeteoraDammV2LiquidityEventKind, MeteoraDammV2SwapEvent, TradeDirection,
+        MeteoraDammV2ClosePositionEvent, MeteoraDammV2CreatePositionEvent,
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SwapEvent,
+        TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
-    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtCreatePosition, EvtLiquidityChange,
-    EvtSwap2,
+    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
+    EvtLiquidityChange, EvtSwap2,
 };
 
 /// Per-event context required to fully translate Swap2 and LiquidityChange.
@@ -196,6 +197,24 @@ pub(super) fn translate_create_position(
     timestamp: DateTime<Utc>,
 ) -> MeteoraDammV2CreatePositionEvent {
     MeteoraDammV2CreatePositionEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        owner: wire.owner,
+        position: wire.position,
+        position_nft_mint: wire.position_nft_mint,
+    }
+}
+
+/// Translate an [`EvtClosePosition`] into a [`MeteoraDammV2ClosePositionEvent`].
+///
+/// Infallible — self-contained wire event, no transferChecked context needed.
+pub(super) fn translate_close_position(
+    wire: &EvtClosePosition,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2ClosePositionEvent {
+    MeteoraDammV2ClosePositionEvent {
         pool_address: wire.pool,
         signature,
         timestamp,
@@ -412,6 +431,9 @@ pub(super) fn translate_wire_event(
         }
         DammV2WireEvent::CreatePosition(e) => {
             MeteoraDammV2Event::CreatePosition(translate_create_position(e, signature, timestamp))
+        }
+        DammV2WireEvent::ClosePosition(e) => {
+            MeteoraDammV2Event::ClosePosition(translate_close_position(e, signature, timestamp))
         }
     };
 

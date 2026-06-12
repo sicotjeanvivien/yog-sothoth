@@ -24,10 +24,10 @@ use tracing::info;
 use yog_core::application::extraction::ExtrationDispacher;
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
-    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
-    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
-    PgNetworkStatusRepository, PgPoolCurrentStateRepository, PgPoolRepository,
-    PgWatchedPoolRepository,
+    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
+    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2SwapEventRepository, PgNetworkStatusRepository, PgPoolCurrentStateRepository,
+    PgPoolRepository, PgWatchedPoolRepository,
 };
 
 /// Top-level process — owns all runtime dependencies and drives the
@@ -200,6 +200,9 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
     let pg_damm_v2_create_position_repo = Arc::new(
         PgMeteoraDammV2CreatePositionEventRepository::new(database.pool().clone()),
     );
+    let pg_damm_v2_close_position_repo = Arc::new(
+        PgMeteoraDammV2ClosePositionEventRepository::new(database.pool().clone()),
+    );
 
     let meteora_damm_v2 = Arc::new(MeteoraDammV2EventPersistor::new(
         pg_damm_v2_swap_repo,
@@ -207,6 +210,7 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         pg_damm_v2_claim_position_fee_repo,
         pg_damm_v2_claim_reward_repo,
         pg_damm_v2_create_position_repo,
+        pg_damm_v2_close_position_repo,
         Arc::clone(&pool_maintenance),
     ));
 

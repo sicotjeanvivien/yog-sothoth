@@ -1,9 +1,11 @@
+mod close_position;
 mod create_position;
 mod liquidity_event;
 mod position_fee_claim;
 mod reward_claim;
 mod swap_event;
 
+pub use close_position::PgMeteoraDammV2ClosePositionEventRepository;
 pub use create_position::PgMeteoraDammV2CreatePositionEventRepository;
 pub use liquidity_event::PgMeteoraDammV2LiquidityEventRepository;
 pub use position_fee_claim::PgMeteoraDammV2ClaimPositionFeeEventRepository;

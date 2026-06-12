@@ -11,6 +11,7 @@ use tracing::{error, warn};
 use yog_core::domain::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
+    MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
     MeteoraDammV2Event, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, Protocol,
@@ -24,6 +25,7 @@ pub(crate) struct MeteoraDammV2EventPersistor {
     claim_position_fee_repo: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
     claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
     create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
+    close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
     pool_maintenance: Arc<PoolMaintenance>,
 }
 
@@ -36,6 +38,7 @@ impl MeteoraDammV2EventPersistor {
         claim_position_fee_repo: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
         claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
         create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
+        close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
         pool_maintenance: Arc<PoolMaintenance>,
     ) -> Self {
         Self {
@@ -44,6 +47,7 @@ impl MeteoraDammV2EventPersistor {
             claim_position_fee_repo,
             claim_reward_repo,
             create_position_repo,
+            close_position_repo,
             pool_maintenance,
         }
     }
@@ -62,6 +66,7 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::ClaimPositionFee(e) => self.persist_claim_position_fee(e).await,
             MeteoraDammV2Event::ClaimReward(e) => self.persist_claim_reward(e).await,
             MeteoraDammV2Event::CreatePosition(e) => self.persist_create_position(e).await,
+            MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -172,6 +177,21 @@ impl MeteoraDammV2EventPersistor {
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
         self.create_position_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Same recipe as create-position: no mints/reserves, so just refresh the
+    /// pool's last-seen marker and record the event.
+    async fn persist_close_position(
+        &self,
+        event: &MeteoraDammV2ClosePositionEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.close_position_repo
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

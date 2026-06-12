@@ -13,8 +13,8 @@ mod watched_pool;
 pub use event_freshness::PgEventFreshnessRepository;
 pub use meteora::{
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2LiquidityEventRepository,
-    PgMeteoraDammV2SwapEventRepository,
+    PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
+    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
 };
 pub use network_status::PgNetworkStatusRepository;
 pub use pool::PgPoolRepository;
