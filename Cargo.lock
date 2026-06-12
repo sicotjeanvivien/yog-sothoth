@@ -6164,6 +6164,7 @@ dependencies = [
  "solana-pubsub-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
+ "solana-signature",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",

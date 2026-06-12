@@ -36,3 +36,7 @@ async-trait = { workspace = true }
 
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
+
+[dev-dependencies]
+# Construct dummy Signatures in the event-persistor dispatch tests.
+solana-signature = { workspace = true }
