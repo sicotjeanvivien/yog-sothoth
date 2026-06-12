@@ -15,7 +15,10 @@ use std::path::PathBuf;
 use yog_core::{
     application::extraction::{
         EventExtractor, MeteoraDammV2,
-        meteora::damm_v2::{events::DammV2WireEvent, extractor::extract_wire_events},
+        meteora::damm_v2::{
+            events::DammV2WireEvent,
+            extractor::{ExtractFailure, extract_wire_events},
+        },
     },
     domain::{DomainEvent, MeteoraDammV2Event},
 };
@@ -356,6 +359,185 @@ fn decodes_create_position_from_genesis_fixtures() {
         assert_eq!(domain.position, position);
         assert_eq!(domain.position_nft_mint, nft);
     }
+}
+
+/// `EvtClosePosition` — same 4-pubkey shape as create. Validate against a real
+/// close transaction: clean decode, sane distinct fields, translation preserved.
+#[test]
+fn decodes_close_position_fixture() {
+    let tx = load_fixture("damm_v2_close_position.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(extracted.failures.is_empty(), "{:?}", extracted.failures);
+
+    let close = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::ClosePosition(e) => Some(e),
+            _ => None,
+        })
+        .expect("no ClosePosition event");
+
+    assert_ne!(close.pool, Pubkey::default());
+    assert_ne!(close.owner, Pubkey::default());
+    assert_ne!(close.position, Pubkey::default());
+    assert_ne!(close.position_nft_mint, Pubkey::default());
+    assert_ne!(close.position, close.position_nft_mint);
+
+    let (pool, owner, position, nft) = (
+        close.pool,
+        close.owner,
+        close.position,
+        close.position_nft_mint,
+    );
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let domain = outcome
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::ClosePosition(e)) => Some(e),
+            _ => None,
+        })
+        .expect("no ClosePosition domain event");
+    assert_eq!(domain.pool_address, pool);
+    assert_eq!(domain.owner, owner);
+    assert_eq!(domain.position, position);
+    assert_eq!(domain.position_nft_mint, nft);
+}
+
+/// `EvtLockPosition` — non-trivial layout (4 pubkeys + u64×2 + u128×2 + u16).
+/// A layout drift would scramble the pubkeys or fail borsh; the vesting
+/// numerics are checked for coherence and round-tripped through the domain.
+#[test]
+fn decodes_lock_position_fixture() {
+    let tx = load_fixture("damm_v2_lock_position.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(extracted.failures.is_empty(), "{:?}", extracted.failures);
+
+    let lock = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::LockPosition(e) => Some(e),
+            _ => None,
+        })
+        .expect("no LockPosition event");
+
+    for (p, name) in [
+        (lock.pool, "pool"),
+        (lock.position, "position"),
+        (lock.owner, "owner"),
+        (lock.vesting, "vesting"),
+    ] {
+        assert_ne!(p, Pubkey::default(), "{name} is all-zero — layout drift");
+    }
+    // A lock must immobilise some liquidity, either fully at the cliff
+    // (number_of_period == 0, a valid cliff-only lock) or spread over periods.
+    // Garbage from a misaligned u128 region would not satisfy this.
+    assert!(
+        lock.cliff_unlock_liquidity > 0 || lock.liquidity_per_period > 0,
+        "no liquidity locked across cliff or periods"
+    );
+
+    let snapshot = (
+        lock.pool,
+        lock.position,
+        lock.owner,
+        lock.vesting,
+        lock.cliff_point,
+        lock.period_frequency,
+        lock.cliff_unlock_liquidity,
+        lock.liquidity_per_period,
+        lock.number_of_period,
+    );
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let d = outcome
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::LockPosition(e)) => Some(e),
+            _ => None,
+        })
+        .expect("no LockPosition domain event");
+    assert_eq!(
+        snapshot,
+        (
+            d.pool_address,
+            d.position,
+            d.owner,
+            d.vesting,
+            d.cliff_point,
+            d.period_frequency,
+            d.cliff_unlock_liquidity,
+            d.liquidity_per_period,
+            d.number_of_period,
+        )
+    );
+}
+
+/// `EvtPermanentLockPosition` — pubkey×2 + u128×2. The running total must be
+/// at least the amount locked by this action: a structural invariant that a
+/// scrambled layout would almost certainly violate.
+#[test]
+fn decodes_permanent_lock_position_fixture() {
+    let tx = load_fixture("damm_v2_permanent_lock_position.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    // This tx also contains an 8-byte tag-only cp-amm self-CPI that trips the
+    // anchor decoder (a benign, pre-existing skip-and-log case). Tolerate that
+    // AnchorDecode failure, but a Borsh failure would mean a *recognized* event
+    // decoded wrong — that must not happen.
+    assert!(
+        !extracted
+            .failures
+            .iter()
+            .any(|f| matches!(f, ExtractFailure::Borsh { .. })),
+        "unexpected Borsh failures: {:?}",
+        extracted.failures
+    );
+
+    let plock = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::PermanentLockPosition(e) => Some(e),
+            _ => None,
+        })
+        .expect("no PermanentLockPosition event");
+
+    assert_ne!(plock.pool, Pubkey::default());
+    assert_ne!(plock.position, Pubkey::default());
+    assert!(plock.lock_liquidity_amount > 0, "nothing locked");
+    assert!(
+        plock.total_permanent_locked_liquidity >= plock.lock_liquidity_amount,
+        "running total ({}) < this lock ({}) — layout drift",
+        plock.total_permanent_locked_liquidity,
+        plock.lock_liquidity_amount
+    );
+
+    let snapshot = (
+        plock.pool,
+        plock.position,
+        plock.lock_liquidity_amount,
+        plock.total_permanent_locked_liquidity,
+    );
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let d = outcome
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::PermanentLockPosition(e)) => Some(e),
+            _ => None,
+        })
+        .expect("no PermanentLockPosition domain event");
+    assert_eq!(
+        snapshot,
+        (
+            d.pool_address,
+            d.position,
+            d.lock_liquidity_amount,
+            d.total_permanent_locked_liquidity,
+        )
+    );
 }
 
 /// Guard for the `EvtUpdatePoolFees` decode. Its `BorshDeserialize` is custom:
