@@ -595,6 +595,94 @@ fn decodes_permanent_lock_position_fixture() {
     );
 }
 
+/// `EvtClaimPositionFee` — validate against a real claim: clean decode, sane
+/// pubkeys, and a full wire→domain translation preserving every field.
+#[test]
+fn decodes_claim_position_fee_fixture() {
+    let tx = load_fixture("damm_v2_claim_position_fee.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(
+        !extracted
+            .failures
+            .iter()
+            .any(|f| matches!(f, ExtractFailure::Borsh { .. })),
+        "unexpected Borsh failures: {:?}",
+        extracted.failures
+    );
+
+    let claim = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::ClaimPositionFee(e) => Some(e),
+            _ => None,
+        })
+        .expect("no ClaimPositionFee event");
+    assert_ne!(claim.pool, Pubkey::default());
+    assert_ne!(claim.position, Pubkey::default());
+    assert_ne!(claim.owner, Pubkey::default());
+
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let d = outcome
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::ClaimPositionFee(e)) => Some(e),
+            _ => None,
+        })
+        .expect("no ClaimPositionFee domain event");
+    assert_eq!(d.pool_address, claim.pool);
+    assert_eq!(d.position, claim.position);
+    assert_eq!(d.owner, claim.owner);
+    assert_eq!(d.fee_a_claimed, claim.fee_a_claimed);
+    assert_eq!(d.fee_b_claimed, claim.fee_b_claimed);
+}
+
+/// `EvtClaimReward` — same shape of guard: decode + field-preserving translation
+/// on a real reward claim. `reward_index` disambiguates the reward stream.
+#[test]
+fn decodes_claim_reward_fixture() {
+    let tx = load_fixture("damm_v2_claim_reward.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(
+        !extracted
+            .failures
+            .iter()
+            .any(|f| matches!(f, ExtractFailure::Borsh { .. })),
+        "unexpected Borsh failures: {:?}",
+        extracted.failures
+    );
+
+    let claim = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::ClaimReward(e) => Some(e),
+            _ => None,
+        })
+        .expect("no ClaimReward event");
+    assert_ne!(claim.pool, Pubkey::default());
+    assert_ne!(claim.position, Pubkey::default());
+    assert_ne!(claim.owner, Pubkey::default());
+    assert_ne!(claim.mint_reward, Pubkey::default());
+
+    let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+    let d = outcome
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::ClaimReward(e)) => Some(e),
+            _ => None,
+        })
+        .expect("no ClaimReward domain event");
+    assert_eq!(d.pool_address, claim.pool);
+    assert_eq!(d.position, claim.position);
+    assert_eq!(d.owner, claim.owner);
+    assert_eq!(d.mint_reward, claim.mint_reward);
+    assert_eq!(d.reward_index, claim.reward_index);
+    assert_eq!(d.total_reward, claim.total_reward);
+}
+
 /// Guard for the `EvtUpdatePoolFees` decode. Its `BorshDeserialize` is custom:
 /// it reads the two leading pubkeys (pool, operator) and captures the trailing
 /// `UpdatePoolFeesParameters` bytes verbatim into `params_raw` ("voie C"). A
