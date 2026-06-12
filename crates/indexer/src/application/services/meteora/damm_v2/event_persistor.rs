@@ -1,7 +1,7 @@
 //! Meteora DAMM v2 event persistor.
 //!
-//! Owns the four DAMM v2-specific repositories and dispatches each
-//! event kind to its persistence recipe. Pool registry upserts and
+//! Owns the per-event-kind DAMM v2 repositories and dispatches each
+//! event to its persistence recipe. Pool registry upserts and
 //! pool_current_state projection are delegated to the shared
 //! [`PoolMaintenance`] helper.
 
@@ -14,6 +14,7 @@ use yog_core::domain::{
     MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
     MeteoraDammV2Event, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
+    MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, Protocol,
 };
 
@@ -26,12 +27,17 @@ pub(crate) struct MeteoraDammV2EventPersistor {
     claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
     create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
     close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
+    lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
     pool_maintenance: Arc<PoolMaintenance>,
 }
 
 impl MeteoraDammV2EventPersistor {
     const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
 
+    // One Arc per event-kind repository plus the shared PoolMaintenance. The
+    // arg count grows with each ring-2 event; a repos-bundle struct is the
+    // planned cleanup once the lifecycle set is complete.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
         liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
@@ -39,6 +45,7 @@ impl MeteoraDammV2EventPersistor {
         claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
         create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
         close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
+        lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
         pool_maintenance: Arc<PoolMaintenance>,
     ) -> Self {
         Self {
@@ -48,6 +55,7 @@ impl MeteoraDammV2EventPersistor {
             claim_reward_repo,
             create_position_repo,
             close_position_repo,
+            lock_position_repo,
             pool_maintenance,
         }
     }
@@ -67,6 +75,7 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::ClaimReward(e) => self.persist_claim_reward(e).await,
             MeteoraDammV2Event::CreatePosition(e) => self.persist_create_position(e).await,
             MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
+            MeteoraDammV2Event::LockPosition(e) => self.persist_lock_position(e).await,
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -192,6 +201,21 @@ impl MeteoraDammV2EventPersistor {
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
         self.close_position_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Lock carries vesting params but no pool reserves — same touch_pool +
+    /// insert recipe as the other lifecycle events.
+    async fn persist_lock_position(
+        &self,
+        event: &MeteoraDammV2LockPositionEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.lock_position_repo
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

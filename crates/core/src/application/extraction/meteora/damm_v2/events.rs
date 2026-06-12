@@ -41,6 +41,7 @@
 //! - [`EvtClaimReward`] — LP claims farming rewards
 //! - [`EvtCreatePosition`] — LP opens a new (empty) position
 //! - [`EvtClosePosition`] — LP closes a position
+//! - [`EvtLockPosition`] — LP locks a position under a vesting schedule
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
@@ -96,6 +97,11 @@ pub fn discriminator_create_position() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtClosePosition`].
 pub fn discriminator_close_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtClosePosition")
+}
+
+/// Discriminator for [`EvtLockPosition`].
+pub fn discriminator_lock_position() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtLockPosition")
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +266,28 @@ pub struct EvtClosePosition {
     pub position_nft_mint: Pubkey,
 }
 
+/// Mirror of `cp-amm::EvtLockPosition`.
+///
+/// Emitted when an LP locks a position under a vesting schedule. The locked
+/// liquidity unlocks linearly: `cliff_unlock_liquidity` becomes available at
+/// `cliff_point`, then `liquidity_per_period` every `period_frequency` for
+/// `number_of_period` periods. `vesting` is the account holding the schedule.
+///
+/// Field order mirrors the on-chain struct exactly (pool, position, owner,
+/// vesting, …) — do not reorder, it is the borsh contract.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtLockPosition {
+    pub pool: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub vesting: Pubkey,
+    pub cliff_point: u64,
+    pub period_frequency: u64,
+    pub cliff_unlock_liquidity: u128,
+    pub liquidity_per_period: u128,
+    pub number_of_period: u16,
+}
+
 // ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
@@ -275,6 +303,7 @@ pub enum DammV2WireEvent {
     ClaimReward(EvtClaimReward),
     CreatePosition(EvtCreatePosition),
     ClosePosition(EvtClosePosition),
+    LockPosition(EvtLockPosition),
 }
 
 impl DammV2WireEvent {
@@ -288,6 +317,7 @@ impl DammV2WireEvent {
             Self::ClaimReward(e) => e.pool,
             Self::CreatePosition(e) => e.pool,
             Self::ClosePosition(e) => e.pool,
+            Self::LockPosition(e) => e.pool,
         }
     }
 }
@@ -309,6 +339,7 @@ mod tests {
         assert_eq!(discriminator_claim_reward().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_create_position().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_close_position().len(), DISCRIMINATOR_LEN);
+        assert_eq!(discriminator_lock_position().len(), DISCRIMINATOR_LEN);
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -323,6 +354,7 @@ mod tests {
             discriminator_claim_reward(),
             discriminator_create_position(),
             discriminator_close_position(),
+            discriminator_lock_position(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

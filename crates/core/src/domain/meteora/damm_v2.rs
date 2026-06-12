@@ -3,6 +3,7 @@ mod claim_reward_event;
 mod close_position_event;
 mod create_position_event;
 mod liquidity_event;
+mod lock_position_event;
 mod swap_event;
 
 use chrono::{DateTime, Utc};
@@ -25,6 +26,9 @@ pub use liquidity_event::{
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
     MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
 };
+pub use lock_position_event::{
+    MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
+};
 pub use swap_event::{
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
 };
@@ -40,6 +44,7 @@ pub enum MeteoraDammV2Event {
     ClaimReward(MeteoraDammV2ClaimRewardEvent),
     CreatePosition(MeteoraDammV2CreatePositionEvent),
     ClosePosition(MeteoraDammV2ClosePositionEvent),
+    LockPosition(MeteoraDammV2LockPositionEvent),
 }
 
 impl MeteoraDammV2Event {
@@ -51,6 +56,7 @@ impl MeteoraDammV2Event {
             Self::ClaimReward(e) => e.pool_address,
             Self::CreatePosition(e) => e.pool_address,
             Self::ClosePosition(e) => e.pool_address,
+            Self::LockPosition(e) => e.pool_address,
         }
     }
 
@@ -62,6 +68,7 @@ impl MeteoraDammV2Event {
             Self::ClaimReward(e) => e.signature,
             Self::CreatePosition(e) => e.signature,
             Self::ClosePosition(e) => e.signature,
+            Self::LockPosition(e) => e.signature,
         }
     }
 
@@ -73,6 +80,7 @@ impl MeteoraDammV2Event {
             Self::ClaimReward(e) => e.timestamp,
             Self::CreatePosition(e) => e.timestamp,
             Self::ClosePosition(e) => e.timestamp,
+            Self::LockPosition(e) => e.timestamp,
         }
     }
 
@@ -84,6 +92,7 @@ impl MeteoraDammV2Event {
             Self::ClaimReward(_) => "claim_reward",
             Self::CreatePosition(_) => "create_position",
             Self::ClosePosition(_) => "close_position",
+            Self::LockPosition(_) => "lock_position",
         }
     }
 }

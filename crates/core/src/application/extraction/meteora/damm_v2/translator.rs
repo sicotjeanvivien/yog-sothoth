@@ -25,15 +25,15 @@ use crate::{
     domain::{
         MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimRewardEvent,
         MeteoraDammV2ClosePositionEvent, MeteoraDammV2CreatePositionEvent,
-        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SwapEvent,
-        TradeDirection,
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
+        MeteoraDammV2LockPositionEvent, MeteoraDammV2SwapEvent, TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
-    EvtLiquidityChange, EvtSwap2,
+    EvtLiquidityChange, EvtLockPosition, EvtSwap2,
 };
 
 /// Per-event context required to fully translate Swap2 and LiquidityChange.
@@ -221,6 +221,29 @@ pub(super) fn translate_close_position(
         owner: wire.owner,
         position: wire.position,
         position_nft_mint: wire.position_nft_mint,
+    }
+}
+
+/// Translate an [`EvtLockPosition`] into a [`MeteoraDammV2LockPositionEvent`].
+///
+/// Infallible — every field maps directly, no enum or context to resolve.
+pub(super) fn translate_lock_position(
+    wire: &EvtLockPosition,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2LockPositionEvent {
+    MeteoraDammV2LockPositionEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        position: wire.position,
+        owner: wire.owner,
+        vesting: wire.vesting,
+        cliff_point: wire.cliff_point,
+        period_frequency: wire.period_frequency,
+        cliff_unlock_liquidity: wire.cliff_unlock_liquidity,
+        liquidity_per_period: wire.liquidity_per_period,
+        number_of_period: wire.number_of_period,
     }
 }
 
@@ -434,6 +457,9 @@ pub(super) fn translate_wire_event(
         }
         DammV2WireEvent::ClosePosition(e) => {
             MeteoraDammV2Event::ClosePosition(translate_close_position(e, signature, timestamp))
+        }
+        DammV2WireEvent::LockPosition(e) => {
+            MeteoraDammV2Event::LockPosition(translate_lock_position(e, signature, timestamp))
         }
     };
 
