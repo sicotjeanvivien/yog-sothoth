@@ -37,10 +37,11 @@ use crate::{
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
     EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition,
-    EvtSetPoolStatus, EvtSwap2, discriminator_claim_position_fee, discriminator_claim_reward,
-    discriminator_close_position, discriminator_create_position, discriminator_initialize_pool,
-    discriminator_liquidity_change, discriminator_lock_position,
+    EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees, discriminator_claim_position_fee,
+    discriminator_claim_reward, discriminator_close_position, discriminator_create_position,
+    discriminator_initialize_pool, discriminator_liquidity_change, discriminator_lock_position,
     discriminator_permanent_lock_position, discriminator_set_pool_status, discriminator_swap2,
+    discriminator_update_pool_fees,
 };
 
 // ---------------------------------------------------------------------------
@@ -138,6 +139,7 @@ pub fn extract_wire_events(
         permanent_lock_position: discriminator_permanent_lock_position(),
         initialize_pool: discriminator_initialize_pool(),
         set_pool_status: discriminator_set_pool_status(),
+        update_pool_fees: discriminator_update_pool_fees(),
     };
     let mut out = ExtractedEvents::default();
 
@@ -186,6 +188,7 @@ struct KnownDiscriminators {
     permanent_lock_position: [u8; DISCRIMINATOR_LEN],
     initialize_pool: [u8; DISCRIMINATOR_LEN],
     set_pool_status: [u8; DISCRIMINATOR_LEN],
+    update_pool_fees: [u8; DISCRIMINATOR_LEN],
 }
 
 /// Outcome of dispatching a single decoded event by its discriminator.
@@ -267,6 +270,13 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
             .map(|e| Dispatch::Recognized(DammV2WireEvent::SetPoolStatus(e)))
             .unwrap_or_else(|reason| Dispatch::BorshFailed {
                 event_name: "EvtSetPoolStatus",
+                reason,
+            })
+    } else if disc == &known.update_pool_fees {
+        deserialize::<EvtUpdatePoolFees>(body, "EvtUpdatePoolFees")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::UpdatePoolFees(e)))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtUpdatePoolFees",
                 reason,
             })
     } else {

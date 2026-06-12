@@ -8,6 +8,7 @@ mod lock_position_event;
 mod permanent_lock_position_event;
 mod set_pool_status_event;
 mod swap_event;
+mod update_pool_fees_event;
 
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
@@ -44,6 +45,9 @@ pub use set_pool_status_event::{
 pub use swap_event::{
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
 };
+pub use update_pool_fees_event::{
+    MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
+};
 
 /// Every kind of event the Meteora DAMM v2 extractor can produce, grouped
 /// under a single sub-enum so [`crate::domain::DomainEvent`] can dispatch
@@ -60,6 +64,7 @@ pub enum MeteoraDammV2Event {
     PermanentLockPosition(MeteoraDammV2PermanentLockPositionEvent),
     InitializePool(MeteoraDammV2InitializePoolEvent),
     SetPoolStatus(MeteoraDammV2SetPoolStatusEvent),
+    UpdatePoolFees(MeteoraDammV2UpdatePoolFeesEvent),
 }
 
 impl MeteoraDammV2Event {
@@ -75,6 +80,7 @@ impl MeteoraDammV2Event {
             Self::PermanentLockPosition(e) => e.pool_address,
             Self::InitializePool(e) => e.pool_address,
             Self::SetPoolStatus(e) => e.pool_address,
+            Self::UpdatePoolFees(e) => e.pool_address,
         }
     }
 
@@ -90,6 +96,7 @@ impl MeteoraDammV2Event {
             Self::PermanentLockPosition(e) => e.signature,
             Self::InitializePool(e) => e.signature,
             Self::SetPoolStatus(e) => e.signature,
+            Self::UpdatePoolFees(e) => e.signature,
         }
     }
 
@@ -105,6 +112,7 @@ impl MeteoraDammV2Event {
             Self::PermanentLockPosition(e) => e.timestamp,
             Self::InitializePool(e) => e.timestamp,
             Self::SetPoolStatus(e) => e.timestamp,
+            Self::UpdatePoolFees(e) => e.timestamp,
         }
     }
 
@@ -120,6 +128,7 @@ impl MeteoraDammV2Event {
             Self::PermanentLockPosition(_) => "permanent_lock_position",
             Self::InitializePool(_) => "initialize_pool",
             Self::SetPoolStatus(_) => "set_pool_status",
+            Self::UpdatePoolFees(_) => "update_pool_fees",
         }
     }
 }

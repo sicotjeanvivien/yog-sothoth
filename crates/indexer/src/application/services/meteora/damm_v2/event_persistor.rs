@@ -19,7 +19,8 @@ use yog_core::domain::{
     MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
     MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2SetPoolStatusEvent,
     MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SwapEvent,
-    MeteoraDammV2SwapEventRepository, Protocol,
+    MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
+    MeteoraDammV2UpdatePoolFeesEventRepository, Protocol,
 };
 
 use crate::application::services::{EventPersistorMetrics, PoolMaintenance};
@@ -35,6 +36,7 @@ pub(crate) struct MeteoraDammV2EventPersistor {
     permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
     initialize_pool_repo: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
     set_pool_status_repo: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
+    update_pool_fees_repo: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
     pool_maintenance: Arc<PoolMaintenance>,
 }
 
@@ -56,6 +58,7 @@ impl MeteoraDammV2EventPersistor {
         permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
         initialize_pool_repo: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
         set_pool_status_repo: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
+        update_pool_fees_repo: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
         pool_maintenance: Arc<PoolMaintenance>,
     ) -> Self {
         Self {
@@ -69,6 +72,7 @@ impl MeteoraDammV2EventPersistor {
             permanent_lock_position_repo,
             initialize_pool_repo,
             set_pool_status_repo,
+            update_pool_fees_repo,
             pool_maintenance,
         }
     }
@@ -94,6 +98,7 @@ impl MeteoraDammV2EventPersistor {
             }
             MeteoraDammV2Event::InitializePool(e) => self.persist_initialize_pool(e).await,
             MeteoraDammV2Event::SetPoolStatus(e) => self.persist_set_pool_status(e).await,
+            MeteoraDammV2Event::UpdatePoolFees(e) => self.persist_update_pool_fees(e).await,
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -290,6 +295,19 @@ impl MeteoraDammV2EventPersistor {
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
         self.set_pool_status_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    async fn persist_update_pool_fees(
+        &self,
+        event: &MeteoraDammV2UpdatePoolFeesEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.update_pool_fees_repo
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

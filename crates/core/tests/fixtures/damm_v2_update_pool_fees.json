@@ -1,0 +1,109 @@
+{
+  "slot": 415604593,
+  "transaction": {
+    "signatures": [
+      "5hDpdxZwhxEbfo9R9JsbWRCdQ1sLPq5mEoTzRLvozWuvo3sWoxSaKjRra36q8tn4W1pgGcuprv2KNPdSNLYZHGbK"
+    ],
+    "message": {
+      "accountKeys": [
+        {
+          "pubkey": "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE",
+          "writable": true,
+          "signer": true,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "BBmuX7b7sBjvxqtv3PKaoSPNv9Nzq7zxFfH4fmdtXc3w",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "3wDHbQWRnt15FRRd9mUBjKo7vpLWe8Lh6wRR6UYHhf5u",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        }
+      ],
+      "recentBlockhash": "4GZnwoJ7QKk8rrpvHeHa2neFhNxrmVvpfiaQ5WQNbN2S",
+      "instructions": [
+        {
+          "programId": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+          "accounts": [
+            "BBmuX7b7sBjvxqtv3PKaoSPNv9Nzq7zxFfH4fmdtXc3w",
+            "3wDHbQWRnt15FRRd9mUBjKo7vpLWe8Lh6wRR6UYHhf5u",
+            "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE",
+            "3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet",
+            "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+          ],
+          "data": "2TwD3AdGQZoQEATPHfXaKg3pWj4HCUkobFEtfrQe2e91si3KKVngZcLVCLgUp8SHNxqaX",
+          "stackHeight": 1
+        }
+      ]
+    }
+  },
+  "meta": {
+    "err": null,
+    "status": {
+      "Ok": null
+    },
+    "fee": 5000,
+    "preBalances": [
+      684718571,
+      8630400,
+      0,
+      1392000,
+      11823511
+    ],
+    "postBalances": [
+      684713571,
+      8630400,
+      0,
+      1392000,
+      11823511
+    ],
+    "innerInstructions": [
+      {
+        "index": 0,
+        "instructions": [
+          {
+            "programId": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
+            "accounts": [
+              "3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet"
+            ],
+            "data": "BdQmuwoGc3m7iUMo4aqtUKThiLWWM2GcQ5zJ4b8ge6jkQZWxtrjz1Po79zM4HFXHAJy4ixwrpaycWLP6FCkAifTVfrUEe5JLySQQTPzgdTfRXMrnUPuyz61mmESLtEoeZW7xvAUtHxhuCsj6JnQNLXF5bYVrQS6y4ZDf5Xu",
+            "stackHeight": 2
+          }
+        ]
+      }
+    ],
+    "logMessages": [
+      "Program cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG invoke [1]",
+      "Program log: Instruction: UpdatePoolFees",
+      "Program cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG invoke [2]",
+      "Program cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG consumed 109 of 192750 compute units",
+      "Program cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG success",
+      "Program cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG consumed 7694 of 200000 compute units",
+      "Program cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG success"
+    ],
+    "preTokenBalances": [],
+    "postTokenBalances": [],
+    "rewards": [],
+    "computeUnitsConsumed": 7694,
+    "costUnits": 9562
+  },
+  "version": "legacy",
+  "blockTime": 1777135782
+}

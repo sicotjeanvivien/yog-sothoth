@@ -7,4 +7,5 @@ pub use damm_v2::{
     PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
+    PgMeteoraDammV2UpdatePoolFeesEventRepository,
 };

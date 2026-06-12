@@ -45,6 +45,7 @@
 //! - [`EvtPermanentLockPosition`] — LP permanently locks position liquidity
 //! - [`EvtInitializePool`] — pool genesis (mints, initial state, fee config)
 //! - [`EvtSetPoolStatus`] — pool status flag change
+//! - [`EvtUpdatePoolFees`] — pool fee parameters update (params captured raw)
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
@@ -120,6 +121,11 @@ pub fn discriminator_initialize_pool() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtSetPoolStatus`].
 pub fn discriminator_set_pool_status() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtSetPoolStatus")
+}
+
+/// Discriminator for [`EvtUpdatePoolFees`].
+pub fn discriminator_update_pool_fees() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtUpdatePoolFees")
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +411,37 @@ pub struct EvtSetPoolStatus {
     pub status: u8,
 }
 
+/// Mirror of `cp-amm::EvtUpdatePoolFees`.
+///
+/// Emitted when a pool's fee parameters are updated by an operator. The
+/// nested `UpdatePoolFeesParameters` is **not** modelled — there is no test
+/// fixture to validate its (version-sensitive) layout, and "voie C" defers
+/// fee interpretation anyway. Instead, [`BorshDeserialize`] reads the two
+/// leading pubkeys and captures the remaining payload bytes verbatim into
+/// `params_raw`. This is robust to fee-struct schema changes: a later decode
+/// works from these stored bytes.
+#[derive(Debug, Clone)]
+pub struct EvtUpdatePoolFees {
+    pub pool: Pubkey,
+    pub operator: Pubkey,
+    /// Raw, undecoded bytes of the trailing `UpdatePoolFeesParameters`.
+    pub params_raw: Vec<u8>,
+}
+
+impl BorshDeserialize for EvtUpdatePoolFees {
+    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
+        let pool = Pubkey::deserialize_reader(reader)?;
+        let operator = Pubkey::deserialize_reader(reader)?;
+        let mut params_raw = Vec::new();
+        reader.read_to_end(&mut params_raw)?;
+        Ok(Self {
+            pool,
+            operator,
+            params_raw,
+        })
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
@@ -429,6 +466,7 @@ pub enum DammV2WireEvent {
     /// and it is rare — keep the enum (and `Dispatch`) small.
     InitializePool(Box<EvtInitializePool>),
     SetPoolStatus(EvtSetPoolStatus),
+    UpdatePoolFees(EvtUpdatePoolFees),
 }
 
 impl DammV2WireEvent {
@@ -446,6 +484,7 @@ impl DammV2WireEvent {
             Self::PermanentLockPosition(e) => e.pool,
             Self::InitializePool(e) => e.pool,
             Self::SetPoolStatus(e) => e.pool,
+            Self::UpdatePoolFees(e) => e.pool,
         }
     }
 }
@@ -474,6 +513,7 @@ mod tests {
         );
         assert_eq!(discriminator_initialize_pool().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_set_pool_status().len(), DISCRIMINATOR_LEN);
+        assert_eq!(discriminator_update_pool_fees().len(), DISCRIMINATOR_LEN);
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -492,6 +532,7 @@ mod tests {
             discriminator_permanent_lock_position(),
             discriminator_initialize_pool(),
             discriminator_set_pool_status(),
+            discriminator_update_pool_fees(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

@@ -24,8 +24,9 @@ pub use repositories::{
     PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
-    PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
-    PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
+    PgMeteoraDammV2UpdatePoolFeesEventRepository, PgNetworkStatusRepository,
+    PgPoolAnalyticsRepository, PgPoolCurrentStateRepository, PgPoolRepository,
+    PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };
 
 /// Re-export `sqlx::PgPool` so consumers don't need to depend on sqlx directly

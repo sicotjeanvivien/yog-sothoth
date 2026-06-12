@@ -8,6 +8,7 @@ mod position_fee_claim;
 mod reward_claim;
 mod set_pool_status;
 mod swap_event;
+mod update_pool_fees;
 
 pub use close_position::PgMeteoraDammV2ClosePositionEventRepository;
 pub use create_position::PgMeteoraDammV2CreatePositionEventRepository;
@@ -19,3 +20,4 @@ pub use position_fee_claim::PgMeteoraDammV2ClaimPositionFeeEventRepository;
 pub use reward_claim::PgMeteoraDammV2ClaimRewardEventRepository;
 pub use set_pool_status::PgMeteoraDammV2SetPoolStatusEventRepository;
 pub use swap_event::PgMeteoraDammV2SwapEventRepository;
+pub use update_pool_fees::PgMeteoraDammV2UpdatePoolFeesEventRepository;

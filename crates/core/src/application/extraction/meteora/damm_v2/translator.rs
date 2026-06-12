@@ -28,7 +28,7 @@ use crate::{
         MeteoraDammV2InitializePoolEvent, MeteoraDammV2LiquidityEvent,
         MeteoraDammV2LiquidityEventKind, MeteoraDammV2LockPositionEvent,
         MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2SetPoolStatusEvent,
-        MeteoraDammV2SwapEvent, TradeDirection,
+        MeteoraDammV2SwapEvent, MeteoraDammV2UpdatePoolFeesEvent, TradeDirection,
     },
     error::TranslationError,
 };
@@ -36,7 +36,7 @@ use crate::{
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
     EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition,
-    EvtSetPoolStatus, EvtSwap2,
+    EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
 };
 
 /// Per-event context required to fully translate Swap2 and LiquidityChange.
@@ -323,6 +323,22 @@ pub(super) fn translate_set_pool_status(
     }
 }
 
+/// Translate an [`EvtUpdatePoolFees`] into a [`MeteoraDammV2UpdatePoolFeesEvent`].
+/// Infallible — the fee params are carried through as the raw, undecoded blob.
+pub(super) fn translate_update_pool_fees(
+    wire: &EvtUpdatePoolFees,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2UpdatePoolFeesEvent {
+    MeteoraDammV2UpdatePoolFeesEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        operator: wire.operator,
+        params_raw: wire.params_raw.clone(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Mint extraction from transferChecked context
 // ---------------------------------------------------------------------------
@@ -545,6 +561,9 @@ pub(super) fn translate_wire_event(
         }
         DammV2WireEvent::SetPoolStatus(e) => {
             MeteoraDammV2Event::SetPoolStatus(translate_set_pool_status(e, signature, timestamp))
+        }
+        DammV2WireEvent::UpdatePoolFees(e) => {
+            MeteoraDammV2Event::UpdatePoolFees(translate_update_pool_fees(e, signature, timestamp))
         }
     };
 
