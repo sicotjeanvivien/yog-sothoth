@@ -290,3 +290,69 @@ fn decodes_initialize_pool_fixtures() {
         // with the swap/liquidity tables (see persist_initialize_pool).
     }
 }
+
+/// Guard for the `EvtUpdatePoolFees` decode. Its `BorshDeserialize` is custom:
+/// it reads the two leading pubkeys (pool, operator) and captures the trailing
+/// `UpdatePoolFeesParameters` bytes verbatim into `params_raw` ("voie C"). A
+/// clean decode here proves the discriminator matches and the prefix layout
+/// (pool, operator) is correct on a real on-chain transaction.
+#[test]
+fn decodes_update_pool_fees_fixture() {
+    let tx = load_fixture("damm_v2_update_pool_fees.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+    assert!(
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
+    );
+
+    let update = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::UpdatePoolFees(e) => Some(e),
+            _ => None,
+        })
+        .expect("no UpdatePoolFees event extracted");
+
+    assert_ne!(
+        update.pool,
+        Pubkey::default(),
+        "pool is all-zero — discriminator matched but prefix layout is wrong"
+    );
+    assert_ne!(
+        update.operator,
+        Pubkey::default(),
+        "operator is all-zero — prefix layout drift"
+    );
+    // The trailing params blob is captured verbatim; a real fee update carries
+    // a non-empty UpdatePoolFeesParameters.
+    assert!(
+        !update.params_raw.is_empty(),
+        "params_raw should be non-empty"
+    );
+
+    // End-to-end: the full extractor must translate it into the domain event,
+    // preserving pool / operator / the raw params blob.
+    let (wire_pool, wire_operator, wire_params) =
+        (update.pool, update.operator, update.params_raw.clone());
+
+    let outcome = MeteoraDammV2::new()
+        .extract_events(&tx)
+        .expect("extract_events should succeed at the transaction level");
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+
+    let domain = outcome
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::UpdatePoolFees(e)) => Some(e),
+            _ => None,
+        })
+        .expect("no UpdatePoolFees domain event produced");
+
+    assert_eq!(domain.pool_address, wire_pool);
+    assert_eq!(domain.operator, wire_operator);
+    assert_eq!(domain.params_raw, wire_params);
+}
