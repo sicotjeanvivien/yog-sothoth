@@ -8,7 +8,7 @@
 //! against mainnet — they capture the exact shape the RPC returns, so
 //! these tests double as regression guards if the JSON schema ever drifts.
 
-use solana_pubkey::pubkey;
+use solana_pubkey::{Pubkey, pubkey};
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 use std::path::PathBuf;
 
@@ -216,4 +216,77 @@ fn extracts_swap_via_router_correctly() {
     assert!(swap.amount_b > 0, "amount_b should be nonzero");
     assert!(swap.reserve_a_after > 0);
     assert!(swap.reserve_b_after > 0);
+}
+
+/// Both `initialize_pool` fixtures must decode cleanly. This is the guard for
+/// the `EvtInitializePool` borsh layout — in particular the nested
+/// `PoolFeeParameters` (opaque 27-byte base fee + `Option<DynamicFeeParameters>`):
+/// if its layout were wrong, every field after it would be garbage and the
+/// borsh deserialize would land in `failures`.
+#[test]
+fn decodes_initialize_pool_fixtures() {
+    for fixture in [
+        "damm_v2_initialize_pool.json",
+        "damm_v2_initialize_pool_2.json",
+    ] {
+        let tx = load_fixture(fixture);
+        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+        assert!(
+            extracted.failures.is_empty(),
+            "{fixture}: unexpected extraction failures (likely a wire-layout mismatch): {:?}",
+            extracted.failures
+        );
+
+        let init = extracted
+            .events
+            .iter()
+            .find_map(|e| match e {
+                DammV2WireEvent::InitializePool(e) => Some(e),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{fixture}: no InitializePool event extracted"));
+
+        // Coherence checks — these only hold if the layout decoded correctly.
+        assert_ne!(
+            init.token_a_mint, init.token_b_mint,
+            "{fixture}: the two mints must differ"
+        );
+        assert_ne!(
+            init.token_a_mint,
+            Pubkey::default(),
+            "{fixture}: token_a_mint is all-zero — layout drift"
+        );
+        assert!(
+            init.sqrt_price > 0,
+            "{fixture}: sqrt_price should be non-zero"
+        );
+        assert!(
+            init.sqrt_min_price < init.sqrt_max_price,
+            "{fixture}: sqrt_min_price ({}) must be < sqrt_max_price ({})",
+            init.sqrt_min_price,
+            init.sqrt_max_price
+        );
+        // Small enums: garbage bytes from a layout drift would blow these up.
+        assert!(
+            init.collect_fee_mode <= 2,
+            "{fixture}: collect_fee_mode out of range: {}",
+            init.collect_fee_mode
+        );
+        assert!(
+            init.pool_type <= 4,
+            "{fixture}: pool_type out of range: {}",
+            init.pool_type
+        );
+        assert!(
+            init.activation_type <= 2,
+            "{fixture}: activation_type out of range: {}",
+            init.activation_type
+        );
+        // NOTE: cp-amm does NOT emit mints sorted by raw bytes — the event
+        // preserves the program's native token_a/token_b designation. The
+        // `initialize_pool_events` table stores this native order as-is; the
+        // pool *registry* upsert re-sorts to the canonical convention shared
+        // with the swap/liquidity tables (see persist_initialize_pool).
+    }
 }

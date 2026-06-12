@@ -14,7 +14,8 @@ pub use event_freshness::PgEventFreshnessRepository;
 pub use meteora::{
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
     PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
-    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
+    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository, PgMeteoraDammV2SwapEventRepository,
 };
 pub use network_status::PgNetworkStatusRepository;

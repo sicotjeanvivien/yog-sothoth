@@ -20,8 +20,8 @@ pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
     PgEventFreshnessRepository, PgMeteoraDammV2ClaimPositionFeeEventRepository,
     PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2LiquidityEventRepository,
-    PgMeteoraDammV2LockPositionEventRepository,
+    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
     PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,

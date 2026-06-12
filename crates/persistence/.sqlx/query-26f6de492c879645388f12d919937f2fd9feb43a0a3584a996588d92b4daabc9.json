@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_initialize_pool_events (\n                pool_address, signature,\n                token_a_mint, token_b_mint, creator, payer, alpha_vault,\n                sqrt_min_price, sqrt_max_price, sqrt_price, liquidity,\n                activation_type, activation_point, collect_fee_mode, pool_type,\n                token_a_flag, token_b_flag,\n                token_a_amount, token_b_amount, total_amount_a, total_amount_b,\n                pool_fees_raw,\n                timestamp\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,\n                $16, $17, $18, $19, $20, $21, $22, $23\n            )\n            ON CONFLICT (signature, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Int2",
+        "Int8",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Int2",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26f6de492c879645388f12d919937f2fd9feb43a0a3584a996588d92b4daabc9"
+}

@@ -43,11 +43,12 @@
 //! - [`EvtClosePosition`] — LP closes a position
 //! - [`EvtLockPosition`] — LP locks a position under a vesting schedule
 //! - [`EvtPermanentLockPosition`] — LP permanently locks position liquidity
+//! - [`EvtInitializePool`] — pool genesis (mints, initial state, fee config)
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
 
-use borsh::BorshDeserialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
 use solana_pubkey::Pubkey;
 
@@ -108,6 +109,11 @@ pub fn discriminator_lock_position() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtPermanentLockPosition`].
 pub fn discriminator_permanent_lock_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtPermanentLockPosition")
+}
+
+/// Discriminator for [`EvtInitializePool`].
+pub fn discriminator_initialize_pool() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtInitializePool")
 }
 
 // ---------------------------------------------------------------------------
@@ -310,13 +316,90 @@ pub struct EvtPermanentLockPosition {
 }
 
 // ---------------------------------------------------------------------------
+// Sub-types referenced by EvtInitializePool
+// ---------------------------------------------------------------------------
+
+/// Mirror of `cp-amm::BaseFeeParameters`.
+///
+/// An opaque 27-byte packed blob on the program side (fee scheduler config).
+/// We do not interpret it here — it is captured losslessly and decoded later
+/// by the dedicated fee-tier work. Reproduced as a fixed array so the borsh
+/// layout of the surrounding [`PoolFeeParameters`] stays byte-exact.
+#[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
+pub struct BaseFeeParameters {
+    pub data: [u8; 27],
+}
+
+/// Mirror of `cp-amm::DynamicFeeParameters`.
+#[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
+pub struct DynamicFeeParameters {
+    pub bin_step: u16,
+    pub bin_step_u128: u128,
+    pub filter_period: u16,
+    pub decay_period: u16,
+    pub reduction_factor: u16,
+    pub max_volatility_accumulator: u32,
+    pub variable_fee_control: u32,
+}
+
+/// Mirror of `cp-amm::PoolFeeParameters`.
+///
+/// `dynamic_fee` is borsh-`Option`: a 1-byte tag precedes the inner struct
+/// when present. Field order mirrors the on-chain struct exactly — it sits
+/// in the middle of [`EvtInitializePool`], so any drift here corrupts every
+/// field after it. `BorshSerialize` is derived so the whole blob can be
+/// re-serialized and persisted raw (undecoded) under "voie C".
+#[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
+pub struct PoolFeeParameters {
+    pub base_fee: BaseFeeParameters,
+    pub compounding_fee_bps: u16,
+    pub padding: u8,
+    pub dynamic_fee: Option<DynamicFeeParameters>,
+}
+
+/// Mirror of `cp-amm::EvtInitializePool`.
+///
+/// Pool genesis: carries both mints, the initial AMM state (sqrt price /
+/// bounds, liquidity), the fee configuration, and the seeded token amounts.
+/// `pool_fees` is captured but not interpreted (see [`PoolFeeParameters`]).
+///
+/// Field order mirrors the on-chain struct exactly — do not reorder.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtInitializePool {
+    pub pool: Pubkey,
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    pub creator: Pubkey,
+    pub payer: Pubkey,
+    pub alpha_vault: Pubkey,
+    pub pool_fees: PoolFeeParameters,
+    pub sqrt_min_price: u128,
+    pub sqrt_max_price: u128,
+    pub activation_type: u8,
+    pub collect_fee_mode: u8,
+    pub liquidity: u128,
+    pub sqrt_price: u128,
+    pub activation_point: u64,
+    pub token_a_flag: u8,
+    pub token_b_flag: u8,
+    pub token_a_amount: u64,
+    pub token_b_amount: u64,
+    pub total_amount_a: u64,
+    pub total_amount_b: u64,
+    pub pool_type: u8,
+}
+
+// ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
 
 /// Heterogeneous collection of DAMM v2 wire events extracted from a single
 /// transaction. Each variant wraps the borsh-deserialized payload of one
 /// Anchor event emission.
-#[derive(Debug, Clone, Copy)]
+///
+/// Not `Copy`: the boxed `InitializePool` variant precludes it. Events are
+/// moved/iterated by reference, never copied, so this costs nothing.
+#[derive(Debug, Clone)]
 pub enum DammV2WireEvent {
     Swap2(EvtSwap2),
     LiquidityChange(EvtLiquidityChange),
@@ -326,6 +409,9 @@ pub enum DammV2WireEvent {
     ClosePosition(EvtClosePosition),
     LockPosition(EvtLockPosition),
     PermanentLockPosition(EvtPermanentLockPosition),
+    /// Boxed: the genesis payload dwarfs every other variant (~380 B vs <100 B),
+    /// and it is rare — keep the enum (and `Dispatch`) small.
+    InitializePool(Box<EvtInitializePool>),
 }
 
 impl DammV2WireEvent {
@@ -341,6 +427,7 @@ impl DammV2WireEvent {
             Self::ClosePosition(e) => e.pool,
             Self::LockPosition(e) => e.pool,
             Self::PermanentLockPosition(e) => e.pool,
+            Self::InitializePool(e) => e.pool,
         }
     }
 }
@@ -367,6 +454,7 @@ mod tests {
             discriminator_permanent_lock_position().len(),
             DISCRIMINATOR_LEN
         );
+        assert_eq!(discriminator_initialize_pool().len(), DISCRIMINATOR_LEN);
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -383,6 +471,7 @@ mod tests {
             discriminator_close_position(),
             discriminator_lock_position(),
             discriminator_permanent_lock_position(),
+            discriminator_initialize_pool(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

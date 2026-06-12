@@ -1,5 +1,6 @@
 mod close_position;
 mod create_position;
+mod initialize_pool;
 mod liquidity_event;
 mod lock_position;
 mod permanent_lock_position;
@@ -9,6 +10,7 @@ mod swap_event;
 
 pub use close_position::PgMeteoraDammV2ClosePositionEventRepository;
 pub use create_position::PgMeteoraDammV2CreatePositionEventRepository;
+pub use initialize_pool::PgMeteoraDammV2InitializePoolEventRepository;
 pub use liquidity_event::PgMeteoraDammV2LiquidityEventRepository;
 pub use lock_position::PgMeteoraDammV2LockPositionEventRepository;
 pub use permanent_lock_position::PgMeteoraDammV2PermanentLockPositionEventRepository;

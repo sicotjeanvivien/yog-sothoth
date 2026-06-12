@@ -2,6 +2,7 @@ mod claim_position_fee_event;
 mod claim_reward_event;
 mod close_position_event;
 mod create_position_event;
+mod initialize_pool_event;
 mod liquidity_event;
 mod lock_position_event;
 mod permanent_lock_position_event;
@@ -22,6 +23,9 @@ pub use close_position_event::{
 };
 pub use create_position_event::{
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
+};
+pub use initialize_pool_event::{
+    MeteoraDammV2InitializePoolEvent, MeteoraDammV2InitializePoolEventRepository,
 };
 pub use liquidity_event::{
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
@@ -50,6 +54,7 @@ pub enum MeteoraDammV2Event {
     ClosePosition(MeteoraDammV2ClosePositionEvent),
     LockPosition(MeteoraDammV2LockPositionEvent),
     PermanentLockPosition(MeteoraDammV2PermanentLockPositionEvent),
+    InitializePool(MeteoraDammV2InitializePoolEvent),
 }
 
 impl MeteoraDammV2Event {
@@ -63,6 +68,7 @@ impl MeteoraDammV2Event {
             Self::ClosePosition(e) => e.pool_address,
             Self::LockPosition(e) => e.pool_address,
             Self::PermanentLockPosition(e) => e.pool_address,
+            Self::InitializePool(e) => e.pool_address,
         }
     }
 
@@ -76,6 +82,7 @@ impl MeteoraDammV2Event {
             Self::ClosePosition(e) => e.signature,
             Self::LockPosition(e) => e.signature,
             Self::PermanentLockPosition(e) => e.signature,
+            Self::InitializePool(e) => e.signature,
         }
     }
 
@@ -89,6 +96,7 @@ impl MeteoraDammV2Event {
             Self::ClosePosition(e) => e.timestamp,
             Self::LockPosition(e) => e.timestamp,
             Self::PermanentLockPosition(e) => e.timestamp,
+            Self::InitializePool(e) => e.timestamp,
         }
     }
 
@@ -102,6 +110,7 @@ impl MeteoraDammV2Event {
             Self::ClosePosition(_) => "close_position",
             Self::LockPosition(_) => "lock_position",
             Self::PermanentLockPosition(_) => "permanent_lock_position",
+            Self::InitializePool(_) => "initialize_pool",
         }
     }
 }

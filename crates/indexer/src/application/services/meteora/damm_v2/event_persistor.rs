@@ -13,10 +13,12 @@ use yog_core::domain::{
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
     MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
-    MeteoraDammV2Event, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
-    MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
-    MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
-    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, Protocol,
+    MeteoraDammV2Event, MeteoraDammV2InitializePoolEvent,
+    MeteoraDammV2InitializePoolEventRepository, MeteoraDammV2LiquidityEvent,
+    MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LockPositionEvent,
+    MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
+    MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2SwapEvent,
+    MeteoraDammV2SwapEventRepository, Protocol,
 };
 
 use crate::application::services::{EventPersistorMetrics, PoolMaintenance};
@@ -30,6 +32,7 @@ pub(crate) struct MeteoraDammV2EventPersistor {
     close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
     lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
     permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
+    initialize_pool_repo: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
     pool_maintenance: Arc<PoolMaintenance>,
 }
 
@@ -49,6 +52,7 @@ impl MeteoraDammV2EventPersistor {
         close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
         lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
         permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
+        initialize_pool_repo: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
         pool_maintenance: Arc<PoolMaintenance>,
     ) -> Self {
         Self {
@@ -60,6 +64,7 @@ impl MeteoraDammV2EventPersistor {
             close_position_repo,
             lock_position_repo,
             permanent_lock_position_repo,
+            initialize_pool_repo,
             pool_maintenance,
         }
     }
@@ -83,6 +88,7 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::PermanentLockPosition(e) => {
                 self.persist_permanent_lock_position(e).await
             }
+            MeteoraDammV2Event::InitializePool(e) => self.persist_initialize_pool(e).await,
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -236,6 +242,36 @@ impl MeteoraDammV2EventPersistor {
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
         self.permanent_lock_position_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Pool genesis carries both mints, so it registers the pool authoritatively
+    /// (full upsert) rather than just touching last-seen. It does not feed the
+    /// current-state projection — there is no price/reserve trajectory yet.
+    ///
+    /// cp-amm does not sort the mints by raw bytes, but the `pools` registry
+    /// uses the canonical (sorted) convention shared with the swap/liquidity
+    /// tables — so the pair is re-sorted before the upsert. The event itself
+    /// is stored in the program's native token_a/token_b order.
+    async fn persist_initialize_pool(
+        &self,
+        event: &MeteoraDammV2InitializePoolEvent,
+    ) -> anyhow::Result<()> {
+        let (mint_a, mint_b) = if event.token_a_mint <= event.token_b_mint {
+            (event.token_a_mint, event.token_b_mint)
+        } else {
+            (event.token_b_mint, event.token_a_mint)
+        };
+        if let Err(err) = self
+            .pool_maintenance
+            .upsert_pool_full(Self::PROTOCOL, event.pool_address, mint_a, mint_b)
+            .await
+        {
+            warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
+        }
+        self.initialize_pool_repo
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

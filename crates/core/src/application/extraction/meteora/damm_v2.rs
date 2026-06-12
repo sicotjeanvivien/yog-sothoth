@@ -137,6 +137,7 @@ fn wire_event_name(wire: &events::DammV2WireEvent) -> &'static str {
         events::DammV2WireEvent::ClosePosition(_) => "EvtClosePosition",
         events::DammV2WireEvent::LockPosition(_) => "EvtLockPosition",
         events::DammV2WireEvent::PermanentLockPosition(_) => "EvtPermanentLockPosition",
+        events::DammV2WireEvent::InitializePool(_) => "EvtInitializePool",
     }
 }
 

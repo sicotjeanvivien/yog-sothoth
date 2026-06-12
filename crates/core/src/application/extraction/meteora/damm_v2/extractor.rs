@@ -36,10 +36,10 @@ use crate::{
 
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
-    EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition, EvtSwap2,
+    EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition, EvtSwap2,
     discriminator_claim_position_fee, discriminator_claim_reward, discriminator_close_position,
-    discriminator_create_position, discriminator_liquidity_change, discriminator_lock_position,
-    discriminator_permanent_lock_position, discriminator_swap2,
+    discriminator_create_position, discriminator_initialize_pool, discriminator_liquidity_change,
+    discriminator_lock_position, discriminator_permanent_lock_position, discriminator_swap2,
 };
 
 // ---------------------------------------------------------------------------
@@ -135,6 +135,7 @@ pub fn extract_wire_events(
         close_position: discriminator_close_position(),
         lock_position: discriminator_lock_position(),
         permanent_lock_position: discriminator_permanent_lock_position(),
+        initialize_pool: discriminator_initialize_pool(),
     };
     let mut out = ExtractedEvents::default();
 
@@ -181,6 +182,7 @@ struct KnownDiscriminators {
     close_position: [u8; DISCRIMINATOR_LEN],
     lock_position: [u8; DISCRIMINATOR_LEN],
     permanent_lock_position: [u8; DISCRIMINATOR_LEN],
+    initialize_pool: [u8; DISCRIMINATOR_LEN],
 }
 
 /// Outcome of dispatching a single decoded event by its discriminator.
@@ -248,6 +250,13 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
             .map(|e| Dispatch::Recognized(DammV2WireEvent::PermanentLockPosition(e)))
             .unwrap_or_else(|reason| Dispatch::BorshFailed {
                 event_name: "EvtPermanentLockPosition",
+                reason,
+            })
+    } else if disc == &known.initialize_pool {
+        deserialize::<EvtInitializePool>(body, "EvtInitializePool")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::InitializePool(Box::new(e))))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtInitializePool",
                 reason,
             })
     } else {
