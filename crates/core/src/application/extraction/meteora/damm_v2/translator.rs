@@ -26,14 +26,15 @@ use crate::{
         MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimRewardEvent,
         MeteoraDammV2ClosePositionEvent, MeteoraDammV2CreatePositionEvent,
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
-        MeteoraDammV2LockPositionEvent, MeteoraDammV2SwapEvent, TradeDirection,
+        MeteoraDammV2LockPositionEvent, MeteoraDammV2PermanentLockPositionEvent,
+        MeteoraDammV2SwapEvent, TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
-    EvtLiquidityChange, EvtLockPosition, EvtSwap2,
+    EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition, EvtSwap2,
 };
 
 /// Per-event context required to fully translate Swap2 and LiquidityChange.
@@ -244,6 +245,23 @@ pub(super) fn translate_lock_position(
         cliff_unlock_liquidity: wire.cliff_unlock_liquidity,
         liquidity_per_period: wire.liquidity_per_period,
         number_of_period: wire.number_of_period,
+    }
+}
+
+/// Translate an [`EvtPermanentLockPosition`] into a
+/// [`MeteoraDammV2PermanentLockPositionEvent`]. Infallible.
+pub(super) fn translate_permanent_lock_position(
+    wire: &EvtPermanentLockPosition,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2PermanentLockPositionEvent {
+    MeteoraDammV2PermanentLockPositionEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        position: wire.position,
+        lock_liquidity_amount: wire.lock_liquidity_amount,
+        total_permanent_locked_liquidity: wire.total_permanent_locked_liquidity,
     }
 }
 
@@ -461,6 +479,9 @@ pub(super) fn translate_wire_event(
         DammV2WireEvent::LockPosition(e) => {
             MeteoraDammV2Event::LockPosition(translate_lock_position(e, signature, timestamp))
         }
+        DammV2WireEvent::PermanentLockPosition(e) => MeteoraDammV2Event::PermanentLockPosition(
+            translate_permanent_lock_position(e, signature, timestamp),
+        ),
     };
 
     Ok(DomainEvent::MeteoraDammV2(damm_v2_event))

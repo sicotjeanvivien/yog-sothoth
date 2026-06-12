@@ -42,6 +42,7 @@
 //! - [`EvtCreatePosition`] — LP opens a new (empty) position
 //! - [`EvtClosePosition`] — LP closes a position
 //! - [`EvtLockPosition`] — LP locks a position under a vesting schedule
+//! - [`EvtPermanentLockPosition`] — LP permanently locks position liquidity
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
@@ -102,6 +103,11 @@ pub fn discriminator_close_position() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtLockPosition`].
 pub fn discriminator_lock_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtLockPosition")
+}
+
+/// Discriminator for [`EvtPermanentLockPosition`].
+pub fn discriminator_permanent_lock_position() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtPermanentLockPosition")
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +294,21 @@ pub struct EvtLockPosition {
     pub number_of_period: u16,
 }
 
+/// Mirror of `cp-amm::EvtPermanentLockPosition`.
+///
+/// Emitted when an LP permanently locks part of a position's liquidity (no
+/// vesting, never unlocks). `lock_liquidity_amount` is the amount locked by
+/// this action; `total_permanent_locked_liquidity` is the position's running
+/// total after it. Carries no owner field — only pool and position identify
+/// it on-chain.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtPermanentLockPosition {
+    pub pool: Pubkey,
+    pub position: Pubkey,
+    pub lock_liquidity_amount: u128,
+    pub total_permanent_locked_liquidity: u128,
+}
+
 // ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
@@ -304,6 +325,7 @@ pub enum DammV2WireEvent {
     CreatePosition(EvtCreatePosition),
     ClosePosition(EvtClosePosition),
     LockPosition(EvtLockPosition),
+    PermanentLockPosition(EvtPermanentLockPosition),
 }
 
 impl DammV2WireEvent {
@@ -318,6 +340,7 @@ impl DammV2WireEvent {
             Self::CreatePosition(e) => e.pool,
             Self::ClosePosition(e) => e.pool,
             Self::LockPosition(e) => e.pool,
+            Self::PermanentLockPosition(e) => e.pool,
         }
     }
 }
@@ -340,6 +363,10 @@ mod tests {
         assert_eq!(discriminator_create_position().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_close_position().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_lock_position().len(), DISCRIMINATOR_LEN);
+        assert_eq!(
+            discriminator_permanent_lock_position().len(),
+            DISCRIMINATOR_LEN
+        );
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -355,6 +382,7 @@ mod tests {
             discriminator_create_position(),
             discriminator_close_position(),
             discriminator_lock_position(),
+            discriminator_permanent_lock_position(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

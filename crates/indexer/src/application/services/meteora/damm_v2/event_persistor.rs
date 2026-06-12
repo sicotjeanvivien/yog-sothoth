@@ -15,6 +15,7 @@ use yog_core::domain::{
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
     MeteoraDammV2Event, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
+    MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, Protocol,
 };
 
@@ -28,6 +29,7 @@ pub(crate) struct MeteoraDammV2EventPersistor {
     create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
     close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
     lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
+    permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
     pool_maintenance: Arc<PoolMaintenance>,
 }
 
@@ -46,6 +48,7 @@ impl MeteoraDammV2EventPersistor {
         create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
         close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
         lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
+        permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
         pool_maintenance: Arc<PoolMaintenance>,
     ) -> Self {
         Self {
@@ -56,6 +59,7 @@ impl MeteoraDammV2EventPersistor {
             create_position_repo,
             close_position_repo,
             lock_position_repo,
+            permanent_lock_position_repo,
             pool_maintenance,
         }
     }
@@ -76,6 +80,9 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::CreatePosition(e) => self.persist_create_position(e).await,
             MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
             MeteoraDammV2Event::LockPosition(e) => self.persist_lock_position(e).await,
+            MeteoraDammV2Event::PermanentLockPosition(e) => {
+                self.persist_permanent_lock_position(e).await
+            }
         };
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -216,6 +223,19 @@ impl MeteoraDammV2EventPersistor {
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
         self.lock_position_repo
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    async fn persist_permanent_lock_position(
+        &self,
+        event: &MeteoraDammV2PermanentLockPositionEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.permanent_lock_position_repo
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

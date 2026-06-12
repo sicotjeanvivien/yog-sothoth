@@ -8,5 +8,6 @@ pub use damm_v2::{
     MeteoraDammV2Event, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
     MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
+    MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
 };
