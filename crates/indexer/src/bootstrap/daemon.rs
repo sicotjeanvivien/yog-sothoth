@@ -27,7 +27,8 @@ use yog_persistence::{
     PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
     PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
     PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
-    PgMeteoraDammV2PermanentLockPositionEventRepository, PgMeteoraDammV2SwapEventRepository,
+    PgMeteoraDammV2PermanentLockPositionEventRepository,
+    PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgNetworkStatusRepository, PgPoolCurrentStateRepository, PgPoolRepository,
     PgWatchedPoolRepository,
 };
@@ -214,6 +215,9 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
     let pg_damm_v2_initialize_pool_repo = Arc::new(
         PgMeteoraDammV2InitializePoolEventRepository::new(database.pool().clone()),
     );
+    let pg_damm_v2_set_pool_status_repo = Arc::new(
+        PgMeteoraDammV2SetPoolStatusEventRepository::new(database.pool().clone()),
+    );
 
     let meteora_damm_v2 = Arc::new(MeteoraDammV2EventPersistor::new(
         pg_damm_v2_swap_repo,
@@ -225,6 +229,7 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         pg_damm_v2_lock_position_repo,
         pg_damm_v2_permanent_lock_position_repo,
         pg_damm_v2_initialize_pool_repo,
+        pg_damm_v2_set_pool_status_repo,
         Arc::clone(&pool_maintenance),
     ));
 

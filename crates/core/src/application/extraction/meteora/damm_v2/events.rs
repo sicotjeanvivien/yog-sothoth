@@ -44,6 +44,7 @@
 //! - [`EvtLockPosition`] — LP locks a position under a vesting schedule
 //! - [`EvtPermanentLockPosition`] — LP permanently locks position liquidity
 //! - [`EvtInitializePool`] — pool genesis (mints, initial state, fee config)
+//! - [`EvtSetPoolStatus`] — pool status flag change
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
@@ -114,6 +115,11 @@ pub fn discriminator_permanent_lock_position() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtInitializePool`].
 pub fn discriminator_initialize_pool() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtInitializePool")
+}
+
+/// Discriminator for [`EvtSetPoolStatus`].
+pub fn discriminator_set_pool_status() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtSetPoolStatus")
 }
 
 // ---------------------------------------------------------------------------
@@ -389,6 +395,16 @@ pub struct EvtInitializePool {
     pub pool_type: u8,
 }
 
+/// Mirror of `cp-amm::EvtSetPoolStatus`.
+///
+/// Emitted when a pool's status flag is changed (e.g. enabled/disabled).
+/// `status` is the raw on-chain status byte — not interpreted here.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtSetPoolStatus {
+    pub pool: Pubkey,
+    pub status: u8,
+}
+
 // ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
@@ -412,6 +428,7 @@ pub enum DammV2WireEvent {
     /// Boxed: the genesis payload dwarfs every other variant (~380 B vs <100 B),
     /// and it is rare — keep the enum (and `Dispatch`) small.
     InitializePool(Box<EvtInitializePool>),
+    SetPoolStatus(EvtSetPoolStatus),
 }
 
 impl DammV2WireEvent {
@@ -428,6 +445,7 @@ impl DammV2WireEvent {
             Self::LockPosition(e) => e.pool,
             Self::PermanentLockPosition(e) => e.pool,
             Self::InitializePool(e) => e.pool,
+            Self::SetPoolStatus(e) => e.pool,
         }
     }
 }
@@ -455,6 +473,7 @@ mod tests {
             DISCRIMINATOR_LEN
         );
         assert_eq!(discriminator_initialize_pool().len(), DISCRIMINATOR_LEN);
+        assert_eq!(discriminator_set_pool_status().len(), DISCRIMINATOR_LEN);
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -472,6 +491,7 @@ mod tests {
             discriminator_lock_position(),
             discriminator_permanent_lock_position(),
             discriminator_initialize_pool(),
+            discriminator_set_pool_status(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

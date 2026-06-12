@@ -6,6 +6,7 @@ mod lock_position;
 mod permanent_lock_position;
 mod position_fee_claim;
 mod reward_claim;
+mod set_pool_status;
 mod swap_event;
 
 pub use close_position::PgMeteoraDammV2ClosePositionEventRepository;
@@ -16,4 +17,5 @@ pub use lock_position::PgMeteoraDammV2LockPositionEventRepository;
 pub use permanent_lock_position::PgMeteoraDammV2PermanentLockPositionEventRepository;
 pub use position_fee_claim::PgMeteoraDammV2ClaimPositionFeeEventRepository;
 pub use reward_claim::PgMeteoraDammV2ClaimRewardEventRepository;
+pub use set_pool_status::PgMeteoraDammV2SetPoolStatusEventRepository;
 pub use swap_event::PgMeteoraDammV2SwapEventRepository;

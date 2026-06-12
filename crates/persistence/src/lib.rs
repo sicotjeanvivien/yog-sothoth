@@ -22,7 +22,8 @@ pub use repositories::{
     PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
     PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
     PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
-    PgMeteoraDammV2PermanentLockPositionEventRepository, PgMeteoraDammV2SwapEventRepository,
+    PgMeteoraDammV2PermanentLockPositionEventRepository,
+    PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
     PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };

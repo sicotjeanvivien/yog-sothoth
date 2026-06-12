@@ -27,14 +27,16 @@ use crate::{
         MeteoraDammV2ClosePositionEvent, MeteoraDammV2CreatePositionEvent,
         MeteoraDammV2InitializePoolEvent, MeteoraDammV2LiquidityEvent,
         MeteoraDammV2LiquidityEventKind, MeteoraDammV2LockPositionEvent,
-        MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2SwapEvent, TradeDirection,
+        MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2SetPoolStatusEvent,
+        MeteoraDammV2SwapEvent, TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
-    EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition, EvtSwap2,
+    EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition,
+    EvtSetPoolStatus, EvtSwap2,
 };
 
 /// Per-event context required to fully translate Swap2 and LiquidityChange.
@@ -306,6 +308,21 @@ pub(super) fn translate_initialize_pool(
     }
 }
 
+/// Translate an [`EvtSetPoolStatus`] into a [`MeteoraDammV2SetPoolStatusEvent`].
+/// Infallible.
+pub(super) fn translate_set_pool_status(
+    wire: &EvtSetPoolStatus,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2SetPoolStatusEvent {
+    MeteoraDammV2SetPoolStatusEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        status: wire.status,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Mint extraction from transferChecked context
 // ---------------------------------------------------------------------------
@@ -525,6 +542,9 @@ pub(super) fn translate_wire_event(
         ),
         DammV2WireEvent::InitializePool(e) => {
             MeteoraDammV2Event::InitializePool(translate_initialize_pool(e, signature, timestamp))
+        }
+        DammV2WireEvent::SetPoolStatus(e) => {
+            MeteoraDammV2Event::SetPoolStatus(translate_set_pool_status(e, signature, timestamp))
         }
     };
 
