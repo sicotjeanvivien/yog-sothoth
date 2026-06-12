@@ -24,14 +24,15 @@ use std::str::FromStr;
 use crate::{
     domain::{
         MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimRewardEvent,
-        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SwapEvent,
-        TradeDirection,
+        MeteoraDammV2CreatePositionEvent, MeteoraDammV2LiquidityEvent,
+        MeteoraDammV2LiquidityEventKind, MeteoraDammV2SwapEvent, TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
-    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtLiquidityChange, EvtSwap2,
+    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtCreatePosition, EvtLiquidityChange,
+    EvtSwap2,
 };
 
 /// Per-event context required to fully translate Swap2 and LiquidityChange.
@@ -181,6 +182,26 @@ pub(super) fn translate_claim_reward(
         mint_reward: wire.mint_reward,
         reward_index: wire.reward_index,
         total_reward: wire.total_reward,
+    }
+}
+
+/// Translate an [`EvtCreatePosition`] into a [`MeteoraDammV2CreatePositionEvent`].
+///
+/// This translation is infallible — the wire event is self-contained
+/// (pool, owner, position, position NFT mint), so no transferChecked
+/// context is required.
+pub(super) fn translate_create_position(
+    wire: &EvtCreatePosition,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2CreatePositionEvent {
+    MeteoraDammV2CreatePositionEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        owner: wire.owner,
+        position: wire.position,
+        position_nft_mint: wire.position_nft_mint,
     }
 }
 
@@ -388,6 +409,9 @@ pub(super) fn translate_wire_event(
         ),
         DammV2WireEvent::ClaimReward(e) => {
             MeteoraDammV2Event::ClaimReward(translate_claim_reward(e, signature, timestamp))
+        }
+        DammV2WireEvent::CreatePosition(e) => {
+            MeteoraDammV2Event::CreatePosition(translate_create_position(e, signature, timestamp))
         }
     };
 

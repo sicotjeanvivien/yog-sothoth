@@ -29,7 +29,7 @@
 //! computed at runtime from the canonical event names (see
 //! [`compute_discriminator`]).
 //!
-//! ## Scope — Cercle 1
+//! ## Scope
 //!
 //! Only the events Yog-Sothoth indexes today are mirrored here:
 //!
@@ -39,9 +39,10 @@
 //!   `change_type`)
 //! - [`EvtClaimPositionFee`] — LP claims accumulated trading fees
 //! - [`EvtClaimReward`] — LP claims farming rewards
+//! - [`EvtCreatePosition`] — LP opens a new (empty) position
 //!
-//! Additional events (position lifecycle, pool initialization, admin) belong
-//! to subsequent rings and will be added later.
+//! The remaining position-lifecycle, pool-initialization and admin events
+//! are added incrementally, one per change.
 
 use borsh::BorshDeserialize;
 use sha2::{Digest, Sha256};
@@ -84,6 +85,11 @@ pub fn discriminator_claim_position_fee() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtClaimReward`].
 pub fn discriminator_claim_reward() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtClaimReward")
+}
+
+/// Discriminator for [`EvtCreatePosition`].
+pub fn discriminator_create_position() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtCreatePosition")
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +226,21 @@ pub struct EvtClaimReward {
     pub total_reward: u64,
 }
 
+/// Mirror of `cp-amm::EvtCreatePosition`.
+///
+/// Emitted when an LP opens a new position on a pool. The position is
+/// represented on-chain by an NFT (`position_nft_mint`); `position` is the
+/// PDA holding the position state. Carries no token amounts — a freshly
+/// created position is empty until liquidity is added (see
+/// [`EvtLiquidityChange`]).
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtCreatePosition {
+    pub pool: Pubkey,
+    pub owner: Pubkey,
+    pub position: Pubkey,
+    pub position_nft_mint: Pubkey,
+}
+
 // ---------------------------------------------------------------------------
 // Wire event sum type
 // ---------------------------------------------------------------------------
@@ -233,6 +254,7 @@ pub enum DammV2WireEvent {
     LiquidityChange(EvtLiquidityChange),
     ClaimPositionFee(EvtClaimPositionFee),
     ClaimReward(EvtClaimReward),
+    CreatePosition(EvtCreatePosition),
 }
 
 impl DammV2WireEvent {
@@ -244,6 +266,7 @@ impl DammV2WireEvent {
             Self::LiquidityChange(e) => e.pool,
             Self::ClaimPositionFee(e) => e.pool,
             Self::ClaimReward(e) => e.pool,
+            Self::CreatePosition(e) => e.pool,
         }
     }
 }
@@ -263,6 +286,7 @@ mod tests {
         assert_eq!(discriminator_liquidity_change().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_claim_position_fee().len(), DISCRIMINATOR_LEN);
         assert_eq!(discriminator_claim_reward().len(), DISCRIMINATOR_LEN);
+        assert_eq!(discriminator_create_position().len(), DISCRIMINATOR_LEN);
     }
 
     /// Sanity check: each event has a distinct discriminator. If two events
@@ -275,6 +299,7 @@ mod tests {
             discriminator_liquidity_change(),
             discriminator_claim_position_fee(),
             discriminator_claim_reward(),
+            discriminator_create_position(),
         ];
         for i in 0..all.len() {
             for j in (i + 1)..all.len() {

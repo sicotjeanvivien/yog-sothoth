@@ -15,8 +15,9 @@ pub use domain_event::DomainEvent;
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
-    MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository, MeteoraDammV2Event,
-    MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
+    MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
+    MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
+    MeteoraDammV2Event, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
     MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository, MeteoraDammV2SwapEvent,
     MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
 };
