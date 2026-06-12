@@ -2,8 +2,8 @@ use crate::{
     application::{
         reporter::{NetworkStatusReporter, NetworkStatusReporterError},
         services::{
-            EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor, PoolMaintenance,
-            TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
+            DammV2Repos, EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor,
+            PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
         },
         workers::IndexerWorker,
     },
@@ -174,7 +174,8 @@ fn init_listener(config: &Config) -> Arc<RpcListener> {
     ))
 }
 
-/// Build the EventPersistor with its six repositories.
+/// Build the EventPersistor: shared pool maintenance plus the per-protocol
+/// sub-persistor and its bundle of per-event-kind repositories.
 fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
     // Cross-protocol repositories
     let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
@@ -187,53 +188,26 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         pg_pool_current_state_repo,
     ));
 
-    // Meteora DAMM v2 sub-persistor and its repositories.
-    let pg_damm_v2_swap_repo = Arc::new(PgMeteoraDammV2SwapEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_damm_v2_liquidity_repo = Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_damm_v2_claim_position_fee_repo = Arc::new(
-        PgMeteoraDammV2ClaimPositionFeeEventRepository::new(database.pool().clone()),
-    );
-    let pg_damm_v2_claim_reward_repo = Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_damm_v2_create_position_repo = Arc::new(
-        PgMeteoraDammV2CreatePositionEventRepository::new(database.pool().clone()),
-    );
-    let pg_damm_v2_close_position_repo = Arc::new(
-        PgMeteoraDammV2ClosePositionEventRepository::new(database.pool().clone()),
-    );
-    let pg_damm_v2_lock_position_repo = Arc::new(PgMeteoraDammV2LockPositionEventRepository::new(
-        database.pool().clone(),
-    ));
-    let pg_damm_v2_permanent_lock_position_repo = Arc::new(
-        PgMeteoraDammV2PermanentLockPositionEventRepository::new(database.pool().clone()),
-    );
-    let pg_damm_v2_initialize_pool_repo = Arc::new(
-        PgMeteoraDammV2InitializePoolEventRepository::new(database.pool().clone()),
-    );
-    let pg_damm_v2_set_pool_status_repo = Arc::new(
-        PgMeteoraDammV2SetPoolStatusEventRepository::new(database.pool().clone()),
-    );
-    let pg_damm_v2_update_pool_fees_repo = Arc::new(
-        PgMeteoraDammV2UpdatePoolFeesEventRepository::new(database.pool().clone()),
-    );
+    // Meteora DAMM v2 sub-persistor and its per-event-kind repositories.
+    let pool = || database.pool().clone();
+    let damm_v2_repos = DammV2Repos {
+        swap_event: Arc::new(PgMeteoraDammV2SwapEventRepository::new(pool())),
+        liquidity_event: Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(pool())),
+        claim_position_fee: Arc::new(PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool())),
+        claim_reward: Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(pool())),
+        create_position: Arc::new(PgMeteoraDammV2CreatePositionEventRepository::new(pool())),
+        close_position: Arc::new(PgMeteoraDammV2ClosePositionEventRepository::new(pool())),
+        lock_position: Arc::new(PgMeteoraDammV2LockPositionEventRepository::new(pool())),
+        permanent_lock_position: Arc::new(
+            PgMeteoraDammV2PermanentLockPositionEventRepository::new(pool()),
+        ),
+        initialize_pool: Arc::new(PgMeteoraDammV2InitializePoolEventRepository::new(pool())),
+        set_pool_status: Arc::new(PgMeteoraDammV2SetPoolStatusEventRepository::new(pool())),
+        update_pool_fees: Arc::new(PgMeteoraDammV2UpdatePoolFeesEventRepository::new(pool())),
+    };
 
     let meteora_damm_v2 = Arc::new(MeteoraDammV2EventPersistor::new(
-        pg_damm_v2_swap_repo,
-        pg_damm_v2_liquidity_repo,
-        pg_damm_v2_claim_position_fee_repo,
-        pg_damm_v2_claim_reward_repo,
-        pg_damm_v2_create_position_repo,
-        pg_damm_v2_close_position_repo,
-        pg_damm_v2_lock_position_repo,
-        pg_damm_v2_permanent_lock_position_repo,
-        pg_damm_v2_initialize_pool_repo,
-        pg_damm_v2_set_pool_status_repo,
-        pg_damm_v2_update_pool_fees_repo,
+        damm_v2_repos,
         Arc::clone(&pool_maintenance),
     ));
 

@@ -25,54 +25,34 @@ use yog_core::domain::{
 
 use crate::application::services::{EventPersistorMetrics, PoolMaintenance};
 
+/// The per-event-kind DAMM v2 repositories, bundled so the persistor takes a
+/// single named-field argument instead of one positional `Arc` per event kind
+/// (which grows unbounded as new events are added).
+pub(crate) struct DammV2Repos {
+    pub swap_event: Arc<dyn MeteoraDammV2SwapEventRepository>,
+    pub liquidity_event: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
+    pub claim_position_fee: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
+    pub claim_reward: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
+    pub create_position: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
+    pub close_position: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
+    pub lock_position: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
+    pub permanent_lock_position: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
+    pub initialize_pool: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
+    pub set_pool_status: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
+    pub update_pool_fees: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
+}
+
 pub(crate) struct MeteoraDammV2EventPersistor {
-    swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
-    liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
-    claim_position_fee_repo: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
-    claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
-    create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
-    close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
-    lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
-    permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
-    initialize_pool_repo: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
-    set_pool_status_repo: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
-    update_pool_fees_repo: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
+    repos: DammV2Repos,
     pool_maintenance: Arc<PoolMaintenance>,
 }
 
 impl MeteoraDammV2EventPersistor {
     const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
 
-    // One Arc per event-kind repository plus the shared PoolMaintenance. The
-    // arg count grows with each ring-2 event; a repos-bundle struct is the
-    // planned cleanup once the lifecycle set is complete.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
-        liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
-        claim_position_fee_repo: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
-        claim_reward_repo: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
-        create_position_repo: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
-        close_position_repo: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
-        lock_position_repo: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
-        permanent_lock_position_repo: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
-        initialize_pool_repo: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
-        set_pool_status_repo: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
-        update_pool_fees_repo: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
-        pool_maintenance: Arc<PoolMaintenance>,
-    ) -> Self {
+    pub(crate) fn new(repos: DammV2Repos, pool_maintenance: Arc<PoolMaintenance>) -> Self {
         Self {
-            swap_event_repo,
-            liquidity_event_repo,
-            claim_position_fee_repo,
-            claim_reward_repo,
-            create_position_repo,
-            close_position_repo,
-            lock_position_repo,
-            permanent_lock_position_repo,
-            initialize_pool_repo,
-            set_pool_status_repo,
-            update_pool_fees_repo,
+            repos,
             pool_maintenance,
         }
     }
@@ -134,7 +114,8 @@ impl MeteoraDammV2EventPersistor {
             warn!(error = %err, kind = "swap", "pool upsert failed");
         }
         let insert_result = self
-            .swap_event_repo
+            .repos
+            .swap_event
             .insert(event)
             .await
             .map_err(anyhow::Error::new);
@@ -160,7 +141,8 @@ impl MeteoraDammV2EventPersistor {
             warn!(error = %err, kind = "liquidity", "pool upsert failed");
         }
         let insert_result = self
-            .liquidity_event_repo
+            .repos
+            .liquidity_event
             .insert(event)
             .await
             .map_err(anyhow::Error::new);
@@ -179,7 +161,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.claim_position_fee_repo
+        self.repos
+            .claim_position_fee
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -192,7 +175,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.claim_reward_repo
+        self.repos
+            .claim_reward
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -208,7 +192,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.create_position_repo
+        self.repos
+            .create_position
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -223,7 +208,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.close_position_repo
+        self.repos
+            .close_position
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -238,7 +224,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.lock_position_repo
+        self.repos
+            .lock_position
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -251,7 +238,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.permanent_lock_position_repo
+        self.repos
+            .permanent_lock_position
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -281,7 +269,8 @@ impl MeteoraDammV2EventPersistor {
         {
             warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
         }
-        self.initialize_pool_repo
+        self.repos
+            .initialize_pool
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -294,7 +283,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.set_pool_status_repo
+        self.repos
+            .set_pool_status
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
@@ -307,7 +297,8 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        self.update_pool_fees_repo
+        self.repos
+            .update_pool_fees
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
