@@ -291,6 +291,73 @@ fn decodes_initialize_pool_fixtures() {
     }
 }
 
+/// `EvtCreatePosition` rides along in the genesis transactions (a pool is
+/// created and its first position opened together), so the initialize_pool
+/// fixtures double as real-data validation for it: clean decode, sane fields,
+/// and a full translation into the domain event.
+#[test]
+fn decodes_create_position_from_genesis_fixtures() {
+    for fixture in [
+        "damm_v2_initialize_pool.json",
+        "damm_v2_initialize_pool_2.json",
+    ] {
+        let tx = load_fixture(fixture);
+        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        assert!(
+            extracted.failures.is_empty(),
+            "{fixture}: failures: {:?}",
+            extracted.failures
+        );
+
+        let create = extracted
+            .events
+            .iter()
+            .find_map(|e| match e {
+                DammV2WireEvent::CreatePosition(e) => Some(e),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{fixture}: no CreatePosition event"));
+
+        assert_ne!(create.pool, Pubkey::default(), "{fixture}: pool all-zero");
+        assert_ne!(create.owner, Pubkey::default(), "{fixture}: owner all-zero");
+        assert_ne!(
+            create.position,
+            Pubkey::default(),
+            "{fixture}: position all-zero"
+        );
+        assert_ne!(
+            create.position_nft_mint,
+            Pubkey::default(),
+            "{fixture}: position_nft_mint all-zero"
+        );
+        assert_ne!(
+            create.position, create.position_nft_mint,
+            "{fixture}: position and its NFT mint must differ"
+        );
+
+        // Full pipeline: wire → domain, fields preserved.
+        let (pool, owner, position, nft) = (
+            create.pool,
+            create.owner,
+            create.position,
+            create.position_nft_mint,
+        );
+        let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+        let domain = outcome
+            .events
+            .iter()
+            .find_map(|e| match e {
+                DomainEvent::MeteoraDammV2(MeteoraDammV2Event::CreatePosition(e)) => Some(e),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{fixture}: no CreatePosition domain event"));
+        assert_eq!(domain.pool_address, pool);
+        assert_eq!(domain.owner, owner);
+        assert_eq!(domain.position, position);
+        assert_eq!(domain.position_nft_mint, nft);
+    }
+}
+
 /// Guard for the `EvtUpdatePoolFees` decode. Its `BorshDeserialize` is custom:
 /// it reads the two leading pubkeys (pool, operator) and captures the trailing
 /// `UpdatePoolFeesParameters` bytes verbatim into `params_raw` ("voie C"). A

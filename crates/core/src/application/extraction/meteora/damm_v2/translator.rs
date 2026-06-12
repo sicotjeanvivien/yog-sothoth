@@ -578,3 +578,101 @@ fn extract_mint_pair_from_refs(
     let owned: Vec<UiInstruction> = refs.iter().map(|r| (*r).clone()).collect();
     extract_mint_pair(&owned)
 }
+
+// ---------------------------------------------------------------------------
+// Translation unit tests
+// ---------------------------------------------------------------------------
+//
+// Field-mapping guards for the ring-2 lifecycle events that have no on-chain
+// fixture yet (close / lock / permanent-lock / set-pool-status). They build a
+// wire event with a distinct sentinel per field and assert each lands in the
+// right domain field — catching swaps/typos in the translator. They do NOT
+// validate the borsh layout or the discriminator against the real program;
+// that still needs a fixture.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::extraction::meteora::damm_v2::events::{
+        EvtClosePosition, EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus,
+    };
+
+    fn pk(b: u8) -> Pubkey {
+        Pubkey::new_from_array([b; 32])
+    }
+    fn sig() -> Signature {
+        Signature::from([7u8; 64])
+    }
+    fn ts() -> DateTime<Utc> {
+        DateTime::from_timestamp(1_700_000_000, 0).unwrap()
+    }
+
+    #[test]
+    fn close_position_maps_every_field() {
+        let wire = EvtClosePosition {
+            pool: pk(1),
+            owner: pk(2),
+            position: pk(3),
+            position_nft_mint: pk(4),
+        };
+        let d = translate_close_position(&wire, sig(), ts());
+        assert_eq!(d.pool_address, pk(1));
+        assert_eq!(d.owner, pk(2));
+        assert_eq!(d.position, pk(3));
+        assert_eq!(d.position_nft_mint, pk(4));
+        assert_eq!(d.signature, sig());
+        assert_eq!(d.timestamp, ts());
+    }
+
+    #[test]
+    fn lock_position_maps_every_field() {
+        let wire = EvtLockPosition {
+            pool: pk(1),
+            position: pk(2),
+            owner: pk(3),
+            vesting: pk(4),
+            cliff_point: 100,
+            period_frequency: 200,
+            cliff_unlock_liquidity: 300,
+            liquidity_per_period: 400,
+            number_of_period: 5,
+        };
+        let d = translate_lock_position(&wire, sig(), ts());
+        assert_eq!(d.pool_address, pk(1));
+        assert_eq!(d.position, pk(2));
+        assert_eq!(d.owner, pk(3));
+        assert_eq!(d.vesting, pk(4));
+        assert_eq!(d.cliff_point, 100);
+        assert_eq!(d.period_frequency, 200);
+        assert_eq!(d.cliff_unlock_liquidity, 300);
+        assert_eq!(d.liquidity_per_period, 400);
+        assert_eq!(d.number_of_period, 5);
+    }
+
+    #[test]
+    fn permanent_lock_position_maps_every_field() {
+        let wire = EvtPermanentLockPosition {
+            pool: pk(1),
+            position: pk(2),
+            lock_liquidity_amount: 111,
+            total_permanent_locked_liquidity: 222,
+        };
+        let d = translate_permanent_lock_position(&wire, sig(), ts());
+        assert_eq!(d.pool_address, pk(1));
+        assert_eq!(d.position, pk(2));
+        assert_eq!(d.lock_liquidity_amount, 111);
+        assert_eq!(d.total_permanent_locked_liquidity, 222);
+    }
+
+    #[test]
+    fn set_pool_status_maps_every_field() {
+        let wire = EvtSetPoolStatus {
+            pool: pk(9),
+            status: 1,
+        };
+        let d = translate_set_pool_status(&wire, sig(), ts());
+        assert_eq!(d.pool_address, pk(9));
+        assert_eq!(d.status, 1);
+        assert_eq!(d.signature, sig());
+        assert_eq!(d.timestamp, ts());
+    }
+}
