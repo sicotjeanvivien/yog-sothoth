@@ -675,4 +675,42 @@ mod tests {
         assert_eq!(d.signature, sig());
         assert_eq!(d.timestamp, ts());
     }
+
+    // ── ring-1 fee-side logic ───────────────────────────────────────────
+
+    /// `compute_fee_token_is_a` mirrors cp-amm's FeeMode. A wrong branch here
+    /// mislabels which token a swap's fee is denominated in — every combination
+    /// is pinned, including the unknown-mode error path.
+    #[test]
+    fn compute_fee_token_is_a_covers_every_mode() {
+        // BothToken (0): fee on the OUT token → A only when the trade is B→A.
+        assert_eq!(compute_fee_token_is_a(0, TradeDirection::AtoB), Ok(false));
+        assert_eq!(compute_fee_token_is_a(0, TradeDirection::BtoA), Ok(true));
+        // OnlyB (1) and Compounding (2): always token B, regardless of direction.
+        assert_eq!(compute_fee_token_is_a(1, TradeDirection::AtoB), Ok(false));
+        assert_eq!(compute_fee_token_is_a(1, TradeDirection::BtoA), Ok(false));
+        assert_eq!(compute_fee_token_is_a(2, TradeDirection::AtoB), Ok(false));
+        assert_eq!(compute_fee_token_is_a(2, TradeDirection::BtoA), Ok(false));
+        // Unknown collect_fee_mode surfaces the raw value as an error.
+        assert_eq!(compute_fee_token_is_a(7, TradeDirection::AtoB), Err(7));
+    }
+
+    /// The two on-chain enum decoders: valid discriminants map, out-of-range
+    /// values surface the raw byte as an error.
+    #[test]
+    fn enum_from_u8_decoders() {
+        assert_eq!(TradeDirection::from_u8(0), Ok(TradeDirection::AtoB));
+        assert_eq!(TradeDirection::from_u8(1), Ok(TradeDirection::BtoA));
+        assert_eq!(TradeDirection::from_u8(2), Err(2));
+
+        assert_eq!(
+            MeteoraDammV2LiquidityEventKind::from_u8(0),
+            Ok(MeteoraDammV2LiquidityEventKind::Add)
+        );
+        assert_eq!(
+            MeteoraDammV2LiquidityEventKind::from_u8(1),
+            Ok(MeteoraDammV2LiquidityEventKind::Remove)
+        );
+        assert_eq!(MeteoraDammV2LiquidityEventKind::from_u8(9), Err(9));
+    }
 }

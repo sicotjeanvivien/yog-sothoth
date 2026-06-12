@@ -20,7 +20,7 @@ use yog_core::{
             extractor::{ExtractFailure, extract_wire_events},
         },
     },
-    domain::{DomainEvent, MeteoraDammV2Event},
+    domain::{DomainEvent, MeteoraDammV2Event, MeteoraDammV2LiquidityEventKind},
 };
 
 const CP_AMM_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
@@ -147,6 +147,61 @@ fn decoded_swap_values_match_onchain_reality() {
         first.reserve_b_amount,
         second.reserve_b_amount
     );
+}
+
+/// `EvtLiquidityChange` — fixtures existed but had no decode test. Validate an
+/// add-liquidity tx end-to-end: clean decode, `Add` kind, canonical sorted
+/// mints, non-zero amounts/reserves/liquidity_delta, translation preserved.
+#[test]
+fn decodes_liquidity_add_fixtures() {
+    for fixture in ["damm_v2_liquidity_add.json", "damm_v2_liquidity_add_2.json"] {
+        let tx = load_fixture(fixture);
+        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        assert!(
+            extracted.failures.is_empty(),
+            "{fixture}: {:?}",
+            extracted.failures
+        );
+
+        let outcome = MeteoraDammV2::new().extract_events(&tx).expect("extract");
+        let liq = outcome
+            .events
+            .iter()
+            .find_map(|e| match e {
+                DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Liquidity(e)) => Some(e),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{fixture}: no Liquidity domain event"));
+
+        assert_eq!(
+            liq.liquidity_event_kind,
+            MeteoraDammV2LiquidityEventKind::Add,
+            "{fixture}: expected an Add"
+        );
+        assert_ne!(
+            liq.pool_address,
+            Pubkey::default(),
+            "{fixture}: pool all-zero"
+        );
+        assert!(
+            liq.token_a_mint <= liq.token_b_mint,
+            "{fixture}: mints not in canonical order"
+        );
+        assert_ne!(liq.token_a_mint, liq.token_b_mint, "{fixture}: mints equal");
+        assert!(
+            liq.reserve_a_after > 0 && liq.reserve_b_after > 0,
+            "{fixture}: zero reserves"
+        );
+        // An add moves at least one side and changes liquidity.
+        assert!(
+            liq.liquidity_delta > 0,
+            "{fixture}: zero liquidity_delta on an add"
+        );
+        assert!(
+            liq.amount_a > 0 || liq.amount_b > 0,
+            "{fixture}: no tokens added"
+        );
+    }
 }
 
 #[test]
