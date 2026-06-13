@@ -72,11 +72,18 @@ Pure logic and domain types. No I/O, no runtime, no database.
 core/src/
 ├── domain/                                  ← entities + repository contracts
 │   ├── meteora/                             (Meteora-family domain events)
-│   │   ├── damm_v2/
+│   │   ├── damm_v2/                         (one module per event kind — 11 today)
 │   │   │   ├── swap_event/                  (MeteoraDammV2SwapEvent + repo trait)
 │   │   │   ├── liquidity_event/             (MeteoraDammV2LiquidityEvent + repo)
 │   │   │   ├── claim_position_fee_event/    (MeteoraDammV2ClaimPositionFeeEvent + repo)
 │   │   │   ├── claim_reward_event/          (MeteoraDammV2ClaimRewardEvent + repo)
+│   │   │   ├── create_position_event/       (MeteoraDammV2CreatePositionEvent + repo)
+│   │   │   ├── close_position_event/        (MeteoraDammV2ClosePositionEvent + repo)
+│   │   │   ├── lock_position_event/         (MeteoraDammV2LockPositionEvent + repo)
+│   │   │   ├── permanent_lock_position_event/ (MeteoraDammV2PermanentLockPositionEvent + repo)
+│   │   │   ├── initialize_pool_event/       (MeteoraDammV2InitializePoolEvent + repo)
+│   │   │   ├── set_pool_status_event/       (MeteoraDammV2SetPoolStatusEvent + repo)
+│   │   │   ├── update_pool_fees_event/      (MeteoraDammV2UpdatePoolFeesEvent + repo)
 │   │   │   └── damm_v2.rs                   (MeteoraDammV2Event sub-enum)
 │   │   └── meteora.rs                       (mod file)
 │   ├── pool/                                (Pool, PoolRepository — cross-protocol)
@@ -244,12 +251,19 @@ persistence/
     ├── repositories/                      ← one impl per domain repository trait
     │   ├── helper/                        (string→Pubkey, u64↔i64, u128↔BigDecimal,
     │   │                                   pagination helpers, sqlx error mapping)
-    │   ├── meteora/                       (per-protocol event repositories)
+    │   ├── meteora/                       (per-protocol event repositories — one per event kind)
     │   │   ├── damm_v2/
     │   │   │   ├── swap_event/            (PgMeteoraDammV2SwapEventRepository + Row)
     │   │   │   ├── liquidity_event/
-    │   │   │   ├── claim_position_fee_event/
-    │   │   │   └── claim_reward_event/
+    │   │   │   ├── position_fee_claim/    (PgMeteoraDammV2ClaimPositionFeeEventRepository)
+    │   │   │   ├── reward_claim/          (PgMeteoraDammV2ClaimRewardEventRepository)
+    │   │   │   ├── create_position.rs
+    │   │   │   ├── close_position.rs
+    │   │   │   ├── lock_position.rs
+    │   │   │   ├── permanent_lock_position.rs
+    │   │   │   ├── initialize_pool.rs
+    │   │   │   ├── set_pool_status.rs
+    │   │   │   └── update_pool_fees.rs
     │   │   └── damm_v2.rs                 (mod file)
     │   ├── pool/                          (PgPoolRepository — cross-protocol)
     │   ├── pool_current_state/            (cross-protocol projection)
@@ -272,13 +286,20 @@ persistence/
 
 ### Per-protocol table strategy ("voie 3")
 
-Each `(protocol, event_kind)` combination has its own SQL table, named `<platform>_<product>_<event_kind>_events`. v0.1 ships four DAMM v2 tables:
+Each `(protocol, event_kind)` combination has its own SQL table, named `<platform>_<product>_<event_kind>_events`. The DAMM v2 family currently ships eleven tables:
 
 ```
 meteora_damm_v2_swap_events
 meteora_damm_v2_liquidity_events
 meteora_damm_v2_claim_position_fee_events
 meteora_damm_v2_claim_reward_events
+meteora_damm_v2_create_position_events
+meteora_damm_v2_close_position_events
+meteora_damm_v2_lock_position_events
+meteora_damm_v2_permanent_lock_position_events
+meteora_damm_v2_initialize_pool_events
+meteora_damm_v2_set_pool_status_events
+meteora_damm_v2_update_pool_fees_events
 ```
 
 Each table holds only the columns relevant to its protocol — no NULL columns for protocol-incompatible fields, no generic JSONB blob. When DLMM, Raydium CLMM or Orca Whirlpool land, they get their own sibling tables (e.g. `meteora_dlmm_swap_events`) with their own schemas.
@@ -293,6 +314,8 @@ claim_reward_events
 ```
 
 Each VIEW exposes the slim common columns plus a synthesised `protocol` column (`'meteora_damm_v2'::TEXT AS protocol`). Protocol-specific columns (`next_sqrt_price`, fee breakdown, etc.) are NOT in the VIEWs — code that needs them reads the underlying table directly. New protocols add a `UNION ALL` branch to each VIEW without touching the API code.
+
+The VIEWs cover only the four concepts that already have a cross-protocol meaning. The newer DAMM v2 tables (position lifecycle — `create_position`, `close_position`, `lock_position`, `permanent_lock_position` — and pool administration — `initialize_pool`, `set_pool_status`, `update_pool_fees`) have no cross-protocol VIEW yet; they are read per-protocol directly. A VIEW is added only once a second protocol exposes the same concept.
 
 The `pools`, `pool_current_state`, `watched_pools`, `network_status`, `token_metadata`, `token_prices` tables stay generic (one table for all protocols), with a `protocol` column where useful.
 
@@ -313,7 +336,7 @@ It reads `DATABASE_URL_MIGRATE` from the environment, connects under the `yog_mi
 - **Forward-only.** Migrations committed to git never change. No `.down.sql`. Rollback in production is a backup restore.
 - **GRANTs live in the migration that creates the table.** Each `CREATE TABLE` is followed by its `GRANT INSERT, UPDATE` (and any other non-default) statements. `SELECT` is covered by the default privileges set in `setup_roles.sql`.
 
-The v0.1 baseline (`001_initial_schema.sql`) consolidates the early dev migrations into a single applicable unit. From this baseline onwards, forward-only resumes — new migrations are added as `002_*.sql` and never rewritten.
+The v0.1 baseline (`001_initial_schema.sql`) consolidates the early dev migrations into a single applicable unit. From this baseline onwards, forward-only resumes — new migrations are added as `00N_*.sql` and never rewritten. The DAMM v2 position-lifecycle and pool-admin tables landed this way (`002_create_position_events.sql` through `008_update_pool_fees_events.sql`), each carrying its own `GRANT ... TO yog_indexer`.
 
 ### `setup_roles.sql`
 
@@ -473,9 +496,12 @@ TransactionProcessor
 └── EventPersistor            (application/services/event_persistor.rs)
     └── async fn persist(event: &DomainEvent)
         └── match DomainEvent::MeteoraDammV2(e) → MeteoraDammV2EventPersistor::persist(e)
-            ├── persist_swap / persist_liquidity / persist_claim_*
+            ├── match on the sub-enum → persist_swap / persist_liquidity /
+            │     persist_claim_* / persist_{create,close,lock,permanent_lock}_position /
+            │     persist_{initialize_pool,set_pool_status,update_pool_fees}
             ├── PoolMaintenance (shared) — pool upsert + pool_current_state projection
-            └── Per-protocol XxxEventRepository (yog-persistence)
+            └── DammV2Repos — bundle of the per-event-kind XxxEventRepository
+                  trait objects (yog-persistence), one Arc each
 ```
 
 The split is deliberate:

@@ -84,12 +84,12 @@ For administering the allowlist (schema, seed scripts, SQL helpers), see **[`cra
 
 | Priority | Protocol | Status | Model |
 |---|---|---|---|
-| **v0.1** | Meteora DAMM v2 | **Active** — circle 1 events end-to-end | x·y=k + dynamic fees + NFT positions |
+| **v0.1** | Meteora DAMM v2 | **Active** — 11 event kinds end-to-end (circles 1–3) | x·y=k + dynamic fees + NFT positions |
 | v0.5 | Meteora DLMM | Stub | Bin-based liquidity, volatility fees |
 | v0.5 | Meteora DAMM v1 | Stub | x·y=k + dual-yield (lending) |
 | v0.5+ | DAMM v1 Farm, Stake2Earn, LST, Multi-Token | Not started | — |
 
-For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circles 2 (position lifecycle, pool config) and 3 (admin) are scoped but not yet wired.
+For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circle 2 (position lifecycle — `EvtCreatePosition`, `EvtClosePosition`, `EvtLockPosition`, `EvtPermanentLockPosition`) and circle 3 (pool config / admin — `EvtInitializePool`, `EvtSetPoolStatus`, `EvtUpdatePoolFees`) are now wired end-to-end as well: extracted, persisted to their own per-kind tables, and covered by fixture tests. Each lands in `meteora_damm_v2_<kind>_events`; cross-protocol VIEWs still expose only the four circle-1 concepts.
 
 ---
 
@@ -146,7 +146,7 @@ For the native development workflow (running services via `cargo run` against a 
 
 - [x] Rust workspace — `core` / `persistence` / `bootstrap` / `indexer` / `api` / `context` / `wasm`
 - [x] Three-stage ingestion pipeline (`RpcListener` → `SignatureDispatcher` → `IndexerWorker`) with Prometheus instrumentation
-- [x] DAMM v2 decoding — Anchor `event_cpi`, circle 1 events end-to-end (Swap, Liquidity, ClaimFee, ClaimReward)
+- [x] DAMM v2 decoding — Anchor `event_cpi`, 11 event kinds end-to-end (swap/liquidity/claims, position lifecycle, pool config & admin)
 - [x] Token enrichment daemon — metadata via Helius DAS, USD prices via Jupiter Price V3
 - [x] HTTP API on axum — `/healthz`, `/api/pools`, `/api/tokens/{mint}`, embedded token data in pool responses
 - [x] Four-role Postgres model — `yog_migrate` / `yog_indexer` / `yog_api` / `yog_context`, least-privilege enforced
