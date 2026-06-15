@@ -39,7 +39,7 @@ impl TransactionFetcher {
         };
 
         let strategy = FixedInterval::from_millis(500).take(5);
-        Retry::spawn(strategy, || async {
+        Retry::start(strategy, || async {
             self.rpc_client
                 .get_transaction_with_config(&signature, config)
                 .await
