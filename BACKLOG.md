@@ -238,24 +238,35 @@
 - [ ] **Ordre d'exécution** : la CA doit exister **avant** d'activer la rétention 30j, sinon on perd l'historique en droppant — dépendance dure avec l'item CA ci-dessous
 - [ ] **GRANT** : policies appliquées via `yog-migrate` (forward-only) ; pas de nouveau rôle requis
 
-#### Continuous aggregate — volume 24h (à cadrer)
-> Lié à la stratégie de rétention ci-dessus : la CA n'est pas qu'une optim perf du calcul 24h,
-> elle est le **rollup qui porte l'historique long terme** une fois la rétention 30j active.
-> Contexte : `volume_24h_usd` est recalculé au read-time dans `pool_analytics.rs`
-> (`SUM(...) FROM swap_events WHERE timestamp > NOW() - INTERVAL '24 hours'`), soit un scan
-> des swaps des dernières 24 h à chaque `GET /api/pools`. Une continuous aggregate
-> TimescaleDB pré-agrégerait les montants. **Pas encore acté — questions de design à
-> trancher avant tout code :**
+#### Continuous aggregates — rollups durables (cadré, 15 juin 2026)
+> Double rôle, acté avec la stratégie de rétention : (1) **historique long terme** qui survit au
+> drop 30j pour les 4 tables qui droppent (`swap`, `liquidity`, `claim_position_fee`, `claim_reward`),
+> (2) **perf** du calcul `volume_24h_usd` de `GET /api/pools` (aujourd'hui `SUM(...) FROM swap_events
+> WHERE timestamp > NOW() - 24h`, un scan à chaque appel).
 
-- [ ] **Sémantique du « 24h »** : buckets horaires → fenêtre quantifiée à l'heure (24 buckets complets + bucket courant partiel) vs exactitude `NOW() - 24h` actuelle. Le glissement des chiffres affichés est-il acceptable ?
-- [ ] **Le bon moment** : la latence `GET /api/pools` est-elle un problème *mesuré*, ou anticipé ? (l'item était classé « différé si ≥ 500 pools » — promouvoir = coût récurrent avant que la charge le justifie)
-- [ ] **Duplication per-protocole** : la CA serait liée à `meteora_damm_v2_swap_events` ; aujourd'hui le volume passe par la VIEW cross-protocole `swap_events` (agnostique). DLMM/Raydium → une CA chacun + union read-time. Simplicité read-time échangée contre perf
-- [ ] **Alternatives plus légères** : index ciblé + requête actuelle, ou table matérialisée rafraîchie par l'indexer — à comparer à la CA avant de choisir
-- [ ] **Conversion USD** : montants bruts dans la CA + conversion read-time aux prix courants (sémantique identique à l'actuel) vs valorisation au prix de la transaction — décision à acter
+**Design acté (TimescaleDB 2.27.1) :**
+- **Un CA par table source** qui droppe — même pattern × 4. Grain **horaire**, conservé à vie, `materialized_only = false` (real-time agg pour couvrir l'heure courante). Tiering horaire→journalier différé si la taille pose souci.
+- **Montants bruts** dans la CA, **conversion USD au read-time** (prix courants) — CA stable, indépendante des prix.
+- Agrégats par `(pool_address, bucket)` :
+	- `swap` : `SUM(amount_a)`, `SUM(amount_b)`, `COUNT(*)`
+	- `liquidity` : `SUM(amount_a/b)`, `SUM(liquidity_delta)`, `COUNT(*)`
+	- `claim_position_fee` : `SUM(fee_a_claimed)`, `SUM(fee_b_claimed)`, `COUNT(*)`
+	- `claim_reward` : `SUM(total_reward)`, `COUNT(*)`, groupé aussi par `mint_reward`
+- **OHLC prix différé** : pas de `first/last/min/max(next_sqrt_price)` pour l'instant (viendra avec les courbes de prix / page Overview).
+- **Sémantique 24h** : quantification horaire acceptée (« ~24 dernières heures-horloge » vs `NOW()-24h` exact) — OK pour un KPI dashboard.
+- **Read mono-protocole** : `pool_analytics.rs` lira la CA swap directement ; VIEW cross-protocole *au-dessus des CA* différée jusqu'au 2ᵉ protocole.
 
-> Une fois cadré : si CA retenue, esquisse d'implémentation = migration forward-only sur la
-> hypertable (`time_bucket('1 hour', …)`, `SUM(amount_a/b)`, `COUNT(*)`), `add_continuous_aggregate_policy`,
-> `GRANT SELECT` à `yog_api`, réécriture de la sous-requête volume, régen `.sqlx` + test d'intégration, bench avant/après.
+**Contraintes migration (forward-only, sqlx lance chaque migration en transaction) :**
+- `CREATE MATERIALIZED VIEW … WITH (timescaledb.continuous, timescaledb.materialized_only = false) … WITH NO DATA` (le `WITH NO DATA` évite l'erreur « CA non créable en transaction »).
+- Backfill par la refresh policy, **jamais** `refresh_continuous_aggregate` dans la migration (ne passe pas en transaction).
+- `add_continuous_aggregate_policy` (`start_offset` large pour backfill initial, `end_offset => '1 hour'`, `schedule_interval => '1 hour'`).
+- `GRANT SELECT` sur chaque CA à `yog_api`.
+
+**Ordre d'implémentation — `swap` en premier (slice verticale), puis réplication :**
+- [ ] **CA `swap`** : migration `010` (CA + refresh policy + GRANT), réécriture sous-requête volume de `pool_analytics.rs` (lecture CA), régen `.sqlx`, test d'intégration, bench latence `GET /api/pools` avant/après
+- [ ] **CA `liquidity`** (historique seul) — même pattern
+- [ ] **CA `claim_position_fee`** (historique seul) — même pattern
+- [ ] **CA `claim_reward`** (historique seul, group by `mint_reward`) — même pattern
 
 #### Performance — différé empirique
 > N'activer que si la charge le justifie. Ne pas anticiper.
