@@ -23,6 +23,9 @@ serde_json = { workspace = true }
 # Solana
 solana-pubkey = { workspace = true }
 
+# Pool account decoding (base64 RPC payload)
+base64 = { workspace = true }
+
 # Errors / logging / config
 thiserror = { workspace = true }
 anyhow = { workspace = true }

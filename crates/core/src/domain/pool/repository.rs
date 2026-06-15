@@ -84,3 +84,25 @@ pub trait PoolRepository: Send + Sync {
         limit: i64,
     ) -> RepositoryResult<Page<Pool>>;
 }
+
+/// Resolution of a pool's token mints from its on-chain account,
+/// performed by yog-context (which holds column-level UPDATE on the
+/// mint columns).
+///
+/// Kept separate from [`PoolRepository`] so the resolver worker depends
+/// only on what it uses, and the read/write mocks in the api and
+/// indexer crates don't have to carry these methods.
+#[async_trait]
+pub trait PoolMintResolver: Send + Sync {
+    /// Pools whose mints haven't been resolved yet (`token_a_mint IS NULL`),
+    /// capped at `limit`.
+    async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
+
+    /// Set both mints for a pool, as decoded from its on-chain account.
+    async fn set_mints(
+        &self,
+        pool_address: &Pubkey,
+        token_a_mint: &Pubkey,
+        token_b_mint: &Pubkey,
+    ) -> RepositoryResult<()>;
+}

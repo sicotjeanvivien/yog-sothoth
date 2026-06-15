@@ -1,6 +1,7 @@
 mod query;
 mod rows;
 
+use crate::repositories::helper::convert_string_to_pubkey;
 use crate::repositories::helper::{PageBuilder, map_sqlx_error, resolve_query_mode};
 use async_trait::async_trait;
 use query::{PaginatedPoolsQuery, build};
@@ -9,7 +10,7 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryResult,
-    domain::{Pool, PoolCursor, PoolRepository},
+    domain::{Pool, PoolCursor, PoolMintResolver, PoolRepository},
 };
 
 pub struct PgPoolRepository {
@@ -136,5 +137,50 @@ impl PoolRepository for PgPoolRepository {
                 })
             }),
         )
+    }
+}
+
+#[async_trait]
+impl PoolMintResolver for PgPoolRepository {
+    async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT pool_address
+            FROM pools
+            WHERE token_a_mint IS NULL OR token_b_mint IS NULL
+            ORDER BY first_seen_at
+            LIMIT $1
+            "#,
+            limit,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter()
+            .map(|r| convert_string_to_pubkey(r.pool_address, "pool_address"))
+            .collect()
+    }
+
+    async fn set_mints(
+        &self,
+        pool_address: &Pubkey,
+        token_a_mint: &Pubkey,
+        token_b_mint: &Pubkey,
+    ) -> RepositoryResult<()> {
+        sqlx::query!(
+            r#"
+            UPDATE pools
+            SET token_a_mint = $2, token_b_mint = $3
+            WHERE pool_address = $1
+            "#,
+            pool_address.to_string(),
+            token_a_mint.to_string(),
+            token_b_mint.to_string(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
     }
 }
