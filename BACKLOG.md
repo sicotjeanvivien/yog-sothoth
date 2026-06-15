@@ -24,6 +24,8 @@
 - [x] `EvtUpdatePoolFees`
 - [x] Test cercle 2 avec fixture ( non fait pour le `EvtSetPoolStatus` car pas d'event sur SOLSCAN  )
 - [ ] Activer `fee_tier` dans `PoolResponse` une fois `EvtInitializePool` indexé
+- [ ] `MeteoraDammV2InitializePoolEvent::pool_fees_raw` à décoder pour le moment c'est un  `Vec<u8>`
+- [ ] `MeteoraDammV2UpdatePoolFeesEvent::params_raw` à décoder pour le moment c'est un  `Vec<u8>`
 
 #### Dashboard — page Overview
 - [ ] Cadrage produit : définir quelles agrégations afficher (KPIs globaux ? top pools ? flux récent ?)
@@ -210,20 +212,22 @@
 ---
 ### Transverse v0.1
 
-#### Continuous aggregate — volume 24h (actif)
-> Aujourd'hui `volume_24h_usd` est recalculé au read-time dans `pool_analytics.rs` :
-> `SUM(...) FROM swap_events WHERE timestamp > NOW() - INTERVAL '24 hours'`, soit un scan
-> de toutes les lignes swap des dernières 24 h à chaque `GET /api/pools`. Objectif :
-> pré-agréger les montants via une continuous aggregate TimescaleDB et ne garder que la
-> conversion USD (prix courants) au read-time — sémantique identique, scan évité.
+#### Continuous aggregate — volume 24h (à cadrer)
+> Contexte : `volume_24h_usd` est recalculé au read-time dans `pool_analytics.rs`
+> (`SUM(...) FROM swap_events WHERE timestamp > NOW() - INTERVAL '24 hours'`), soit un scan
+> des swaps des dernières 24 h à chaque `GET /api/pools`. Une continuous aggregate
+> TimescaleDB pré-agrégerait les montants. **Pas encore acté — questions de design à
+> trancher avant tout code :**
 
-- [ ] Migration `009_swap_volume_hourly_cagg.sql` (forward-only) : `CREATE MATERIALIZED VIEW ... WITH (timescaledb.continuous)` sur la hypertable `meteora_damm_v2_swap_events` (pas la VIEW `swap_events`, non-agrégeable en CA), bucket `time_bucket('1 hour', timestamp)`, agrégats par `(pool_address, bucket)` : `SUM(amount_a)`, `SUM(amount_b)`, `COUNT(*)` — montants en unités token brutes, la conversion USD reste read-time avec les prix courants
-- [ ] Refresh policy : `add_continuous_aggregate_policy` (`start_offset => '3 hours'`, `end_offset => '1 hour'`, `schedule_interval => '30 minutes'`, à ajuster) ; real-time aggregation laissée ON pour couvrir le bucket courant
-- [ ] `GRANT SELECT` sur la CA à `yog_api` dans la même migration (cohérent avec le modèle de privilèges)
-- [ ] Réécrire la sous-requête volume de `pool_analytics.rs` : sommer les 24 derniers buckets horaires de la CA au lieu de scanner `swap_events`, puis conversion USD via `token_prices`
-- [ ] Régénérer le cache `.sqlx/` (`cd crates/persistence && cargo sqlx prepare`) + couvrir par un test d'intégration DB (`integration-tests`)
-- [ ] Bench latence `GET /api/pools` avant/après sur dataset représentatif
-- [ ] À dupliquer par protocole quand DLMM/Raydium arrivent (la CA est liée à une table per-protocole par construction)
+- [ ] **Sémantique du « 24h »** : buckets horaires → fenêtre quantifiée à l'heure (24 buckets complets + bucket courant partiel) vs exactitude `NOW() - 24h` actuelle. Le glissement des chiffres affichés est-il acceptable ?
+- [ ] **Le bon moment** : la latence `GET /api/pools` est-elle un problème *mesuré*, ou anticipé ? (l'item était classé « différé si ≥ 500 pools » — promouvoir = coût récurrent avant que la charge le justifie)
+- [ ] **Duplication per-protocole** : la CA serait liée à `meteora_damm_v2_swap_events` ; aujourd'hui le volume passe par la VIEW cross-protocole `swap_events` (agnostique). DLMM/Raydium → une CA chacun + union read-time. Simplicité read-time échangée contre perf
+- [ ] **Alternatives plus légères** : index ciblé + requête actuelle, ou table matérialisée rafraîchie par l'indexer — à comparer à la CA avant de choisir
+- [ ] **Conversion USD** : montants bruts dans la CA + conversion read-time aux prix courants (sémantique identique à l'actuel) vs valorisation au prix de la transaction — décision à acter
+
+> Une fois cadré : si CA retenue, esquisse d'implémentation = migration forward-only sur la
+> hypertable (`time_bucket('1 hour', …)`, `SUM(amount_a/b)`, `COUNT(*)`), `add_continuous_aggregate_policy`,
+> `GRANT SELECT` à `yog_api`, réécriture de la sous-requête volume, régen `.sqlx` + test d'intégration, bench avant/après.
 
 #### Performance — différé empirique
 > N'activer que si la charge le justifie. Ne pas anticiper.
