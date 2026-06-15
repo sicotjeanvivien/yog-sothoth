@@ -265,8 +265,8 @@
 **Ordre d'implémentation — `swap` en premier (slice verticale), puis réplication :**
 - [x] **CA `swap`** : migration `010_swap_volume_hourly_cagg.sql` (CA + refresh policy 31j/1h + GRANT `yog_api`), réécriture sous-requête volume de `pool_analytics.rs` (lecture CA, valorisation trade-time par bucket), `.sqlx` régénéré, test d'intégration `tests/volume_cagg.rs` ✅. Reste : bench latence `GET /api/pools` avant/après sur dataset représentatif
 - [x] **CA `liquidity`** (historique seul) : migration `011_liquidity_hourly_cagg.sql` (split par kind, refresh policy 31j/1h, GRANT `yog_api`), test d'intégration `tests/liquidity_cagg.rs` ✅
-- [ ] **CA `claim_position_fee`** (historique seul) — même pattern
-- [ ] **CA `claim_reward`** (historique seul, group by `mint_reward`) — même pattern
+- [x] **CA `claim_position_fee`** (historique seul) : migration `012` (`SUM(fee_a/b_claimed)`, `COUNT(*)` ; pas de mint dans la table source → jointure `pools` au read si besoin), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
+- [x] **CA `claim_reward`** (historique seul, group by `mint_reward`) : migration `013` (`SUM(total_reward)`, `COUNT(*)` par `(pool, mint_reward, bucket)`), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
 
 #### Performance — différé empirique
 > N'activer que si la charge le justifie. Ne pas anticiper.
