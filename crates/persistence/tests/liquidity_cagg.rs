@@ -21,8 +21,6 @@ fn pk(seed: u8) -> Pubkey {
 async fn insert_liquidity(
     pool: &PgPool,
     pool_addr: &str,
-    mint_a: &str,
-    mint_b: &str,
     signature: &str,
     kind: &str,
     amount_a: i64,
@@ -32,15 +30,13 @@ async fn insert_liquidity(
 ) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_liquidity_events
-           (pool_address, signature, token_a_mint, token_b_mint, liquidity_event_kind,
+           (pool_address, signature, liquidity_event_kind,
             amount_a, amount_b, liquidity_delta, reserve_a_after, reserve_b_after,
             position, owner, timestamp)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::NUMERIC,0,0,'pos','own',$9)",
+         VALUES ($1,$2,$3,$4,$5,$6::NUMERIC,0,0,'pos','own',$7)",
     )
     .bind(pool_addr)
     .bind(signature)
-    .bind(mint_a)
-    .bind(mint_b)
     .bind(kind)
     .bind(amount_a)
     .bind(amount_b)
@@ -54,24 +50,13 @@ async fn insert_liquidity(
 #[sqlx::test]
 async fn liquidity_cagg_splits_add_and_remove(pool: PgPool) {
     let pool_addr = pk(1).to_string();
-    let mint_a = pk(2).to_string();
-    let mint_b = pk(3).to_string();
     // Same hour bucket so the three events collapse into one CA row.
     let ts = Utc::now() - Duration::hours(1);
 
     // Two adds, one remove.
-    insert_liquidity(
-        &pool, &pool_addr, &mint_a, &mint_b, "add1", "add", 100, 200, 1000, ts,
-    )
-    .await;
-    insert_liquidity(
-        &pool, &pool_addr, &mint_a, &mint_b, "add2", "add", 50, 70, 500, ts,
-    )
-    .await;
-    insert_liquidity(
-        &pool, &pool_addr, &mint_a, &mint_b, "rem1", "remove", 30, 40, 300, ts,
-    )
-    .await;
+    insert_liquidity(&pool, &pool_addr, "add1", "add", 100, 200, 1000, ts).await;
+    insert_liquidity(&pool, &pool_addr, "add2", "add", 50, 70, 500, ts).await;
+    insert_liquidity(&pool, &pool_addr, "rem1", "remove", 30, 40, 300, ts).await;
 
     let (a_add, b_add, a_rem, b_rem, l_add, l_rem, n_add, n_rem): (
         i64,

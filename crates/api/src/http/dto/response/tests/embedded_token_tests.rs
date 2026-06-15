@@ -58,7 +58,7 @@ fn to_json(dto: &EmbeddedTokenResponse) -> serde_json::Value {
 
 #[test]
 fn uses_metadata_fields_when_present() {
-    let dto = EmbeddedTokenResponse::from_sources(mint(), Some(full_metadata(mint())), None);
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(full_metadata(mint())), None);
     let j = to_json(&dto);
 
     assert_eq!(j["mint"], mint().to_string());
@@ -78,7 +78,7 @@ fn metadata_with_null_symbol_and_name_is_preserved() {
     meta.name = None;
     meta.logo_uri = None;
 
-    let dto = EmbeddedTokenResponse::from_sources(mint(), Some(meta), None);
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(meta), None);
     let j = to_json(&dto);
 
     assert!(j["symbol"].is_null());
@@ -94,7 +94,7 @@ fn empty_logo_uri_serializes_as_null() {
     let mut meta = full_metadata(mint());
     meta.logo_uri = Some(String::new());
 
-    let dto = EmbeddedTokenResponse::from_sources(mint(), Some(meta), None);
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(meta), None);
     let j = to_json(&dto);
 
     assert!(j["logoUri"].is_null(), "empty logo must be null, not \"\"");
@@ -106,7 +106,7 @@ fn empty_logo_uri_serializes_as_null() {
 fn falls_back_when_metadata_is_none() {
     // Fresh pool whose mints have not been enriched by yog-context yet.
     // The dashboard must still see a usable payload.
-    let dto = EmbeddedTokenResponse::from_sources(mint(), None, None);
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), None, None);
     let j = to_json(&dto);
 
     assert_eq!(j["mint"], mint().to_string());
@@ -129,7 +129,8 @@ fn mint_in_response_comes_from_parameter_not_metadata() {
     // makes it read the mint off the metadata struct, the two paths
     // become inconsistent. This test pins the parameter as the
     // source of truth even when metadata is present.
-    let dto = EmbeddedTokenResponse::from_sources(mint(), Some(full_metadata(other_mint())), None);
+    let dto =
+        EmbeddedTokenResponse::from_sources(Some(mint()), Some(full_metadata(other_mint())), None);
     let j = to_json(&dto);
 
     assert_eq!(j["mint"], mint().to_string());
@@ -141,7 +142,7 @@ fn mint_in_response_comes_from_parameter_not_metadata() {
 #[test]
 fn price_is_attached_when_present() {
     let dto = EmbeddedTokenResponse::from_sources(
-        mint(),
+        Some(mint()),
         Some(full_metadata(mint())),
         Some(sample_price(mint())),
     );
@@ -156,7 +157,7 @@ fn price_is_attached_when_present() {
 
 #[test]
 fn price_is_null_when_absent() {
-    let dto = EmbeddedTokenResponse::from_sources(mint(), Some(full_metadata(mint())), None);
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(full_metadata(mint())), None);
     let j = to_json(&dto);
 
     assert!(j["price"].is_null());
@@ -167,7 +168,7 @@ fn price_attaches_even_when_metadata_absent() {
     // Edge case: price exists before metadata. Could happen if the
     // price worker races ahead of the metadata worker. The response
     // must still attach the price.
-    let dto = EmbeddedTokenResponse::from_sources(mint(), None, Some(sample_price(mint())));
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), None, Some(sample_price(mint())));
     let j = to_json(&dto);
 
     assert!(j["price"].is_object());
@@ -183,7 +184,7 @@ fn wire_field_names_are_camel_case() {
     // The Next.js dashboard parses these payloads with zod and would
     // fail at runtime — this test catches it at `cargo test` time.
     let dto = EmbeddedTokenResponse::from_sources(
-        mint(),
+        Some(mint()),
         Some(full_metadata(mint())),
         Some(sample_price(mint())),
     );

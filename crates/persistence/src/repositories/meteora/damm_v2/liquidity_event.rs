@@ -46,25 +46,22 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
             r#"
             INSERT INTO meteora_damm_v2_liquidity_events (
                 pool_address, signature,
-                token_a_mint, token_b_mint,
                 liquidity_event_kind, amount_a, amount_b, liquidity_delta,
                 reserve_a_after, reserve_b_after,
                 position, owner,
                 timestamp
             )
             VALUES (
-                $1, $2, $3,
-                $4, $5,
-                $6, $7, $8, $9,
-                $10, $11,
-                $12, $13
+                $1, $2,
+                $3, $4, $5, $6,
+                $7, $8,
+                $9, $10,
+                $11
             )
             ON CONFLICT (signature, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
             event.signature.to_string(),
-            event.token_a_mint.to_string(),
-            event.token_b_mint.to_string(),
             event.liquidity_event_kind.as_str(),
             convert_u64_to_i64(event.amount_a, "amount_a")?,
             convert_u64_to_i64(event.amount_b, "amount_b")?,
@@ -115,7 +112,6 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
                 MeteoraDammV2LiquidityEventRow,
                 r#"
                 SELECT pool_address, signature,
-                       token_a_mint, token_b_mint,
                        liquidity_event_kind, amount_a, amount_b, liquidity_delta,
                        reserve_a_after, reserve_b_after,
                        position, owner,
@@ -143,7 +139,6 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
                 MeteoraDammV2LiquidityEventRow,
                 r#"
                 SELECT pool_address, signature,
-                       token_a_mint, token_b_mint,
                        liquidity_event_kind, amount_a, amount_b, liquidity_delta,
                        reserve_a_after, reserve_b_after,
                        position, owner,

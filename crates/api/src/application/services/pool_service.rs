@@ -163,36 +163,39 @@ impl PoolService {
     /// Sequential awaits: at single-request latency the four indexed
     /// lookups are cheap, and readability wins over micro-parallelism.
     async fn enrich(&self, pool: Pool, analytics: PoolAnalytics) -> RepositoryResult<EnrichedPool> {
-        let token_a_meta = self
-            .token_metadata_repository
-            .find_by_mint(&pool.token_a_mint)
-            .await?;
-        let token_a_price = self
-            .token_price_repository
-            .find_latest_by_mint(&pool.token_a_mint)
-            .await?;
-        let token_b_meta = self
-            .token_metadata_repository
-            .find_by_mint(&pool.token_b_mint)
-            .await?;
-        let token_b_price = self
-            .token_price_repository
-            .find_latest_by_mint(&pool.token_b_mint)
-            .await?;
+        let token_a = self.enrich_side(pool.token_a_mint).await?;
+        let token_b = self.enrich_side(pool.token_b_mint).await?;
 
         Ok(EnrichedPool {
-            token_a: EnrichedToken {
-                mint: pool.token_a_mint,
-                metadata: token_a_meta,
-                price: token_a_price,
-            },
-            token_b: EnrichedToken {
-                mint: pool.token_b_mint,
-                metadata: token_b_meta,
-                price: token_b_price,
-            },
+            token_a,
+            token_b,
             analytics,
             pool,
+        })
+    }
+
+    /// Enrich one token side. A pool discovered but not yet resolved by
+    /// yog-context has no mint, so there's nothing to look up.
+    async fn enrich_side(
+        &self,
+        mint: Option<solana_pubkey::Pubkey>,
+    ) -> RepositoryResult<EnrichedToken> {
+        let Some(mint) = mint else {
+            return Ok(EnrichedToken {
+                mint: None,
+                metadata: None,
+                price: None,
+            });
+        };
+        let metadata = self.token_metadata_repository.find_by_mint(&mint).await?;
+        let price = self
+            .token_price_repository
+            .find_latest_by_mint(&mint)
+            .await?;
+        Ok(EnrichedToken {
+            mint: Some(mint),
+            metadata,
+            price,
         })
     }
 }

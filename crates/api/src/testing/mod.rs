@@ -44,8 +44,8 @@ pub(crate) fn make_pool(addr: Pubkey, token_a: Pubkey, token_b: Pubkey) -> Pool 
     Pool {
         pool_address: addr,
         protocol: Protocol::MeteoraDammV2, // adapt to your variant name
-        token_a_mint: token_a,
-        token_b_mint: token_b,
+        token_a_mint: Some(token_a),
+        token_b_mint: Some(token_b),
         first_seen_at: ts(1_000),
         last_seen_at: ts(2_000),
     }
@@ -505,8 +505,6 @@ pub(crate) fn make_swap_event(pool_address: Pubkey) -> MeteoraDammV2SwapEvent {
         pool_address,
         signature: sig_for_pool(pool_address, 1),
         timestamp: ts(1_500),
-        token_a_mint: pk(10),
-        token_b_mint: pk(11),
         trade_direction: TradeDirection::AtoB,
         amount_a: 1_000_000,
         amount_b: 2_000_000,
@@ -528,8 +526,6 @@ pub(crate) fn make_liquidity_event(pool_address: Pubkey) -> MeteoraDammV2Liquidi
         pool_address,
         signature: sig_for_pool(pool_address, 1),
         timestamp: ts(1_600),
-        token_a_mint: pk(10),
-        token_b_mint: pk(11),
         liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
         amount_a: 5_000_000,
         amount_b: 10_000_000,

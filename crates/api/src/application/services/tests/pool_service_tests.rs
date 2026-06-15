@@ -138,8 +138,8 @@ async fn token_sides_map_to_their_own_mint() {
     let page = svc.list_pools(default_params()).await.unwrap();
     let item = &page.items[0];
 
-    assert_eq!(item.token_a.mint, token_a);
-    assert_eq!(item.token_b.mint, token_b);
+    assert_eq!(item.token_a.mint, Some(token_a));
+    assert_eq!(item.token_b.mint, Some(token_b));
     assert_eq!(
         item.token_a.metadata.as_ref().unwrap().symbol,
         Some("AAA".to_string())

@@ -22,12 +22,9 @@ fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn insert_swap(
     pool: &PgPool,
     pool_addr: &str,
-    mint_a: &str,
-    mint_b: &str,
     signature: &str,
     direction: &str,
     amount_a: i64,
@@ -36,15 +33,13 @@ async fn insert_swap(
 ) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
-           (pool_address, signature, token_a_mint, token_b_mint, trade_direction,
+           (pool_address, signature, trade_direction,
             amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
             claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a, timestamp)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,0,0,0,0,0,0,0,false,$8)",
+         VALUES ($1,$2,$3,$4,$5,0,0,0,0,0,0,0,false,$6)",
     )
     .bind(pool_addr)
     .bind(signature)
-    .bind(mint_a)
-    .bind(mint_b)
     .bind(direction)
     .bind(amount_a)
     .bind(amount_b)
@@ -106,8 +101,6 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     insert_swap(
         &pool,
         &pool_addr,
-        &mint_a,
-        &mint_b,
         "sig_a",
         "a_to_b",
         1_000_000,
@@ -119,8 +112,6 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     insert_swap(
         &pool,
         &pool_addr,
-        &mint_a,
-        &mint_b,
         "sig_b",
         "b_to_a",
         0,
@@ -132,8 +123,6 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     insert_swap(
         &pool,
         &pool_addr,
-        &mint_a,
-        &mint_b,
         "sig_old",
         "a_to_b",
         999_000_000,

@@ -184,11 +184,6 @@ fn decodes_liquidity_add_fixtures() {
             "{fixture}: pool all-zero"
         );
         assert!(
-            liq.token_a_mint <= liq.token_b_mint,
-            "{fixture}: mints not in canonical order"
-        );
-        assert_ne!(liq.token_a_mint, liq.token_b_mint, "{fixture}: mints equal");
-        assert!(
             liq.reserve_a_after > 0 && liq.reserve_b_after > 0,
             "{fixture}: zero reserves"
         );
@@ -255,17 +250,8 @@ fn extracts_swap_via_router_correctly() {
         pubkey!("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie"),
     );
 
-    // Mints: the relevant transferChecked group is (USDC, SOL, SOL_dust).
-    // We take the first 2 unique mints in order, sorted by raw bytes.
-    // SOL = So11... < USDC = EPjFW... (raw bytes), so token_a = SOL, token_b = USDC.
-    assert_eq!(
-        swap.token_a_mint,
-        pubkey!("So11111111111111111111111111111111111111112"),
-    );
-    assert_eq!(
-        swap.token_b_mint,
-        pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-    );
+    // Mints are no longer carried on the event (they're a pool property
+    // resolved by yog-context), so there's nothing mint-related to assert here.
 
     // The amounts come from the EvtSwap2 wire fields, mapped via trade_direction.
     // We don't hard-code them here — the EvtSwap2 borsh payload is what drives

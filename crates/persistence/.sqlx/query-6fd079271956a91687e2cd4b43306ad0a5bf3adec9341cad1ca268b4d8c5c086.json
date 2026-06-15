@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT pool_address, signature,\n                       token_a_mint, token_b_mint,\n                       trade_direction, amount_a, amount_b,\n                       reserve_a_after, reserve_b_after, next_sqrt_price,\n                       claiming_fee, protocol_fee, compounding_fee, referral_fee,\n                       fee_token_is_a,\n                       timestamp\n                FROM meteora_damm_v2_swap_events\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp > $2\n                      OR (timestamp = $2 AND signature < $3)\n                  )\n                ORDER BY timestamp ASC, signature DESC\n                LIMIT $4\n                ",
+  "query": "\n                SELECT pool_address, signature,\n                       trade_direction, amount_a, amount_b,\n                       reserve_a_after, reserve_b_after, next_sqrt_price,\n                       claiming_fee, protocol_fee, compounding_fee, referral_fee,\n                       fee_token_is_a,\n                       timestamp\n                FROM meteora_damm_v2_swap_events\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp > $2\n                      OR (timestamp = $2 AND signature < $3)\n                  )\n                ORDER BY timestamp ASC, signature DESC\n                LIMIT $4\n                ",
   "describe": {
     "columns": [
       {
@@ -15,71 +15,61 @@
       },
       {
         "ordinal": 2,
-        "name": "token_a_mint",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 3,
-        "name": "token_b_mint",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
         "name": "trade_direction",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 3,
         "name": "amount_a",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 4,
         "name": "amount_b",
         "type_info": "Int8"
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "reserve_a_after",
         "type_info": "Int8"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "reserve_b_after",
         "type_info": "Int8"
       },
       {
-        "ordinal": 9,
+        "ordinal": 7,
         "name": "next_sqrt_price",
         "type_info": "Numeric"
       },
       {
-        "ordinal": 10,
+        "ordinal": 8,
         "name": "claiming_fee",
         "type_info": "Int8"
       },
       {
-        "ordinal": 11,
+        "ordinal": 9,
         "name": "protocol_fee",
         "type_info": "Int8"
       },
       {
-        "ordinal": 12,
+        "ordinal": 10,
         "name": "compounding_fee",
         "type_info": "Int8"
       },
       {
-        "ordinal": 13,
+        "ordinal": 11,
         "name": "referral_fee",
         "type_info": "Int8"
       },
       {
-        "ordinal": 14,
+        "ordinal": 12,
         "name": "fee_token_is_a",
         "type_info": "Bool"
       },
       {
-        "ordinal": 15,
+        "ordinal": 13,
         "name": "timestamp",
         "type_info": "Timestamptz"
       }
@@ -106,10 +96,8 @@
       false,
       false,
       false,
-      false,
-      false,
       false
     ]
   },
-  "hash": "01367aec3bc9c8b49ad46a00a89a76d94b9790c98625883284f04b40d1f7d409"
+  "hash": "6fd079271956a91687e2cd4b43306ad0a5bf3adec9341cad1ca268b4d8c5c086"
 }

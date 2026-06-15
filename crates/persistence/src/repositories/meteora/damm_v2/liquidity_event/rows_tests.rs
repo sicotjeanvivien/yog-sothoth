@@ -18,8 +18,6 @@ use super::MeteoraDammV2LiquidityEventRow;
 // Distinct valid base58-encoded Pubkeys so any field swap in the
 // `TryFrom` impl shows up immediately in the happy path test.
 const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
-const VALID_TOKEN_A: &str = "So11111111111111111111111111111111111111112";
-const VALID_TOKEN_B: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const VALID_POSITION: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 const VALID_OWNER: &str = "11111111111111111111111111111111";
 
@@ -28,8 +26,6 @@ fn valid_row() -> MeteoraDammV2LiquidityEventRow {
         pool_address: VALID_POOL.into(),
         signature: sig(1).to_string(),
         timestamp: Utc::now(),
-        token_a_mint: VALID_TOKEN_A.into(),
-        token_b_mint: VALID_TOKEN_B.into(),
         liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add.as_str().to_string(),
         amount_a: 1_000_000,
         amount_b: 2_000_000,
@@ -53,8 +49,6 @@ fn try_from_valid_row_returns_event_with_all_fields_mapped() {
         MeteoraDammV2LiquidityEvent::try_from(valid_row()).expect("valid row should convert");
 
     assert_eq!(event.pool_address.to_string(), VALID_POOL);
-    assert_eq!(event.token_a_mint.to_string(), VALID_TOKEN_A);
-    assert_eq!(event.token_b_mint.to_string(), VALID_TOKEN_B);
     assert_eq!(event.position.to_string(), VALID_POSITION);
     assert_eq!(event.owner.to_string(), VALID_OWNER);
     assert_eq!(
@@ -93,32 +87,6 @@ fn try_from_invalid_pool_address_returns_integrity() {
         ..valid_row()
     };
     let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("invalid pubkey should fail");
-    assert!(
-        matches!(err, RepositoryError::Integrity(_)),
-        "expected Integrity, got {err:?}"
-    );
-}
-
-#[test]
-fn try_from_invalid_token_a_mint_returns_integrity() {
-    let row = MeteoraDammV2LiquidityEventRow {
-        token_a_mint: "garbage".into(),
-        ..valid_row()
-    };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("invalid token_a should fail");
-    assert!(
-        matches!(err, RepositoryError::Integrity(_)),
-        "expected Integrity, got {err:?}"
-    );
-}
-
-#[test]
-fn try_from_invalid_token_b_mint_returns_integrity() {
-    let row = MeteoraDammV2LiquidityEventRow {
-        token_b_mint: "garbage".into(),
-        ..valid_row()
-    };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("invalid token_b should fail");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
         "expected Integrity, got {err:?}"

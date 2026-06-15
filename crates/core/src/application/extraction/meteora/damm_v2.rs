@@ -10,10 +10,10 @@ use crate::application::extraction::meteora::{extract_signature, extract_timesta
 use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
 use crate::application::extraction::{EventExtractor, ExtractionOutcome};
 use crate::domain::Protocol;
-use crate::solana_types::{EncodedConfirmedTransactionWithStatusMeta, UiInstruction};
+use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 use self::extractor::extract_wire_events;
-use self::translator::{collect_pre_event_instruction_slices, translate_wire_event};
+use self::translator::translate_wire_event;
 
 /// Meteora DAMM v2 protocol handler (x·y=k + dynamic fees + NFT positions).
 pub struct MeteoraDammV2 {
@@ -53,29 +53,18 @@ impl EventExtractor for MeteoraDammV2 {
         // Step 1: extract wire events from inner instructions.
         let wire_outcome = extract_wire_events(tx, &self.program_id_str);
 
-        // Step 2: precompute, in the same order, the slice of instructions
-        // preceding each self-CPI (used for mint extraction by the translator).
-        let transfer_groups = collect_pre_event_instruction_slices(tx, &self.program_id_str);
-
-        // Step 3: translate each wire event into a domain event.
-        translate_extracted_events(
-            wire_outcome,
-            transfer_groups,
-            self.protocol,
-            signature,
-            timestamp,
-        )
+        // Step 2: translate each wire event into a domain event.
+        translate_extracted_events(wire_outcome, self.protocol, signature, timestamp)
     }
 }
 
 /// Glue between the wire-event extraction layer and the translation layer.
 ///
-/// Walks `wire_events` and `transfer_groups` together, producing one domain
-/// event per successfully translated wire event. Translation failures are
-/// reported in `failures`; the loop continues on each failure (skip-and-log).
+/// Produces one domain event per successfully translated wire event.
+/// Translation failures are reported in `failures`; the loop continues on each
+/// failure (skip-and-log).
 fn translate_extracted_events(
     wire_outcome: extractor::ExtractedEvents,
-    transfer_groups: Vec<Vec<&UiInstruction>>,
     protocol: Protocol,
     signature: Signature,
     timestamp: DateTime<Utc>,
@@ -95,20 +84,8 @@ fn translate_extracted_events(
         outcome.failures.push(map_extractor_failure(failure));
     }
 
-    // Sanity: the transfer_groups list should have at least as many entries
-    // as recognized wire events. If not, we have an alignment problem
-    // (probably a transaction shape we don't expect) — record translation
-    // failures for the unalignable suffix.
-    let event_count = wire_outcome.events.len();
-    let group_count = transfer_groups.len();
-
-    for (idx, wire) in wire_outcome.events.iter().enumerate() {
-        let transfer_group = transfer_groups
-            .get(idx)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
-
-        match translate_wire_event(wire, transfer_group, signature, timestamp) {
+    for wire in wire_outcome.events.iter() {
+        match translate_wire_event(wire, signature, timestamp) {
             Ok(domain) => outcome.events.push(domain),
             Err(e) => {
                 outcome.failures.push(ExtractionFailure::Translation {
@@ -117,11 +94,6 @@ fn translate_extracted_events(
                 });
             }
         }
-    }
-
-    if event_count > group_count {
-        // Diagnostic only — already covered as per-event failures above.
-        // We keep the check explicit to make the case visible if it ever happens.
     }
 
     Ok(outcome)

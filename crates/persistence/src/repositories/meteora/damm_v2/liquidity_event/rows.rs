@@ -14,8 +14,6 @@ pub(super) struct MeteoraDammV2LiquidityEventRow {
     pub(super) pool_address: String,
     pub(super) signature: String,
     pub(super) timestamp: DateTime<Utc>,
-    pub(super) token_a_mint: String,
-    pub(super) token_b_mint: String,
     pub(super) liquidity_event_kind: String,
     pub(super) amount_a: i64,
     pub(super) amount_b: i64,
@@ -34,8 +32,6 @@ impl TryFrom<MeteoraDammV2LiquidityEventRow> for MeteoraDammV2LiquidityEvent {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             signature: convert_string_to_signature(row.signature, "signature")?,
             timestamp: row.timestamp,
-            token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
-            token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
             liquidity_event_kind: parse_string_to_liquidity_event_kind(
                 row.liquidity_event_kind,
                 "liquidity_event_kind",

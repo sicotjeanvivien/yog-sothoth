@@ -48,8 +48,6 @@ pub struct MeteoraDammV2SwapEvent {
     pub pool_address: Pubkey,
     pub signature: Signature,
     pub timestamp: DateTime<Utc>,
-    pub token_a_mint: Pubkey,
-    pub token_b_mint: Pubkey,
     pub trade_direction: TradeDirection,
     pub amount_a: u64,
     pub amount_b: u64,

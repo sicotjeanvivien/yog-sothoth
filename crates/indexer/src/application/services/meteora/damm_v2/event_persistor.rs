@@ -103,12 +103,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_swap(&self, event: &MeteoraDammV2SwapEvent) -> anyhow::Result<()> {
         if let Err(err) = self
             .pool_maintenance
-            .upsert_pool_full(
-                Self::PROTOCOL,
-                event.pool_address,
-                event.token_a_mint,
-                event.token_b_mint,
-            )
+            .discover_pool(Self::PROTOCOL, event.pool_address)
             .await
         {
             warn!(error = %err, kind = "swap", "pool upsert failed");
@@ -130,12 +125,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_liquidity(&self, event: &MeteoraDammV2LiquidityEvent) -> anyhow::Result<()> {
         if let Err(err) = self
             .pool_maintenance
-            .upsert_pool_full(
-                Self::PROTOCOL,
-                event.pool_address,
-                event.token_a_mint,
-                event.token_b_mint,
-            )
+            .discover_pool(Self::PROTOCOL, event.pool_address)
             .await
         {
             warn!(error = %err, kind = "liquidity", "pool upsert failed");
@@ -249,22 +239,17 @@ impl MeteoraDammV2EventPersistor {
     /// (full upsert) rather than just touching last-seen. It does not feed the
     /// current-state projection — there is no price/reserve trajectory yet.
     ///
-    /// cp-amm does not sort the mints by raw bytes, but the `pools` registry
-    /// uses the canonical (sorted) convention shared with the swap/liquidity
-    /// tables — so the pair is re-sorted before the upsert. The event itself
-    /// is stored in the program's native token_a/token_b order.
+    /// The InitializePool event does carry the mints, but the `pools` registry
+    /// gets them from a single source — yog-context decoding the pool account —
+    /// to avoid a dual-write that could disagree on A/B ordering. So here we
+    /// only register the pool; the mints land on the event's own table.
     async fn persist_initialize_pool(
         &self,
         event: &MeteoraDammV2InitializePoolEvent,
     ) -> anyhow::Result<()> {
-        let (mint_a, mint_b) = if event.token_a_mint <= event.token_b_mint {
-            (event.token_a_mint, event.token_b_mint)
-        } else {
-            (event.token_b_mint, event.token_a_mint)
-        };
         if let Err(err) = self
             .pool_maintenance
-            .upsert_pool_full(Self::PROTOCOL, event.pool_address, mint_a, mint_b)
+            .discover_pool(Self::PROTOCOL, event.pool_address)
             .await
         {
             warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
@@ -554,8 +539,6 @@ mod tests {
             pool_address: pk(1),
             signature: sg(),
             timestamp: ts(),
-            token_a_mint: pk(2),
-            token_b_mint: pk(3),
             trade_direction: TradeDirection::AtoB,
             amount_a: 1,
             amount_b: 2,
@@ -574,8 +557,6 @@ mod tests {
             pool_address: pk(1),
             signature: sg(),
             timestamp: ts(),
-            token_a_mint: pk(2),
-            token_b_mint: pk(3),
             liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
             amount_a: 1,
             amount_b: 2,

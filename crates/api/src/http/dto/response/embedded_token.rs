@@ -27,8 +27,9 @@ use crate::http::dto::response::EmbeddedPriceResponse;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EmbeddedTokenResponse {
-    /// SPL mint address, base58.
-    mint: String,
+    /// SPL mint address, base58. `null` until the pool's mints are
+    /// resolved by yog-context.
+    mint: Option<String>,
 
     /// Symbol (e.g. "USDC"). `null` when DAS returned no metadata.
     symbol: Option<String>,
@@ -60,7 +61,7 @@ impl EmbeddedTokenResponse {
     /// from the pool itself, so it can construct a meaningful
     /// response even when no metadata row exists yet.
     pub(crate) fn from_sources(
-        mint: solana_pubkey::Pubkey,
+        mint: Option<solana_pubkey::Pubkey>,
         metadata: Option<TokenMetadata>,
         price: Option<TokenPrice>,
     ) -> Self {
@@ -79,7 +80,7 @@ impl EmbeddedTokenResponse {
         };
 
         Self {
-            mint: mint.to_string(),
+            mint: mint.map(|m| m.to_string()),
             symbol,
             name,
             decimals,

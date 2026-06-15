@@ -15,9 +15,6 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) signature: String,
     pub(super) timestamp: DateTime<Utc>,
 
-    pub(super) token_a_mint: String,
-    pub(super) token_b_mint: String,
-
     pub(super) liquidity_event_kind: String,
     pub(super) amount_a: u64,
     pub(super) amount_b: u64,
@@ -37,8 +34,6 @@ impl From<MeteoraDammV2LiquidityEvent> for LiquidityEventResponse {
             protocol: Protocol::MeteoraDammV2.to_string(),
             signature: event.signature.to_string(),
             timestamp: event.timestamp,
-            token_a_mint: event.token_a_mint.to_string(),
-            token_b_mint: event.token_b_mint.to_string(),
             liquidity_event_kind: liquidity_event_kind_str(event.liquidity_event_kind),
             amount_a: event.amount_a,
             amount_b: event.amount_b,

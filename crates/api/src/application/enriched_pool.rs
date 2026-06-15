@@ -13,7 +13,8 @@ use yog_core::domain::{Pool, PoolAnalytics, TokenMetadata, TokenPrice};
 /// observed mint may have neither yet (yog-context hasn't caught up),
 /// or metadata without a price (priced lazily).
 pub(crate) struct EnrichedToken {
-    pub(crate) mint: solana_pubkey::Pubkey,
+    /// `None` until the pool's mints are resolved by yog-context.
+    pub(crate) mint: Option<solana_pubkey::Pubkey>,
     pub(crate) metadata: Option<TokenMetadata>,
     pub(crate) price: Option<TokenPrice>,
 }

@@ -74,11 +74,13 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 ) tpb ON true
                 WHERE pcs.pool_address = ANY($1::TEXT[])
             ),
-            -- Volume reads the hourly continuous aggregate (migration 010)
-            -- instead of scanning raw swap_events. The CA stores raw token
-            -- amounts split by direction (volume_in_a from a_to_b swaps,
-            -- volume_in_b from b_to_a); USD valuation stays here, per bucket,
-            -- at the price as-of that bucket — preserving trade-time pricing.
+            -- Volume reads the hourly continuous aggregate (no mints on it —
+            -- they're a pool property) and joins `pools` for the mints. USD
+            -- valuation stays here, per bucket, at the price as-of that bucket
+            -- — preserving trade-time pricing. The CA stores raw token amounts
+            -- split by direction (volume_in_a from a_to_b, volume_in_b from
+            -- b_to_a). Pools whose mints aren't resolved yet drop out (INNER
+            -- JOIN on token_metadata) and yield a NULL volume.
             volume_per_pool AS (
                 SELECT
                     h.pool_address,
@@ -88,12 +90,13 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                         (COALESCE(h.volume_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd
                     ) AS volume_24h_usd
                 FROM meteora_damm_v2_swap_events_hourly h
-                JOIN token_metadata tma ON tma.mint = h.token_a_mint
-                JOIN token_metadata tmb ON tmb.mint = h.token_b_mint
+                JOIN pools p ON p.pool_address = h.pool_address
+                JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
+                JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
                 LEFT JOIN LATERAL (
                     SELECT price_usd
                     FROM token_prices
-                    WHERE mint = h.token_a_mint
+                    WHERE mint = p.token_a_mint::TEXT
                       AND fetched_at <= h.bucket
                     ORDER BY fetched_at DESC
                     LIMIT 1
@@ -101,7 +104,7 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 LEFT JOIN LATERAL (
                     SELECT price_usd
                     FROM token_prices
-                    WHERE mint = h.token_b_mint
+                    WHERE mint = p.token_b_mint::TEXT
                       AND fetched_at <= h.bucket
                     ORDER BY fetched_at DESC
                     LIMIT 1

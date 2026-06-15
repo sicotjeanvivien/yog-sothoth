@@ -12,8 +12,8 @@ use yog_core::{
 pub(super) struct PoolRow {
     pub(super) pool_address: String,
     pub(super) protocol: String,
-    pub(super) token_a_mint: String,
-    pub(super) token_b_mint: String,
+    pub(super) token_a_mint: Option<String>,
+    pub(super) token_b_mint: Option<String>,
     pub(super) first_seen_at: DateTime<Utc>,
     pub(super) last_seen_at: DateTime<Utc>,
 }
@@ -26,8 +26,14 @@ impl TryFrom<PoolRow> for Pool {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             protocol: Protocol::from_str(&row.protocol)
                 .map_err(|e| RepositoryError::Integrity(format!("invalid protocol: {e}")))?,
-            token_a_mint: convert_string_to_pubkey(row.token_a_mint, "token_a_mint")?,
-            token_b_mint: convert_string_to_pubkey(row.token_b_mint, "token_b_mint")?,
+            token_a_mint: row
+                .token_a_mint
+                .map(|m| convert_string_to_pubkey(m, "token_a_mint"))
+                .transpose()?,
+            token_b_mint: row
+                .token_b_mint
+                .map(|m| convert_string_to_pubkey(m, "token_b_mint"))
+                .transpose()?,
             first_seen_at: row.first_seen_at,
             last_seen_at: row.last_seen_at,
         })

@@ -33,9 +33,6 @@ pub(crate) struct SwapEventResponse {
     pub(crate) signature: String,
     pub(crate) timestamp: DateTime<Utc>,
 
-    pub(crate) token_a_mint: String,
-    pub(crate) token_b_mint: String,
-
     pub(crate) trade_direction: String,
     pub(crate) amount_a: u64,
     pub(crate) amount_b: u64,
@@ -58,8 +55,6 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
             protocol: Protocol::MeteoraDammV2.to_string(),
             signature: event.signature.to_string(),
             timestamp: event.timestamp,
-            token_a_mint: event.token_a_mint.to_string(),
-            token_b_mint: event.token_b_mint.to_string(),
             trade_direction: trade_direction_str(event.trade_direction),
             amount_a: event.amount_a,
             amount_b: event.amount_b,

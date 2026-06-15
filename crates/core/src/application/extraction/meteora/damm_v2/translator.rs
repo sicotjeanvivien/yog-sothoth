@@ -5,21 +5,12 @@
 //! ([`crate::domain::DomainEvent`]) are protocol-agnostic representations
 //! consumed by the indexer service.
 //!
-//! Some wire events do not carry every piece of information the domain
-//! representation needs. Specifically, [`super::events::EvtSwap2`] and
-//! [`super::events::EvtLiquidityChange`] do not include the pool's mint
-//! addresses — they assume the caller can recover them from elsewhere.
-//! This translator extracts them from the transferChecked CPI instructions
-//! sitting alongside each Anchor self-CPI in the same inner instruction
-//! group.
+//! Token mints are NOT derived here: they are a property of the pool,
+//! resolved authoritatively from the cp-amm Pool account by yog-context. Swap
+//! and liquidity events therefore carry no mints — they reference the pool.
 
-use crate::solana_types::{
-    EncodedConfirmedTransactionWithStatusMeta, OptionSerializer, UiInstruction, UiParsedInstruction,
-};
 use chrono::{DateTime, Utc};
-use solana_pubkey::Pubkey;
 use solana_signature::Signature;
-use std::str::FromStr;
 
 use crate::{
     domain::{
@@ -39,18 +30,6 @@ use super::events::{
     EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
 };
 
-/// Per-event context required to fully translate Swap2 and LiquidityChange.
-///
-/// The two mints and the signature/timestamp are extracted once at the
-/// orchestration level (in `MeteoraDammV2::extract_events`) and threaded
-/// through to the per-event translation functions.
-pub(super) struct EventContext {
-    pub token_a_mint: Pubkey,
-    pub token_b_mint: Pubkey,
-    pub signature: Signature,
-    pub timestamp: DateTime<Utc>,
-}
-
 // ---------------------------------------------------------------------------
 // Per-variant translators (option C)
 // ---------------------------------------------------------------------------
@@ -60,7 +39,8 @@ pub(super) struct EventContext {
 /// Returns `Err` only if `trade_direction` is invalid (out of range).
 pub(super) fn translate_swap(
     wire: &EvtSwap2,
-    ctx: &EventContext,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
 ) -> Result<MeteoraDammV2SwapEvent, TranslationError> {
     let trade_direction = TradeDirection::from_u8(wire.trade_direction).map_err(|raw| {
         TranslationError::InvalidEnum {
@@ -94,11 +74,8 @@ pub(super) fn translate_swap(
     };
     Ok(MeteoraDammV2SwapEvent {
         pool_address: wire.pool,
-        signature: ctx.signature,
-        timestamp: ctx.timestamp,
-
-        token_a_mint: ctx.token_a_mint,
-        token_b_mint: ctx.token_b_mint,
+        signature,
+        timestamp,
 
         trade_direction,
         amount_a,
@@ -119,7 +96,8 @@ pub(super) fn translate_swap(
 /// Translate an [`EvtLiquidityChange`] into a [`MeteoraDammV2LiquidityEvent`].
 pub(super) fn translate_liquidity(
     wire: &EvtLiquidityChange,
-    ctx: &EventContext,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
 ) -> Result<MeteoraDammV2LiquidityEvent, TranslationError> {
     let liquidity_event_kind =
         MeteoraDammV2LiquidityEventKind::from_u8(wire.change_type).map_err(|raw| {
@@ -131,11 +109,8 @@ pub(super) fn translate_liquidity(
 
     Ok(MeteoraDammV2LiquidityEvent {
         pool_address: wire.pool,
-        signature: ctx.signature,
-        timestamp: ctx.timestamp,
-
-        token_a_mint: ctx.token_a_mint,
-        token_b_mint: ctx.token_b_mint,
+        signature,
+        timestamp,
 
         liquidity_event_kind,
         amount_a: wire.token_a_amount,
@@ -340,135 +315,6 @@ pub(super) fn translate_update_pool_fees(
 }
 
 // ---------------------------------------------------------------------------
-// Mint extraction from transferChecked context
-// ---------------------------------------------------------------------------
-
-/// Extract the canonical (token_a, token_b) mints from the transferChecked
-/// instructions inside an inner-instruction group.
-///
-/// The two mints are sorted by raw pubkey bytes — same convention as
-/// [`crate::domain::Pool`]. Stable across swap directions.
-///
-/// Returns an error if fewer than 2 transferChecked instructions are found
-/// in the group.
-pub(super) fn extract_mint_pair(
-    group_instructions: &[UiInstruction],
-) -> Result<(Pubkey, Pubkey), TranslationError> {
-    let mints: Vec<Pubkey> = group_instructions
-        .iter()
-        .filter_map(extract_mint_from_transfer_checked)
-        .take(2)
-        .collect();
-
-    if mints.len() < 2 {
-        return Err(TranslationError::MissingTransferContext(format!(
-            "expected at least 2 transferChecked, found {}",
-            mints.len()
-        )));
-    }
-
-    let (m1, m2) = (mints[0], mints[1]);
-    if m1 <= m2 { Ok((m1, m2)) } else { Ok((m2, m1)) }
-}
-
-/// Try to extract the mint pubkey from a parsed transferChecked instruction.
-/// Returns `None` if the instruction is not a transferChecked or is malformed.
-fn extract_mint_from_transfer_checked(ix: &UiInstruction) -> Option<Pubkey> {
-    let UiInstruction::Parsed(UiParsedInstruction::Parsed(p)) = ix else {
-        return None;
-    };
-
-    if p.parsed.get("type").and_then(|t| t.as_str()) != Some("transferChecked") {
-        return None;
-    }
-
-    let mint_str = p
-        .parsed
-        .get("info")
-        .and_then(|info| info.get("mint"))
-        .and_then(|m| m.as_str())?;
-
-    Pubkey::from_str(mint_str).ok()
-}
-
-/// Walk the inner instruction groups and locate, for each Anchor self-CPI
-/// that targets the cp-amm program, the slice of instructions in the same
-/// group **before** that self-CPI. Those instructions contain the
-/// transferChecked CPIs we need for mint extraction.
-///
-/// Returns one `Vec<&UiInstruction>` per Anchor self-CPI, in the order the
-/// self-CPIs appear across the whole transaction. The length of the returned
-/// vector matches the number of `DammV2WireEvent`s produced by the
-/// extractor for the same transaction — so callers can zip them by index.
-pub(super) fn collect_pre_event_instruction_slices<'a>(
-    tx: &'a EncodedConfirmedTransactionWithStatusMeta,
-    target_program_id: &str,
-) -> Vec<Vec<&'a UiInstruction>> {
-    let Some(meta) = tx.transaction.meta.as_ref() else {
-        return Vec::new();
-    };
-
-    let OptionSerializer::Some(inner_groups) = &meta.inner_instructions else {
-        return Vec::new();
-    };
-
-    let mut out: Vec<Vec<&UiInstruction>> = Vec::new();
-
-    for group in inner_groups {
-        let mut current_slice: Vec<&UiInstruction> = Vec::new();
-
-        for ix in &group.instructions {
-            if is_self_cpi_to_program(ix, target_program_id) {
-                // Self-CPI marker — emit the slice accumulated so far.
-                out.push(std::mem::take(&mut current_slice));
-            } else {
-                current_slice.push(ix);
-            }
-        }
-    }
-
-    out
-}
-
-/// 8-byte tag prefixing every Anchor event_cpi self-CPI's instruction data.
-/// Equal to `sha256("anchor:event")[..8]`.
-///
-/// This is the discriminator Anchor uses for the synthetic instruction it
-/// emits when calling `emit_cpi!`. It distinguishes event self-CPIs from
-/// regular instructions invoking the same program — both share the same
-/// `programId` but differ in their `data` prefix.
-const EVENT_IX_TAG: [u8; 8] = [0xe4, 0x45, 0xa5, 0x2e, 0x51, 0xcb, 0x9a, 0x1d];
-
-/// Returns `true` if the instruction is an Anchor event_cpi self-CPI to the
-/// target program.
-///
-/// The check has two prongs:
-///   1. The `programId` must match the target.
-///   2. The `data` payload (base58-encoded) must start with [`EVENT_IX_TAG`].
-///
-/// Both prongs are necessary: the outer `Swap2` instruction targeting the
-/// same program also has `programId == target`, but its data prefix is
-/// the swap2 instruction discriminator, not the Anchor event tag. Without
-/// the second check, mid-transaction routers (Jupiter-style aggregators)
-/// would yield false positives at every swap-to-cp-amm hop.
-fn is_self_cpi_to_program(ix: &UiInstruction, target_program_id: &str) -> bool {
-    let UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p)) = ix else {
-        return false;
-    };
-
-    if p.program_id != target_program_id {
-        return false;
-    }
-
-    let data_bytes = match bs58::decode(&p.data).into_vec() {
-        Ok(bytes) => bytes,
-        Err(_) => return false,
-    };
-
-    data_bytes.len() >= 8 && data_bytes[..8] == EVENT_IX_TAG
-}
-
-// ---------------------------------------------------------------------------
 // Compute fee_token_is_a
 // ---------------------------------------------------------------------------
 
@@ -501,16 +347,9 @@ fn compute_fee_token_is_a(
 // High-level dispatch
 // ---------------------------------------------------------------------------
 
-/// Translate a single wire event into a domain event, given its context.
-///
-/// `transferChecked_group` is the slice of instructions immediately
-/// preceding the self-CPI of this wire event in its inner instruction
-/// group. It is used to extract the (token_a, token_b) mint pair for
-/// Swap2 and LiquidityChange events. ClaimPositionFee and ClaimReward
-/// don't need it.
+/// Translate a single wire event into a domain event.
 pub(super) fn translate_wire_event(
     wire: &DammV2WireEvent,
-    transfer_checked_group: &[&UiInstruction],
     signature: Signature,
     timestamp: DateTime<Utc>,
 ) -> Result<crate::domain::DomainEvent, TranslationError> {
@@ -519,24 +358,10 @@ pub(super) fn translate_wire_event(
 
     let damm_v2_event = match wire {
         DammV2WireEvent::Swap2(e) => {
-            let (token_a_mint, token_b_mint) = extract_mint_pair_from_refs(transfer_checked_group)?;
-            let ctx = EventContext {
-                token_a_mint,
-                token_b_mint,
-                signature,
-                timestamp,
-            };
-            MeteoraDammV2Event::Swap(translate_swap(e, &ctx)?)
+            MeteoraDammV2Event::Swap(translate_swap(e, signature, timestamp)?)
         }
         DammV2WireEvent::LiquidityChange(e) => {
-            let (token_a_mint, token_b_mint) = extract_mint_pair_from_refs(transfer_checked_group)?;
-            let ctx = EventContext {
-                token_a_mint,
-                token_b_mint,
-                signature,
-                timestamp,
-            };
-            MeteoraDammV2Event::Liquidity(translate_liquidity(e, &ctx)?)
+            MeteoraDammV2Event::Liquidity(translate_liquidity(e, signature, timestamp)?)
         }
         DammV2WireEvent::ClaimPositionFee(e) => MeteoraDammV2Event::ClaimPositionFee(
             translate_claim_position_fee(e, signature, timestamp),
@@ -570,15 +395,6 @@ pub(super) fn translate_wire_event(
     Ok(DomainEvent::MeteoraDammV2(damm_v2_event))
 }
 
-/// Adapter: extract the mint pair from a slice of `&UiInstruction`s
-/// (rather than owned `UiInstruction`s as in `extract_mint_pair`).
-fn extract_mint_pair_from_refs(
-    refs: &[&UiInstruction],
-) -> Result<(Pubkey, Pubkey), TranslationError> {
-    let owned: Vec<UiInstruction> = refs.iter().map(|r| (*r).clone()).collect();
-    extract_mint_pair(&owned)
-}
-
 // ---------------------------------------------------------------------------
 // Translation unit tests
 // ---------------------------------------------------------------------------
@@ -595,6 +411,7 @@ mod tests {
     use crate::application::extraction::meteora::damm_v2::events::{
         EvtClosePosition, EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus,
     };
+    use solana_pubkey::Pubkey;
 
     fn pk(b: u8) -> Pubkey {
         Pubkey::new_from_array([b; 32])

@@ -38,8 +38,8 @@ impl PoolRepository for PgPoolRepository {
             "#,
             pool.pool_address.to_string(),
             pool.protocol.as_str(),
-            pool.token_a_mint.to_string(),
-            pool.token_b_mint.to_string(),
+            pool.token_a_mint.map(|m| m.to_string()),
+            pool.token_b_mint.map(|m| m.to_string()),
             pool.last_seen_at,
         )
         .execute(&self.pool)

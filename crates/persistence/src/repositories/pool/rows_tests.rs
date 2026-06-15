@@ -25,8 +25,8 @@ fn valid_row() -> PoolRow {
     PoolRow {
         pool_address: VALID_POOL.into(),
         protocol: Protocol::MeteoraDammV2.as_str().to_string(),
-        token_a_mint: VALID_TOKEN_A.into(),
-        token_b_mint: VALID_TOKEN_B.into(),
+        token_a_mint: Some(VALID_TOKEN_A.into()),
+        token_b_mint: Some(VALID_TOKEN_B.into()),
         first_seen_at: now,
         last_seen_at: now,
     }
@@ -38,8 +38,20 @@ fn try_from_valid_row_returns_pool_with_all_fields_mapped() {
 
     assert_eq!(pool.pool_address.to_string(), VALID_POOL);
     assert_eq!(pool.protocol, Protocol::MeteoraDammV2);
-    assert_eq!(pool.token_a_mint.to_string(), VALID_TOKEN_A);
-    assert_eq!(pool.token_b_mint.to_string(), VALID_TOKEN_B);
+    assert_eq!(pool.token_a_mint.unwrap().to_string(), VALID_TOKEN_A);
+    assert_eq!(pool.token_b_mint.unwrap().to_string(), VALID_TOKEN_B);
+}
+
+#[test]
+fn try_from_null_mints_maps_to_none() {
+    let row = PoolRow {
+        token_a_mint: None,
+        token_b_mint: None,
+        ..valid_row()
+    };
+    let pool = Pool::try_from(row).expect("null mints should convert");
+    assert!(pool.token_a_mint.is_none());
+    assert!(pool.token_b_mint.is_none());
 }
 
 #[test]
@@ -94,7 +106,7 @@ fn try_from_invalid_protocol_returns_integrity_with_message() {
 #[test]
 fn try_from_invalid_token_a_mint_returns_integrity() {
     let row = PoolRow {
-        token_a_mint: "garbage".into(),
+        token_a_mint: Some("garbage".into()),
         ..valid_row()
     };
 
@@ -108,7 +120,7 @@ fn try_from_invalid_token_a_mint_returns_integrity() {
 #[test]
 fn try_from_invalid_token_b_mint_returns_integrity() {
     let row = PoolRow {
-        token_b_mint: "garbage".into(),
+        token_b_mint: Some("garbage".into()),
         ..valid_row()
     };
 

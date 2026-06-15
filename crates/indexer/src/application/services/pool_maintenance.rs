@@ -32,21 +32,21 @@ impl PoolMaintenance {
         }
     }
 
-    /// Upsert the pool with full information (mints known). Used by
-    /// Swap and Liquidity events of any protocol.
-    pub(crate) async fn upsert_pool_full(
+    /// Record a pool seen in the stream. The mints are NOT known here —
+    /// they're a pool property resolved later from the on-chain pool account
+    /// by yog-context, so the row is created with `None` mints. Used by Swap
+    /// and Liquidity events of any protocol.
+    pub(crate) async fn discover_pool(
         &self,
         protocol: Protocol,
         pool_address: solana_pubkey::Pubkey,
-        token_a_mint: solana_pubkey::Pubkey,
-        token_b_mint: solana_pubkey::Pubkey,
     ) -> anyhow::Result<()> {
         let now = chrono::Utc::now();
         let pool = Pool {
             pool_address,
             protocol,
-            token_a_mint,
-            token_b_mint,
+            token_a_mint: None,
+            token_b_mint: None,
             first_seen_at: now,
             last_seen_at: now,
         };

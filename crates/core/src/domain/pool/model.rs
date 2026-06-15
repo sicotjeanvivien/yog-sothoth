@@ -13,15 +13,12 @@ use crate::domain::Protocol;
 /// Rows are upserted on every parsed event: `first_seen_at` is set once on
 /// first observation, `last_seen_at` is refreshed on every subsequent event.
 ///
-/// # Mint ordering
+/// # Mints
 ///
-/// Mints are stored in **byte-wise order of the raw 32-byte pubkey**
-/// (the default `Ord` impl of `Pubkey`), not in base58 string order.
-/// This ensures the same pool always yields the same `(token_a, token_b)`
-/// regardless of swap direction.
-///
-/// This differs from the Meteora SDK's canonical A/B ordering — adjust
-/// at query time if alignment is needed.
+/// The token mints are a property of the pool, resolved authoritatively from
+/// the on-chain pool account by yog-context. They are `None` between a pool's
+/// discovery (its address appears in the stream) and that resolution — the
+/// indexer no longer infers them from the transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pool {
     /// On-chain address of the AMM pool.
@@ -30,11 +27,11 @@ pub struct Pool {
     /// Protocol this pool belongs to (DAMM v2, DAMM v1, DLMM).
     pub protocol: Protocol,
 
-    /// Mint of token A, as defined by the protocol's account ordering.
-    pub token_a_mint: Pubkey,
+    /// Mint of token A. `None` until resolved by yog-context.
+    pub token_a_mint: Option<Pubkey>,
 
-    /// Mint of token B, as defined by the protocol's account ordering.
-    pub token_b_mint: Pubkey,
+    /// Mint of token B. `None` until resolved by yog-context.
+    pub token_b_mint: Option<Pubkey>,
 
     /// When Yog-Sothoth first observed this pool in the transaction stream.
     pub first_seen_at: DateTime<Utc>,

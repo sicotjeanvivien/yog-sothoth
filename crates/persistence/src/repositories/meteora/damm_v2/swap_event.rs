@@ -46,7 +46,6 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
             r#"
             INSERT INTO meteora_damm_v2_swap_events (
                 pool_address, signature,
-                token_a_mint, token_b_mint,
                 trade_direction, amount_a, amount_b,
                 reserve_a_after, reserve_b_after, next_sqrt_price,
                 claiming_fee, protocol_fee, compounding_fee, referral_fee,
@@ -55,19 +54,16 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
             )
             VALUES (
                 $1, $2,
-                $3, $4,
-                $5, $6, $7,
-                $8, $9, $10,
-                $11, $12, $13, $14,
-                $15,
-                $16
+                $3, $4, $5,
+                $6, $7, $8,
+                $9, $10, $11, $12,
+                $13,
+                $14
             )
             ON CONFLICT (signature, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
             event.signature.to_string(),
-            event.token_a_mint.to_string(),
-            event.token_b_mint.to_string(),
             event.trade_direction.as_str(),
             convert_u64_to_i64(event.amount_a, "amount_a")?,
             convert_u64_to_i64(event.amount_b, "amount_b")?,
@@ -128,7 +124,6 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
                 MeteoraDammV2SwapEventRow,
                 r#"
                 SELECT pool_address, signature,
-                       token_a_mint, token_b_mint,
                        trade_direction, amount_a, amount_b,
                        reserve_a_after, reserve_b_after, next_sqrt_price,
                        claiming_fee, protocol_fee, compounding_fee, referral_fee,
@@ -157,7 +152,6 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
                 MeteoraDammV2SwapEventRow,
                 r#"
                 SELECT pool_address, signature,
-                       token_a_mint, token_b_mint,
                        trade_direction, amount_a, amount_b,
                        reserve_a_after, reserve_b_after, next_sqrt_price,
                        claiming_fee, protocol_fee, compounding_fee, referral_fee,
