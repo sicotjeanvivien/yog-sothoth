@@ -227,11 +227,13 @@
 > agrégeable). La voie 3 aide : chaque kind est déjà sa propre table → policy par table.
 
 - [x] **Décision A/B** — actée : **A (analytics only) + compression**. Drop des lignes brutes `swap`/`liquidity` > 30j, historique porté par le rollup CA
-- [ ] **Rétention différenciée par table** :
-	- fort volume (`swap_events`, `liquidity_events`) : `add_compression_policy` ~J+7 + `add_retention_policy` drop > 30j
-	- ponctuel / config (`initialize_pool`, `update_pool_fees`, `set_pool_status`) : **aucune policy, conservés à vie**
-	- cycle de vie position (`create`/`close`/`lock`/`permanent_lock_position`) : **aucune policy, conservés à vie**
-- [ ] **Rollup long terme** = la continuous aggregate ci-dessous : c'est elle qui porte l'historique analytique survivant au drop 30j (grain journalier par pool : `SUM(amount_a/b)`, `COUNT(*)`, éventuellement first/last `sqrt_price` pour OHLC)
+- [x] **Rétention différenciée par table** (migration `009_differentiated_retention.sql`) :
+	- fort volume (`swap_events`, `liquidity_events`) : compression J+7 + rétention drop > 30j (inchangé)
+	- ponctuel / config (`initialize_pool`, `update_pool_fees`, `set_pool_status`) : rétention **retirée** → conservés à vie ; compression conservée (reclaim sans perte)
+	- cycle de vie position (`create`/`close`/`lock`/`permanent_lock_position`) : rétention **retirée** → conservés à vie ; compression conservée
+	- note : 001–008 appliquaient le défaut 7d/30d uniformément ; 009 ne fait que `remove_retention_policy` sur les 7 tables ci-dessus
+- [x] **Classe des `claim_*`** — actée : **gros volume, même stratégie que `swap`/`liquidity`** (rétention 30j déjà en place, conservée) → besoin du même rollup long terme avant d'activer le drop en prod
+- [ ] **Rollup long terme** = continuous aggregate(s) ci-dessous : porte(nt) l'historique analytique survivant au drop 30j. Couvre `swap`/`liquidity` (volume) **et** `claim_*` (montants fees/rewards réalisés). Grain journalier par pool : `SUM(amount_*)`, `COUNT(*)`, éventuellement first/last `sqrt_price` pour OHLC côté swaps
 - [ ] 🔜 **Archivage froid (plus tard, si besoin d'audit)** : dump des chunks `swap`/`liquidity` > 30j vers le bucket Object Storage `yog-backups` (parquet/csv compressé) **avant** le drop. Additif à la décision A — n'active que si un besoin de provenance/audit sur le grain transaction apparaît
 - [ ] **Ordre d'exécution** : la CA doit exister **avant** d'activer la rétention 30j, sinon on perd l'historique en droppant — dépendance dure avec l'item CA ci-dessous
 - [ ] **GRANT** : policies appliquées via `yog-migrate` (forward-only) ; pas de nouveau rôle requis
