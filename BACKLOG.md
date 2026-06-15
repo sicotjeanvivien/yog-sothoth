@@ -249,7 +249,7 @@
 - **Montants bruts** dans la CA (une CAGG ne peut pas joindre `token_prices`), **conversion USD au read-time** au **prix as-of le bucket** = valorisation *trade-time* (préserve la sémantique actuelle : prix au moment du trade, pas le prix courant — l'historique ne dérive pas).
 - Agrégats par `(pool_address, bucket)` (valorisation côté **entrée** du swap → sommes filtrées par direction) :
 	- `swap` : `SUM(amount_a) FILTER (a_to_b)` → `volume_in_a`, `SUM(amount_b) FILTER (b_to_a)` → `volume_in_b`, `COUNT(*)`
-	- `liquidity` : `SUM(amount_a/b)`, `SUM(liquidity_delta)`, `COUNT(*)`
+	- `liquidity` : `liquidity_delta` est une magnitude non signée + direction `kind ∈ (add, remove)` → tout splitté par kind comme le swap par direction (`amount_a/b_added/removed`, `liquidity_added/removed`, `add_count`/`remove_count`)
 	- `claim_position_fee` : `SUM(fee_a_claimed)`, `SUM(fee_b_claimed)`, `COUNT(*)`
 	- `claim_reward` : `SUM(total_reward)`, `COUNT(*)`, groupé aussi par `mint_reward`
 - **OHLC prix différé** : pas de `first/last/min/max(next_sqrt_price)` pour l'instant (viendra avec les courbes de prix / page Overview).
@@ -264,7 +264,7 @@
 
 **Ordre d'implémentation — `swap` en premier (slice verticale), puis réplication :**
 - [x] **CA `swap`** : migration `010_swap_volume_hourly_cagg.sql` (CA + refresh policy 31j/1h + GRANT `yog_api`), réécriture sous-requête volume de `pool_analytics.rs` (lecture CA, valorisation trade-time par bucket), `.sqlx` régénéré, test d'intégration `tests/volume_cagg.rs` ✅. Reste : bench latence `GET /api/pools` avant/après sur dataset représentatif
-- [ ] **CA `liquidity`** (historique seul) — même pattern
+- [x] **CA `liquidity`** (historique seul) : migration `011_liquidity_hourly_cagg.sql` (split par kind, refresh policy 31j/1h, GRANT `yog_api`), test d'intégration `tests/liquidity_cagg.rs` ✅
 - [ ] **CA `claim_position_fee`** (historique seul) — même pattern
 - [ ] **CA `claim_reward`** (historique seul, group by `mint_reward`) — même pattern
 
