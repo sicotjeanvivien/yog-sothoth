@@ -224,11 +224,18 @@ fn into_fetched_metadata(asset: DasAsset) -> Option<FetchedMetadata> {
         .map(|m| (m.symbol.clone(), m.name.clone()))
         .unwrap_or((None, None));
 
+    // Filter empty strings before the fallback: an `image: Some("")` must not
+    // shadow a valid `files[].uri`, and absence is represented as None.
     let logo_uri = asset.content.as_ref().and_then(|c| {
         c.links
             .as_ref()
             .and_then(|l| l.image.clone())
-            .or_else(|| c.files.iter().find_map(|f| f.uri.clone()))
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                c.files
+                    .iter()
+                    .find_map(|f| f.uri.clone().filter(|s| !s.is_empty()))
+            })
     });
 
     Some(FetchedMetadata {

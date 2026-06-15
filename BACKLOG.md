@@ -50,7 +50,7 @@
 	- [ ] pool
 	- [ ] price
 	- [ ] swap-event
-	- [ ] token
+	- [x] token — `logoUri` : le schéma `url|null` était **correct**, c'est l'API qui émettait `""`. Fix côté backend (yog-api normalise `""`→`null` à la sérialisation + yog-context filtre les images vides du provider Helius). Schéma front laissé strict (anti-corruption)
 - [x] suppression BFF
 - [x] Ajout Client Browser
 	- [x] lib/api/browser/network-status.ts — browser-side, exposes fetchNetworkStatusBrowser
@@ -212,7 +212,7 @@
 ---
 ### Transverse v0.1
 
-#### Stratégie de rétention & historisation (décidé : A + compression)
+#### ✅ Stratégie de rétention & historisation (décidé : A + compression)
 > **Décision (15 juin 2026) : option A — analytics only.** Au-delà de 30j, les lignes brutes
 > `swap`/`liquidity` sont droppées ; l'historique long terme vit dans le rollup (CA). On ne garde
 > **pas** les signatures brutes « au cas où » dans la DB chaude. L'archivage froid (audit) reste
@@ -236,7 +236,7 @@
 - [x] **Rollup long terme** = les 4 continuous aggregates ci-dessous (grain **horaire**, pas journalier) : portent l'historique analytique survivant au drop 30j pour `swap`/`liquidity` + `claim_*`. Migrations `010`–`013`
 - [x] **Ordre d'exécution** : satisfait — les 4 CA existent (migrations `010`–`013`) ; la rétention 30j peut tourner sans perte d'historique. ⚠️ **En prod** : vérifier que la refresh policy a bien matérialisé avant qu'un chunk franchisse 30j
 - [x] **GRANT** : policies (009) + CA (010–013) appliquées via `yog-migrate` ; pas de nouveau rôle requis
-- [ ] 🔜 **Archivage froid (plus tard, si besoin d'audit)** : dump des chunks `swap`/`liquidity` > 30j vers le bucket Object Storage `yog-backups` (parquet/csv compressé) **avant** le drop. Additif à la décision A — n'active que si un besoin de provenance/audit sur le grain transaction apparaît
+- [-] 🚫 🔜 **Archivage froid (plus tard, si besoin d'audit)** : dump des chunks `swap`/`liquidity` > 30j vers le bucket Object Storage `yog-backups` (parquet/csv compressé) **avant** le drop. Additif à la décision A — n'active que si un besoin de provenance/audit sur le grain transaction apparaît
 
 #### Continuous aggregates — rollups durables (cadré, 15 juin 2026)
 > Double rôle, acté avec la stratégie de rétention : (1) **historique long terme** qui survit au

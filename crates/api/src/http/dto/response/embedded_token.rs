@@ -68,7 +68,13 @@ impl EmbeddedTokenResponse {
         // showing just the mint with nulls — the dashboard can
         // render a placeholder rather than hiding the pool.
         let (symbol, name, decimals, logo_uri) = match metadata {
-            Some(m) => (m.symbol, m.name, m.decimals, m.logo_uri),
+            // Treat an empty logo as absent: the API contract is "URL or null".
+            Some(m) => (
+                m.symbol,
+                m.name,
+                m.decimals,
+                m.logo_uri.filter(|s| !s.is_empty()),
+            ),
             None => (None, None, 0, None),
         };
 

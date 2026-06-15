@@ -87,6 +87,19 @@ fn metadata_with_null_symbol_and_name_is_preserved() {
     assert_eq!(j["decimals"], 6); // decimals still come from metadata
 }
 
+#[test]
+fn empty_logo_uri_serializes_as_null() {
+    // DAS sometimes reports an empty image string. The API contract is
+    // "URL or null", so an empty logo must surface as null, not "".
+    let mut meta = full_metadata(mint());
+    meta.logo_uri = Some(String::new());
+
+    let dto = EmbeddedTokenResponse::from_sources(mint(), Some(meta), None);
+    let j = to_json(&dto);
+
+    assert!(j["logoUri"].is_null(), "empty logo must be null, not \"\"");
+}
+
 // ── Branch 2: metadata absent ────────────────────────────────────────
 
 #[test]

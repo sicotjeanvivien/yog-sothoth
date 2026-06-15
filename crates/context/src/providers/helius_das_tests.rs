@@ -165,6 +165,59 @@ fn falls_back_to_files_when_links_image_absent() {
 }
 
 #[test]
+fn empty_links_image_falls_back_to_files_and_never_yields_empty() {
+    // DAS sometimes reports `image: ""`. It must not shadow a valid
+    // files[].uri, and an empty string must never surface as the logo.
+    let mint = pk(9);
+    let asset = DasAsset {
+        id: mint.to_string(),
+        content: Some(DasContent {
+            metadata: None,
+            files: vec![DasFile {
+                uri: Some("https://example.com/from-files.png".to_string()),
+            }],
+            links: Some(DasLinks {
+                image: Some(String::new()),
+            }),
+        }),
+        token_info: Some(DasTokenInfo { decimals: Some(6) }),
+    };
+
+    let result = into_fetched_metadata(asset).expect("expected Some");
+
+    assert_eq!(
+        result.logo_uri.as_deref(),
+        Some("https://example.com/from-files.png"),
+        "empty image must fall back to files, not shadow it",
+    );
+}
+
+#[test]
+fn empty_image_with_no_other_source_yields_none() {
+    let mint = pk(10);
+    let asset = DasAsset {
+        id: mint.to_string(),
+        content: Some(DasContent {
+            metadata: None,
+            files: vec![DasFile {
+                uri: Some(String::new()),
+            }],
+            links: Some(DasLinks {
+                image: Some(String::new()),
+            }),
+        }),
+        token_info: Some(DasTokenInfo { decimals: Some(6) }),
+    };
+
+    let result = into_fetched_metadata(asset).expect("expected Some");
+
+    assert_eq!(
+        result.logo_uri, None,
+        "empty strings must normalize to None"
+    );
+}
+
+#[test]
 fn skips_files_with_null_uri_to_find_first_usable_one() {
     let mint = pk(5);
     let asset = DasAsset {

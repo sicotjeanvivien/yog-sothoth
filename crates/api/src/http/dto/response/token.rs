@@ -56,7 +56,8 @@ impl TokenResponse {
             symbol: metadata.symbol,
             name: metadata.name,
             decimals: metadata.decimals,
-            logo_uri: metadata.logo_uri,
+            // Treat an empty logo as absent: the API contract is "URL or null".
+            logo_uri: metadata.logo_uri.filter(|s| !s.is_empty()),
             fetched_at: metadata.fetched_at,
             last_refresh_at: metadata.last_refresh_at,
             price: price.map(TokenPriceResponse::from),
