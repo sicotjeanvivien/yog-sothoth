@@ -32,6 +32,7 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
+      - ".cargo/audit.toml"
       - ".github/workflows/crates.yml"
 
 # Cancel any in-flight run for the same ref when a new commit lands.
