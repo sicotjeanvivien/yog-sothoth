@@ -9,25 +9,24 @@ solana = ["dep:solana-transaction-status", "dep:solana-pubkey"]
 wasm = []
 
 [dependencies]
+# Serialization / encoding
 serde = { workspace = true }
-serde_json = { workspace = true }
+borsh = { workspace = true }
+bs58 = { workspace = true }
+sha2 = { workspace = true }
+
+# Solana
 solana-pubkey = { workspace = true, optional = true, default-features = false }
 solana-signature = { workspace = true }
 solana-transaction-status = { workspace = true, optional = true, default-features = false }
+solana-transaction-status-client-types = { workspace = true }
+
+# Misc
 chrono = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
-bs58 = { workspace = true }
-borsh = { workspace = true }
-sha2 = { workspace = true }
 rust_decimal = { workspace = true }
-solana-transaction-status-client-types.workspace = true
-
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
-solana-rpc-client = { workspace = true }
-solana-rpc-client-api = { workspace = true }
-solana-commitment-config = { workspace = true }
-solana-transaction-status = { workspace = true }
-solana-transaction-status-client-types = { workspace = true }
+serde_json = { workspace = true }

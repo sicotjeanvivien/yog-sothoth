@@ -6069,17 +6069,13 @@ dependencies = [
  "chrono",
  "dotenvy",
  "rust_decimal",
- "rustls",
  "serde",
  "serde_json",
  "solana-pubkey 4.1.0",
  "solana-signature",
- "thiserror 2.0.18",
  "tokio",
- "tower",
  "tower-http",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "yog-bootstrap",
  "yog-core",
@@ -6090,7 +6086,6 @@ dependencies = [
 name = "yog-bootstrap"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "rustls",
  "thiserror 2.0.18",
  "tracing",
@@ -6109,7 +6104,6 @@ dependencies = [
  "metrics-exporter-prometheus",
  "reqwest 0.13.3",
  "rust_decimal",
- "rustls",
  "serde",
  "serde_json",
  "solana-pubkey 4.1.0",
@@ -6117,7 +6111,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "yog-bootstrap",
  "yog-core",
  "yog-persistence",
@@ -6135,10 +6128,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
- "solana-commitment-config",
  "solana-pubkey 4.1.0",
- "solana-rpc-client",
- "solana-rpc-client-api",
  "solana-signature",
  "solana-transaction-status",
  "solana-transaction-status-client-types",
@@ -6157,7 +6147,6 @@ dependencies = [
  "futures-util",
  "metrics",
  "metrics-exporter-prometheus",
- "serde",
  "serde_json",
  "solana-commitment-config",
  "solana-pubkey 4.1.0",
@@ -6171,7 +6160,6 @@ dependencies = [
  "tokio-tungstenite 0.29.0",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "yog-bootstrap",
  "yog-core",
  "yog-persistence",
@@ -6187,8 +6175,6 @@ dependencies = [
  "chrono",
  "dotenvy",
  "rust_decimal",
- "serde",
- "serde_json",
  "solana-pubkey 4.1.0",
  "solana-signature",
  "sqlx",
@@ -6202,12 +6188,6 @@ dependencies = [
 [[package]]
 name = "yog-wasm"
 version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "yog-core",
-]
 
 [[package]]
 name = "yoke"

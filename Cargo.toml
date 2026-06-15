@@ -62,9 +62,8 @@ base64 = "0.22"
 sha2 = "0.11"
 rust_decimal = "1"
 
-# Axum 
+# Axum
 axum = "0.8.9"
-tower = "0.5"
 tower-http = { version = "0.6.10", features = [
   "cors",
   "trace",

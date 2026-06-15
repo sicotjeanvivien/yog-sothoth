@@ -14,13 +14,11 @@ path = "src/bin/migrate.rs"
 integration-tests = []
 
 [dependencies]
-# Workspace deps already declared at root
+# Workspace crates
 yog-core = { path = "../core" }
 yog-bootstrap = { path = "../bootstrap" }
 
-anyhow = { workspace = true }
-dotenvy = { workspace = true }
-tokio = { workspace = true }
+# Database
 sqlx = { workspace = true, default-features = false, features = [
   "postgres",
   "runtime-tokio-rustls",
@@ -31,16 +29,25 @@ sqlx = { workspace = true, default-features = false, features = [
   "rust_decimal",
   "migrate",
 ] }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tracing = { workspace = true }
-thiserror = { workspace = true }
-async-trait = { workspace = true }
 bigdecimal = { workspace = true }
-chrono = { workspace = true }
+rust_decimal = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Solana
 solana-pubkey = { workspace = true }
 solana-signature = { workspace = true }
-rust_decimal = { workspace = true }
+
+# Errors / logging / config
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
+
+# Misc
+async-trait = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 # Integration tests will spin up a real Postgres via docker-compose

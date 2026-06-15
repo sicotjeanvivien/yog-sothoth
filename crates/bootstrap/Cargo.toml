@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Errors
 thiserror = { workspace = true }
-anyhow = { workspace = true }
+
+# Logging / TLS runtime init
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 rustls = { workspace = true }

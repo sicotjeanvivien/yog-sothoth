@@ -4,31 +4,36 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Workspace crates
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
 yog-bootstrap = { path = "../bootstrap" }
 
+# Async runtime
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 
+# HTTP client
 reqwest = { workspace = true }
 
+# Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Solana
+solana-pubkey = { workspace = true }
+
+# Errors / logging / config
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
 
-rustls = { workspace = true }
-
-chrono = { workspace = true }
-solana-pubkey = { workspace = true }
-rust_decimal = { workspace = true }
-
-async-trait = { workspace = true }
-
+# Metrics
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
+
+# Misc
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+async-trait = { workspace = true }

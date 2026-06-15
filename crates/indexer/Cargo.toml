@@ -4,38 +4,41 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Workspace crates
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
-yog-bootstrap={ path = "../bootstrap"}
+yog-bootstrap = { path = "../bootstrap" }
 
+# Async runtime
 tokio = { workspace = true }
-futures-util = { workspace = true }
-tokio-retry = { workspace = true }
 tokio-util = { workspace = true }
+tokio-retry = { workspace = true }
 tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
 
+# Solana
 solana-rpc-client = { workspace = true }
 solana-rpc-client-api = { workspace = true }
 solana-commitment-config = { workspace = true }
 solana-pubsub-client = { workspace = true }
 solana-pubkey = { workspace = true }
 
-serde = { workspace = true }
+# Serialization
 serde_json = { workspace = true }
 
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-
-dotenvy = { workspace = true }
-
+# Errors / logging / config
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
 
-chrono = { workspace = true }
-async-trait = { workspace = true }
-
+# Metrics
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
+
+# Misc
+chrono = { workspace = true }
+async-trait = { workspace = true }
 
 [dev-dependencies]
 # Construct dummy Signatures in the event-persistor dispatch tests.

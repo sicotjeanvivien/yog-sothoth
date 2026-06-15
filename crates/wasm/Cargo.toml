@@ -6,9 +6,7 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Deferred scaffold: no dependencies yet. The wasm bindings will pull in
+# yog-core (with its `wasm` feature) and serialization crates once the
+# browser-side decoder is implemented.
 [dependencies]
-yog-core = { path = "../core" }
-
-serde = { workspace = true }
-serde_json = { workspace = true }
-chrono = { workspace = true }
