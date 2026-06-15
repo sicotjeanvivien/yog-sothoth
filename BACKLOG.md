@@ -233,10 +233,10 @@
 	- cycle de vie position (`create`/`close`/`lock`/`permanent_lock_position`) : rétention **retirée** → conservés à vie ; compression conservée
 	- note : 001–008 appliquaient le défaut 7d/30d uniformément ; 009 ne fait que `remove_retention_policy` sur les 7 tables ci-dessus
 - [x] **Classe des `claim_*`** — actée : **gros volume, même stratégie que `swap`/`liquidity`** (rétention 30j déjà en place, conservée) → besoin du même rollup long terme avant d'activer le drop en prod
-- [ ] **Rollup long terme** = continuous aggregate(s) ci-dessous : porte(nt) l'historique analytique survivant au drop 30j. Couvre `swap`/`liquidity` (volume) **et** `claim_*` (montants fees/rewards réalisés). Grain journalier par pool : `SUM(amount_*)`, `COUNT(*)`, éventuellement first/last `sqrt_price` pour OHLC côté swaps
+- [x] **Rollup long terme** = les 4 continuous aggregates ci-dessous (grain **horaire**, pas journalier) : portent l'historique analytique survivant au drop 30j pour `swap`/`liquidity` + `claim_*`. Migrations `010`–`013`
+- [x] **Ordre d'exécution** : satisfait — les 4 CA existent (migrations `010`–`013`) ; la rétention 30j peut tourner sans perte d'historique. ⚠️ **En prod** : vérifier que la refresh policy a bien matérialisé avant qu'un chunk franchisse 30j
+- [x] **GRANT** : policies (009) + CA (010–013) appliquées via `yog-migrate` ; pas de nouveau rôle requis
 - [ ] 🔜 **Archivage froid (plus tard, si besoin d'audit)** : dump des chunks `swap`/`liquidity` > 30j vers le bucket Object Storage `yog-backups` (parquet/csv compressé) **avant** le drop. Additif à la décision A — n'active que si un besoin de provenance/audit sur le grain transaction apparaît
-- [ ] **Ordre d'exécution** : la CA doit exister **avant** d'activer la rétention 30j, sinon on perd l'historique en droppant — dépendance dure avec l'item CA ci-dessous
-- [ ] **GRANT** : policies appliquées via `yog-migrate` (forward-only) ; pas de nouveau rôle requis
 
 #### Continuous aggregates — rollups durables (cadré, 15 juin 2026)
 > Double rôle, acté avec la stratégie de rétention : (1) **historique long terme** qui survit au
@@ -268,6 +268,8 @@
 - [x] **CA `liquidity`** (historique seul) : migration `011_liquidity_hourly_cagg.sql` (split par kind, refresh policy 31j/1h, GRANT `yog_api`), test d'intégration `tests/liquidity_cagg.rs` ✅
 - [x] **CA `claim_position_fee`** (historique seul) : migration `012` (`SUM(fee_a/b_claimed)`, `COUNT(*)` ; pas de mint dans la table source → jointure `pools` au read si besoin), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
 - [x] **CA `claim_reward`** (historique seul, group by `mint_reward`) : migration `013` (`SUM(total_reward)`, `COUNT(*)` par `(pool, mint_reward, bucket)`), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
+- [ ] **Brancher des read-paths sur les CA `liquidity`/`claim_*`** : elles sont alimentées mais **sans lecteur** (seul `swap`→volume est lu par `pool_analytics.rs`). À câbler quand les courbes/agrégations historiques arrivent (cf. Dashboard Overview)
+- [ ] **VIEW cross-protocole au-dessus des CA** : à créer au 2ᵉ protocole (DLMM/Raydium), comme la VIEW `swap_events` actuelle — lecture mono-protocole directe en attendant
 
 #### Performance — différé empirique
 > N'activer que si la charge le justifie. Ne pas anticiper.
