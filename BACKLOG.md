@@ -263,7 +263,8 @@
 - `GRANT SELECT` sur chaque CA à `yog_api`.
 
 **Ordre d'implémentation — `swap` en premier (slice verticale), puis réplication :**
-- [x] **CA `swap`** : migration `010_swap_volume_hourly_cagg.sql` (CA + refresh policy 31j/1h + GRANT `yog_api`), réécriture sous-requête volume de `pool_analytics.rs` (lecture CA, valorisation trade-time par bucket), `.sqlx` régénéré, test d'intégration `tests/volume_cagg.rs` ✅. Reste : bench latence `GET /api/pools` avant/après sur dataset représentatif
+- [x] **CA `swap`** : migration `010_swap_volume_hourly_cagg.sql` (CA + refresh policy 31j/1h + GRANT `yog_api`), réécriture sous-requête volume de `pool_analytics.rs` (lecture CA, valorisation trade-time par bucket), `.sqlx` régénéré, test d'intégration `tests/volume_cagg.rs` ✅
+	- [x] Bench : plan validé via `EXPLAIN ANALYZE` (CA = lecture des buckets matérialisés + scan live du seul bucket courant via real-time agg). Latence chiffrée **déférée à la prod** : en dev (16 swaps/24h) la CA est même légèrement plus lourde (machinerie real-time agg) ; le gain n'apparaît qu'au-dessus du point de bascule (milliers de lignes/24h par pool). Cohérent avec « ne pas anticiper »
 - [x] **CA `liquidity`** (historique seul) : migration `011_liquidity_hourly_cagg.sql` (split par kind, refresh policy 31j/1h, GRANT `yog_api`), test d'intégration `tests/liquidity_cagg.rs` ✅
 - [x] **CA `claim_position_fee`** (historique seul) : migration `012` (`SUM(fee_a/b_claimed)`, `COUNT(*)` ; pas de mint dans la table source → jointure `pools` au read si besoin), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
 - [x] **CA `claim_reward`** (historique seul, group by `mint_reward`) : migration `013` (`SUM(total_reward)`, `COUNT(*)` par `(pool, mint_reward, bucket)`), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
