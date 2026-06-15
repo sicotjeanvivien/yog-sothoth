@@ -212,7 +212,33 @@
 ---
 ### Transverse v0.1
 
+#### Stratégie de rétention & historisation (décidé : A + compression)
+> **Décision (15 juin 2026) : option A — analytics only.** Au-delà de 30j, les lignes brutes
+> `swap`/`liquidity` sont droppées ; l'historique long terme vit dans le rollup (CA). On ne garde
+> **pas** les signatures brutes « au cas où » dans la DB chaude. L'archivage froid (audit) reste
+> une option additive pour plus tard, non bloquante.
+>
+> Les events n'ont pas le même profil : **fort volume** (`swap`, `liquidity` — des milliers/jour)
+> vs **ponctuel** (`initialize_pool`, `update_pool_fees`, `set_pool_status`, cycle de vie position).
+> Objectif : DB chaude légère sans perdre l'historique. Piège à éviter : « agréger en conservant
+> les signatures » est contradictoire — une agrégation écrase le grain transaction (donc la
+> signature). Il faut séparer deux historiques : **analytique** (volume dans le temps → agrégé,
+> signatures inutiles) et **provenance/audit** (quelles transactions exactes → grain brut, non
+> agrégeable). La voie 3 aide : chaque kind est déjà sa propre table → policy par table.
+
+- [x] **Décision A/B** — actée : **A (analytics only) + compression**. Drop des lignes brutes `swap`/`liquidity` > 30j, historique porté par le rollup CA
+- [ ] **Rétention différenciée par table** :
+	- fort volume (`swap_events`, `liquidity_events`) : `add_compression_policy` ~J+7 + `add_retention_policy` drop > 30j
+	- ponctuel / config (`initialize_pool`, `update_pool_fees`, `set_pool_status`) : **aucune policy, conservés à vie**
+	- cycle de vie position (`create`/`close`/`lock`/`permanent_lock_position`) : **aucune policy, conservés à vie**
+- [ ] **Rollup long terme** = la continuous aggregate ci-dessous : c'est elle qui porte l'historique analytique survivant au drop 30j (grain journalier par pool : `SUM(amount_a/b)`, `COUNT(*)`, éventuellement first/last `sqrt_price` pour OHLC)
+- [ ] 🔜 **Archivage froid (plus tard, si besoin d'audit)** : dump des chunks `swap`/`liquidity` > 30j vers le bucket Object Storage `yog-backups` (parquet/csv compressé) **avant** le drop. Additif à la décision A — n'active que si un besoin de provenance/audit sur le grain transaction apparaît
+- [ ] **Ordre d'exécution** : la CA doit exister **avant** d'activer la rétention 30j, sinon on perd l'historique en droppant — dépendance dure avec l'item CA ci-dessous
+- [ ] **GRANT** : policies appliquées via `yog-migrate` (forward-only) ; pas de nouveau rôle requis
+
 #### Continuous aggregate — volume 24h (à cadrer)
+> Lié à la stratégie de rétention ci-dessus : la CA n'est pas qu'une optim perf du calcul 24h,
+> elle est le **rollup qui porte l'historique long terme** une fois la rétention 30j active.
 > Contexte : `volume_24h_usd` est recalculé au read-time dans `pool_analytics.rs`
 > (`SUM(...) FROM swap_events WHERE timestamp > NOW() - INTERVAL '24 hours'`), soit un scan
 > des swaps des dernières 24 h à chaque `GET /api/pools`. Une continuous aggregate
