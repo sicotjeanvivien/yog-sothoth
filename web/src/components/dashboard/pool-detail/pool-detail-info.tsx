@@ -145,9 +145,9 @@ function TokenLine({
         {token.symbol ?? "—"}
       </span>
       <span className="truncate font-mono text-slate-400">
-        {formatShortAddress(token.mint)}
+        {token.mint ? formatShortAddress(token.mint) : "—"}
       </span>
-      <CopyButton value={token.mint} label={copyLabel} />
+      {token.mint && <CopyButton value={token.mint} label={copyLabel} />}
     </>
   );
 }

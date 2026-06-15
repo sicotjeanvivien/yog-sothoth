@@ -14,9 +14,6 @@ export const SwapEventSchema = z.object({
   signature: z.string().min(1),
   timestamp: Rfc3339,
 
-  tokenAMint: z.string().min(1),
-  tokenBMint: z.string().min(1),
-
   tradeDirection: z.enum(["a_to_b", "b_to_a"]),
   amountA: z.number().int().nonnegative(),
   amountB: z.number().int().nonnegative(),

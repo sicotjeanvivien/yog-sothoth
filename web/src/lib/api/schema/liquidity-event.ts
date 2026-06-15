@@ -15,9 +15,6 @@ export const LiquidityEventSchema = z.object({
   signature: z.string().min(1),
   timestamp: Rfc3339,
 
-  tokenAMint: z.string().min(1),
-  tokenBMint: z.string().min(1),
-
   liquidityEventKind: z.enum(["add", "remove"]),
   amountA: z.number().int().nonnegative(),
   amountB: z.number().int().nonnegative(),

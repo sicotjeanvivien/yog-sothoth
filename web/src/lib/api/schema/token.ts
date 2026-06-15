@@ -2,7 +2,8 @@ import * as z from "zod";
 import { PriceSchema } from "./price";
 
 export const TokenSchema = z.object({
-  mint: z.string(),
+  // null until the pool's mints are resolved by yog-context.
+  mint: z.string().nullable(),
   symbol: z.string().nullable(),
   name: z.string().nullable(),
   decimals: z.number(),
