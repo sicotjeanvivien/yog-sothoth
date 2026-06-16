@@ -94,24 +94,32 @@ pub trait PoolRepository: Send + Sync {
     ) -> RepositoryResult<Page<Pool>>;
 }
 
-/// Resolution of a pool's token mints from its on-chain account,
-/// performed by yog-context (which holds column-level UPDATE on the
-/// mint columns).
+/// Resolution of a pool's account-derived properties (token mints and base
+/// fee) from its on-chain cp-amm `Pool` account, performed by yog-context
+/// (which holds column-level UPDATE on those columns).
+///
+/// These properties can't be inferred reliably from the event stream: the
+/// mints were mis-resolved by a per-event heuristic, and the base fee is only
+/// emitted at pool genesis (`InitializePool`) — which the indexer never sees
+/// for pools created before it started watching. Reading the account back-fills
+/// both for every pool, old or new.
 ///
 /// Kept separate from [`PoolRepository`] so the resolver worker depends
 /// only on what it uses, and the read/write mocks in the api and
 /// indexer crates don't have to carry these methods.
 #[async_trait]
-pub trait PoolMintResolver: Send + Sync {
-    /// Pools whose mints haven't been resolved yet (`token_a_mint IS NULL`),
-    /// capped at `limit`.
+pub trait PoolAccountResolver: Send + Sync {
+    /// Pools missing at least one account-derived property — a `NULL` mint or
+    /// a `NULL` `fee_bps` — capped at `limit`.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
-    /// Set both mints for a pool, as decoded from its on-chain account.
-    async fn set_mints(
+    /// Set a pool's mints and base fee (basis points), as decoded from its
+    /// on-chain account. A single column-level UPDATE; idempotent.
+    async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
         token_a_mint: &Pubkey,
         token_b_mint: &Pubkey,
+        fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()>;
 }

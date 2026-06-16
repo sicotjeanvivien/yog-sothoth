@@ -11,7 +11,7 @@ use anyhow::Context;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::domain::{PoolMintResolver, TokenMetadataRepository, TokenPriceRepository};
+use yog_core::domain::{PoolAccountResolver, TokenMetadataRepository, TokenPriceRepository};
 use yog_persistence::{
     Database, PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
@@ -23,7 +23,7 @@ use crate::providers::{CpAmmPoolClient, HeliusDasClient, JupiterPriceClient};
 use crate::source::{MetadataSource, PoolAccountSource, PriceSource};
 use crate::workers::MetadataWorkerMetrics;
 use crate::workers::PriceWorkerMetrics;
-use crate::workers::{MetadataWorker, PoolMintsWorker, PriceWorker};
+use crate::workers::{MetadataWorker, PoolAccountWorker, PriceWorker};
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
@@ -37,7 +37,7 @@ pub(crate) struct Daemon {
     /// Jupiter price source client.
     price_source: Arc<dyn PriceSource>,
     /// Pool-mint resolution persistence.
-    pool_mint_resolver: Arc<dyn PoolMintResolver>,
+    pool_account_resolver: Arc<dyn PoolAccountResolver>,
     /// cp-amm pool account source.
     pool_account_source: Arc<dyn PoolAccountSource>,
     /// Context METADATA poll secs
@@ -66,7 +66,7 @@ impl Daemon {
         let token_price_repository: Arc<dyn TokenPriceRepository> =
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
 
-        let pool_mint_resolver: Arc<dyn PoolMintResolver> =
+        let pool_account_resolver: Arc<dyn PoolAccountResolver> =
             Arc::new(PgPoolRepository::new(db_pool));
 
         // Two independent HTTP clients — one per external source.
@@ -89,7 +89,7 @@ impl Daemon {
             token_price_repository,
             metadata_source,
             price_source,
-            pool_mint_resolver,
+            pool_account_resolver,
             pool_account_source,
             poll_interval,
             price_interval,
@@ -112,10 +112,10 @@ impl Daemon {
             self.price_interval,
             shutdown.clone(),
         );
-        // Resolver runs at the metadata cadence — it must fill mints before
+        // Resolver runs at the metadata cadence — it must fill mints + fee before
         // metadata/price enrichment has anything to key off.
-        let pool_mints_task = spawn_pool_mints_worker(
-            Arc::clone(&self.pool_mint_resolver),
+        let pool_account_task = spawn_pool_account_worker(
+            Arc::clone(&self.pool_account_resolver),
             self.pool_account_source.clone(),
             self.poll_interval,
             shutdown.clone(),
@@ -130,9 +130,9 @@ impl Daemon {
                 shutdown.cancel();
                 handle_task_result(result, "price worker")?
             }
-            result = pool_mints_task => {
+            result = pool_account_task => {
                 shutdown.cancel();
-                handle_task_result(result, "pool-mints worker")?
+                handle_task_result(result, "pool-account worker")?
             }
             _ = tokio::signal::ctrl_c() => {
                 info!("ctrl-c received — stopping");
@@ -185,14 +185,14 @@ fn spawn_price_worker(
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 
-/// Spawn the pool-mint resolver worker task.
-fn spawn_pool_mints_worker(
-    repository: Arc<dyn PoolMintResolver>,
+/// Spawn the pool-account resolver worker task.
+fn spawn_pool_account_worker(
+    repository: Arc<dyn PoolAccountResolver>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PoolMintsWorker::new(repository, source, poll_interval);
+    let worker = PoolAccountWorker::new(repository, source, poll_interval);
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 
