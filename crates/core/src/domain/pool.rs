@@ -2,4 +2,4 @@ pub mod model;
 pub mod repository;
 
 pub use model::Pool;
-pub use repository::{PoolCursor, PoolMintResolver, PoolRepository};
+pub use repository::{PoolAccountResolver, PoolCursor, PoolRepository};

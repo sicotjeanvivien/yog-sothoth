@@ -107,7 +107,11 @@ pub fn decode_updated_base_fee_bps(params_raw: &[u8]) -> CoreResult<Option<Decim
 /// Convert a cp-amm fee numerator to basis points. The fee fraction is
 /// `numerator / FEE_DENOMINATOR`; in bps that is `numerator / 100_000`. Exact
 /// in `Decimal` (e.g. 2_500_000 → 25, 500_000_000 → 5000, 250_000 → 2.5).
-fn fee_numerator_to_bps(numerator: u64) -> Decimal {
+///
+/// Public because the cliff fee numerator is also read directly (as the leading
+/// `u64`) from the on-chain `Pool` account by yog-context, bypassing the borsh
+/// event blobs entirely.
+pub fn fee_numerator_to_bps(numerator: u64) -> Decimal {
     Decimal::from(numerator) / Decimal::from(FEE_DENOMINATOR / 10_000)
 }
 

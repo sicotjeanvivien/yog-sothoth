@@ -11,6 +11,8 @@
 //! 8-byte Anchor discriminator, then fixed-offset fields. Empirically
 //! verified against mainnet (and stable across the program's ABI):
 //!
+//! - `cliff_fee_numerator` (base fee) — the leading `u64` at byte offset 8
+//!   (`pool_fees` is the first field; its base fee numerator leads it)
 //! - `token_a_mint` at byte offset 168 (32 bytes)
 //! - `token_b_mint` at byte offset 200 (32 bytes)
 //!
@@ -25,7 +27,7 @@ use yog_core::domain::Protocol;
 
 use super::metrics::ProviderMetrics;
 use crate::error::SourceError;
-use crate::source::{PoolAccountSource, ResolvedPoolMints};
+use crate::source::{PoolAccountSource, ResolvedPoolAccount};
 use std::time::Instant;
 
 /// `getMultipleAccounts` accepts at most 100 keys per call.
@@ -36,6 +38,10 @@ const PROVIDER_LABEL: &str = "cpamm_pool";
 /// (`sha256("account:Pool")[..8]`) — guards against decoding the wrong
 /// account shape.
 const POOL_DISCRIMINATOR: [u8; 8] = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
+/// `cliff_fee_numerator`: the leading `u64` of `pool_fees`, right after the
+/// 8-byte discriminator. The same quantity decoded from the genesis event,
+/// validated against mainnet pool accounts.
+const CLIFF_FEE_NUMERATOR_OFFSET: usize = 8;
 const TOKEN_A_MINT_OFFSET: usize = 168;
 const TOKEN_B_MINT_OFFSET: usize = 200;
 
@@ -89,7 +95,7 @@ impl CpAmmPoolClient {
         }
     }
 
-    async fn fetch_chunk(&self, pools: &[Pubkey]) -> Result<Vec<ResolvedPoolMints>, SourceError> {
+    async fn fetch_chunk(&self, pools: &[Pubkey]) -> Result<Vec<ResolvedPoolAccount>, SourceError> {
         let start = Instant::now();
         let result = self.fetch_chunk_inner(pools).await;
         let outcome = match &result {
@@ -104,7 +110,7 @@ impl CpAmmPoolClient {
     async fn fetch_chunk_inner(
         &self,
         pools: &[Pubkey],
-    ) -> Result<Vec<ResolvedPoolMints>, SourceError> {
+    ) -> Result<Vec<ResolvedPoolAccount>, SourceError> {
         let keys: Vec<String> = pools.iter().map(|p| p.to_string()).collect();
         let request = RpcRequest {
             jsonrpc: "2.0",
@@ -135,9 +141,9 @@ impl CpAmmPoolClient {
             .collect())
     }
 
-    /// Decode the two mints from a pool account, or `None` if the owner,
-    /// discriminator or length don't match the cp-amm `Pool` shape.
-    fn decode(&self, pool: Pubkey, account: RpcAccount) -> Option<ResolvedPoolMints> {
+    /// Decode the mints and base fee from a pool account, or `None` if the
+    /// owner, discriminator or length don't match the cp-amm `Pool` shape.
+    fn decode(&self, pool: Pubkey, account: RpcAccount) -> Option<ResolvedPoolAccount> {
         if account.owner != self.program_id {
             return None;
         }
@@ -147,21 +153,30 @@ impl CpAmmPoolClient {
         if bytes.len() < TOKEN_B_MINT_OFFSET + 32 || bytes[..8] != POOL_DISCRIMINATOR {
             return None;
         }
+        let cliff_fee_numerator = u64::from_le_bytes(
+            bytes[CLIFF_FEE_NUMERATOR_OFFSET..CLIFF_FEE_NUMERATOR_OFFSET + 8]
+                .try_into()
+                .ok()?,
+        );
         let token_a_mint =
             Pubkey::try_from(&bytes[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32]).ok()?;
         let token_b_mint =
             Pubkey::try_from(&bytes[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32]).ok()?;
-        Some(ResolvedPoolMints {
+        Some(ResolvedPoolAccount {
             pool,
             token_a_mint,
             token_b_mint,
+            fee_bps: yog_core::amm::damm_v2::fee_numerator_to_bps(cliff_fee_numerator),
         })
     }
 }
 
 #[async_trait]
 impl PoolAccountSource for CpAmmPoolClient {
-    async fn fetch_mints(&self, pools: &[Pubkey]) -> Result<Vec<ResolvedPoolMints>, SourceError> {
+    async fn fetch_accounts(
+        &self,
+        pools: &[Pubkey],
+    ) -> Result<Vec<ResolvedPoolAccount>, SourceError> {
         let mut all = Vec::with_capacity(pools.len());
         for chunk in pools.chunks(ACCOUNTS_BATCH_MAX) {
             all.extend(self.fetch_chunk(chunk).await?);

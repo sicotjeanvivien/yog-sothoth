@@ -1,11 +1,14 @@
-//! Pool-mint resolver worker — fills the mints of newly discovered pools.
+//! Pool-account resolver worker — fills account-derived pool properties.
 //!
 //! The indexer records a pool by address with `NULL` mints (it can't infer
-//! them reliably from the transaction). Every `poll_interval` this worker:
-//!   1. lists pools whose mints are still `NULL` (`list_unresolved`);
+//! them reliably from the transaction) and a `NULL` `fee_bps` for any pool
+//! whose genesis `InitializePool` event it never saw. Every `poll_interval`
+//! this worker:
+//!   1. lists pools missing any account-derived property (`list_unresolved`:
+//!      a NULL mint or a NULL fee);
 //!   2. fetches and decodes each pool's on-chain account (the authoritative
-//!      mint source) via `PoolAccountSource`;
-//!   3. writes the resolved mints back (`set_mints`).
+//!      source for mints and base fee) via `PoolAccountSource`;
+//!   3. writes the resolved mints + fee back (`set_pool_account`).
 //!
 //! # Resilience
 //!
@@ -20,7 +23,7 @@ use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use yog_core::domain::PoolMintResolver;
+use yog_core::domain::PoolAccountResolver;
 
 use crate::error::WorkerError;
 use crate::source::PoolAccountSource;
@@ -29,15 +32,15 @@ use crate::source::PoolAccountSource;
 /// so a tick is a single RPC round-trip.
 const RESOLVE_BATCH_MAX: i64 = 100;
 
-pub struct PoolMintsWorker {
-    repository: Arc<dyn PoolMintResolver>,
+pub struct PoolAccountWorker {
+    repository: Arc<dyn PoolAccountResolver>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
 }
 
-impl PoolMintsWorker {
+impl PoolAccountWorker {
     pub fn new(
-        repository: Arc<dyn PoolMintResolver>,
+        repository: Arc<dyn PoolAccountResolver>,
         source: Arc<dyn PoolAccountSource>,
         poll_interval: std::time::Duration,
     ) -> Self {
@@ -49,13 +52,13 @@ impl PoolMintsWorker {
     }
 
     pub async fn run(self, shutdown: CancellationToken) -> Result<(), WorkerError> {
-        info!("PoolMintsWorker started");
+        info!("PoolAccountWorker started");
         let mut ticker = tokio::time::interval(self.poll_interval);
         loop {
             tokio::select! {
                 _ = ticker.tick() => self.run_one_cycle().await,
                 _ = shutdown.cancelled() => {
-                    info!("shutdown requested — pool-mints worker stopping");
+                    info!("shutdown requested — pool-account worker stopping");
                     return Ok(());
                 }
             }
@@ -67,19 +70,19 @@ impl PoolMintsWorker {
         let unresolved = match self.repository.list_unresolved(RESOLVE_BATCH_MAX).await {
             Ok(pools) => pools,
             Err(e) => {
-                warn!(error = %e, "pool-mints worker: list_unresolved failed");
+                warn!(error = %e, "pool-account worker: list_unresolved failed");
                 return;
             }
         };
         if unresolved.is_empty() {
-            debug!("pool-mints worker: no unresolved pools — sleeping");
+            debug!("pool-account worker: no unresolved pools — sleeping");
             return;
         }
 
-        let resolved = match self.source.fetch_mints(&unresolved).await {
+        let resolved = match self.source.fetch_accounts(&unresolved).await {
             Ok(resolved) => resolved,
             Err(e) => {
-                warn!(error = %e, "pool-mints worker: source returned a hard error");
+                warn!(error = %e, "pool-account worker: source returned a hard error");
                 return;
             }
         };
@@ -88,11 +91,13 @@ impl PoolMintsWorker {
         for r in &resolved {
             match self
                 .repository
-                .set_mints(&r.pool, &r.token_a_mint, &r.token_b_mint)
+                .set_pool_account(&r.pool, &r.token_a_mint, &r.token_b_mint, r.fee_bps)
                 .await
             {
                 Ok(()) => ok += 1,
-                Err(e) => warn!(pool = %r.pool, error = %e, "pool-mints worker: set_mints failed"),
+                Err(e) => {
+                    warn!(pool = %r.pool, error = %e, "pool-account worker: set_pool_account failed")
+                }
             }
         }
 
@@ -101,11 +106,11 @@ impl PoolMintsWorker {
             resolved = resolved.len(),
             written = ok,
             elapsed_s = start.elapsed().as_secs_f64(),
-            "pool-mints worker: cycle done",
+            "pool-account worker: cycle done",
         );
     }
 }
 
 #[cfg(test)]
-#[path = "pool_mints_tests.rs"]
+#[path = "pool_account_tests.rs"]
 mod tests;

@@ -12,7 +12,7 @@ use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
     RepositoryResult,
-    domain::{Pool, PoolCursor, PoolMintResolver, PoolRepository},
+    domain::{Pool, PoolAccountResolver, PoolCursor, PoolRepository},
 };
 
 pub struct PgPoolRepository {
@@ -26,6 +26,14 @@ impl PgPoolRepository {
 }
 
 const MAX_PAGE_SIZE: i64 = 200;
+
+/// Convert a domain `fee_bps` (`rust_decimal::Decimal`) to the `BigDecimal`
+/// that NUMERIC binds to at the persistence boundary. Round-trips through the
+/// exact decimal string — never lossy for the small fee values we store.
+fn fee_bps_to_numeric(fee_bps: rust_decimal::Decimal) -> RepositoryResult<sqlx::types::BigDecimal> {
+    sqlx::types::BigDecimal::from_str(&fee_bps.to_string())
+        .map_err(|e| RepositoryError::Integrity(format!("invalid fee_bps decimal: {e}")))
+}
 
 #[async_trait]
 impl PoolRepository for PgPoolRepository {
@@ -67,12 +75,7 @@ impl PoolRepository for PgPoolRepository {
         pool_address: &Pubkey,
         fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()> {
-        // NUMERIC binds to BigDecimal at the persistence boundary (the crate
-        // also enables sqlx's bigdecimal feature for the lossless u128 columns).
-        // Round-trip through the exact decimal string — never lossy for the
-        // small fee values we store.
-        let fee_bps = sqlx::types::BigDecimal::from_str(&fee_bps.to_string())
-            .map_err(|e| RepositoryError::Integrity(format!("invalid fee_bps decimal: {e}")))?;
+        let fee_bps = fee_bps_to_numeric(fee_bps)?;
         sqlx::query!(
             r#"UPDATE pools SET fee_bps = $2 WHERE pool_address = $1"#,
             pool_address.to_string(),
@@ -166,13 +169,13 @@ impl PoolRepository for PgPoolRepository {
 }
 
 #[async_trait]
-impl PoolMintResolver for PgPoolRepository {
+impl PoolAccountResolver for PgPoolRepository {
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         let rows = sqlx::query!(
             r#"
             SELECT pool_address
             FROM pools
-            WHERE token_a_mint IS NULL OR token_b_mint IS NULL
+            WHERE token_a_mint IS NULL OR token_b_mint IS NULL OR fee_bps IS NULL
             ORDER BY first_seen_at
             LIMIT $1
             "#,
@@ -187,21 +190,24 @@ impl PoolMintResolver for PgPoolRepository {
             .collect()
     }
 
-    async fn set_mints(
+    async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
         token_a_mint: &Pubkey,
         token_b_mint: &Pubkey,
+        fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()> {
+        let fee_bps = fee_bps_to_numeric(fee_bps)?;
         sqlx::query!(
             r#"
             UPDATE pools
-            SET token_a_mint = $2, token_b_mint = $3
+            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4
             WHERE pool_address = $1
             "#,
             pool_address.to_string(),
             token_a_mint.to_string(),
             token_b_mint.to_string(),
+            fee_bps,
         )
         .execute(&self.pool)
         .await
