@@ -71,6 +71,7 @@
         "title": "Informations sur la pool",
         "poolAddress": "Adresse de la pool",
         "protocol": "Protocole",
+        "feeTier": "Frais",
         "network": "Réseau",
         "tokenA": "Token A",
         "tokenB": "Token B",

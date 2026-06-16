@@ -43,6 +43,7 @@ function validPool() {
         "fetchedAt": "2026-05-25T12:17:17.479657Z"
       }
     },
+    "feeBps": "25",
     "tvlUsd": "1332007.7148736200400326721044",
     "volume24hUsd": "47964.973514780605664520660399",
     "firstSeenAt": "2026-05-21T10:01:35.084596Z",
@@ -55,6 +56,11 @@ describe("PoolSchema", () => {
     const parsed = PoolSchema.parse(validPool());
     expect(parsed.poolAddress).toBe("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie");
     expect(parsed.protocol).toBe("meteora_damm_v2");
+  });
+
+  it("accepts a null feeBps (pool seen before its InitializePool)", () => {
+    const parsed = PoolSchema.parse({ ...validPool(), feeBps: null });
+    expect(parsed.feeBps).toBeNull();
   });
 
   it("accepts RFC3339 with a numeric timezone offset", () => {
