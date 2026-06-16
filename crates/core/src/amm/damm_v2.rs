@@ -58,9 +58,57 @@ pub fn decode_base_fee_bps(pool_fees_raw: &[u8]) -> CoreResult<Decimal> {
             .expect("slice is 8 bytes after the length check"),
     );
 
-    // bps = numerator / FEE_DENOMINATOR * 10_000 = numerator / 100_000.
-    // Exact in Decimal (e.g. 2_500_000 → 25, 500_000_000 → 5000).
-    Ok(Decimal::from(cliff_fee_numerator) / Decimal::from(FEE_DENOMINATOR / 10_000))
+    Ok(fee_numerator_to_bps(cliff_fee_numerator))
+}
+
+/// Decode the new base trading fee (basis points) from an `EvtUpdatePoolFees`
+/// `params_raw` blob (borsh `UpdatePoolFeesParameters`), captured raw under
+/// "voie C" (`MeteoraDammV2UpdatePoolFeesEvent::params_raw`). Returns `None`
+/// when the update did not change the base fee.
+///
+/// `UpdatePoolFeesParameters` leads with `cliff_fee_numerator: Option<u64>`,
+/// so reading only that leading field is **robust to trailing-field schema
+/// drift**: the struct has since gained `dynamic_fee` / `compounding_fee_bps`
+/// (and a captured fixture predates the latter — its blob is one byte short of
+/// the current three-field layout), none of which the headline fee tier needs.
+///   - tag `0` → `None` (base fee unchanged by this update)
+///   - tag `1` → `Some(bps)` decoded from the following little-endian `u64`
+///   - any other tag → fail-loud (a malformed borsh `Option` discriminant)
+pub fn decode_updated_base_fee_bps(params_raw: &[u8]) -> CoreResult<Option<Decimal>> {
+    let Some((&tag, rest)) = params_raw.split_first() else {
+        return Err(CoreError::FeeDecode {
+            reason: "empty UpdatePoolFeesParameters blob".to_string(),
+        });
+    };
+    match tag {
+        0 => Ok(None),
+        1 => {
+            if rest.len() < 8 {
+                return Err(CoreError::FeeDecode {
+                    reason: format!(
+                        "cliff_fee_numerator truncated: {} bytes after tag, need 8",
+                        rest.len()
+                    ),
+                });
+            }
+            let numerator = u64::from_le_bytes(
+                rest[0..8]
+                    .try_into()
+                    .expect("8 bytes after the length check"),
+            );
+            Ok(Some(fee_numerator_to_bps(numerator)))
+        }
+        other => Err(CoreError::FeeDecode {
+            reason: format!("invalid cliff_fee_numerator Option tag: {other}"),
+        }),
+    }
+}
+
+/// Convert a cp-amm fee numerator to basis points. The fee fraction is
+/// `numerator / FEE_DENOMINATOR`; in bps that is `numerator / 100_000`. Exact
+/// in `Decimal` (e.g. 2_500_000 → 25, 500_000_000 → 5000, 250_000 → 2.5).
+fn fee_numerator_to_bps(numerator: u64) -> Decimal {
+    Decimal::from(numerator) / Decimal::from(FEE_DENOMINATOR / 10_000)
 }
 
 /// Apply the DAMM v2 fee to an input amount.
@@ -229,6 +277,60 @@ mod tests {
     fn decode_base_fee_bps_too_short_errors() {
         assert!(matches!(
             decode_base_fee_bps(&[0u8; 10]),
+            Err(CoreError::FeeDecode { .. })
+        ));
+    }
+
+    // ── decode_updated_base_fee_bps ─────────────────────────────────────────
+
+    /// Real `params_raw` bytes from `damm_v2_update_pool_fees.json`:
+    /// cliff_fee_numerator = Some(12_800_000) → 128 bps, followed by a
+    /// dynamic_fee (Some) and NO compounding_fee_bps field (the tx predates it)
+    /// — which the leading-field decode ignores.
+    #[test]
+    fn decode_updated_base_fee_bps_real_fixture_128bps() {
+        let params: [u8; 42] = [
+            1, 0, 80, 195, 0, 0, 0, 0, 0, 1, 1, 0, 203, 16, 199, 186, 184, 141, 6, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 10, 0, 120, 0, 136, 19, 96, 164, 220, 0, 200, 4, 0, 0,
+        ];
+        assert_eq!(
+            decode_updated_base_fee_bps(&params).unwrap(),
+            Some(Decimal::new(128, 0)),
+            "12_800_000 / 1e9 = 1.28% = 128 bps"
+        );
+    }
+
+    /// tag 0 → the update left the base fee untouched.
+    #[test]
+    fn decode_updated_base_fee_bps_none_when_unchanged() {
+        // cliff None, then whatever trailing bytes — ignored.
+        let params = [0u8, 1, 2, 3, 4];
+        assert_eq!(decode_updated_base_fee_bps(&params).unwrap(), None);
+    }
+
+    /// tag 1 but fewer than 8 trailing bytes → fail-loud.
+    #[test]
+    fn decode_updated_base_fee_bps_truncated_value_errors() {
+        assert!(matches!(
+            decode_updated_base_fee_bps(&[1, 0, 0, 0]),
+            Err(CoreError::FeeDecode { .. })
+        ));
+    }
+
+    /// A non-0/1 Option discriminant is rejected.
+    #[test]
+    fn decode_updated_base_fee_bps_bad_tag_errors() {
+        assert!(matches!(
+            decode_updated_base_fee_bps(&[9, 0, 0, 0, 0, 0, 0, 0, 0]),
+            Err(CoreError::FeeDecode { .. })
+        ));
+    }
+
+    /// An empty blob is rejected.
+    #[test]
+    fn decode_updated_base_fee_bps_empty_errors() {
+        assert!(matches!(
+            decode_updated_base_fee_bps(&[]),
             Err(CoreError::FeeDecode { .. })
         ));
     }

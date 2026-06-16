@@ -295,6 +295,20 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
+        // An operator fee change refreshes the pool's headline fee tier — but
+        // only when it actually touched the base fee (Some). Skip-and-log on an
+        // undecodable blob: keep the previous fee_bps rather than a wrong value.
+        match yog_core::amm::damm_v2::decode_updated_base_fee_bps(&event.params_raw) {
+            Ok(Some(fee_bps)) => {
+                self.pool_maintenance
+                    .set_fee_bps(Self::PROTOCOL, &event.pool_address, fee_bps)
+                    .await;
+            }
+            Ok(None) => {}
+            Err(err) => {
+                warn!(error = %err, kind = "update_pool_fees", "fee_bps decode failed");
+            }
+        }
         self.repos
             .update_pool_fees
             .insert(event)
@@ -775,11 +789,13 @@ mod tests {
                     signature: sg(),
                     timestamp: ts(),
                     operator: pk(12),
-                    params_raw: vec![9, 9],
+                    // cliff_fee_numerator = Some(2_500_000) → 25 bps: refreshes
+                    // the fee tier, so set_fee_bps fires between touch and insert.
+                    params_raw: vec![1, 160, 37, 38, 0, 0, 0, 0, 0],
                 })
             )
             .await,
-            ["pool:touch", "insert:update_pool_fees"]
+            ["pool:touch", "pool:set_fee_bps", "insert:update_pool_fees"]
         );
     }
 }
