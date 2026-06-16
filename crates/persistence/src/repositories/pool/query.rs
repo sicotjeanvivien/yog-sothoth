@@ -105,7 +105,7 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
 
     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
         "SELECT pool_address, protocol, token_a_mint, token_b_mint, \
-         first_seen_at, last_seen_at FROM pools WHERE 1=1",
+         fee_bps, first_seen_at, last_seen_at FROM pools WHERE 1=1",
     );
 
     // ── Keyset cursor predicate ──────────────────────────────────

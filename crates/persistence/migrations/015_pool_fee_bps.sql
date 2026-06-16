@@ -1,0 +1,24 @@
+-- ============================================================================
+-- 015 — pools.fee_bps (base trading fee, decoded from genesis "voie C" blob)
+-- ============================================================================
+-- The base fee was captured undecoded at pool genesis as a raw borsh blob
+-- (meteora_damm_v2_initialize_pool_events.pool_fees_raw). This decodes the
+-- headline fee tier once, at index time, into a pool property: the base/cliff
+-- fee numerator (leading u64 of the BaseFeeParameters blob) divided by the
+-- cp-amm FEE_DENOMINATOR (1e9), expressed in basis points.
+--
+-- Nullable: unknown between a pool's discovery (swap/liquidity stream) and the
+-- arrival of its InitializePool event, and left NULL if the fee blob ever fails
+-- to decode (unknown BaseFeeMode) — skip-and-log, never a wrong value.
+--
+-- For a fee-scheduler (anti-sniper) pool this is the genesis cliff, not the
+-- live decayed rate; an operator UpdatePoolFees does not yet refresh it (that
+-- decode is a separate, deferred task — params_raw stays captured raw).
+--
+-- Unconstrained NUMERIC: bps = numerator / 100_000 is exact for any integer
+-- numerator (including sub-bps fractions like 2.5), so no scale is imposed.
+--
+-- No new GRANT: yog_indexer already holds table-level UPDATE on pools (it
+-- writes this column) and yog_api holds SELECT (it reads it).
+
+ALTER TABLE pools ADD COLUMN fee_bps NUMERIC;

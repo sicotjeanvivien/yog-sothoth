@@ -23,9 +23,10 @@
 - [x] `EvtSetPoolStatus`
 - [x] `EvtUpdatePoolFees`
 - [x] Test cercle 2 avec fixture ( non fait pour le `EvtSetPoolStatus` car pas d'event sur SOLSCAN  )
-- [ ] Activer `fee_tier` dans `PoolResponse` une fois `EvtInitializePool` indexé
-- [ ] `MeteoraDammV2InitializePoolEvent::pool_fees_raw` à décoder pour le moment c'est un  `Vec<u8>`
-- [ ] `MeteoraDammV2UpdatePoolFeesEvent::params_raw` à décoder pour le moment c'est un  `Vec<u8>`
+- [x] Activer `fee_tier` dans `PoolResponse` une fois `EvtInitializePool` indexé → champ `feeBps` (base fee en bps), porté par la colonne `pools.fee_bps` (migration 015), décodé à l'indexation
+- [x] `MeteoraDammV2InitializePoolEvent::pool_fees_raw` à décoder → base fee décodé (`core::amm::damm_v2::decode_base_fee_bps`, mode-aware, fail-loud), validé sur fixtures. Octets bruts toujours stockés (voie C) ; décodage *complet* (scheduler/dynamic fee) différé jusqu'aux graphes de l'onglet Fees
+- [ ] `MeteoraDammV2UpdatePoolFeesEvent::params_raw` à décoder (encore `Vec<u8>`) → **différé** : conséquence = `pools.fee_bps` reflète le genesis et n'est pas rafraîchi sur changement opérateur (rare). Layout version-sensible, fixture dispo
+- [ ] Sync front : ajouter `feeBps` au schéma `web/src/lib/api/schema/pool.ts` + onglet Fees du PoolDetail (graphes barème configuré / frais effectif)
 
 #### Dashboard — page Overview
 - [ ] Cadrage produit : définir quelles agrégations afficher (KPIs globaux ? top pools ? flux récent ?)

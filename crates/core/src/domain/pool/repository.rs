@@ -52,6 +52,15 @@ pub trait PoolRepository: Send + Sync {
     /// create the row properly.
     async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()>;
 
+    /// Set the pool's base trading fee (basis points), decoded from its
+    /// genesis fee config. A column-level `UPDATE`; a no-op if the pool row
+    /// does not exist yet (the caller registers it first). Idempotent.
+    async fn set_fee_bps(
+        &self,
+        pool_address: &Pubkey,
+        fee_bps: rust_decimal::Decimal,
+    ) -> RepositoryResult<()>;
+
     // ---- Read-side (api) ------------------------------------------------
 
     /// Fetch a single pool by its on-chain address.

@@ -39,6 +39,7 @@ metrics-exporter-prometheus = { workspace = true }
 # Misc
 chrono = { workspace = true }
 async-trait = { workspace = true }
+rust_decimal = { workspace = true }
 
 [dev-dependencies]
 # Construct dummy Signatures in the event-persistor dispatch tests.

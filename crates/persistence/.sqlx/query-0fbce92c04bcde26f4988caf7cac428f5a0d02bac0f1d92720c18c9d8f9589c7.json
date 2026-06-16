@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, protocol, token_a_mint, token_b_mint,\n                   first_seen_at, last_seen_at\n            FROM pools\n            WHERE pool_address = $1\n            ",
+  "query": "\n            SELECT pool_address, protocol, token_a_mint, token_b_mint,\n                   fee_bps AS \"fee_bps?: rust_decimal::Decimal\",\n                   first_seen_at, last_seen_at\n            FROM pools\n            WHERE pool_address = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -25,11 +25,16 @@
       },
       {
         "ordinal": 4,
+        "name": "fee_bps?: rust_decimal::Decimal",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
         "name": "first_seen_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "last_seen_at",
         "type_info": "Timestamptz"
       }
@@ -44,9 +49,10 @@
       false,
       true,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "a67c759215abf5fc9066fb1f65cbd5c4c39d584ffadce739d1fad316f1d79d0c"
+  "hash": "0fbce92c04bcde26f4988caf7cac428f5a0d02bac0f1d92720c18c9d8f9589c7"
 }

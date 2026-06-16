@@ -47,6 +47,7 @@ impl PoolMaintenance {
             protocol,
             token_a_mint: None,
             token_b_mint: None,
+            fee_bps: None,
             first_seen_at: now,
             last_seen_at: now,
         };
@@ -58,6 +59,34 @@ impl PoolMaintenance {
             start.elapsed().as_secs_f64(),
         );
         Ok(())
+    }
+
+    /// Record a pool's base trading fee (basis points), decoded from its
+    /// genesis fee config. Best-effort: a failure here is logged but never
+    /// aborts the caller — the pool simply keeps a NULL `fee_bps`.
+    pub(crate) async fn set_fee_bps(
+        &self,
+        protocol: Protocol,
+        pool_address: &solana_pubkey::Pubkey,
+        fee_bps: rust_decimal::Decimal,
+    ) {
+        let start = Instant::now();
+        match self.pool_repo.set_fee_bps(pool_address, fee_bps).await {
+            Ok(()) => {
+                EventPersistorMetrics::record_persist_duration(
+                    &protocol,
+                    "pool_set_fee_bps",
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(
+                    protocol = %protocol.as_str(),
+                    error = %err,
+                    "pool set_fee_bps failed"
+                );
+            }
+        }
     }
 
     /// Refresh `last_seen_at` for a pool. No-op if the pool is unknown

@@ -6,6 +6,7 @@
 //! `RepositoryError::Integrity`.
 
 use chrono::{Duration, Utc};
+use rust_decimal::Decimal;
 use yog_core::{
     RepositoryError,
     domain::{Pool, Protocol},
@@ -27,6 +28,7 @@ fn valid_row() -> PoolRow {
         protocol: Protocol::MeteoraDammV2.as_str().to_string(),
         token_a_mint: Some(VALID_TOKEN_A.into()),
         token_b_mint: Some(VALID_TOKEN_B.into()),
+        fee_bps: Some(Decimal::new(25, 0)),
         first_seen_at: now,
         last_seen_at: now,
     }
@@ -40,6 +42,7 @@ fn try_from_valid_row_returns_pool_with_all_fields_mapped() {
     assert_eq!(pool.protocol, Protocol::MeteoraDammV2);
     assert_eq!(pool.token_a_mint.unwrap().to_string(), VALID_TOKEN_A);
     assert_eq!(pool.token_b_mint.unwrap().to_string(), VALID_TOKEN_B);
+    assert_eq!(pool.fee_bps, Some(Decimal::new(25, 0)));
 }
 
 #[test]
@@ -52,6 +55,16 @@ fn try_from_null_mints_maps_to_none() {
     let pool = Pool::try_from(row).expect("null mints should convert");
     assert!(pool.token_a_mint.is_none());
     assert!(pool.token_b_mint.is_none());
+}
+
+#[test]
+fn try_from_null_fee_bps_maps_to_none() {
+    let row = PoolRow {
+        fee_bps: None,
+        ..valid_row()
+    };
+    let pool = Pool::try_from(row).expect("null fee_bps should convert");
+    assert!(pool.fee_bps.is_none());
 }
 
 #[test]

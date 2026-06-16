@@ -254,6 +254,19 @@ impl MeteoraDammV2EventPersistor {
         {
             warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
         }
+        // Decode the headline base fee from the genesis "voie C" blob and record
+        // it as a pool property. Skip-and-log on an undecodable blob (unknown
+        // fee mode): the pool keeps a NULL fee_bps rather than a wrong value.
+        match yog_core::amm::damm_v2::decode_base_fee_bps(&event.pool_fees_raw) {
+            Ok(fee_bps) => {
+                self.pool_maintenance
+                    .set_fee_bps(Self::PROTOCOL, &event.pool_address, fee_bps)
+                    .await;
+            }
+            Err(err) => {
+                warn!(error = %err, kind = "initialize_pool", "fee_bps decode failed");
+            }
+        }
         self.repos
             .initialize_pool
             .insert(event)
@@ -457,6 +470,10 @@ mod tests {
         }
         async fn touch_last_seen(&self, _: &Pubkey) -> RepositoryResult<()> {
             rec(&self.0, "pool:touch");
+            Ok(())
+        }
+        async fn set_fee_bps(&self, _: &Pubkey, _: rust_decimal::Decimal) -> RepositoryResult<()> {
+            rec(&self.0, "pool:set_fee_bps");
             Ok(())
         }
         async fn find_by_address(&self, _: &Pubkey) -> RepositoryResult<Option<Pool>> {
@@ -695,7 +712,11 @@ mod tests {
             ["pool:touch", "insert:permanent_lock_position"]
         );
 
-        // initialize_pool: full upsert + insert, NO projection.
+        // initialize_pool: full upsert + decode/record fee + insert, NO
+        // projection. The 27-byte fee blob (numerator 2_500_000, mode 0)
+        // decodes cleanly, so the fee_bps step fires between upsert and insert.
+        let mut fee_blob = vec![0u8; 27];
+        fee_blob[0..8].copy_from_slice(&2_500_000u64.to_le_bytes());
         assert_eq!(
             route(
                 &p,
@@ -723,11 +744,11 @@ mod tests {
                     token_b_amount: 2,
                     total_amount_a: 1,
                     total_amount_b: 2,
-                    pool_fees_raw: vec![1, 2, 3],
+                    pool_fees_raw: fee_blob,
                 })
             )
             .await,
-            ["pool:upsert", "insert:initialize_pool"]
+            ["pool:upsert", "pool:set_fee_bps", "insert:initialize_pool"]
         );
 
         // set_pool_status / update_pool_fees: touch + insert.

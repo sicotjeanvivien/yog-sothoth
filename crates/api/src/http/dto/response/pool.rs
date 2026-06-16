@@ -28,6 +28,9 @@ pub(crate) struct PoolResponse {
     pub(crate) protocol: String,
     pub(crate) token_a: EmbeddedTokenResponse,
     pub(crate) token_b: EmbeddedTokenResponse,
+    /// Base trading fee in basis points (genesis fee tier). `None` until the
+    /// pool's `InitializePool` event has been indexed.
+    pub(crate) fee_bps: Option<Decimal>,
     pub(crate) tvl_usd: Option<Decimal>,
     pub(crate) volume_24h_usd: Option<Decimal>,
     pub(crate) first_seen_at: DateTime<Utc>,
@@ -50,6 +53,7 @@ impl PoolResponse {
             protocol: pool.protocol.to_string(),
             token_a,
             token_b,
+            fee_bps: pool.fee_bps,
             tvl_usd: analytics.tvl_usd,
             volume_24h_usd: analytics.volume_24h_usd,
             first_seen_at: pool.first_seen_at,
