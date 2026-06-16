@@ -25,7 +25,7 @@
 - [x] Test cercle 2 avec fixture ( non fait pour le `EvtSetPoolStatus` car pas d'event sur SOLSCAN  )
 - [x] Activer `fee_tier` dans `PoolResponse` une fois `EvtInitializePool` indexé → champ `feeBps` (base fee en bps), porté par la colonne `pools.fee_bps` (migration 015), décodé à l'indexation
 - [x] `MeteoraDammV2InitializePoolEvent::pool_fees_raw` à décoder → base fee décodé (`core::amm::damm_v2::decode_base_fee_bps`, mode-aware, fail-loud), validé sur fixtures. Octets bruts toujours stockés (voie C) ; décodage *complet* (scheduler/dynamic fee) différé jusqu'aux graphes de l'onglet Fees
-- [ ] `MeteoraDammV2UpdatePoolFeesEvent::params_raw` à décoder (encore `Vec<u8>`) → **différé** : conséquence = `pools.fee_bps` reflète le genesis et n'est pas rafraîchi sur changement opérateur (rare). Layout version-sensible, fixture dispo
+- [x] `MeteoraDammV2UpdatePoolFeesEvent::params_raw` à décoder → `core::amm::damm_v2::decode_updated_base_fee_bps` lit le champ de tête `cliff_fee_numerator: Option<u64>` (robuste au drift des champs suivants : la fixture précède l'ajout de `compounding_fee_bps`), validé sur fixture (128 bps). L'indexer rafraîchit `pools.fee_bps` sur changement opérateur (Some) ; `None` = base fee inchangé. Octets bruts toujours stockés (voie C)
 - [ ] Sync front : ajouter `feeBps` au schéma `web/src/lib/api/schema/pool.ts` + onglet Fees du PoolDetail (graphes barème configuré / frais effectif)
 
 #### Dashboard — page Overview
