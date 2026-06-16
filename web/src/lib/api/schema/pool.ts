@@ -19,12 +19,16 @@ import { TokenSchema } from "./token";
  *     protocol: String,
  *     token_a: EmbeddedTokenResponse,
  *     token_b: EmbeddedTokenResponse,
+ *     fee_bps: Option<Decimal>,
  *     tvl_usd: Option<Decimal>,
  *     volume_24h_usd: Option<Decimal>,
  *     first_seen_at: DateTime<Utc>,
  *     last_seen_at: DateTime<Utc>,
  * }
  * ```
+ *
+ * `feeBps` is the pool's base trading fee in basis points (its genesis
+ * fee tier), null until the `InitializePool` event has been indexed.
  *
  * Naming is camelCase end-to-end (Rust `rename_all = "camelCase"`),
  * so the schema mirrors that. USD-denominated values arrive as
@@ -45,6 +49,7 @@ export const PoolSchema = z.object({
   protocol: z.string().min(1),
   tokenA: TokenSchema,
   tokenB: TokenSchema,
+  feeBps: BigDecimal.nullable(),
   tvlUsd: BigDecimal.nullable(),
   volume24hUsd: BigDecimal.nullable(),
   firstSeenAt: Rfc3339,

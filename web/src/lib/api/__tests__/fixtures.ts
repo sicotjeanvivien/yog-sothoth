@@ -36,6 +36,7 @@ export function validPool() {
         fetchedAt: "2026-05-25T12:17:17.479657Z",
       },
     },
+    feeBps: "25",
     tvlUsd: "1332007.7148736200400326721044",
     volume24hUsd: "47964.973514780605664520660399",
     firstSeenAt: "2026-05-21T10:01:35.084596Z",

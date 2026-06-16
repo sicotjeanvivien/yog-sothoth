@@ -71,6 +71,7 @@
         "title": "Pool info",
         "poolAddress": "Pool address",
         "protocol": "Protocol",
+        "feeTier": "Fee tier",
         "network": "Network",
         "tokenA": "Token A",
         "tokenB": "Token B",

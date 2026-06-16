@@ -26,7 +26,8 @@
 - [x] Activer `fee_tier` dans `PoolResponse` une fois `EvtInitializePool` indexé → champ `feeBps` (base fee en bps), porté par la colonne `pools.fee_bps` (migration 015), décodé à l'indexation
 - [x] `MeteoraDammV2InitializePoolEvent::pool_fees_raw` à décoder → base fee décodé (`core::amm::damm_v2::decode_base_fee_bps`, mode-aware, fail-loud), validé sur fixtures. Octets bruts toujours stockés (voie C) ; décodage *complet* (scheduler/dynamic fee) différé jusqu'aux graphes de l'onglet Fees
 - [x] `MeteoraDammV2UpdatePoolFeesEvent::params_raw` à décoder → `core::amm::damm_v2::decode_updated_base_fee_bps` lit le champ de tête `cliff_fee_numerator: Option<u64>` (robuste au drift des champs suivants : la fixture précède l'ajout de `compounding_fee_bps`), validé sur fixture (128 bps). L'indexer rafraîchit `pools.fee_bps` sur changement opérateur (Some) ; `None` = base fee inchangé. Octets bruts toujours stockés (voie C)
-- [ ] Sync front : ajouter `feeBps` au schéma `web/src/lib/api/schema/pool.ts` + onglet Fees du PoolDetail (graphes barème configuré / frais effectif)
+- [x] Sync front (schéma + affichage) : `feeBps` ajouté à `pool.ts` ; le fee tier est affiché comme ligne « Fee tier » du bloc **Pool info** du PoolDetail (`formatFeeBps` bps→%, `—` si null), i18n en/fr. Pas d'onglet dédié : le PoolDetail n'a pas de système d'onglets et `feeBps` est une seule valeur scalaire
+- [ ] Onglet/section **Fees** du PoolDetail avec graphes (barème configuré via events `initialize`/`update_pool_fees`, frais effectif via swaps) — **différé** : nécessite d'abord des endpoints d'historique fee (n'existent pas ; cf. CA fees non agrégées). À ouvrir quand le cadrage produit de l'onglet Fees est acté
 
 #### Dashboard — page Overview
 - [ ] Cadrage produit : définir quelles agrégations afficher (KPIs globaux ? top pools ? flux récent ?)

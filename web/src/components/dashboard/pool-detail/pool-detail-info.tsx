@@ -2,10 +2,11 @@
  * Pool detail page — "Pool info" block.
  *
  * A factual key/value card for the pool's identity, sitting below
- * the header and (eventually) the KPI strip. Seven rows:
+ * the header and (eventually) the KPI strip. Eight rows:
  *
  *   - Pool address (full, copy-friendly)
  *   - Protocol     (display label)
+ *   - Fee tier     (base trading fee, `—` until InitializePool indexed)
  *   - Network      (hardcoded "Solana" while we only index Solana)
  *   - Token A      (symbol + truncated mint + copy)
  *   - Token B      (symbol + truncated mint + copy)
@@ -27,6 +28,7 @@ import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { TokenResponse } from "@/lib/api/schema/token";
 
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
+import { formatFeeBps } from "@/lib/format/format-fee";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
@@ -73,6 +75,10 @@ export async function PoolDetailInfo({
 
           <InfoRow label={t("protocol")}>
             <span>{formatProtocolLabel(pool.protocol)}</span>
+          </InfoRow>
+
+          <InfoRow label={t("feeTier")}>
+            <span>{formatFeeBps(pool.feeBps)}</span>
           </InfoRow>
 
           <InfoRow label={t("network")}>
