@@ -33,7 +33,11 @@ cargo test --workspace --all-features
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
-# Integration tests are DB-backed and #[ignore]d by default — they need a live Postgres:
+# Integration tests are DB-backed and #[ignore]d by default — they need a live Postgres.
+# The Postgres must run with `timescaledb.max_background_workers = 0` (see
+# docker-compose.yml): sqlx::test creates a fresh DB per test whose cagg refresh
+# policies (migrations 010–013) otherwise have the TimescaleDB job scheduler race
+# the next test's migration DDL on the shared catalog ("tuple concurrently deleted").
 cargo test -p yog-persistence --features integration-tests -- --include-ignored
 
 # Run a binary natively (see "Local dev" for the DB it expects)
