@@ -8,8 +8,10 @@ use query::{PaginatedPoolsQuery, build};
 use rows::PoolRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
+use std::str::FromStr;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryResult,
+    Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
+    RepositoryResult,
     domain::{Pool, PoolCursor, PoolMintResolver, PoolRepository},
 };
 
@@ -60,11 +62,34 @@ impl PoolRepository for PgPoolRepository {
         Ok(())
     }
 
+    async fn set_fee_bps(
+        &self,
+        pool_address: &Pubkey,
+        fee_bps: rust_decimal::Decimal,
+    ) -> RepositoryResult<()> {
+        // NUMERIC binds to BigDecimal at the persistence boundary (the crate
+        // also enables sqlx's bigdecimal feature for the lossless u128 columns).
+        // Round-trip through the exact decimal string — never lossy for the
+        // small fee values we store.
+        let fee_bps = sqlx::types::BigDecimal::from_str(&fee_bps.to_string())
+            .map_err(|e| RepositoryError::Integrity(format!("invalid fee_bps decimal: {e}")))?;
+        sqlx::query!(
+            r#"UPDATE pools SET fee_bps = $2 WHERE pool_address = $1"#,
+            pool_address.to_string(),
+            fee_bps,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>> {
         let row = sqlx::query_as!(
             PoolRow,
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
+                   fee_bps AS "fee_bps?: rust_decimal::Decimal",
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = $1

@@ -1,5 +1,6 @@
 use crate::repositories::helper::convert_string_to_pubkey;
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use std::str::FromStr;
 use yog_core::{
     RepositoryError,
@@ -14,6 +15,7 @@ pub(super) struct PoolRow {
     pub(super) protocol: String,
     pub(super) token_a_mint: Option<String>,
     pub(super) token_b_mint: Option<String>,
+    pub(super) fee_bps: Option<Decimal>,
     pub(super) first_seen_at: DateTime<Utc>,
     pub(super) last_seen_at: DateTime<Utc>,
 }
@@ -34,6 +36,7 @@ impl TryFrom<PoolRow> for Pool {
                 .token_b_mint
                 .map(|m| convert_string_to_pubkey(m, "token_b_mint"))
                 .transpose()?,
+            fee_bps: row.fee_bps,
             first_seen_at: row.first_seen_at,
             last_seen_at: row.last_seen_at,
         })

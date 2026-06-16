@@ -1,5 +1,67 @@
+use rust_decimal::Decimal;
+
 use crate::CoreResult;
 use crate::amm::common::price_impact;
+use crate::error::CoreError;
+
+/// cp-amm fee denominator: a fee numerator `n` represents the fraction
+/// `n / FEE_DENOMINATOR`. 1e9 → a numerator of 2_500_000 is 0.25 %.
+const FEE_DENOMINATOR: u64 = 1_000_000_000;
+
+/// Number of leading bytes of a borsh `PoolFeeParameters` blob occupied by the
+/// opaque `BaseFeeParameters` (`[u8; 27]`), which holds the base-fee config.
+const BASE_FEE_LEN: usize = 27;
+
+/// Byte offset, within the base-fee blob, of the `BaseFeeMode` discriminant.
+const BASE_FEE_MODE_OFFSET: usize = 26;
+
+/// Decode the pool's base trading fee, in basis points, from the raw borsh
+/// `PoolFeeParameters` blob captured at pool genesis under "voie C"
+/// (`MeteoraDammV2InitializePoolEvent::pool_fees_raw`).
+///
+/// The base fee lives in the leading opaque `[u8; 27]` `BaseFeeParameters`
+/// blob, whose interpretation depends on the `BaseFeeMode` discriminant at
+/// byte [`BASE_FEE_MODE_OFFSET`]:
+///   - `0` — fee scheduler, linear decay
+///   - `1` — fee scheduler, exponential decay
+///   - `2` — rate limiter (anti-sniper)
+///
+/// In all three the base / cliff fee numerator is the leading little-endian
+/// `u64`, which we surface as the headline fee tier. For a scheduler pool this
+/// is the fee **at genesis** (the starting, pre-decay rate), not the decayed
+/// current value — computing the live decayed rate is deliberately out of
+/// scope (it varies per read and ignores the dynamic-fee component).
+///
+/// Fails loud on a too-short blob or an unknown mode: we never guess an
+/// unrecognised layout (the caller skips-and-logs, leaving the fee unknown
+/// rather than persisting a wrong value).
+pub fn decode_base_fee_bps(pool_fees_raw: &[u8]) -> CoreResult<Decimal> {
+    if pool_fees_raw.len() < BASE_FEE_LEN {
+        return Err(CoreError::FeeDecode {
+            reason: format!(
+                "blob too short: {} bytes, need at least {BASE_FEE_LEN}",
+                pool_fees_raw.len()
+            ),
+        });
+    }
+
+    let mode = pool_fees_raw[BASE_FEE_MODE_OFFSET];
+    if mode > 2 {
+        return Err(CoreError::FeeDecode {
+            reason: format!("unknown BaseFeeMode discriminant: {mode}"),
+        });
+    }
+
+    let cliff_fee_numerator = u64::from_le_bytes(
+        pool_fees_raw[0..8]
+            .try_into()
+            .expect("slice is 8 bytes after the length check"),
+    );
+
+    // bps = numerator / FEE_DENOMINATOR * 10_000 = numerator / 100_000.
+    // Exact in Decimal (e.g. 2_500_000 → 25, 500_000_000 → 5000).
+    Ok(Decimal::from(cliff_fee_numerator) / Decimal::from(FEE_DENOMINATOR / 10_000))
+}
 
 /// Apply the DAMM v2 fee to an input amount.
 ///
@@ -102,6 +164,73 @@ mod tests {
             impact_with_fee <= impact_without_fee,
             "impact_with_fee={impact_with_fee} should be <= impact_without_fee={impact_without_fee}"
         );
+    }
+
+    // ── decode_base_fee_bps ─────────────────────────────────────────────────
+
+    /// Real `base_fee` bytes captured from `damm_v2_initialize_pool_2.json`:
+    /// a constant-fee pool, cliff_fee_numerator = 2_500_000 → 0.25 % = 25 bps,
+    /// mode 0 (linear scheduler, no periods).
+    #[test]
+    fn decode_base_fee_bps_constant_25bps() {
+        let data: [u8; 27] = [
+            160, 37, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        assert_eq!(
+            decode_base_fee_bps(&data).unwrap(),
+            Decimal::new(25, 0),
+            "2_500_000 / 1e9 = 0.25% = 25 bps"
+        );
+    }
+
+    /// Real `base_fee` bytes from `damm_v2_initialize_pool.json`: an anti-sniper
+    /// fee-scheduler pool starting at 50% — cliff_fee_numerator = 500_000_000 →
+    /// 5000 bps. We surface the genesis cliff, not the decayed value.
+    #[test]
+    fn decode_base_fee_bps_scheduler_cliff_5000bps() {
+        let data: [u8; 27] = [
+            0, 101, 205, 29, 0, 0, 0, 0, 144, 0, 88, 2, 0, 0, 0, 0, 0, 0, 196, 159, 46, 0, 0, 0, 0,
+            0, 0,
+        ];
+        assert_eq!(decode_base_fee_bps(&data).unwrap(), Decimal::new(5000, 0));
+    }
+
+    /// A fractional sub-bps fee must not round: 250_000 / 1e9 = 0.000_25 = 2.5 bps.
+    #[test]
+    fn decode_base_fee_bps_fractional_is_lossless() {
+        let mut data = [0u8; 27];
+        data[0..8].copy_from_slice(&250_000u64.to_le_bytes());
+        assert_eq!(decode_base_fee_bps(&data).unwrap(), Decimal::new(25, 1));
+    }
+
+    /// Rate-limiter mode (2) is accepted: the base-fee numerator is still the
+    /// leading u64.
+    #[test]
+    fn decode_base_fee_bps_rate_limiter_mode_ok() {
+        let mut data = [0u8; 27];
+        data[0..8].copy_from_slice(&1_000_000u64.to_le_bytes());
+        data[BASE_FEE_MODE_OFFSET] = 2;
+        assert_eq!(decode_base_fee_bps(&data).unwrap(), Decimal::new(10, 0));
+    }
+
+    /// An unknown mode discriminant is rejected fail-loud — never guessed.
+    #[test]
+    fn decode_base_fee_bps_unknown_mode_errors() {
+        let mut data = [0u8; 27];
+        data[BASE_FEE_MODE_OFFSET] = 7;
+        assert!(matches!(
+            decode_base_fee_bps(&data),
+            Err(CoreError::FeeDecode { .. })
+        ));
+    }
+
+    /// A truncated blob is rejected fail-loud rather than indexing past the end.
+    #[test]
+    fn decode_base_fee_bps_too_short_errors() {
+        assert!(matches!(
+            decode_base_fee_bps(&[0u8; 10]),
+            Err(CoreError::FeeDecode { .. })
+        ));
     }
 
     #[test]

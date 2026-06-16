@@ -46,6 +46,7 @@ pub(crate) fn make_pool(addr: Pubkey, token_a: Pubkey, token_b: Pubkey) -> Pool 
         protocol: Protocol::MeteoraDammV2, // adapt to your variant name
         token_a_mint: Some(token_a),
         token_b_mint: Some(token_b),
+        fee_bps: None,
         first_seen_at: ts(1_000),
         last_seen_at: ts(2_000),
     }
@@ -151,6 +152,13 @@ impl PoolRepository for PoolRepoOnce {
     }
     async fn touch_last_seen(&self, _addr: &Pubkey) -> RepositoryResult<()> {
         unreachable!("touch_last_seen not used by PoolService")
+    }
+    async fn set_fee_bps(
+        &self,
+        _addr: &Pubkey,
+        _fee_bps: rust_decimal::Decimal,
+    ) -> RepositoryResult<()> {
+        unreachable!("set_fee_bps not used by PoolService")
     }
     async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
         take(&self.by_address)

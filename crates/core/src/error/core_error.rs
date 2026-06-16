@@ -23,6 +23,10 @@ pub enum CoreError {
     #[error("arithmetic overflow in {context}")]
     ArithmeticOverflow { context: String },
 
+    /// The on-chain fee configuration blob could not be decoded.
+    #[error("failed to decode pool fee parameters: {reason}")]
+    FeeDecode { reason: String },
+
     /// The program is known but the instruction is not handled.
     #[error("unsupported instruction in transaction {signature}")]
     UnsupportedInstruction { signature: String },

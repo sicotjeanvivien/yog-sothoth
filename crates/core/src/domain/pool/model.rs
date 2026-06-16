@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
@@ -32,6 +33,12 @@ pub struct Pool {
 
     /// Mint of token B. `None` until resolved by yog-context.
     pub token_b_mint: Option<Pubkey>,
+
+    /// Base trading fee in basis points, decoded from the pool's genesis fee
+    /// config (`InitializePool`). `None` until that event is seen (or if the
+    /// fee blob failed to decode). For a fee-scheduler pool this is the genesis
+    /// cliff, not the live decayed rate.
+    pub fee_bps: Option<Decimal>,
 
     /// When Yog-Sothoth first observed this pool in the transaction stream.
     pub first_seen_at: DateTime<Utc>,

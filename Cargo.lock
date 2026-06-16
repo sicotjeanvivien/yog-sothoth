@@ -6112,6 +6112,7 @@ dependencies = [
  "futures-util",
  "metrics",
  "metrics-exporter-prometheus",
+ "rust_decimal",
  "serde_json",
  "solana-commitment-config",
  "solana-pubkey 4.1.0",
