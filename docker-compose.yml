@@ -45,6 +45,16 @@ services:
   # ── Database ───────────────────────────────────────────────────
   postgres:
     image: timescale/timescaledb:latest-pg16
+    # max_background_workers = 0 disables the TimescaleDB job scheduler. It is
+    # required by the DB-backed integration tests: sqlx::test creates a fresh
+    # database per test, each adding continuous-aggregate refresh policies
+    # (migrations 010–013); the scheduler then mutates the cluster-wide
+    # _timescaledb_catalog asynchronously and races the next test's
+    # cagg-creating migration DDL, failing it with "tuple concurrently deleted".
+    # Safe for the local app stack too: the caggs are materialized_only = false,
+    # so reads stay correct via real-time aggregation; only the durable backfill
+    # and retention drops (themselves scheduler jobs) are paused locally.
+    command: ["postgres", "-c", "timescaledb.max_background_workers=0"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-yog}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yog}

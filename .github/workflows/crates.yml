@@ -137,12 +137,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      # The migrations 001 emit GRANTs against the runtime roles;
-      # create them as bare login roles so the migration applies.
-      # sqlx::test re-runs migrations per test database, so the roles
-      # must exist at the cluster level (they do — roles are cluster-
-      # wide, not per-database).
-      - name: Pre-create runtime roles
+      # Roles: migration 001 emits GRANTs against the runtime roles; create
+      # them as bare login roles so the migration applies. sqlx::test re-runs
+      # migrations per test database, so the roles must exist at the cluster
+      # level (they do — roles are cluster-wide, not per-database).
+      #
+      # max_background_workers = 0: sqlx::test creates a fresh database per
+      # test, each replaying migrations 010–013 which add continuous-aggregate
+      # refresh policies. The TimescaleDB job scheduler (a background worker)
+      # then mutates the cluster-wide _timescaledb_catalog asynchronously,
+      # racing the next test's cagg-creating migration DDL and failing it with
+      # "tuple concurrently deleted" (XX000). Disabling the scheduler removes
+      # the only concurrent writer; real-time aggregation still serves reads.
+      # The GUC is postmaster-context, so it needs a restart to take effect.
+      - name: Pre-create runtime roles and disable TimescaleDB scheduler
         env:
           PGPASSWORD: yog
         run: |
@@ -151,7 +159,15 @@ jobs:
           CREATE ROLE yog_indexer;
           CREATE ROLE yog_api;
           CREATE ROLE yog_context;
+          ALTER SYSTEM SET timescaledb.max_background_workers = 0;
           SQL
+          docker restart "${{ job.services.postgres.id }}"
+          for _ in $(seq 1 30); do
+            pg_isready -h localhost -U yog -d yog_sothoth && break
+            sleep 1
+          done
+          test "$(psql -h localhost -U yog -d yog_sothoth -tAc \
+            'SHOW timescaledb.max_background_workers;')" = "0"
 
       - name: Run integration tests
         run: |
