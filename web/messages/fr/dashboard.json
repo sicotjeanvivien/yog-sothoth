@@ -86,6 +86,12 @@
         "copyPoolAddress": "Copier l'adresse de la pool",
         "copyTokenMint": "Copier le mint du token"
       },
+      "fees": {
+        "title": "Frais",
+        "empty": "Aucune activité de frais sur la fenêtre sélectionnée pour l'instant.",
+        "revenue": "Revenu des frais (USD)",
+        "effectiveRate": "Taux effectif (bps)"
+      },
       "kpis": {
         "tvl": "TVL",
         "volume24h": "Volume 24h",

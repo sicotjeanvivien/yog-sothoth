@@ -51,6 +51,23 @@ export function validPool() {
   };
 }
 
+/** Build a representative valid pool history bucket. */
+export function validPoolHistoryBucket() {
+  return {
+    bucket: "2026-06-15T11:00:00Z",
+    volumeUsd: "16070.42",
+    feesUsd: "160.70",
+    protocolFeesUsd: "30.45",
+    lpFeesUsd: "130.25",
+    effectiveFeeBps: "100",
+    liquidityAddedUsd: null,
+    liquidityRemovedUsd: null,
+    feesClaimedUsd: null,
+    rewardsClaimedUsd: null,
+    swapCount: 96,
+  };
+}
+
 /**
  * Build a representative valid pools page with bidirectional
  * pagination metadata. Defaults represent a "first page with more
