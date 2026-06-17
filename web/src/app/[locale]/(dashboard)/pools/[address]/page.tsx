@@ -36,6 +36,7 @@ import { fetchPool } from "@/lib/api/server/pool";
 import { fetchPoolLatestState } from "@/lib/api/server/latest-state";
 import { fetchPoolSwapEvents } from "@/lib/api/server/swap-events";
 import { fetchPoolLiquidityEvents } from "@/lib/api/server/liquidity-events";
+import { fetchPoolHistory } from "@/lib/api/server/pool-history";
 import { safeFetch, safeFetchOrNotFound } from "@/lib/api/safe-fetch";
 import type {
   PageDir,
@@ -45,6 +46,7 @@ import type {
 import { PoolDetailHeader } from "@/components/dashboard/pool-detail/pool-detail-header";
 import { PoolDetailKpis } from "@/components/dashboard/pool-detail/pool-detail-kpis";
 import { PoolDetailInfo } from "@/components/dashboard/pool-detail/pool-detail-info";
+import { PoolDetailFees } from "@/components/dashboard/pool-detail/pool-detail-fees";
 import { PoolDetailSwaps } from "@/components/dashboard/pool-detail/pool-detail-swaps";
 import { PoolDetailLiquidity } from "@/components/dashboard/pool-detail/pool-detail-liquidity";
 import { BlockError } from "@/components/dashboard/block-error";
@@ -103,6 +105,10 @@ function parseCursor(raw: string | string[] | undefined): string | undefined {
   return raw;
 }
 
+// Look-back window for the Fees charts (hourly buckets). Fixed for now; a
+// user-selectable range can come later.
+const HISTORY_DAYS = 30;
+
 // ── Page ──────────────────────────────────────────────────────────────
 
 export default async function PoolDetailPage({
@@ -143,13 +149,15 @@ export default async function PoolDetailPage({
     limit: 20,
   };
 
-  // Three non-critical fetches in parallel. Failures are isolated
-  // and rendered as block-level error states.
-  const [stateOutcome, swapsOutcome, liquidityOutcome] = await Promise.all([
-    safeFetchOrNotFound(() => fetchPoolLatestState(address)),
-    safeFetch(() => fetchPoolSwapEvents(address, swapsPagination)),
-    safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination)),
-  ]);
+  // Non-critical fetches in parallel. Failures are isolated and
+  // rendered as block-level error states.
+  const [stateOutcome, swapsOutcome, liquidityOutcome, historyOutcome] =
+    await Promise.all([
+      safeFetchOrNotFound(() => fetchPoolLatestState(address)),
+      safeFetch(() => fetchPoolSwapEvents(address, swapsPagination)),
+      safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination)),
+      safeFetch(() => fetchPoolHistory(address, HISTORY_DAYS)),
+    ]);
 
   // "Latest state" 404 is expected (pool observed via Claim*
   // events only) — collapse it to null so the KPI block adapts.
@@ -157,6 +165,7 @@ export default async function PoolDetailPage({
   // visible, the composition card simply doesn't render.
   const state = stateOutcome.kind === "ok" ? stateOutcome.data : null;
 
+  const tFees = await getTranslations("Dashboard.PoolDetail.fees");
   const tSwaps = await getTranslations("Dashboard.PoolDetail.swaps");
   const tLiquidity = await getTranslations("Dashboard.PoolDetail.liquidity");
 
@@ -169,6 +178,14 @@ export default async function PoolDetailPage({
       <PoolDetailKpis pool={pool} state={state} />
 
       <PoolDetailInfo pool={pool} locale={locale} />
+
+      {historyOutcome.kind === "ok" ? (
+        <PoolDetailFees history={historyOutcome.data} locale={locale} />
+      ) : (
+        <section className="mt-6 px-6 lg:px-10">
+          <BlockError title={tFees("title")} kind={historyOutcome.reason} />
+        </section>
+      )}
 
       {swapsOutcome.kind === "ok" ? (
         <>

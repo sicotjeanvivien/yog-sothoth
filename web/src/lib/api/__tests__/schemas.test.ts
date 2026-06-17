@@ -9,8 +9,9 @@
 import { describe, expect, it } from "vitest";
 import { PoolSchema } from "../schema/pool";
 import { PoolsPageSchema } from "../schema/page";
+import { PoolHistorySchema } from "../schema/pool-history";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
-import { validPoolsPage } from "./fixtures";
+import { validPoolsPage, validPoolHistoryBucket } from "./fixtures";
 
 
 // A representative valid pool payload, copied from a real yog-api
@@ -219,6 +220,35 @@ describe("PoolsPageSchema", () => {
   it("rejects a non-boolean isFirst flag", () => {
     expect(() =>
       PoolsPageSchema.parse(validPoolsPage({ isFirst: "true" as unknown as boolean })),
+    ).toThrow();
+  });
+});
+
+describe("PoolHistorySchema", () => {
+  it("accepts an array of valid buckets", () => {
+    const parsed = PoolHistorySchema.parse([
+      validPoolHistoryBucket(),
+      validPoolHistoryBucket(),
+    ]);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]?.feesUsd).toBe("160.70");
+    expect(parsed[0]?.swapCount).toBe(96);
+  });
+
+  it("accepts an empty series", () => {
+    expect(PoolHistorySchema.parse([])).toHaveLength(0);
+  });
+
+  it("accepts null USD metrics (a bucket with one source of activity)", () => {
+    const parsed = PoolHistorySchema.parse([
+      { ...validPoolHistoryBucket(), feesUsd: null, effectiveFeeBps: null },
+    ]);
+    expect(parsed[0]?.feesUsd).toBeNull();
+  });
+
+  it("rejects a non-RFC3339 bucket timestamp", () => {
+    expect(() =>
+      PoolHistorySchema.parse([{ ...validPoolHistoryBucket(), bucket: "nope" }]),
     ).toThrow();
   });
 });
