@@ -7,15 +7,15 @@ use crate::bootstrap::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
-        LiquidityEventResponse, PageResponse, PoolCurrentStateResponse, PoolResponse,
-        SwapEventResponse,
+        LiquidityEventResponse, PageResponse, PoolCurrentStateResponse, PoolHistoryBucketResponse,
+        PoolResponse, SwapEventResponse,
         request::{
-            GetPoolLatestStateRequest, GetPoolRequest, ListPoolLiquidityRequest,
-            ListPoolSwapsRequest, ListPoolsRequest,
+            GetPoolHistoryRequest, GetPoolLatestStateRequest, GetPoolRequest,
+            ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest,
         },
     },
     error::ApiError,
-    query::PageQuery,
+    query::{HistoryQuery, PageQuery},
 };
 
 // ===========================================================================
@@ -83,6 +83,30 @@ pub(crate) async fn get_pool_latest_state(
         })?;
 
     Ok(Json(PoolCurrentStateResponse::from(state_row)))
+}
+
+// ===========================================================================
+// GET /api/pools/{address}/history
+// ===========================================================================
+
+pub(crate) async fn get_pool_history(
+    State(state): State<AppState>,
+    Path(address): Path<String>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<Vec<PoolHistoryBucketResponse>>, ApiError> {
+    let request = GetPoolHistoryRequest::parse(address, query)?;
+
+    let buckets = state
+        .pool_service
+        .get_history(&request.pool_address, request.days)
+        .await?;
+
+    let items: Vec<PoolHistoryBucketResponse> = buckets
+        .into_iter()
+        .map(PoolHistoryBucketResponse::from)
+        .collect();
+
+    Ok(Json(items))
 }
 
 // ===========================================================================

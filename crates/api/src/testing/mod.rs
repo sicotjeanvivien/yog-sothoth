@@ -221,6 +221,17 @@ impl PoolAnalyticsRepository for MockAnalyticsRepo {
         }
         Ok(out)
     }
+
+    async fn history(
+        &self,
+        _pool_address: &Pubkey,
+        _days: i32,
+    ) -> RepositoryResult<Vec<yog_core::domain::PoolHistoryBucket>> {
+        if self.fail {
+            return Err(RepositoryError::Integrity("analytics boom".into()));
+        }
+        Ok(Vec::new())
+    }
 }
 
 // ── Mock: TokenMetadataRepository ───────────────────────────────────

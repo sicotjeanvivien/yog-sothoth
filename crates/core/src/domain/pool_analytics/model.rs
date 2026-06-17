@@ -11,6 +11,7 @@
 //! land in a dedicated analytics table written by a separate job —
 //! never by the indexer or by yog-context.
 
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
 /// USD-denominated metrics for a single pool.
@@ -53,4 +54,32 @@ impl PoolAnalytics {
             protocol_fees_24h_usd: None,
         }
     }
+}
+
+/// One hourly bucket of a pool's activity history, USD-denominated.
+///
+/// Built from the four hourly continuous aggregates (swap, liquidity,
+/// claim_position_fee, claim_reward) joined on the bucket, each valued at the
+/// token price as-of that bucket (trade-time valuation, like [`PoolAnalytics`]).
+///
+/// Every metric is `Option` because a bucket may have activity from one source
+/// but not another, and because USD valuation needs a known price for the
+/// tokens involved at that time — `None` means "no priced activity of this kind
+/// in this bucket", surfaced rather than coerced to zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PoolHistoryBucket {
+    /// Start of the hourly bucket (UTC).
+    pub bucket: DateTime<Utc>,
+    pub volume_usd: Option<Decimal>,
+    /// Realized trading fee and Meteora's cut of it (from swaps).
+    pub fees_usd: Option<Decimal>,
+    pub protocol_fees_usd: Option<Decimal>,
+    pub liquidity_added_usd: Option<Decimal>,
+    pub liquidity_removed_usd: Option<Decimal>,
+    /// LP position fees actually claimed in this bucket.
+    pub fees_claimed_usd: Option<Decimal>,
+    /// Farming rewards actually claimed in this bucket (summed across mints).
+    pub rewards_claimed_usd: Option<Decimal>,
+    /// Number of swaps in the bucket.
+    pub swap_count: Option<i64>,
 }

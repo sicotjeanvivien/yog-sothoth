@@ -57,6 +57,10 @@ pub(crate) fn build_router(state: AppState) -> Router {
             get(handlers::pools::get_pool_latest_state),
         )
         .route(
+            "/api/pools/{address}/history",
+            get(handlers::pools::get_pool_history),
+        )
+        .route(
             "/api/pools/{address}/swap-events",
             get(handlers::pools::list_pool_swaps),
         )
