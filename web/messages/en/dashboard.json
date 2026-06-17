@@ -61,6 +61,13 @@
       }
     },
     "PoolDetail": {
+      "tabs": {
+        "ariaLabel": "Pool sections",
+        "info": "Info",
+        "swaps": "Swaps",
+        "liquidity": "Liquidity",
+        "fees": "Fees"
+      },
       "header": {
         "backToList": "Back to pools",
         "copyAddress": "Copy pool address",

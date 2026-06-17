@@ -47,6 +47,10 @@ import { PoolDetailHeader } from "@/components/dashboard/pool-detail/pool-detail
 import { PoolDetailKpis } from "@/components/dashboard/pool-detail/pool-detail-kpis";
 import { PoolDetailInfo } from "@/components/dashboard/pool-detail/pool-detail-info";
 import { PoolDetailFees } from "@/components/dashboard/pool-detail/pool-detail-fees";
+import {
+  PoolDetailTabs,
+  parseTab,
+} from "@/components/dashboard/pool-detail/pool-detail-tabs";
 import { PoolDetailSwaps } from "@/components/dashboard/pool-detail/pool-detail-swaps";
 import { PoolDetailLiquidity } from "@/components/dashboard/pool-detail/pool-detail-liquidity";
 import { BlockError } from "@/components/dashboard/block-error";
@@ -149,14 +153,22 @@ export default async function PoolDetailPage({
     limit: 20,
   };
 
-  // Non-critical fetches in parallel. Failures are isolated and
-  // rendered as block-level error states.
+  const tab = parseTab(sp["tab"]);
+
+  // KPIs (state) are always shown above the tabs; only the active tab's data
+  // is fetched, in parallel with the state. Inactive tabs resolve to `null`.
   const [stateOutcome, swapsOutcome, liquidityOutcome, historyOutcome] =
     await Promise.all([
       safeFetchOrNotFound(() => fetchPoolLatestState(address)),
-      safeFetch(() => fetchPoolSwapEvents(address, swapsPagination)),
-      safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination)),
-      safeFetch(() => fetchPoolHistory(address, HISTORY_DAYS)),
+      tab === "swaps"
+        ? safeFetch(() => fetchPoolSwapEvents(address, swapsPagination))
+        : Promise.resolve(null),
+      tab === "liquidity"
+        ? safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination))
+        : Promise.resolve(null),
+      tab === "fees"
+        ? safeFetch(() => fetchPoolHistory(address, HISTORY_DAYS))
+        : Promise.resolve(null),
     ]);
 
   // "Latest state" 404 is expected (pool observed via Claim*
@@ -177,62 +189,70 @@ export default async function PoolDetailPage({
 
       <PoolDetailKpis pool={pool} state={state} />
 
-      <PoolDetailInfo pool={pool} locale={locale} />
+      <PoolDetailTabs basePath={basePath} activeTab={tab} />
 
-      {historyOutcome.kind === "ok" ? (
-        <PoolDetailFees history={historyOutcome.data} locale={locale} />
-      ) : (
-        <section className="mt-6 px-6 lg:px-10">
-          <BlockError title={tFees("title")} kind={historyOutcome.reason} />
-        </section>
-      )}
+      {tab === "info" && <PoolDetailInfo pool={pool} locale={locale} />}
 
-      {swapsOutcome.kind === "ok" ? (
-        <>
-          <PoolDetailSwaps
-            pool={pool}
-            swaps={swapsOutcome.data.items}
-            locale={locale}
-          />
-          {swapsOutcome.data.items.length > 0 && (
-            <Pagination
-              page={swapsOutcome.data}
-              searchParams={sp}
-              paramPrefix="swaps"
-              basePath={basePath}
+      {tab === "fees" &&
+        historyOutcome !== null &&
+        (historyOutcome.kind === "ok" ? (
+          <PoolDetailFees history={historyOutcome.data} locale={locale} />
+        ) : (
+          <section className="mt-6 px-6 lg:px-10">
+            <BlockError title={tFees("title")} kind={historyOutcome.reason} />
+          </section>
+        ))}
+
+      {tab === "swaps" &&
+        swapsOutcome !== null &&
+        (swapsOutcome.kind === "ok" ? (
+          <>
+            <PoolDetailSwaps
+              pool={pool}
+              swaps={swapsOutcome.data.items}
+              locale={locale}
             />
-          )}
-        </>
-      ) : (
-        <section className="mt-6 px-6 lg:px-10">
-          <BlockError title={tSwaps("title")} kind={swapsOutcome.reason} />
-        </section>
-      )}
+            {swapsOutcome.data.items.length > 0 && (
+              <Pagination
+                page={swapsOutcome.data}
+                searchParams={sp}
+                paramPrefix="swaps"
+                basePath={basePath}
+              />
+            )}
+          </>
+        ) : (
+          <section className="mt-6 px-6 lg:px-10">
+            <BlockError title={tSwaps("title")} kind={swapsOutcome.reason} />
+          </section>
+        ))}
 
-      {liquidityOutcome.kind === "ok" ? (
-        <>
-          <PoolDetailLiquidity
-            pool={pool}
-            events={liquidityOutcome.data.items}
-            locale={locale}
-          />
-          {liquidityOutcome.data.items.length > 0 && (
-            <Pagination
-              page={liquidityOutcome.data}
-              searchParams={sp}
-              paramPrefix="liq"
-              basePath={basePath}
+      {tab === "liquidity" &&
+        liquidityOutcome !== null &&
+        (liquidityOutcome.kind === "ok" ? (
+          <>
+            <PoolDetailLiquidity
+              pool={pool}
+              events={liquidityOutcome.data.items}
+              locale={locale}
             />
-          )}
-        </>
-      ) : (
-        <section className="mt-6 px-6 lg:px-10">
-          <BlockError
-            title={tLiquidity("title")}
-            kind={liquidityOutcome.reason}
-          />
-        </section>
-      )}
+            {liquidityOutcome.data.items.length > 0 && (
+              <Pagination
+                page={liquidityOutcome.data}
+                searchParams={sp}
+                paramPrefix="liq"
+                basePath={basePath}
+              />
+            )}
+          </>
+        ) : (
+          <section className="mt-6 px-6 lg:px-10">
+            <BlockError
+              title={tLiquidity("title")}
+              kind={liquidityOutcome.reason}
+            />
+          </section>
+        ))}
     </div>
   );
 }
