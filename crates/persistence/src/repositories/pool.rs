@@ -12,7 +12,7 @@ use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
     RepositoryResult,
-    domain::{Pool, PoolAccountResolver, PoolCursor, PoolRepository},
+    domain::{Pool, PoolAccountProperties, PoolAccountResolver, PoolCursor, PoolRepository},
 };
 
 pub struct PgPoolRepository {
@@ -193,18 +193,12 @@ impl PoolAccountResolver for PgPoolRepository {
             .collect()
     }
 
-    #[allow(clippy::too_many_arguments)]
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
-        token_a_mint: &Pubkey,
-        token_b_mint: &Pubkey,
-        fee_bps: rust_decimal::Decimal,
-        protocol_fee_percent: u8,
-        partner_fee_percent: u8,
-        referral_fee_percent: u8,
+        properties: &PoolAccountProperties,
     ) -> RepositoryResult<()> {
-        let fee_bps = fee_bps_to_numeric(fee_bps)?;
+        let fee_bps = fee_bps_to_numeric(properties.fee_bps)?;
         // u8 → i16 (SMALLINT) is always lossless.
         sqlx::query!(
             r#"
@@ -215,12 +209,12 @@ impl PoolAccountResolver for PgPoolRepository {
             WHERE pool_address = $1
             "#,
             pool_address.to_string(),
-            token_a_mint.to_string(),
-            token_b_mint.to_string(),
+            properties.token_a_mint.to_string(),
+            properties.token_b_mint.to_string(),
             fee_bps,
-            i16::from(protocol_fee_percent),
-            i16::from(partner_fee_percent),
-            i16::from(referral_fee_percent),
+            i16::from(properties.protocol_fee_percent),
+            i16::from(properties.partner_fee_percent),
+            i16::from(properties.referral_fee_percent),
         )
         .execute(&self.pool)
         .await

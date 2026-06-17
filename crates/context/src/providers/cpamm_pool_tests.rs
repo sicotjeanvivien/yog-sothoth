@@ -51,12 +51,12 @@ fn decodes_mints_and_fee_at_correct_offsets() {
     };
     let resolved = c.decode(pk(1), account).expect("should decode");
     assert_eq!(resolved.pool, pk(1));
-    assert_eq!(resolved.token_a_mint, pk(2));
-    assert_eq!(resolved.token_b_mint, pk(3));
-    assert_eq!(resolved.fee_bps, Decimal::new(25, 0));
-    assert_eq!(resolved.protocol_fee_percent, 20);
-    assert_eq!(resolved.partner_fee_percent, 0);
-    assert_eq!(resolved.referral_fee_percent, 20);
+    assert_eq!(resolved.properties.token_a_mint, pk(2));
+    assert_eq!(resolved.properties.token_b_mint, pk(3));
+    assert_eq!(resolved.properties.fee_bps, Decimal::new(25, 0));
+    assert_eq!(resolved.properties.protocol_fee_percent, 20);
+    assert_eq!(resolved.properties.partner_fee_percent, 0);
+    assert_eq!(resolved.properties.referral_fee_percent, 20);
 }
 
 #[test]

@@ -4,7 +4,7 @@ use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
-use crate::{RepositoryResult, domain::Pool};
+use crate::{RepositoryResult, domain::Pool, domain::PoolAccountProperties};
 
 /// Cursor identifying a position in a pool ordering.
 ///
@@ -114,20 +114,12 @@ pub trait PoolAccountResolver: Send + Sync {
     /// `NULL` `fee_bps`, or a `NULL` fee-split percent — capped at `limit`.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
-    /// Set a pool's mints, base fee (basis points) and fee-split percents, as
-    /// decoded from its on-chain account. A single column-level UPDATE;
-    /// idempotent.
-    // A flat list of resolved account columns — a wrapper struct would add
-    // ceremony without clarifying anything.
-    #[allow(clippy::too_many_arguments)]
+    /// Set a pool's account-derived properties (mints, base fee and fee-split
+    /// percents), as decoded from its on-chain account. A single column-level
+    /// UPDATE; idempotent.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
-        token_a_mint: &Pubkey,
-        token_b_mint: &Pubkey,
-        fee_bps: rust_decimal::Decimal,
-        protocol_fee_percent: u8,
-        partner_fee_percent: u8,
-        referral_fee_percent: u8,
+        properties: &PoolAccountProperties,
     ) -> RepositoryResult<()>;
 }

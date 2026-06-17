@@ -29,7 +29,7 @@ pub use meteora::{
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
 };
 pub use network_status::{NetworkStatus, NetworkStatusRepository};
-pub use pool::{Pool, PoolAccountResolver, PoolCursor, PoolRepository};
+pub use pool::{Pool, PoolAccountProperties, PoolAccountResolver, PoolCursor, PoolRepository};
 pub use pool_analytics::{PoolAnalytics, PoolAnalyticsRepository};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,

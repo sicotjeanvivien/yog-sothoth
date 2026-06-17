@@ -92,15 +92,7 @@ impl PoolAccountWorker {
         for r in &resolved {
             match self
                 .repository
-                .set_pool_account(
-                    &r.pool,
-                    &r.token_a_mint,
-                    &r.token_b_mint,
-                    r.fee_bps,
-                    r.protocol_fee_percent,
-                    r.partner_fee_percent,
-                    r.referral_fee_percent,
-                )
+                .set_pool_account(&r.pool, &r.properties)
                 .await
             {
                 Ok(()) => ok += 1,

@@ -26,7 +26,7 @@ use base64::Engine;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 
-use yog_core::domain::Protocol;
+use yog_core::domain::{PoolAccountProperties, Protocol};
 
 use super::metrics::ProviderMetrics;
 use crate::error::SourceError;
@@ -172,12 +172,14 @@ impl CpAmmPoolClient {
             Pubkey::try_from(&bytes[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32]).ok()?;
         Some(ResolvedPoolAccount {
             pool,
-            token_a_mint,
-            token_b_mint,
-            fee_bps: yog_core::amm::damm_v2::fee_numerator_to_bps(cliff_fee_numerator),
-            protocol_fee_percent: bytes[PROTOCOL_FEE_PERCENT_OFFSET],
-            partner_fee_percent: bytes[PARTNER_FEE_PERCENT_OFFSET],
-            referral_fee_percent: bytes[REFERRAL_FEE_PERCENT_OFFSET],
+            properties: PoolAccountProperties {
+                token_a_mint,
+                token_b_mint,
+                fee_bps: yog_core::amm::damm_v2::fee_numerator_to_bps(cliff_fee_numerator),
+                protocol_fee_percent: bytes[PROTOCOL_FEE_PERCENT_OFFSET],
+                partner_fee_percent: bytes[PARTNER_FEE_PERCENT_OFFSET],
+                referral_fee_percent: bytes[REFERRAL_FEE_PERCENT_OFFSET],
+            },
         })
     }
 }
