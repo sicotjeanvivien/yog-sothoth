@@ -7,6 +7,7 @@
  *   - Pool address  (full, copy-friendly)
  *   - Protocol      (display label)
  *   - Fee tier      (base trading fee, `—` until InitializePool indexed)
+ *   - Fee split     (configured protocol/partner/referral percents)
  *   - Effective fee (realized 24h rate: fees / volume, `—` when no volume)
  *   - Protocol cut  (Meteora's share of the realized 24h fee, USD)
  *   - Network       (hardcoded "Solana" while we only index Solana)
@@ -30,7 +31,7 @@ import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { TokenResponse } from "@/lib/api/schema/token";
 
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
-import { formatFeeBps } from "@/lib/format/format-fee";
+import { formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsd } from "@/lib/format/format-usd";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
@@ -82,6 +83,21 @@ export async function PoolDetailInfo({
 
           <InfoRow label={t("feeTier")}>
             <span>{formatFeeBps(pool.feeBps)}</span>
+          </InfoRow>
+
+          <InfoRow label={t("feeSplit")}>
+            <span>
+              {formatFeeSplit(
+                pool.protocolFeePercent,
+                pool.partnerFeePercent,
+                pool.referralFeePercent,
+                {
+                  protocol: t("feeSplitProtocol"),
+                  partner: t("feeSplitPartner"),
+                  referral: t("feeSplitReferral"),
+                },
+              )}
+            </span>
           </InfoRow>
 
           <InfoRow label={t("effectiveFee")}>

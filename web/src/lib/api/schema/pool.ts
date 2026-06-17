@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { BigDecimal, Rfc3339 } from "./shared";
+import { BigDecimal, FeePercent, Rfc3339 } from "./shared";
 import { TokenSchema } from "./token";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -20,6 +20,9 @@ import { TokenSchema } from "./token";
  *     token_a: EmbeddedTokenResponse,
  *     token_b: EmbeddedTokenResponse,
  *     fee_bps: Option<Decimal>,
+ *     protocol_fee_percent: Option<u8>,
+ *     partner_fee_percent: Option<u8>,
+ *     referral_fee_percent: Option<u8>,
  *     tvl_usd: Option<Decimal>,
  *     volume_24h_usd: Option<Decimal>,
  *     fees_24h_usd: Option<Decimal>,
@@ -33,6 +36,12 @@ import { TokenSchema } from "./token";
  *
  * `feeBps` is the pool's base trading fee in basis points (its genesis
  * fee tier), null until the `InitializePool` event has been indexed.
+ *
+ * `protocolFeePercent` / `partnerFeePercent` / `referralFeePercent` are the
+ * *configured* split of the trading fee (whole percents, 0..=100), read from
+ * the pool account. All three are null together until yog-context resolves
+ * the account. This is the configured split, distinct from the *realized*
+ * `protocolFees24hUsd` below.
  *
  * The `*Fees24hUsd` block is the *realized* fee over the last 24h, valued
  * at trade-time prices like `volume24hUsd` (same null rules): total
@@ -60,6 +69,12 @@ export const PoolSchema = z.object({
   tokenA: TokenSchema,
   tokenB: TokenSchema,
   feeBps: BigDecimal.nullable(),
+  // Fee-split percents are u8 (0..=100) on the wire — JSON numbers, not
+  // BigDecimal strings. Resolved as a unit from the pool account, so all
+  // three are null together until yog-context resolves it.
+  protocolFeePercent: FeePercent.nullable(),
+  partnerFeePercent: FeePercent.nullable(),
+  referralFeePercent: FeePercent.nullable(),
   tvlUsd: BigDecimal.nullable(),
   volume24hUsd: BigDecimal.nullable(),
   fees24hUsd: BigDecimal.nullable(),

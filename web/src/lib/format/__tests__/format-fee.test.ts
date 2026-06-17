@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { formatFeeBps } from "../format-fee";
+import { formatFeeBps, formatFeeSplit } from "../format-fee";
+
+const LABELS = { protocol: "Protocol", partner: "Partner", referral: "Referral" };
 
 describe("formatFeeBps", () => {
   it("formats a standard tier as a percentage", () => {
@@ -24,5 +26,19 @@ describe("formatFeeBps", () => {
 
   it("renders an em-dash on a non-numeric value", () => {
     expect(formatFeeBps("not-a-number")).toBe("—");
+  });
+});
+
+describe("formatFeeSplit", () => {
+  it("joins the three labeled percents", () => {
+    expect(formatFeeSplit(20, 0, 20, LABELS)).toBe(
+      "Protocol 20% · Partner 0% · Referral 20%",
+    );
+  });
+
+  it("renders an em-dash when any percent is unknown", () => {
+    expect(formatFeeSplit(null, 0, 20, LABELS)).toBe("—");
+    expect(formatFeeSplit(20, null, 20, LABELS)).toBe("—");
+    expect(formatFeeSplit(20, 0, null, LABELS)).toBe("—");
   });
 });

@@ -24,3 +24,25 @@ export function formatFeeBps(feeBps: string | null): string {
   const trimmed = percent.toFixed(6).replace(/\.?0+$/, "");
   return `${trimmed}%`;
 }
+
+/**
+ * Format the *configured* fee split (protocol / partner / referral percents)
+ * for display, e.g. `"Protocol 20% · Partner 0% · Referral 20%"`.
+ *
+ * The percents are resolved as a unit from the pool account, so this returns
+ * the em-dash placeholder unless all three are known — "factual or absent,
+ * never fake". Role labels are passed in already translated.
+ */
+export function formatFeeSplit(
+  protocol: number | null,
+  partner: number | null,
+  referral: number | null,
+  labels: { protocol: string; partner: string; referral: string },
+): string {
+  if (protocol === null || partner === null || referral === null) return DASH;
+  return [
+    `${labels.protocol} ${protocol}%`,
+    `${labels.partner} ${partner}%`,
+    `${labels.referral} ${referral}%`,
+  ].join(" · ");
+}

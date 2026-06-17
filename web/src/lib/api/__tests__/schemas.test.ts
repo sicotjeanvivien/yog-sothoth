@@ -44,6 +44,9 @@ function validPool() {
       }
     },
     "feeBps": "25",
+    "protocolFeePercent": 20,
+    "partnerFeePercent": 0,
+    "referralFeePercent": 20,
     "tvlUsd": "1332007.7148736200400326721044",
     "volume24hUsd": "47964.973514780605664520660399",
     "fees24hUsd": "119.912433786951514161301650",
@@ -65,6 +68,22 @@ describe("PoolSchema", () => {
   it("accepts a null feeBps (pool seen before its InitializePool)", () => {
     const parsed = PoolSchema.parse({ ...validPool(), feeBps: null });
     expect(parsed.feeBps).toBeNull();
+  });
+
+  it("accepts null fee-split percents (pool account not resolved yet)", () => {
+    const parsed = PoolSchema.parse({
+      ...validPool(),
+      protocolFeePercent: null,
+      partnerFeePercent: null,
+      referralFeePercent: null,
+    });
+    expect(parsed.protocolFeePercent).toBeNull();
+  });
+
+  it("rejects a fee-split percent out of the 0..=100 range", () => {
+    expect(() =>
+      PoolSchema.parse({ ...validPool(), protocolFeePercent: 101 }),
+    ).toThrow();
   });
 
   it("accepts null fee analytics (no priced swap in the window)", () => {
