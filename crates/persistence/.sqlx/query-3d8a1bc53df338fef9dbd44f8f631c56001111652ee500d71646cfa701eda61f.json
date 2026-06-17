@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                bucket                AS \"bucket!\",\n                volume_usd,\n                fees_usd,\n                protocol_fees_usd,\n                swap_count,\n                liquidity_added_usd,\n                liquidity_removed_usd,\n                fees_claimed_usd,\n                rewards_claimed_usd\n            FROM meteora_damm_v2_pool_hourly_activity\n            WHERE pool_address = $1\n              AND bucket > NOW() - make_interval(days => $2)\n            ORDER BY bucket\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bucket!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "volume_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "fees_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "protocol_fees_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "swap_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "liquidity_added_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "liquidity_removed_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "fees_claimed_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "rewards_claimed_usd",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "3d8a1bc53df338fef9dbd44f8f631c56001111652ee500d71646cfa701eda61f"
+}
