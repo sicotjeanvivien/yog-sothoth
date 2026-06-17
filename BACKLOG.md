@@ -12,7 +12,7 @@
 ---
 ### v0.1.0 — Analyzer (POC, pas de release publique)
 
-#### Indexer — Cercle 2 events
+#### ✅ Indexer — Cercle 2 events
 > Fondation per-protocole en place (voir section ✅ refactor voie 3 ci-dessous). Les cinq events s'ajoutent en suivant le pattern : wire event borsh → discriminator + extractor → translator → variant `MeteoraDammV2Event` → struct domaine + repo trait → table `meteora_damm_v2_<event>_events` + VIEW → bras `MeteoraDammV2EventPersistor`.
 
 - [x] `EvtInitializePool` — débloque `fee_tier` dans `PoolResponse`
@@ -170,7 +170,31 @@
 - [x] Refacto cross-crate : `signature: String → solana_signature::Signature` partout (events + cursors + extract_signature au boundary RPC)
 - [x] `WatchedPoolRepository::exists` / `::remove` : `&str` → `&Pubkey`
 
+
+#### Yog-Persistence — maintenabilité du SQL (grosses requêtes → VIEWs)
+> Douleur : certaines requêtes SQL en string Rust sont énormes et dupliquées
+> (la valorisation USD trade-time était copiée dans `history` ET `batch_compute`).
+>
+> **Décision (17 juin 2026) : NON à un passage à SeaQuery.** Évalué et écarté :
+> SeaQuery construit le SQL au runtime → on **perd la vérification schéma à la
+> compilation** (le filet des macros `sqlx::query!`), et sur les requêtes
+> CTE/LATERAL/window c'est *pire* (mur d'appels de builder + `Expr::cust`). Sur
+> les ~13 repos statiques (INSERT/SELECT par clé) ça n'apporterait que du
+> downside. Témoin réalisé sur `history` pour juger sur pièce (PR #17).
+>
+> **Approche retenue : extraire les grosses requêtes analytiques en VIEWs SQL
+> versionnées.** Ça réduit *et* dé-duplique (composition + réutilisation), garde
+> la vérification compile-time (le SELECT au-dessus reste macro-vérifié), et
+> laisse le gros SQL dans du vrai fichier `.sql` outillé. Les repos statiques
+> restent sur les macros sqlx, intacts.
+
+- [x] **VIEW `meteora_damm_v2_pool_hourly_activity` (migration 019, PR #17)** : encapsule la valorisation USD par `(pool, heure)` des 4 CA. `history` passe de ~80 lignes de SQL inline à un `SELECT … FROM <view> WHERE pool/window` trivial ; `batch_compute` réutilise la même VIEW (valorisation 24h dé-dupliquée). Équivalence vérifiée (même `sum(feesUsd)`), compile-time check conservé.
+- [ ] **Requête paginée dynamique `pool/query.rs`** — *autre* cas : le SQL y est assemblé en string via `QueryBuilder` parce que `ORDER BY`/`WHERE`/search viennent de l'input user (dynamique → ni macro, ni VIEW possible). Seul endroit où un query-builder (SeaQuery sur cette requête uniquement) se discuterait, si la maintenabilité y devient gênante. À évaluer séparément, non prioritaire.
+- repos statiques (events, token_metadata, token_prices, network_status, watched_pool, …) : **on ne touche pas** — aucune douleur, les macros sqlx font le travail avec le check compile-time.
+
 ---
+---
+
 ### v0.1.1 — Signal Engine (release publique)
 
 > C'est cette phase qui justifie la mise en prod. Sans signaux, pas d'utilisateurs ; pas d'utilisateurs, pas de release.
@@ -217,6 +241,8 @@
 - [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
 
 ---
+---
+
 ### Transverse v0.1
 
 #### ✅ Stratégie de rétention & historisation (décidé : A + compression)
@@ -292,6 +318,7 @@
 
 ---
 ---
+
 ## v0.2 — Auth (ex-v0.3, pas encore attaqué)
 - [ ] Tables `users`, `sessions`, `auth_methods`
 - [ ] Auth email + Argon2
