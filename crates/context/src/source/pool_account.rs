@@ -1,20 +1,19 @@
 use async_trait::async_trait;
-use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
+
+use yog_core::domain::PoolAccountProperties;
 
 use crate::error::SourceError;
 
-/// A pool's account-derived properties, decoded from its on-chain account:
-/// both token mints and the base trading fee (basis points). The authoritative
-/// source for all of them — the mints because the per-event transferChecked
-/// heuristic mis-resolved them, the fee because the genesis event is invisible
-/// for pools that predate the indexer.
+/// A pool address paired with the properties decoded from its on-chain account
+/// (mints, base fee, fee-split percents). The authoritative source for all of
+/// them — the mints because the per-event transferChecked heuristic mis-resolved
+/// them, the fee/percents because the genesis event is invisible for pools that
+/// predate the indexer.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedPoolAccount {
     pub(crate) pool: Pubkey,
-    pub(crate) token_a_mint: Pubkey,
-    pub(crate) token_b_mint: Pubkey,
-    pub(crate) fee_bps: Decimal,
+    pub(crate) properties: PoolAccountProperties,
 }
 
 /// Abstraction over a source of on-chain pool account state.

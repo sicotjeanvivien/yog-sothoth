@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE pools\n            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4,\n                protocol_fee_percent = $5, partner_fee_percent = $6,\n                referral_fee_percent = $7\n            WHERE pool_address = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Numeric",
+        "Int2",
+        "Int2",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03fe1be0e6e41784e0c53e5f31028b4f7c73b8c9237d0f756e6f845fb964663d"
+}

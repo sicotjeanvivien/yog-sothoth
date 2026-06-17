@@ -40,9 +40,39 @@ pub struct Pool {
     /// cliff, not the live decayed rate.
     pub fee_bps: Option<Decimal>,
 
+    /// Meteora's cut of the trading fee, as a whole percent (0..=100), decoded
+    /// from the on-chain `Pool` account. `None` until yog-context resolves it.
+    pub protocol_fee_percent: Option<u8>,
+
+    /// A partner's cut of the trading fee, as a whole percent (0..=100), decoded
+    /// from the on-chain `Pool` account (often 0). `None` until resolved.
+    pub partner_fee_percent: Option<u8>,
+
+    /// A referrer's cut of the trading fee, as a whole percent (0..=100),
+    /// decoded from the on-chain `Pool` account (only charged when a swap
+    /// carries a referral account). `None` until resolved.
+    pub referral_fee_percent: Option<u8>,
+
     /// When Yog-Sothoth first observed this pool in the transaction stream.
     pub first_seen_at: DateTime<Utc>,
 
     /// Last time any event touched this pool.
     pub last_seen_at: DateTime<Utc>,
+}
+
+/// The properties of a pool that are resolved authoritatively from its on-chain
+/// cp-amm `Pool` account (not inferable from the event stream): the token mints,
+/// the base trading fee, and the fee-split percents. Written as a unit by
+/// yog-context via [`super::PoolAccountResolver::set_pool_account`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PoolAccountProperties {
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    /// Base trading fee in basis points (genesis cliff for a scheduler pool).
+    pub fee_bps: Decimal,
+    /// Fee-split percents (0..=100): Meteora's, a partner's, and a referrer's
+    /// cut of the trading fee.
+    pub protocol_fee_percent: u8,
+    pub partner_fee_percent: u8,
+    pub referral_fee_percent: u8,
 }

@@ -7,6 +7,8 @@ use solana_pubkey::Pubkey;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 
+use yog_core::domain::PoolAccountProperties;
+
 use crate::error::SourceError;
 use crate::source::ResolvedPoolAccount;
 
@@ -17,7 +19,7 @@ fn pk(seed: u8) -> Pubkey {
 #[derive(Default)]
 struct FakeRepo {
     unresolved: Vec<Pubkey>,
-    written: Mutex<Vec<(Pubkey, Pubkey, Pubkey, Decimal)>>,
+    written: Mutex<Vec<(Pubkey, PoolAccountProperties)>>,
 }
 
 #[async_trait]
@@ -28,14 +30,12 @@ impl PoolAccountResolver for FakeRepo {
     async fn set_pool_account(
         &self,
         pool: &Pubkey,
-        token_a_mint: &Pubkey,
-        token_b_mint: &Pubkey,
-        fee_bps: Decimal,
+        properties: &PoolAccountProperties,
     ) -> RepositoryResult<()> {
         self.written
             .lock()
             .unwrap()
-            .push((*pool, *token_a_mint, *token_b_mint, fee_bps));
+            .push((*pool, properties.clone()));
         Ok(())
     }
 }
@@ -64,22 +64,25 @@ async fn resolves_and_writes_mints_and_fee() {
         unresolved: vec![pk(1)],
         written: Mutex::new(Vec::new()),
     });
+    let properties = PoolAccountProperties {
+        token_a_mint: pk(2),
+        token_b_mint: pk(3),
+        fee_bps: Decimal::new(25, 0),
+        protocol_fee_percent: 20,
+        partner_fee_percent: 0,
+        referral_fee_percent: 20,
+    };
     let source = Arc::new(FakeSource {
         resolved: vec![ResolvedPoolAccount {
             pool: pk(1),
-            token_a_mint: pk(2),
-            token_b_mint: pk(3),
-            fee_bps: Decimal::new(25, 0),
+            properties: properties.clone(),
         }],
     });
 
     worker(repo.clone(), source).run_one_cycle().await;
 
     let written = repo.written.lock().unwrap();
-    assert_eq!(
-        written.as_slice(),
-        &[(pk(1), pk(2), pk(3), Decimal::new(25, 0))]
-    );
+    assert_eq!(written.as_slice(), &[(pk(1), properties)]);
 }
 
 #[tokio::test]

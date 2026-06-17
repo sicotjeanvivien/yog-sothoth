@@ -12,7 +12,7 @@ use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
     RepositoryResult,
-    domain::{Pool, PoolAccountResolver, PoolCursor, PoolRepository},
+    domain::{Pool, PoolAccountProperties, PoolAccountResolver, PoolCursor, PoolRepository},
 };
 
 pub struct PgPoolRepository {
@@ -93,6 +93,7 @@ impl PoolRepository for PgPoolRepository {
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
+                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = $1
@@ -176,6 +177,8 @@ impl PoolAccountResolver for PgPoolRepository {
             SELECT pool_address
             FROM pools
             WHERE token_a_mint IS NULL OR token_b_mint IS NULL OR fee_bps IS NULL
+               OR protocol_fee_percent IS NULL OR partner_fee_percent IS NULL
+               OR referral_fee_percent IS NULL
             ORDER BY first_seen_at
             LIMIT $1
             "#,
@@ -193,21 +196,25 @@ impl PoolAccountResolver for PgPoolRepository {
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
-        token_a_mint: &Pubkey,
-        token_b_mint: &Pubkey,
-        fee_bps: rust_decimal::Decimal,
+        properties: &PoolAccountProperties,
     ) -> RepositoryResult<()> {
-        let fee_bps = fee_bps_to_numeric(fee_bps)?;
+        let fee_bps = fee_bps_to_numeric(properties.fee_bps)?;
+        // u8 → i16 (SMALLINT) is always lossless.
         sqlx::query!(
             r#"
             UPDATE pools
-            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4
+            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4,
+                protocol_fee_percent = $5, partner_fee_percent = $6,
+                referral_fee_percent = $7
             WHERE pool_address = $1
             "#,
             pool_address.to_string(),
-            token_a_mint.to_string(),
-            token_b_mint.to_string(),
+            properties.token_a_mint.to_string(),
+            properties.token_b_mint.to_string(),
             fee_bps,
+            i16::from(properties.protocol_fee_percent),
+            i16::from(properties.partner_fee_percent),
+            i16::from(properties.referral_fee_percent),
         )
         .execute(&self.pool)
         .await

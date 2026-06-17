@@ -31,6 +31,12 @@ pub(crate) struct PoolResponse {
     /// Base trading fee in basis points (genesis fee tier). `None` until the
     /// pool's `InitializePool` event has been indexed.
     pub(crate) fee_bps: Option<Decimal>,
+    /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's,
+    /// a partner's, and a referrer's cut of the trading fee. `None` until
+    /// yog-context resolves the pool account.
+    pub(crate) protocol_fee_percent: Option<u8>,
+    pub(crate) partner_fee_percent: Option<u8>,
+    pub(crate) referral_fee_percent: Option<u8>,
     pub(crate) tvl_usd: Option<Decimal>,
     pub(crate) volume_24h_usd: Option<Decimal>,
     pub(crate) first_seen_at: DateTime<Utc>,
@@ -54,6 +60,9 @@ impl PoolResponse {
             token_a,
             token_b,
             fee_bps: pool.fee_bps,
+            protocol_fee_percent: pool.protocol_fee_percent,
+            partner_fee_percent: pool.partner_fee_percent,
+            referral_fee_percent: pool.referral_fee_percent,
             tvl_usd: analytics.tvl_usd,
             volume_24h_usd: analytics.volume_24h_usd,
             first_seen_at: pool.first_seen_at,

@@ -16,8 +16,23 @@ pub(super) struct PoolRow {
     pub(super) token_a_mint: Option<String>,
     pub(super) token_b_mint: Option<String>,
     pub(super) fee_bps: Option<Decimal>,
+    pub(super) protocol_fee_percent: Option<i16>,
+    pub(super) partner_fee_percent: Option<i16>,
+    pub(super) referral_fee_percent: Option<i16>,
     pub(super) first_seen_at: DateTime<Utc>,
     pub(super) last_seen_at: DateTime<Utc>,
+}
+
+/// Convert a SMALLINT fee-split percent back to the domain `u8`. The column
+/// only ever holds values written from a `u8` (0..=100), but guard the range
+/// rather than silently truncate a corrupt row — surfaces as `Integrity`.
+fn percent_to_u8(value: Option<i16>, field: &str) -> Result<Option<u8>, RepositoryError> {
+    value
+        .map(|v| {
+            u8::try_from(v)
+                .map_err(|_| RepositoryError::Integrity(format!("{field} out of u8 range: {v}")))
+        })
+        .transpose()
 }
 
 impl TryFrom<PoolRow> for Pool {
@@ -37,6 +52,9 @@ impl TryFrom<PoolRow> for Pool {
                 .map(|m| convert_string_to_pubkey(m, "token_b_mint"))
                 .transpose()?,
             fee_bps: row.fee_bps,
+            protocol_fee_percent: percent_to_u8(row.protocol_fee_percent, "protocol_fee_percent")?,
+            partner_fee_percent: percent_to_u8(row.partner_fee_percent, "partner_fee_percent")?,
+            referral_fee_percent: percent_to_u8(row.referral_fee_percent, "referral_fee_percent")?,
             first_seen_at: row.first_seen_at,
             last_seen_at: row.last_seen_at,
         })
