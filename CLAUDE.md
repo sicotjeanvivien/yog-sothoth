@@ -55,6 +55,16 @@ Queries use `sqlx::query!`/`query_as!` macros validated at compile time against 
 cd crates/persistence && cargo sqlx prepare
 ```
 
+## Choosing how to write a query (decided 2026-06; no SeaQuery/ORM)
+
+A query-builder/ORM migration of the persistence layer (SeaQuery et al.) was evaluated and **rejected**: it builds SQL at runtime, losing the `query!` compile-time schema check, and is *worse* on the CTE/LATERAL queries that actually hurt. Pick by query shape instead:
+
+- **Simple / static** → `sqlx::query!` / `query_as!` **inline**. The default. Compile-time checked.
+- **Big but static** → prefer a **SQL VIEW** when the query is reusable or decomposable (define it in a migration; the slim `SELECT … FROM <view>` over it stays a checked `query!`). This *reduces and de-duplicates* the SQL, it doesn't just relocate it — e.g. `meteora_damm_v2_pool_hourly_activity` (migration 019) factors the per-`(pool, hour)` USD valuation shared by `history` and `pool_analytics`. If it isn't view-able, use `query_file!("…​.sql")` to move the big SQL into a tooled `.sql` file (still compile-checked).
+- **Dynamic** (shape varies from user input — `WHERE`/`ORDER BY`/search) → `QueryBuilder` (runtime, *not* macro-checked → cover with integration tests). Neither `query!`/`query_file!` (need static SQL) nor a VIEW expresses a runtime-variable shape; a VIEW can still be the base table the dynamic query reads. The lone case today is `repositories/pool/query.rs`.
+
+**Perf note:** a plain VIEW gives **no** performance gain — Postgres inlines it, same plan. Choose a VIEW for readability, never for speed. The perf tool is **materialization** (a continuous aggregate or `MATERIALIZED VIEW`), which precomputes at the cost of staleness/refresh — that's what the hourly CAs already do.
+
 ## Architecture rules that are enforced, not aspirational
 
 A PR that breaks these is unlikely to be accepted (full list in `crates/README.md` → *Conventions*):
