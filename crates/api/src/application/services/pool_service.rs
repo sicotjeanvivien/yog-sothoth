@@ -17,7 +17,8 @@ use yog_core::{
     Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
     domain::{
         Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCurrentState, PoolCurrentStateRepository,
-        PoolCursor, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
+        PoolCursor, PoolHistoryBucket, PoolRepository, TokenMetadataRepository,
+        TokenPriceRepository,
     },
 };
 
@@ -156,6 +157,17 @@ impl PoolService {
         self.pool_current_state_repository
             .get_by_address(address)
             .await
+    }
+
+    /// Hourly activity history (volume, fees, liquidity, claims — all USD) for
+    /// a pool over the last `days` days. A thin pass-through to the analytics
+    /// repository: no enrichment, the series is self-contained.
+    pub(crate) async fn get_history(
+        &self,
+        address: &solana_pubkey::Pubkey,
+        days: i32,
+    ) -> RepositoryResult<Vec<PoolHistoryBucket>> {
+        self.pool_analytics_repository.history(address, days).await
     }
 
     /// Compose a pool with both enriched token sides and its analytics.

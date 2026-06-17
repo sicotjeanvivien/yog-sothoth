@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use std::collections::HashMap;
 
-use crate::{RepositoryResult, domain::PoolAnalytics};
+use crate::{
+    RepositoryResult,
+    domain::{PoolAnalytics, PoolHistoryBucket},
+};
 
 /// Read-only access to derived analytics over pools.
 ///
@@ -21,4 +24,14 @@ pub trait PoolAnalyticsRepository: Send + Sync {
         &self,
         pool_addresses: &[Pubkey],
     ) -> RepositoryResult<HashMap<Pubkey, PoolAnalytics>>;
+
+    /// Hourly activity history for a single pool over the last `days` days,
+    /// one [`PoolHistoryBucket`] per hour that had any activity, ordered by
+    /// bucket ascending (oldest first — chart-ready). Buckets with no activity
+    /// in any of the four sources are simply absent (sparse series).
+    async fn history(
+        &self,
+        pool_address: &Pubkey,
+        days: i32,
+    ) -> RepositoryResult<Vec<PoolHistoryBucket>>;
 }

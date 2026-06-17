@@ -30,6 +30,31 @@ pub(crate) fn default_limit() -> i64 {
     DEFAULT_LIMIT
 }
 
+pub(crate) const DEFAULT_HISTORY_DAYS: i64 = 7;
+pub(crate) const MAX_HISTORY_DAYS: i64 = 90;
+
+/// Query params for the pool history endpoint: a single `days` window.
+#[derive(Debug, Deserialize)]
+pub(crate) struct HistoryQuery {
+    #[serde(default = "default_history_days")]
+    pub(crate) days: i64,
+}
+
+pub(crate) fn default_history_days() -> i64 {
+    DEFAULT_HISTORY_DAYS
+}
+
+/// Reject an out-of-range window rather than clamp it — a client asking for
+/// `days=9999` has a bug worth surfacing, consistent with `validate_limit`.
+pub(crate) fn validate_history_days(days: i64) -> Result<(), ApiError> {
+    if !(1..=MAX_HISTORY_DAYS).contains(&days) {
+        return Err(ApiError::BadRequest(format!(
+            "days must be between 1 and {MAX_HISTORY_DAYS}"
+        )));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Default, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum PageDirectionParam {
