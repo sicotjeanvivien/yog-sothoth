@@ -1,10 +1,12 @@
 /**
  * Pool detail page — KPI strip block.
  *
- * Three cards side by side on desktop, stacked on mobile:
+ * KPI cards, stacked on mobile:
  *
  *   - TVL              (always rendered; `—` when null)
  *   - Volume 24h       (always rendered; `—` when null)
+ *   - Fees 24h         (always rendered; `—` when null) — realized
+ *                      trading fee revenue over the window
  *   - Pool composition (donut, rendered only when computable)
  *
  * The composition card is dropped from the layout when either side
@@ -54,12 +56,12 @@ export async function PoolDetailKpis({
       })
       : null;
 
-  // Grid layout: 1 column on mobile, 2 cols when only KPIs, 3
-  // cols when composition is included. Tailwind class is chosen
-  // based on whether the composition will render.
+  // Grid layout: 1 column on mobile. Three base KPIs (TVL, Volume,
+  // Fees) always render — 3 cols; with the composition donut it
+  // becomes a 4th card — 4 cols. Tailwind class chosen accordingly.
   const gridClass = composition
-    ? "grid grid-cols-1 gap-4 lg:grid-cols-3"
-    : "grid grid-cols-1 gap-4 lg:grid-cols-2";
+    ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+    : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
   return (
     <section className="px-6 lg:px-10">
@@ -73,6 +75,11 @@ export async function PoolDetailKpis({
           label={t("volume24h")}
           valueCompact={formatUsdCompact(pool.volume24hUsd)}
           value={formatUsd(pool.volume24hUsd)}
+        />
+        <KpiCard
+          label={t("fees24h")}
+          valueCompact={formatUsdCompact(pool.fees24hUsd)}
+          value={formatUsd(pool.fees24hUsd)}
         />
         {composition && (
           <PoolCompositionCard
