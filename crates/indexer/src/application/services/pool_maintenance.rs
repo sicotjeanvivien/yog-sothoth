@@ -48,6 +48,9 @@ impl PoolMaintenance {
             token_a_mint: None,
             token_b_mint: None,
             fee_bps: None,
+            protocol_fee_percent: None,
+            partner_fee_percent: None,
+            referral_fee_percent: None,
             first_seen_at: now,
             last_seen_at: now,
         };

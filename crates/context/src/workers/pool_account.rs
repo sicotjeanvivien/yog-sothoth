@@ -5,10 +5,11 @@
 //! whose genesis `InitializePool` event it never saw. Every `poll_interval`
 //! this worker:
 //!   1. lists pools missing any account-derived property (`list_unresolved`:
-//!      a NULL mint or a NULL fee);
+//!      a NULL mint, a NULL fee, or a NULL fee-split percent);
 //!   2. fetches and decodes each pool's on-chain account (the authoritative
-//!      source for mints and base fee) via `PoolAccountSource`;
-//!   3. writes the resolved mints + fee back (`set_pool_account`).
+//!      source for mints, base fee and fee-split percents) via
+//!      `PoolAccountSource`;
+//!   3. writes the resolved mints + fee + percents back (`set_pool_account`).
 //!
 //! # Resilience
 //!
@@ -91,7 +92,15 @@ impl PoolAccountWorker {
         for r in &resolved {
             match self
                 .repository
-                .set_pool_account(&r.pool, &r.token_a_mint, &r.token_b_mint, r.fee_bps)
+                .set_pool_account(
+                    &r.pool,
+                    &r.token_a_mint,
+                    &r.token_b_mint,
+                    r.fee_bps,
+                    r.protocol_fee_percent,
+                    r.partner_fee_percent,
+                    r.referral_fee_percent,
+                )
                 .await
             {
                 Ok(()) => ok += 1,

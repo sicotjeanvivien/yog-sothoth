@@ -94,8 +94,9 @@ pub trait PoolRepository: Send + Sync {
     ) -> RepositoryResult<Page<Pool>>;
 }
 
-/// Resolution of a pool's account-derived properties (token mints and base
-/// fee) from its on-chain cp-amm `Pool` account, performed by yog-context
+/// Resolution of a pool's account-derived properties (token mints, base fee
+/// and fee-split percents) from its on-chain cp-amm `Pool` account, performed
+/// by yog-context
 /// (which holds column-level UPDATE on those columns).
 ///
 /// These properties can't be inferred reliably from the event stream: the
@@ -109,17 +110,24 @@ pub trait PoolRepository: Send + Sync {
 /// indexer crates don't have to carry these methods.
 #[async_trait]
 pub trait PoolAccountResolver: Send + Sync {
-    /// Pools missing at least one account-derived property — a `NULL` mint or
-    /// a `NULL` `fee_bps` — capped at `limit`.
+    /// Pools missing at least one account-derived property — a `NULL` mint, a
+    /// `NULL` `fee_bps`, or a `NULL` fee-split percent — capped at `limit`.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
-    /// Set a pool's mints and base fee (basis points), as decoded from its
-    /// on-chain account. A single column-level UPDATE; idempotent.
+    /// Set a pool's mints, base fee (basis points) and fee-split percents, as
+    /// decoded from its on-chain account. A single column-level UPDATE;
+    /// idempotent.
+    // A flat list of resolved account columns — a wrapper struct would add
+    // ceremony without clarifying anything.
+    #[allow(clippy::too_many_arguments)]
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
         token_a_mint: &Pubkey,
         token_b_mint: &Pubkey,
         fee_bps: rust_decimal::Decimal,
+        protocol_fee_percent: u8,
+        partner_fee_percent: u8,
+        referral_fee_percent: u8,
     ) -> RepositoryResult<()>;
 }

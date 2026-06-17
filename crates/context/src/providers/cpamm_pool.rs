@@ -13,6 +13,9 @@
 //!
 //! - `cliff_fee_numerator` (base fee) — the leading `u64` at byte offset 8
 //!   (`pool_fees` is the first field; its base fee numerator leads it)
+//! - `protocol_fee_percent` (`u8`) at byte offset 48 — right after the 40-byte
+//!   `BaseFeeStruct`, then `partner_fee_percent` (49) and
+//!   `referral_fee_percent` (50)
 //! - `token_a_mint` at byte offset 168 (32 bytes)
 //! - `token_b_mint` at byte offset 200 (32 bytes)
 //!
@@ -42,6 +45,11 @@ const POOL_DISCRIMINATOR: [u8; 8] = [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0
 /// 8-byte discriminator. The same quantity decoded from the genesis event,
 /// validated against mainnet pool accounts.
 const CLIFF_FEE_NUMERATOR_OFFSET: usize = 8;
+/// Fee-split percents (`u8` each), immediately after the 40-byte `BaseFeeStruct`
+/// inside `PoolFeesStruct`. Verified against mainnet pool accounts.
+const PROTOCOL_FEE_PERCENT_OFFSET: usize = 48;
+const PARTNER_FEE_PERCENT_OFFSET: usize = 49;
+const REFERRAL_FEE_PERCENT_OFFSET: usize = 50;
 const TOKEN_A_MINT_OFFSET: usize = 168;
 const TOKEN_B_MINT_OFFSET: usize = 200;
 
@@ -167,6 +175,9 @@ impl CpAmmPoolClient {
             token_a_mint,
             token_b_mint,
             fee_bps: yog_core::amm::damm_v2::fee_numerator_to_bps(cliff_fee_numerator),
+            protocol_fee_percent: bytes[PROTOCOL_FEE_PERCENT_OFFSET],
+            partner_fee_percent: bytes[PARTNER_FEE_PERCENT_OFFSET],
+            referral_fee_percent: bytes[REFERRAL_FEE_PERCENT_OFFSET],
         })
     }
 }

@@ -47,6 +47,9 @@ pub(crate) fn make_pool(addr: Pubkey, token_a: Pubkey, token_b: Pubkey) -> Pool 
         token_a_mint: Some(token_a),
         token_b_mint: Some(token_b),
         fee_bps: None,
+        protocol_fee_percent: None,
+        partner_fee_percent: None,
+        referral_fee_percent: None,
         first_seen_at: ts(1_000),
         last_seen_at: ts(2_000),
     }

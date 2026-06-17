@@ -5,16 +5,19 @@ use solana_pubkey::Pubkey;
 use crate::error::SourceError;
 
 /// A pool's account-derived properties, decoded from its on-chain account:
-/// both token mints and the base trading fee (basis points). The authoritative
-/// source for all of them — the mints because the per-event transferChecked
-/// heuristic mis-resolved them, the fee because the genesis event is invisible
-/// for pools that predate the indexer.
+/// both token mints, the base trading fee (basis points) and the fee-split
+/// percents. The authoritative source for all of them — the mints because the
+/// per-event transferChecked heuristic mis-resolved them, the fee/percents
+/// because the genesis event is invisible for pools that predate the indexer.
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedPoolAccount {
     pub(crate) pool: Pubkey,
     pub(crate) token_a_mint: Pubkey,
     pub(crate) token_b_mint: Pubkey,
     pub(crate) fee_bps: Decimal,
+    pub(crate) protocol_fee_percent: u8,
+    pub(crate) partner_fee_percent: u8,
+    pub(crate) referral_fee_percent: u8,
 }
 
 /// Abstraction over a source of on-chain pool account state.

@@ -14,10 +14,12 @@ fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
+type WrittenAccount = (Pubkey, Pubkey, Pubkey, Decimal, u8, u8, u8);
+
 #[derive(Default)]
 struct FakeRepo {
     unresolved: Vec<Pubkey>,
-    written: Mutex<Vec<(Pubkey, Pubkey, Pubkey, Decimal)>>,
+    written: Mutex<Vec<WrittenAccount>>,
 }
 
 #[async_trait]
@@ -25,17 +27,26 @@ impl PoolAccountResolver for FakeRepo {
     async fn list_unresolved(&self, _limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         Ok(self.unresolved.clone())
     }
+    #[allow(clippy::too_many_arguments)]
     async fn set_pool_account(
         &self,
         pool: &Pubkey,
         token_a_mint: &Pubkey,
         token_b_mint: &Pubkey,
         fee_bps: Decimal,
+        protocol_fee_percent: u8,
+        partner_fee_percent: u8,
+        referral_fee_percent: u8,
     ) -> RepositoryResult<()> {
-        self.written
-            .lock()
-            .unwrap()
-            .push((*pool, *token_a_mint, *token_b_mint, fee_bps));
+        self.written.lock().unwrap().push((
+            *pool,
+            *token_a_mint,
+            *token_b_mint,
+            fee_bps,
+            protocol_fee_percent,
+            partner_fee_percent,
+            referral_fee_percent,
+        ));
         Ok(())
     }
 }
@@ -70,6 +81,9 @@ async fn resolves_and_writes_mints_and_fee() {
             token_a_mint: pk(2),
             token_b_mint: pk(3),
             fee_bps: Decimal::new(25, 0),
+            protocol_fee_percent: 20,
+            partner_fee_percent: 0,
+            referral_fee_percent: 20,
         }],
     });
 
@@ -78,7 +92,7 @@ async fn resolves_and_writes_mints_and_fee() {
     let written = repo.written.lock().unwrap();
     assert_eq!(
         written.as_slice(),
-        &[(pk(1), pk(2), pk(3), Decimal::new(25, 0))]
+        &[(pk(1), pk(2), pk(3), Decimal::new(25, 0), 20, 0, 20)]
     );
 }
 

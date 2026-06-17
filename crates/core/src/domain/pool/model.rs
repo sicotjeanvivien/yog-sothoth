@@ -40,6 +40,19 @@ pub struct Pool {
     /// cliff, not the live decayed rate.
     pub fee_bps: Option<Decimal>,
 
+    /// Meteora's cut of the trading fee, as a whole percent (0..=100), decoded
+    /// from the on-chain `Pool` account. `None` until yog-context resolves it.
+    pub protocol_fee_percent: Option<u8>,
+
+    /// A partner's cut of the trading fee, as a whole percent (0..=100), decoded
+    /// from the on-chain `Pool` account (often 0). `None` until resolved.
+    pub partner_fee_percent: Option<u8>,
+
+    /// A referrer's cut of the trading fee, as a whole percent (0..=100),
+    /// decoded from the on-chain `Pool` account (only charged when a swap
+    /// carries a referral account). `None` until resolved.
+    pub referral_fee_percent: Option<u8>,
+
     /// When Yog-Sothoth first observed this pool in the transaction stream.
     pub first_seen_at: DateTime<Utc>,
 
