@@ -88,7 +88,21 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                         (COALESCE(h.volume_in_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd
                         +
                         (COALESCE(h.volume_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd
-                    ) AS volume_24h_usd
+                    ) AS volume_24h_usd,
+                    -- Realized trading fee and the protocol's share, valued the
+                    -- same way (raw token amounts split by the token that bore
+                    -- the fee, priced as-of each bucket). The CA columns come
+                    -- from migration 017.
+                    SUM(
+                        (COALESCE(h.fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd
+                        +
+                        (COALESCE(h.fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd
+                    ) AS fees_24h_usd,
+                    SUM(
+                        (COALESCE(h.protocol_fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd
+                        +
+                        (COALESCE(h.protocol_fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd
+                    ) AS protocol_fees_24h_usd
                 FROM meteora_damm_v2_swap_events_hourly h
                 JOIN pools p ON p.pool_address = h.pool_address
                 JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
@@ -116,7 +130,9 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
             SELECT
                 r.pool_address AS "pool_address!",
                 t.tvl_usd      AS "tvl_usd?",
-                v.volume_24h_usd AS "volume_24h_usd?"
+                v.volume_24h_usd AS "volume_24h_usd?",
+                v.fees_24h_usd AS "fees_24h_usd?",
+                v.protocol_fees_24h_usd AS "protocol_fees_24h_usd?"
             FROM requested r
             LEFT JOIN tvl_per_pool t    ON t.pool_address = r.pool_address
             LEFT JOIN volume_per_pool v ON v.pool_address = r.pool_address

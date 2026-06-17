@@ -246,6 +246,7 @@ async fn present_analytics_are_attached_to_the_right_pool() {
         PoolAnalytics {
             tvl_usd: Some(rust_decimal::Decimal::new(1000, 0)),
             volume_24h_usd: Some(rust_decimal::Decimal::new(500, 0)),
+            ..PoolAnalytics::empty()
         },
     );
 
@@ -334,6 +335,7 @@ async fn get_pool_attaches_analytics_correctly() {
         PoolAnalytics {
             tvl_usd: Some(rust_decimal::Decimal::new(2000, 0)),
             volume_24h_usd: Some(rust_decimal::Decimal::new(750, 0)),
+            ..PoolAnalytics::empty()
         },
     );
 

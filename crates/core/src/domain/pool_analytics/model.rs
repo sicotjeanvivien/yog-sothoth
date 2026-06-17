@@ -15,7 +15,7 @@ use rust_decimal::Decimal;
 
 /// USD-denominated metrics for a single pool.
 ///
-/// Both fields are `Option` because the inputs may not be fully
+/// All fields are `Option` because the inputs may not be fully
 /// available:
 ///
 ///   - `tvl_usd` is `None` if the pool has no current state yet,
@@ -26,10 +26,19 @@ use rust_decimal::Decimal;
 ///     returned as `Some(sum_of_priced_swaps)` — we surface what
 ///     we have rather than collapse the value because of partial
 ///     coverage.
+///   - `fees_24h_usd` / `protocol_fees_24h_usd` are the realized
+///     trading fee and Meteora's share of it over the same 24h
+///     window, valued at trade-time prices exactly like volume.
+///     `None` under the same partial-coverage rules. The LP share
+///     is `fees_24h_usd - protocol_fees_24h_usd`; the effective fee
+///     rate is `fees_24h_usd / volume_24h_usd` — both left to the
+///     presentation layer to derive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolAnalytics {
     pub tvl_usd: Option<Decimal>,
     pub volume_24h_usd: Option<Decimal>,
+    pub fees_24h_usd: Option<Decimal>,
+    pub protocol_fees_24h_usd: Option<Decimal>,
 }
 
 impl PoolAnalytics {
@@ -40,6 +49,8 @@ impl PoolAnalytics {
         Self {
             tvl_usd: None,
             volume_24h_usd: None,
+            fees_24h_usd: None,
+            protocol_fees_24h_usd: None,
         }
     }
 }

@@ -20,6 +20,8 @@ fn valid_row() -> PoolAnalyticsRow {
         pool_address: VALID_POOL.into(),
         tvl_usd: Some(BigDecimal::from_str("1234.56").unwrap()),
         volume_24h_usd: Some(BigDecimal::from_str("789.01").unwrap()),
+        fees_24h_usd: Some(BigDecimal::from_str("12.34").unwrap()),
+        protocol_fees_24h_usd: Some(BigDecimal::from_str("2.46").unwrap()),
     }
 }
 
@@ -38,6 +40,14 @@ fn try_from_valid_row_returns_pair_with_all_fields_mapped() {
     assert_eq!(
         analytics.volume_24h_usd,
         Some(Decimal::from_str("789.01").unwrap())
+    );
+    assert_eq!(
+        analytics.fees_24h_usd,
+        Some(Decimal::from_str("12.34").unwrap())
+    );
+    assert_eq!(
+        analytics.protocol_fees_24h_usd,
+        Some(Decimal::from_str("2.46").unwrap())
     );
 }
 

@@ -39,8 +39,29 @@ pub(crate) struct PoolResponse {
     pub(crate) referral_fee_percent: Option<u8>,
     pub(crate) tvl_usd: Option<Decimal>,
     pub(crate) volume_24h_usd: Option<Decimal>,
+    /// Realized trading fee over the last 24h (USD), and its split: Meteora's
+    /// cut, the LP cut (`fees - protocol`). `None` under the same partial-price
+    /// coverage rules as `volume_24h_usd`.
+    pub(crate) fees_24h_usd: Option<Decimal>,
+    pub(crate) protocol_fees_24h_usd: Option<Decimal>,
+    pub(crate) lp_fees_24h_usd: Option<Decimal>,
+    /// Effective realized fee rate in basis points (`fees / volume * 10000`)
+    /// over the 24h window. `None` when volume is absent or zero.
+    pub(crate) effective_fee_bps: Option<Decimal>,
     pub(crate) first_seen_at: DateTime<Utc>,
     pub(crate) last_seen_at: DateTime<Utc>,
+}
+
+/// Effective realized fee rate in basis points over the window:
+/// `fees / volume * 10_000`. `None` when volume is unknown or zero (no
+/// meaningful rate, and avoids a division by zero).
+fn effective_fee_bps(fees_usd: Option<Decimal>, volume_usd: Option<Decimal>) -> Option<Decimal> {
+    match (fees_usd, volume_usd) {
+        (Some(fees), Some(volume)) if !volume.is_zero() => {
+            Some(fees / volume * Decimal::from(10_000))
+        }
+        _ => None,
+    }
 }
 
 impl PoolResponse {
@@ -65,6 +86,14 @@ impl PoolResponse {
             referral_fee_percent: pool.referral_fee_percent,
             tvl_usd: analytics.tvl_usd,
             volume_24h_usd: analytics.volume_24h_usd,
+            fees_24h_usd: analytics.fees_24h_usd,
+            protocol_fees_24h_usd: analytics.protocol_fees_24h_usd,
+            // LP share = total realized fee minus the protocol's cut.
+            lp_fees_24h_usd: match (analytics.fees_24h_usd, analytics.protocol_fees_24h_usd) {
+                (Some(fees), Some(protocol)) => Some(fees - protocol),
+                _ => None,
+            },
+            effective_fee_bps: effective_fee_bps(analytics.fees_24h_usd, analytics.volume_24h_usd),
             first_seen_at: pool.first_seen_at,
             last_seen_at: pool.last_seen_at,
         }
@@ -80,5 +109,32 @@ impl From<EnrichedToken> for EmbeddedTokenResponse {
 impl From<EnrichedPool> for PoolResponse {
     fn from(e: EnrichedPool) -> Self {
         PoolResponse::new(e.pool, e.token_a.into(), e.token_b.into(), e.analytics)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effective_fee_bps;
+    use rust_decimal::Decimal;
+
+    #[test]
+    fn effective_fee_bps_is_fees_over_volume_in_bps() {
+        // 25 USD fees on 10_000 USD volume = 0.25% = 25 bps.
+        let bps = effective_fee_bps(Some(Decimal::new(25, 0)), Some(Decimal::new(10_000, 0)));
+        assert_eq!(bps, Some(Decimal::new(25, 0)));
+    }
+
+    #[test]
+    fn effective_fee_bps_none_when_volume_zero() {
+        assert_eq!(
+            effective_fee_bps(Some(Decimal::new(25, 0)), Some(Decimal::ZERO)),
+            None
+        );
+    }
+
+    #[test]
+    fn effective_fee_bps_none_when_an_input_missing() {
+        assert_eq!(effective_fee_bps(None, Some(Decimal::new(10, 0))), None);
+        assert_eq!(effective_fee_bps(Some(Decimal::new(10, 0)), None), None);
     }
 }

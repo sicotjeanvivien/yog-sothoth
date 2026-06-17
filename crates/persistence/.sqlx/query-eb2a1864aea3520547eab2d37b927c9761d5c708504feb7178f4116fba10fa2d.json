@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH\n            requested AS (\n                SELECT pool_address\n                FROM UNNEST($1::TEXT[]) AS pool_address\n            ),\n            tvl_per_pool AS (\n                SELECT\n                    pcs.pool_address,\n                    (\n                        (pcs.reserve_a::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd\n                        +\n                        (pcs.reserve_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd\n                    ) AS tvl_usd\n                FROM pool_current_state pcs\n                JOIN pools p ON p.pool_address = pcs.pool_address\n                JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT\n                JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT\n                LEFT JOIN LATERAL (\n                    SELECT price_usd\n                    FROM token_prices\n                    WHERE mint = p.token_a_mint::TEXT\n                    ORDER BY fetched_at DESC\n                    LIMIT 1\n                ) tpa ON true\n                LEFT JOIN LATERAL (\n                    SELECT price_usd\n                    FROM token_prices\n                    WHERE mint = p.token_b_mint::TEXT\n                    ORDER BY fetched_at DESC\n                    LIMIT 1\n                ) tpb ON true\n                WHERE pcs.pool_address = ANY($1::TEXT[])\n            ),\n            -- Volume reads the hourly continuous aggregate (no mints on it —\n            -- they're a pool property) and joins `pools` for the mints. USD\n            -- valuation stays here, per bucket, at the price as-of that bucket\n            -- — preserving trade-time pricing. The CA stores raw token amounts\n            -- split by direction (volume_in_a from a_to_b, volume_in_b from\n            -- b_to_a). Pools whose mints aren't resolved yet drop out (INNER\n            -- JOIN on token_metadata) and yield a NULL volume.\n            volume_per_pool AS (\n                SELECT\n                    h.pool_address,\n                    SUM(\n                        (COALESCE(h.volume_in_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd\n                        +\n                        (COALESCE(h.volume_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd\n                    ) AS volume_24h_usd,\n                    -- Realized trading fee and the protocol's share, valued the\n                    -- same way (raw token amounts split by the token that bore\n                    -- the fee, priced as-of each bucket). The CA columns come\n                    -- from migration 017.\n                    SUM(\n                        (COALESCE(h.fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd\n                        +\n                        (COALESCE(h.fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd\n                    ) AS fees_24h_usd,\n                    SUM(\n                        (COALESCE(h.protocol_fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd\n                        +\n                        (COALESCE(h.protocol_fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd\n                    ) AS protocol_fees_24h_usd\n                FROM meteora_damm_v2_swap_events_hourly h\n                JOIN pools p ON p.pool_address = h.pool_address\n                JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT\n                JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT\n                LEFT JOIN LATERAL (\n                    SELECT price_usd\n                    FROM token_prices\n                    WHERE mint = p.token_a_mint::TEXT\n                      AND fetched_at <= h.bucket\n                    ORDER BY fetched_at DESC\n                    LIMIT 1\n                ) tpa ON true\n                LEFT JOIN LATERAL (\n                    SELECT price_usd\n                    FROM token_prices\n                    WHERE mint = p.token_b_mint::TEXT\n                      AND fetched_at <= h.bucket\n                    ORDER BY fetched_at DESC\n                    LIMIT 1\n                ) tpb ON true\n                WHERE h.pool_address = ANY($1::TEXT[])\n                  AND h.bucket > NOW() - INTERVAL '24 hours'\n                GROUP BY h.pool_address\n            )\n            SELECT\n                r.pool_address AS \"pool_address!\",\n                t.tvl_usd      AS \"tvl_usd?\",\n                v.volume_24h_usd AS \"volume_24h_usd?\",\n                v.fees_24h_usd AS \"fees_24h_usd?\",\n                v.protocol_fees_24h_usd AS \"protocol_fees_24h_usd?\"\n            FROM requested r\n            LEFT JOIN tvl_per_pool t    ON t.pool_address = r.pool_address\n            LEFT JOIN volume_per_pool v ON v.pool_address = r.pool_address\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "tvl_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "protocol_fees_24h_usd?",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "eb2a1864aea3520547eab2d37b927c9761d5c708504feb7178f4116fba10fa2d"
+}
