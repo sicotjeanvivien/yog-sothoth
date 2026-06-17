@@ -189,7 +189,7 @@
 > restent sur les macros sqlx, intacts.
 
 - [x] **VIEW `meteora_damm_v2_pool_hourly_activity` (migration 019, PR #17)** : encapsule la valorisation USD par `(pool, heure)` des 4 CA. `history` passe de ~80 lignes de SQL inline à un `SELECT … FROM <view> WHERE pool/window` trivial ; `batch_compute` réutilise la même VIEW (valorisation 24h dé-dupliquée). Équivalence vérifiée (même `sum(feesUsd)`), compile-time check conservé.
-- [ ] **Requête paginée dynamique `pool/query.rs`** — *autre* cas : le SQL y est assemblé en string via `QueryBuilder` parce que `ORDER BY`/`WHERE`/search viennent de l'input user (dynamique → ni macro, ni VIEW possible). Seul endroit où un query-builder (SeaQuery sur cette requête uniquement) se discuterait, si la maintenabilité y devient gênante. À évaluer séparément, non prioritaire.
+- [x] **Requêtes dynamiques → on garde le `QueryBuilder` sqlx natif (décidé 17 juin 2026)**. Le SQL dynamique (`ORDER BY`/`WHERE`/search selon input user, ex. `pool/query.rs`, et les futurs filtres /pools) ne peut ni macro ni VIEW. SeaQuery évalué et **écarté même pour la couche dynamique** : pas justifié d'ajouter toute une dépendance pour 2-3 requêtes quand un `QueryBuilder` natif fait le job, contenu et testé. Acté dans CLAUDE.md → « Choosing how to write a query ».
 - repos statiques (events, token_metadata, token_prices, network_status, watched_pool, …) : **on ne touche pas** — aucune douleur, les macros sqlx font le travail avec le check compile-time.
 
 ---
