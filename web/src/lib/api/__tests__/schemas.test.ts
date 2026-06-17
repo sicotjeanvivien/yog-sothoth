@@ -46,6 +46,10 @@ function validPool() {
     "feeBps": "25",
     "tvlUsd": "1332007.7148736200400326721044",
     "volume24hUsd": "47964.973514780605664520660399",
+    "fees24hUsd": "119.912433786951514161301650",
+    "protocolFees24hUsd": "23.982486757390302832260330",
+    "lpFees24hUsd": "95.929947029561211329041320",
+    "effectiveFeeBps": "25",
     "firstSeenAt": "2026-05-21T10:01:35.084596Z",
     "lastSeenAt": "2026-05-25T12:14:01.715170Z"
   };
@@ -61,6 +65,18 @@ describe("PoolSchema", () => {
   it("accepts a null feeBps (pool seen before its InitializePool)", () => {
     const parsed = PoolSchema.parse({ ...validPool(), feeBps: null });
     expect(parsed.feeBps).toBeNull();
+  });
+
+  it("accepts null fee analytics (no priced swap in the window)", () => {
+    const parsed = PoolSchema.parse({
+      ...validPool(),
+      fees24hUsd: null,
+      protocolFees24hUsd: null,
+      lpFees24hUsd: null,
+      effectiveFeeBps: null,
+    });
+    expect(parsed.fees24hUsd).toBeNull();
+    expect(parsed.effectiveFeeBps).toBeNull();
   });
 
   it("accepts RFC3339 with a numeric timezone offset", () => {

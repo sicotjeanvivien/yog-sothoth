@@ -22,6 +22,10 @@ import { TokenSchema } from "./token";
  *     fee_bps: Option<Decimal>,
  *     tvl_usd: Option<Decimal>,
  *     volume_24h_usd: Option<Decimal>,
+ *     fees_24h_usd: Option<Decimal>,
+ *     protocol_fees_24h_usd: Option<Decimal>,
+ *     lp_fees_24h_usd: Option<Decimal>,
+ *     effective_fee_bps: Option<Decimal>,
  *     first_seen_at: DateTime<Utc>,
  *     last_seen_at: DateTime<Utc>,
  * }
@@ -29,6 +33,12 @@ import { TokenSchema } from "./token";
  *
  * `feeBps` is the pool's base trading fee in basis points (its genesis
  * fee tier), null until the `InitializePool` event has been indexed.
+ *
+ * The `*Fees24hUsd` block is the *realized* fee over the last 24h, valued
+ * at trade-time prices like `volume24hUsd` (same null rules): total
+ * (`fees24hUsd`), Meteora's cut (`protocolFees24hUsd`), the LP cut
+ * (`lpFees24hUsd` = total − protocol). `effectiveFeeBps` is the realized
+ * rate `fees / volume * 10000` — null when volume is absent or zero.
  *
  * Naming is camelCase end-to-end (Rust `rename_all = "camelCase"`),
  * so the schema mirrors that. USD-denominated values arrive as
@@ -52,6 +62,10 @@ export const PoolSchema = z.object({
   feeBps: BigDecimal.nullable(),
   tvlUsd: BigDecimal.nullable(),
   volume24hUsd: BigDecimal.nullable(),
+  fees24hUsd: BigDecimal.nullable(),
+  protocolFees24hUsd: BigDecimal.nullable(),
+  lpFees24hUsd: BigDecimal.nullable(),
+  effectiveFeeBps: BigDecimal.nullable(),
   firstSeenAt: Rfc3339,
   lastSeenAt: Rfc3339,
 });

@@ -72,6 +72,8 @@
         "poolAddress": "Adresse de la pool",
         "protocol": "Protocole",
         "feeTier": "Frais",
+        "effectiveFee": "Frais effectifs (24h)",
+        "protocolCut": "Part protocole (24h)",
         "network": "Réseau",
         "tokenA": "Token A",
         "tokenB": "Token B",
@@ -83,6 +85,7 @@
       "kpis": {
         "tvl": "TVL",
         "volume24h": "Volume 24h",
+        "fees24h": "Frais 24h",
         "composition": "Composition de la pool"
       },
       "swaps": {
