@@ -30,6 +30,7 @@ import { Link } from "@/i18n/navigation";
 import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/shared/icon";
 
 import type { PoolResponse } from "@/lib/api/schema/pool";
+import { formatMeteoraUrl } from "@/lib/format/format-meteora-url";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
@@ -42,7 +43,7 @@ const CTA_CLASS =
 export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
   const t = await getTranslations("Dashboard.PoolDetail.header");
 
-  const meteoraUrl = `https://app.meteora.ag/pools/${pool.poolAddress}`;
+  const meteoraUrl = formatMeteoraUrl(pool.protocol, pool.poolAddress);
   const solscanUrl = `https://solscan.io/account/${pool.poolAddress}`;
 
   return (
@@ -84,15 +85,17 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
 
         {/* Right — external CTAs */}
         <div className="flex flex-wrap gap-2">
-          <a
-            href={meteoraUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={CTA_CLASS}
-          >
-            {t("viewOnMeteora")}
-            <ExternalLinkIcon size={12} />
-          </a>
+          {meteoraUrl && (
+            <a
+              href={meteoraUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={CTA_CLASS}
+            >
+              {t("viewOnMeteora")}
+              <ExternalLinkIcon size={12} />
+            </a>
+          )}
           <a
             href={solscanUrl}
             target="_blank"
