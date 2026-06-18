@@ -5,13 +5,19 @@
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
-use yog_core::{PageDirection, PagePosition, PoolSort, domain::PoolCursor};
+use yog_core::{
+    PageDirection, PagePosition, PoolSort,
+    domain::{PoolCursor, PoolRankMetric},
+};
 
 use crate::http::error::ApiError;
 
 pub(crate) const DEFAULT_LIMIT: i64 = 50;
 pub(crate) const MAX_LIMIT: i64 = 200;
 pub(crate) const MAX_SEARCH_LEN: usize = 100;
+
+pub(crate) const DEFAULT_TOP_LIMIT: i64 = 10;
+pub(crate) const MAX_TOP_LIMIT: i64 = 20;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct PageQuery {
@@ -107,6 +113,47 @@ impl From<PoolSortParam> for PoolSort {
             PoolSortParam::LastSeenAsc => PoolSort::LastSeenAsc,
         }
     }
+}
+
+/// Query params for `GET /api/pools/top`: the ranking metric and how many
+/// rows. Non-paginated — a small capped ranking, not a navigable list.
+#[derive(Debug, Deserialize)]
+pub(crate) struct TopPoolsQuery {
+    #[serde(default)]
+    pub(crate) metric: PoolRankMetricParam,
+    #[serde(default = "default_top_limit")]
+    pub(crate) limit: i64,
+}
+
+pub(crate) fn default_top_limit() -> i64 {
+    DEFAULT_TOP_LIMIT
+}
+
+/// Wire form of the ranking metric. An unknown value fails serde
+/// deserialization → axum returns 400 before the handler runs.
+#[derive(Debug, Default, Deserialize, Clone, Copy)]
+pub(crate) enum PoolRankMetricParam {
+    #[default]
+    #[serde(rename = "volume_24h")]
+    Volume24h,
+}
+
+impl From<PoolRankMetricParam> for PoolRankMetric {
+    fn from(value: PoolRankMetricParam) -> Self {
+        match value {
+            PoolRankMetricParam::Volume24h => PoolRankMetric::Volume24h,
+        }
+    }
+}
+
+/// Validate the top-N `limit` against its (smaller) accepted range.
+pub(crate) fn validate_top_limit(limit: i64) -> Result<(), ApiError> {
+    if !(1..=MAX_TOP_LIMIT).contains(&limit) {
+        return Err(ApiError::BadRequest(format!(
+            "`limit` must be between 1 and {MAX_TOP_LIMIT}, got {limit}"
+        )));
+    }
+    Ok(())
 }
 
 /// Validate the `limit` query param against the accepted range.

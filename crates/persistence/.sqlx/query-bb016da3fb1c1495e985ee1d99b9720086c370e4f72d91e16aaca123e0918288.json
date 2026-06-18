@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT pool_address AS \"pool_address!\"\n                FROM meteora_damm_v2_pool_hourly_activity\n                WHERE bucket > NOW() - INTERVAL '24 hours'\n                GROUP BY pool_address\n                HAVING SUM(volume_usd) IS NOT NULL\n                ORDER BY SUM(volume_usd) DESC\n                LIMIT $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "bb016da3fb1c1495e985ee1d99b9720086c370e4f72d91e16aaca123e0918288"
+}

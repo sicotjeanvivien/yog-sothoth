@@ -34,6 +34,13 @@
         "fees24h": "Frais 24h",
         "pools": "Pools",
         "discovered": "{count, plural, =0 {Aucune nouvelle pool (24h)} other {+# découvertes (24h)}}"
+      },
+      "topPools": {
+        "title": "Top pools par volume 24h",
+        "pair": "Paire",
+        "volume24h": "Volume 24h",
+        "tvl": "TVL",
+        "empty": "Aucune pool n'a enregistré de volume sur les dernières 24h."
       }
     },
     "Pools": {

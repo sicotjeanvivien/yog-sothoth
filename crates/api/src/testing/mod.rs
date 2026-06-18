@@ -127,6 +127,7 @@ fn take<T>(slot: &Mutex<Option<RepositoryResult<T>>>) -> RepositoryResult<T> {
 pub(crate) struct PoolRepoOnce {
     paginated: Mutex<Option<RepositoryResult<Page<Pool>>>>,
     by_address: Mutex<Option<RepositoryResult<Option<Pool>>>>,
+    by_addresses: Mutex<Option<RepositoryResult<Vec<Pool>>>>,
 }
 
 impl PoolRepoOnce {
@@ -134,18 +135,30 @@ impl PoolRepoOnce {
         Self {
             paginated: Mutex::new(Some(Ok(page))),
             by_address: Mutex::new(Some(Ok(None))),
+            by_addresses: Mutex::new(Some(Ok(Vec::new()))),
         }
     }
     pub(crate) fn with_pool(pool: Option<Pool>) -> Self {
         Self {
             paginated: Mutex::new(Some(Ok(make_page(vec![], true, true)))),
             by_address: Mutex::new(Some(Ok(pool))),
+            by_addresses: Mutex::new(Some(Ok(Vec::new()))),
         }
     }
     pub(crate) fn with_paginate_err() -> Self {
         Self {
             paginated: Mutex::new(Some(Err(RepositoryError::Integrity("boom".into())))),
             by_address: Mutex::new(Some(Ok(None))),
+            by_addresses: Mutex::new(Some(Ok(Vec::new()))),
+        }
+    }
+    /// Seed the batch `find_by_addresses` lookup — given intentionally
+    /// unordered, so a top-N test can assert the service re-imposes the rank.
+    pub(crate) fn with_pools(pools: Vec<Pool>) -> Self {
+        Self {
+            paginated: Mutex::new(Some(Ok(make_page(vec![], true, true)))),
+            by_address: Mutex::new(Some(Ok(None))),
+            by_addresses: Mutex::new(Some(Ok(pools))),
         }
     }
 }
@@ -170,6 +183,9 @@ impl PoolRepository for PoolRepoOnce {
     }
     async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
         unreachable!("counts not used by PoolService")
+    }
+    async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
+        take(&self.by_addresses)
     }
     async fn find_paginated(
         &self,
@@ -254,6 +270,9 @@ impl PoolRepository for PoolCountsRepo {
     async fn counts(&self) -> RepositoryResult<PoolCounts> {
         take(&self.counts)
     }
+    async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
+        unreachable!("find_by_addresses not used by StatsService")
+    }
     async fn find_paginated(
         &self,
         _cursor: Option<PoolCursor>,
@@ -271,24 +290,37 @@ impl PoolRepository for PoolCountsRepo {
 
 pub(crate) struct MockAnalyticsRepo {
     map: HashMap<Pubkey, PoolAnalytics>,
+    /// Ranked addresses returned by `top_pool_addresses`, in order.
+    top_ranked: Vec<Pubkey>,
     fail: bool,
 }
 
 impl MockAnalyticsRepo {
     pub(crate) fn with(map: HashMap<Pubkey, PoolAnalytics>) -> Self {
-        Self { map, fail: false }
+        Self {
+            map,
+            top_ranked: Vec::new(),
+            fail: false,
+        }
     }
     pub(crate) fn empty() -> Self {
         Self {
             map: HashMap::new(),
+            top_ranked: Vec::new(),
             fail: false,
         }
     }
     pub(crate) fn failing() -> Self {
         Self {
             map: HashMap::new(),
+            top_ranked: Vec::new(),
             fail: true,
         }
+    }
+    /// Set the ranking `top_pool_addresses` returns (already ordered).
+    pub(crate) fn with_top(mut self, ranked: Vec<Pubkey>) -> Self {
+        self.top_ranked = ranked;
+        self
     }
 }
 
@@ -319,6 +351,22 @@ impl PoolAnalyticsRepository for MockAnalyticsRepo {
             return Err(RepositoryError::Integrity("analytics boom".into()));
         }
         Ok(Vec::new())
+    }
+
+    async fn top_pool_addresses(
+        &self,
+        _metric: yog_core::domain::PoolRankMetric,
+        limit: i64,
+    ) -> RepositoryResult<Vec<Pubkey>> {
+        if self.fail {
+            return Err(RepositoryError::Integrity("analytics boom".into()));
+        }
+        Ok(self
+            .top_ranked
+            .iter()
+            .take(limit.max(0) as usize)
+            .copied()
+            .collect())
     }
 }
 

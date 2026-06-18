@@ -83,6 +83,11 @@ pub trait PoolRepository: Send + Sync {
     /// how many were first seen in the last 24h. See [`PoolCounts`].
     async fn counts(&self) -> RepositoryResult<PoolCounts>;
 
+    /// Fetch many pools by address in one query. The result is unordered and
+    /// silently omits unknown addresses — the caller (e.g. a top-N ranking)
+    /// owns the ordering and reconciles against the addresses it requested.
+    async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>>;
+
     /// Fetch a page of pools.
     ///
     /// - `cursor` + `direction` cooperate: traverse forward (`Next`)

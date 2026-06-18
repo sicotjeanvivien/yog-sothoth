@@ -50,6 +50,8 @@ pub(crate) fn build_router(state: AppState) -> Router {
     let app = Router::new()
         // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
+        // ── Ranked pools (non-paginated, capped) ─────────────────────────
+        .route("/api/pools/top", get(handlers::pools::list_top_pools))
         // ── Single-pool resources ───────────────────────────────────────
         .route("/api/pools/{address}", get(handlers::pools::get_pool))
         .route(

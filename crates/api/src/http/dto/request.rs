@@ -21,6 +21,7 @@ pub(crate) mod get_token;
 pub(crate) mod list_pool_liquidity;
 pub(crate) mod list_pool_swaps;
 pub(crate) mod list_pools;
+pub(crate) mod list_top_pools;
 
 pub(crate) use get_pool::GetPoolRequest;
 pub(crate) use get_pool_history::GetPoolHistoryRequest;
@@ -29,6 +30,7 @@ pub(crate) use get_token::GetTokenRequest;
 pub(crate) use list_pool_liquidity::ListPoolLiquidityRequest;
 pub(crate) use list_pool_swaps::ListPoolSwapsRequest;
 pub(crate) use list_pools::ListPoolsRequest;
+pub(crate) use list_top_pools::ListTopPoolsRequest;
 
 #[cfg(test)]
 #[path = "request/tests/common.rs"]
