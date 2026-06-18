@@ -24,6 +24,18 @@ pub struct PoolCursor {
     pub pool_address: Pubkey,
 }
 
+/// Pool inventory counts over the whole observed universe.
+///
+/// A protocol-centric snapshot of *what was seen*: `observed` is every pool
+/// the indexer has ever recorded; `discovered_24h` is how many of those were
+/// first seen in the last 24h (the discovery pulse). Powers the pools KPI of
+/// `GET /api/stats`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoolCounts {
+    pub observed: i64,
+    pub discovered_24h: i64,
+}
+
 /// Persistence contract for Pool.
 ///
 /// Implemented by the infrastructure layer (`yog-persistence`).
@@ -66,6 +78,10 @@ pub trait PoolRepository: Send + Sync {
     /// Fetch a single pool by its on-chain address.
     /// Returns `Ok(None)` if the pool has never been observed.
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>>;
+
+    /// Count pools across the whole observed universe: the total ever seen and
+    /// how many were first seen in the last 24h. See [`PoolCounts`].
+    async fn counts(&self) -> RepositoryResult<PoolCounts>;
 
     /// Fetch a page of pools.
     ///

@@ -72,6 +72,7 @@ pub(crate) fn build_router(state: AppState) -> Router {
             "/api/network/status",
             get(handlers::network_status::get_network_status),
         )
+        .route("/api/stats", get(handlers::stats::get_stats))
         .route("/api/tokens/{mint}", get(handlers::token::get_token))
         // ── Tracing and request id (applied only here) ───────────────────
         // Inner-to-outer:

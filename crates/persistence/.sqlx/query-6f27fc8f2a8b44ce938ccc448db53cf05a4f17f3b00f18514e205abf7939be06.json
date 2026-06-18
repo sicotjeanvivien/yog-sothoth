@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH tvl AS (\n                SELECT\n                    SUM(\n                        (pcs.reserve_a::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd\n                      + (pcs.reserve_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd\n                    ) AS total_tvl_usd,\n                    COUNT(*) FILTER (\n                        WHERE tpa.price_usd IS NOT NULL AND tpb.price_usd IS NOT NULL\n                    ) AS pools_priced\n                FROM pool_current_state pcs\n                JOIN pools p ON p.pool_address = pcs.pool_address\n                JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT\n                JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT\n                LEFT JOIN LATERAL (\n                    SELECT price_usd FROM token_prices\n                    WHERE mint = p.token_a_mint::TEXT\n                    ORDER BY fetched_at DESC LIMIT 1\n                ) tpa ON true\n                LEFT JOIN LATERAL (\n                    SELECT price_usd FROM token_prices\n                    WHERE mint = p.token_b_mint::TEXT\n                    ORDER BY fetched_at DESC LIMIT 1\n                ) tpb ON true\n            ),\n            vol AS (\n                SELECT\n                    SUM(volume_usd) AS volume_24h_usd,\n                    SUM(fees_usd)   AS fees_24h_usd\n                FROM meteora_damm_v2_pool_hourly_activity\n                WHERE bucket > NOW() - INTERVAL '24 hours'\n            )\n            SELECT\n                tvl.total_tvl_usd  AS \"total_tvl_usd?\",\n                tvl.pools_priced   AS \"pools_priced!\",\n                vol.volume_24h_usd AS \"volume_24h_usd?\",\n                vol.fees_24h_usd   AS \"fees_24h_usd?\"\n            FROM tvl, vol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_tvl_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "pools_priced!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_24h_usd?",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6f27fc8f2a8b44ce938ccc448db53cf05a4f17f3b00f18514e205abf7939be06"
+}
