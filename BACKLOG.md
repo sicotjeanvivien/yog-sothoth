@@ -281,8 +281,8 @@
 > `rows_tests.rs`). Garde les gros fichiers lisibles et isole les mocks de test
 > du code de prod. Reste des `#[cfg(test)] mod tests { … }` inline à migrer.
 
-- [ ] `crates/indexer/src/application/services/meteora/damm_v2/event_persistor.rs` — tests + mocks (`MockPoolRepo`, `MockPcsRepo`, …) inline à extraire dans un `event_persistor_tests.rs`
-- [ ] Balayer le workspace pour les autres `#[cfg(test)] mod tests { … }` inline et les séparer au même pattern
+- [x] `crates/indexer/src/application/services/meteora/damm_v2/event_persistor.rs` — tests + mocks (`MockPoolRepo`, `MockPcsRepo`, …) extraits dans `event_persistor_tests.rs`
+- [x] Balayage workspace : **17 fichiers** `#[cfg(test)] mod tests { … }` inline séparés au pattern `#[path = "xxx_tests.rs"]` (frère, sauf `response/pool.rs` → `tests/pool_tests.rs` car le dossier a déjà un sous-dossier `tests/`). 413 tests verts, iso-comportement. **Seul `crates/wasm/src/lib.rs` laissé inline** (scaffold différé, test placeholder `it_works`, exclu du clippy) — à reprendre si/quand le crate wasm est activé
 
 #### ✅ Stratégie de rétention & historisation (décidé : A + compression)
 > **Décision (15 juin 2026) : option A — analytics only.** Au-delà de 30j, les lignes brutes
