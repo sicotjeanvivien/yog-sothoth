@@ -66,6 +66,7 @@
 ##### PagePool
 - [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage
 - [ ] Ajout colonne fee + filtre
+- [ ] Tableau liquidity — colonne « Value (USD) » : valeur USD de l'événement (amountA·prixA + amountB·prixB, valorisation trade-time comme les swaps). Chantier backend d'abord (enrichir `LiquidityEventResponse`/DTO), puis colonne front. NB : `liquidityDelta` (u128 brut, unités L sans décimales) écarté car illisible.
 
 #### ✅ yog-context — métriques
 - [x] Métriques Prometheus sur worker tick metadata (10s)
