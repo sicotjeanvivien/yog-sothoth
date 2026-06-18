@@ -11,6 +11,7 @@ import { PoolSchema } from "../schema/pool";
 import { PoolsPageSchema } from "../schema/page";
 import { PoolHistorySchema } from "../schema/pool-history";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
+import { StatsSchema } from "../schema/stats";
 import { validPoolsPage, validPoolHistoryBucket } from "./fixtures";
 
 
@@ -290,5 +291,57 @@ describe("ApiErrorBodySchema", () => {
     expect(() =>
       ApiErrorBodySchema.parse({ ...validProblem(), status: "400" }),
     ).toThrow();
+  });
+});
+
+describe("StatsSchema", () => {
+  const validStats = () => ({
+    totalTvlUsd: "10427935.81",
+    poolsPriced: 348,
+    volume24hUsd: "508193.05",
+    fees24hUsd: "391.03",
+    poolsObserved: 359,
+    poolsDiscovered24h: 52,
+  });
+
+  it("accepts a complete valid payload", () => {
+    const parsed = StatsSchema.parse(validStats());
+    expect(parsed.totalTvlUsd).toBe("10427935.81");
+    expect(parsed.poolsObserved).toBe(359);
+    expect(parsed.poolsDiscovered24h).toBe(52);
+  });
+
+  it("accepts null USD aggregates (empty universe / no activity)", () => {
+    const parsed = StatsSchema.parse({
+      ...validStats(),
+      totalTvlUsd: null,
+      volume24hUsd: null,
+      fees24hUsd: null,
+      poolsPriced: 0,
+    });
+    expect(parsed.totalTvlUsd).toBeNull();
+    expect(parsed.volume24hUsd).toBeNull();
+    expect(parsed.poolsPriced).toBe(0);
+  });
+
+  it("rejects a USD aggregate sent as a JS number (precision contract)", () => {
+    expect(() =>
+      StatsSchema.parse({ ...validStats(), totalTvlUsd: 10427935.81 }),
+    ).toThrow();
+  });
+
+  it("rejects a negative or fractional count", () => {
+    expect(() =>
+      StatsSchema.parse({ ...validStats(), poolsObserved: -1 }),
+    ).toThrow();
+    expect(() =>
+      StatsSchema.parse({ ...validStats(), poolsDiscovered24h: 1.5 }),
+    ).toThrow();
+  });
+
+  it("rejects a missing field", () => {
+    const { poolsObserved, ...rest } = validStats();
+    void poolsObserved;
+    expect(() => StatsSchema.parse(rest)).toThrow();
   });
 });

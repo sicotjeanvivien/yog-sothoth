@@ -21,6 +21,21 @@
       "openMenu": "Ouvrir le menu de navigation",
       "closeMenu": "Fermer le menu de navigation"
     },
+    "Overview": {
+      "page": {
+        "eyebrow": "Observation temps réel",
+        "title": "Vue d'ensemble",
+        "description": "Aperçu global de toutes les pools Meteora observées par l'indexer : valeur totale verrouillée, activité 24h et découverte."
+      },
+      "kpis": {
+        "tvl": "TVL totale",
+        "coverage": "{priced} / {observed} valorisées",
+        "volume24h": "Volume 24h",
+        "fees24h": "Frais 24h",
+        "pools": "Pools",
+        "discovered": "{count, plural, =0 {Aucune nouvelle pool (24h)} other {+# découvertes (24h)}}"
+      }
+    },
     "Pools": {
       "page": {
         "eyebrow": "Observation temps réel",

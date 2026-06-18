@@ -50,7 +50,7 @@
 	3. **Fees 24h** (`fees24hUsd`, SUM fees réalisés via VIEW 019) — le différenciateur vs un simple viewer
 	4. **Pools** : `poolsObserved` (COUNT cumulatif) + `poolsDiscovered24h` (COUNT `first_seen_at > NOW()-24h`)
 - [x] **VIEW `pool_current_tvl` (migration 020, PR #22)** : extrait la valorisation TVL par pool (copiée-collée entre `batch_compute` et `global_analytics`) en VIEW versionnée, non préfixée (tables génériques). Dé-duplique une duplication préexistante ; même pattern que la VIEW 019.
-- [ ] Implémentation front (remplace le stub `overview/page.tsx`) : bande de 4 cartes
+- [x] **Implémentation front** : bande de 4 `StatCard` (`overview/page.tsx` remplace le stub) consommant `GET /api/stats` via `fetchStats`. TVL + couverture `N/M priced`, Volume 24h, Fees 24h, Pools observées + `+K découvertes (24h)` (pluriel ICU). Couverture/découverte composées côté client. Erreur fetch → `PageError`. i18n en/fr. Pas de hero ingestion (déjà dans la sidebar). Tests : schéma `StatsSchema` + `formatCount` (vitest)
 - [ ] **Hors périmètre phase 1** (pour mémoire) : top-N pools (→ phase 1.5), flux récent global cross-pool (pas d'endpoint), watchlist (auth v0.2), split protocol/LP fee (redondant PoolDetail), taux de fee effectif global (trompeur — n'a de sens que par pool)
 
 **Phase 1.5 — top-N pools (après la bande KPI)**
