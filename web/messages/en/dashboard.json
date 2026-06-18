@@ -21,6 +21,21 @@
       "openMenu": "Open navigation menu",
       "closeMenu": "Close navigation menu"
     },
+    "Overview": {
+      "page": {
+        "eyebrow": "Real-time observation",
+        "title": "Overview",
+        "description": "Protocol-wide snapshot of every Meteora pool the indexer has observed: total value locked, 24h activity, and discovery."
+      },
+      "kpis": {
+        "tvl": "Total TVL",
+        "coverage": "{priced} / {observed} priced",
+        "volume24h": "Volume 24h",
+        "fees24h": "Fees 24h",
+        "pools": "Pools",
+        "discovered": "{count, plural, =0 {No new pools (24h)} other {+# discovered (24h)}}"
+      }
+    },
     "Pools": {
       "page": {
         "eyebrow": "Real-time observation",
