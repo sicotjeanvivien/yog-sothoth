@@ -17,7 +17,7 @@ use yog_core::{
     Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
     domain::{
         Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCurrentState, PoolCurrentStateRepository,
-        PoolCursor, PoolHistoryBucket, PoolRepository, TokenMetadataRepository,
+        PoolCursor, PoolHistoryBucket, PoolRankMetric, PoolRepository, TokenMetadataRepository,
         TokenPriceRepository,
     },
 };
@@ -127,6 +127,52 @@ impl PoolService {
             is_first: page.is_first,
             is_last: page.is_last,
         })
+    }
+
+    /// Top-N pools ranked by `metric`, each enriched with token context and
+    /// analytics — powers `GET /api/pools/top`.
+    ///
+    /// Choreography:
+    ///   1. `top_pool_addresses` → the ranked addresses (read-time ranking,
+    ///      highest first, pools with no metric value excluded).
+    ///   2. `find_by_addresses` + `batch_compute` → the pool rows and their
+    ///      analytics in one query each.
+    ///   3. emit in **rank order**, re-imposing it over the unordered batch
+    ///      reads. A ranked address with no pool row is skipped defensively.
+    pub(crate) async fn top_pools(
+        &self,
+        metric: PoolRankMetric,
+        limit: i64,
+    ) -> RepositoryResult<Vec<EnrichedPool>> {
+        let ranked = self
+            .pool_analytics_repository
+            .top_pool_addresses(metric, limit)
+            .await?;
+        if ranked.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let pools = self.pool_repository.find_by_addresses(&ranked).await?;
+        let mut analytics = self
+            .pool_analytics_repository
+            .batch_compute(&ranked)
+            .await?;
+
+        let mut by_address: std::collections::HashMap<solana_pubkey::Pubkey, Pool> =
+            pools.into_iter().map(|p| (p.pool_address, p)).collect();
+
+        let mut items = Vec::with_capacity(ranked.len());
+        for address in &ranked {
+            let Some(pool) = by_address.remove(address) else {
+                continue;
+            };
+            let pool_analytics = analytics
+                .remove(address)
+                .unwrap_or_else(PoolAnalytics::empty);
+            items.push(self.enrich(pool, pool_analytics).await?);
+        }
+
+        Ok(items)
     }
 
     /// Fetch a single pool by address and enrich it. Returns `None` if

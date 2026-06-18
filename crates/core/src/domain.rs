@@ -34,7 +34,9 @@ pub use network_status::{NetworkStatus, NetworkStatusRepository};
 pub use pool::{
     Pool, PoolAccountProperties, PoolAccountResolver, PoolCounts, PoolCursor, PoolRepository,
 };
-pub use pool_analytics::{PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket};
+pub use pool_analytics::{
+    PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket, PoolRankMetric,
+};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
 };

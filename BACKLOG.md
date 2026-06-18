@@ -54,7 +54,8 @@
 - [ ] **Hors périmètre phase 1** (pour mémoire) : top-N pools (→ phase 1.5), flux récent global cross-pool (pas d'endpoint), watchlist (auth v0.2), split protocol/LP fee (redondant PoolDetail), taux de fee effectif global (trompeur — n'a de sens que par pool)
 
 **Phase 1.5 — top-N pools (après la bande KPI)**
-- [ ] Top-N pools par volume 24h et/ou TVL — read-time non-paginé (compute → sort → LIMIT N, mesuré 5–36 ms) ; cadrer la métrique et le nombre de lignes
+- [x] **Top-N pools par volume 24h** — endpoint `GET /api/pools/top?metric=volume_24h&limit=10` (read-time non-paginé, classé desc, plafonné 20 ; `metric` = enum serde-validé extensible TVL ; renvoie un `Vec<PoolResponse>` enrichi ordonné). Domaine : `PoolRankMetric` + `PoolAnalyticsRepository::top_pool_addresses` + `PoolRepository::find_by_addresses` (batch) ; `PoolService::top_pools` réimpose le rang. Front : section `OverviewTopPools` sous la bande KPI (table rang · paire · Volume 24h · TVL, lignes → fiche pool ; `BlockError` autonome si l'appel échoue, n'abat pas les KPIs), i18n en/fr. TVL en colonne mais tri volume seul pour commencer
+- [ ] Extension future : tri par TVL (variante `metric=tvl` + colonne triable / toggle) — quand le besoin se présente
 
 **Phase 2 — crate `Yog-Analytic` (différé, déclenché empiriquement)**
 - [ ] Crate `yog-analytic` : calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker ; cf. contraintes ci-dessus)

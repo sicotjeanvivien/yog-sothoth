@@ -11,11 +11,11 @@ use crate::http::{
         PoolResponse, SwapEventResponse,
         request::{
             GetPoolHistoryRequest, GetPoolLatestStateRequest, GetPoolRequest,
-            ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest,
+            ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest, ListTopPoolsRequest,
         },
     },
     error::ApiError,
-    query::{HistoryQuery, PageQuery},
+    query::{HistoryQuery, PageQuery, TopPoolsQuery},
 };
 
 // ===========================================================================
@@ -40,6 +40,24 @@ pub(crate) async fn list_pools(
         is_first: page.is_first,
         is_last: page.is_last,
     }))
+}
+
+// ===========================================================================
+// GET /api/pools/top
+// ===========================================================================
+
+pub(crate) async fn list_top_pools(
+    State(state): State<AppState>,
+    Query(query): Query<TopPoolsQuery>,
+) -> Result<Json<Vec<PoolResponse>>, ApiError> {
+    let request = ListTopPoolsRequest::parse(query)?;
+    let pools = state
+        .pool_service
+        .top_pools(request.metric(), request.limit())
+        .await?;
+
+    let items: Vec<PoolResponse> = pools.into_iter().map(PoolResponse::from).collect();
+    Ok(Json(items))
 }
 
 // ===========================================================================

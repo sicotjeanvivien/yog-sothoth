@@ -10,7 +10,8 @@ use crate::testing::{
 };
 use std::sync::Arc;
 
-use yog_core::domain::PoolAnalytics;
+use std::collections::HashMap;
+use yog_core::domain::{PoolAnalytics, PoolRankMetric};
 use yog_core::{PageDirection, PoolSort};
 
 fn service(
@@ -352,4 +353,66 @@ async fn get_pool_attaches_analytics_correctly() {
         enriched.analytics.tvl_usd,
         Some(rust_decimal::Decimal::new(2000, 0))
     );
+}
+
+// ---------------------------------------------------------------------------
+// top_pools
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn top_pools_emits_in_rank_order() {
+    // The ranking puts a1 first, a2 second. The batch `find_by_addresses`
+    // returns them in the *opposite* order on purpose — the service must
+    // re-impose the rank, not echo the DB's arbitrary order.
+    let a1 = pk(1);
+    let a2 = pk(2);
+    let pool1 = make_pool(a1, pk(10), pk(11));
+    let pool2 = make_pool(a2, pk(12), pk(13));
+
+    let mut map = HashMap::new();
+    map.insert(a1, PoolAnalytics::empty());
+    map.insert(a2, PoolAnalytics::empty());
+
+    let svc = service(
+        PoolRepoOnce::with_pools(vec![pool2, pool1]),
+        MockPoolCurrentStateRepo::not_found(),
+        MockAnalyticsRepo::with(map).with_top(vec![a1, a2]),
+        MockMetadataRepo::empty(),
+        MockPriceRepo::empty(),
+    );
+
+    let top = svc.top_pools(PoolRankMetric::Volume24h, 10).await.unwrap();
+
+    assert_eq!(top.len(), 2);
+    assert_eq!(top[0].pool.pool_address, a1);
+    assert_eq!(top[1].pool.pool_address, a2);
+}
+
+#[tokio::test]
+async fn top_pools_empty_when_no_ranking() {
+    // No ranked addresses → short-circuit to an empty list, no pool/analytics
+    // reads attempted.
+    let svc = service(
+        PoolRepoOnce::with_pools(vec![]),
+        MockPoolCurrentStateRepo::not_found(),
+        MockAnalyticsRepo::empty(),
+        MockMetadataRepo::empty(),
+        MockPriceRepo::empty(),
+    );
+
+    let top = svc.top_pools(PoolRankMetric::Volume24h, 10).await.unwrap();
+    assert!(top.is_empty());
+}
+
+#[tokio::test]
+async fn top_pools_ranking_error_propagates() {
+    let svc = service(
+        PoolRepoOnce::with_pools(vec![]),
+        MockPoolCurrentStateRepo::not_found(),
+        MockAnalyticsRepo::failing(),
+        MockMetadataRepo::empty(),
+        MockPriceRepo::empty(),
+    );
+
+    assert!(svc.top_pools(PoolRankMetric::Volume24h, 10).await.is_err());
 }

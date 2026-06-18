@@ -130,6 +130,27 @@ impl PoolRepository for PgPoolRepository {
         })
     }
 
+    async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
+        let addresses: Vec<String> = pool_addresses.iter().map(|p| p.to_string()).collect();
+        let rows = sqlx::query_as!(
+            PoolRow,
+            r#"
+            SELECT pool_address, protocol, token_a_mint, token_b_mint,
+                   fee_bps AS "fee_bps?: rust_decimal::Decimal",
+                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,
+                   first_seen_at, last_seen_at
+            FROM pools
+            WHERE pool_address = ANY($1::TEXT[])
+            "#,
+            &addresses
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(Pool::try_from).collect()
+    }
+
     async fn find_paginated(
         &self,
         cursor: Option<PoolCursor>,

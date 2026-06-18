@@ -3,7 +3,7 @@
 //! [keep the existing module-level doc as-is]
 mod rows;
 
-use crate::repositories::helper::map_sqlx_error;
+use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
 use async_trait::async_trait;
 use rows::{PoolAnalyticsRow, PoolHistoryRow};
 use solana_pubkey::Pubkey;
@@ -11,7 +11,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use yog_core::{
     RepositoryResult,
-    domain::{PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket},
+    domain::{PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket, PoolRankMetric},
 };
 
 pub struct PgPoolAnalyticsRepository {
@@ -127,5 +127,36 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         .map_err(map_sqlx_error)?;
 
         rows.into_iter().map(PoolHistoryBucket::try_from).collect()
+    }
+
+    async fn top_pool_addresses(
+        &self,
+        metric: PoolRankMetric,
+        limit: i64,
+    ) -> RepositoryResult<Vec<Pubkey>> {
+        // One metric today → one static, compile-checked query. When a second
+        // metric lands, add its arm (each stays a static query, no dynamic SQL).
+        let addresses: Vec<String> = match metric {
+            PoolRankMetric::Volume24h => sqlx::query_scalar!(
+                r#"
+                SELECT pool_address AS "pool_address!"
+                FROM meteora_damm_v2_pool_hourly_activity
+                WHERE bucket > NOW() - INTERVAL '24 hours'
+                GROUP BY pool_address
+                HAVING SUM(volume_usd) IS NOT NULL
+                ORDER BY SUM(volume_usd) DESC
+                LIMIT $1
+                "#,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+        };
+
+        addresses
+            .into_iter()
+            .map(|a| convert_string_to_pubkey(a, "pool_address"))
+            .collect()
     }
 }

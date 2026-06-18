@@ -18,6 +18,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { OverviewStats } from "@/components/dashboard/overview/overview-stats";
+import { OverviewTopPools } from "@/components/dashboard/overview/overview-top-pools";
 import { PageError } from "@/components/dashboard/page-error";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchStats } from "@/lib/api/server/stats";
@@ -71,6 +72,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
       </header>
 
       <OverviewStats stats={stats} />
+      <OverviewTopPools />
     </>
   );
 }
