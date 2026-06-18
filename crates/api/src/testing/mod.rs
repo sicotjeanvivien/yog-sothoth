@@ -20,12 +20,14 @@ use std::sync::Mutex;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
     domain::{
-        EventFreshnessRepository, MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
+        EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository,
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
         MeteoraDammV2LiquidityEventRepository, MeteoraDammV2SwapEvent,
         MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository, NetworkStatus,
-        NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCurrentState,
-        PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor, PoolRepository, Protocol,
-        TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+        NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCounts,
+        PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor,
+        PoolRepository, Protocol, TokenMetadata, TokenMetadataRepository, TokenPrice,
+        TokenPriceRepository,
     },
 };
 
@@ -166,6 +168,9 @@ impl PoolRepository for PoolRepoOnce {
     async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
         take(&self.by_address)
     }
+    async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
+        unreachable!("counts not used by PoolService")
+    }
     async fn find_paginated(
         &self,
         _cursor: Option<PoolCursor>,
@@ -176,6 +181,89 @@ impl PoolRepository for PoolRepoOnce {
         _limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
         take(&self.paginated)
+    }
+}
+
+// ── Mock: GlobalAnalyticsRepository ─────────────────────────────────
+
+pub(crate) struct MockGlobalAnalyticsRepo {
+    result: Mutex<Option<RepositoryResult<GlobalAnalytics>>>,
+}
+
+impl MockGlobalAnalyticsRepo {
+    pub(crate) fn with(analytics: GlobalAnalytics) -> Self {
+        Self {
+            result: Mutex::new(Some(Ok(analytics))),
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            result: Mutex::new(Some(Err(RepositoryError::Integrity(
+                "global analytics boom".into(),
+            )))),
+        }
+    }
+}
+
+#[async_trait]
+impl GlobalAnalyticsRepository for MockGlobalAnalyticsRepo {
+    async fn global_analytics(&self) -> RepositoryResult<GlobalAnalytics> {
+        take(&self.result)
+    }
+}
+
+// ── Mock: PoolRepository yielding only counts ───────────────────────
+
+/// Minimal `PoolRepository` mock for `StatsService`: only `counts()` is
+/// exercised; every other method panics if reached.
+pub(crate) struct PoolCountsRepo {
+    counts: Mutex<Option<RepositoryResult<PoolCounts>>>,
+}
+
+impl PoolCountsRepo {
+    pub(crate) fn with(counts: PoolCounts) -> Self {
+        Self {
+            counts: Mutex::new(Some(Ok(counts))),
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            counts: Mutex::new(Some(Err(RepositoryError::Integrity("counts boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl PoolRepository for PoolCountsRepo {
+    async fn upsert(&self, _pool: &Pool) -> RepositoryResult<()> {
+        unreachable!("upsert not used by StatsService")
+    }
+    async fn touch_last_seen(&self, _addr: &Pubkey) -> RepositoryResult<()> {
+        unreachable!("touch_last_seen not used by StatsService")
+    }
+    async fn set_fee_bps(
+        &self,
+        _addr: &Pubkey,
+        _fee_bps: rust_decimal::Decimal,
+    ) -> RepositoryResult<()> {
+        unreachable!("set_fee_bps not used by StatsService")
+    }
+    async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
+        unreachable!("find_by_address not used by StatsService")
+    }
+    async fn counts(&self) -> RepositoryResult<PoolCounts> {
+        take(&self.counts)
+    }
+    async fn find_paginated(
+        &self,
+        _cursor: Option<PoolCursor>,
+        _direction: PageDirection,
+        _position: Option<PagePosition>,
+        _sort: PoolSort,
+        _search: Option<String>,
+        _limit: i64,
+    ) -> RepositoryResult<Page<Pool>> {
+        unreachable!("find_paginated not used by StatsService")
     }
 }
 

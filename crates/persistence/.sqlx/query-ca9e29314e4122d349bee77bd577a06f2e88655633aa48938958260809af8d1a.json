@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                COUNT(*) AS \"observed!\",\n                COUNT(*) FILTER (\n                    WHERE first_seen_at > NOW() - INTERVAL '24 hours'\n                ) AS \"discovered_24h!\"\n            FROM pools\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "observed!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "discovered_24h!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "ca9e29314e4122d349bee77bd577a06f2e88655633aa48938958260809af8d1a"
+}

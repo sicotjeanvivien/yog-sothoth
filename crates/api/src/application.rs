@@ -5,5 +5,5 @@ pub(crate) use enriched_pool::{EnrichedPool, EnrichedToken};
 pub(crate) use services::{
     MeteoraDammV2LiquidityListParams, MeteoraDammV2LiquidityService, MeteoraDammV2SwapListParams,
     MeteoraDammV2SwapService, NetworkStatusAggregate, NetworkStatusService, PoolListParams,
-    PoolService, TokenAggregate, TokenService,
+    PoolService, StatsAggregate, StatsService, TokenAggregate, TokenService,
 };

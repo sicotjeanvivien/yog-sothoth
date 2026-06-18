@@ -46,33 +46,14 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 SELECT pool_address
                 FROM UNNEST($1::TEXT[]) AS pool_address
             ),
+            -- Per-pool current TVL is encapsulated in the `pool_current_tvl`
+            -- view (migration 020) — same reserve × most-recent-price valuation
+            -- as before, no longer duplicated here (the `global_analytics`
+            -- roll-up reads the same view).
             tvl_per_pool AS (
-                SELECT
-                    pcs.pool_address,
-                    (
-                        (pcs.reserve_a::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * tpa.price_usd
-                        +
-                        (pcs.reserve_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * tpb.price_usd
-                    ) AS tvl_usd
-                FROM pool_current_state pcs
-                JOIN pools p ON p.pool_address = pcs.pool_address
-                JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
-                JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
-                LEFT JOIN LATERAL (
-                    SELECT price_usd
-                    FROM token_prices
-                    WHERE mint = p.token_a_mint::TEXT
-                    ORDER BY fetched_at DESC
-                    LIMIT 1
-                ) tpa ON true
-                LEFT JOIN LATERAL (
-                    SELECT price_usd
-                    FROM token_prices
-                    WHERE mint = p.token_b_mint::TEXT
-                    ORDER BY fetched_at DESC
-                    LIMIT 1
-                ) tpb ON true
-                WHERE pcs.pool_address = ANY($1::TEXT[])
+                SELECT pool_address, tvl_usd
+                FROM pool_current_tvl
+                WHERE pool_address = ANY($1::TEXT[])
             ),
             -- 24h volume + realized fees, rolled up from the shared
             -- per-(pool, hour) USD valuation view (migration 019) — same

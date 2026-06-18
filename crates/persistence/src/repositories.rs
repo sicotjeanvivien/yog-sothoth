@@ -1,4 +1,5 @@
 mod event_freshness;
+mod global_analytics;
 mod helper;
 
 mod meteora;
@@ -11,6 +12,7 @@ mod token_price;
 mod watched_pool;
 
 pub use event_freshness::PgEventFreshnessRepository;
+pub use global_analytics::PgGlobalAnalyticsRepository;
 pub use meteora::{
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
     PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,

@@ -1,5 +1,6 @@
 mod domain_event;
 mod freshness_status;
+mod global_analytics;
 mod meteora;
 mod network_status;
 mod pool;
@@ -13,6 +14,7 @@ mod watched_pool;
 
 pub use domain_event::DomainEvent;
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
+pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
@@ -29,7 +31,9 @@ pub use meteora::{
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
 };
 pub use network_status::{NetworkStatus, NetworkStatusRepository};
-pub use pool::{Pool, PoolAccountProperties, PoolAccountResolver, PoolCursor, PoolRepository};
+pub use pool::{
+    Pool, PoolAccountProperties, PoolAccountResolver, PoolCounts, PoolCursor, PoolRepository,
+};
 pub use pool_analytics::{PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket};
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,

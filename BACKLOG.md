@@ -35,8 +35,30 @@
 - [x] **Section Fees du PoolDetail avec graphes (PRs #13 + #14)** : (1) endpoint d'historique time-series `GET /api/pools/{address}/history?days=N` (#13) — buckets horaires joignant les **4 CA** (swap fees + liquidity + claim_position_fee + claim_reward), valorisés USD trade-time, `PoolHistoryBucket`/`PoolAnalyticsRepository::history` ; (2) graphes (#14) — section serveur `PoolDetailFees` + `TimeSeriesChart` Client Component sur **visx** (revenu fee en aire, taux effectif en ligne), fenêtre 30j, i18n en/fr. Cadrage v1 acté : 2 graphes (revenu + taux effectif), liquidity/claims dans l'endpoint mais pas encore tracés. NB le barème *configuré* (decode scheduler/dynamic fee complet, cf. ligne 28) reste hors scope — on trace le réalisé
 
 #### Dashboard — page Overview
-- [ ] Cadrage produit : définir quelles agrégations afficher (KPIs globaux ? top pools ? flux récent ?)
-- [ ] Implémentation une fois le cadrage acté
+> **Cadrage acté (18 juin 2026) : deux temps — phase 1 read-time, phase 2 = futur crate `Yog-Analytic`.**
+> Coût mesuré sur la DB de dev (356 pools, 733k `token_prices`, CA swap) :
+> - KPIs globaux (TVL totale, volume/fees 24h) + top-N pools par volume/TVL sont **calculables au read-time** : 5–47 ms (TVL globale 18 ms, vol/fees 24h via VIEW 019 47 ms, top-10 volume 36 ms, top-10 TVL 5,5 ms). Coût borné par le nb de pools (TVL = 1 ligne `pool_current_state`/pool) et la fenêtre 24h (chunk exclusion sur la CA), **pas** par l'historique accumulé ; lookup prix `(mint, fetched_at DESC)` index-backed → ~constant.
+> - **MAIS le volume observé aujourd'hui est artificiellement contraint par l'allowlist `watched_pools`** — ce n'est pas un proxy de la charge cible. La raison d'être du projet est l'observation de protocoles **à l'échelle**. La matérialisation analytique n'est donc **pas abandonnée** : elle prendra la forme d'un crate dédié **`Yog-Analytic`** (calcul + stockage de l'analytique, forme à définir) en phase 2. La phase 1 read-time est un point de départ, pas l'état final.
+> - Contraintes de design pour `Yog-Analytic` (relevées ici pour mémoire) : `pool_analytics_hourly` **ne peut pas** être un continuous aggregate (la valorisation USD joint `token_prices`, interdit en CAGG) → ce serait un `MATERIALIZED VIEW` rafraîchi (pg_cron/worker) ou une table peuplée par un worker. La TVL (état courant, pas agrégat d'events) n'est **pas backfillable** → snapshot horaire forward-only.
+> - Le « mur » keyset documenté (filtres/tri TVL-volume **paginés** sur `/pools`) reste vrai pour son cas — un top-N d'Overview ne pagine pas (compute → sort → LIMIT N), donc n'y touche pas.
+
+**Phase 1 — Overview read-time (maintenant)**
+> Périmètre KPI figé (18 juin 2026) : **4 cartes scalaires**, toutes read-time. Pas de hero santé ingestion sur l'Overview (déjà présent partout dans le dashboard via le panel sidebar `network-status-panel`). Top-N pools repoussé en phase 1.5 (composant table, pas scalaire).
+- [x] **Endpoint `GET /api/stats` (PR #22, en review)** : 4 KPIs globaux read-time. Nom client-agnostique (pas `/overview` : « Overview » est un écran, pas une ressource ; ship des compteurs bruts, le client dérive la couverture). Domaine séparé `core::domain::global_analytics` (`GlobalAnalytics` + repo), distinct de `pool_analytics` (per-pool) ; compteurs sur `PoolRepository::counts()` (option B : composés dans `StatsService`). Champs livrés :
+	1. **TVL totale** (`totalTvlUsd`) + `poolsPriced` (numérateur de couverture ; ~349/356 ≈ 98 % en dev)
+	2. **Volume 24h** (`volume24hUsd`, SUM via VIEW 019)
+	3. **Fees 24h** (`fees24hUsd`, SUM fees réalisés via VIEW 019) — le différenciateur vs un simple viewer
+	4. **Pools** : `poolsObserved` (COUNT cumulatif) + `poolsDiscovered24h` (COUNT `first_seen_at > NOW()-24h`)
+- [x] **VIEW `pool_current_tvl` (migration 020, PR #22)** : extrait la valorisation TVL par pool (copiée-collée entre `batch_compute` et `global_analytics`) en VIEW versionnée, non préfixée (tables génériques). Dé-duplique une duplication préexistante ; même pattern que la VIEW 019.
+- [ ] Implémentation front (remplace le stub `overview/page.tsx`) : bande de 4 cartes
+- [ ] **Hors périmètre phase 1** (pour mémoire) : top-N pools (→ phase 1.5), flux récent global cross-pool (pas d'endpoint), watchlist (auth v0.2), split protocol/LP fee (redondant PoolDetail), taux de fee effectif global (trompeur — n'a de sens que par pool)
+
+**Phase 1.5 — top-N pools (après la bande KPI)**
+- [ ] Top-N pools par volume 24h et/ou TVL — read-time non-paginé (compute → sort → LIMIT N, mesuré 5–36 ms) ; cadrer la métrique et le nombre de lignes
+
+**Phase 2 — crate `Yog-Analytic` (différé, déclenché empiriquement)**
+- [ ] Crate `yog-analytic` : calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker ; cf. contraintes ci-dessus)
+- [ ] Déclencheur : quand une requête analytique **mesurée** franchit un seuil réel — en particulier dès l'ouverture de l'allowlist `watched_pools` / montée du throughput cible (re-mesurer alors, le chiffre dev de juin 2026 n'est plus représentatif)
 #### yog-api
 - [x] `health.rs` — vérifier que ce n'est qu'une liveness, pas une readiness
 - [ ] `MIDDLEWARE  CORS`
@@ -64,8 +86,8 @@
 - [ ] KPI - Current Pool Price
 
 ##### PagePool
-- [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage
-- [ ] Ajout colonne fee + filtre
+- [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage. Je pense que c'est pas vraiment possible sinon faut du back pour pouvoir récupérer plusieurs pool via des PubKey . 
+- [ ] Ajout colonne fee + filtre . Je sais pas si c'est possible . 
 - [ ] Tableau liquidity — colonne « Value (USD) » : valeur USD de l'événement (amountA·prixA + amountB·prixB, valorisation trade-time comme les swaps). Chantier backend d'abord (enrichir `LiquidityEventResponse`/DTO), puis colonne front. NB : `liquidityDelta` (u128 brut, unités L sans décimales) écarté car illisible.
 
 #### ✅ yog-context — métriques
@@ -250,6 +272,17 @@
 
 ### Transverse v0.1
 
+#### Convention code/tests — un fichier de tests séparé
+> Harmoniser sur le pattern déjà majoritaire : code dans `xxx.rs`, tests dans
+> `xxx_tests.rs` attaché par `#[cfg(test)] #[path = "xxx_tests.rs"] mod tests;`
+> (ex. `pool_analytics/rows.rs` + `rows_tests.rs`, `network_status_service.rs`
+> + `tests/network_status_service_tests.rs`, `global_analytics/rows.rs` +
+> `rows_tests.rs`). Garde les gros fichiers lisibles et isole les mocks de test
+> du code de prod. Reste des `#[cfg(test)] mod tests { … }` inline à migrer.
+
+- [ ] `crates/indexer/src/application/services/meteora/damm_v2/event_persistor.rs` — tests + mocks (`MockPoolRepo`, `MockPcsRepo`, …) inline à extraire dans un `event_persistor_tests.rs`
+- [ ] Balayer le workspace pour les autres `#[cfg(test)] mod tests { … }` inline et les séparer au même pattern
+
 #### ✅ Stratégie de rétention & historisation (décidé : A + compression)
 > **Décision (15 juin 2026) : option A — analytics only.** Au-delà de 30j, les lignes brutes
 > `swap`/`liquidity` sont droppées ; l'historique long terme vit dans le rollup (CA). On ne garde
@@ -312,7 +345,7 @@
 
 #### Performance — différé empirique
 > N'activer que si la charge le justifie. Ne pas anticiper.
-- [ ] Table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — si besoin avéré
+- [ ] Table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relèvera du crate `Yog-Analytic` (cf. Overview phase 2). Mesure 18 juin 2026 : KPIs/top-N read-time à 5–47 ms sur la DB dev → pas encore le déclencheur ; mais volume dev plafonné par `watched_pools`, à re-mesurer dès ouverture de l'allowlist
 - [ ] Cache HTTP `Cache-Control: max-age=30` sur `GET /api/pools`
 
 #### 🚫 Infrastructure RPC — différé

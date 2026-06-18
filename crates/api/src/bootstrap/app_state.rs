@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
 use yog_core::domain::{
-    EventFreshnessRepository, MeteoraDammV2LiquidityEventRepository,
+    EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2SwapEventRepository, NetworkStatusRepository, PoolAnalyticsRepository,
     PoolCurrentStateRepository, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
-    Database, PgEventFreshnessRepository, PgHealthChecker, PgMeteoraDammV2LiquidityEventRepository,
-    PgMeteoraDammV2SwapEventRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
-    PgPoolCurrentStateRepository, PgPoolRepository, PgTokenMetadataRepository,
-    PgTokenPriceRepository,
+    Database, PgEventFreshnessRepository, PgGlobalAnalyticsRepository, PgHealthChecker,
+    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
+    PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
+    PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::application::{
     MeteoraDammV2LiquidityService, MeteoraDammV2SwapService, NetworkStatusService, PoolService,
-    TokenService,
+    StatsService, TokenService,
 };
 use crate::bootstrap::Config;
 use anyhow::Context;
@@ -33,6 +33,7 @@ pub(crate) struct AppState {
     pub(crate) swap_service: Arc<MeteoraDammV2SwapService>,
     pub(crate) liquidity_service: Arc<MeteoraDammV2LiquidityService>,
     pub(crate) network_status_service: Arc<NetworkStatusService>,
+    pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
     /// Infra probe — exposed directly because no application logic
     /// surrounds it. See `yog-persistence/health.rs`.
@@ -49,6 +50,8 @@ impl AppState {
 
         // ── Repositories ────────────────────────────────────────────────
         let pool_repo: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool.clone()));
+        let global_analytics_repo: Arc<dyn GlobalAnalyticsRepository> =
+            Arc::new(PgGlobalAnalyticsRepository::new(db_pool.clone()));
         let pool_current_state_repo: Arc<dyn PoolCurrentStateRepository> =
             Arc::new(PgPoolCurrentStateRepository::new(db_pool.clone()));
         let swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository> =
@@ -70,7 +73,7 @@ impl AppState {
         // ── Services ────────────────────────────────────────────────────
         Ok(Self {
             pool_service: Arc::new(PoolService::new(
-                pool_repo,
+                pool_repo.clone(),
                 pool_current_state_repo,
                 pool_analytics_repo,
                 token_metadata_repo.clone(),
@@ -82,6 +85,7 @@ impl AppState {
                 network_status_repo,
                 event_freshness_repo,
             )),
+            stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         })

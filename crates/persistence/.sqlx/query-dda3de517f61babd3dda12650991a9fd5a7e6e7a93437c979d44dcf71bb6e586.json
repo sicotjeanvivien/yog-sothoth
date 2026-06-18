@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH tvl AS (\n                SELECT\n                    SUM(tvl_usd)                                AS total_tvl_usd,\n                    COUNT(*) FILTER (WHERE tvl_usd IS NOT NULL) AS pools_priced\n                FROM pool_current_tvl\n            ),\n            vol AS (\n                SELECT\n                    SUM(volume_usd) AS volume_24h_usd,\n                    SUM(fees_usd)   AS fees_24h_usd\n                FROM meteora_damm_v2_pool_hourly_activity\n                WHERE bucket > NOW() - INTERVAL '24 hours'\n            )\n            SELECT\n                tvl.total_tvl_usd  AS \"total_tvl_usd?\",\n                tvl.pools_priced   AS \"pools_priced!\",\n                vol.volume_24h_usd AS \"volume_24h_usd?\",\n                vol.fees_24h_usd   AS \"fees_24h_usd?\"\n            FROM tvl, vol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_tvl_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "pools_priced!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_24h_usd?",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "dda3de517f61babd3dda12650991a9fd5a7e6e7a93437c979d44dcf71bb6e586"
+}

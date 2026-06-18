@@ -493,6 +493,9 @@ mod tests {
         async fn find_by_address(&self, _: &Pubkey) -> RepositoryResult<Option<Pool>> {
             unimplemented!("not exercised by persist()")
         }
+        async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
+            unimplemented!("not exercised by persist()")
+        }
         async fn find_paginated(
             &self,
             _: Option<PoolCursor>,
