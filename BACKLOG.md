@@ -44,11 +44,12 @@
 
 **Phase 1 — Overview read-time (maintenant)**
 > Périmètre KPI figé (18 juin 2026) : **4 cartes scalaires**, toutes read-time. Pas de hero santé ingestion sur l'Overview (déjà présent partout dans le dashboard via le panel sidebar `network-status-panel`). Top-N pools repoussé en phase 1.5 (composant table, pas scalaire).
-- [ ] Endpoint `GET /api/overview` (ou `/stats`) : 4 KPIs globaux read-time —
-	1. **TVL totale** (SUM USD sur `pool_current_state` valorisé) + couverture (`N valorisées / M observées` ; ~349/356 ≈ 98 % en dev, les pools aux mints/prix non résolus sont exclues de la somme)
-	2. **Volume 24h** (SUM USD via VIEW 019, fenêtre `bucket > NOW()-24h`)
-	3. **Fees 24h** (SUM fees réalisés USD via VIEW 019) — le différenciateur vs un simple viewer
-	4. **Pools** : `observées` (COUNT cumulatif) + `découvertes 24h` (COUNT `first_seen_at > NOW()-24h`)
+- [x] **Endpoint `GET /api/stats` (PR #22, en review)** : 4 KPIs globaux read-time. Nom client-agnostique (pas `/overview` : « Overview » est un écran, pas une ressource ; ship des compteurs bruts, le client dérive la couverture). Domaine séparé `core::domain::global_analytics` (`GlobalAnalytics` + repo), distinct de `pool_analytics` (per-pool) ; compteurs sur `PoolRepository::counts()` (option B : composés dans `StatsService`). Champs livrés :
+	1. **TVL totale** (`totalTvlUsd`) + `poolsPriced` (numérateur de couverture ; ~349/356 ≈ 98 % en dev)
+	2. **Volume 24h** (`volume24hUsd`, SUM via VIEW 019)
+	3. **Fees 24h** (`fees24hUsd`, SUM fees réalisés via VIEW 019) — le différenciateur vs un simple viewer
+	4. **Pools** : `poolsObserved` (COUNT cumulatif) + `poolsDiscovered24h` (COUNT `first_seen_at > NOW()-24h`)
+- [x] **VIEW `pool_current_tvl` (migration 020, PR #22)** : extrait la valorisation TVL par pool (copiée-collée entre `batch_compute` et `global_analytics`) en VIEW versionnée, non préfixée (tables génériques). Dé-duplique une duplication préexistante ; même pattern que la VIEW 019.
 - [ ] Implémentation front (remplace le stub `overview/page.tsx`) : bande de 4 cartes
 - [ ] **Hors périmètre phase 1** (pour mémoire) : top-N pools (→ phase 1.5), flux récent global cross-pool (pas d'endpoint), watchlist (auth v0.2), split protocol/LP fee (redondant PoolDetail), taux de fee effectif global (trompeur — n'a de sens que par pool)
 
@@ -270,6 +271,17 @@
 ---
 
 ### Transverse v0.1
+
+#### Convention code/tests — un fichier de tests séparé
+> Harmoniser sur le pattern déjà majoritaire : code dans `xxx.rs`, tests dans
+> `xxx_tests.rs` attaché par `#[cfg(test)] #[path = "xxx_tests.rs"] mod tests;`
+> (ex. `pool_analytics/rows.rs` + `rows_tests.rs`, `network_status_service.rs`
+> + `tests/network_status_service_tests.rs`, `global_analytics/rows.rs` +
+> `rows_tests.rs`). Garde les gros fichiers lisibles et isole les mocks de test
+> du code de prod. Reste des `#[cfg(test)] mod tests { … }` inline à migrer.
+
+- [ ] `crates/indexer/src/application/services/meteora/damm_v2/event_persistor.rs` — tests + mocks (`MockPoolRepo`, `MockPcsRepo`, …) inline à extraire dans un `event_persistor_tests.rs`
+- [ ] Balayer le workspace pour les autres `#[cfg(test)] mod tests { … }` inline et les séparer au même pattern
 
 #### ✅ Stratégie de rétention & historisation (décidé : A + compression)
 > **Décision (15 juin 2026) : option A — analytics only.** Au-delà de 30j, les lignes brutes
