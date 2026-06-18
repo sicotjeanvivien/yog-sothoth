@@ -8,7 +8,7 @@
  *   Kind       — coloured badge: "Add" (green) / "Remove" (red)
  *   Amount A   — `amountA` in human units + token A symbol
  *   Amount B   — `amountB` in human units + token B symbol
- *   Tx         — truncated signature linking to Solscan
+ *   Action     — copy the signature / open the tx on Solscan
  *
  * Unlike a swap (which has an "in" and an "out" side), a liquidity
  * event touches both tokens together: adding 5 SOL + 100 USDC, or
@@ -19,7 +19,8 @@
  * Load-more pagination lands later, alongside the swaps one.
  *
  * Rows are NOT clickable — liquidity events don't have their own
- * page; the only useful affordance is the per-row Solscan link.
+ * page; the only useful affordances are the per-row actions (copy
+ * signature, open on Solscan) in the last column.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -27,10 +28,10 @@ import { getTranslations } from "next-intl/server";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { LiquidityEventResponse } from "@/lib/api/schema/liquidity-event";
 
-import { ExternalLinkIcon } from "@/components/shared/icon";
+import { SolscanIcon } from "@/components/shared/icon";
+import { CopyButton } from "./copy-button";
 
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
-import { formatShortAddress } from "@/lib/format/format-short-address";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
 import { TokenResponse } from "@/lib/api/schema/token";
 
@@ -50,7 +51,7 @@ const SECTION_TITLE_CLASS =
 const TABLE_WRAPPER_CLASS = "overflow-x-auto";
 
 const GRID_COLS =
-  "grid-cols-[minmax(110px,1fr)_minmax(100px,0.8fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)]";
+  "grid-cols-[minmax(110px,1fr)_minmax(100px,0.8fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(96px,auto)]";
 
 const HEAD_CELL_CLASS =
   "px-4 py-3 text-left text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
@@ -60,8 +61,8 @@ const CELL_CLASS =
 
 const CELL_MONO_CLASS = `${CELL_CLASS} font-mono`;
 
-const TX_LINK_CLASS =
-  "inline-flex items-center gap-1.5 font-mono text-sothoth-300 transition-colors hover:text-sothoth-200";
+const ACTION_LINK_CLASS =
+  "inline-flex h-6 w-6 items-center justify-center rounded-[3px] text-slate-400 transition-colors hover:bg-sothoth-500/15 hover:text-sothoth-300";
 
 // Badge styles — emerald for add (capital inflow), rose for remove
 // (capital outflow). Translucent backgrounds so the badge sits
@@ -84,7 +85,7 @@ export async function PoolDetailLiquidity({
   locale: string;
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.liquidity");
-
+  
   return (
     <section className={`mt-6 ${SECTION_CLASS}`}>
       <div className={CARD_CLASS}>
@@ -112,7 +113,7 @@ export async function PoolDetailLiquidity({
                     {t("amountB")}
                   </div>
                   <div role="columnheader" className={HEAD_CELL_CLASS}>
-                    {t("tx")}
+                    {t("action")}
                   </div>
                 </div>
               </div>
@@ -127,6 +128,8 @@ export async function PoolDetailLiquidity({
                     locale={locale}
                     addLabel={t("add")}
                     removeLabel={t("remove")}
+                    copyLabel={t("copySignature")}
+                    solscanLabel={t("viewOnSolscan")}
                   />
                 ))}
               </div>
@@ -147,6 +150,8 @@ function LiquidityRow({
   locale,
   addLabel,
   removeLabel,
+  copyLabel,
+  solscanLabel,
 }: {
   event: LiquidityEventResponse;
   tokenA: TokenResponse;
@@ -154,6 +159,8 @@ function LiquidityRow({
   locale: string;
   addLabel: string;
   removeLabel: string;
+  copyLabel: string;
+  solscanLabel: string;
 }) {
   const isAdd = event.liquidityEventKind === "add";
   const solscanUrl = `https://solscan.io/tx/${event.signature}`;
@@ -184,15 +191,19 @@ function LiquidityRow({
       </div>
 
       <div role="cell" className={CELL_CLASS}>
-        <a
-          href={solscanUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={TX_LINK_CLASS}
-        >
-          {formatShortAddress(event.signature)}
-          <ExternalLinkIcon size={11} />
-        </a>
+        <div className="flex items-center gap-1">
+          <CopyButton value={event.signature} label={copyLabel} />
+          <a
+            href={solscanUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={ACTION_LINK_CLASS}
+            aria-label={solscanLabel}
+            title={solscanLabel}
+          >
+            <SolscanIcon size={16} />
+          </a>
+        </div>
       </div>
     </div>
   );

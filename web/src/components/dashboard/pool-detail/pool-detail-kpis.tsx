@@ -27,7 +27,7 @@ import { getTranslations } from "next-intl/server";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-state";
 
-import { formatUsd, formatUsdCompact } from "@/lib/format/format-usd";
+import { formatUsdCompact } from "@/lib/format/format-usd";
 import { computePoolComposition } from "@/lib/format/pool-composition";
 
 import { KpiCard } from "./kpi-card";
@@ -69,17 +69,14 @@ export async function PoolDetailKpis({
         <KpiCard
           label={t("tvl")}
           valueCompact={formatUsdCompact(pool.tvlUsd)}
-          value={formatUsd(pool.tvlUsd)}
         />
         <KpiCard
           label={t("volume24h")}
           valueCompact={formatUsdCompact(pool.volume24hUsd)}
-          value={formatUsd(pool.volume24hUsd)}
         />
         <KpiCard
           label={t("fees24h")}
           valueCompact={formatUsdCompact(pool.fees24hUsd)}
-          value={formatUsd(pool.fees24hUsd)}
         />
         {composition && (
           <PoolCompositionCard

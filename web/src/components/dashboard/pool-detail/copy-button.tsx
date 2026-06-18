@@ -55,7 +55,7 @@ export function CopyButton({
       className={BUTTON_CLASS}
       aria-label={label}
     >
-      {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+      {copied ? <CheckIcon size={16} /> : <CopyIcon size={16} />}
     </button>
   );
 }
