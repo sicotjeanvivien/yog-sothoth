@@ -35,10 +35,10 @@ const COLOR_A = "#8b5cf6"; // sothoth violet
 const COLOR_B = "#3b82f6"; // signal blue
 
 const CARD_CLASS =
-  "rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 px-5 py-4 lg:px-6 lg:py-5";
+  "rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/50 px-3 py-2 lg:px-4 lg:py-3";
 
 const LABEL_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+  "text-[17px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
 
 export function PoolCompositionCard({
   label,
@@ -57,7 +57,7 @@ export function PoolCompositionCard({
     <div className={CARD_CLASS}>
       <p className={LABEL_CLASS}>{label}</p>
 
-      <div className="mt-3 flex items-center gap-5">
+      <div className="mt-1 flex items-center gap-5">
         {/* Donut */}
         <Donut shareA={composition.shareA} tvlUsd={tvlUsd} />
 

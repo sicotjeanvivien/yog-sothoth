@@ -3,20 +3,21 @@
  *
  * Renders the most recent page of swap events for the pool as a
  * CSS-grid table with ARIA roles (same pattern as `/pools` — see
- * `pools-table.tsx` for the rationale). Five columns:
+ * `pools-table.tsx` for the rationale). Six columns:
  *
  *   Time     — relative ("2 min ago")
  *   Direction — "SOL → USDC" from `tradeDirection`
  *   Amount in — what the trader sent, in human units + symbol
  *   Amount out — what the trader received
- *   Tx        — truncated signature linking to Solscan
+ *   Fee       — the claiming (LP) fee, in the fee token (`feeTokenIsA`)
+ *   Action    — copy the signature / open the tx on Solscan
  *
  * No pagination in this commit: only the first page is shown.
  * Interactive pagination (Load more) lives in a separate change.
  *
  * Rows are NOT clickable — swap events don't have their own page;
- * the only useful affordance is the Solscan link in the last
- * column.
+ * the only useful affordances are the per-row actions (copy
+ * signature, open on Solscan) in the last column.
  *
  * The empty state replaces the table when no swaps have been
  * observed yet for the pool.
@@ -28,10 +29,10 @@ import { TokenResponse } from "@/lib/api/schema/token";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { SwapEventResponse } from "@/lib/api/schema/swap-event";
 
-import { ExternalLinkIcon } from "@/components/shared/icon";
+import { SolscanIcon } from "@/components/shared/icon";
+import { CopyButton } from "./copy-button";
 
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
-import { formatShortAddress } from "@/lib/format/format-short-address";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
 
 // ── Tailwind class fragments ─────────────────────────────────────────
@@ -50,7 +51,7 @@ const SECTION_TITLE_CLASS =
 const TABLE_WRAPPER_CLASS = "overflow-x-auto";
 
 const GRID_COLS =
-  "grid-cols-[minmax(110px,1fr)_minmax(160px,1.4fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(140px,1fr)]";
+  "grid-cols-[minmax(110px,0.9fr)_minmax(120px,0.9fr)_minmax(150px,1.3fr)_minmax(150px,1.3fr)_minmax(130px,1.1fr)_minmax(96px,auto)]";
 
 const HEAD_CELL_CLASS =
   "px-4 py-3 text-left text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
@@ -60,8 +61,8 @@ const CELL_CLASS =
 
 const CELL_MONO_CLASS = `${CELL_CLASS} font-mono`;
 
-const TX_LINK_CLASS =
-  "inline-flex items-center gap-1.5 font-mono text-sothoth-300 transition-colors hover:text-sothoth-200";
+const ACTION_LINK_CLASS =
+  "inline-flex h-6 w-6 items-center justify-center rounded-[3px] text-slate-400 transition-colors hover:bg-sothoth-500/15 hover:text-sothoth-300";
 
 // ── Component ─────────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ export async function PoolDetailSwaps({
           <EmptyState message={t("empty")} />
         ) : (
           <div className={TABLE_WRAPPER_CLASS}>
-            <div role="table" className="min-w-[760px]">
+            <div role="table" className="min-w-[860px]">
               <div role="rowgroup" className="border-b border-sothoth-500/20">
                 <div role="row" className={`grid ${GRID_COLS}`}>
                   <div role="columnheader" className={HEAD_CELL_CLASS}>
@@ -103,7 +104,10 @@ export async function PoolDetailSwaps({
                     {t("amountOut")}
                   </div>
                   <div role="columnheader" className={HEAD_CELL_CLASS}>
-                    {t("tx")}
+                    {t("fee")}
+                  </div>
+                  <div role="columnheader" className={HEAD_CELL_CLASS}>
+                    {t("action")}
                   </div>
                 </div>
               </div>
@@ -116,6 +120,8 @@ export async function PoolDetailSwaps({
                     tokenA={pool.tokenA}
                     tokenB={pool.tokenB}
                     locale={locale}
+                    copyLabel={t("copySignature")}
+                    solscanLabel={t("viewOnSolscan")}
                   />
                 ))}
               </div>
@@ -134,11 +140,15 @@ function SwapRow({
   tokenA,
   tokenB,
   locale,
+  copyLabel,
+  solscanLabel,
 }: {
   swap: SwapEventResponse;
   tokenA: TokenResponse;
   tokenB: TokenResponse;
   locale: string;
+  copyLabel: string;
+  solscanLabel: string;
 }) {
   // trade_direction tells us which side was sent (in) vs received (out).
   //   a_to_b → trader sent amount_a (token A in), received amount_b (token B out)
@@ -149,6 +159,10 @@ function SwapRow({
   const outToken = aToB ? tokenB : tokenA;
   const inAmount = aToB ? swap.amountA : swap.amountB;
   const outAmount = aToB ? swap.amountB : swap.amountA;
+
+  // The claiming (LP) fee is taken in a single token — `feeTokenIsA`
+  // says which — so it's valued in that token's decimals/symbol.
+  const feeToken = swap.feeTokenIsA ? tokenA : tokenB;
 
   const solscanUrl = `https://solscan.io/tx/${swap.signature}`;
 
@@ -181,16 +195,24 @@ function SwapRow({
         {formatTokenAmount(outAmount, outToken.decimals, outToken.symbol)}
       </div>
 
+      <div role="cell" className={CELL_MONO_CLASS}>
+        {formatTokenAmount(swap.claimingFee, feeToken.decimals, feeToken.symbol)}
+      </div>
+
       <div role="cell" className={CELL_CLASS}>
-        <a
-          href={solscanUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={TX_LINK_CLASS}
-        >
-          {formatShortAddress(swap.signature)}
-          <ExternalLinkIcon size={11} />
-        </a>
+        <div className="flex items-center gap-1">
+          <CopyButton value={swap.signature} label={copyLabel} />
+          <a
+            href={solscanUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={ACTION_LINK_CLASS}
+            aria-label={solscanLabel}
+            title={solscanLabel}
+          >
+            <SolscanIcon size={16} />
+          </a>
+        </div>
       </div>
     </div>
   );
