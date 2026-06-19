@@ -37,8 +37,11 @@ pub(crate) struct SwapEventResponse {
     pub(crate) amount_a: u64,
     pub(crate) amount_b: u64,
 
-    pub(crate) reserve_a_after: u64,
-    pub(crate) reserve_b_after: u64,
+    // Reserves are `u64` but emitted as strings: a pool balance in atomic
+    // units can exceed 2^53, which a JSON-number consumer (JS) silently
+    // truncates. Same rationale as `next_sqrt_price` below.
+    pub(crate) reserve_a_after: String,
+    pub(crate) reserve_b_after: String,
     pub(crate) next_sqrt_price: String,
 
     pub(crate) claiming_fee: u64,
@@ -58,8 +61,8 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
             trade_direction: trade_direction_str(event.trade_direction),
             amount_a: event.amount_a,
             amount_b: event.amount_b,
-            reserve_a_after: event.reserve_a_after,
-            reserve_b_after: event.reserve_b_after,
+            reserve_a_after: event.reserve_a_after.to_string(),
+            reserve_b_after: event.reserve_b_after.to_string(),
             next_sqrt_price: event.next_sqrt_price.to_string(),
             claiming_fee: event.claiming_fee,
             protocol_fee: event.protocol_fee,

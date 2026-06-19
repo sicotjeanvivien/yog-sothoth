@@ -20,8 +20,9 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) amount_b: u64,
     pub(super) liquidity_delta: String,
 
-    pub(super) reserve_a_after: u64,
-    pub(super) reserve_b_after: u64,
+    // Emitted as strings (u64 can exceed 2^53); see SwapEventResponse.
+    pub(super) reserve_a_after: String,
+    pub(super) reserve_b_after: String,
 
     pub(super) position: String,
     pub(super) owner: String,
@@ -38,8 +39,8 @@ impl From<MeteoraDammV2LiquidityEvent> for LiquidityEventResponse {
             amount_a: event.amount_a,
             amount_b: event.amount_b,
             liquidity_delta: event.liquidity_delta.to_string(),
-            reserve_a_after: event.reserve_a_after,
-            reserve_b_after: event.reserve_b_after,
+            reserve_a_after: event.reserve_a_after.to_string(),
+            reserve_b_after: event.reserve_b_after.to_string(),
             position: event.position.to_string(),
             owner: event.owner.to_string(),
         }
