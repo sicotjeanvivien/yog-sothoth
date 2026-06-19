@@ -18,6 +18,14 @@
  * never fake". The price needs only the reserves and the resolved
  * token metadata (decimals + symbol), not the USD prices.
  *
+ * Layout: the scalar KPI cards (TVL, Volume, Fees, Price) and the
+ * composition donut are two visually distinct things, so when the
+ * donut is present they split into two side-by-side blocks on large
+ * screens — the KPIs as a 2-column grid (two rows) on the left, the
+ * donut as its own wider block on the right. Cramming all five into a
+ * single five-up row squeezed the donut. Without the donut, the KPIs
+ * just flow as one responsive row.
+ *
  * Inputs:
  *   - `pool`: identity + analytics from `GET /api/pools/{address}`
  *   - `state`: current reserves from `GET /api/pools/{address}/latest-state`,
@@ -80,48 +88,60 @@ export async function PoolDetailKpis({
       })
       : null;
 
-  // Grid layout: 1 column on mobile, 2 on small. Three base KPIs (TVL,
-  // Volume, Fees) always render; the price and composition cards are
-  // conditional, so the large-screen column count tracks the actual
-  // card count (3 → 5).
-  const cardCount = 3 + (price ? 1 : 0) + (composition ? 1 : 0);
-  const lgCols =
-    cardCount >= 5 ? "lg:grid-cols-5" : cardCount === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
-  const gridClass = `grid grid-cols-1 gap-4 sm:grid-cols-2 ${lgCols}`;
+  const kpiCount = 3 + (price ? 1 : 0);
+
+  const kpiCards = (
+    <>
+      <KpiCard label={t("tvl")} valueCompact={formatUsdCompact(pool.tvlUsd)} />
+      <KpiCard
+        label={t("volume24h")}
+        valueCompact={formatUsdCompact(pool.volume24hUsd)}
+      />
+      <KpiCard
+        label={t("fees24h")}
+        valueCompact={formatUsdCompact(pool.fees24hUsd)}
+      />
+      {price && (
+        // Pair notation: "SOL/USDC" reads as "price of SOL in USDC",
+        // i.e. token A (base) quoted in token B. `priceAInB` matches.
+        <KpiCard
+          label={`${pool.tokenA.symbol ?? "?"}/${pool.tokenB.symbol ?? "?"}`}
+          valueCompact={formatPrice(price.priceAInB)}
+        />
+      )}
+    </>
+  );
+
+  const compositionCard = composition && (
+    <PoolCompositionCard
+      label={t("composition")}
+      tokenA={pool.tokenA}
+      tokenB={pool.tokenB}
+      composition={composition}
+      tvlUsd={pool.tvlUsd}
+    />
+  );
 
   return (
     <section className="px-6 lg:px-10">
-      <div className={gridClass}>
-        <KpiCard
-          label={t("tvl")}
-          valueCompact={formatUsdCompact(pool.tvlUsd)}
-        />
-        <KpiCard
-          label={t("volume24h")}
-          valueCompact={formatUsdCompact(pool.volume24hUsd)}
-        />
-        <KpiCard
-          label={t("fees24h")}
-          valueCompact={formatUsdCompact(pool.fees24hUsd)}
-        />
-        {price && (
-          // Pair notation: "SOL/USDC" reads as "price of SOL in USDC",
-          // i.e. token A (base) quoted in token B. `priceAInB` matches.
-          <KpiCard
-            label={`${pool.tokenA.symbol ?? "?"}/${pool.tokenB.symbol ?? "?"}`}
-            valueCompact={formatPrice(price.priceAInB)}
-          />
-        )}
-        {composition && (
-          <PoolCompositionCard
-            label={t("composition")}
-            tokenA={pool.tokenA}
-            tokenB={pool.tokenB}
-            composition={composition}
-            tvlUsd={pool.tvlUsd}
-          />
-        )}
-      </div>
+      {compositionCard ? (
+        // Two blocks side by side on large screens: the KPI cards as a
+        // 2-up grid (two rows) taking two thirds, the donut its own
+        // third. Top-aligned so neither block stretches into dead space.
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
+            {kpiCards}
+          </div>
+          {compositionCard}
+        </div>
+      ) : (
+        // No donut → KPIs flow as a single responsive row.
+        <div
+          className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${kpiCount === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+        >
+          {kpiCards}
+        </div>
+      )}
     </section>
   );
 }
