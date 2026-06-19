@@ -85,7 +85,7 @@
 - [x] suppression BFF
 - [x] Ajout Client Browser
 	- [x] lib/api/browser/network-status.ts — browser-side, exposes fetchNetworkStatusBrowser
-- [ ] KPI - Current Pool Price
+- [x] KPI - Current Pool Price — carte KPI « prix courant » sur la page pool, dérivée des **réserves** (convention projet : prix calculé au query-time depuis les réserves, pas le `sqrt_price`). Helper pur `computePoolPrice` + `formatPrice` (testés). Affichée en notation paire (`SOL/USDC` = prix de A en B), gated sur `state` + symboles résolus (décimales fiables) + flag `poolPriceImbalance` (enfin câblé)
 
 ##### PagePool
 - [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage. Je pense que c'est pas vraiment possible sinon faut du back pour pouvoir récupérer plusieurs pool via des PubKey . 
