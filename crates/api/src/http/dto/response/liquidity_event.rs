@@ -16,11 +16,11 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) timestamp: DateTime<Utc>,
 
     pub(super) liquidity_event_kind: String,
-    pub(super) amount_a: u64,
-    pub(super) amount_b: u64,
+    // u64 quantities emitted as strings (can exceed 2^53); see SwapEventResponse.
+    pub(super) amount_a: String,
+    pub(super) amount_b: String,
     pub(super) liquidity_delta: String,
 
-    // Emitted as strings (u64 can exceed 2^53); see SwapEventResponse.
     pub(super) reserve_a_after: String,
     pub(super) reserve_b_after: String,
 
@@ -36,8 +36,8 @@ impl From<MeteoraDammV2LiquidityEvent> for LiquidityEventResponse {
             signature: event.signature.to_string(),
             timestamp: event.timestamp,
             liquidity_event_kind: liquidity_event_kind_str(event.liquidity_event_kind),
-            amount_a: event.amount_a,
-            amount_b: event.amount_b,
+            amount_a: event.amount_a.to_string(),
+            amount_b: event.amount_b.to_string(),
             liquidity_delta: event.liquidity_delta.to_string(),
             reserve_a_after: event.reserve_a_after.to_string(),
             reserve_b_after: event.reserve_b_after.to_string(),
