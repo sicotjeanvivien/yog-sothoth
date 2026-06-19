@@ -14,20 +14,22 @@ import { Rfc3339, U128String } from "./shared";
  * appearing in this projection (see CQRS read model in
  * `crates/core/src/domain/pool_current_state.rs`).
  *
- * `last_sqrt_price` and `liquidity` are emitted as digit-only strings;
- * see the file-level note on u128 handling.
+ * `reserveA`/`reserveB` (u64) and `lastSqrtPrice`/`liquidity` (u128) are
+ * all emitted as digit-only strings to survive the JS 2^53 ceiling.
  */
 export const PoolCurrentStateSchema = z.object({
   poolAddress: z.string().min(1),
   protocol: z.string().min(1),
 
   lastEventAt: Rfc3339,
-  // last_event_kind: z.enum(["swap", "liquidity_add", "liquidity_remove"]),
-  lastEventKind: z.string(),
+  // Closed set on the Rust side (`LastEventKind::as_str`); reject drift.
+  lastEventKind: z.enum(["swap", "liquidity_add", "liquidity_remove"]),
   lastSignature: z.string().min(1),
 
-  reserveA: z.coerce.bigint(),
-  reserveB: z.number().int().nonnegative(),
+  // u64 reserves emitted as digit-only strings (can exceed 2^53); see
+  // the file header. Use `BigInt(value)` for arithmetic.
+  reserveA: U128String,
+  reserveB: U128String,
 
   lastSqrtPrice: U128String.nullable(),
   lastSwapAt: Rfc3339.nullable(),

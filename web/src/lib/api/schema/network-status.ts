@@ -18,6 +18,8 @@
 
 import * as z from "zod";
 
+import { Rfc3339 } from "./shared";
+
 /** The three ingestion-freshness verdicts yog-api can return. */
 export const FreshnessSchema = z.enum(["live", "delayed", "stale"]);
 
@@ -30,12 +32,12 @@ export const NetworkStatusSchema = z.object({
   slot: z.string(),
   // getSlot round-trip latency measured by the indexer's reporter.
   rpcLatencyMs: z.number(),
-  // When the indexer recorded the slot above.
-  observedAt: z.string(),
+  // When the indexer recorded the slot above (DateTime<Utc> → RFC 3339).
+  observedAt: Rfc3339,
   // Ingestion freshness verdict.
   freshness: FreshnessSchema,
   // Timestamp of the most recent indexed event; null on an empty DB.
-  lastEventAt: z.string().nullable(),
+  lastEventAt: Rfc3339.nullable(),
 });
 
 /** Validated network status payload. */

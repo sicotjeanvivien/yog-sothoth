@@ -20,8 +20,10 @@ export const LiquidityEventSchema = z.object({
   amountB: z.number().int().nonnegative(),
   liquidityDelta: U128String,
 
-  reserveAAfter: z.number().int().nonnegative(),
-  reserveBAfter: z.number().int().nonnegative(),
+  // u64 reserves emitted as digit-only strings (can exceed 2^53); see
+  // SwapEventSchema. Use `BigInt(value)` for arithmetic.
+  reserveAAfter: U128String,
+  reserveBAfter: U128String,
 
   position: z.string().min(1),
   owner: z.string().min(1),

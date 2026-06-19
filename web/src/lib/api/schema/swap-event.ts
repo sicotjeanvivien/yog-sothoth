@@ -18,8 +18,11 @@ export const SwapEventSchema = z.object({
   amountA: z.number().int().nonnegative(),
   amountB: z.number().int().nonnegative(),
 
-  reserveAAfter: z.coerce.bigint(),
-  reserveBAfter: z.number().int().nonnegative(),
+  // Reserves are `u64` emitted as digit-only strings: a pool balance in
+  // atomic units can exceed 2^53, which a JSON-number consumer truncates.
+  // Same handling as `nextSqrtPrice`. Use `BigInt(value)` for arithmetic.
+  reserveAAfter: U128String,
+  reserveBAfter: U128String,
   nextSqrtPrice: U128String,
 
   claimingFee: z.number().int().nonnegative(),

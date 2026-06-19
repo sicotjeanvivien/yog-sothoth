@@ -47,8 +47,8 @@ export async function PoolDetailKpis({
   const composition =
     state !== null
       ? computePoolComposition({
-        reserveA: String(state.reserveA),
-        reserveB: String(state.reserveB),
+        reserveA: state.reserveA,
+        reserveB: state.reserveB,
         decimalsA: pool.tokenA.decimals,
         decimalsB: pool.tokenB.decimals,
         priceAUsd: pool.tokenA.price?.usd ?? null,
