@@ -86,6 +86,8 @@
 - [x] Ajout Client Browser
 	- [x] lib/api/browser/network-status.ts — browser-side, exposes fetchNetworkStatusBrowser
 - [x] KPI - Current Pool Price — carte KPI « prix courant » sur la page pool, dérivée des **réserves** (convention projet : prix calculé au query-time depuis les réserves, pas le `sqrt_price`). Helper pur `computePoolPrice` + `formatPrice` (testés). Affichée en notation paire (`SOL/USDC` = prix de A en B), gated sur `state` + symboles résolus (décimales fiables) + flag `poolPriceImbalance` (enfin câblé)
+	- [x] Layout KPI strip — les 5 cartes sur une rangée écrasaient le donut. Séparé en deux blocs côte à côte sur `lg` (KPICards en grille 2×2 d'un côté, `PoolCompositionCard` de l'autre), hauteurs égalisées par stretch, ratio 5/9–4/9
+- [ ] Enrichir `PoolCompositionCard` — la carte ne montre aujourd'hui que la part de valeur (%) par token + la TVL au centre. Pistes : montant USD par côté (pas seulement le %), réserves en unités humaines (ex. « 1 234 SOL / 187k USDC »), et surtout le volet **imbalance** annoncé par le flag `poolPriceImbalance` mais pas encore affiché — déséquilibre du prix implicite du pool (ratio des réserves) vs prix oracle de marché (signal d'arbitrage). À cadrer côté produit.
 
 ##### PagePool
 - [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage. Je pense que c'est pas vraiment possible sinon faut du back pour pouvoir récupérer plusieurs pool via des PubKey . 
