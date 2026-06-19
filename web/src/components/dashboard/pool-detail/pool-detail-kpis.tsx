@@ -119,7 +119,7 @@ export async function PoolDetailKpis({
       tokenB={pool.tokenB}
       composition={composition}
       tvlUsd={pool.tvlUsd}
-      className="lg:col-span-2 lg:h-full"
+      className="lg:col-span-4 lg:h-full"
     />
   );
 
@@ -127,12 +127,12 @@ export async function PoolDetailKpis({
     <section className="px-6 lg:px-10">
       {compositionCard ? (
         // Two blocks side by side on large screens: the KPI cards as a
-        // 2-up grid (two rows) over three fifths, the donut its own two
-        // fifths. Both columns stretch to the same height (default grid
+        // 2-up grid (two rows) over five ninths, the donut its own four
+        // ninths. Both columns stretch to the same height (default grid
         // `items-stretch`); the KPI grid fills it via `grid-rows-2` and
         // the donut card via `h-full`, so the two blocks line up exactly.
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3 lg:h-full lg:grid-rows-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-9">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-5 lg:h-full lg:grid-rows-2">
             {kpiCards}
           </div>
           {compositionCard}
