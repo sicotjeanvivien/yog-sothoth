@@ -60,6 +60,7 @@
 **Phase 2 — crate `Yog-Analytic` (différé, déclenché empiriquement)**
 - [ ] Crate `yog-analytic` : calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker ; cf. contraintes ci-dessus)
 - [ ] Déclencheur : quand une requête analytique **mesurée** franchit un seuil réel — en particulier dès l'ouverture de l'allowlist `watched_pools` / montée du throughput cible (re-mesurer alors, le chiffre dev de juin 2026 n'est plus représentatif)
+
 #### yog-api
 - [x] `health.rs` — vérifier que ce n'est qu'une liveness, pas une readiness
 - [ ] `MIDDLEWARE  CORS`
@@ -71,15 +72,15 @@
 
 #### Frontend
 - [ ] Copy-to-clipboard sur l'adresse Solana du wallet `support-us` (actuellement plain text server-side)
-- [ ] Revoir /lib/api/schema — problème si valeur nul
-	- [ ] api-error-body
-	- [ ] liquidity-event
-	- [ ] network-status
-	- [ ] page
-	- [ ] pool-center-state
-	- [ ] pool
-	- [ ] price
-	- [ ] swap-event
+- [x] Revoir /lib/api/schema — problème si valeur nul . Vérife type data possible — revue complète des 11 schémas contre les DTO Rust. Conclusion : nullabilité OK partout (les `Option<…>` Rust → `.nullable()`), `BigDecimal=string` correct (rust_decimal sérialise en string par défaut). Deux corrections livrées : (1) symétrie A/B des réserves + resserrements `Rfc3339`/enum ; (2) réserves `u64` → string côté API pour ne pas tronquer au-delà de 2^53. **Reste en suspens** : `amountA/amountB` et fees `u64` ont le même risque 2^53 (laissés en number, magnitudes plus faibles, blast radius consommateur plus large)
+	- [x] api-error-body — conforme RFC 9457, RAS
+	- [x] liquidity-event — réserves `u64` → `U128String`
+	- [x] network-status — `observedAt`/`lastEventAt` resserrés en `Rfc3339`
+	- [x] page — RAS
+	- [x] pool-center-state (pool-current-state) — réserves `u64` → `U128String`, `lastEventKind` → `z.enum`
+	- [x] pool — RAS (nullabilité + USD string déjà corrects, couverts par tests)
+	- [x] price — RAS
+	- [x] swap-event — réserves `u64` → `U128String` (A/B était asymétrique : A en bigint, B en number)
 	- [x] token — `logoUri` : le schéma `url|null` était **correct**, c'est l'API qui émettait `""`. Fix côté backend (yog-api normalise `""`→`null` à la sérialisation + yog-context filtre les images vides du provider Helius). Schéma front laissé strict (anti-corruption)
 - [x] suppression BFF
 - [x] Ajout Client Browser
@@ -273,7 +274,7 @@
 
 ### Transverse v0.1
 
-#### Convention code/tests — un fichier de tests séparé
+#### ✅ Convention code/tests — un fichier de tests séparé
 > Harmoniser sur le pattern déjà majoritaire : code dans `xxx.rs`, tests dans
 > `xxx_tests.rs` attaché par `#[cfg(test)] #[path = "xxx_tests.rs"] mod tests;`
 > (ex. `pool_analytics/rows.rs` + `rows_tests.rs`, `network_status_service.rs`
