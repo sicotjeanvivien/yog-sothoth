@@ -3,10 +3,10 @@
  * value the chain emits) as a human-readable string with the
  * token's symbol appended.
  *
- *   formatTokenAmount(3450000000, 9, "SOL")     → "3.45 SOL"
- *   formatTokenAmount(512240000, 6, "USDC")     → "512.24 USDC"
- *   formatTokenAmount(1250000000000, 6, "USDC") → "1.25M USDC"
- *   formatTokenAmount(123, 9, "SOL")            → "0.000000123 SOL"
+ *   formatTokenAmount("3450000000", 9, "SOL")     → "3.45 SOL"
+ *   formatTokenAmount("512240000", 6, "USDC")     → "512.24 USDC"
+ *   formatTokenAmount("1250000000000", 6, "USDC") → "1.25M USDC"
+ *   formatTokenAmount("123", 9, "SOL")            → "0.000000123 SOL"
  *
  * The function picks a precision strategy from the order of
  * magnitude:
@@ -16,10 +16,11 @@
  *   ≥ 0.000001 → up to 6 significant digits, no trailing zeros
  *   <          → "< 0.000001" (sub-micro amounts are noise)
  *
- * `amount` is taken as `number` to keep the call sites simple;
- * native u64 values from the API arrive as JS numbers and stay
- * within `Number.MAX_SAFE_INTEGER` for any realistic SPL amount
- * (2^53 ≈ 9 PB of atomic units).
+ * `amount` is a digit-only string: native u64 values arrive from the
+ * API as strings to survive the JS 2^53 ceiling (a u64 atomic amount
+ * can exceed it). For display we downcast to a float — the precision
+ * beyond ~15 significant digits is irrelevant once formatted — but the
+ * exact value is preserved on the wire for callers that need it.
  */
 
 const COMPACT_FORMATTER = new Intl.NumberFormat("en-US", {
@@ -39,17 +40,18 @@ const SMALL_AMOUNT_FORMATTER = new Intl.NumberFormat("en-US", {
 const MIN_DISPLAYABLE = 1e-6;
 
 export function formatTokenAmount(
-  amount: number,
+  amount: string,
   decimals: number,
   symbol: string | null,
 ): string {
   const sym = symbol ?? "?";
 
-  if (!Number.isFinite(amount) || amount < 0) {
+  const raw = Number(amount);
+  if (!Number.isFinite(raw) || raw < 0) {
     return `— ${sym}`;
   }
 
-  const value = amount / 10 ** decimals;
+  const value = raw / 10 ** decimals;
 
   if (value === 0) {
     return `0 ${sym}`;

@@ -72,15 +72,15 @@
 
 #### Frontend
 - [ ] Copy-to-clipboard sur l'adresse Solana du wallet `support-us` (actuellement plain text server-side)
-- [x] Revoir /lib/api/schema — problème si valeur nul . Vérife type data possible — revue complète des 11 schémas contre les DTO Rust. Conclusion : nullabilité OK partout (les `Option<…>` Rust → `.nullable()`), `BigDecimal=string` correct (rust_decimal sérialise en string par défaut). Deux corrections livrées : (1) symétrie A/B des réserves + resserrements `Rfc3339`/enum ; (2) réserves `u64` → string côté API pour ne pas tronquer au-delà de 2^53. **Reste en suspens** : `amountA/amountB` et fees `u64` ont le même risque 2^53 (laissés en number, magnitudes plus faibles, blast radius consommateur plus large)
+- [x] Revoir /lib/api/schema — problème si valeur nul . Vérife type data possible — revue complète des 11 schémas contre les DTO Rust. Conclusion : nullabilité OK partout (les `Option<…>` Rust → `.nullable()`), `BigDecimal=string` correct (rust_decimal sérialise en string par défaut). Corrections livrées : (1) symétrie A/B des réserves + resserrements `Rfc3339`/enum ; (2) **toutes** les quantités `u64` (réserves, `amount*`, fees) → string côté API pour ne pas tronquer au-delà de 2^53 — `formatTokenAmount` accepte désormais une string et downcast à l'affichage
 	- [x] api-error-body — conforme RFC 9457, RAS
-	- [x] liquidity-event — réserves `u64` → `U128String`
+	- [x] liquidity-event — `amount*` + réserves `u64` → `U128String`
 	- [x] network-status — `observedAt`/`lastEventAt` resserrés en `Rfc3339`
 	- [x] page — RAS
 	- [x] pool-center-state (pool-current-state) — réserves `u64` → `U128String`, `lastEventKind` → `z.enum`
 	- [x] pool — RAS (nullabilité + USD string déjà corrects, couverts par tests)
 	- [x] price — RAS
-	- [x] swap-event — réserves `u64` → `U128String` (A/B était asymétrique : A en bigint, B en number)
+	- [x] swap-event — `amount*` + réserves + fees `u64` → `U128String` (A/B était asymétrique : A en bigint, B en number)
 	- [x] token — `logoUri` : le schéma `url|null` était **correct**, c'est l'API qui émettait `""`. Fix côté backend (yog-api normalise `""`→`null` à la sérialisation + yog-context filtre les images vides du provider Helius). Schéma front laissé strict (anti-corruption)
 - [x] suppression BFF
 - [x] Ajout Client Browser

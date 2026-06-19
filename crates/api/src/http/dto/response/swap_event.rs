@@ -34,20 +34,20 @@ pub(crate) struct SwapEventResponse {
     pub(crate) timestamp: DateTime<Utc>,
 
     pub(crate) trade_direction: String,
-    pub(crate) amount_a: u64,
-    pub(crate) amount_b: u64,
+    // All `u64` token quantities (amounts, reserves, fees) are emitted as
+    // strings: an atomic-unit value can exceed 2^53, which a JSON-number
+    // consumer (JS) silently truncates. Same rationale as `next_sqrt_price`.
+    pub(crate) amount_a: String,
+    pub(crate) amount_b: String,
 
-    // Reserves are `u64` but emitted as strings: a pool balance in atomic
-    // units can exceed 2^53, which a JSON-number consumer (JS) silently
-    // truncates. Same rationale as `next_sqrt_price` below.
     pub(crate) reserve_a_after: String,
     pub(crate) reserve_b_after: String,
     pub(crate) next_sqrt_price: String,
 
-    pub(crate) claiming_fee: u64,
-    pub(crate) protocol_fee: u64,
-    pub(crate) compounding_fee: u64,
-    pub(crate) referral_fee: u64,
+    pub(crate) claiming_fee: String,
+    pub(crate) protocol_fee: String,
+    pub(crate) compounding_fee: String,
+    pub(crate) referral_fee: String,
     pub(crate) fee_token_is_a: bool,
 }
 
@@ -59,15 +59,15 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
             signature: event.signature.to_string(),
             timestamp: event.timestamp,
             trade_direction: trade_direction_str(event.trade_direction),
-            amount_a: event.amount_a,
-            amount_b: event.amount_b,
+            amount_a: event.amount_a.to_string(),
+            amount_b: event.amount_b.to_string(),
             reserve_a_after: event.reserve_a_after.to_string(),
             reserve_b_after: event.reserve_b_after.to_string(),
             next_sqrt_price: event.next_sqrt_price.to_string(),
-            claiming_fee: event.claiming_fee,
-            protocol_fee: event.protocol_fee,
-            compounding_fee: event.compounding_fee,
-            referral_fee: event.referral_fee,
+            claiming_fee: event.claiming_fee.to_string(),
+            protocol_fee: event.protocol_fee.to_string(),
+            compounding_fee: event.compounding_fee.to_string(),
+            referral_fee: event.referral_fee.to_string(),
             fee_token_is_a: event.fee_token_is_a,
         }
     }

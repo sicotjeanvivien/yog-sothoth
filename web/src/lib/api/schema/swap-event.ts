@@ -15,20 +15,21 @@ export const SwapEventSchema = z.object({
   timestamp: Rfc3339,
 
   tradeDirection: z.enum(["a_to_b", "b_to_a"]),
-  amountA: z.number().int().nonnegative(),
-  amountB: z.number().int().nonnegative(),
+  // All u64 token quantities (amounts, reserves, fees) are emitted as
+  // digit-only strings: an atomic-unit value can exceed 2^53, which a
+  // JSON-number consumer truncates. Same handling as `nextSqrtPrice`.
+  // Use `BigInt(value)` for arithmetic.
+  amountA: U128String,
+  amountB: U128String,
 
-  // Reserves are `u64` emitted as digit-only strings: a pool balance in
-  // atomic units can exceed 2^53, which a JSON-number consumer truncates.
-  // Same handling as `nextSqrtPrice`. Use `BigInt(value)` for arithmetic.
   reserveAAfter: U128String,
   reserveBAfter: U128String,
   nextSqrtPrice: U128String,
 
-  claimingFee: z.number().int().nonnegative(),
-  protocolFee: z.number().int().nonnegative(),
-  compoundingFee: z.number().int().nonnegative(),
-  referralFee: z.number().int().nonnegative(),
+  claimingFee: U128String,
+  protocolFee: U128String,
+  compoundingFee: U128String,
+  referralFee: U128String,
   feeTokenIsA: z.boolean(),
 });
 

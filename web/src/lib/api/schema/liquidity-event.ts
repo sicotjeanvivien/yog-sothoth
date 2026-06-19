@@ -16,12 +16,12 @@ export const LiquidityEventSchema = z.object({
   timestamp: Rfc3339,
 
   liquidityEventKind: z.enum(["add", "remove"]),
-  amountA: z.number().int().nonnegative(),
-  amountB: z.number().int().nonnegative(),
+  // u64 quantities emitted as digit-only strings (can exceed 2^53); see
+  // SwapEventSchema. Use `BigInt(value)` for arithmetic.
+  amountA: U128String,
+  amountB: U128String,
   liquidityDelta: U128String,
 
-  // u64 reserves emitted as digit-only strings (can exceed 2^53); see
-  // SwapEventSchema. Use `BigInt(value)` for arithmetic.
   reserveAAfter: U128String,
   reserveBAfter: U128String,
 
