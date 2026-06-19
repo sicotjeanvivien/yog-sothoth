@@ -16,7 +16,7 @@
  */
 
 const CARD_CLASS =
-  "rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/50 px-3 py-2 lg:px-4 lg:py-3";
+  "flex h-full flex-col justify-center rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/50 px-3 py-2 lg:px-4 lg:py-3";
 
 const LABEL_CLASS =
   "text-[17px] font-semibold tracking-[0.2em] text-slate-400 uppercase";

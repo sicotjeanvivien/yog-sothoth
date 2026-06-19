@@ -35,7 +35,7 @@ const COLOR_A = "#8b5cf6"; // sothoth violet
 const COLOR_B = "#3b82f6"; // signal blue
 
 const CARD_CLASS =
-  "rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/50 px-3 py-2 lg:px-4 lg:py-3";
+  "flex flex-col rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/50 px-3 py-2 lg:px-4 lg:py-3";
 
 const LABEL_CLASS =
   "text-[17px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
@@ -46,18 +46,24 @@ export function PoolCompositionCard({
   tokenB,
   composition,
   tvlUsd,
+  className,
 }: {
   label: string;
   tokenA: TokenResponse;
   tokenB: TokenResponse;
   composition: PoolComposition;
   tvlUsd: string | null;
+  /** Extra classes from the parent (e.g. `h-full` to match a sibling block). */
+  className?: string;
 }) {
   return (
-    <div className={CARD_CLASS}>
+    <div className={`${CARD_CLASS} ${className ?? ""}`}>
       <p className={LABEL_CLASS}>{label}</p>
 
-      <div className="mt-1 flex items-center gap-5">
+      {/* `flex-1` lets the donut row absorb any extra height when the card is
+          stretched to match the KPI block, keeping the donut vertically
+          centred instead of leaving dead space at the bottom. */}
+      <div className="mt-1 flex flex-1 items-center gap-5">
         {/* Donut */}
         <Donut shareA={composition.shareA} tvlUsd={tvlUsd} />
 
