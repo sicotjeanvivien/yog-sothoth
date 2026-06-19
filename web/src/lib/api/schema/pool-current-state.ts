@@ -22,11 +22,13 @@ export const PoolCurrentStateSchema = z.object({
   protocol: z.string().min(1),
 
   lastEventAt: Rfc3339,
-  // last_event_kind: z.enum(["swap", "liquidity_add", "liquidity_remove"]),
-  lastEventKind: z.string(),
+  // Closed set on the Rust side (`LastEventKind::as_str`); reject drift.
+  lastEventKind: z.enum(["swap", "liquidity_add", "liquidity_remove"]),
   lastSignature: z.string().min(1),
 
-  reserveA: z.coerce.bigint(),
+  // Both reserves are `u64` on the wire (JSON numbers); model the two
+  // sides identically.
+  reserveA: z.number().int().nonnegative(),
   reserveB: z.number().int().nonnegative(),
 
   lastSqrtPrice: U128String.nullable(),

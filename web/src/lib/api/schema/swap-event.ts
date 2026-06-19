@@ -18,7 +18,10 @@ export const SwapEventSchema = z.object({
   amountA: z.number().int().nonnegative(),
   amountB: z.number().int().nonnegative(),
 
-  reserveAAfter: z.coerce.bigint(),
+  // Both reserves are `u64` on the wire (JSON numbers); model the two
+  // sides identically. See the u64/2^53 note in the `next_sqrt_price`
+  // file header on the Rust DTO.
+  reserveAAfter: z.number().int().nonnegative(),
   reserveBAfter: z.number().int().nonnegative(),
   nextSqrtPrice: U128String,
 
