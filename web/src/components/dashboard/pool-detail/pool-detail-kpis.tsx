@@ -7,13 +7,16 @@
  *   - Volume 24h       (always rendered; `—` when null)
  *   - Fees 24h         (always rendered; `—` when null) — realized
  *                      trading fee revenue over the window
+ *   - Current price    (the pool's quoted A↔B rate, derived from the
+ *                      latest reserves; rendered only when computable)
  *   - Pool composition (donut, rendered only when computable)
  *
- * The composition card is dropped from the layout when either side
- * of the pool has no known price or when the pool has no current
- * state yet — the grid collapses to two cards rather than showing
- * a placeholder, in line with the broader rule of "factual or
- * absent, never fake".
+ * The price and composition cards are dropped from the layout when
+ * the pool has no current state yet (or, for composition, when a side
+ * has no known USD price) — the grid collapses rather than showing a
+ * placeholder, in line with the broader rule of "factual or absent,
+ * never fake". The price needs only the reserves and the resolved
+ * token metadata (decimals + symbol), not the USD prices.
  *
  * Inputs:
  *   - `pool`: identity + analytics from `GET /api/pools/{address}`
@@ -27,8 +30,10 @@ import { getTranslations } from "next-intl/server";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-state";
 
+import { isFeatureEnabled } from "@/config/features";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { computePoolComposition } from "@/lib/format/pool-composition";
+import { computePoolPrice, formatPrice } from "@/lib/format/pool-price";
 
 import { KpiCard } from "./kpi-card";
 import { PoolCompositionCard } from "./pool-composition-card";
@@ -43,7 +48,7 @@ export async function PoolDetailKpis({
   const t = await getTranslations("Dashboard.PoolDetail.kpis");
 
   // Composition needs the current state AND both prices. Anything
-  // missing → don't render the third card.
+  // missing → don't render the donut card.
   const composition =
     state !== null
       ? computePoolComposition({
@@ -56,12 +61,33 @@ export async function PoolDetailKpis({
       })
       : null;
 
-  // Grid layout: 1 column on mobile. Three base KPIs (TVL, Volume,
-  // Fees) always render — 3 cols; with the composition donut it
-  // becomes a 4th card — 4 cols. Tailwind class chosen accordingly.
-  const gridClass = composition
-    ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-    : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3";
+  // Current price needs only the reserves and resolved token metadata.
+  // Behind the `poolPriceImbalance` flag ("Current price […] derived from
+  // latest reserves"). Gate on both symbols being present: it both labels
+  // the card (pair notation) and signals that the decimals are real, not
+  // the 0 default the API returns for an unresolved mint (which would skew
+  // the rate).
+  const price =
+    isFeatureEnabled("poolPriceImbalance") &&
+      state !== null &&
+      pool.tokenA.symbol &&
+      pool.tokenB.symbol
+      ? computePoolPrice({
+        reserveA: state.reserveA,
+        reserveB: state.reserveB,
+        decimalsA: pool.tokenA.decimals,
+        decimalsB: pool.tokenB.decimals,
+      })
+      : null;
+
+  // Grid layout: 1 column on mobile, 2 on small. Three base KPIs (TVL,
+  // Volume, Fees) always render; the price and composition cards are
+  // conditional, so the large-screen column count tracks the actual
+  // card count (3 → 5).
+  const cardCount = 3 + (price ? 1 : 0) + (composition ? 1 : 0);
+  const lgCols =
+    cardCount >= 5 ? "lg:grid-cols-5" : cardCount === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3";
+  const gridClass = `grid grid-cols-1 gap-4 sm:grid-cols-2 ${lgCols}`;
 
   return (
     <section className="px-6 lg:px-10">
@@ -78,6 +104,14 @@ export async function PoolDetailKpis({
           label={t("fees24h")}
           valueCompact={formatUsdCompact(pool.fees24hUsd)}
         />
+        {price && (
+          // Pair notation: "SOL/USDC" reads as "price of SOL in USDC",
+          // i.e. token A (base) quoted in token B. `priceAInB` matches.
+          <KpiCard
+            label={`${pool.tokenA.symbol ?? "?"}/${pool.tokenB.symbol ?? "?"}`}
+            valueCompact={formatPrice(price.priceAInB)}
+          />
+        )}
         {composition && (
           <PoolCompositionCard
             label={t("composition")}
