@@ -26,6 +26,7 @@ import {
   ShieldIcon,
   type IconProps,
 } from "@/components/shared/icon";
+import { CopyButton } from "@/components/shared/copy-button";
 
 const GITHUB_ISSUES_URL = "https://github.com/sicotjeanvivien/yog-sothoth/issues";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/sicotjeanvivien";
@@ -50,7 +51,7 @@ const CTA_SECONDARY_CLASS =
   "inline-flex items-center justify-center gap-2 rounded-[4px] border border-slate-700 bg-transparent px-5 py-[10px] text-[14px] font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800/40";
 
 const WALLET_CLASS =
-  "mt-5 rounded-[4px] border border-sothoth-500/15 bg-cosmos-950/60 px-3 py-2 font-mono text-[12px] break-all text-slate-300";
+  "mt-5 flex items-center justify-between gap-3 rounded-[4px] border border-sothoth-500/15 bg-cosmos-950/60 px-3 py-2 font-mono text-[12px] text-slate-300";
 
 // ── Component ─────────────────────────────────────────────────────────
 
@@ -115,14 +116,17 @@ async function SponsorCard() {
         </a>
       </div>
 
-      {/* Solana wallet — copy-friendly box. No copy-to-clipboard
-          button on purpose; that would force the card to become a
-          Client Component for a single nice-to-have. */}
+      {/* Solana wallet — copy-friendly box. `CopyButton` is an
+          isolated Client Component island, so this card itself stays
+          a Server Component. */}
       <div className="mt-6">
         <p className="text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
           {t("solanaLabel")}
         </p>
-        <div className={WALLET_CLASS}>{SOLANA_WALLET_ADDRESS}</div>
+        <div className={WALLET_CLASS}>
+          <span className="min-w-0 break-all">{SOLANA_WALLET_ADDRESS}</span>
+          <CopyButton value={SOLANA_WALLET_ADDRESS} label={t("copyAddress")} />
+        </div>
       </div>
     </CardShell>
   );

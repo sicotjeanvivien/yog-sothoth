@@ -47,7 +47,7 @@ import { formatUsd } from "@/lib/format/format-usd";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
-import { CopyButton } from "./copy-button";
+import { CopyButton } from "@/components/shared/copy-button";
 
 // ── Tailwind class fragments ─────────────────────────────────────────
 

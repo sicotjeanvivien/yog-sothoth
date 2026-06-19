@@ -71,7 +71,7 @@
 - [x] filtrage `/readyz`
 
 #### Frontend
-- [ ] Copy-to-clipboard sur l'adresse Solana du wallet `support-us` (actuellement plain text server-side)
+- [x] Copy-to-clipboard sur l'adresse Solana du wallet `support-us` — `CopyButton` promu de `dashboard/pool-detail/` vers `shared/` (2ᵉ consommateur, cross-feature) ; ajouté en îlot client dans la box wallet, la carte Sponsor reste Server Component. Clé i18n `sponsor.copyAddress` (en/fr)
 - [x] Revoir /lib/api/schema — problème si valeur nul . Vérife type data possible — revue complète des 11 schémas contre les DTO Rust. Conclusion : nullabilité OK partout (les `Option<…>` Rust → `.nullable()`), `BigDecimal=string` correct (rust_decimal sérialise en string par défaut). Corrections livrées : (1) symétrie A/B des réserves + resserrements `Rfc3339`/enum ; (2) **toutes** les quantités `u64` (réserves, `amount*`, fees) → string côté API pour ne pas tronquer au-delà de 2^53 — `formatTokenAmount` accepte désormais une string et downcast à l'affichage
 	- [x] api-error-body — conforme RFC 9457, RAS
 	- [x] liquidity-event — `amount*` + réserves `u64` → `U128String`
