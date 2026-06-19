@@ -29,7 +29,7 @@ import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { LiquidityEventResponse } from "@/lib/api/schema/liquidity-event";
 
 import { SolscanIcon } from "@/components/shared/icon";
-import { CopyButton } from "./copy-button";
+import { CopyButton } from "@/components/shared/copy-button";
 
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";

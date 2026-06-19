@@ -34,7 +34,8 @@
       "body": "If you want to support Yog-Scope financially, GitHub Sponsors and direct Solana donations are both available.",
       "fundsNote": "Funds go toward infrastructure costs (hosting, RPC quota) and ongoing development. The project remains open source and the public dashboard remains free.",
       "ctaGithub": "Sponsor on GitHub",
-      "solanaLabel": "Solana wallet"
+      "solanaLabel": "Solana wallet",
+      "copyAddress": "Copy wallet address"
     }
   }
 }

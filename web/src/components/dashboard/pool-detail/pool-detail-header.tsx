@@ -35,7 +35,7 @@ import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
-import { CopyButton } from "./copy-button";
+import { CopyButton } from "@/components/shared/copy-button";
 
 const CTA_CLASS =
   "inline-flex items-center justify-center gap-2 rounded-[4px] border border-slate-700 bg-transparent px-4 py-[8px] text-[13px] font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800/40";
