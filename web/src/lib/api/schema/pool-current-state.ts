@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { Rfc3339, U128String } from "./shared";
+import { BigDecimal, Rfc3339, U128String } from "./shared";
 
 // ─────────────────────────────────────────────────────────────────────
 // PoolCurrentStateResponse — mirrors `api::http::dto::response::PoolCurrentStateResponse`
@@ -32,6 +32,13 @@ export const PoolCurrentStateSchema = z.object({
   reserveB: U128String,
 
   lastSqrtPrice: U128String.nullable(),
+
+  // Spot price derived server-side from `lastSqrtPrice` (the true DAMM v2
+  // concentrated-liquidity price, not the reserve ratio): units of token B
+  // per 1 token A, decimal-adjusted. `null` when no sqrt_price yet or the
+  // token decimals are unresolved. A `Decimal` → digit-or-dotted string.
+  spotPriceAInB: BigDecimal.nullable(),
+
   lastSwapAt: Rfc3339.nullable(),
 
   liquidity: U128String.nullable(),

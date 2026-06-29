@@ -1,57 +1,12 @@
 /**
- * Pool spot price — pure math helpers.
+ * Pool spot price — display formatting.
  *
- * Derives the pool's quoted exchange rate between its two tokens from
- * the latest reserves. This follows the project's stated convention:
- * price is computed at query time from reserves, not from `sqrt_price`
- * (see the `MeteoraDammV2SwapEvent` domain doc — "no derived analytics
- * […] computed at query time from the reserves recorded here").
- *
- *   priceAInB = (reserveB / 10^decB) / (reserveA / 10^decA)
- *             = how many units of token B one unit of token A is worth
- *   priceBInA = its reciprocal
- *
- * Returns `null` when a reserve is missing / non-finite or when either
- * side is empty — a zero reserve has no defined price. The caller then
- * omits the price card (factual or absent, never fake).
+ * The spot price itself is derived **server-side** from the pool's
+ * `sqrt_price` and exposed as `PoolCurrentStateResponse.spotPriceAInB`
+ * (DAMM v2 is concentrated liquidity, so the reserve ratio is *not* the
+ * spot price — see `yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b`).
+ * The frontend only formats that value for display.
  */
-
-export type PoolPrice = {
-  /** Units of B per 1 unit of A. */
-  priceAInB: number;
-  /** Units of A per 1 unit of B. */
-  priceBInA: number;
-};
-
-export type PoolPriceInput = {
-  /** Reserve in native units, integer string from the API. */
-  reserveA: string;
-  reserveB: string;
-  /** Decimals of each token. */
-  decimalsA: number;
-  decimalsB: number;
-};
-
-export function computePoolPrice(input: PoolPriceInput): PoolPrice | null {
-  const reserveA = Number.parseFloat(input.reserveA);
-  const reserveB = Number.parseFloat(input.reserveB);
-
-  if (!Number.isFinite(reserveA) || !Number.isFinite(reserveB)) {
-    return null;
-  }
-
-  const humanA = reserveA / 10 ** input.decimalsA;
-  const humanB = reserveB / 10 ** input.decimalsB;
-
-  if (humanA <= 0 || humanB <= 0) {
-    return null;
-  }
-
-  return {
-    priceAInB: humanB / humanA,
-    priceBInA: humanA / humanB,
-  };
-}
 
 // ── Formatting ────────────────────────────────────────────────────────
 
