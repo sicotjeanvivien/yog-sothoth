@@ -22,6 +22,7 @@
 import type { TokenResponse } from "@/lib/api/schema/token";
 import type { PoolComposition } from "@/lib/format/pool-composition";
 import { shareToCircleCoords } from "@/lib/format/pool-composition";
+import { formatTokenAmount } from "@/lib/format/format-token-amount";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 
 // Visual tuning. The donut viewBox is centered on (0,0) with the
@@ -46,6 +47,8 @@ export function PoolCompositionCard({
   tokenB,
   composition,
   tvlUsd,
+  reserveA,
+  reserveB,
   className,
 }: {
   label: string;
@@ -53,6 +56,9 @@ export function PoolCompositionCard({
   tokenB: TokenResponse;
   composition: PoolComposition;
   tvlUsd: string | null;
+  /** Reserve in native units (integer string from the API) per side. */
+  reserveA: string;
+  reserveB: string;
   /** Extra classes from the parent (e.g. `h-full` to match a sibling block). */
   className?: string;
 }) {
@@ -68,16 +74,22 @@ export function PoolCompositionCard({
         <Donut shareA={composition.shareA} tvlUsd={tvlUsd} />
 
         {/* Legend */}
-        <div className="flex flex-1 flex-col gap-2 text-[13px]">
+        <div className="flex flex-1 flex-col gap-3 text-[13px]">
           <LegendRow
             color={COLOR_A}
             symbol={tokenA.symbol ?? "?"}
             share={composition.shareA}
+            valueUsd={composition.valueAUsd}
+            reserve={reserveA}
+            decimals={tokenA.decimals}
           />
           <LegendRow
             color={COLOR_B}
             symbol={tokenB.symbol ?? "?"}
             share={composition.shareB}
+            valueUsd={composition.valueBUsd}
+            reserve={reserveB}
+            decimals={tokenB.decimals}
           />
         </div>
       </div>
@@ -179,28 +191,53 @@ function ArcPath({
   return <path d={d} fill={color} />;
 }
 
+/**
+ * Two-line legend entry for one side of the pool:
+ *
+ *   [dot] SOL                    $1.2M
+ *         1,234 SOL              51.2%
+ *
+ * Top line carries the identity (colour dot + symbol) and the USD value
+ * of the side; bottom line the human-readable reserve and the share of
+ * TVL. All four numbers are factual (reserves from current state, prices
+ * from the latest quote) — no derived signal.
+ */
 function LegendRow({
   color,
   symbol,
   share,
+  valueUsd,
+  reserve,
+  decimals,
 }: {
   color: string;
   symbol: string;
   share: number;
+  valueUsd: number;
+  reserve: string;
+  decimals: number;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <span
-          aria-hidden="true"
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span className="truncate font-medium text-slate-100">{symbol}</span>
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            aria-hidden="true"
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span className="truncate font-medium text-slate-100">{symbol}</span>
+        </div>
+        <span className="font-mono text-slate-100">
+          {formatUsdCompact(String(valueUsd))}
+        </span>
       </div>
-      <span className="font-mono text-slate-400">
-        {(share * 100).toFixed(1)}%
-      </span>
+      <div className="flex items-center justify-between gap-3 pl-[18px] text-[11px] text-slate-400">
+        <span className="truncate font-mono">
+          {formatTokenAmount(reserve, decimals, symbol)}
+        </span>
+        <span className="font-mono">{(share * 100).toFixed(1)}%</span>
+      </div>
     </div>
   );
 }

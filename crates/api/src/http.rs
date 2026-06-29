@@ -18,7 +18,7 @@ mod query;
 
 use std::net::SocketAddr;
 
-use axum::{Router, routing::get};
+use axum::{Router, http::HeaderValue, routing::get};
 use tower_http::{
     request_id::{PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
@@ -42,7 +42,7 @@ use crate::http::middleware::tracing::{
 ///
 /// Cross-cutting headers (security, CORS, frame-options) apply to
 /// both — they are hung on the merged router below.
-pub(crate) fn build_router(state: AppState) -> Router {
+pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValue>) -> Router {
     let probes = Router::new()
         .route("/healthz", get(handlers::health::healthz))
         .route("/readyz", get(handlers::health::readyz));
@@ -105,18 +105,22 @@ pub(crate) fn build_router(state: AppState) -> Router {
         // No log noise concern — these layers don't emit logs.
         .layer(middleware::security_headers_layer())
         .layer(middleware::frame_options_layer())
-        .layer(middleware::cors_layer())
+        .layer(middleware::cors_layer(cors_allowed_origins))
 }
 
 /// Run the axum server on `bind_addr` until the process is killed.
-pub(crate) async fn run(state: AppState, bind_addr: SocketAddr) -> anyhow::Result<()> {
+pub(crate) async fn run(
+    state: AppState,
+    bind_addr: SocketAddr,
+    cors_allowed_origins: Vec<HeaderValue>,
+) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .map_err(|e| anyhow::anyhow!("failed to bind on {bind_addr}: {e}"))?;
 
     info!(addr = %bind_addr, "API server listening");
 
-    let router = build_router(state);
+    let router = build_router(state, cors_allowed_origins);
 
     axum::serve(listener, router)
         .await
