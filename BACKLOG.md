@@ -61,7 +61,7 @@
 - [ ] Crate `yog-analytic` : calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker ; cf. contraintes ci-dessus)
 - [ ] Déclencheur : quand une requête analytique **mesurée** franchit un seuil réel — en particulier dès l'ouverture de l'allowlist `watched_pools` / montée du throughput cible (re-mesurer alors, le chiffre dev de juin 2026 n'est plus représentatif)
 
-#### yog-api
+#### ✅ yog-api
 - [x] `health.rs` — vérifier que ce n'est qu'une liveness, pas une readiness
 - [x] **`MIDDLEWARE CORS`** — `cors_layer` passe de `permissive()` à une liste d'origines explicite. Env var **requise** `API_CORS_ALLOWED_ORIGINS` (CSV, parsée fail-loud en `Vec<HeaderValue>` dans `bootstrap::config`, tests unitaires) → `Config → run → build_router → cors_layer`. API read-only → `allow_methods([GET])`, `allow_headers([content-type])`, `expose_headers([x-request-id])` pour que le client browser remonte l'id de corrélation. SSR (`API_INTERNAL_URL`)/curl sans header `Origin` non affectés. `.env`/`.env.example`/`docker-compose` (api) renseignés (`http://localhost:3000` en dev → origine publique en prod). Vérifié en live : origine autorisée → ACAO échoué ; origine refusée → pas d'ACAO (browser bloque)
 - [x] ErrorResponse RFC 9457

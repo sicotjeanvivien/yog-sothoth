@@ -248,7 +248,17 @@ jobs:
       # yog_context roles — the migrations 001 emit GRANT statements
       # against them, which would fail. Create them as bare login
       # roles (no passwords needed; CI is ephemeral).
-      - name: Pre-create runtime roles
+      #
+      # max_background_workers = 0: migrations 010–013 add continuous-
+      # aggregate refresh policies, after which the TimescaleDB job
+      # scheduler (a background worker) starts mutating the cluster-wide
+      # _timescaledb_catalog asynchronously, racing the very next cagg
+      # migration's DDL and failing it with "tuple concurrently deleted"
+      # (migration 14, intermittently). The test-integration job already
+      # disables the scheduler for the same reason; this job needs it too
+      # because it applies the same migrations. The GUC is postmaster-
+      # context, so it needs a restart to take effect.
+      - name: Pre-create runtime roles and disable TimescaleDB scheduler
         env:
           PGPASSWORD: yog
         run: |
@@ -257,7 +267,15 @@ jobs:
           CREATE ROLE yog_indexer;
           CREATE ROLE yog_api;
           CREATE ROLE yog_context;
+          ALTER SYSTEM SET timescaledb.max_background_workers = 0;
           SQL
+          docker restart "${{ job.services.postgres.id }}"
+          for _ in $(seq 1 30); do
+            pg_isready -h localhost -U yog -d yog_sothoth && break
+            sleep 1
+          done
+          test "$(psql -h localhost -U yog -d yog_sothoth -tAc \
+            'SHOW timescaledb.max_background_workers;')" = "0"
  
       # Apply migrations in the same shape the runtime does, using
       # the standard sqlx CLI command. yog-migrate is the binary
