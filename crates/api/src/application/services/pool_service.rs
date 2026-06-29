@@ -13,6 +13,7 @@
 
 use std::sync::Arc;
 
+use rust_decimal::Decimal;
 use yog_core::{
     Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
     domain::{
@@ -35,6 +36,18 @@ pub(crate) struct EnrichedPoolPage {
     pub(crate) is_first: bool,
     pub(crate) is_last: bool,
 }
+/// A pool's latest observed state plus its derived spot price.
+///
+/// `spot_price_a_in_b` is the on-chain `last_sqrt_price` decoded to a human
+/// price (units of token B per 1 token A) via
+/// [`yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b`]. `None` when there is
+/// no `sqrt_price` yet, or the token decimals needed to rescale it are not
+/// resolved — derived in the service so the HTTP layer only formats.
+pub(crate) struct PoolCurrentStateView {
+    pub(crate) state: PoolCurrentState,
+    pub(crate) spot_price_a_in_b: Option<Decimal>,
+}
+
 // ---------------------------------------------------------------------------
 // Params
 // ---------------------------------------------------------------------------
@@ -199,10 +212,58 @@ impl PoolService {
     pub(crate) async fn get_latest_state(
         &self,
         address: &str,
-    ) -> RepositoryResult<Option<PoolCurrentState>> {
-        self.pool_current_state_repository
+    ) -> RepositoryResult<Option<PoolCurrentStateView>> {
+        let Some(state) = self
+            .pool_current_state_repository
             .get_by_address(address)
-            .await
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        // The spot price lives in `last_sqrt_price`, but rescaling it to human
+        // units needs both tokens' decimals (resolved by yog-context) — absent
+        // either input, the price is simply unknown, not faked.
+        let spot_price_a_in_b = match state.last_sqrt_price {
+            Some(sqrt_price) => {
+                self.spot_price_a_in_b(&state.pool_address, sqrt_price)
+                    .await?
+            }
+            None => None,
+        };
+
+        Ok(Some(PoolCurrentStateView {
+            state,
+            spot_price_a_in_b,
+        }))
+    }
+
+    /// Decode a pool's spot price (token B per 1 token A, human units) from its
+    /// `sqrt_price`, resolving the token decimals it needs. `None` when the
+    /// pool's mints or their metadata are not yet resolved.
+    async fn spot_price_a_in_b(
+        &self,
+        pool_address: &solana_pubkey::Pubkey,
+        sqrt_price: u128,
+    ) -> RepositoryResult<Option<Decimal>> {
+        let Some(pool) = self.pool_repository.find_by_address(pool_address).await? else {
+            return Ok(None);
+        };
+        let (Some(mint_a), Some(mint_b)) = (pool.token_a_mint, pool.token_b_mint) else {
+            return Ok(None);
+        };
+        let (Some(md_a), Some(md_b)) = (
+            self.token_metadata_repository.find_by_mint(&mint_a).await?,
+            self.token_metadata_repository.find_by_mint(&mint_b).await?,
+        ) else {
+            return Ok(None);
+        };
+
+        Ok(yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b(
+            sqrt_price,
+            md_a.decimals,
+            md_b.decimals,
+        ))
     }
 
     /// Hourly activity history (volume, fees, liquidity, claims — all USD) for

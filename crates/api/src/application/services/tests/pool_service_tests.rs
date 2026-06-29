@@ -309,7 +309,51 @@ async fn get_latest_state_returns_state_when_present() {
         .unwrap()
         .expect("should be Some");
 
-    assert_eq!(result.pool_address, state.pool_address);
+    assert_eq!(result.state.pool_address, state.pool_address);
+    // The pool's mints/metadata are unresolved here (with_pool(None),
+    // empty metadata), so the spot price cannot be rescaled → None,
+    // never a fabricated value.
+    assert!(result.spot_price_a_in_b.is_none());
+}
+
+#[tokio::test]
+async fn get_latest_state_derives_spot_price_when_resolvable() {
+    use rust_decimal::prelude::ToPrimitive;
+
+    let addr = pk(1);
+    let (mint_a, mint_b) = (pk(10), pk(11));
+    let state = make_pool_current_state(addr); // last_sqrt_price = 1e18
+
+    let svc = service(
+        PoolRepoOnce::with_pool(Some(make_pool(addr, mint_a, mint_b))),
+        MockPoolCurrentStateRepo::found(state),
+        MockAnalyticsRepo::empty(),
+        // Both sides resolved (make_metadata → 9 decimals), so the
+        // sqrt_price can be decoded to a human spot price.
+        MockMetadataRepo::with(vec![
+            (mint_a, make_metadata(mint_a, "AAA")),
+            (mint_b, make_metadata(mint_b, "BBB")),
+        ]),
+        MockPriceRepo::empty(),
+    );
+
+    let view = svc
+        .get_latest_state(&addr.to_string())
+        .await
+        .unwrap()
+        .expect("should be Some");
+
+    // (1e18 / 2^64)^2 * 10^(9-9) ≈ 0.00293874 — the value the core helper
+    // computes; the service plumbing must surface it intact.
+    let price = view
+        .spot_price_a_in_b
+        .expect("spot price resolvable")
+        .to_f64()
+        .unwrap();
+    assert!(
+        (price - 0.002_938_74).abs() < 0.000_001,
+        "got {price}, expected ~0.00293874"
+    );
 }
 
 #[tokio::test]
