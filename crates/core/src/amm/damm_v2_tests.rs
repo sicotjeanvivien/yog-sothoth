@@ -200,3 +200,50 @@ fn test_net_price_impact_zero_fee_equals_price_impact() {
 
     assert_eq!(net, raw);
 }
+
+// ── sqrt_price_to_price_a_in_b ──────────────────────────────────────────
+//
+// Real pool states captured from the dev DB (2026-06-29), each cross-checked
+// against the Jupiter oracle ratio for the pair (price_a_usd / price_b_usd).
+// The decimal-adjustment exponent is the part that is easy to get wrong, so
+// the assertions pin actual mainnet magnitudes, not just "it computes".
+
+/// Assert a `Decimal` price is within `rel_tol` (relative) of `expected`.
+fn assert_price_approx(actual: Decimal, expected: f64, rel_tol: f64) {
+    use rust_decimal::prelude::ToPrimitive;
+    let a = actual.to_f64().expect("decimal fits in f64");
+    assert!(
+        (a - expected).abs() <= expected.abs() * rel_tol,
+        "got {a}, expected ~{expected} (±{}%)",
+        rel_tol * 100.0
+    );
+}
+
+/// SOL (9 dec) / USDC (6 dec): oracle ≈ 71.53 USDC per SOL. Exercises a
+/// non-zero decimals delta (9 − 6 = +3).
+#[test]
+fn sqrt_price_sol_usdc() {
+    let price = sqrt_price_to_price_a_in_b(4_933_901_760_807_917_481, 9, 6).unwrap();
+    assert_price_approx(price, 71.53, 0.01);
+}
+
+/// USDT (6) / USDC (6): equal decimals (exponent 0), near-parity ≈ 0.9987.
+#[test]
+fn sqrt_price_usdt_usdc() {
+    let price = sqrt_price_to_price_a_in_b(18_435_166_270_019_141_902, 6, 6).unwrap();
+    assert_price_approx(price, 0.99875, 0.001);
+}
+
+/// SOL (9) / America250 (9): a large `sqrt_price` (~1.36e21) and a high pair
+/// price (~5440) — guards against overflow in the squaring path.
+#[test]
+fn sqrt_price_large_value_no_overflow() {
+    let price = sqrt_price_to_price_a_in_b(1_360_539_537_410_322_597_216, 9, 9).unwrap();
+    assert_price_approx(price, 5439.7, 0.01);
+}
+
+/// A zero `sqrt_price` has no defined price → `None`, never a fake 0.
+#[test]
+fn sqrt_price_zero_is_none() {
+    assert!(sqrt_price_to_price_a_in_b(0, 9, 6).is_none());
+}

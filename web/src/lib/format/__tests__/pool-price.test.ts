@@ -1,46 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computePoolPrice, formatPrice } from "../pool-price";
-
-describe("computePoolPrice", () => {
-  it("derives the A↔B rate from decimal-adjusted reserves", () => {
-    // 100 SOL (9 decimals) vs 15234 USDC (6 decimals) → 152.34 USDC per SOL.
-    const price = computePoolPrice({
-      reserveA: "100000000000", // 100 * 1e9
-      reserveB: "15234000000", // 15234 * 1e6
-      decimalsA: 9,
-      decimalsB: 6,
-    });
-    expect(price).not.toBeNull();
-    expect(price?.priceAInB).toBeCloseTo(152.34, 6);
-    expect(price?.priceBInA).toBeCloseTo(1 / 152.34, 10);
-  });
-
-  it("is reciprocal-consistent", () => {
-    const price = computePoolPrice({
-      reserveA: "100000000000",
-      reserveB: "15234000000",
-      decimalsA: 9,
-      decimalsB: 6,
-    });
-    expect((price?.priceAInB ?? 0) * (price?.priceBInA ?? 0)).toBeCloseTo(1, 10);
-  });
-
-  it("returns null when a reserve is zero (no defined price)", () => {
-    expect(
-      computePoolPrice({ reserveA: "0", reserveB: "15234000000", decimalsA: 9, decimalsB: 6 }),
-    ).toBeNull();
-    expect(
-      computePoolPrice({ reserveA: "100000000000", reserveB: "0", decimalsA: 9, decimalsB: 6 }),
-    ).toBeNull();
-  });
-
-  it("returns null on a non-numeric reserve", () => {
-    expect(
-      computePoolPrice({ reserveA: "nope", reserveB: "15234000000", decimalsA: 9, decimalsB: 6 }),
-    ).toBeNull();
-  });
-});
+import { formatPrice } from "../pool-price";
 
 describe("formatPrice", () => {
   it("uses two fraction digits for normal prices", () => {

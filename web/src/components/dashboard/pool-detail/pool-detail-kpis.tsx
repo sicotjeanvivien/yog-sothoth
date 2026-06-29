@@ -7,16 +7,18 @@
  *   - Volume 24h       (always rendered; `—` when null)
  *   - Fees 24h         (always rendered; `—` when null) — realized
  *                      trading fee revenue over the window
- *   - Current price    (the pool's quoted A↔B rate, derived from the
- *                      latest reserves; rendered only when computable)
+ *   - Current price    (the pool's quoted A↔B spot rate, derived
+ *                      server-side from `sqrt_price`; rendered only when
+ *                      computable)
  *   - Pool composition (donut, rendered only when computable)
  *
  * The price and composition cards are dropped from the layout when
  * the pool has no current state yet (or, for composition, when a side
  * has no known USD price) — the grid collapses rather than showing a
  * placeholder, in line with the broader rule of "factual or absent,
- * never fake". The price needs only the reserves and the resolved
- * token metadata (decimals + symbol), not the USD prices.
+ * never fake". The price is `spotPriceAInB` from the API (already
+ * decimal-adjusted); the card additionally needs both symbols to label
+ * the pair.
  *
  * Layout: the scalar KPI cards (TVL, Volume, Fees, Price) and the
  * composition donut are two visually distinct things, so when the
@@ -41,7 +43,7 @@ import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-sta
 import { isFeatureEnabled } from "@/config/features";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { computePoolComposition } from "@/lib/format/pool-composition";
-import { computePoolPrice, formatPrice } from "@/lib/format/pool-price";
+import { formatPrice } from "@/lib/format/pool-price";
 
 import { KpiCard } from "./kpi-card";
 import { PoolCompositionCard } from "./pool-composition-card";
@@ -69,26 +71,21 @@ export async function PoolDetailKpis({
       })
       : null;
 
-  // Current price needs only the reserves and resolved token metadata.
-  // Behind the `poolPriceImbalance` flag ("Current price […] derived from
-  // latest reserves"). Gate on both symbols being present: it both labels
-  // the card (pair notation) and signals that the decimals are real, not
-  // the 0 default the API returns for an unresolved mint (which would skew
-  // the rate).
-  const price =
+  // Current price: the spot price derived server-side from the pool's
+  // `sqrt_price` (the true DAMM v2 concentrated-liquidity price — the
+  // reserve ratio would be wrong here). Behind the `poolPriceImbalance`
+  // flag. The API already returns `null` when the price isn't computable
+  // (no sqrt_price, or unresolved token decimals); we additionally require
+  // both symbols, which label the card in pair notation.
+  const spotPrice =
     isFeatureEnabled("poolPriceImbalance") &&
-      state !== null &&
+      state?.spotPriceAInB != null &&
       pool.tokenA.symbol &&
       pool.tokenB.symbol
-      ? computePoolPrice({
-        reserveA: state.reserveA,
-        reserveB: state.reserveB,
-        decimalsA: pool.tokenA.decimals,
-        decimalsB: pool.tokenB.decimals,
-      })
+      ? Number(state.spotPriceAInB)
       : null;
 
-  const kpiCount = 3 + (price ? 1 : 0);
+  const kpiCount = 3 + (spotPrice !== null ? 1 : 0);
 
   const kpiCards = (
     <>
@@ -101,12 +98,12 @@ export async function PoolDetailKpis({
         label={t("fees24h")}
         valueCompact={formatUsdCompact(pool.fees24hUsd)}
       />
-      {price && (
+      {spotPrice !== null && (
         // Pair notation: "SOL/USDC" reads as "price of SOL in USDC",
-        // i.e. token A (base) quoted in token B. `priceAInB` matches.
+        // i.e. token A (base) quoted in token B. `spotPriceAInB` matches.
         <KpiCard
           label={`${pool.tokenA.symbol ?? "?"}/${pool.tokenB.symbol ?? "?"}`}
-          valueCompact={formatPrice(price.priceAInB)}
+          valueCompact={formatPrice(spotPrice)}
         />
       )}
     </>

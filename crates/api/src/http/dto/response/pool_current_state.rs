@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::{LastEventKind, PoolCurrentState};
+use yog_core::domain::LastEventKind;
+
+use crate::application::PoolCurrentStateView;
 
 /// `GET /api/pools/{address}/latest-state` response body.
 ///
@@ -22,6 +25,14 @@ pub(crate) struct PoolCurrentStateResponse {
 
     /// Q64.64 fixed-point; encoded as a string to keep precision in JS.
     pub(crate) last_sqrt_price: Option<String>,
+
+    /// Spot price derived from `last_sqrt_price`: units of token B per 1 token
+    /// A, in human (decimal-adjusted) terms. This is the true DAMM v2 price
+    /// (concentrated liquidity), **not** the reserve ratio. `None` when there
+    /// is no `sqrt_price` yet or the token decimals are unresolved. Serialized
+    /// as a string (`rust_decimal` default) to match the other prices.
+    pub(crate) spot_price_a_in_b: Option<Decimal>,
+
     pub(crate) last_swap_at: Option<DateTime<Utc>>,
 
     /// Concentrated-liquidity L; encoded as a string to keep precision in JS.
@@ -31,8 +42,12 @@ pub(crate) struct PoolCurrentStateResponse {
     pub(crate) updated_at: DateTime<Utc>,
 }
 
-impl From<PoolCurrentState> for PoolCurrentStateResponse {
-    fn from(state: PoolCurrentState) -> Self {
+impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
+    fn from(view: PoolCurrentStateView) -> Self {
+        let PoolCurrentStateView {
+            state,
+            spot_price_a_in_b,
+        } = view;
         Self {
             pool_address: state.pool_address.to_string(),
             protocol: state.protocol.as_str().to_string(),
@@ -42,6 +57,7 @@ impl From<PoolCurrentState> for PoolCurrentStateResponse {
             reserve_a: state.reserve_a.to_string(),
             reserve_b: state.reserve_b.to_string(),
             last_sqrt_price: state.last_sqrt_price.map(|v| v.to_string()),
+            spot_price_a_in_b,
             last_swap_at: state.last_swap_at,
             liquidity: state.liquidity.map(|v| v.to_string()),
             last_liquidity_at: state.last_liquidity_at,

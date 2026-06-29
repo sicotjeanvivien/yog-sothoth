@@ -115,6 +115,47 @@ pub fn fee_numerator_to_bps(numerator: u64) -> Decimal {
     Decimal::from(numerator) / Decimal::from(FEE_DENOMINATOR / 10_000)
 }
 
+/// Q64.64 fixed-point scale factor: the on-chain `sqrt_price` encodes
+/// `sqrt(price) * 2^64`. As `f64` (exact — 2^64 is a power of two).
+const Q64_SCALE: f64 = 18_446_744_073_709_551_616.0; // 2^64
+
+/// Derive a pool's **spot price** — units of token B per 1 unit of token A, in
+/// human (decimal-adjusted) terms — from the on-chain Q64.64 `sqrt_price`.
+///
+/// DAMM v2 is concentrated liquidity (Uniswap-v3 style), so the spot price is
+/// carried by `sqrt_price`, **not** by the reserve ratio: reserves reflect
+/// *where* liquidity is parked across price ranges, not the active trading
+/// price. `sqrt_price` encodes `sqrt(raw_price) * 2^64`, where `raw_price` is
+/// token B per token A in their raw on-chain integer units. Squaring undoes the
+/// square root, dividing out the `2^64` factor undoes the fixed point, and
+/// `10^(decimals_a - decimals_b)` rescales raw units to human units:
+///
+/// ```text
+/// price_a_in_b = (sqrt_price / 2^64)^2 * 10^(decimals_a - decimals_b)
+/// ```
+///
+/// Computed in `f64`. This is a **display / comparison ratio** (a handful of
+/// significant figures), not a token quantity, so the project's lossless-integer
+/// rule does not apply: `f64`'s ~15 significant digits far exceed any price's
+/// display need, and squaring a `u128` exactly would overflow `Decimal` anyway.
+/// Validated against real mainnet pool states (see tests). Returns `None` when
+/// the result is not a finite, strictly positive number (a zero / garbage
+/// `sqrt_price`, or a magnitude `Decimal` cannot hold).
+pub fn sqrt_price_to_price_a_in_b(
+    sqrt_price: u128,
+    decimals_a: u8,
+    decimals_b: u8,
+) -> Option<Decimal> {
+    let ratio = sqrt_price as f64 / Q64_SCALE;
+    let exponent = i32::from(decimals_a) - i32::from(decimals_b);
+    let price = ratio * ratio * 10f64.powi(exponent);
+
+    if !price.is_finite() || price <= 0.0 {
+        return None;
+    }
+    Decimal::from_f64_retain(price).map(|d| d.normalize())
+}
+
 /// Apply the DAMM v2 fee to an input amount.
 ///
 /// Fee is expressed in basis points (1 bp = 0.01%).
