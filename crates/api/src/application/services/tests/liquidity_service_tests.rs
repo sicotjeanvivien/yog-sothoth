@@ -31,7 +31,7 @@ async fn returns_page_items_from_repo() {
         .unwrap();
 
     assert_eq!(result.items.len(), 1);
-    assert_eq!(result.items[0].signature, event.signature);
+    assert_eq!(result.items[0].event.signature, event.signature);
 }
 
 #[tokio::test]

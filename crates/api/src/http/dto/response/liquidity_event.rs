@@ -3,8 +3,11 @@
 // ---------------------------------------------------------------------------
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::{MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind, Protocol};
+use yog_core::domain::{
+    MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventValued, Protocol,
+};
 
 /// `GET /api/pools/{address}/liquidity-events` item.
 #[derive(Debug, Serialize)]
@@ -26,10 +29,16 @@ pub(crate) struct LiquidityEventResponse {
 
     pub(super) position: String,
     pub(super) owner: String,
+
+    /// Trade-time USD value of the event (both legs valued at the price
+    /// as-of the event). `null` when not computable (a leg unpriced, or
+    /// unresolved mints/decimals). `Decimal` → a string, like the other USD.
+    pub(super) value_usd: Option<Decimal>,
 }
 
-impl From<MeteoraDammV2LiquidityEvent> for LiquidityEventResponse {
-    fn from(event: MeteoraDammV2LiquidityEvent) -> Self {
+impl From<MeteoraDammV2LiquidityEventValued> for LiquidityEventResponse {
+    fn from(valued: MeteoraDammV2LiquidityEventValued) -> Self {
+        let MeteoraDammV2LiquidityEventValued { event, value_usd } = valued;
         Self {
             pool_address: event.pool_address.to_string(),
             protocol: Protocol::MeteoraDammV2.to_string(),
@@ -43,6 +52,7 @@ impl From<MeteoraDammV2LiquidityEvent> for LiquidityEventResponse {
             reserve_b_after: event.reserve_b_after.to_string(),
             position: event.position.to_string(),
             owner: event.owner.to_string(),
+            value_usd,
         }
     }
 }

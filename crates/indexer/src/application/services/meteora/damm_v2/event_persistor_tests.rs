@@ -6,8 +6,8 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::domain::{
     MeteoraDammV2LiquidityEventCursor, MeteoraDammV2LiquidityEventKind,
-    MeteoraDammV2SwapEventCursor, Pool, PoolCurrentState, PoolCurrentStateRepository,
-    PoolCurrentStateUpsert, PoolCursor, PoolRepository, TradeDirection,
+    MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEventCursor, Pool, PoolCurrentState,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor, PoolRepository, TradeDirection,
 };
 use yog_core::{Page, PageDirection, PagePosition, PoolSort, RepositoryResult};
 
@@ -107,7 +107,7 @@ impl MeteoraDammV2LiquidityEventRepository for MockLiquidity {
         _: PageDirection,
         _: Option<PagePosition>,
         _: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>> {
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>> {
         unimplemented!("not exercised by persist()")
     }
 }

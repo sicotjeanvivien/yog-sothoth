@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
@@ -70,4 +71,22 @@ pub struct MeteoraDammV2LiquidityEvent {
     pub reserve_b_after: u64,
     pub position: Pubkey,
     pub owner: Pubkey,
+}
+
+/// A liquidity event plus its **read-time derived** USD value.
+///
+/// `value_usd` is the trade-time valuation of both legs —
+/// `(amount_a / 10^decA) * price_a + (amount_b / 10^decB) * price_b`, each leg
+/// priced at the most recent `token_prices` row as-of the event timestamp (the
+/// price *when it happened*, not the current price). `None` when the value
+/// cannot be computed: an event older than the pool's price coverage, or a pool
+/// whose mints / token decimals are not resolved yet.
+///
+/// This is a read model, kept separate from the raw [`MeteoraDammV2LiquidityEvent`]:
+/// the indexer persists the raw event with no USD, and domain events stay
+/// infra-neutral. The valuation belongs only to the read path.
+#[derive(Debug, Clone)]
+pub struct MeteoraDammV2LiquidityEventValued {
+    pub event: MeteoraDammV2LiquidityEvent,
+    pub value_usd: Option<Decimal>,
 }

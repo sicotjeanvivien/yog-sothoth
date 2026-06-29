@@ -5,7 +5,10 @@ use solana_signature::Signature;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition};
-use crate::{RepositoryResult, domain::MeteoraDammV2LiquidityEvent};
+use crate::{
+    RepositoryResult,
+    domain::{MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventValued},
+};
 
 /// Cursor identifying a position in the canonical liquidity-event
 /// ordering (`timestamp DESC`, `signature ASC` as tiebreaker).
@@ -25,7 +28,9 @@ pub trait MeteoraDammV2LiquidityEventRepository: Send + Sync {
     // ---- Read-side (api) ------------------------------------------------
 
     /// Paginate liquidity events for a given pool, ordered by
-    /// `timestamp DESC`, `signature ASC` as tiebreaker.
+    /// `timestamp DESC`, `signature ASC` as tiebreaker. Each item carries its
+    /// trade-time USD value (`None` when not computable) — see
+    /// [`MeteoraDammV2LiquidityEventValued`].
     ///
     /// `cursor` is `None` for the first page; for subsequent pages,
     /// pass the `next_cursor` returned by the previous call. `limit`
@@ -38,5 +43,5 @@ pub trait MeteoraDammV2LiquidityEventRepository: Send + Sync {
         direction: PageDirection,
         position: Option<PagePosition>,
         limit: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>>;
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>>;
 }

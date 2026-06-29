@@ -1,5 +1,5 @@
 import * as z from "zod";
-import { Rfc3339, U128String } from "./shared";
+import { BigDecimal, Rfc3339, U128String } from "./shared";
 
 // ─────────────────────────────────────────────────────────────────────
 // LiquidityEventResponse — mirrors `api::http::dto::response::LiquidityEventResponse`
@@ -27,6 +27,11 @@ export const LiquidityEventSchema = z.object({
 
   position: z.string().min(1),
   owner: z.string().min(1),
+
+  // Trade-time USD value of the event (both legs at the price as-of the
+  // event), derived server-side. `null` when a leg is unpriced or the
+  // mints/decimals are unresolved → the table renders "—". Decimal string.
+  valueUsd: BigDecimal.nullable(),
 });
 
 export type LiquidityEventResponse = z.infer<typeof LiquidityEventSchema>;

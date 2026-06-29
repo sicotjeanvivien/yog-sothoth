@@ -1,16 +1,18 @@
-//! Unit tests for `TryFrom<MeteoraDammV2LiquidityEventRow> for LiquidityEvent`.
+//! Unit tests for `TryFrom<MeteoraDammV2LiquidityEventRow> for
+//! MeteoraDammV2LiquidityEventValued`.
 //!
 //! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right `LiquidityEvent`, that each fallible field
+//! ones produce the right event + `value_usd`, that each fallible field
 //! has its own validation path, and that errors surface as
 //! `RepositoryError::Integrity`.
 
 use chrono::{Duration, Utc};
+use rust_decimal::Decimal;
 use solana_signature::Signature;
 use sqlx::types::BigDecimal;
 use yog_core::{
     RepositoryError,
-    domain::{MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind},
+    domain::{MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventValued},
 };
 
 use super::MeteoraDammV2LiquidityEventRow;
@@ -34,6 +36,7 @@ fn valid_row() -> MeteoraDammV2LiquidityEventRow {
         reserve_b_after: 20_000_000,
         position: VALID_POSITION.into(),
         owner: VALID_OWNER.into(),
+        value_usd: Some(BigDecimal::from(455_u64)),
     }
 }
 
@@ -45,8 +48,9 @@ fn sig(seed: u8) -> Signature {
 
 #[test]
 fn try_from_valid_row_returns_event_with_all_fields_mapped() {
-    let event =
-        MeteoraDammV2LiquidityEvent::try_from(valid_row()).expect("valid row should convert");
+    let valued =
+        MeteoraDammV2LiquidityEventValued::try_from(valid_row()).expect("valid row should convert");
+    let event = valued.event;
 
     assert_eq!(event.pool_address.to_string(), VALID_POOL);
     assert_eq!(event.position.to_string(), VALID_POSITION);
@@ -60,6 +64,18 @@ fn try_from_valid_row_returns_event_with_all_fields_mapped() {
     assert_eq!(event.liquidity_delta, 42_000_000_u128);
     assert_eq!(event.reserve_a_after, 10_000_000);
     assert_eq!(event.reserve_b_after, 20_000_000);
+    assert_eq!(valued.value_usd, Some(Decimal::from(455)));
+}
+
+#[test]
+fn try_from_null_value_usd_maps_to_none() {
+    let row = MeteoraDammV2LiquidityEventRow {
+        value_usd: None,
+        ..valid_row()
+    };
+    let valued =
+        MeteoraDammV2LiquidityEventValued::try_from(row).expect("valid row should convert");
+    assert_eq!(valued.value_usd, None);
 }
 
 #[test]
@@ -72,10 +88,11 @@ fn try_from_preserves_signature_and_timestamp() {
         ..valid_row()
     };
 
-    let event = MeteoraDammV2LiquidityEvent::try_from(row).expect("valid row should convert");
+    let valued =
+        MeteoraDammV2LiquidityEventValued::try_from(row).expect("valid row should convert");
 
-    assert_eq!(event.signature.to_string(), signature);
-    assert_eq!(event.timestamp, timestamp);
+    assert_eq!(valued.event.signature.to_string(), signature);
+    assert_eq!(valued.event.timestamp, timestamp);
 }
 
 // ── Pubkey validation ────────────────────────────────────────────────
@@ -86,7 +103,8 @@ fn try_from_invalid_pool_address_returns_integrity() {
         pool_address: "not-a-pubkey".into(),
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("invalid pubkey should fail");
+    let err =
+        MeteoraDammV2LiquidityEventValued::try_from(row).expect_err("invalid pubkey should fail");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
         "expected Integrity, got {err:?}"
@@ -99,7 +117,8 @@ fn try_from_invalid_position_returns_integrity() {
         position: "garbage".into(),
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("invalid position should fail");
+    let err =
+        MeteoraDammV2LiquidityEventValued::try_from(row).expect_err("invalid position should fail");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
         "expected Integrity, got {err:?}"
@@ -112,7 +131,8 @@ fn try_from_invalid_owner_returns_integrity() {
         owner: "garbage".into(),
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("invalid owner should fail");
+    let err =
+        MeteoraDammV2LiquidityEventValued::try_from(row).expect_err("invalid owner should fail");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
         "expected Integrity, got {err:?}"
@@ -127,7 +147,8 @@ fn try_from_invalid_liquidity_event_kind_returns_integrity() {
         liquidity_event_kind: "definitely_not_a_kind".into(),
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row).expect_err("unknown kind should fail");
+    let err =
+        MeteoraDammV2LiquidityEventValued::try_from(row).expect_err("unknown kind should fail");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
         "expected Integrity, got {err:?}"
@@ -142,7 +163,7 @@ fn try_from_negative_amount_a_returns_integrity() {
         amount_a: -1,
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row)
+    let err = MeteoraDammV2LiquidityEventValued::try_from(row)
         .expect_err("negative i64 should fail u64 conversion");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
@@ -156,7 +177,7 @@ fn try_from_negative_amount_b_returns_integrity() {
         amount_b: -1,
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row)
+    let err = MeteoraDammV2LiquidityEventValued::try_from(row)
         .expect_err("negative i64 should fail u64 conversion");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
@@ -170,7 +191,7 @@ fn try_from_negative_reserve_a_after_returns_integrity() {
         reserve_a_after: -1,
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row)
+    let err = MeteoraDammV2LiquidityEventValued::try_from(row)
         .expect_err("negative i64 should fail u64 conversion");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
@@ -184,7 +205,7 @@ fn try_from_negative_reserve_b_after_returns_integrity() {
         reserve_b_after: -1,
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row)
+    let err = MeteoraDammV2LiquidityEventValued::try_from(row)
         .expect_err("negative i64 should fail u64 conversion");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),
@@ -198,7 +219,7 @@ fn try_from_negative_liquidity_delta_returns_integrity() {
         liquidity_delta: BigDecimal::from(-1_i64),
         ..valid_row()
     };
-    let err = MeteoraDammV2LiquidityEvent::try_from(row)
+    let err = MeteoraDammV2LiquidityEventValued::try_from(row)
         .expect_err("negative BigDecimal should fail u128 conversion");
     assert!(
         matches!(err, RepositoryError::Integrity(_)),

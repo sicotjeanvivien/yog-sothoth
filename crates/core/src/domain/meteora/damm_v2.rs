@@ -32,6 +32,7 @@ pub use initialize_pool_event::{
 pub use liquidity_event::{
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
     MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
+    MeteoraDammV2LiquidityEventValued,
 };
 pub use lock_position_event::{
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,

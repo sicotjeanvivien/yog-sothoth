@@ -19,7 +19,7 @@ use yog_core::{
     RepositoryResult,
     domain::{
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-        MeteoraDammV2LiquidityEventRepository,
+        MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
     },
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
@@ -91,7 +91,7 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
         direction: PageDirection,
         position: Option<PagePosition>,
         limit: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>> {
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>> {
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
         let fetch_limit = effective_limit + 1;
 
@@ -111,12 +111,20 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
             QueryMode::Forward => sqlx::query_as!(
                 MeteoraDammV2LiquidityEventRow,
                 r#"
-                SELECT pool_address, signature,
-                       liquidity_event_kind, amount_a, amount_b, liquidity_delta,
-                       reserve_a_after, reserve_b_after,
-                       position, owner,
-                       timestamp
-                FROM meteora_damm_v2_liquidity_events
+                -- Reading from a VIEW: sqlx infers every column as nullable
+                -- (it can't see the base table's NOT NULL through the joins),
+                -- so force `!` on the event columns; only value_usd is truly
+                -- nullable (a leg may be unpriced).
+                SELECT pool_address AS "pool_address!", signature AS "signature!",
+                       liquidity_event_kind AS "liquidity_event_kind!",
+                       amount_a AS "amount_a!", amount_b AS "amount_b!",
+                       liquidity_delta AS "liquidity_delta!",
+                       reserve_a_after AS "reserve_a_after!",
+                       reserve_b_after AS "reserve_b_after!",
+                       position AS "position!", owner AS "owner!",
+                       timestamp AS "timestamp!",
+                       value_usd
+                FROM meteora_damm_v2_liquidity_events_valued
                 WHERE pool_address = $1
                   AND (
                       $2::TIMESTAMPTZ IS NULL
@@ -138,12 +146,18 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
             QueryMode::Backward => sqlx::query_as!(
                 MeteoraDammV2LiquidityEventRow,
                 r#"
-                SELECT pool_address, signature,
-                       liquidity_event_kind, amount_a, amount_b, liquidity_delta,
-                       reserve_a_after, reserve_b_after,
-                       position, owner,
-                       timestamp
-                FROM meteora_damm_v2_liquidity_events
+                -- See the Forward path: VIEW columns need `!` to undo sqlx's
+                -- nullable inference; value_usd stays nullable.
+                SELECT pool_address AS "pool_address!", signature AS "signature!",
+                       liquidity_event_kind AS "liquidity_event_kind!",
+                       amount_a AS "amount_a!", amount_b AS "amount_b!",
+                       liquidity_delta AS "liquidity_delta!",
+                       reserve_a_after AS "reserve_a_after!",
+                       reserve_b_after AS "reserve_b_after!",
+                       position AS "position!", owner AS "owner!",
+                       timestamp AS "timestamp!",
+                       value_usd
+                FROM meteora_damm_v2_liquidity_events_valued
                 WHERE pool_address = $1
                   AND (
                       $2::TIMESTAMPTZ IS NULL
@@ -163,16 +177,16 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
             .map_err(map_sqlx_error)?,
         };
 
-        let events: Vec<MeteoraDammV2LiquidityEvent> = rows
+        let events: Vec<MeteoraDammV2LiquidityEventValued> = rows
             .into_iter()
-            .map(MeteoraDammV2LiquidityEvent::try_from)
+            .map(MeteoraDammV2LiquidityEventValued::try_from)
             .collect::<Result<_, _>>()?;
 
         Ok(
             PageBuilder::new(events, effective_limit, mode, had_cursor).finalize(|e| {
                 Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
-                    timestamp: e.timestamp,
-                    signature: e.signature,
+                    timestamp: e.event.timestamp,
+                    signature: e.event.signature,
                 })
             }),
         )
