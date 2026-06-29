@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = ?e, "failed to build application state"))?;
 
     // ── HTTP server ───────────────────────────────────────────────────────────
-    http::run(app_state, config.bind_addr)
+    http::run(app_state, config.bind_addr, config.cors_allowed_origins)
         .await
         .inspect_err(|e| error!(error = ?e, "fatal error in HTTP server"))
 }

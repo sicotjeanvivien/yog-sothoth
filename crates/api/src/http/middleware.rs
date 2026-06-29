@@ -5,8 +5,13 @@
 //! request ID propagation) will land here as additional layers.
 pub(crate) mod tracing;
 
-use axum::http::{HeaderName, HeaderValue, header};
-use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
+use axum::http::{HeaderName, HeaderValue, Method, header};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    set_header::SetResponseHeaderLayer,
+};
+
+use crate::http::middleware::tracing::REQUEST_ID_HEADER;
 
 /// Build the middleware stack applied to the whole router.
 ///
@@ -39,13 +44,21 @@ pub(super) fn frame_options_layer() -> SetResponseHeaderLayer<HeaderValue> {
 
 /// CORS configuration.
 ///
-/// `permissive()` allows any origin, any method, any header. Suitable
-/// for development and for the current state where no production
-/// frontend exists yet. Tighten this once the dashboard is deployed —
-/// typically: `CorsLayer::new().allow_origin("https://yog-sothoth.fr".parse()?)`.
-pub(super) fn cors_layer() -> CorsLayer {
-    // TODO(v0.1 step 4): restrict to the dashboard origin once Next.js
-    // is deployed. Until then, permissive CORS unblocks local dev with
-    // any tool (curl, Postman, browser).
-    CorsLayer::permissive()
+/// Restricted to the explicit set of browser origins configured via
+/// `API_CORS_ALLOWED_ORIGINS` (parsed at boot in `bootstrap::config`).
+/// The API is read-only, so only `GET` is allowed; `Content-Type` is
+/// the sole request header a browser sets on these calls. The
+/// `x-request-id` response header is exposed so the browser client can
+/// surface the correlation id when reporting a server error.
+///
+/// Non-browser callers (curl, the SSR layer via `API_INTERNAL_URL`,
+/// monitoring) don't send an `Origin` header and are unaffected — CORS
+/// only ever *grants* cross-origin browser access, it never gates
+/// server-to-server traffic.
+pub(super) fn cors_layer(allowed_origins: Vec<HeaderValue>) -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(allowed_origins))
+        .allow_methods([Method::GET])
+        .allow_headers([header::CONTENT_TYPE])
+        .expose_headers([HeaderName::from_static(REQUEST_ID_HEADER)])
 }

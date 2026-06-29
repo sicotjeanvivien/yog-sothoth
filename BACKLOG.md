@@ -61,9 +61,9 @@
 - [ ] Crate `yog-analytic` : calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker ; cf. contraintes ci-dessus)
 - [ ] Déclencheur : quand une requête analytique **mesurée** franchit un seuil réel — en particulier dès l'ouverture de l'allowlist `watched_pools` / montée du throughput cible (re-mesurer alors, le chiffre dev de juin 2026 n'est plus représentatif)
 
-#### yog-api
+#### ✅ yog-api
 - [x] `health.rs` — vérifier que ce n'est qu'une liveness, pas une readiness
-- [ ] `MIDDLEWARE  CORS`
+- [x] **`MIDDLEWARE CORS`** — `cors_layer` passe de `permissive()` à une liste d'origines explicite. Env var **requise** `API_CORS_ALLOWED_ORIGINS` (CSV, parsée fail-loud en `Vec<HeaderValue>` dans `bootstrap::config`, tests unitaires) → `Config → run → build_router → cors_layer`. API read-only → `allow_methods([GET])`, `allow_headers([content-type])`, `expose_headers([x-request-id])` pour que le client browser remonte l'id de corrélation. SSR (`API_INTERNAL_URL`)/curl sans header `Origin` non affectés. `.env`/`.env.example`/`docker-compose` (api) renseignés (`http://localhost:3000` en dev → origine publique en prod). Vérifié en live : origine autorisée → ACAO échoué ; origine refusée → pas d'ACAO (browser bloque)
 - [x] ErrorResponse RFC 9457
 
 ##### ✅ tracing HTTP
@@ -87,7 +87,8 @@
 	- [x] lib/api/browser/network-status.ts — browser-side, exposes fetchNetworkStatusBrowser
 - [x] KPI - Current Pool Price — carte KPI « prix courant » sur la page pool, dérivée des **réserves** (convention projet : prix calculé au query-time depuis les réserves, pas le `sqrt_price`). Helper pur `computePoolPrice` + `formatPrice` (testés). Affichée en notation paire (`SOL/USDC` = prix de A en B), gated sur `state` + symboles résolus (décimales fiables) + flag `poolPriceImbalance` (enfin câblé)
 	- [x] Layout KPI strip — les 5 cartes sur une rangée écrasaient le donut. Séparé en deux blocs côte à côte sur `lg` (KPICards en grille 2×2 d'un côté, `PoolCompositionCard` de l'autre), hauteurs égalisées par stretch, ratio 5/9–4/9
-- [ ] Enrichir `PoolCompositionCard` — la carte ne montre aujourd'hui que la part de valeur (%) par token + la TVL au centre. Pistes : montant USD par côté (pas seulement le %), réserves en unités humaines (ex. « 1 234 SOL / 187k USDC »), et surtout le volet **imbalance** annoncé par le flag `poolPriceImbalance` mais pas encore affiché — déséquilibre du prix implicite du pool (ratio des réserves) vs prix oracle de marché (signal d'arbitrage). À cadrer côté produit.
+- [x] Enrichir `PoolCompositionCard` (volet **factuel**) — légende à deux lignes par côté : **montant USD** (`composition.valueA/BUsd`) + **réserve en unités humaines** (`formatTokenAmount` sur reserves+decimals) en plus du % existant. Réserves passées en props depuis `pool-detail-kpis` (garanties non-null car `composition` dérive de `state`). Purement présentationnel, données déjà dispo, pas de backend. typecheck/lint/140 tests verts
+- [ ] **Imbalance — re-scopé hors « petit item » (29 juin 2026)** : le signal annoncé (« prix implicite du pool vs oracle ») ne peut **pas** se baser sur le ratio des réserves — DAMM v2 est de la **liquidité concentrée** (`pool_current_state` porte `last_sqrt_price` + `liquidity` L, cf. `model.rs:82`), donc le ratio des réserves ≠ spot price (les réserves reflètent où la liquidité est posée vs le prix actif). Un imbalance correct doit dériver le spot price de **`sqrt_price`** (déjà exposé : `PoolCurrentStateResponse.lastSqrtPrice`, nullable) au format **Q64.64** (`price = (sqrt_price / 2^64)^2`, ajusté décimales A/B), le comparer au prix oracle Jupiter (`priceAUsd/priceBUsd`), puis afficher l'écart %. Chantier : helper pur `computeSqrtSpotPrice` (+ validation sur données mainnet réelles, comme `decode_base_fee_bps`) + cadrage produit d'affichage. Le flag `poolPriceImbalance` reste pour ça.
 
 ##### PagePool
 - [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage. Je pense que c'est pas vraiment possible sinon faut du back pour pouvoir récupérer plusieurs pool via des PubKey . 
