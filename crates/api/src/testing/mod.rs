@@ -22,11 +22,11 @@ use yog_core::{
     domain::{
         EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository,
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-        MeteoraDammV2LiquidityEventRepository, MeteoraDammV2SwapEvent,
-        MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository, NetworkStatus,
-        NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCounts,
-        PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor,
-        PoolRepository, Protocol, TokenMetadata, TokenMetadataRepository, TokenPrice,
+        MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
+        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
+        NetworkStatus, NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository,
+        PoolCounts, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+        PoolCursor, PoolRepository, Protocol, TokenMetadata, TokenMetadataRepository, TokenPrice,
         TokenPriceRepository,
     },
 };
@@ -547,11 +547,11 @@ impl MeteoraDammV2SwapEventRepository for MockSwapEventRepo {
 // ── Mock: LiquidityEventRepository ──────────────────────────────────
 
 pub(crate) struct MockLiquidityEventRepo {
-    find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2LiquidityEvent>>>>,
+    find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>>>>,
 }
 
 impl MockLiquidityEventRepo {
-    pub(crate) fn with_page(page: Page<MeteoraDammV2LiquidityEvent>) -> Self {
+    pub(crate) fn with_page(page: Page<MeteoraDammV2LiquidityEventValued>) -> Self {
         Self {
             find_paginated: Mutex::new(Some(Ok(page))),
         }
@@ -584,7 +584,7 @@ impl MeteoraDammV2LiquidityEventRepository for MockLiquidityEventRepo {
         _direction: PageDirection,
         _position: Option<PagePosition>,
         _limit: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEvent>> {
+    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>> {
         take(&self.find_paginated)
     }
 }
@@ -743,7 +743,7 @@ pub(crate) fn make_liquidity_page(
     events: Vec<MeteoraDammV2LiquidityEvent>,
     is_first: bool,
     is_last: bool,
-) -> Page<MeteoraDammV2LiquidityEvent> {
+) -> Page<MeteoraDammV2LiquidityEventValued> {
     use yog_core::domain::MeteoraDammV2LiquidityEventCursor;
 
     let prev = if is_first {
@@ -766,8 +766,17 @@ pub(crate) fn make_liquidity_page(
             })
         })
     };
+    // The read path returns events wrapped with their USD value; the fixture
+    // leaves it None (the service tests assert pagination, not valuation).
+    let items = events
+        .into_iter()
+        .map(|event| MeteoraDammV2LiquidityEventValued {
+            event,
+            value_usd: None,
+        })
+        .collect();
     Page {
-        items: events,
+        items,
         next_cursor: next,
         prev_cursor: prev,
         is_first,

@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                -- See the Forward path: VIEW columns need `!` to undo sqlx's\n                -- nullable inference; value_usd stays nullable.\n                SELECT pool_address AS \"pool_address!\", signature AS \"signature!\",\n                       liquidity_event_kind AS \"liquidity_event_kind!\",\n                       amount_a AS \"amount_a!\", amount_b AS \"amount_b!\",\n                       liquidity_delta AS \"liquidity_delta!\",\n                       reserve_a_after AS \"reserve_a_after!\",\n                       reserve_b_after AS \"reserve_b_after!\",\n                       position AS \"position!\", owner AS \"owner!\",\n                       timestamp AS \"timestamp!\",\n                       value_usd\n                FROM meteora_damm_v2_liquidity_events_valued\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp > $2\n                      OR (timestamp = $2 AND signature < $3)\n                  )\n                ORDER BY timestamp ASC, signature DESC\n                LIMIT $4\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "signature!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "liquidity_event_kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "amount_a!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "amount_b!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "liquidity_delta!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "reserve_a_after!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "reserve_b_after!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "position!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "timestamp!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "value_usd",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "4edf7f275e45cb85f93784048752027341d906c12b2f764cb31cddf4c732348c"
+}

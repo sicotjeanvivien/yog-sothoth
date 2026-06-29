@@ -96,7 +96,7 @@
 ##### PagePool
 - [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage. Je pense que c'est pas vraiment possible sinon faut du back pour pouvoir récupérer plusieurs pool via des PubKey . 
 - [ ] Ajout colonne fee + filtre . Je sais pas si c'est possible . 
-- [ ] Tableau liquidity — colonne « Value (USD) » : valeur USD de l'événement (amountA·prixA + amountB·prixB, valorisation trade-time comme les swaps). Chantier backend d'abord (enrichir `LiquidityEventResponse`/DTO), puis colonne front. NB : `liquidityDelta` (u128 brut, unités L sans décimales) écarté car illisible.
+- [x] Tableau liquidity — colonne « Value (USD) » : valeur USD de l'événement (amountA·prixA + amountB·prixB, valorisation **trade-time** = prix as-of le timestamp de l'event). **Backend** : VIEW `meteora_damm_v2_liquidity_events_valued` (migration 021, LATERAL `token_prices` as-of + jointure décimales, GRANT `yog_api`) — les 2 chemins cursor (forward/backward) lisent la VIEW (colonnes forcées `!` car sqlx infère nullable sur une VIEW) ; read-model `MeteoraDammV2LiquidityEventValued { event, value_usd: Option<Decimal> }` (séparé de l'event brut → infra-neutral, l'INSERT indexer inchangé) ; `LiquidityEventResponse.valueUsd`. **Front** : 6ᵉ colonne, `formatUsd` plein, `—` si null. Test d'intégration VIEW (as-of correct + NULL si jambe non pricée). Vérifié live : SOL/USDC remove → $41.26. NB : `liquidityDelta` (u128 brut, unités L sans décimales) écarté car illisible.
 
 #### ✅ yog-context — métriques
 - [x] Métriques Prometheus sur worker tick metadata (10s)

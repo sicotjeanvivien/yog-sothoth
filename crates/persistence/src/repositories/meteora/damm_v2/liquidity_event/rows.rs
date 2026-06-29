@@ -1,14 +1,18 @@
 use crate::repositories::helper::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
-    convert_string_to_signature, parse_string_to_liquidity_event_kind,
+    convert_bigdecimal_to_decimal, convert_bigdecimal_to_u128, convert_i64_to_u64,
+    convert_string_to_pubkey, convert_string_to_signature, parse_string_to_liquidity_event_kind,
 };
 use chrono::{DateTime, Utc};
 use sqlx::types::BigDecimal;
-use yog_core::{RepositoryError, domain::MeteoraDammV2LiquidityEvent};
+use yog_core::{
+    RepositoryError,
+    domain::{MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventValued},
+};
 
-/// Row shape returned by SELECTs on `liquidity_events`. Mirrors every
-/// column of the table; used by `find_by_pool_paginated` in both
-/// traversal modes.
+/// Row shape returned by SELECTs on the `meteora_damm_v2_liquidity_events_valued`
+/// VIEW: every column of the underlying event table, plus the read-time
+/// `value_usd` (NULL when not computable). Used by `find_by_pool_paginated` in
+/// both traversal modes.
 #[derive(sqlx::FromRow)]
 pub(super) struct MeteoraDammV2LiquidityEventRow {
     pub(super) pool_address: String,
@@ -22,27 +26,41 @@ pub(super) struct MeteoraDammV2LiquidityEventRow {
     pub(super) reserve_b_after: i64,
     pub(super) position: String,
     pub(super) owner: String,
+    /// Trade-time USD value of the event; NULL when a leg is unpriced or the
+    /// pool's mints / decimals are unresolved.
+    pub(super) value_usd: Option<BigDecimal>,
 }
 
-impl TryFrom<MeteoraDammV2LiquidityEventRow> for MeteoraDammV2LiquidityEvent {
+impl TryFrom<MeteoraDammV2LiquidityEventRow> for MeteoraDammV2LiquidityEventValued {
     type Error = RepositoryError;
 
     fn try_from(row: MeteoraDammV2LiquidityEventRow) -> Result<Self, Self::Error> {
-        Ok(MeteoraDammV2LiquidityEvent {
-            pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-            signature: convert_string_to_signature(row.signature, "signature")?,
-            timestamp: row.timestamp,
-            liquidity_event_kind: parse_string_to_liquidity_event_kind(
-                row.liquidity_event_kind,
-                "liquidity_event_kind",
-            )?,
-            amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
-            amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
-            liquidity_delta: convert_bigdecimal_to_u128(row.liquidity_delta, "liquidity_delta")?,
-            reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
-            reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
-            position: convert_string_to_pubkey(row.position, "position")?,
-            owner: convert_string_to_pubkey(row.owner, "owner")?,
+        let value_usd = row
+            .value_usd
+            .map(|v| convert_bigdecimal_to_decimal(v, "value_usd"))
+            .transpose()?;
+
+        Ok(MeteoraDammV2LiquidityEventValued {
+            event: MeteoraDammV2LiquidityEvent {
+                pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
+                signature: convert_string_to_signature(row.signature, "signature")?,
+                timestamp: row.timestamp,
+                liquidity_event_kind: parse_string_to_liquidity_event_kind(
+                    row.liquidity_event_kind,
+                    "liquidity_event_kind",
+                )?,
+                amount_a: convert_i64_to_u64(row.amount_a, "amount_a")?,
+                amount_b: convert_i64_to_u64(row.amount_b, "amount_b")?,
+                liquidity_delta: convert_bigdecimal_to_u128(
+                    row.liquidity_delta,
+                    "liquidity_delta",
+                )?,
+                reserve_a_after: convert_i64_to_u64(row.reserve_a_after, "reserve_a_after")?,
+                reserve_b_after: convert_i64_to_u64(row.reserve_b_after, "reserve_b_after")?,
+                position: convert_string_to_pubkey(row.position, "position")?,
+                owner: convert_string_to_pubkey(row.owner, "owner")?,
+            },
+            value_usd,
         })
     }
 }

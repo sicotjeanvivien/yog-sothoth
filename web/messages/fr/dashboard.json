@@ -150,6 +150,7 @@
         "kind": "Type",
         "amountA": "Montant A",
         "amountB": "Montant B",
+        "valueUsd": "Valeur (USD)",
         "action": "Action",
         "copySignature": "Copier la signature",
         "viewOnSolscan": "Voir sur Solscan",

@@ -9,8 +9,8 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     PageDirection, PagePosition, RepositoryError,
     domain::{
-        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-        MeteoraDammV2LiquidityEventRepository,
+        MeteoraDammV2LiquidityEventCursor, MeteoraDammV2LiquidityEventRepository,
+        MeteoraDammV2LiquidityEventValued,
     },
     tools::Page,
 };
@@ -46,7 +46,7 @@ impl MeteoraDammV2LiquidityService {
     pub(crate) async fn list_liquidity_for_pool(
         &self,
         params: MeteoraDammV2LiquidityListParams,
-    ) -> Result<Page<MeteoraDammV2LiquidityEvent>, RepositoryError> {
+    ) -> Result<Page<MeteoraDammV2LiquidityEventValued>, RepositoryError> {
         self.repo
             .find_by_pool_paginated(
                 &params.pool_address,

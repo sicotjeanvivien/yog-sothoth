@@ -23,11 +23,11 @@ pub use meteora::{
     MeteoraDammV2Event, MeteoraDammV2InitializePoolEvent,
     MeteoraDammV2InitializePoolEventRepository, MeteoraDammV2LiquidityEvent,
     MeteoraDammV2LiquidityEventCursor, MeteoraDammV2LiquidityEventKind,
-    MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LockPositionEvent,
-    MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
-    MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2SetPoolStatusEvent,
-    MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SwapEvent,
-    MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
+    MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
+    MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
+    MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
+    MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
+    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
 };
 pub use network_status::{NetworkStatus, NetworkStatusRepository};

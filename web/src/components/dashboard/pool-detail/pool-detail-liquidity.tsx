@@ -2,12 +2,13 @@
  * Pool detail page — "Recent liquidity events" block.
  *
  * Same CSS-grid + ARIA structure as the swaps block (see
- * `pool-detail-swaps.tsx` for the rationale). Five columns:
+ * `pool-detail-swaps.tsx` for the rationale). Six columns:
  *
  *   Time       — relative ("2 min ago")
  *   Kind       — coloured badge: "Add" (green) / "Remove" (red)
  *   Amount A   — `amountA` in human units + token A symbol
  *   Amount B   — `amountB` in human units + token B symbol
+ *   Value (USD)— `valueUsd`, trade-time value of the event ("—" if unknown)
  *   Action     — copy the signature / open the tx on Solscan
  *
  * Unlike a swap (which has an "in" and an "out" side), a liquidity
@@ -33,6 +34,7 @@ import { CopyButton } from "@/components/shared/copy-button";
 
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
+import { formatUsd } from "@/lib/format/format-usd";
 import { TokenResponse } from "@/lib/api/schema/token";
 
 // ── Tailwind class fragments ─────────────────────────────────────────
@@ -51,7 +53,7 @@ const SECTION_TITLE_CLASS =
 const TABLE_WRAPPER_CLASS = "overflow-x-auto";
 
 const GRID_COLS =
-  "grid-cols-[minmax(110px,1fr)_minmax(100px,0.8fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(96px,auto)]";
+  "grid-cols-[minmax(110px,1fr)_minmax(100px,0.8fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(120px,1fr)_minmax(96px,auto)]";
 
 const HEAD_CELL_CLASS =
   "px-4 py-3 text-left text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
@@ -97,7 +99,7 @@ export async function PoolDetailLiquidity({
           <EmptyState message={t("empty")} />
         ) : (
           <div className={TABLE_WRAPPER_CLASS}>
-            <div role="table" className="min-w-[760px]">
+            <div role="table" className="min-w-[880px]">
               <div role="rowgroup" className="border-b border-sothoth-500/20">
                 <div role="row" className={`grid ${GRID_COLS}`}>
                   <div role="columnheader" className={HEAD_CELL_CLASS}>
@@ -111,6 +113,9 @@ export async function PoolDetailLiquidity({
                   </div>
                   <div role="columnheader" className={HEAD_CELL_CLASS}>
                     {t("amountB")}
+                  </div>
+                  <div role="columnheader" className={HEAD_CELL_CLASS}>
+                    {t("valueUsd")}
                   </div>
                   <div role="columnheader" className={HEAD_CELL_CLASS}>
                     {t("action")}
@@ -188,6 +193,10 @@ function LiquidityRow({
 
       <div role="cell" className={CELL_MONO_CLASS}>
         {formatTokenAmount(event.amountB, tokenB.decimals, tokenB.symbol)}
+      </div>
+
+      <div role="cell" className={CELL_MONO_CLASS}>
+        {formatUsd(event.valueUsd)}
       </div>
 
       <div role="cell" className={CELL_CLASS}>
