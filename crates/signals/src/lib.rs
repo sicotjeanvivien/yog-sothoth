@@ -9,6 +9,8 @@
 
 pub mod detectors;
 pub mod engine;
+pub mod metrics;
 
 pub use detectors::FlowImbalanceDetector;
 pub use engine::{EngineError, SignalEngine};
+pub use metrics::EngineMetrics;

@@ -3,18 +3,31 @@ name = "yog-signals"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "signal-engine"
+path = "src/main.rs"
+
 [dependencies]
-# Workspace crates — the engine depends ONLY on core traits; the concrete
-# Pg repositories are injected by the binary (step 5), never linked here.
+# Workspace crates. The LIB (engine + detectors) depends only on core
+# traits. The BIN wires the concrete Pg repositories and process plumbing,
+# which is why yog-persistence / yog-bootstrap appear here.
 yog-core = { path = "../core" }
+yog-persistence = { path = "../persistence" }
+yog-bootstrap = { path = "../bootstrap" }
 
 # Async runtime
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 
-# Errors / logging
+# Errors / logging / config
 thiserror = { workspace = true }
+anyhow = { workspace = true }
 tracing = { workspace = true }
+dotenvy = { workspace = true }
+
+# Metrics
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 
 # Misc
 chrono = { workspace = true }
@@ -23,4 +36,3 @@ async-trait = { workspace = true }
 
 [dev-dependencies]
 solana-pubkey = { workspace = true }
-

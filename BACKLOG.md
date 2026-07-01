@@ -324,12 +324,14 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 
 #### Signal Engine — déroulé d'implémentation
 
-1. [ ] **Migration** : table `signals` (hypertable `triggered_at`) + rôle `yog_signals` + `GRANT` (RW `signals` → `yog_signals`, RO → `yog_api`) → régénérer le cache sqlx (`cargo sqlx prepare`)
-2. [ ] **`core`** : `struct Signal`, trait `SignalDetector`, `struct EvalContext`, trait `SignalRepository`, erreurs typées (`DetectorError`)
-3. [ ] **`persistence`** : `PgSignalRepository` (write) + **méthode de lecture** du volume par direction sur la cagg `..._swap_events_hourly` (décision d'impl : méthode sur `MeteoraDammV2SwapEventRepository` vs repo dédié « swap volume »)
-4. [ ] **`yog-signals`** : `FlowImbalanceDetector` (1er détecteur : net buy vs sell sur fenêtre, seuil + plancher de volume) + boucle engine (poll par détecteur, skip-and-log, `CancellationToken`)
-5. [ ] **binaire `signal-engine`** : câblage des repos concrets à la `daemon.rs`
+1. [x] **Migration** : table `signals` (hypertable `triggered_at`) + rôle `yog_signals` + `GRANT` (RW `signals` → `yog_signals`, RO → `yog_api`) — migration 022, `setup_roles.sql`
+2. [x] **`core`** : `Signal`/`Severity`, `SignalDetector`, `EvalContext`, `SignalRepository`, `DetectorError` — module `signals`
+3. [x] **`persistence`** : `PgSignalRepository` (write) + lecture directionnelle → **décision : VIEW dédiée** `meteora_damm_v2_pool_hourly_flow` (migration 023, reprend la valorisation 019 en gardant les 2 sens séparés) + `swap_flow` core (`PoolSwapFlow`, `SwapFlowRepository`) + `PgSwapFlowRepository`. Test d'intégration `tests/swap_flow.rs`
+4. [x] **`yog-signals`** : `FlowImbalanceDetector` (imbalance = (a_to_b − b_to_a)/(a_to_b + b_to_a), plancher + seuil, Warning/Critical>0.9) + `SignalEngine` (poll par détecteur, skip-and-log, `CancellationToken`). 6 tests unitaires
+5. [x] **binaire `signal-engine`** : `main.rs` + `bootstrap` (Config + Daemon câblant les Pg repos), metrics Prometheus (:9000), Dockerfile + service compose (host :9002), `.env(.example)`. Vérifié live sous le rôle `yog_signals` (émet Critical ±1 / Warning). **→ fondation fonctionnelle, PR ouverte**
 6. [ ] **2ᵉ détecteur** : `PriceOracleDeviationDetector` — compare le spot price backend (`spotPriceAInB`, dérivé de `sqrt_price` Q64.64) au prix oracle Jupiter (`priceAUsd`/`priceBUsd`), émet sur l'écart %. Ex-reliquat v0.1 « Frontend / Imbalance % » (rapatrié ici : c'est un détecteur backend, pas du front). Valide le point d'extension multi-détecteur
+
+**Follow-up (constaté au run de l'étape 5) : déduplication.** Un détecteur batch ré-émet le même signal à chaque tick (une ligne par pool qualifiant par tick). À trancher : dédup côté engine/détecteur (fenêtre de suppression, ou clé `(detector, pool, bucket)` + `SELECT` récent via le SELECT déjà accordé à `yog_signals`). Pas bloquant pour la fondation ; à faire avant d'activer des canaux de notification.
 
 #### Signal Engine — détecteurs suivants (post-fondation)
 - [ ] Détecteur Fee yield spike

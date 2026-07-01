@@ -20,6 +20,8 @@ use tracing::{error, info, warn};
 
 use yog_core::domain::{EvalContext, SignalDetector, SignalRepository};
 
+use crate::metrics::EngineMetrics;
+
 /// Loop-level failure of the engine. Per-tick failures never reach here —
 /// they are skipped-and-logged inside the loop.
 #[derive(Debug, Error)]
@@ -107,7 +109,11 @@ async fn detector_loop(
 
 /// A single tick: evaluate, then persist. Absorbs every recoverable error so
 /// one hiccup never stops the loop.
-async fn run_tick(detector: &dyn SignalDetector, repository: &dyn SignalRepository, name: &str) {
+async fn run_tick(
+    detector: &dyn SignalDetector,
+    repository: &dyn SignalRepository,
+    name: &'static str,
+) {
     let ctx = EvalContext {
         evaluated_at: Utc::now(),
     };
@@ -116,19 +122,24 @@ async fn run_tick(detector: &dyn SignalDetector, repository: &dyn SignalReposito
         Ok(signals) => signals,
         Err(e) => {
             warn!(detector = name, error = %e, "evaluation failed — skipping tick");
+            EngineMetrics::record_tick(name, "eval_failed");
             return;
         }
     };
 
     if signals.is_empty() {
+        EngineMetrics::record_tick(name, "ok");
         return;
     }
 
     let count = signals.len();
     if let Err(e) = repository.insert_batch(&signals).await {
         warn!(detector = name, error = %e, "signal persistence failed — skipping tick");
+        EngineMetrics::record_tick(name, "persist_failed");
         return;
     }
 
+    EngineMetrics::record_emitted(name, count);
+    EngineMetrics::record_tick(name, "ok");
     info!(detector = name, count, "signals emitted");
 }

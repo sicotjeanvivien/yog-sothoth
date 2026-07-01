@@ -187,6 +187,37 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  # ── Signal engine (detectors) ──────────────────────────────────
+  signal-engine:
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: docker/signal-engine.Dockerfile
+    environment:
+      DATABASE_URL_SIGNALS: ${DATABASE_URL_SIGNALS}
+      SIGNALS_FLOW_INTERVAL_SECS: ${SIGNALS_FLOW_INTERVAL_SECS:-300}
+      SIGNALS_FLOW_WINDOW_HOURS: ${SIGNALS_FLOW_WINDOW_HOURS:-24}
+      SIGNALS_FLOW_MIN_VOLUME_USD: ${SIGNALS_FLOW_MIN_VOLUME_USD:-10000}
+      SIGNALS_FLOW_THRESHOLD: ${SIGNALS_FLOW_THRESHOLD:-0.6}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_SIGNALS="$$(echo "$$DATABASE_URL_SIGNALS" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/signal-engine
+    ports:
+      # Prometheus /metrics — bind to 127.0.0.1 on the host so it's
+      # not exposed on the LAN during local rehearsals.
+      - "127.0.0.1:9002:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      yog-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # ── Web (frontend) ─────────────────────────────────────────────
   yog-web:
     profiles: ["full"]
