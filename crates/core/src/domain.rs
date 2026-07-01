@@ -7,6 +7,7 @@ mod pool;
 mod pool_analytics;
 mod pool_current_state;
 mod protocol;
+mod signals;
 mod token_metadata;
 mod token_price;
 mod trade_direction;
@@ -41,6 +42,7 @@ pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
 };
 pub use protocol::Protocol;
+pub use signals::{DetectorError, EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 pub use token_metadata::{MetadataProvider, TokenMetadata, TokenMetadataRepository};
 pub use token_price::{PriceProvider, TokenPrice, TokenPriceRepository};
 pub use trade_direction::TradeDirection;
