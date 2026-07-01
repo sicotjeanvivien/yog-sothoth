@@ -6,6 +6,7 @@ members = [
   "crates/core",
   "crates/indexer",
   "crates/persistence",
+  "crates/signals",
   "crates/wasm",
 ]
 resolver = "2"

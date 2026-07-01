@@ -84,6 +84,7 @@ jobs:
             -p yog-context \
             -p yog-indexer \
             -p yog-persistence \
+            -p yog-signals \
             --all-targets --all-features \
             -- -D warnings
 
@@ -101,6 +102,7 @@ jobs:
             -p yog-context \
             -p yog-indexer \
             -p yog-persistence \
+            -p yog-signals \
 
   # ─────────────────────────────────────────────────────────────────
   # test-integration — DB-backed tests behind the integration-tests
@@ -159,6 +161,7 @@ jobs:
           CREATE ROLE yog_indexer;
           CREATE ROLE yog_api;
           CREATE ROLE yog_context;
+          CREATE ROLE yog_signals;
           ALTER SYSTEM SET timescaledb.max_background_workers = 0;
           SQL
           docker restart "${{ job.services.postgres.id }}"
@@ -267,6 +270,7 @@ jobs:
           CREATE ROLE yog_indexer;
           CREATE ROLE yog_api;
           CREATE ROLE yog_context;
+          CREATE ROLE yog_signals;
           ALTER SYSTEM SET timescaledb.max_background_workers = 0;
           SQL
           docker restart "${{ job.services.postgres.id }}"
