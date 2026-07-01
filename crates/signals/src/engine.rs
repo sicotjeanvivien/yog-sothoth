@@ -147,7 +147,7 @@ async fn run_tick(
         }
     };
 
-    let to_emit = filter_new_or_escalated(candidates, &recent);
+    let to_emit = emittable(candidates, &recent);
     if to_emit.is_empty() {
         EngineMetrics::record_tick(name, "suppressed");
         return;
@@ -169,10 +169,7 @@ async fn run_tick(
 /// same pool. `recent` maps a pool to the latest severity this detector has
 /// already emitted for it within the cooldown window; a candidate is dropped
 /// only when a signal of equal-or-higher severity is already present.
-fn filter_new_or_escalated(
-    candidates: Vec<Signal>,
-    recent: &HashMap<Pubkey, Severity>,
-) -> Vec<Signal> {
+fn emittable(candidates: Vec<Signal>, recent: &HashMap<Pubkey, Severity>) -> Vec<Signal> {
     candidates
         .into_iter()
         .filter(|candidate| match recent.get(&candidate.pool_address) {

@@ -33,14 +33,14 @@ fn pools(emitted: &[Signal]) -> Vec<u8> {
 #[test]
 fn new_pool_is_emitted() {
     let recent = HashMap::new();
-    let out = filter_new_or_escalated(vec![sig(1, Severity::Warning)], &recent);
+    let out = emittable(vec![sig(1, Severity::Warning)], &recent);
     assert_eq!(pools(&out), vec![1]);
 }
 
 #[test]
 fn same_severity_within_cooldown_is_suppressed() {
     let recent = HashMap::from([(pk(1), Severity::Warning)]);
-    let out = filter_new_or_escalated(vec![sig(1, Severity::Warning)], &recent);
+    let out = emittable(vec![sig(1, Severity::Warning)], &recent);
     assert!(out.is_empty());
 }
 
@@ -48,7 +48,7 @@ fn same_severity_within_cooldown_is_suppressed() {
 fn escalation_breaks_the_cooldown() {
     // Already emitted Warning; a Critical for the same pool must get through.
     let recent = HashMap::from([(pk(1), Severity::Warning)]);
-    let out = filter_new_or_escalated(vec![sig(1, Severity::Critical)], &recent);
+    let out = emittable(vec![sig(1, Severity::Critical)], &recent);
     assert_eq!(pools(&out), vec![1]);
     assert_eq!(out[0].severity, Severity::Critical);
 }
@@ -57,7 +57,7 @@ fn escalation_breaks_the_cooldown() {
 fn de_escalation_is_suppressed() {
     // Already Critical; a lower Warning must not re-alert.
     let recent = HashMap::from([(pk(1), Severity::Critical)]);
-    let out = filter_new_or_escalated(vec![sig(1, Severity::Warning)], &recent);
+    let out = emittable(vec![sig(1, Severity::Warning)], &recent);
     assert!(out.is_empty());
 }
 
@@ -67,7 +67,7 @@ fn mixed_batch_keeps_only_new_and_escalating() {
         (pk(1), Severity::Warning),  // pool 1: seen Warning
         (pk(2), Severity::Critical), // pool 2: seen Critical
     ]);
-    let out = filter_new_or_escalated(
+    let out = emittable(
         vec![
             sig(1, Severity::Warning),  // same → drop
             sig(2, Severity::Critical), // same → drop
