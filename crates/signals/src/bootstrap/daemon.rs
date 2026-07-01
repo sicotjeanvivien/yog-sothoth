@@ -43,6 +43,7 @@ impl Daemon {
             Protocol::MeteoraDammV2,
             config.flow_window,
             config.flow_interval,
+            config.flow_cooldown,
             config.flow_min_volume_usd,
             config.flow_threshold,
         ));

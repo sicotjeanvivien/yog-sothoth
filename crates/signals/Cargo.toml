@@ -33,6 +33,4 @@ metrics-exporter-prometheus = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
 async-trait = { workspace = true }
-
-[dev-dependencies]
 solana-pubkey = { workspace = true }
