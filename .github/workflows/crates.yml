@@ -161,6 +161,7 @@ jobs:
           CREATE ROLE yog_indexer;
           CREATE ROLE yog_api;
           CREATE ROLE yog_context;
+          CREATE ROLE yog_signals;
           ALTER SYSTEM SET timescaledb.max_background_workers = 0;
           SQL
           docker restart "${{ job.services.postgres.id }}"
@@ -269,6 +270,7 @@ jobs:
           CREATE ROLE yog_indexer;
           CREATE ROLE yog_api;
           CREATE ROLE yog_context;
+          CREATE ROLE yog_signals;
           ALTER SYSTEM SET timescaledb.max_background_workers = 0;
           SQL
           docker restart "${{ job.services.postgres.id }}"
