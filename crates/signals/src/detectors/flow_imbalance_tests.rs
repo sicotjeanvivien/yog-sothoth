@@ -36,13 +36,15 @@ fn flow(seed: u8, a2b: i64, b2a: i64) -> PoolSwapFlow {
     }
 }
 
-/// Build a detector: window 24h, interval 300s, floor $1000, threshold 0.3.
+/// Build a detector: window 24h, interval 300s, cooldown 6h, floor $1000,
+/// threshold 0.3. (Cooldown is engine-level, so it doesn't affect `evaluate`.)
 fn detector(flows: Vec<PoolSwapFlow>) -> FlowImbalanceDetector {
     FlowImbalanceDetector::new(
         Arc::new(MockFlowRepo(flows)),
         Protocol::MeteoraDammV2,
         ChronoDuration::hours(24),
         Duration::from_secs(300),
+        Duration::from_secs(6 * 3600),
         usd(1000),
         Decimal::new(3, 1), // 0.3
     )

@@ -19,6 +19,11 @@ const DEFAULT_FLOW_INTERVAL_SECS: u64 = 300;
 /// Overridable via `SIGNALS_FLOW_WINDOW_HOURS`.
 const DEFAULT_FLOW_WINDOW_HOURS: u64 = 24;
 
+/// Rolling per-pool suppression window, in hours — a persisting imbalance
+/// re-alerts at most once per cooldown. Overridable via
+/// `SIGNALS_FLOW_COOLDOWN_HOURS`.
+const DEFAULT_FLOW_COOLDOWN_HOURS: u64 = 6;
+
 /// Minimum total window volume (USD) for a pool to be considered.
 /// Overridable via `SIGNALS_FLOW_MIN_VOLUME_USD`.
 const DEFAULT_FLOW_MIN_VOLUME_USD: i64 = 10_000;
@@ -34,6 +39,9 @@ pub(crate) struct Config {
 
     /// Flow-imbalance aggregation window.
     pub(crate) flow_window: ChronoDuration,
+
+    /// Flow-imbalance rolling per-pool suppression window.
+    pub(crate) flow_cooldown: Duration,
 
     /// Flow-imbalance volume floor, in USD.
     pub(crate) flow_min_volume_usd: Decimal,
@@ -54,6 +62,9 @@ impl Config {
                 "SIGNALS_FLOW_WINDOW_HOURS",
                 DEFAULT_FLOW_WINDOW_HOURS,
             )? as i64),
+            flow_cooldown: Duration::from_secs(
+                duration_var("SIGNALS_FLOW_COOLDOWN_HOURS", DEFAULT_FLOW_COOLDOWN_HOURS)? * 3600,
+            ),
             flow_min_volume_usd: decimal_var(
                 "SIGNALS_FLOW_MIN_VOLUME_USD",
                 Decimal::from(DEFAULT_FLOW_MIN_VOLUME_USD),

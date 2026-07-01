@@ -19,7 +19,8 @@ impl EngineMetrics {
     pub fn register_descriptions() {
         describe_counter!(
             TICK_TOTAL,
-            "Detector ticks completed (labels: detector, outcome=ok|eval_failed|persist_failed)"
+            "Detector ticks completed (labels: detector, \
+             outcome=ok|suppressed|eval_failed|dedup_failed|persist_failed)"
         );
         describe_counter!(
             EMITTED_TOTAL,

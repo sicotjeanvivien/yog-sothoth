@@ -39,6 +39,8 @@ pub struct FlowImbalanceDetector {
     window: ChronoDuration,
     /// How often the engine ticks this detector.
     interval: Duration,
+    /// Rolling per-pool suppression window (engine-level dedup).
+    cooldown: Duration,
     /// Minimum total USD volume in the window for a pool to be considered.
     min_volume_usd: Decimal,
     /// `|imbalance|` at or above which a signal is emitted.
@@ -51,6 +53,7 @@ impl FlowImbalanceDetector {
         protocol: Protocol,
         window: ChronoDuration,
         interval: Duration,
+        cooldown: Duration,
         min_volume_usd: Decimal,
         threshold: Decimal,
     ) -> Self {
@@ -59,6 +62,7 @@ impl FlowImbalanceDetector {
             protocol,
             window,
             interval,
+            cooldown,
             min_volume_usd,
             threshold,
         }
@@ -73,6 +77,10 @@ impl SignalDetector for FlowImbalanceDetector {
 
     fn interval(&self) -> Duration {
         self.interval
+    }
+
+    fn cooldown(&self) -> Duration {
+        self.cooldown
     }
 
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {

@@ -59,6 +59,13 @@ pub trait SignalDetector: Send + Sync {
     /// This detector's evaluation cadence — how often the engine ticks it.
     fn interval(&self) -> Duration;
 
+    /// Rolling suppression window: the minimum time before the same
+    /// `(detector, pool)` may re-emit. The engine drops candidates for pools
+    /// already signalled within it — unless the new signal escalates to a
+    /// higher severity, which overrides the suppression. Stops a persisting
+    /// condition from re-alerting on every tick.
+    fn cooldown(&self) -> Duration;
+
     /// Evaluate against a fresh snapshot (read through the detector's own
     /// repositories) and return any signals to raise. An empty vec means
     /// "nothing noteworthy this tick" — the common case.

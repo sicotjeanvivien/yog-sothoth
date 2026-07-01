@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (pool_address)\n                pool_address AS \"pool_address!\",\n                severity     AS \"severity!\"\n            FROM signals\n            WHERE detector = $1 AND triggered_at > $2\n            ORDER BY pool_address, triggered_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "severity!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a1dadc5940f557d873d564b81cb95227141c22c82695a5f92e242ff199420c07"
+}

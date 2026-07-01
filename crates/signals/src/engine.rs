@@ -10,15 +10,17 @@
 //! and the tick is stepped over — one missed tick, never a dead loop. Only a
 //! task panic (a genuine bug) is loop-level and bubbles up as [`EngineError`].
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{Duration as ChronoDuration, Utc};
+use solana_pubkey::Pubkey;
 use thiserror::Error;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use yog_core::domain::{EvalContext, SignalDetector, SignalRepository};
+use yog_core::domain::{EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 
 use crate::metrics::EngineMetrics;
 
@@ -118,8 +120,8 @@ async fn run_tick(
         evaluated_at: Utc::now(),
     };
 
-    let signals = match detector.evaluate(&ctx).await {
-        Ok(signals) => signals,
+    let candidates = match detector.evaluate(&ctx).await {
+        Ok(candidates) => candidates,
         Err(e) => {
             warn!(detector = name, error = %e, "evaluation failed — skipping tick");
             EngineMetrics::record_tick(name, "eval_failed");
@@ -127,13 +129,32 @@ async fn run_tick(
         }
     };
 
-    if signals.is_empty() {
+    if candidates.is_empty() {
         EngineMetrics::record_tick(name, "ok");
         return;
     }
 
-    let count = signals.len();
-    if let Err(e) = repository.insert_batch(&signals).await {
+    // Dedup: drop pools already signalled within the cooldown window, unless
+    // the candidate escalates to a higher severity.
+    let since = ctx.evaluated_at
+        - ChronoDuration::from_std(detector.cooldown()).unwrap_or_else(|_| ChronoDuration::zero());
+    let recent = match repository.latest_severity_by_pool(name, since).await {
+        Ok(recent) => recent,
+        Err(e) => {
+            warn!(detector = name, error = %e, "dedup lookup failed — skipping tick");
+            EngineMetrics::record_tick(name, "dedup_failed");
+            return;
+        }
+    };
+
+    let to_emit = emittable(candidates, &recent);
+    if to_emit.is_empty() {
+        EngineMetrics::record_tick(name, "suppressed");
+        return;
+    }
+
+    let count = to_emit.len();
+    if let Err(e) = repository.insert_batch(&to_emit).await {
         warn!(detector = name, error = %e, "signal persistence failed — skipping tick");
         EngineMetrics::record_tick(name, "persist_failed");
         return;
@@ -143,3 +164,21 @@ async fn run_tick(
     EngineMetrics::record_tick(name, "ok");
     info!(detector = name, count, "signals emitted");
 }
+
+/// Keep only candidates that are new or escalate an existing signal for the
+/// same pool. `recent` maps a pool to the latest severity this detector has
+/// already emitted for it within the cooldown window; a candidate is dropped
+/// only when a signal of equal-or-higher severity is already present.
+fn emittable(candidates: Vec<Signal>, recent: &HashMap<Pubkey, Severity>) -> Vec<Signal> {
+    candidates
+        .into_iter()
+        .filter(|candidate| match recent.get(&candidate.pool_address) {
+            None => true,
+            Some(last) => candidate.severity > *last,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+#[path = "engine_tests.rs"]
+mod tests;

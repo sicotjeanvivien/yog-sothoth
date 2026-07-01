@@ -17,7 +17,10 @@ use crate::domain::Protocol;
 
 /// How much attention a signal warrants. Closed, stable set → an enum,
 /// mirrored one-to-one by the `signals.severity` CHECK constraint.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Ord` follows the declaration order (`Info < Warning < Critical`), which
+/// is exactly the escalation order the engine's dedup compares against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Info,
