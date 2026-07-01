@@ -1,0 +1,26 @@
+[package]
+name = "yog-signals"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Workspace crates — the engine depends ONLY on core traits; the concrete
+# Pg repositories are injected by the binary (step 5), never linked here.
+yog-core = { path = "../core" }
+
+# Async runtime
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+# Errors / logging
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Misc
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+solana-pubkey = { workspace = true }
+

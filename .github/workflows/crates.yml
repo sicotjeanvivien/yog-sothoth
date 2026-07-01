@@ -84,6 +84,7 @@ jobs:
             -p yog-context \
             -p yog-indexer \
             -p yog-persistence \
+            -p yog-signals \
             --all-targets --all-features \
             -- -D warnings
 
@@ -101,6 +102,7 @@ jobs:
             -p yog-context \
             -p yog-indexer \
             -p yog-persistence \
+            -p yog-signals \
 
   # ─────────────────────────────────────────────────────────────────
   # test-integration — DB-backed tests behind the integration-tests
