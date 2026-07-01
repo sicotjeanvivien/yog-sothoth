@@ -14,7 +14,9 @@ use yog_core::domain::{Protocol, SignalDetector, SignalRepository, SwapFlowRepos
 use yog_persistence::{Database, PgSignalRepository, PgSwapFlowRepository};
 
 use crate::bootstrap::Config;
-use yog_signals::{EngineMetrics, FlowImbalanceDetector, SignalEngine};
+use crate::detectors::FlowImbalanceDetector;
+use crate::engine::SignalEngine;
+use crate::metrics::EngineMetrics;
 
 /// Owns the assembled engine, ready to run.
 pub(crate) struct Daemon {

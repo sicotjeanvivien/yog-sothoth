@@ -8,9 +8,9 @@ name = "signal-engine"
 path = "src/main.rs"
 
 [dependencies]
-# Workspace crates. The LIB (engine + detectors) depends only on core
-# traits. The BIN wires the concrete Pg repositories and process plumbing,
-# which is why yog-persistence / yog-bootstrap appear here.
+# Workspace crates. The engine + detectors (engine.rs, detectors/) use only
+# core traits; the process wiring (bootstrap/) pulls in yog-persistence for
+# the concrete Pg repositories and yog-bootstrap for the runtime plumbing.
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
 yog-bootstrap = { path = "../bootstrap" }

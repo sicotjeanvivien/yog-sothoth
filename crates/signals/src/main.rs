@@ -10,6 +10,9 @@
 //! run`.
 
 mod bootstrap;
+mod detectors;
+mod engine;
+mod metrics;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::{error, info};
