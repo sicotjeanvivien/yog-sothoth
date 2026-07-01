@@ -5,12 +5,12 @@
 
 ---
 ---
-## v0.1 — Analyzer + Signal Engine
+## ✅ v0.1 — Analyzer + Signal Engine
 
 > Décision (10 juin 2026) : v0.1 et v0.2 fusionnées. Pas de release publique tant qu'il n'y a pas de signaux à offrir — un analytics Solana sans détecteurs est un viewer d'events, pas un produit. Le découpage interne (v0.1.0 / v0.1.1) reste pour conserver l'ordre de construction.
 
 ---
-### v0.1.0 — Analyzer (POC, pas de release publique)
+### ✅ v0.1.0 — Analyzer (POC, pas de release publique)
 
 #### ✅ Indexer — Cercle 2 events
 > Fondation per-protocole en place (voir section ✅ refactor voie 3 ci-dessous). Les cinq events s'ajoutent en suivant le pattern : wire event borsh → discriminator + extractor → translator → variant `MeteoraDammV2Event` → struct domaine + repo trait → table `meteora_damm_v2_<event>_events` + VIEW → bras `MeteoraDammV2EventPersistor`.
@@ -34,7 +34,7 @@
 - [x] **Web fees réalisés (PR #10)** : KPI « Fees 24h » + lignes « Effective fee (24h) » / « Protocol cut (24h) » sur le PoolDetail
 - [x] **Section Fees du PoolDetail avec graphes (PRs #13 + #14)** : (1) endpoint d'historique time-series `GET /api/pools/{address}/history?days=N` (#13) — buckets horaires joignant les **4 CA** (swap fees + liquidity + claim_position_fee + claim_reward), valorisés USD trade-time, `PoolHistoryBucket`/`PoolAnalyticsRepository::history` ; (2) graphes (#14) — section serveur `PoolDetailFees` + `TimeSeriesChart` Client Component sur **visx** (revenu fee en aire, taux effectif en ligne), fenêtre 30j, i18n en/fr. Cadrage v1 acté : 2 graphes (revenu + taux effectif), liquidity/claims dans l'endpoint mais pas encore tracés. NB le barème *configuré* (decode scheduler/dynamic fee complet, cf. ligne 28) reste hors scope — on trace le réalisé
 
-#### Dashboard — page Overview
+#### ✅ Dashboard — page Overview
 > **Cadrage acté (18 juin 2026) : deux temps — phase 1 read-time, phase 2 = futur crate `Yog-Analytic`.**
 > Coût mesuré sur la DB de dev (356 pools, 733k `token_prices`, CA swap) :
 > - KPIs globaux (TVL totale, volume/fees 24h) + top-N pools par volume/TVL sont **calculables au read-time** : 5–47 ms (TVL globale 18 ms, vol/fees 24h via VIEW 019 47 ms, top-10 volume 36 ms, top-10 TVL 5,5 ms). Coût borné par le nb de pools (TVL = 1 ligne `pool_current_state`/pool) et la fenêtre 24h (chunk exclusion sur la CA), **pas** par l'historique accumulé ; lookup prix `(mint, fetched_at DESC)` index-backed → ~constant.
@@ -55,11 +55,9 @@
 
 **Phase 1.5 — top-N pools (après la bande KPI)**
 - [x] **Top-N pools par volume 24h** — endpoint `GET /api/pools/top?metric=volume_24h&limit=10` (read-time non-paginé, classé desc, plafonné 20 ; `metric` = enum serde-validé extensible TVL ; renvoie un `Vec<PoolResponse>` enrichi ordonné). Domaine : `PoolRankMetric` + `PoolAnalyticsRepository::top_pool_addresses` + `PoolRepository::find_by_addresses` (batch) ; `PoolService::top_pools` réimpose le rang. Front : section `OverviewTopPools` sous la bande KPI (table rang · paire · Volume 24h · TVL, lignes → fiche pool ; `BlockError` autonome si l'appel échoue, n'abat pas les KPIs), i18n en/fr. TVL en colonne mais tri volume seul pour commencer
-- [ ] Extension future : tri par TVL (variante `metric=tvl` + colonne triable / toggle) — quand le besoin se présente
 
 **Phase 2 — crate `Yog-Analytic` (différé, déclenché empiriquement)**
-- [ ] Crate `yog-analytic` : calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker ; cf. contraintes ci-dessus)
-- [ ] Déclencheur : quand une requête analytique **mesurée** franchit un seuil réel — en particulier dès l'ouverture de l'allowlist `watched_pools` / montée du throughput cible (re-mesurer alors, le chiffre dev de juin 2026 n'est plus représentatif)
+> Items `[ ]` (crate `yog-analytic` + déclencheur empirique) regroupés dans **« Reste à faire »** en fin de fichier. Contexte/contraintes : voir le blockquote *Dashboard — page Overview* ci-dessus.
 
 #### ✅ yog-api
 - [x] `health.rs` — vérifier que ce n'est qu'une liveness, pas une readiness
@@ -70,7 +68,7 @@
 - [x] filtrage `/healthz` via `EnvFilter`
 - [x] filtrage `/readyz`
 
-#### Frontend
+#### ✅ Frontend
 - [x] Copy-to-clipboard sur l'adresse Solana du wallet `support-us` — `CopyButton` promu de `dashboard/pool-detail/` vers `shared/` (2ᵉ consommateur, cross-feature) ; ajouté en îlot client dans la box wallet, la carte Sponsor reste Server Component. Clé i18n `sponsor.copyAddress` (en/fr)
 - [x] Revoir /lib/api/schema — problème si valeur nul . Vérife type data possible — revue complète des 11 schémas contre les DTO Rust. Conclusion : nullabilité OK partout (les `Option<…>` Rust → `.nullable()`), `BigDecimal=string` correct (rust_decimal sérialise en string par défaut). Corrections livrées : (1) symétrie A/B des réserves + resserrements `Rfc3339`/enum ; (2) **toutes** les quantités `u64` (réserves, `amount*`, fees) → string côté API pour ne pas tronquer au-delà de 2^53 — `formatTokenAmount` accepte désormais une string et downcast à l'affichage
 	- [x] api-error-body — conforme RFC 9457, RAS
@@ -91,11 +89,10 @@
 - [~] **Imbalance — re-scopé hors « petit item » (29 juin 2026)** : le signal annoncé (« prix implicite du pool vs oracle ») ne peut **pas** se baser sur le ratio des réserves — DAMM v2 est de la **liquidité concentrée** (`pool_current_state` porte `last_sqrt_price` + `liquidity` L, cf. `model.rs:82`), donc le ratio des réserves ≠ spot price (les réserves reflètent où la liquidité est posée vs le prix actif). Un imbalance correct doit dériver le spot price de **`sqrt_price`** au format **Q64.64** (`price = (sqrt_price / 2^64)^2`, ajusté décimales A/B), le comparer au prix oracle Jupiter (`priceAUsd/priceBUsd`), puis afficher l'écart %.
 	- [x] **Spot price → core+api (décidé 29 juin 2026)** : le calcul est de la **logique de domaine** (décodage d'un encodage on-chain validé sur mainnet, comme `decode_base_fee_bps`), pas du formatage ; et l'imbalance est un **futur détecteur Signal Engine** (backend) → le calculer dans le front = double maths. Donc : helper pur `yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b` (f64, validé sur 3 pools mainnet réels), exposé en `PoolCurrentStateResponse.spotPriceAInB` (`Option<Decimal>`, dérivé dans `PoolService::get_latest_state` qui résout les décimales ; **pas** sur `PoolResponse` → éviterait un N+1 dans `list_pools`/`top_pools`). Vérifié live : SOL/USDC → 71.54 (oracle 71.53 ; le ratio réserves donnait 1.30, absurde). Aucune migration/SQL. Le `computePoolPrice` (ratio réserves) côté front reste à **remplacer** par la conso de ce champ
 	- [x] **Front** : la carte « Current price » consomme `spotPriceAInB` (schema `pool-current-state.ts` + `pool-detail-kpis.tsx`) ; `computePoolPrice` (ratio réserves) supprimé, `formatPrice` conservé, `pool-price.ts` réduit au formatage. Le front est purement affichage. Flag `poolPriceImbalance` conservé. typecheck/lint/136 tests verts
-	- [ ] **Imbalance %** : différé au **Signal Engine** (v0.1.1) — comparer spot price vs oracle côté backend, ne pas bâtir le détecteur avant son crate
+	- Reliquat **Imbalance %** (différé au Signal Engine) → regroupé en fin de fichier.
 
 ##### PagePool
-- [ ] Mettre en place un systéme de favoris sur la page Pool stocker dans le LocalStorage. Je pense que c'est pas vraiment possible sinon faut du back pour pouvoir récupérer plusieurs pool via des PubKey . 
-- [ ] Ajout colonne fee + filtre . Je sais pas si c'est possible . 
+> Reliquats `[ ]` (favoris localStorage, colonne fee + filtre) → regroupés dans **« Reste à faire »** en fin de fichier.
 - [x] Tableau liquidity — colonne « Value (USD) » : valeur USD de l'événement (amountA·prixA + amountB·prixB, valorisation **trade-time** = prix as-of le timestamp de l'event). **Backend** : VIEW `meteora_damm_v2_liquidity_events_valued` (migration 021, LATERAL `token_prices` as-of + jointure décimales, GRANT `yog_api`) — les 2 chemins cursor (forward/backward) lisent la VIEW (colonnes forcées `!` car sqlx infère nullable sur une VIEW) ; read-model `MeteoraDammV2LiquidityEventValued { event, value_usd: Option<Decimal> }` (séparé de l'event brut → infra-neutral, l'INSERT indexer inchangé) ; `LiquidityEventResponse.valueUsd`. **Front** : 6ᵉ colonne, `formatUsd` plein, `—` si null. Test d'intégration VIEW (as-of correct + NULL si jambe non pricée). Vérifié live : SOL/USDC remove → $41.26. NB : `liquidityDelta` (u128 brut, unités L sans décimales) écarté car illisible.
 
 #### ✅ yog-context — métriques
@@ -227,58 +224,7 @@
 - [x] **Requêtes dynamiques → on garde le `QueryBuilder` sqlx natif (décidé 17 juin 2026)**. Le SQL dynamique (`ORDER BY`/`WHERE`/search selon input user, ex. `pool/query.rs`, et les futurs filtres /pools) ne peut ni macro ni VIEW. SeaQuery évalué et **écarté même pour la couche dynamique** : pas justifié d'ajouter toute une dépendance pour 2-3 requêtes quand un `QueryBuilder` natif fait le job, contenu et testé. Acté dans CLAUDE.md → « Choosing how to write a query ».
 - repos statiques (events, token_metadata, token_prices, network_status, watched_pool, …) : **on ne touche pas** — aucune douleur, les macros sqlx font le travail avec le check compile-time.
 
----
----
-
-### v0.1.1 — Signal Engine (release publique)
-
-> C'est cette phase qui justifie la mise en prod. Sans signaux, pas d'utilisateurs ; pas d'utilisateurs, pas de release.
-
-#### Signal Engine — crate et détecteurs
-- [ ] Crate `signals` dans le workspace
-- [ ] Trait `SignalDetector`, struct `Signal`
-- [ ] Détecteur Fee yield spike
-- [ ] Détecteur TVL drain
-- [ ] Détecteur Imbalance alert (selon retour utilisateur)
-- [ ] Détecteur Price impact creep (selon retour utilisateur)
-- [ ] Service `signal-engine` binaire
-- [ ] Table `signals` TimescaleDB
-
-#### Signal Engine — push channels
-- [ ] Webhook
-- [ ] Email (Resend/Mailgun)
-- [ ] Telegram
-
-#### Signal Engine — UI
-- [ ] UI feed signaux dans le dashboard
-
-#### yog-context — robustesse pour release
-- [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
-
-#### Frontend — page /pools (filtres)
-- [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Transverse)
-
-#### RGPD / légal — avant déploiement public
-- [ ] Vérifier contenu page Privacy (mentions RGPD complètes)
-- [ ] Vérifier contenu page Mentions légales (SASU AWSD, éditeur, hébergeur)
-- [ ] Vérifier contenu pages Terms / Support / About
-
-#### Déploiement Scaleway
-- [ ] Provisionner Instance DEV1-M (`fr-par-1`, Ubuntu 24.04)
-- [ ] Hardening SSH (clé uniquement, fail2ban, ufw 22/80/443)
-- [ ] Installer Docker + Compose plugin
-- [ ] Provisionner Managed PostgreSQL, activer TimescaleDB
-- [ ] Créer bucket Object Storage `yog-backups` One Zone IA
-- [ ] Migrer site AWSD (Hugo → rsync → Caddy)
-- [ ] Configurer Caddy + Let's Encrypt pour yog-scope.xyz
-- [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
-- [ ] Tester restore pg_dump avant août (impératif avant convalescence)
-- [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
-
----
----
-
-### Transverse v0.1
+### ✅Transverse v0.1
 
 #### ✅ Convention code/tests — un fichier de tests séparé
 > Harmoniser sur le pattern déjà majoritaire : code dans `xxx.rs`, tests dans
@@ -317,7 +263,7 @@
 - [x] **GRANT** : policies (009) + CA (010–013) appliquées via `yog-migrate` ; pas de nouveau rôle requis
 - [-] 🚫 🔜 **Archivage froid (plus tard, si besoin d'audit)** : dump des chunks `swap`/`liquidity` > 30j vers le bucket Object Storage `yog-backups` (parquet/csv compressé) **avant** le drop. Additif à la décision A — n'active que si un besoin de provenance/audit sur le grain transaction apparaît
 
-#### Continuous aggregates — rollups durables (cadré, 15 juin 2026)
+#### ✅ Continuous aggregates — rollups durables (cadré, 15 juin 2026)
 > Double rôle, acté avec la stratégie de rétention : (1) **historique long terme** qui survit au
 > drop 30j pour les 4 tables qui droppent (`swap`, `liquidity`, `claim_position_fee`, `claim_reward`),
 > (2) **perf** du calcul `volume_24h_usd` de `GET /api/pools` (aujourd'hui `SUM(...) FROM swap_events
@@ -349,12 +295,11 @@
 - [x] **CA `claim_position_fee`** (historique seul) : migration `012` (`SUM(fee_a/b_claimed)`, `COUNT(*)` ; pas de mint dans la table source → jointure `pools` au read si besoin), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
 - [x] **CA `claim_reward`** (historique seul, group by `mint_reward`) : migration `013` (`SUM(total_reward)`, `COUNT(*)` par `(pool, mint_reward, bucket)`), GRANT `yog_api`, test `tests/claim_caggs.rs` ✅
 - [x] **Brancher des read-paths sur les CA `liquidity`/`claim_*` (PR #13)** : la requête `history` de `pool_analytics.rs` joint et lit désormais les 4 CA (swap/liquidity/claim_position_fee/claim_reward) par bucket. Côté web, seuls swap-fees sont tracés en v1 ; liquidity/claims sont exposés par l'endpoint, à tracer quand le cadrage le justifie
-- [ ] **VIEW cross-protocole au-dessus des CA** : à créer au 2ᵉ protocole (DLMM/Raydium), comme la VIEW `swap_events` actuelle — lecture mono-protocole directe en attendant
 
-#### Performance — différé empirique
-> N'activer que si la charge le justifie. Ne pas anticiper.
-- [ ] Table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relèvera du crate `Yog-Analytic` (cf. Overview phase 2). Mesure 18 juin 2026 : KPIs/top-N read-time à 5–47 ms sur la DB dev → pas encore le déclencheur ; mais volume dev plafonné par `watched_pools`, à re-mesurer dès ouverture de l'allowlist
-- [ ] Cache HTTP `Cache-Control: max-age=30` sur `GET /api/pools`
+> Reliquat `[ ]` (**VIEW cross-protocole au-dessus des CA**, au 2ᵉ protocole) → regroupé en fin de fichier.
+
+#### ✅ Performance — différé empirique
+> N'activer que si la charge le justifie. Ne pas anticiper. Items `[ ]` (table `pool_analytics_hourly` matérialisée, cache HTTP `/api/pools`) → regroupés dans **« Reste à faire »** en fin de fichier.
 
 #### 🚫 Infrastructure RPC — différé
 - [-] 🚫 Migration vers `transactionSubscribe` Helius ou Yellowstone gRPC (Shyft/Triton) — désactive l'allowlist `watched_pools`, architecture protocol-centric pleine. À faire quand throughput devient la contrainte réelle. (Non acceptable : si mise en place => dépendance structurelle à Helius)
@@ -364,6 +309,73 @@
 
 ---
 ---
+
+### v0.1.1 — Signal Engine + prep release (bloque la mise en prod)
+
+#### Signal Engine — décisions d'architecture (figées 1 juil. 2026)
+
+Phase conceptuelle bouclée avant tout code. Décisions structurantes :
+
+- **Concept** : un signal = une *conclusion* (forme uniforme, tous protocoles confondus), **pas** un event brut (hétérogène). C'est cette distinction qui dicte tout ce qui suit.
+- **Table** : **une** table `signals` générique (hypertable sur `triggered_at`), discriminée par **deux colonnes** `detector` + `protocol` — rejoint la famille `pools`/`token_prices` (cross-protocole = table unique, protocole = colonne). **Rejeté** : tables par protocole (voie 3 — un signal est uniforme) *et* tables par détecteur `signals_<detector>` (voie 3 sur le mauvais axe : détecteurs = forte cardinalité + rotation + lecture cross-cut → le feed deviendrait un UNION ALL permanent).
+- **Schéma niveau 1, sans JSONB** : colonnes communes typées (`detector, protocol, pool_address, severity, value, threshold, message, triggered_at`). Échelle d'escalade si un détecteur exige un payload structuré : (1) aucun/message → (2) `details JSONB` → (3) tables d'extension jointes par `signal_id`. On ne monte que sous preuve d'un détecteur réel. Le JSONB dans `signals` serait une exception défendable à la règle no-JSONB (qui vise les *events*), mais coûte le check sqlx compile-time + les contraintes DB sur la queue payload → si pris : promouvoir en colonne tout ce qu'on filtre/trie, garder le JSONB opaque en SQL (interprété en Rust via enum serde clée sur `detector`).
+- **Modèle d'évaluation** : trait **batch à cadence par-détecteur**. Chaque `SignalDetector` déclare son `interval()` et un `evaluate(ctx) -> Vec<Signal>` qui recalcule depuis un snapshot DB — **stateless entre tics** (la DB porte l'état). Engine = une boucle de poll par détecteur, skip-and-log par détecteur, shutdown via `CancellationToken`. **Rejeté** comme substrat : le streaming (event-callback, stateful, exigerait un transport — LISTEN/NOTIFY ou couplage indexer — car `signal-engine` est un process séparé) ; les 1ers détecteurs sont à fenêtre sur des caggs déjà bucketées → le sous-seconde n'achète rien. Un trait `StreamDetector` reste ajoutable plus tard en extension, non bâti en spéculatif.
+- **Injection (modèle B)** : le **détecteur porte ses repos**, injectés concrets par le binaire à la construction — exactement comme `daemon.rs` injecte `Arc::new(PgX::new(pool()))` dans chaque persistor. Les détecteurs dépendent des **traits** repo de `core`, jamais des `Pg*`. L'`EvalContext` est **fin** : il ne porte que l'horloge du tic (`evaluated_at` → `triggered_at` cohérent + fenêtres calculées depuis un point fixe). Le détecteur **rend** `Vec<Signal>` ; c'est l'**engine** qui tient le `SignalRepository` et persiste (miroir de extraction→persistor). Rejeté : le fat-context (contexte bundle tous les repos) → viole ISP/SRP.
+
+#### Signal Engine — déroulé d'implémentation
+
+1. [ ] **Migration** : table `signals` (hypertable `triggered_at`) + rôle `yog_signals` + `GRANT` (RW `signals` → `yog_signals`, RO → `yog_api`) → régénérer le cache sqlx (`cargo sqlx prepare`)
+2. [ ] **`core`** : `struct Signal`, trait `SignalDetector`, `struct EvalContext`, trait `SignalRepository`, erreurs typées (`DetectorError`)
+3. [ ] **`persistence`** : `PgSignalRepository` (write) + **méthode de lecture** du volume par direction sur la cagg `..._swap_events_hourly` (décision d'impl : méthode sur `MeteoraDammV2SwapEventRepository` vs repo dédié « swap volume »)
+4. [ ] **`yog-signals`** : `FlowImbalanceDetector` (1er détecteur : net buy vs sell sur fenêtre, seuil + plancher de volume) + boucle engine (poll par détecteur, skip-and-log, `CancellationToken`)
+5. [ ] **binaire `signal-engine`** : câblage des repos concrets à la `daemon.rs`
+6. [ ] **2ᵉ détecteur** : `PriceOracleDeviationDetector` — compare le spot price backend (`spotPriceAInB`, dérivé de `sqrt_price` Q64.64) au prix oracle Jupiter (`priceAUsd`/`priceBUsd`), émet sur l'écart %. Ex-reliquat v0.1 « Frontend / Imbalance % » (rapatrié ici : c'est un détecteur backend, pas du front). Valide le point d'extension multi-détecteur
+
+#### Signal Engine — détecteurs suivants (post-fondation)
+- [ ] Détecteur Fee yield spike
+- [ ] Détecteur TVL drain
+- [ ] Détecteur Price impact creep (selon retour utilisateur)
+
+#### Signal Engine — push channels
+- [ ] Webhook
+- [ ] Email (Resend/Mailgun)
+- [ ] Telegram
+
+#### Signal Engine — UI
+- [ ] UI feed signaux dans le dashboard
+
+#### yog-context — robustesse pour release
+- [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
+
+#### Frontend — page /pools (filtres)
+- [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Reliquats v0.1 ci-dessous)
+
+#### RGPD / légal — avant déploiement public
+- [ ] Vérifier contenu page Privacy (mentions RGPD complètes)
+- [ ] Vérifier contenu page Mentions légales (SASU AWSD, éditeur, hébergeur)
+- [ ] Vérifier contenu pages Terms / Support / About
+
+#### Déploiement Scaleway — ⚠️ deadline : restore testé avant août (convalescence 27 août)
+- [ ] Provisionner Instance DEV1-M (`fr-par-1`, Ubuntu 24.04)
+- [ ] Hardening SSH (clé uniquement, fail2ban, ufw 22/80/443)
+- [ ] Installer Docker + Compose plugin
+- [ ] Provisionner Managed PostgreSQL, activer TimescaleDB
+- [ ] Créer bucket Object Storage `yog-backups` One Zone IA
+- [ ] Migrer site AWSD (Hugo → rsync → Caddy)
+- [ ] Configurer Caddy + Let's Encrypt pour yog-scope.xyz
+- [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
+- [ ] Tester restore pg_dump avant août (impératif avant convalescence)
+- [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
+
+### Reliquats v0.1 (analyzer — non bloquants, déclenchés au besoin)
+- [ ] **Overview phase 1.5** : tri par TVL (variante `metric=tvl` + colonne triable / toggle) — quand le besoin se présente
+- [ ] **Overview phase 2** : crate `yog-analytic` — calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker)
+- [ ] **Overview phase 2** : déclencheur — quand une requête analytique **mesurée** franchit un seuil réel (notamment à l'ouverture de l'allowlist `watched_pools` ; re-mesurer, le chiffre dev de juin 2026 n'est plus représentatif)
+- [ ] **Frontend / PagePool** : système de favoris stocké en LocalStorage (sinon back pour récupérer plusieurs pools par PubKey)
+- [ ] **Frontend / PagePool** : ajout colonne fee + filtre (faisabilité à confirmer)
+- [ ] **Transverse** : VIEW cross-protocole au-dessus des CA — à créer au 2ᵉ protocole (DLMM/Raydium), comme la VIEW `swap_events` ; lecture mono-protocole directe en attendant
+- [ ] **Transverse / perf** : table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relève du crate `Yog-Analytic` ; pas encore le déclencheur (5–47 ms read-time en dev), re-mesurer à l'ouverture de `watched_pools`
+- [ ] **Transverse / perf** : cache HTTP `Cache-Control: max-age=30` sur `GET /api/pools`
 
 ## v0.2 — Auth (ex-v0.3, pas encore attaqué)
 - [ ] Tables `users`, `sessions`, `auth_methods`

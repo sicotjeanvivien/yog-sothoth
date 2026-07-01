@@ -20,10 +20,12 @@
 --   yog_indexer  : RW on event tables, RO on watched_pools.
 --   yog_api      : RO across the board.
 --   yog_context  : RW on token enrichment tables, RO on pools.
+--   yog_signals  : RW (append-only) on signals, RO on the read sources it
+--                  evaluates (caggs, pool_current_state, token_prices).
 --
--- Least privilege at runtime: none of yog_indexer / yog_api / yog_context can
--- CREATE or ALTER tables. The day one of them is compromised, the schema
--- itself stays out of reach.
+-- Least privilege at runtime: none of yog_indexer / yog_api / yog_context /
+-- yog_signals can CREATE or ALTER tables. The day one of them is compromised,
+-- the schema itself stays out of reach.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -33,11 +35,12 @@ CREATE ROLE yog_migrate LOGIN PASSWORD 'CHANGE_ME_migrate_password';
 CREATE ROLE yog_indexer LOGIN PASSWORD 'CHANGE_ME_indexer_password';
 CREATE ROLE yog_api     LOGIN PASSWORD 'CHANGE_ME_api_password';
 CREATE ROLE yog_context LOGIN PASSWORD 'CHANGE_ME_context_password';
+CREATE ROLE yog_signals LOGIN PASSWORD 'CHANGE_ME_signals_password';
 
 -- ---------------------------------------------------------------------------
 -- Schema access
 -- ---------------------------------------------------------------------------
-GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context;
+GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context, yog_signals;
 
 -- yog_migrate owns the schema. This is the cleanest way to give it GRANT
 -- authority over the tables it creates (migration files emit their own
@@ -65,6 +68,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
 
 ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_context;
+
+-- yog_signals evaluates detectors by reading future read-sources (caggs, state,
+-- prices). Its RW on `signals` is granted explicitly in that table's migration;
+-- SELECT on existing read-sources is granted per-table when a detector needs it.
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON TABLES TO yog_signals;
 
 -- Sequences (behind BIGSERIAL columns) are used by yog_indexer at insert
 -- time. Default USAGE + SELECT keeps future tables consistent.
