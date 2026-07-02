@@ -1,6 +1,6 @@
 //! Application service for the signal feed.
 //!
-//! Orchestrates pagination of the signals emitted by the signal-engine
+//! Orchestrates pagination of the signals emitted by the yog-signals daemon
 //! detectors. Pure domain: no axum, no DTOs, no HTTP concerns. The
 //! handler is responsible for cursor wire encoding/decoding and DTO
 //! mapping.

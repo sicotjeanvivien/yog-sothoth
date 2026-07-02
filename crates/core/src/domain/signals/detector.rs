@@ -8,7 +8,7 @@
 //! detector returns; the detector itself performs no writes.
 //!
 //! Streaming (event-callback, stateful) was deliberately not made the
-//! substrate: a separate `signal-engine` process would need a transport
+//! substrate: a separate `yog-signals` process would need a transport
 //! (LISTEN/NOTIFY or indexer coupling), and the first detectors are
 //! windowed over already-bucketed caggs where sub-second reactivity buys
 //! nothing. A `StreamDetector` can be added later as an extension.
