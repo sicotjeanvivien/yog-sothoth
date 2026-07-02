@@ -45,6 +45,7 @@ pub enum Cursor {
     Pool(crate::domain::PoolCursor),
     MeteoraDammV2SwapEvent(crate::domain::MeteoraDammV2SwapEventCursor),
     MeteoraDammV2LiquidityEvent(crate::domain::MeteoraDammV2LiquidityEventCursor),
+    Signal(crate::domain::SignalCursor),
 }
 
 impl<T> Page<T> {
