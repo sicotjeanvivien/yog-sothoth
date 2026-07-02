@@ -74,6 +74,8 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
             "/api/network/status",
             get(handlers::network_status::get_network_status),
         )
+        // ── Signal feed ─────────────────────────────────────────────────
+        .route("/api/signals", get(handlers::signals::list_signals))
         .route("/api/stats", get(handlers::stats::get_stats))
         .route("/api/tokens/{mint}", get(handlers::token::get_token))
         // ── Tracing and request id (applied only here) ───────────────────
