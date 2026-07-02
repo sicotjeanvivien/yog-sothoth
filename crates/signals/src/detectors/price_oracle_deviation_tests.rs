@@ -51,18 +51,19 @@ fn snapshot(
     }
 }
 
-/// Build a detector: interval 300s, cooldown 6h, price age 15min, spot age
-/// 24h, threshold 0.05, critical 0.2. (Cooldown is engine-level, so it
+/// Build a detector over the mock. (Cooldown is engine-level, so it
 /// doesn't affect `evaluate`.)
 fn detector(snapshots: Vec<PoolPriceSnapshot>) -> PriceOracleDeviationDetector {
     PriceOracleDeviationDetector::new(
         Arc::new(MockSnapshotRepo(snapshots)),
-        Duration::from_secs(300),
-        Duration::from_secs(6 * 3600),
-        ChronoDuration::minutes(15),
-        ChronoDuration::hours(24),
-        Decimal::new(5, 2), // 0.05
-        Decimal::new(2, 1), // 0.2
+        PriceOracleDeviationSettings {
+            interval: Duration::from_secs(300),
+            cooldown: Duration::from_secs(6 * 3600),
+            max_price_age: ChronoDuration::minutes(15),
+            max_spot_age: ChronoDuration::hours(24),
+            threshold: Decimal::new(5, 2), // 0.05
+            critical: Decimal::new(2, 1),  // 0.2
+        },
     )
 }
 

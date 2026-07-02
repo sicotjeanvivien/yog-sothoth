@@ -28,45 +28,47 @@ use yog_core::domain::{
     Signal, SignalDetector,
 };
 
+/// Tuning knobs of the price-oracle-deviation detector, as loaded from the
+/// environment by the bootstrap config. A named-field struct rather than
+/// constructor arguments: the fields pair up by type (`Duration` ×2,
+/// `ChronoDuration` ×2, `Decimal` ×2), so positional passing would let a
+/// swapped pair compile silently.
+pub struct PriceOracleDeviationSettings {
+    /// How often the engine ticks this detector.
+    pub interval: Duration,
+    /// Rolling per-pool suppression window (engine-level dedup).
+    pub cooldown: Duration,
+    /// Oldest acceptable oracle observation. Pools where either token's
+    /// price is older are skipped.
+    pub max_price_age: ChronoDuration,
+    /// Oldest acceptable last swap. Pools quiet for longer are skipped —
+    /// their spot price is history, not a live quote.
+    pub max_spot_age: ChronoDuration,
+    /// `|deviation|` at or above which a signal is emitted.
+    pub threshold: Decimal,
+    /// `|deviation|` at or above which the signal escalates to Critical.
+    /// The config guarantees `threshold < critical` at load.
+    pub critical: Decimal,
+}
+
 /// Detector for pool spot price drifting away from the oracle price.
 pub struct PriceOracleDeviationDetector {
     /// Source of per-pool spot-price inputs and latest oracle prices.
     snapshot_repo: Arc<dyn PoolPriceSnapshotRepository>,
-    /// How often the engine ticks this detector.
-    interval: Duration,
-    /// Rolling per-pool suppression window (engine-level dedup).
-    cooldown: Duration,
-    /// Oldest acceptable oracle observation. Pools where either token's
-    /// price is older are skipped.
-    max_price_age: ChronoDuration,
-    /// Oldest acceptable last swap. Pools quiet for longer are skipped —
-    /// their spot price is history, not a live quote.
-    max_spot_age: ChronoDuration,
-    /// `|deviation|` at or above which a signal is emitted.
-    threshold: Decimal,
-    /// `|deviation|` at or above which the signal escalates to Critical.
-    /// The config guarantees `threshold < critical` at load.
-    critical: Decimal,
+    /// The detector's tuning knobs.
+    settings: PriceOracleDeviationSettings,
 }
 
 impl PriceOracleDeviationDetector {
+    /// Build the detector: its dependency positionally, its tuning as a
+    /// named-field struct.
     pub fn new(
         snapshot_repo: Arc<dyn PoolPriceSnapshotRepository>,
-        interval: Duration,
-        cooldown: Duration,
-        max_price_age: ChronoDuration,
-        max_spot_age: ChronoDuration,
-        threshold: Decimal,
-        critical: Decimal,
+        settings: PriceOracleDeviationSettings,
     ) -> Self {
         Self {
             snapshot_repo,
-            interval,
-            cooldown,
-            max_price_age,
-            max_spot_age,
-            threshold,
-            critical,
+            settings,
         }
     }
 }
@@ -101,18 +103,18 @@ impl SignalDetector for PriceOracleDeviationDetector {
     }
 
     fn interval(&self) -> Duration {
-        self.interval
+        self.settings.interval
     }
 
     fn cooldown(&self) -> Duration {
-        self.cooldown
+        self.settings.cooldown
     }
 
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let snapshots = self.snapshot_repo.latest().await?;
 
-        let price_cutoff = ctx.evaluated_at - self.max_price_age;
-        let spot_cutoff = ctx.evaluated_at - self.max_spot_age;
+        let price_cutoff = ctx.evaluated_at - self.settings.max_price_age;
+        let spot_cutoff = ctx.evaluated_at - self.settings.max_spot_age;
 
         let mut signals = Vec::new();
         for snapshot in snapshots {
@@ -142,11 +144,11 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 continue;
             };
             let magnitude = deviation.abs();
-            if magnitude < self.threshold {
+            if magnitude < self.settings.threshold {
                 continue;
             }
 
-            let severity = if magnitude >= self.critical {
+            let severity = if magnitude >= self.settings.critical {
                 Severity::Critical
             } else {
                 Severity::Warning
@@ -158,7 +160,7 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 pool_address: snapshot.pool_address,
                 severity,
                 value: deviation,
-                threshold: Some(self.threshold),
+                threshold: Some(self.settings.threshold),
                 message: Some(format!(
                     "spot price deviates {} from oracle (spot {}, oracle {})",
                     deviation.round_dp(4),

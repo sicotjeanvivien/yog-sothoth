@@ -25,6 +25,27 @@ use yog_core::domain::{
     DetectorError, EvalContext, Protocol, Severity, Signal, SignalDetector, SwapFlowRepository,
 };
 
+/// Tuning knobs of the flow-imbalance detector, as loaded from the
+/// environment by the bootstrap config. A named-field struct rather than
+/// constructor arguments: half of these share a type (`Decimal` ×3,
+/// durations ×3), so positional passing would let a swapped pair compile
+/// silently.
+pub struct FlowImbalanceSettings {
+    /// Trailing window over which volume is aggregated.
+    pub window: ChronoDuration,
+    /// How often the engine ticks this detector.
+    pub interval: Duration,
+    /// Rolling per-pool suppression window (engine-level dedup).
+    pub cooldown: Duration,
+    /// Minimum total USD volume in the window for a pool to be considered.
+    pub min_volume_usd: Decimal,
+    /// `|imbalance|` at or above which a signal is emitted.
+    pub threshold: Decimal,
+    /// `|imbalance|` at or above which the signal escalates to Critical.
+    /// The config guarantees `threshold < critical` at load.
+    pub critical: Decimal,
+}
+
 /// Detector for lopsided directional swap flow.
 pub struct FlowImbalanceDetector {
     /// Source of per-pool directional USD volume.
@@ -35,44 +56,22 @@ pub struct FlowImbalanceDetector {
     /// read becomes cross-protocol, `PoolSwapFlow` will carry the protocol
     /// and this field goes away.
     protocol: Protocol,
-    /// Trailing window over which volume is aggregated.
-    window: ChronoDuration,
-    /// How often the engine ticks this detector.
-    interval: Duration,
-    /// Rolling per-pool suppression window (engine-level dedup).
-    cooldown: Duration,
-    /// Minimum total USD volume in the window for a pool to be considered.
-    min_volume_usd: Decimal,
-    /// `|imbalance|` at or above which a signal is emitted.
-    threshold: Decimal,
-    /// `|imbalance|` at or above which the signal escalates to Critical.
-    /// The config guarantees `threshold < critical` at load.
-    critical: Decimal,
+    /// The detector's tuning knobs.
+    settings: FlowImbalanceSettings,
 }
 
 impl FlowImbalanceDetector {
-    // 8 args, each a meaningful constructor input — grouping them into a
-    // params struct would just push the same arity one level up.
-    #[allow(clippy::too_many_arguments)]
+    /// Build the detector: its dependencies positionally, its tuning as a
+    /// named-field struct.
     pub fn new(
         flow_repo: Arc<dyn SwapFlowRepository>,
         protocol: Protocol,
-        window: ChronoDuration,
-        interval: Duration,
-        cooldown: Duration,
-        min_volume_usd: Decimal,
-        threshold: Decimal,
-        critical: Decimal,
+        settings: FlowImbalanceSettings,
     ) -> Self {
         Self {
             flow_repo,
             protocol,
-            window,
-            interval,
-            cooldown,
-            min_volume_usd,
-            threshold,
-            critical,
+            settings,
         }
     }
 }
@@ -84,15 +83,15 @@ impl SignalDetector for FlowImbalanceDetector {
     }
 
     fn interval(&self) -> Duration {
-        self.interval
+        self.settings.interval
     }
 
     fn cooldown(&self) -> Duration {
-        self.cooldown
+        self.settings.cooldown
     }
 
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
-        let since = ctx.evaluated_at - self.window;
+        let since = ctx.evaluated_at - self.settings.window;
         let flows = self.flow_repo.directional_volume_since(since).await?;
 
         let mut signals = Vec::new();
@@ -100,17 +99,17 @@ impl SignalDetector for FlowImbalanceDetector {
             let total = flow.volume_a_to_b_usd + flow.volume_b_to_a_usd;
             // Volume floor: skip pools too thin for the ratio to mean anything
             // (also guards the division below against a zero denominator).
-            if total < self.min_volume_usd || total.is_zero() {
+            if total < self.settings.min_volume_usd || total.is_zero() {
                 continue;
             }
 
             let imbalance = (flow.volume_a_to_b_usd - flow.volume_b_to_a_usd) / total;
             let magnitude = imbalance.abs();
-            if magnitude < self.threshold {
+            if magnitude < self.settings.threshold {
                 continue;
             }
 
-            let severity = if magnitude >= self.critical {
+            let severity = if magnitude >= self.settings.critical {
                 Severity::Critical
             } else {
                 Severity::Warning
@@ -122,7 +121,7 @@ impl SignalDetector for FlowImbalanceDetector {
                 pool_address: flow.pool_address,
                 severity,
                 value: imbalance,
-                threshold: Some(self.threshold),
+                threshold: Some(self.settings.threshold),
                 message: Some(format!(
                     "directional flow imbalance {} (total volume ${})",
                     imbalance.round_dp(4),

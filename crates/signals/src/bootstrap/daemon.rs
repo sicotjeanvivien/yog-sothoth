@@ -18,7 +18,10 @@ use yog_persistence::{
 };
 
 use crate::bootstrap::Config;
-use crate::detectors::{FlowImbalanceDetector, PriceOracleDeviationDetector};
+use crate::detectors::{
+    FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
+    PriceOracleDeviationSettings,
+};
 use crate::engine::SignalEngine;
 use crate::metrics::EngineMetrics;
 
@@ -47,23 +50,27 @@ impl Daemon {
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
             Protocol::MeteoraDammV2,
-            config.flow_window,
-            config.flow_interval,
-            config.flow_cooldown,
-            config.flow_min_volume_usd,
-            config.flow_threshold,
-            config.flow_critical,
+            FlowImbalanceSettings {
+                window: config.flow_window,
+                interval: config.flow_interval,
+                cooldown: config.flow_cooldown,
+                min_volume_usd: config.flow_min_volume_usd,
+                threshold: config.flow_threshold,
+                critical: config.flow_critical,
+            },
         ));
 
         let price_oracle_deviation: Arc<dyn SignalDetector> =
             Arc::new(PriceOracleDeviationDetector::new(
                 snapshot_repository,
-                config.price_deviation_interval,
-                config.price_deviation_cooldown,
-                config.price_deviation_max_price_age,
-                config.price_deviation_max_spot_age,
-                config.price_deviation_threshold,
-                config.price_deviation_critical,
+                PriceOracleDeviationSettings {
+                    interval: config.price_deviation_interval,
+                    cooldown: config.price_deviation_cooldown,
+                    max_price_age: config.price_deviation_max_price_age,
+                    max_spot_age: config.price_deviation_max_spot_age,
+                    threshold: config.price_deviation_threshold,
+                    critical: config.price_deviation_critical,
+                },
             ));
 
         EngineMetrics::register_descriptions();
