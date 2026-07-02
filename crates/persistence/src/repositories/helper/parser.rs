@@ -29,6 +29,13 @@ pub(crate) fn convert_i64_to_u64(v: i64, field: &str) -> RepositoryResult<u64> {
     u64::try_from(v).map_err(|e| RepositoryError::Integrity(format!("invalid {field}: {e}")))
 }
 
+/// Narrow a `SMALLINT` read from Postgres into a `u8` (token decimals).
+/// Fails on negative or >255 values — they would mean the row was written
+/// by a non-conforming source.
+pub(crate) fn convert_i16_to_u8(v: i16, field: &str) -> RepositoryResult<u8> {
+    u8::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
+}
+
 /// Convert a Postgres `NUMERIC` (mapped to `BigDecimal`) into a `u128`.
 /// Used for fields like `price_q64` that exceed `i64` range.
 pub(crate) fn convert_bigdecimal_to_u128(

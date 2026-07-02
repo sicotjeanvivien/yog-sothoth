@@ -29,3 +29,7 @@ impl TryFrom<PoolSwapFlowRow> for PoolSwapFlow {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "rows_tests.rs"]
+mod tests;
