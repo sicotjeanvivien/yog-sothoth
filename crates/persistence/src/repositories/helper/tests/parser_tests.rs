@@ -29,6 +29,27 @@ fn convert_i64_to_u64_should_fail_for_negative_value() {
 }
 
 #[test]
+fn convert_i16_to_u8_should_convert_valid_value() {
+    let result = convert_i16_to_u8(9, "decimals");
+
+    assert_eq!(result.unwrap(), 9);
+}
+
+#[test]
+fn convert_i16_to_u8_should_fail_for_negative_value() {
+    let result = convert_i16_to_u8(-1, "decimals");
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
+fn convert_i16_to_u8_should_fail_on_overflow() {
+    let result = convert_i16_to_u8(256, "decimals");
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
 fn convert_u128_to_bigdecimal_should_convert() {
     let value = 12345678901234567890u128;
 
