@@ -1,4 +1,4 @@
-//! `signal-engine` — the Signal Engine daemon.
+//! `yog-signals` — the Signal Engine daemon.
 //!
 //! The 5th backend binary alongside `indexer`, `api`, `context` and the
 //! `web` BFF. It runs the detectors from the `yog-signals` library on their

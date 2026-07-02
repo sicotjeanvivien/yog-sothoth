@@ -46,7 +46,7 @@ const DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS: u64 = 15;
 /// `SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS`.
 const DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS: u64 = 24;
 
-/// Runtime configuration for the `signal-engine` binary.
+/// Runtime configuration for the `yog-signals` binary.
 #[derive(Debug, Clone)]
 pub(crate) struct Config {
     /// Postgres connection string for the yog_signals role.
