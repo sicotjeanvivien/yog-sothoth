@@ -398,6 +398,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] **Frontend / PagePool** : système de favoris stocké en LocalStorage (sinon back pour récupérer plusieurs pools par PubKey)
 - [ ] **Frontend / PagePool** : ajout colonne fee + filtre (faisabilité à confirmer)
 - [ ] **Transverse** : VIEW cross-protocole au-dessus des CA — à créer au 2ᵉ protocole (DLMM/Raydium), comme la VIEW `swap_events` ; lecture mono-protocole directe en attendant
+- [ ] **Transverse** : extraction d'un `StreamPoller`/handler SSE **génériques** — **au 2ᵉ flux SSE** (relevé revue PR #39 : `SignalStreamPoller` + handler sont volontairement couplés aux signaux). Le squelette mécanique (tick + `receiver_count` + watermark + unfold/keep-alive/`Lagged`) est généralisable (trait `StreamSource` : curseur + `tip()`/`delta()`) ; extraction mécanique avec 2 cas concrets sous les yeux — pas avant, une abstraction déduite d'un seul exemple encoderait les hypothèses du feed signaux (global, basse fréquence, broadcast partagé). ⚠️ Au 2ᵉ flux, **re-questionner le substrat** selon sa fréquence : swaps live = haute fréquence + filtre par pool → broadcast partagé insuffisant, LISTEN/NOTIFY redevient peut-être pertinent
 - [ ] **Transverse / perf** : table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relève du crate `Yog-Analytic` ; pas encore le déclencheur (5–47 ms read-time en dev), re-mesurer à l'ouverture de `watched_pools`
 - [ ] **Transverse / perf** : cache HTTP `Cache-Control: max-age=30` sur `GET /api/pools`
 
