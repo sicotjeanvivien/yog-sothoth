@@ -8,9 +8,10 @@
 
 import { describe, expect, it } from "vitest";
 import { PoolSchema } from "../schema/pool";
-import { PoolsPageSchema } from "../schema/page";
+import { PoolsPageSchema, SignalsPageSchema } from "../schema/page";
 import { PoolHistorySchema } from "../schema/pool-history";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
+import { SignalSchema } from "../schema/signal";
 import { StatsSchema } from "../schema/stats";
 import { validPoolsPage, validPoolHistoryBucket } from "./fixtures";
 
@@ -343,5 +344,71 @@ describe("StatsSchema", () => {
     const { poolsObserved, ...rest } = validStats();
     void poolsObserved;
     expect(() => StatsSchema.parse(rest)).toThrow();
+  });
+});
+// A representative valid signal payload, copied from a real yog-api
+// response (both the list items and the SSE events carry this shape).
+function validSignal() {
+  return {
+    id: 739,
+    detector: "price_oracle_deviation",
+    protocol: "meteora_damm_v2",
+    poolAddress: "5NMi3SSebB7MyP17Sf5SwXh6nTnPPp1Ctb1G45NnRKuZ",
+    severity: "critical",
+    value: "1.1059558665865029280736523078",
+    threshold: "0.0500",
+    message: "spot price deviates 1.1060 from oracle (spot 0.000000582488, oracle 0.000000276591)",
+    triggeredAt: "2026-07-02T10:03:31.056847Z",
+  };
+}
+
+describe("SignalSchema", () => {
+  it("accepts a real payload", () => {
+    expect(() => SignalSchema.parse(validSignal())).not.toThrow();
+  });
+
+  it("accepts a negative value (a deviation can be below the oracle)", () => {
+    const parsed = SignalSchema.parse({ ...validSignal(), value: "-0.2157" });
+    expect(parsed.value).toBe("-0.2157");
+  });
+
+  it("accepts null threshold and message", () => {
+    const parsed = SignalSchema.parse({
+      ...validSignal(),
+      threshold: null,
+      message: null,
+    });
+    expect(parsed.threshold).toBeNull();
+    expect(parsed.message).toBeNull();
+  });
+
+  it("rejects an unknown severity (closed set)", () => {
+    expect(() =>
+      SignalSchema.parse({ ...validSignal(), severity: "panic" }),
+    ).toThrow();
+  });
+
+  it("rejects a value sent as a JS number (precision contract)", () => {
+    expect(() =>
+      SignalSchema.parse({ ...validSignal(), value: 1.1059 }),
+    ).toThrow();
+  });
+
+  it("rejects a fractional id", () => {
+    expect(() => SignalSchema.parse({ ...validSignal(), id: 1.5 })).toThrow();
+  });
+});
+
+describe("SignalsPageSchema", () => {
+  it("accepts a page envelope of signals", () => {
+    expect(() =>
+      SignalsPageSchema.parse({
+        items: [validSignal()],
+        nextCursor: "opaque",
+        prevCursor: null,
+        isFirst: true,
+        isLast: false,
+      }),
+    ).not.toThrow();
   });
 });

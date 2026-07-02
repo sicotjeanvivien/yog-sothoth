@@ -13,4 +13,4 @@
  * its entry in `sidebar-nav.ts`.
  */
 
-export type SidebarNavKey = "overview" | "pools";
+export type SidebarNavKey = "overview" | "pools" | "signals";

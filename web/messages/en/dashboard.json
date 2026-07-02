@@ -4,7 +4,8 @@
       "caption": "Dashboard",
       "nav": {
         "overview": "Overview",
-        "pools": "Pools"
+        "pools": "Pools",
+        "signals": "Signals"
       },
       "network": {
         "title": "Solana",
@@ -184,6 +185,28 @@
       "validation": "The upstream service returned an unexpected response.",
       "retry": "Retry",
       "retryPending": "Loading…"
+    },
+    "Signals": {
+      "page": {
+        "eyebrow": "Detection",
+        "title": "Signals",
+        "description": "Live feed of the detectors' conclusions: flow imbalances, price deviations — every anomaly worth a look, as it is detected."
+      },
+      "feed": {
+        "title": "Latest signals",
+        "empty": "No signal yet — the detectors are watching.",
+        "fallback": "value {value} (threshold {threshold})",
+        "status": {
+          "connecting": "Connecting",
+          "live": "Live",
+          "reconnecting": "Reconnecting"
+        },
+        "severity": {
+          "info": "Info",
+          "warning": "Warning",
+          "critical": "Critical"
+        }
+      }
     }
   }
 }

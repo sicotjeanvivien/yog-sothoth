@@ -4,7 +4,8 @@
       "caption": "Dashboard",
       "nav": {
         "overview": "Vue d'ensemble",
-        "pools": "Pools"
+        "pools": "Pools",
+        "signals": "Signaux"
       },
       "network": {
         "title": "Solana",
@@ -184,6 +185,28 @@
       "validation": "Le service en amont a retourné une réponse inattendue.",
       "retry": "Réessayer",
       "retryPending": "Chargement…"
+    },
+    "Signals": {
+      "page": {
+        "eyebrow": "Détection",
+        "title": "Signaux",
+        "description": "Flux en direct des conclusions des détecteurs : déséquilibres de flux, déviations de prix — chaque anomalie qui mérite un œil, au moment où elle est détectée."
+      },
+      "feed": {
+        "title": "Derniers signaux",
+        "empty": "Aucun signal pour l'instant — les détecteurs veillent.",
+        "fallback": "valeur {value} (seuil {threshold})",
+        "status": {
+          "connecting": "Connexion",
+          "live": "En direct",
+          "reconnecting": "Reconnexion"
+        },
+        "severity": {
+          "info": "Info",
+          "warning": "Alerte",
+          "critical": "Critique"
+        }
+      }
     }
   }
 }

@@ -2,6 +2,7 @@ import * as z from "zod";
 import { PoolSchema } from "./pool";
 import { SwapEventSchema } from "./swap-event";
 import { LiquidityEventSchema } from "./liquidity-event";
+import { SignalSchema } from "./signal";
 
 // ─────────────────────────────────────────────────────────────────────
 // PageResponse<T> — mirrors `api::http::dto::response::PageResponse<T>`
@@ -36,3 +37,6 @@ export type SwapEventsPageResponse = z.infer<typeof SwapEventsPageSchema>;
 
 export const LiquidityEventsPageSchema = pageSchema(LiquidityEventSchema);
 export type LiquidityEventsPageResponse = z.infer<typeof LiquidityEventsPageSchema>;
+
+export const SignalsPageSchema = pageSchema(SignalSchema);
+export type SignalsPageResponse = z.infer<typeof SignalsPageSchema>;

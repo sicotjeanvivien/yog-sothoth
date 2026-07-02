@@ -18,6 +18,16 @@ export const BigDecimal = z.string().regex(/^\d+(\.\d+)?$/, {
 });
 
 /**
+ * A decimal that may be negative, as emitted by yog-api for values that
+ * carry a direction — e.g. a signal's `value` (a price deviation of
+ * `-0.2157` is 21.57% *below* the oracle). `BigDecimal` above is
+ * unsigned on purpose (amounts, prices); do not widen it.
+ */
+export const SignedBigDecimal = z.string().regex(/^-?\d+(\.\d+)?$/, {
+  message: "expected a decimal number as a string, optionally negative (e.g. '-0.2157')",
+});
+
+/**
  * A fee-split percent as emitted by yog-api: a `u8` in `0..=100`, sent as a
  * JSON number (not a string). Used for the protocol/partner/referral cuts.
  */
