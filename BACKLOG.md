@@ -312,7 +312,7 @@
 
 ### v0.1.1 — Signal Engine + prep release (bloque la mise en prod)
 
-#### Signal Engine — décisions d'architecture (figées 1 juil. 2026)
+#### ✅ Signal Engine — décisions d'architecture (figées 1 juil. 2026)
 
 Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 
@@ -322,7 +322,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - **Modèle d'évaluation** : trait **batch à cadence par-détecteur**. Chaque `SignalDetector` déclare son `interval()` et un `evaluate(ctx) -> Vec<Signal>` qui recalcule depuis un snapshot DB — **stateless entre tics** (la DB porte l'état). Engine = une boucle de poll par détecteur, skip-and-log par détecteur, shutdown via `CancellationToken`. **Rejeté** comme substrat : le streaming (event-callback, stateful, exigerait un transport — LISTEN/NOTIFY ou couplage indexer — car `signal-engine` est un process séparé) ; les 1ers détecteurs sont à fenêtre sur des caggs déjà bucketées → le sous-seconde n'achète rien. Un trait `StreamDetector` reste ajoutable plus tard en extension, non bâti en spéculatif.
 - **Injection (modèle B)** : le **détecteur porte ses repos**, injectés concrets par le binaire à la construction — exactement comme `daemon.rs` injecte `Arc::new(PgX::new(pool()))` dans chaque persistor. Les détecteurs dépendent des **traits** repo de `core`, jamais des `Pg*`. L'`EvalContext` est **fin** : il ne porte que l'horloge du tic (`evaluated_at` → `triggered_at` cohérent + fenêtres calculées depuis un point fixe). Le détecteur **rend** `Vec<Signal>` ; c'est l'**engine** qui tient le `SignalRepository` et persiste (miroir de extraction→persistor). Rejeté : le fat-context (contexte bundle tous les repos) → viole ISP/SRP.
 
-#### Signal Engine — déroulé d'implémentation
+#### ✅ Signal Engine — déroulé d'implémentation
 
 1. [x] **Migration** : table `signals` (hypertable `triggered_at`) + rôle `yog_signals` + `GRANT` (RW `signals` → `yog_signals`, RO → `yog_api`) — migration 022, `setup_roles.sql`
 2. [x] **`core`** : `Signal`/`Severity`, `SignalDetector`, `EvalContext`, `SignalRepository`, `DetectorError` — module `signals`
@@ -339,16 +339,32 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] Détecteur TVL drain
 - [ ] Détecteur Price impact creep (selon retour utilisateur)
 
-#### Signal Engine — push channels
-- [ ] Webhook
-- [ ] Email (Resend/Mailgun)
-- [ ] Telegram
+#### Signal Engine — canaux de diffusion (recadré 2 juil. 2026)
+> **Décision** : la porte de sortie des signaux est **yog-api**, pas un pusher dans l'engine. Le canal prioritaire est le **web live** (page ouverte qui s'update à l'arrivée d'un signal) — SSE servi par l'API, alimenté par un **poller interne** (~3 s, keyset `triggered_at`, broadcast tokio vers les clients connectés). LISTEN/NOTIFY rejeté pour l'instant (contrat inter-processus, aucun gain au tempo réel des détecteurs : tick 5 min) — escalade documentée si le tempo change. **Webhook abandonné pour v0.1.1** : aucun destinataire n'existe (pas d'users avant v0.2) ; reviendra en v0.2 comme consommateur outbox per-user si besoin.
 
-#### Signal Engine — UI
-- [ ] UI feed signaux dans le dashboard
+**Canal web (focus)** — 3 PRs :
+1. [x] **`GET /api/signals`** — collection paginée cursor (recette add-endpoint), tri `triggered_at DESC` ; sert le rendu initial de la page et vaut seul. Livré (2 juil.) :
+	1. [x] **core** : `SignalRepository::list(severity, cursor, direction, position, limit) → Page<SignalRecord>` ; curseur `SignalCursor { triggered_at, id }` (tie-breaker `id BIGSERIAL`) ; contrat d'ordre documenté (`triggered_at DESC, id DESC`) ; **modèle de lecture** `SignalRecord { id, signal }` (l'id n'existe qu'après insert, il ne va pas sur le `Signal` d'écriture) ; variante `Cursor::Signal`
+	2. [x] **persistence** : `PgSignalRepository::list` — même machinerie bidirectionnelle que SwapEvent (`resolve_query_mode` + peek N+1 + `PageBuilder`, 2 requêtes statiques Forward/Backward) ; filtre severity en SQL statique (`$1 IS NULL OR severity = $1` — une égalité optionnelle n'est pas une « forme dynamique », le compile-check `query_as!` est conservé) ; `signal/rows.rs` + `rows_tests.rs` ; intégration `tests/signal_list.rs` (ordre, navigation avant/arrière, tie-break id sur timestamps égaux, positions, filtre) ; `.sqlx` régénéré
+	3. [x] **api** : `SignalService` + `SignalsQuery`/`SeverityParam` (serde → 400 sur valeur inconnue) + `ListSignalsRequest` (validation avant DB) + `SignalResponse` (pubkey base58, RFC3339, `value`/`threshold` en string décimale, `id` en number) + handler + route + wiring `AppState` ; `validate_cursor_position_exclusive` extrait (partagé avec `PageQuery`)
+	4. [x] **vérif live** (rôle `yog_api`, 328 signaux regénérés puis nettoyés) : page 1 → curseur → page 2, `severity=warning`, `position=last`, et les 400 RFC 9457 (limit=0, severity inconnue, cursor+position)
+2. [ ] `GET /api/signals/stream` — SSE (axum `response::sse`) branché sur le poller/broadcast ; payload = même DTO que la liste ; reconnexion = re-fetch liste puis re-stream (pas de `Last-Event-ID` en v1)
+3. [ ] Page feed dans le dashboard — liste antéchronologique, badges sévérité, lien fiche pool, prepend live ; **plus de BFF** (constaté 2 juil. : `client/browser.ts` → `NEXT_PUBLIC_YOG_API_URL` en direct, CORS déjà verrouillé) → `EventSource` du Client Component directement sur `/api/signals/stream`, zéro proxy ; i18n en/fr. NB : `CLAUDE.md` + `web/README.md` décrivent encore l'archi BFF → dérive de doc à corriger (audit ou au passage)
+
+**Canaux différés :**
+- [ ] Telegram opérateur — après le canal web (« ensuite on verra ») ; seul push sortant avec un destinataire réel aujourd'hui (JV)
+- [ ] Email — statut incertain : la forme serait un abonnement newsletter → contraintes RGPD (consentement, désinscription) ; ne se décide pas avant v0.2/auth
+- [-] 🚫 Webhook v0.1.1 (abandonné — pas de destinataire ; à réévaluer en v0.2 avec users + outbox)
 
 #### yog-context — robustesse pour release
 - [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
+
+#### yog-indexer — source de données
+- [ ] Étudier le passage du WebSocket RPC à un **Yellowstone gRPC (Geyser) managé** : stream plus fiable/complet que `logsSubscribe` (reconnexions, trous). Des offres avec free tier existeraient (à vérifier : Shyft, Helius/LaserStream, QuickNode…) — comparer quotas/coûts/latence. Périmètre : seule la couche subscription de l'indexer change, le pipeline extraction → persistance reste
+
+#### Audit complet du code — avant déploiement public
+- [ ] Audit sécurité (surface API, secrets/env, rôles DB, CORS/headers, dépendances `cargo audit`/`npm audit`)
+- [ ] Audit bonnes pratiques / conventions (cohérence inter-crates, erreurs typées aux frontières, couverture de tests, dette accumulée — leçon des revues PR #37 : vérifier que l'exemple copié est la règle, pas l'exception)
 
 #### Frontend — page /pools (filtres)
 - [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Reliquats v0.1 ci-dessous)
@@ -358,7 +374,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] Vérifier contenu page Mentions légales (SASU AWSD, éditeur, hébergeur)
 - [ ] Vérifier contenu pages Terms / Support / About
 
-#### Déploiement Scaleway — ⚠️ deadline : restore testé avant août (convalescence 27 août)
+#### Déploiement Scaleway — 📅 démarrage 1ʳᵉ semaine d'août 2026 (décidé 2 juil.) · ⚠️ restore testé avant le 27 août (convalescence)
 - [ ] Provisionner Instance DEV1-M (`fr-par-1`, Ubuntu 24.04)
 - [ ] Hardening SSH (clé uniquement, fail2ban, ufw 22/80/443)
 - [ ] Installer Docker + Compose plugin
@@ -367,7 +383,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] Migrer site AWSD (Hugo → rsync → Caddy)
 - [ ] Configurer Caddy + Let's Encrypt pour yog-scope.xyz
 - [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
-- [ ] Tester restore pg_dump avant août (impératif avant convalescence)
+- [ ] Tester restore pg_dump avant le 27 août (impératif avant convalescence)
 - [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
 
 ### Reliquats v0.1 (analyzer — non bloquants, déclenchés au besoin)

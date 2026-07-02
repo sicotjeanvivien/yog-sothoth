@@ -3,6 +3,6 @@ pub(crate) mod response;
 
 pub(crate) use response::{
     EmbeddedTokenResponse, LiquidityEventResponse, NetworkStatusResponse, PageResponse,
-    PoolCurrentStateResponse, PoolHistoryBucketResponse, PoolResponse, StatsResponse,
-    SwapEventResponse, TokenResponse,
+    PoolCurrentStateResponse, PoolHistoryBucketResponse, PoolResponse, SignalResponse,
+    StatsResponse, SwapEventResponse, TokenResponse,
 };

@@ -3,18 +3,19 @@ use std::sync::Arc;
 use yog_core::domain::{
     EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2SwapEventRepository, NetworkStatusRepository, PoolAnalyticsRepository,
-    PoolCurrentStateRepository, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
+    PoolCurrentStateRepository, PoolRepository, SignalRepository, TokenMetadataRepository,
+    TokenPriceRepository,
 };
 use yog_persistence::{
     Database, PgEventFreshnessRepository, PgGlobalAnalyticsRepository, PgHealthChecker,
     PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
-    PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
+    PgPoolRepository, PgSignalRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::application::{
     MeteoraDammV2LiquidityService, MeteoraDammV2SwapService, NetworkStatusService, PoolService,
-    StatsService, TokenService,
+    SignalService, StatsService, TokenService,
 };
 use crate::bootstrap::Config;
 use anyhow::Context;
@@ -33,6 +34,7 @@ pub(crate) struct AppState {
     pub(crate) swap_service: Arc<MeteoraDammV2SwapService>,
     pub(crate) liquidity_service: Arc<MeteoraDammV2LiquidityService>,
     pub(crate) network_status_service: Arc<NetworkStatusService>,
+    pub(crate) signal_service: Arc<SignalService>,
     pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
     /// Infra probe — exposed directly because no application logic
@@ -69,6 +71,8 @@ impl AppState {
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
         let pool_analytics_repo: Arc<dyn PoolAnalyticsRepository> =
             Arc::new(PgPoolAnalyticsRepository::new(db_pool.clone()));
+        let signal_repo: Arc<dyn SignalRepository> =
+            Arc::new(PgSignalRepository::new(db_pool.clone()));
 
         // ── Services ────────────────────────────────────────────────────
         Ok(Self {
@@ -85,6 +89,7 @@ impl AppState {
                 network_status_repo,
                 event_freshness_repo,
             )),
+            signal_service: Arc::new(SignalService::new(signal_repo)),
             stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),

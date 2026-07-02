@@ -7,7 +7,7 @@ use solana_pubkey::Pubkey;
 use std::str::FromStr;
 use yog_core::{
     PageDirection, PagePosition, PoolSort,
-    domain::{PoolCursor, PoolRankMetric},
+    domain::{PoolCursor, PoolRankMetric, Severity},
 };
 
 use crate::http::error::ApiError;
@@ -115,6 +115,40 @@ impl From<PoolSortParam> for PoolSort {
     }
 }
 
+/// Query params for `GET /api/signals`: standard cursor pagination plus
+/// an optional exact severity filter. No sort (the feed ordering is
+/// fixed by contract) and no free-text search.
+#[derive(Debug, Deserialize)]
+pub(crate) struct SignalsQuery {
+    pub(crate) cursor: Option<String>,
+    #[serde(default)]
+    pub(crate) dir: PageDirectionParam,
+    pub(crate) position: Option<PagePositionParam>,
+    pub(crate) severity: Option<SeverityParam>,
+    #[serde(default = "default_limit")]
+    pub(crate) limit: i64,
+}
+
+/// Wire form of the severity filter. An unknown value fails serde
+/// deserialization → axum returns 400 before the handler runs.
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum SeverityParam {
+    Info,
+    Warning,
+    Critical,
+}
+
+impl From<SeverityParam> for Severity {
+    fn from(value: SeverityParam) -> Self {
+        match value {
+            SeverityParam::Info => Severity::Info,
+            SeverityParam::Warning => Severity::Warning,
+            SeverityParam::Critical => Severity::Critical,
+        }
+    }
+}
+
 /// Query params for `GET /api/pools/top`: the ranking metric and how many
 /// rows. Non-paginated — a small capped ranking, not a navigable list.
 #[derive(Debug, Deserialize)]
@@ -168,7 +202,16 @@ pub(crate) fn validate_limit(limit: i64) -> Result<(), ApiError> {
 
 /// Reject `position` combined with `cursor` (contradictory directives).
 pub(crate) fn validate_pagination_query(query: &PageQuery) -> Result<(), ApiError> {
-    if query.position.is_some() && query.cursor.is_some() {
+    validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())
+}
+
+/// The rule behind [`validate_pagination_query`], shared with query
+/// types that don't use `PageQuery` (e.g. `SignalsQuery`).
+pub(crate) fn validate_cursor_position_exclusive(
+    has_cursor: bool,
+    has_position: bool,
+) -> Result<(), ApiError> {
+    if has_cursor && has_position {
         return Err(ApiError::BadRequest(
             "`position` cannot be combined with `cursor`".to_string(),
         ));
