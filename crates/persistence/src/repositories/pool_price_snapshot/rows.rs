@@ -47,3 +47,7 @@ impl TryFrom<PoolPriceSnapshotRow> for PoolPriceSnapshot {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "rows_tests.rs"]
+mod tests;
