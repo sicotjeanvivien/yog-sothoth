@@ -17,7 +17,9 @@ use solana_signature::Signature;
 use std::str::FromStr;
 use yog_core::{
     Cursor, PoolSortColumn,
-    domain::{MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor},
+    domain::{
+        MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor, SignalCursor,
+    },
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,6 +33,12 @@ struct PoolCursorWire {
 struct EventCursorWire {
     timestamp: String,
     signature: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SignalCursorWire {
+    triggered_at: String,
+    id: i64,
 }
 
 pub(crate) fn encode_cursor_opt(cursor: Option<&Cursor>) -> Result<Option<String>, ApiError> {
@@ -51,6 +59,10 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
         Cursor::MeteoraDammV2LiquidityEvent(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
             signature: c.signature.to_string(),
+        }),
+        Cursor::Signal(c) => encode_b64_json(&SignalCursorWire {
+            triggered_at: c.triggered_at.to_rfc3339(),
+            id: c.id,
         }),
     }
 }
@@ -107,6 +119,14 @@ pub(crate) fn decode_liquidity_cursor(
     Ok(MeteoraDammV2LiquidityEventCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature,
+    })
+}
+
+pub(crate) fn decode_signal_cursor(raw: &str) -> Result<SignalCursor, ApiError> {
+    let wire: SignalCursorWire = decode_b64_json(raw)?;
+    Ok(SignalCursor {
+        triggered_at: parse_rfc3339(&wire.triggered_at)?,
+        id: wire.id,
     })
 }
 

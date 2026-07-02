@@ -99,3 +99,20 @@ pub struct Signal {
     /// [`EvalContext`]: crate::domain::EvalContext
     pub triggered_at: DateTime<Utc>,
 }
+
+/// A persisted signal, as read back from storage.
+///
+/// Wraps the [`Signal`] payload with its storage identity: `id` only
+/// exists once the row is inserted (`BIGSERIAL`), so it has no place on
+/// the write-side [`Signal`] — but the read side needs it as the
+/// deterministic tie-breaker of the feed ordering (see
+/// [`SignalCursor`]).
+///
+/// [`SignalCursor`]: crate::domain::SignalCursor
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignalRecord {
+    /// Storage-assigned identity, unique within the table.
+    pub id: i64,
+    /// The signal as emitted by its detector.
+    pub signal: Signal,
+}

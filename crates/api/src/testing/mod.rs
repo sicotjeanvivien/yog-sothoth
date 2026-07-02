@@ -26,8 +26,8 @@ use yog_core::{
         MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
         NetworkStatus, NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository,
         PoolCounts, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-        PoolCursor, PoolRepository, Protocol, TokenMetadata, TokenMetadataRepository, TokenPrice,
-        TokenPriceRepository,
+        PoolCursor, PoolRepository, Protocol, Severity, Signal, SignalCursor, SignalFeedRepository,
+        SignalRecord, TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
     },
 };
 
@@ -810,4 +810,80 @@ pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
     bytes[..32].copy_from_slice(&pool_address.to_bytes());
     bytes[63] = tag;
     Signature::from(bytes)
+}
+
+// ── Mock: SignalFeedRepository ──────────────────────────────────────
+//
+// The api only ever sees the feed lens; the engine-side contract
+// (insert_batch / latest_severity_by_pool) never reaches this crate,
+// so the mock has nothing to stub out.
+
+pub(crate) struct MockSignalRepo {
+    list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
+}
+
+impl MockSignalRepo {
+    pub(crate) fn with_page(page: Page<SignalRecord>) -> Self {
+        Self {
+            list: Mutex::new(Some(Ok(page))),
+        }
+    }
+    pub(crate) fn empty() -> Self {
+        Self::with_page(Page::empty())
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            list: Mutex::new(Some(Err(RepositoryError::Integrity("signal boom".into())))),
+        }
+    }
+}
+
+#[async_trait]
+impl SignalFeedRepository for MockSignalRepo {
+    async fn list(
+        &self,
+        _severity: Option<Severity>,
+        _cursor: Option<SignalCursor>,
+        _direction: PageDirection,
+        _position: Option<PagePosition>,
+        _limit: i64,
+    ) -> RepositoryResult<Page<SignalRecord>> {
+        take(&self.list)
+    }
+}
+
+pub(crate) fn make_signal_record(id: i64, pool_address: Pubkey) -> SignalRecord {
+    SignalRecord {
+        id,
+        signal: Signal {
+            detector: "flow_imbalance".to_string(),
+            protocol: Protocol::MeteoraDammV2,
+            pool_address,
+            severity: Severity::Warning,
+            value: rust_decimal::Decimal::new(75, 2),
+            threshold: Some(rust_decimal::Decimal::new(6, 1)),
+            message: Some("directional flow imbalance 0.75".to_string()),
+            triggered_at: ts(1_700),
+        },
+    }
+}
+
+pub(crate) fn make_signal_page(records: Vec<SignalRecord>, is_last: bool) -> Page<SignalRecord> {
+    let next = if is_last {
+        None
+    } else {
+        records.last().map(|r| {
+            Cursor::Signal(SignalCursor {
+                triggered_at: r.signal.triggered_at,
+                id: r.id,
+            })
+        })
+    };
+    Page {
+        items: records,
+        next_cursor: next,
+        prev_cursor: None,
+        is_first: true,
+        is_last,
+    }
 }
