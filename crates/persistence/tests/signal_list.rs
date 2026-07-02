@@ -47,10 +47,11 @@ fn signal_cursor(cursor: &Cursor) -> SignalCursor {
     }
 }
 
-/// Seed five signals at strictly increasing timestamps. In a fresh test
-/// database the BIGSERIAL assigns ids 1..=5 in insert order, so id N was
-/// triggered at `base + N seconds` — newest first is 5,4,3,2,1.
-async fn seed_five(repo: &PgSignalRepository) {
+/// Seed five signals at strictly increasing timestamps and return the
+/// base instant. In a fresh test database the BIGSERIAL assigns ids
+/// 1..=5 in insert order, so id N was triggered at `base + N seconds` —
+/// newest first is 5,4,3,2,1.
+async fn seed_five(repo: &PgSignalRepository) -> DateTime<Utc> {
     let base = Utc::now() - Duration::hours(1);
     let severities = [
         Severity::Warning,  // id 1
@@ -65,6 +66,7 @@ async fn seed_five(repo: &PgSignalRepository) {
         .map(|(i, &sev)| signal(1, sev, base + Duration::seconds(i as i64 + 1)))
         .collect();
     repo.insert_batch(&batch).await.unwrap();
+    base
 }
 
 #[sqlx::test]
@@ -145,6 +147,38 @@ async fn equal_timestamps_tie_break_on_id_desc(pool: PgPool) {
         .unwrap();
     assert_eq!(ids(&page2), vec![1]);
     assert!(page2.is_last);
+}
+
+#[sqlx::test]
+async fn latest_cursor_and_newer_than_track_the_feed_tip(pool: PgPool) {
+    let repo = PgSignalRepository::new(pool);
+
+    // Empty feed: no tip yet.
+    assert!(repo.latest_cursor().await.unwrap().is_none());
+
+    let base = seed_five(&repo).await;
+
+    // The tip is the newest row.
+    let tip = repo.latest_cursor().await.unwrap().unwrap();
+    assert_eq!(tip.id, 5);
+
+    // Strictly after id 2: chronological (ASC) delivery of 3, 4, 5.
+    let after_two = yog_core::domain::SignalCursor {
+        triggered_at: base + Duration::seconds(2),
+        id: 2,
+    };
+    let delta = repo.newer_than(&after_two, 10).await.unwrap();
+    assert_eq!(
+        delta.iter().map(|r| r.id).collect::<Vec<_>>(),
+        vec![3, 4, 5]
+    );
+
+    // The limit caps the batch — the rest stays for the next poll.
+    let capped = repo.newer_than(&after_two, 2).await.unwrap();
+    assert_eq!(capped.iter().map(|r| r.id).collect::<Vec<_>>(), vec![3, 4]);
+
+    // Nothing is strictly after the tip.
+    assert!(repo.newer_than(&tip, 10).await.unwrap().is_empty());
 }
 
 #[sqlx::test]

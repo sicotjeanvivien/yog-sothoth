@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT triggered_at AS \"triggered_at!\", id AS \"id!\"\n            FROM signals\n            ORDER BY triggered_at DESC, id DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "triggered_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fc1d3fcb2d65db9faa52c1c706995f95bc7984190ba90709235a99088ee2cc43"
+}
