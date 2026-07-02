@@ -28,6 +28,12 @@ use yog_core::domain::{
     Signal, SignalDetector,
 };
 
+/// `|deviation|` at or above which the pool price is way off → Critical.
+/// Deliberately hardcoded (only the Warning threshold is configurable),
+/// mirroring the flow detector's `CRITICAL_IMBALANCE`. `from_parts` because
+/// `Decimal::new` is not `const`: mantissa 2, scale 1 → 0.2.
+const CRITICAL_DEVIATION: Decimal = Decimal::from_parts(2, 0, 0, false, 1);
+
 /// Detector for pool spot price drifting away from the oracle price.
 pub struct PriceOracleDeviationDetector {
     /// Source of per-pool spot-price inputs and latest oracle prices.
@@ -108,8 +114,6 @@ impl SignalDetector for PriceOracleDeviationDetector {
 
         let price_cutoff = ctx.evaluated_at - self.max_price_age;
         let spot_cutoff = ctx.evaluated_at - self.max_spot_age;
-        // `|deviation|` at or above which the pool price is way off → Critical.
-        let critical_deviation = Decimal::new(2, 1); // 0.2
 
         let mut signals = Vec::new();
         for snapshot in snapshots {
@@ -143,7 +147,7 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 continue;
             }
 
-            let severity = if magnitude >= critical_deviation {
+            let severity = if magnitude >= CRITICAL_DEVIATION {
                 Severity::Critical
             } else {
                 Severity::Warning

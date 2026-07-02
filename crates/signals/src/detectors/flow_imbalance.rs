@@ -25,6 +25,12 @@ use yog_core::domain::{
     DetectorError, EvalContext, Protocol, Severity, Signal, SignalDetector, SwapFlowRepository,
 };
 
+/// `|imbalance|` at or above which the flow is near one-sided → Critical.
+/// Deliberately hardcoded (only the Warning threshold is configurable).
+/// `from_parts` because `Decimal::new` is not `const`: mantissa 9,
+/// scale 1 → 0.9.
+const CRITICAL_IMBALANCE: Decimal = Decimal::from_parts(9, 0, 0, false, 1);
+
 /// Detector for lopsided directional swap flow.
 pub struct FlowImbalanceDetector {
     /// Source of per-pool directional USD volume.
@@ -87,9 +93,6 @@ impl SignalDetector for FlowImbalanceDetector {
         let since = ctx.evaluated_at - self.window;
         let flows = self.flow_repo.directional_volume_since(since).await?;
 
-        // `|imbalance|` at or above which the flow is near one-sided → Critical.
-        let critical_imbalance = Decimal::new(9, 1); // 0.9
-
         let mut signals = Vec::new();
         for flow in flows {
             let total = flow.volume_a_to_b_usd + flow.volume_b_to_a_usd;
@@ -105,7 +108,7 @@ impl SignalDetector for FlowImbalanceDetector {
                 continue;
             }
 
-            let severity = if magnitude >= critical_imbalance {
+            let severity = if magnitude >= CRITICAL_IMBALANCE {
                 Severity::Critical
             } else {
                 Severity::Warning
