@@ -52,6 +52,7 @@ impl Daemon {
             config.flow_cooldown,
             config.flow_min_volume_usd,
             config.flow_threshold,
+            config.flow_critical,
         ));
 
         let price_oracle_deviation: Arc<dyn SignalDetector> =
@@ -62,6 +63,7 @@ impl Daemon {
                 config.price_deviation_max_price_age,
                 config.price_deviation_max_spot_age,
                 config.price_deviation_threshold,
+                config.price_deviation_critical,
             ));
 
         EngineMetrics::register_descriptions();

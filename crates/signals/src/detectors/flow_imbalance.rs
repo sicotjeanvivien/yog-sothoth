@@ -25,12 +25,6 @@ use yog_core::domain::{
     DetectorError, EvalContext, Protocol, Severity, Signal, SignalDetector, SwapFlowRepository,
 };
 
-/// `|imbalance|` at or above which the flow is near one-sided → Critical.
-/// Deliberately hardcoded (only the Warning threshold is configurable).
-/// `from_parts` because `Decimal::new` is not `const`: mantissa 9,
-/// scale 1 → 0.9.
-const CRITICAL_IMBALANCE: Decimal = Decimal::from_parts(9, 0, 0, false, 1);
-
 /// Detector for lopsided directional swap flow.
 pub struct FlowImbalanceDetector {
     /// Source of per-pool directional USD volume.
@@ -51,9 +45,15 @@ pub struct FlowImbalanceDetector {
     min_volume_usd: Decimal,
     /// `|imbalance|` at or above which a signal is emitted.
     threshold: Decimal,
+    /// `|imbalance|` at or above which the signal escalates to Critical.
+    /// The config guarantees `threshold < critical` at load.
+    critical: Decimal,
 }
 
 impl FlowImbalanceDetector {
+    // 8 args, each a meaningful constructor input — grouping them into a
+    // params struct would just push the same arity one level up.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         flow_repo: Arc<dyn SwapFlowRepository>,
         protocol: Protocol,
@@ -62,6 +62,7 @@ impl FlowImbalanceDetector {
         cooldown: Duration,
         min_volume_usd: Decimal,
         threshold: Decimal,
+        critical: Decimal,
     ) -> Self {
         Self {
             flow_repo,
@@ -71,6 +72,7 @@ impl FlowImbalanceDetector {
             cooldown,
             min_volume_usd,
             threshold,
+            critical,
         }
     }
 }
@@ -108,7 +110,7 @@ impl SignalDetector for FlowImbalanceDetector {
                 continue;
             }
 
-            let severity = if magnitude >= CRITICAL_IMBALANCE {
+            let severity = if magnitude >= self.critical {
                 Severity::Critical
             } else {
                 Severity::Warning
