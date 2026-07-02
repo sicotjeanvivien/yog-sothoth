@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                pool_address       AS \"pool_address!\",\n                protocol           AS \"protocol!\",\n                last_sqrt_price    AS \"last_sqrt_price!\",\n                last_swap_at       AS \"last_swap_at!\",\n                decimals_a         AS \"decimals_a!\",\n                decimals_b         AS \"decimals_b!\",\n                price_a_usd        AS \"price_a_usd!\",\n                price_a_fetched_at AS \"price_a_fetched_at!\",\n                price_b_usd        AS \"price_b_usd!\",\n                price_b_fetched_at AS \"price_b_fetched_at!\"\n            FROM pool_price_snapshot\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_sqrt_price!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_swap_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "decimals_a!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "decimals_b!",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "price_a_usd!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "price_a_fetched_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "price_b_usd!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "price_b_fetched_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "f691d6d27b19125bf4e59b56a90edb251832272e977923e0dfeaaa8c17031bfa"
+}
