@@ -1,7 +1,14 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use axum::http::HeaderValue;
-use yog_bootstrap::{ConfigError, SecretUrl, required};
+use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required};
+
+/// How often the signal-stream poller checks the feed for new rows, in
+/// seconds. Overridable via `API_SIGNAL_STREAM_POLL_SECS`. Detectors
+/// tick every few minutes, so a few seconds of poll latency is
+/// invisible to a feed reader.
+const DEFAULT_SIGNAL_STREAM_POLL_SECS: u64 = 3;
 
 #[derive(Clone)]
 pub(crate) struct Config {
@@ -11,6 +18,8 @@ pub(crate) struct Config {
     /// talks to the API directly from the browser, so its origin must
     /// be listed here. Server-side (SSR) calls bypass CORS entirely.
     pub(crate) cors_allowed_origins: Vec<HeaderValue>,
+    /// Cadence of the signal-stream poller feeding `/api/signals/stream`.
+    pub(crate) signal_stream_poll: Duration,
 }
 
 impl Config {
@@ -31,6 +40,10 @@ impl Config {
             database_url: SecretUrl::new(required("DATABASE_URL_API")?),
             bind_addr,
             cors_allowed_origins,
+            signal_stream_poll: Duration::from_secs(duration_var(
+                "API_SIGNAL_STREAM_POLL_SECS",
+                DEFAULT_SIGNAL_STREAM_POLL_SECS,
+            )?),
         })
     }
 }

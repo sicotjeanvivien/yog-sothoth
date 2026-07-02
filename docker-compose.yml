@@ -137,6 +137,7 @@ services:
       # applies to `cargo run` on the host.
       API_BIND_ADDR: 0.0.0.0:5000
       API_CORS_ALLOWED_ORIGINS: ${API_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      API_SIGNAL_STREAM_POLL_SECS: ${API_SIGNAL_STREAM_POLL_SECS:-3}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     entrypoint:

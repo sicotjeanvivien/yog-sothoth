@@ -820,12 +820,16 @@ pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
 
 pub(crate) struct MockSignalRepo {
     list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
+    latest_cursor: Mutex<Option<RepositoryResult<Option<SignalCursor>>>>,
+    newer_than: Mutex<Option<RepositoryResult<Vec<SignalRecord>>>>,
 }
 
 impl MockSignalRepo {
     pub(crate) fn with_page(page: Page<SignalRecord>) -> Self {
         Self {
             list: Mutex::new(Some(Ok(page))),
+            latest_cursor: Mutex::new(None),
+            newer_than: Mutex::new(None),
         }
     }
     pub(crate) fn empty() -> Self {
@@ -834,6 +838,20 @@ impl MockSignalRepo {
     pub(crate) fn failing() -> Self {
         Self {
             list: Mutex::new(Some(Err(RepositoryError::Integrity("signal boom".into())))),
+            latest_cursor: Mutex::new(None),
+            newer_than: Mutex::new(None),
+        }
+    }
+    /// Seed the streaming lens (poller tests): what `latest_cursor` and
+    /// `newer_than` will yield, once each.
+    pub(crate) fn feed(
+        latest_cursor: RepositoryResult<Option<SignalCursor>>,
+        newer_than: RepositoryResult<Vec<SignalRecord>>,
+    ) -> Self {
+        Self {
+            list: Mutex::new(None),
+            latest_cursor: Mutex::new(Some(latest_cursor)),
+            newer_than: Mutex::new(Some(newer_than)),
         }
     }
 }
@@ -849,6 +867,16 @@ impl SignalFeedRepository for MockSignalRepo {
         _limit: i64,
     ) -> RepositoryResult<Page<SignalRecord>> {
         take(&self.list)
+    }
+    async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>> {
+        take(&self.latest_cursor)
+    }
+    async fn newer_than(
+        &self,
+        _after: &SignalCursor,
+        _limit: i64,
+    ) -> RepositoryResult<Vec<SignalRecord>> {
+        take(&self.newer_than)
     }
 }
 

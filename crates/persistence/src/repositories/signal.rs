@@ -229,4 +229,55 @@ impl SignalFeedRepository for PgSignalRepository {
             }),
         )
     }
+
+    async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT triggered_at AS "triggered_at!", id AS "id!"
+            FROM signals
+            ORDER BY triggered_at DESC, id DESC
+            LIMIT 1
+            "#,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(row.map(|r| SignalCursor {
+            triggered_at: r.triggered_at,
+            id: r.id,
+        }))
+    }
+
+    async fn newer_than(
+        &self,
+        after: &SignalCursor,
+        limit: i64,
+    ) -> RepositoryResult<Vec<SignalRecord>> {
+        let capped = limit.clamp(1, MAX_PAGE_SIZE);
+
+        // Strictly-after keyset, ASC: the delivery order of a stream is
+        // chronological, unlike the feed's DESC display order.
+        let rows: Vec<SignalRow> = sqlx::query_as!(
+            SignalRow,
+            r#"
+            SELECT id, detector, protocol, pool_address,
+                   severity, value, threshold, message,
+                   triggered_at
+            FROM signals
+            WHERE triggered_at > $1
+               OR (triggered_at = $1 AND id > $2)
+            ORDER BY triggered_at ASC, id ASC
+            LIMIT $3
+            "#,
+            after.triggered_at,
+            after.id,
+            capped,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        rows.into_iter().map(SignalRecord::try_from).collect()
+    }
 }

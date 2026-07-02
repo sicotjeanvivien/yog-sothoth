@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
+use tokio::sync::broadcast;
 use yog_core::domain::{
     EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2SwapEventRepository, NetworkStatusRepository, PoolAnalyticsRepository,
-    PoolCurrentStateRepository, PoolRepository, SignalFeedRepository, TokenMetadataRepository,
-    TokenPriceRepository,
+    PoolCurrentStateRepository, PoolRepository, SignalFeedRepository, SignalRecord,
+    TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
     Database, PgEventFreshnessRepository, PgGlobalAnalyticsRepository, PgHealthChecker,
@@ -15,7 +16,7 @@ use yog_persistence::{
 
 use crate::application::{
     MeteoraDammV2LiquidityService, MeteoraDammV2SwapService, NetworkStatusService, PoolService,
-    SignalService, StatsService, TokenService,
+    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, StatsService, TokenService,
 };
 use crate::bootstrap::Config;
 use anyhow::Context;
@@ -35,6 +36,9 @@ pub(crate) struct AppState {
     pub(crate) liquidity_service: Arc<MeteoraDammV2LiquidityService>,
     pub(crate) network_status_service: Arc<NetworkStatusService>,
     pub(crate) signal_service: Arc<SignalService>,
+    /// Live end of the signal feed: SSE handlers `subscribe()` here;
+    /// the [`SignalStreamPoller`] spawned by the binary is the producer.
+    pub(crate) signal_stream: broadcast::Sender<SignalRecord>,
     pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
     /// Infra probe — exposed directly because no application logic
@@ -43,7 +47,11 @@ pub(crate) struct AppState {
 }
 
 impl AppState {
-    pub(crate) async fn build(config: Config) -> anyhow::Result<Self> {
+    /// Build the state and the signal-stream poller that feeds it.
+    ///
+    /// Returned as a pair: the state goes to the router, the poller to
+    /// a `tokio::spawn` in `main` — the binary owns the runtime wiring.
+    pub(crate) async fn build(config: Config) -> anyhow::Result<(Self, SignalStreamPoller)> {
         let database = Database::connect(config.database_url.expose())
             .await
             .context("failed to connect to database")?;
@@ -74,8 +82,16 @@ impl AppState {
         let signal_repo: Arc<dyn SignalFeedRepository> =
             Arc::new(PgSignalRepository::new(db_pool.clone()));
 
+        // ── Signal stream (poller → broadcast → SSE handlers) ──────────
+        let (signal_stream, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);
+        let signal_poller = SignalStreamPoller::new(
+            signal_repo.clone(),
+            signal_stream.clone(),
+            config.signal_stream_poll,
+        );
+
         // ── Services ────────────────────────────────────────────────────
-        Ok(Self {
+        let state = Self {
             pool_service: Arc::new(PoolService::new(
                 pool_repo.clone(),
                 pool_current_state_repo,
@@ -90,9 +106,11 @@ impl AppState {
                 event_freshness_repo,
             )),
             signal_service: Arc::new(SignalService::new(signal_repo)),
+            signal_stream,
             stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),
-        })
+        };
+        Ok((state, signal_poller))
     }
 }

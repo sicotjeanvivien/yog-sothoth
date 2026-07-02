@@ -74,4 +74,25 @@ pub trait SignalFeedRepository: Send + Sync {
         position: Option<PagePosition>,
         limit: i64,
     ) -> RepositoryResult<Page<SignalRecord>>;
+
+    /// The current tip of the feed — the maximum `(triggered_at, id)` —
+    /// or `None` when no signal has ever been emitted. Anchors a
+    /// streaming consumer's watermark so it only sees signals born
+    /// after it started (history is the paginated [`list`]'s job).
+    ///
+    /// [`list`]: SignalFeedRepository::list
+    async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>>;
+
+    /// Every signal strictly after `after` in the feed ordering,
+    /// oldest first (chronological delivery), capped at `limit`. The
+    /// polling counterpart of [`list`]: no pagination envelope, just
+    /// the delta since a watermark. A result of exactly `limit` rows
+    /// may mean more are pending — the caller's next poll drains them.
+    ///
+    /// [`list`]: SignalFeedRepository::list
+    async fn newer_than(
+        &self,
+        after: &SignalCursor,
+        limit: i64,
+    ) -> RepositoryResult<Vec<SignalRecord>>;
 }

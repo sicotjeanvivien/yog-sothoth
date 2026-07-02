@@ -1,5 +1,6 @@
 pub(crate) mod enriched_pool;
 pub(crate) mod services;
+pub(crate) mod signal_stream;
 
 pub(crate) use enriched_pool::{EnrichedPool, EnrichedToken};
 pub(crate) use services::{
@@ -8,3 +9,4 @@ pub(crate) use services::{
     PoolListParams, PoolService, SignalListParams, SignalService, StatsAggregate, StatsService,
     TokenAggregate, TokenService,
 };
+pub(crate) use signal_stream::{STREAM_CHANNEL_CAPACITY, SignalStreamPoller};
