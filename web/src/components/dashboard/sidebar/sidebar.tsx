@@ -53,6 +53,7 @@ import { Link, usePathname } from "@/i18n/navigation";
 import {
   OverviewIcon,
   PoolsIcon,
+  SignalsIcon,
   type IconProps,
 } from "@/components/shared/icon";
 
@@ -75,6 +76,7 @@ import { NetworkStatusPanel } from "./network-status-panel";
 const NAV_ICONS: Record<SidebarNavKey, FC<IconProps>> = {
   overview: OverviewIcon,
   pools: PoolsIcon,
+  signals: SignalsIcon,
 };
 
 // ── Active-item logic ─────────────────────────────────────────────────
