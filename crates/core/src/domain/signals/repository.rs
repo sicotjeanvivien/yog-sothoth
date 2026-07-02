@@ -47,7 +47,17 @@ pub trait SignalRepository: Send + Sync {
         detector: &str,
         since: DateTime<Utc>,
     ) -> RepositoryResult<HashMap<Pubkey, Severity>>;
+}
 
+/// Read contract for the signal feed (api process, RO role).
+///
+/// Kept separate from [`SignalRepository`] — the engine's contract —
+/// even though both are implemented by the same `Pg` struct: the two
+/// consumers share no method, so each depends only on what it uses and
+/// the api mock doesn't have to carry the engine's write/dedup methods
+/// (same reasoning as `PoolAccountResolver` vs `PoolRepository`).
+#[async_trait]
+pub trait SignalFeedRepository: Send + Sync {
     /// Paginate the signal feed, ordered by `triggered_at DESC`,
     /// `id DESC` as tiebreaker (newest first).
     ///
@@ -55,7 +65,7 @@ pub trait SignalRepository: Send + Sync {
     /// `cursor` is `None` for the first page; for subsequent pages, pass
     /// the cursor returned by the previous call. `limit` is the maximum
     /// number of items to return; implementations may cap it to an upper
-    /// bound. Read-side of the feed (api process, RO role).
+    /// bound.
     async fn list(
         &self,
         severity: Option<Severity>,

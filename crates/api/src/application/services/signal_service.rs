@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use yog_core::{
     PageDirection, PagePosition, RepositoryError,
-    domain::{Severity, SignalCursor, SignalRecord, SignalRepository},
+    domain::{Severity, SignalCursor, SignalFeedRepository, SignalRecord},
     tools::Page,
 };
 
@@ -31,12 +31,15 @@ pub(crate) struct SignalListParams {
 // ---------------------------------------------------------------------------
 
 /// Application service for signal feed queries.
+///
+/// Depends on the feed lens only ([`SignalFeedRepository`]) — the
+/// engine's write/dedup contract never reaches the api process.
 pub(crate) struct SignalService {
-    repo: Arc<dyn SignalRepository>,
+    repo: Arc<dyn SignalFeedRepository>,
 }
 
 impl SignalService {
-    pub(crate) fn new(repo: Arc<dyn SignalRepository>) -> Self {
+    pub(crate) fn new(repo: Arc<dyn SignalFeedRepository>) -> Self {
         Self { repo }
     }
 

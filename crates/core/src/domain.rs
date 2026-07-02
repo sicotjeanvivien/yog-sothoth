@@ -46,8 +46,8 @@ pub use pool_current_state::{
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use protocol::Protocol;
 pub use signals::{
-    DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalRecord,
-    SignalRepository,
+    DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector,
+    SignalFeedRepository, SignalRecord, SignalRepository,
 };
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
 pub use token_metadata::{MetadataProvider, TokenMetadata, TokenMetadataRepository};

@@ -15,7 +15,7 @@ use sqlx::PgPool;
 
 use yog_core::{
     Cursor, PageDirection, PagePosition,
-    domain::{Protocol, Severity, Signal, SignalCursor, SignalRepository},
+    domain::{Protocol, Severity, Signal, SignalCursor, SignalFeedRepository, SignalRepository},
 };
 use yog_persistence::PgSignalRepository;
 

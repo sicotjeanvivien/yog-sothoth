@@ -3,7 +3,7 @@ use std::sync::Arc;
 use yog_core::domain::{
     EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2SwapEventRepository, NetworkStatusRepository, PoolAnalyticsRepository,
-    PoolCurrentStateRepository, PoolRepository, SignalRepository, TokenMetadataRepository,
+    PoolCurrentStateRepository, PoolRepository, SignalFeedRepository, TokenMetadataRepository,
     TokenPriceRepository,
 };
 use yog_persistence::{
@@ -71,7 +71,7 @@ impl AppState {
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
         let pool_analytics_repo: Arc<dyn PoolAnalyticsRepository> =
             Arc::new(PgPoolAnalyticsRepository::new(db_pool.clone()));
-        let signal_repo: Arc<dyn SignalRepository> =
+        let signal_repo: Arc<dyn SignalFeedRepository> =
             Arc::new(PgSignalRepository::new(db_pool.clone()));
 
         // ── Services ────────────────────────────────────────────────────

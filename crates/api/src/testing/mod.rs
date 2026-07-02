@@ -26,8 +26,8 @@ use yog_core::{
         MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
         NetworkStatus, NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository,
         PoolCounts, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-        PoolCursor, PoolRepository, Protocol, Severity, Signal, SignalCursor, SignalRecord,
-        SignalRepository, TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+        PoolCursor, PoolRepository, Protocol, Severity, Signal, SignalCursor, SignalFeedRepository,
+        SignalRecord, TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
     },
 };
 
@@ -812,7 +812,11 @@ pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
     Signature::from(bytes)
 }
 
-// ── Mock: SignalRepository ──────────────────────────────────────────
+// ── Mock: SignalFeedRepository ──────────────────────────────────────
+//
+// The api only ever sees the feed lens; the engine-side contract
+// (insert_batch / latest_severity_by_pool) never reaches this crate,
+// so the mock has nothing to stub out.
 
 pub(crate) struct MockSignalRepo {
     list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
@@ -835,17 +839,7 @@ impl MockSignalRepo {
 }
 
 #[async_trait]
-impl SignalRepository for MockSignalRepo {
-    async fn insert_batch(&self, _: &[Signal]) -> RepositoryResult<()> {
-        unreachable!()
-    }
-    async fn latest_severity_by_pool(
-        &self,
-        _detector: &str,
-        _since: DateTime<Utc>,
-    ) -> RepositoryResult<HashMap<Pubkey, Severity>> {
-        unreachable!()
-    }
+impl SignalFeedRepository for MockSignalRepo {
     async fn list(
         &self,
         _severity: Option<Severity>,

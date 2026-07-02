@@ -1,13 +1,15 @@
-//! Postgres implementation of [`SignalRepository`].
+//! Postgres implementation of [`SignalRepository`] and
+//! [`SignalFeedRepository`] — one struct, two consumer lenses.
 //!
-//! Backed by the `signals` hypertable (migration 022). Append-only: the
-//! write-side is a plain multi-row INSERT — signals are immutable
-//! conclusions, so there is no `ON CONFLICT` / UPSERT path. The read-side
-//! paginates the feed with the same bidirectional keyset machinery as the
-//! swap/liquidity event repositories (static SQL, one query per traversal
-//! mode).
+//! Backed by the `signals` hypertable (migration 022). The engine's
+//! contract is append-only: a plain multi-row INSERT (signals are
+//! immutable conclusions, no `ON CONFLICT` / UPSERT path) plus the dedup
+//! read. The api's feed contract paginates with the same bidirectional
+//! keyset machinery as the swap/liquidity event repositories (static
+//! SQL, one query per traversal mode).
 //!
 //! [`SignalRepository`]: yog_core::domain::SignalRepository
+//! [`SignalFeedRepository`]: yog_core::domain::SignalFeedRepository
 
 mod rows;
 
@@ -24,7 +26,9 @@ use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{Severity, Signal, SignalCursor, SignalRecord, SignalRepository},
+    domain::{
+        Severity, Signal, SignalCursor, SignalFeedRepository, SignalRecord, SignalRepository,
+    },
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
 
@@ -115,7 +119,10 @@ impl SignalRepository for PgSignalRepository {
         }
         Ok(out)
     }
+}
 
+#[async_trait]
+impl SignalFeedRepository for PgSignalRepository {
     /// Paginate the signal feed with bidirectional navigation.
     ///
     /// Natural display order is `triggered_at DESC, id DESC` (newest
