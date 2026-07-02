@@ -6,6 +6,7 @@ mod network_status;
 mod pool;
 mod pool_analytics;
 mod pool_current_state;
+mod pool_price_snapshot;
 mod protocol;
 mod signals;
 mod swap_flow;
@@ -42,6 +43,7 @@ pub use pool_analytics::{
 pub use pool_current_state::{
     LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
 };
+pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
 pub use protocol::Protocol;
 pub use signals::{DetectorError, EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
