@@ -28,6 +28,24 @@ const DEFAULT_FLOW_COOLDOWN_HOURS: u64 = 6;
 /// Overridable via `SIGNALS_FLOW_MIN_VOLUME_USD`.
 const DEFAULT_FLOW_MIN_VOLUME_USD: i64 = 10_000;
 
+/// How often the price-oracle-deviation detector ticks, in seconds.
+/// Overridable via `SIGNALS_PRICE_DEVIATION_INTERVAL_SECS`.
+const DEFAULT_PRICE_DEVIATION_INTERVAL_SECS: u64 = 300;
+
+/// Rolling per-pool suppression window, in hours. Overridable via
+/// `SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS`.
+const DEFAULT_PRICE_DEVIATION_COOLDOWN_HOURS: u64 = 6;
+
+/// Oldest acceptable oracle price observation, in minutes — older and the
+/// pool is skipped (a stale oracle reads as a spurious deviation).
+/// Overridable via `SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS`.
+const DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS: u64 = 15;
+
+/// Oldest acceptable last swap, in hours — quieter pools are skipped (their
+/// spot price is history, not a live quote). Overridable via
+/// `SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS`.
+const DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS: u64 = 24;
+
 /// Runtime configuration for the `signal-engine` binary.
 #[derive(Debug, Clone)]
 pub(crate) struct Config {
@@ -48,6 +66,21 @@ pub(crate) struct Config {
 
     /// `|imbalance|` at or above which a signal is emitted.
     pub(crate) flow_threshold: Decimal,
+
+    /// Price-oracle-deviation detector cadence.
+    pub(crate) price_deviation_interval: Duration,
+
+    /// Price-oracle-deviation rolling per-pool suppression window.
+    pub(crate) price_deviation_cooldown: Duration,
+
+    /// Oldest acceptable oracle price observation.
+    pub(crate) price_deviation_max_price_age: ChronoDuration,
+
+    /// Oldest acceptable last swap.
+    pub(crate) price_deviation_max_spot_age: ChronoDuration,
+
+    /// `|deviation|` at or above which a signal is emitted.
+    pub(crate) price_deviation_threshold: Decimal,
 }
 
 impl Config {
@@ -71,6 +104,29 @@ impl Config {
             )?,
             // 0.6 — a clearly lopsided flow, without drowning in noise.
             flow_threshold: decimal_var("SIGNALS_FLOW_THRESHOLD", Decimal::new(6, 1))?,
+            price_deviation_interval: Duration::from_secs(duration_var(
+                "SIGNALS_PRICE_DEVIATION_INTERVAL_SECS",
+                DEFAULT_PRICE_DEVIATION_INTERVAL_SECS,
+            )?),
+            price_deviation_cooldown: Duration::from_secs(
+                duration_var(
+                    "SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS",
+                    DEFAULT_PRICE_DEVIATION_COOLDOWN_HOURS,
+                )? * 3600,
+            ),
+            price_deviation_max_price_age: ChronoDuration::minutes(duration_var(
+                "SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS",
+                DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS,
+            )? as i64),
+            price_deviation_max_spot_age: ChronoDuration::hours(duration_var(
+                "SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS",
+                DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS,
+            )? as i64),
+            // 0.05 — a 5% spot/oracle gap, past the fee band and oracle lag.
+            price_deviation_threshold: decimal_var(
+                "SIGNALS_PRICE_DEVIATION_THRESHOLD",
+                Decimal::new(5, 2),
+            )?,
         })
     }
 }

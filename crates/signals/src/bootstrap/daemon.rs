@@ -10,11 +10,15 @@ use std::sync::Arc;
 use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::domain::{Protocol, SignalDetector, SignalRepository, SwapFlowRepository};
-use yog_persistence::{Database, PgSignalRepository, PgSwapFlowRepository};
+use yog_core::domain::{
+    PoolPriceSnapshotRepository, Protocol, SignalDetector, SignalRepository, SwapFlowRepository,
+};
+use yog_persistence::{
+    Database, PgPoolPriceSnapshotRepository, PgSignalRepository, PgSwapFlowRepository,
+};
 
 use crate::bootstrap::Config;
-use crate::detectors::FlowImbalanceDetector;
+use crate::detectors::{FlowImbalanceDetector, PriceOracleDeviationDetector};
 use crate::engine::SignalEngine;
 use crate::metrics::EngineMetrics;
 
@@ -36,7 +40,9 @@ impl Daemon {
         let signal_repository: Arc<dyn SignalRepository> =
             Arc::new(PgSignalRepository::new(pool.clone()));
         let flow_repository: Arc<dyn SwapFlowRepository> =
-            Arc::new(PgSwapFlowRepository::new(pool));
+            Arc::new(PgSwapFlowRepository::new(pool.clone()));
+        let snapshot_repository: Arc<dyn PoolPriceSnapshotRepository> =
+            Arc::new(PgPoolPriceSnapshotRepository::new(pool));
 
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
@@ -48,9 +54,22 @@ impl Daemon {
             config.flow_threshold,
         ));
 
+        let price_oracle_deviation: Arc<dyn SignalDetector> =
+            Arc::new(PriceOracleDeviationDetector::new(
+                snapshot_repository,
+                config.price_deviation_interval,
+                config.price_deviation_cooldown,
+                config.price_deviation_max_price_age,
+                config.price_deviation_max_spot_age,
+                config.price_deviation_threshold,
+            ));
+
         EngineMetrics::register_descriptions();
 
-        let engine = SignalEngine::new(signal_repository, vec![flow_imbalance]);
+        let engine = SignalEngine::new(
+            signal_repository,
+            vec![flow_imbalance, price_oracle_deviation],
+        );
         Ok(Self { engine })
     }
 
