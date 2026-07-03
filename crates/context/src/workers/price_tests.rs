@@ -80,10 +80,6 @@ impl TokenMetadataRepository for FakeMetadataRepository {
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
         Ok(vec![])
     }
-
-    async fn find_by_mint(&self, _mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>> {
-        Ok(None)
-    }
 }
 
 #[derive(Default)]
@@ -113,16 +109,6 @@ impl TokenPriceRepository for FakePriceRepository {
             return Err(err);
         }
         Ok(())
-    }
-
-    async fn find_latest_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenPrice>> {
-        Ok(Some(TokenPrice {
-            mint: *mint,
-            price_usd: dec("1234"),
-            price_provider: PriceProvider::Helius,
-            confidence: None,
-            fetched_at: Utc::now(),
-        }))
     }
 }
 

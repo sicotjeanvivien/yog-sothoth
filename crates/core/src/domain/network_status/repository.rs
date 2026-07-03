@@ -12,7 +12,9 @@ use async_trait::async_trait;
 
 use crate::{RepositoryResult, domain::NetworkStatus};
 
-/// Persistence contract for the network status snapshot.
+/// Persistence contract for the network status snapshot — the write side,
+/// owned by the indexer's reporter. The read side lives in
+/// [`NetworkStatusLookup`].
 #[async_trait]
 pub trait NetworkStatusRepository: Send + Sync {
     /// Overwrite the current snapshot.
@@ -20,7 +22,14 @@ pub trait NetworkStatusRepository: Send + Sync {
     /// Called by the indexer on every tick (~15s). Implementations
     /// upsert the singleton row — there is never more than one.
     async fn upsert(&self, status: &NetworkStatus) -> RepositoryResult<()>;
+}
 
+/// Consultation of the network status snapshot — the api's lens.
+///
+/// Kept separate from [`NetworkStatusRepository`] (write side, indexer)
+/// so each binary depends on exactly the methods it uses.
+#[async_trait]
+pub trait NetworkStatusLookup: Send + Sync {
     /// Read the current snapshot.
     ///
     /// Called by the API for the dashboard's "Solana Live" panel.

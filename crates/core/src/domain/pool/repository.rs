@@ -36,19 +36,17 @@ pub struct PoolCounts {
     pub discovered_24h: i64,
 }
 
-/// Persistence contract for Pool.
+/// Persistence contract for Pool — the write side, owned by the indexer.
 ///
 /// Implemented by the infrastructure layer (`yog-persistence`).
-/// `core` defines the interface, consumers (indexer, api) wire the
-/// concrete implementation under their own Postgres role.
+/// `core` defines the interface; the indexer wires the concrete
+/// implementation under the `yog_indexer` Postgres role.
 ///
-/// At runtime, calls that exceed the role's grants will fail with a
-/// permission error from Postgres — by design. The api role has only
-/// `SELECT` on `pools`, so calling `upsert` from the api will fail.
+/// The read side lives in [`PoolCatalog`] — one lens per consumer, same
+/// `Pg` struct behind both. At runtime, calls that exceed the connected
+/// role's grants fail with a permission error from Postgres — by design.
 #[async_trait]
 pub trait PoolRepository: Send + Sync {
-    // ---- Write-side (indexer) -------------------------------------------
-
     /// Insert a new pool, or refresh an existing one's `last_seen_at`.
     /// Used when an event arrives that fully describes the pool
     /// (Swap, Liquidity).
@@ -72,9 +70,19 @@ pub trait PoolRepository: Send + Sync {
         pool_address: &Pubkey,
         fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()>;
+}
 
-    // ---- Read-side (api) ------------------------------------------------
-
+/// The consultation surface of the pool registry — the api's read lens.
+///
+/// "Catalog" in the project's own language: the `pools` table records what
+/// was *seen*, and this trait is how the API browses it — point lookup,
+/// batch lookup, paginated listing, inventory counts.
+///
+/// Kept separate from [`PoolRepository`] (write side, indexer) and
+/// [`PoolAccountResolver`] (property backfill, context) so each binary
+/// depends on exactly the methods it uses and mocks carry no dead stubs.
+#[async_trait]
+pub trait PoolCatalog: Send + Sync {
     /// Fetch a single pool by its on-chain address.
     /// Returns `Ok(None)` if the pool has never been observed.
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>>;

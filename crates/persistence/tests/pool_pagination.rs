@@ -18,7 +18,7 @@ use sqlx::PgPool;
 
 use yog_core::{
     PageDirection, PagePosition, PoolSort,
-    domain::{Pool, PoolCursor, PoolRepository, Protocol},
+    domain::{Pool, PoolCatalog, PoolCursor, Protocol},
 };
 use yog_persistence::PgPoolRepository;
 

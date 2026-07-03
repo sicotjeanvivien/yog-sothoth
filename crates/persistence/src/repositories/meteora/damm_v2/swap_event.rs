@@ -19,7 +19,8 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
+        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed,
+        MeteoraDammV2SwapEventRepository,
     },
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
@@ -83,7 +84,10 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
 
         Ok(())
     }
+}
 
+#[async_trait]
+impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
     /// Paginate DAMM v2 swap events for a pool with bidirectional navigation.
     ///
     /// Natural display order is `timestamp DESC, signature ASC` (newest

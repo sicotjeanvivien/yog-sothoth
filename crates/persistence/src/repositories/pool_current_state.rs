@@ -26,7 +26,10 @@ use rows::PoolCurrentStateRow;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{LastEventKind, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert},
+    domain::{
+        LastEventKind, PoolCurrentState, PoolCurrentStateLookup, PoolCurrentStateRepository,
+        PoolCurrentStateUpsert,
+    },
 };
 
 /// sqlx-backed implementation of [`PoolCurrentStateRepository`].
@@ -124,7 +127,10 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
 
         Ok(outcome.is_some())
     }
+}
 
+#[async_trait]
+impl PoolCurrentStateLookup for PgPoolCurrentStateRepository {
     async fn get_by_address(
         &self,
         pool_address: &str,

@@ -15,7 +15,7 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{TokenMetadata, TokenMetadataRepository},
+    domain::{TokenMetadata, TokenMetadataLookup, TokenMetadataRepository},
 };
 
 /// Postgres-backed token metadata repository.
@@ -102,7 +102,10 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
             .map(|mint| convert_string_to_pubkey(mint, "mint"))
             .collect()
     }
+}
 
+#[async_trait]
+impl TokenMetadataLookup for PgTokenMetadataRepository {
     async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>> {
         let row = sqlx::query_as!(
             TokenMetadataRow,

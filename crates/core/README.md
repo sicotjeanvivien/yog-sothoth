@@ -19,7 +19,7 @@ core/src/
 │   ├── pool_analytics/    (hourly aggregates read models)
 │   ├── global_analytics/  (GlobalAnalytics — the /api/stats read model)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
-│   │                       SignalRepository + SignalFeedRepository, DetectorError)
+│   │                       SignalRepository + SignalFeed, DetectorError)
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)
 │   ├── pool_price_snapshot/ (spot-vs-oracle read model)
 │   ├── token_metadata/    (TokenMetadata + repo)
@@ -47,7 +47,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 - **Domain models** (`domain/`) — entities and the repository traits behind every persistence contract. Per-protocol events live under `domain/<platform>/<product>/`; cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenPrice`, `Signal`, …) sit at the root of `domain/`. Read models used by a single consumer (e.g. `swap_flow` for the flow-imbalance detector, `global_analytics` for `/api/stats`) get their own slim module rather than widening an existing trait.
 - **Two-level `DomainEvent`** (`domain/domain_event.rs`) — sum type with one outer variant per protocol, delegating to a sub-enum per event kind. `DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(...))` is the canonical shape. Accessors (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) delegate to the inner sub-enum.
 - **Event extraction** (`application/extraction/`) — turns raw Solana transactions into protocol-agnostic `DomainEvent`s. Lives in `application/` rather than `domain/` because it orchestrates an external concern (the Solana transaction shape) into the domain language.
-- **Signals domain** (`domain/signals/`) — the write model (`Signal`, `Severity`) and the contracts of the signal engine: the `SignalDetector` trait (see below), the thin `EvalContext` (carries the tick clock, nothing else), `SignalRepository` (write + cooldown lookup) and `SignalFeedRepository` (read side used by the API feed). The read model `SignalRecord { id, signal }` exists because the id only exists after insert — it never sits on the write-side `Signal`.
+- **Signals domain** (`domain/signals/`) — the write model (`Signal`, `Severity`) and the contracts of the signal engine: the `SignalDetector` trait (see below), the thin `EvalContext` (carries the tick clock, nothing else), `SignalRepository` (write + cooldown lookup) and `SignalFeed` (read side used by the API feed). The read model `SignalRecord { id, signal }` exists because the id only exists after insert — it never sits on the write-side `Signal`.
 - **AMM math** (`amm/`) — price, reserves, slippage, imbalance formulas, plus DAMM v2-specific decoding: `sqrt_price_to_price_a_in_b` (Q64.64 spot price) and the base-fee decoders (`decode_base_fee_bps`, `decode_updated_base_fee_bps`) used on raw on-chain fee bytes. Kept here because these formulas will eventually run in the browser via WASM.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method.
 - **Solana SDK indirection** (`solana_types.rs`) — single point of contact for types reshuffled by Solana SDK releases. When the SDK restructures, only this file changes.
@@ -127,7 +127,14 @@ Detectors are batch evaluators: they recompute from the database at each tick (t
 
 Each domain aggregate that needs persistence declares a repository trait in its module (`domain/<aggregate>/repository.rs`). Per-protocol event repositories follow the same pattern with protocol-prefixed types — `MeteoraDammV2SwapEventRepository` operates on `MeteoraDammV2SwapEvent` and `MeteoraDammV2SwapCursor`.
 
-At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer (e.g. `PoolAccountResolver` vs the rest of `PoolRepository`, `SignalRepository` vs `SignalFeedRepository`) — one lens per process, same `Pg*` struct behind both.
+At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer — one lens per process, same `Pg*` struct behind both. The write/owning side keeps the `*Repository` name; read lenses are named by intent, from a deliberately small vocabulary:
+
+- **`*Feed`** — a cursor-paginated, time-ordered listing (`SignalFeed`, `MeteoraDammV2SwapEventFeed`, `MeteoraDammV2LiquidityEventFeed`).
+- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `PoolCurrentStateLookup`).
+- **`PoolCatalog`** — the consultation surface of the pool registry (lookup + listing + counts).
+- **`PoolAccountResolver`** — context's property-backfill lens, named by its capability.
+
+Don't invent new vocabulary words for future lenses unless none of these fit.
 
 ## Conventions and invariants
 

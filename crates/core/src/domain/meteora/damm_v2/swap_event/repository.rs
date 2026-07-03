@@ -19,15 +19,21 @@ pub struct MeteoraDammV2SwapEventCursor {
     pub signature: Signature,
 }
 
-/// Persistence contract for swap events.
+/// Persistence contract for swap events — the write side, owned by the
+/// indexer's persistor. The read side lives in
+/// [`MeteoraDammV2SwapEventFeed`].
 #[async_trait]
 pub trait MeteoraDammV2SwapEventRepository: Send + Sync {
-    // ---- Write-side (indexer) -------------------------------------------
-
     async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<()>;
+}
 
-    // ---- Read-side (api) ------------------------------------------------
-
+/// The per-pool swap-event feed — the api's lens: a cursor-paginated,
+/// time-ordered listing, same shape as the signal feed (`SignalFeed`).
+///
+/// Kept separate from [`MeteoraDammV2SwapEventRepository`] (write side,
+/// indexer) so each binary depends on exactly the methods it uses.
+#[async_trait]
+pub trait MeteoraDammV2SwapEventFeed: Send + Sync {
     /// Paginate swap events for a given pool, ordered by
     /// `timestamp DESC`, `signature ASC` as tiebreaker.
     ///

@@ -4,12 +4,11 @@ use chrono::DateTime;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use std::sync::Mutex;
+use yog_core::RepositoryResult;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEventCursor, MeteoraDammV2LiquidityEventKind,
-    MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEventCursor, Pool, PoolCurrentState,
-    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCursor, PoolRepository, TradeDirection,
+    MeteoraDammV2LiquidityEventKind, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+    PoolRepository, TradeDirection,
 };
-use yog_core::{Page, PageDirection, PagePosition, PoolSort, RepositoryResult};
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
 
@@ -82,16 +81,6 @@ impl MeteoraDammV2SwapEventRepository for MockSwap {
         rec(&self.0, "insert:swap");
         Ok(())
     }
-    async fn find_by_pool_paginated(
-        &self,
-        _: &Pubkey,
-        _: Option<MeteoraDammV2SwapEventCursor>,
-        _: PageDirection,
-        _: Option<PagePosition>,
-        _: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2SwapEvent>> {
-        unimplemented!("not exercised by persist()")
-    }
 }
 struct MockLiquidity(Calls);
 #[async_trait]
@@ -99,16 +88,6 @@ impl MeteoraDammV2LiquidityEventRepository for MockLiquidity {
     async fn insert(&self, _e: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()> {
         rec(&self.0, "insert:liquidity");
         Ok(())
-    }
-    async fn find_by_pool_paginated(
-        &self,
-        _: &Pubkey,
-        _: Option<MeteoraDammV2LiquidityEventCursor>,
-        _: PageDirection,
-        _: Option<PagePosition>,
-        _: i64,
-    ) -> RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>> {
-        unimplemented!("not exercised by persist()")
     }
 }
 struct MockClaimFee(Calls);
@@ -118,13 +97,6 @@ impl MeteoraDammV2ClaimPositionFeeEventRepository for MockClaimFee {
         rec(&self.0, "insert:claim_position_fee");
         Ok(())
     }
-    async fn find_by_pool(
-        &self,
-        _: &Pubkey,
-        _: i64,
-    ) -> RepositoryResult<Vec<MeteoraDammV2ClaimPositionFeeEvent>> {
-        unimplemented!("not exercised by persist()")
-    }
 }
 struct MockClaimReward(Calls);
 #[async_trait]
@@ -132,13 +104,6 @@ impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
     async fn insert(&self, _e: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<()> {
         rec(&self.0, "insert:claim_reward");
         Ok(())
-    }
-    async fn find_by_pool(
-        &self,
-        _: &Pubkey,
-        _: i64,
-    ) -> RepositoryResult<Vec<MeteoraDammV2ClaimRewardEvent>> {
-        unimplemented!("not exercised by persist()")
     }
 }
 
@@ -159,26 +124,6 @@ impl PoolRepository for MockPoolRepo {
         rec(&self.0, "pool:set_fee_bps");
         Ok(())
     }
-    async fn find_by_address(&self, _: &Pubkey) -> RepositoryResult<Option<Pool>> {
-        unimplemented!("not exercised by persist()")
-    }
-    async fn counts(&self) -> RepositoryResult<yog_core::domain::PoolCounts> {
-        unimplemented!("not exercised by persist()")
-    }
-    async fn find_by_addresses(&self, _: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
-        unimplemented!("not exercised by persist()")
-    }
-    async fn find_paginated(
-        &self,
-        _: Option<PoolCursor>,
-        _: PageDirection,
-        _: Option<PagePosition>,
-        _: PoolSort,
-        _: Option<String>,
-        _: i64,
-    ) -> RepositoryResult<Page<Pool>> {
-        unimplemented!("not exercised by persist()")
-    }
 }
 struct MockPcsRepo(Calls);
 #[async_trait]
@@ -186,16 +131,6 @@ impl PoolCurrentStateRepository for MockPcsRepo {
     async fn upsert(&self, _: &PoolCurrentStateUpsert) -> RepositoryResult<bool> {
         rec(&self.0, "pcs:upsert");
         Ok(true)
-    }
-    async fn get_by_address(&self, _: &str) -> RepositoryResult<Option<PoolCurrentState>> {
-        unimplemented!("not exercised by persist()")
-    }
-    async fn list_most_recent(
-        &self,
-        _: u32,
-        _: Option<DateTime<chrono::Utc>>,
-    ) -> RepositoryResult<Vec<PoolCurrentState>> {
-        unimplemented!("not exercised by persist()")
     }
 }
 

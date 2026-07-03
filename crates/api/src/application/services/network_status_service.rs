@@ -10,7 +10,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryError,
-    domain::{EventFreshnessRepository, FreshnessStatus, NetworkStatus, NetworkStatusRepository},
+    domain::{EventFreshnessRepository, FreshnessStatus, NetworkStatus, NetworkStatusLookup},
 };
 
 // ---------------------------------------------------------------------------
@@ -31,13 +31,13 @@ pub(crate) struct NetworkStatusAggregate {
 
 /// Application service for network status queries.
 pub(crate) struct NetworkStatusService {
-    network_status_repo: Arc<dyn NetworkStatusRepository>,
+    network_status_repo: Arc<dyn NetworkStatusLookup>,
     event_freshness_repo: Arc<dyn EventFreshnessRepository>,
 }
 
 impl NetworkStatusService {
     pub(crate) fn new(
-        network_status_repo: Arc<dyn NetworkStatusRepository>,
+        network_status_repo: Arc<dyn NetworkStatusLookup>,
         event_freshness_repo: Arc<dyn EventFreshnessRepository>,
     ) -> Self {
         Self {

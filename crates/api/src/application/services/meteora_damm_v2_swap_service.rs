@@ -9,9 +9,7 @@ use std::sync::Arc;
 use solana_pubkey::Pubkey;
 use yog_core::{
     PageDirection, PagePosition, RepositoryError,
-    domain::{
-        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
-    },
+    domain::{MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed},
     tools::Page,
 };
 
@@ -34,11 +32,11 @@ pub(crate) struct MeteoraDammV2SwapListParams {
 
 /// Application service for swap event queries.
 pub(crate) struct MeteoraDammV2SwapService {
-    repo: Arc<dyn MeteoraDammV2SwapEventRepository>,
+    repo: Arc<dyn MeteoraDammV2SwapEventFeed>,
 }
 
 impl MeteoraDammV2SwapService {
-    pub(crate) fn new(repo: Arc<dyn MeteoraDammV2SwapEventRepository>) -> Self {
+    pub(crate) fn new(repo: Arc<dyn MeteoraDammV2SwapEventFeed>) -> Self {
         Self { repo }
     }
 

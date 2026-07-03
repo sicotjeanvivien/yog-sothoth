@@ -19,7 +19,8 @@ use yog_core::{
     RepositoryResult,
     domain::{
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-        MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
+        MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventRepository,
+        MeteoraDammV2LiquidityEventValued,
     },
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
@@ -78,7 +79,10 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
 
         Ok(())
     }
+}
 
+#[async_trait]
+impl MeteoraDammV2LiquidityEventFeed for PgMeteoraDammV2LiquidityEventRepository {
     /// Paginate liquidity events for a pool with bidirectional navigation.
     ///
     /// See `PgSwapEventRepository::find_by_pool_paginated` for the full

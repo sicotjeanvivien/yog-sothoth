@@ -1,5 +1,5 @@
 //! Postgres implementation of [`SignalRepository`] and
-//! [`SignalFeedRepository`] — one struct, two consumer lenses.
+//! [`SignalFeed`] — one struct, two consumer lenses.
 //!
 //! Backed by the `signals` hypertable (migration 022). The engine's
 //! contract is append-only: a plain multi-row INSERT (signals are
@@ -9,7 +9,7 @@
 //! SQL, one query per traversal mode).
 //!
 //! [`SignalRepository`]: yog_core::domain::SignalRepository
-//! [`SignalFeedRepository`]: yog_core::domain::SignalFeedRepository
+//! [`SignalFeed`]: yog_core::domain::SignalFeed
 
 mod rows;
 
@@ -26,9 +26,7 @@ use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{
-        Severity, Signal, SignalCursor, SignalFeedRepository, SignalRecord, SignalRepository,
-    },
+    domain::{Severity, Signal, SignalCursor, SignalFeed, SignalRecord, SignalRepository},
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
 
@@ -122,7 +120,7 @@ impl SignalRepository for PgSignalRepository {
 }
 
 #[async_trait]
-impl SignalFeedRepository for PgSignalRepository {
+impl SignalFeed for PgSignalRepository {
     /// Paginate the signal feed with bidirectional navigation.
     ///
     /// Natural display order is `triggered_at DESC, id DESC` (newest

@@ -18,7 +18,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::sync::broadcast;
 use tracing::{info, warn};
-use yog_core::domain::{SignalCursor, SignalFeedRepository, SignalRecord};
+use yog_core::domain::{SignalCursor, SignalFeed, SignalRecord};
 
 /// Capacity of the broadcast channel between the poller and the SSE
 /// connections. A subscriber lagging further than this behind gets
@@ -34,14 +34,14 @@ const POLL_BATCH_LIMIT: i64 = 256;
 /// sender; [`run`](Self::run) loops until the process dies (the api has
 /// no graceful-shutdown path to hook into).
 pub(crate) struct SignalStreamPoller {
-    repo: Arc<dyn SignalFeedRepository>,
+    repo: Arc<dyn SignalFeed>,
     sender: broadcast::Sender<SignalRecord>,
     interval: Duration,
 }
 
 impl SignalStreamPoller {
     pub(crate) fn new(
-        repo: Arc<dyn SignalFeedRepository>,
+        repo: Arc<dyn SignalFeed>,
         sender: broadcast::Sender<SignalRecord>,
         interval: Duration,
     ) -> Self {
@@ -79,7 +79,7 @@ impl SignalStreamPoller {
 /// skipped-and-logged — one missed tick, never a dead loop; `None`
 /// means the anchoring itself failed and must be retried.
 async fn poll_once(
-    repo: &dyn SignalFeedRepository,
+    repo: &dyn SignalFeed,
     sender: &broadcast::Sender<SignalRecord>,
     watermark: Option<SignalCursor>,
 ) -> Option<SignalCursor> {

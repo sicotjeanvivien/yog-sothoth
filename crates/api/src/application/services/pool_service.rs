@@ -17,9 +17,9 @@ use rust_decimal::Decimal;
 use yog_core::{
     Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
     domain::{
-        Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCurrentState, PoolCurrentStateRepository,
-        PoolCursor, PoolHistoryBucket, PoolRankMetric, PoolRepository, TokenMetadataRepository,
-        TokenPriceRepository,
+        Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
+        PoolCurrentStateLookup, PoolCursor, PoolHistoryBucket, PoolRankMetric, TokenMetadataLookup,
+        TokenPriceLookup,
     },
 };
 
@@ -68,20 +68,20 @@ pub(crate) struct PoolListParams {
 // Service
 // ---------------------------------------------------------------------------
 pub(crate) struct PoolService {
-    pool_repository: Arc<dyn PoolRepository>,
-    pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
+    pool_repository: Arc<dyn PoolCatalog>,
+    pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
     pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
-    token_metadata_repository: Arc<dyn TokenMetadataRepository>,
-    token_price_repository: Arc<dyn TokenPriceRepository>,
+    token_metadata_repository: Arc<dyn TokenMetadataLookup>,
+    token_price_repository: Arc<dyn TokenPriceLookup>,
 }
 
 impl PoolService {
     pub(crate) fn new(
-        pool_repository: Arc<dyn PoolRepository>,
-        pool_current_state_repository: Arc<dyn PoolCurrentStateRepository>,
+        pool_repository: Arc<dyn PoolCatalog>,
+        pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
         pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
-        token_metadata_repository: Arc<dyn TokenMetadataRepository>,
-        token_price_repository: Arc<dyn TokenPriceRepository>,
+        token_metadata_repository: Arc<dyn TokenMetadataLookup>,
+        token_price_repository: Arc<dyn TokenPriceLookup>,
     ) -> Self {
         Self {
             pool_repository,

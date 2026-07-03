@@ -31,8 +31,8 @@ pub use initialize_pool_event::{
 };
 pub use liquidity_event::{
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
-    MeteoraDammV2LiquidityEventValued,
+    MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventKind,
+    MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
 };
 pub use lock_position_event::{
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
@@ -44,7 +44,8 @@ pub use set_pool_status_event::{
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
 };
 pub use swap_event::{
-    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
+    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed,
+    MeteoraDammV2SwapEventRepository,
 };
 pub use update_pool_fees_event::{
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
