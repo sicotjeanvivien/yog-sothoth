@@ -303,6 +303,7 @@
 
 #### 🚫 Infrastructure RPC — différé
 - [-] 🚫 Migration vers `transactionSubscribe` Helius ou Yellowstone gRPC (Shyft/Triton) — désactive l'allowlist `watched_pools`, architecture protocol-centric pleine. À faire quand throughput devient la contrainte réelle. (Non acceptable : si mise en place => dépendance structurelle à Helius)
+  - **Décision renversée le 3 juillet 2026** : l'extension multi-protocoles (v0.2) rend l'acquisition d'un flux RPC adapté **nécessaire à la viabilité du projet** → section **Pré-v0.2** en fin de fichier. L'objection « dépendance structurelle Helius » devient un *critère de choix* (multi-provider, couche subscription abstraite), pas un veto.
 
 #### 🚫 Filtres TVL/volume sans matérialisation
 - [-] 🚫 Filtres TVL min / volume min sur /pools (abandonné — TVL et volume sont calculés au read-time, pas matérialisés ; filtrage SQL efficace impossible sans table `pool_analytics_hourly` matérialisée. Repris en v0.1.1 si la table est créée)
@@ -370,7 +371,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
 
 #### yog-indexer — source de données
-- [ ] Étudier le passage du WebSocket RPC à un **Yellowstone gRPC (Geyser) managé** : stream plus fiable/complet que `logsSubscribe` (reconnexions, trous). Des offres avec free tier existeraient (à vérifier : Shyft, Helius/LaserStream, QuickNode…) — comparer quotas/coûts/latence. Périmètre : seule la couche subscription de l'indexer change, le pipeline extraction → persistance reste
+- [ ] Étudier le passage du WebSocket RPC à un **Yellowstone gRPC (Geyser) managé** : stream plus fiable/complet que `logsSubscribe` (reconnexions, trous). Des offres avec free tier existeraient (à vérifier : Shyft, Helius/LaserStream, QuickNode…) — comparer quotas/coûts/latence. Périmètre : seule la couche subscription de l'indexer change, le pipeline extraction → persistance reste. **→ promu en gate Pré-v0.2 (3 juil. 2026), voir section dédiée en fin de fichier** ; l'étude peut démarrer pendant v0.1.1, la migration est le gate
 
 #### Audit complet du code — avant déploiement public
 - [ ] Audit sécurité (surface API, secrets/env, rôles DB, CORS/headers, dépendances `cargo audit`/`npm audit`)
@@ -408,11 +409,163 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] **Transverse / perf** : table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relève du crate `Yog-Analytic` ; pas encore le déclencheur (5–47 ms read-time en dev), re-mesurer à l'ouverture de `watched_pools`
 - [ ] **Transverse / perf** : cache HTTP `Cache-Control: max-age=30` sur `GET /api/pools`
 
-## v0.2 — Auth (ex-v0.3, pas encore attaqué)
+## Pré-v0.2 — Acquisition d'un flux RPC adapté (gate de viabilité, décidé 3 juil. 2026)
+
+> L'extension multi-protocoles (v0.2) rend ce choix **nécessaire à la viabilité du
+> projet**. Sous le free tier (~10 req/s), chaque protocole ajouté se partage le
+> même budget de requêtes via l'allowlist : la *profondeur par pool* reste bonne
+> (pools de l'allowlist couvertes intégralement), mais l'argument « poids marché »
+> de la priorisation (Raydium #1 fees, Orca leader volume) ne paie qu'avec du
+> débit réel. Multiplier les protocoles en largeur avec un débit d'échantillon,
+> c'est acheter la promesse sans la marchandise.
+>
+> Le 🚫 de v0.1 (« dépendance structurelle à Helius ») est **levé, pas oublié** :
+> il devient le premier critère de choix — provider interchangeable, pas de
+> couplage structurel.
+
+- [ ] Comparer les offres **Yellowstone gRPC (Geyser) managées** : Shyft, Triton, Helius LaserStream, QuickNode — quotas / coûts / latence / free tier (reprend l'item d'étude v0.1.1 *yog-indexer — source de données* ; l'étude peut démarrer pendant v0.1.1)
+- [ ] Critère de choix n°1 : **pas de dépendance structurelle à un provider unique** — couche subscription derrière une interface, provider swappable par config
+- [ ] Migration de la couche subscription de l'indexer (périmètre : `RpcListener` seul ; pipeline extraction → persistance inchangé)
+- [ ] Désactivation de l'allowlist `watched_pools` → architecture protocol-centric pleine
+- [ ] Re-mesurer les déclencheurs différés « à l'ouverture de l'allowlist » (perf read-time Overview, table `pool_analytics_hourly` — cf. Reliquats v0.1)
+- [ ] Intégrer le budget RPC mensuel au coût d'infra (~20 € HT Scaleway + flux RPC)
+
+---
+
+## v0.2 — Extension multi-protocoles (découpée en v0.2.x)
+
+> **Décision de séquençage (3 juillet 2026)** : les protocoles avant l'auth —
+> acquérir (couverture) → retenir (auth/watchlists, v0.3) → monétiser (referral,
+> v0.4). L'auth en premier aurait été de la rétention sans audience. Corollaire
+> calendrier : l'intégration protocole est du travail *recetté* (voie 3, 3
+> dispatch points), compatible avec la convalescence de septembre ; l'auth est
+> sécurité-critique et attendra la pleine capacité.
+>
+> **Gates d'entrée de v0.2** :
+> 1. **Signal Engine DAMM v2 calibré empiriquement en prod** — pas juste livré :
+>    seuils flow/deviation validés sur données réelles Scaleway. Multiplier les
+>    protocoles avant d'avoir validé la valeur des signaux dilue l'effort.
+> 2. **Flux RPC adapté acquis** (section Pré-v0.2 ci-dessus).
+>
+> **Pourquoi une version par protocole** : le coût réel n'est pas le décodeur
+> (event_cpi identique, recette add-protocol) mais la **sémantique domaine** —
+> modèle de liquidité, prix spot, signification de l'imbalance, VIEWs de lecture
+> des détecteurs. Chaque v0.2.x livre un protocole **de bout en bout, détecteurs
+> compris**, pas trois décodeurs sans signaux.
+
+### v0.2.0 — Meteora DLMM
+
+- [ ] Décodeur event_cpi + recette add-protocol (3 dispatch points, cf. `crates/README.md`)
+- [ ] Sémantique domaine **bins concentrés** (≠ x·y=k) : `PoolCurrentState`, prix spot, AMM math DLMM (`core::amm`)
+- [ ] VIEW cross-protocole au-dessus des CA — le déclencheur « au 2ᵉ protocole » des Reliquats v0.1 est atteint
+- [ ] Couverture détecteurs : flow imbalance + price deviation adaptés au modèle bins (VIEWs de lecture dédiées, façon migrations 023/024)
+- [ ] Front : fiche pool DLMM (les champs DAMM v2-spécifiques ne s'appliquent pas tels quels)
+
+### v0.2.1 — Raydium CLMM/CPMM
+
+- [ ] Nouvel IDL, même modèle conceptuel CLMM — décodeur + domaine + détecteurs + front
+- [ ] **Re-décision throughput avant ouverture** : mesurer le budget requêtes réel post-migration RPC (Raydium = plus gros volume Solana, 147 M$/j)
+
+### v0.2.2 — Orca Whirlpools
+
+- [ ] CLMM bien documenté, SDK mature — décodeur + domaine + détecteurs + front
+- [ ] Au 3ᵉ protocole CLMM : évaluer la factorisation de la sémantique bins/ticks partagée DLMM/Raydium/Orca (pas avant — abstraction sous preuve de 3 cas concrets)
+
+### Référence — priorisation multi-protocoles (analyse du 3 juil. 2026)
+
+> Quatre axes de pondération : **fit thèse** (nourrit l'analyse de liquidity
+> pools AMM vs adjacent), **coût d'intégration** (proximité avec le pattern
+> event_cpi Anchor déjà en place), **valeur signal** (enrichit le Signal Engine
+> ou pas), **poids marché** (TVL/volume réel, snapshot avril-mai 2026 DeFiLlama).
+
+**Tier 1 — extension directe (même famille de données, même pattern event_cpi) → c'est le périmètre v0.2.x**
+
+| Protocole | Fit thèse | Coût intégration | Valeur signal | Poids marché |
+|---|---|---|---|---|
+| Meteora DLMM | 10/10 | Faible — même écosystème Meteora | 10/10 — bins concentrés, imbalance plus riche | 1,1 Md$ TVL |
+| Raydium CLMM/CPMM | 9/10 | Moyen — nouvel IDL, même modèle conceptuel | 9/10 — plus gros volume réel (147M$/j) | 2,3 Md$ TVL, #1 fees (~222M$/an) |
+| Orca Whirlpools | 9/10 | Moyen — CLMM bien documenté, SDK mature | 8/10 | Leader volume 24h (162M$) |
+
+**Tier 2 — couche transversale (prix, exécution) → pas dans v0.2.x, réévalué ensuite**
+
+| Protocole | Fit thèse | Coût intégration | Valeur signal | Poids marché |
+|---|---|---|---|---|
+| Jupiter (deepen) | 7/10 | Faible — Price V3 déjà intégré | 6/10 — pas un signal de pool, génère du revenu (cf. v0.4) | 70-85% du volume agrégé |
+| Pyth Network | 6/10 | Moyen — nouvel oracle, réduit la dépendance à Jupiter comme source de prix unique | 7/10 — fiabilité sub-seconde | Standard de facto Solana |
+
+**Tier 3 — adjacent, hors thèse (à surveiller comme bruit, pas à intégrer)**
+
+| Protocole | Fit thèse | Coût intégration | Valeur signal | Poids marché |
+|---|---|---|---|---|
+| Kamino Finance | 4/10 | Élevé — nouveau domaine (lending + vaults) | 5/10 — ses vaults wrappent des positions Orca/Raydium CLMM → source de faux positifs possibles sur un futur détecteur TVL drain | ~2-3 Md$ TVL, #1 Solana |
+| Drift Protocol | 2/10 | Élevé — perps, virtual AMM, modèle de données différent | 3/10 | 150-400M$ TVL |
+
+**Tier 4 — hors périmètre**
+
+Jito, Marinade, Sanctum (liquid staking) — fit thèse quasi nul, pas de
+liquidity pool events comparables à un AMM. Écarté sauf besoin futur de
+tracker spécifiquement les paires SOL/LST.
+
+> Kamino n'est pas une cible d'intégration mais un **bruit à filtrer** :
+> si un futur détecteur TVL drain se déclenche sur un pool Orca/Raydium à
+> cause d'un rebalancing automatique Kamino plutôt qu'un vrai signal de
+> marché, c'est un faux positif à connaître avant de le construire.
+
+---
+
+## v0.3 — Auth (ex-v0.2, pas encore attaqué)
+
+> Repoussée derrière l'extension protocoles (décision 3 juil. 2026) : la
+> rétention (watchlists, tiers) suppose une audience que la couverture v0.2
+> doit d'abord créer. L'**auth wallet Solana** de cette version est aussi le
+> prérequis technique du wallet-connect de v0.4.
+
 - [ ] Tables `users`, `sessions`, `auth_methods`
 - [ ] Auth email + Argon2
 - [ ] OAuth Google + GitHub
 - [ ] Auth wallet Solana (signature nonce)
 - [ ] Watchlist personnelle par utilisateur
 - [ ] Tiers placeholders (free/solo/pro) sans billing
-- [ ] Réévaluation WASM en début de v0.2
+- [ ] Réévaluation WASM en début de v0.3
+
+## v0.4 — Monétisation : Jupiter Referral Program
+
+> Analysé le 3 juillet 2026. Jupiter expose un **Referral Program** on-chain
+> open-source : un intégrateur peut prendre une fee (bps) sur les swaps routés
+> via son intégration de l'API. Jupiter retient 20% de la fee intégrateur.
+> Techniquement : `referralAccount` + `referralTokenAccount` par mint, ajout
+> de `referralAccount`/`referralFee` sur `/order`, sign+send via `/execute`
+> (`@jup-ag/referral-sdk`).
+>
+> **Le vrai coût n'est pas l'API, c'est le pivot produit** : yog-sothoth est
+> aujourd'hui un outil d'observation pure (pas de wallet connecté, pas de
+> signature). Toucher un centime de fee suppose d'ajouter (1) connexion
+> wallet frontend, (2) UI de swap (input/output/slippage/preview/signature),
+> (3) gestion d'erreurs transactionnelles — un second pilier produit, pas un
+> endpoint de plus. Le (1) est livré par l'auth wallet de v0.3.
+>
+> **Ordre de grandeur revenu** (fee nette ~40 bps après cut Jupiter) :
+> - Aujourd'hui (0 utilisateur actif) : ~0 €
+> - Traction modeste (~2k€/mois de volume routé) : ~8 €/mois — négligeable
+> - Traction réelle (~50-100k€/mois routé) : ~200-400 €/mois
+> - Revenu qui compte (plusieurs k€/mois) : suppose ~1M€/mois de volume,
+>   donc une base d'utilisateurs actifs traders bien au-delà d'un outil
+>   d'analyse niche
+>
+> **Condition de rentabilité** : ce n'est pas une feature qui rapporte en
+> soi, c'est une monétisation d'une audience déjà captée par la qualité des
+> signaux. Sans un Signal Engine qui donne une raison de rester sur la UI au
+> moment d'agir (« ce pool a un imbalance inhabituel, je swap maintenant »),
+> le trader n'a aucune raison de ne pas aller swapper directement sur
+> Jupiter.ag sans payer la fee. **Prérequis implicite : Signal Engine mature
+> et utilisé, pas juste livré.**
+>
+> **Non exclusif** : si la pression runway monte avant la traction, des tiers
+> Stripe sur les signaux (alerting premium — l'ancienne piste monétisation)
+> peuvent monétiser *avant* d'avoir du volume routé. Le referral a l'avantage
+> de la friction zéro, pas celui de la précocité. Les deux se cumulent.
+
+- [ ] Wallet connect frontend (Phantom/Solflare) — s'appuie sur l'auth wallet v0.3
+- [ ] UI de swap (Ultra Swap API + Referral Program)
+- [ ] Setup `referralAccount` + `referralTokenAccount` par mint cible
+- [ ] Déclencheur : Signal Engine mature **et utilisé** (pas juste livré) — pas de date, condition d'usage

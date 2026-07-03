@@ -160,4 +160,4 @@ Fixture transactions for the extraction pipeline live under `core/tests/fixtures
 ## Compilation targets
 
 - `cargo build` → native library, linked into every binary ✅
-- `wasm-pack build` → WASM module for the browser 🚧 deferred — reassessed at v0.2 (see [`crates/README.md`](../README.md#wasm-yog-wasm))
+- `wasm-pack build` → WASM module for the browser 🚧 deferred — reassessed at v0.3 — auth (see [`crates/README.md`](../README.md#wasm-yog-wasm))
