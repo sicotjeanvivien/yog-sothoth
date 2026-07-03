@@ -72,7 +72,7 @@ The dependency graph is strict and one-directional:
 - **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Fourteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
 - **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill (mints, fee config from cp-amm accounts).
 - **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; first two detectors: swap-flow imbalance and spot-vs-oracle price deviation.
-- **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed at v0.2.
+- **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed at v0.3 (auth).
 
 ---
 

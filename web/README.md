@@ -179,7 +179,7 @@ Because Next.js inlines `NEXT_PUBLIC_*` values into the client bundle
 at build time, **flipping a flag in production requires a rebuild and
 a redeploy**. This is a build-time toggle, not a hot runtime toggle.
 A runtime toggle system (DB-backed, modifiable via UI) only makes sense
-once user accounts and admin areas exist (v0.2).
+once user accounts and admin areas exist (v0.3).
 
 ### Using a flag in code
 

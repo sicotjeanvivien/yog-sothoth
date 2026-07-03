@@ -283,7 +283,7 @@ ORDER BY added_at DESC;
 
 The filter is loaded once at indexer startup. Modifying `watched_pools` while
 the indexer is running has no effect on the running process — restart the
-indexer to pick up the change. Hot reload becomes relevant in **v0.2** when
+indexer to pick up the change. Hot reload becomes relevant in **v0.3** when
 user-managed watchlists arrive as a first-class feature.
 
 ### Removing the constraint

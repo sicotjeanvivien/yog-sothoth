@@ -32,7 +32,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 - **HTTP API** — JSON endpoints with cursor-based pagination and SSE streaming, served by an axum-based server
 - **Per-process database roles** — least-privilege Postgres roles, one per binary, enforced at the database level
 - **Docker stack** — full local development environment via `docker compose`, profile-driven
-- **WASM in the browser** *(deferred)* — same Rust AMM formulas run client-side via WebAssembly; reassessed at v0.2
+- **WASM in the browser** *(deferred)* — same Rust AMM formulas run client-side via WebAssembly; reassessed at v0.3 (auth)
 
 ---
 
@@ -74,7 +74,7 @@ The long-term design is **protocol-centric**: the indexer subscribes to Meteora 
 
 In the current phase, ingestion is bounded by a **temporary allowlist** stored in the `watched_pools` table — the public Solana RPC and the free Helius tier both cap transaction fetches at roughly 10 req/s, and peak DAMM v2 traffic saturates that by more than an order of magnitude. The allowlist is applied as a filter inside the dispatcher's filter chain, not as a return to static configuration: lifting the constraint is a matter of disabling the filter.
 
-The allowlist will be lifted once an upgraded RPC path is in place — Helius `transactionSubscribe`, or a managed Yellowstone gRPC (Geyser) stream (Shyft, Triton, Helius LaserStream…). Only the subscription layer of the indexer changes; the extraction → persistence pipeline stays as is.
+The allowlist will be lifted once an upgraded RPC path is in place — a managed Yellowstone gRPC (Geyser) stream (Shyft, Triton, Helius LaserStream…), selected to avoid structural dependency on a single provider. This acquisition is a hard gate before v0.2 (multi-protocol expansion — see the roadmap). Only the subscription layer of the indexer changes; the extraction → persistence pipeline stays as is.
 
 For administering the allowlist (schema, seed scripts, SQL helpers), see **[`crates/persistence/README.md`](./crates/persistence/README.md)**.
 
@@ -85,9 +85,10 @@ For administering the allowlist (schema, seed scripts, SQL helpers), see **[`cra
 | Protocol | Status | Model |
 |---|---|---|
 | Meteora DAMM v2 | **Active** — 11 event kinds end-to-end (circles 1–3) | x·y=k + dynamic fees + NFT positions |
-| Meteora DLMM | Stub | Bin-based liquidity, volatility fees |
-| Meteora DAMM v1 | Stub | x·y=k + dual-yield (lending) |
-| DAMM v1 Farm, Stake2Earn, LST, Multi-Token | Not started | — |
+| Meteora DLMM | Stub — scheduled v0.2.0 | Bin-based liquidity, volatility fees |
+| Raydium CLMM/CPMM | Scheduled v0.2.1 | Concentrated liquidity |
+| Orca Whirlpools | Scheduled v0.2.2 | Concentrated liquidity |
+| Meteora DAMM v1, Farm, Stake2Earn, LST, Multi-Token | Not started | — |
 
 For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circle 2 (position lifecycle — `EvtCreatePosition`, `EvtClosePosition`, `EvtLockPosition`, `EvtPermanentLockPosition`) and circle 3 (pool config / admin — `EvtInitializePool`, `EvtSetPoolStatus`, `EvtUpdatePoolFees`) are wired end-to-end as well: extracted, persisted to their own per-kind tables, and covered by fixture tests. Each lands in `meteora_damm_v2_<kind>_events`; cross-protocol VIEWs expose only the four circle-1 concepts.
 
@@ -171,15 +172,31 @@ Originally two releases, merged in June 2026: an on-chain analytics tool without
 - [ ] Pre-release audit (security, conventions) and legal pages (privacy, terms)
 - [ ] Scaleway deployment *(scheduled to start early August 2026)*
 
-### v0.2 — Auth and per-user pool watchlists
+### Pre-v0.2 gate — upgraded RPC stream
 
-Multi-channel authentication (email, OAuth, Solana wallet), per-user pool watchlists, tier infrastructure with placeholder quotas. The `yog_api` Postgres role gains `INSERT/UPDATE` on user-facing tables. WASM activation reassessed at this point.
+Acquisition of a managed Yellowstone gRPC (Geyser) stream (Shyft, Triton, Helius LaserStream, …), chosen to avoid structural dependency on any single provider — the subscription layer stays behind an interface, the provider swappable by config. Lifts the watched-pools allowlist and returns ingestion to full protocol-centric coverage. With multi-protocol expansion ahead, this is now a viability requirement, not an optimization.
+
+### v0.2 — Multi-protocol expansion *(one protocol per v0.2.x release)*
+
+The sequencing decision (July 2026): coverage before auth — acquire an audience (protocols), then retain it (auth, v0.3), then monetize it (v0.4). Entry gates: the DAMM v2 signal engine **empirically calibrated in production** (not just shipped), and the upgraded RPC stream above. Each release ships a protocol end-to-end — decoder, domain semantics, detector coverage, dashboard — because the real cost is never the decoder, it's the per-protocol liquidity model:
+
+- **v0.2.0 — Meteora DLMM** (concentrated bins ≠ x·y=k; richest signal value)
+- **v0.2.1 — Raydium CLMM/CPMM** (largest real volume on Solana)
+- **v0.2.2 — Orca Whirlpools**
+
+### v0.3 — Auth and per-user pool watchlists
+
+Multi-channel authentication (email, OAuth, Solana wallet), per-user pool watchlists, tier infrastructure with placeholder quotas. The `yog_api` Postgres role gains `INSERT/UPDATE` on user-facing tables. The Solana wallet auth is also the technical prerequisite for v0.4's wallet connect. WASM activation reassessed at this point.
+
+### v0.4 — Monetization: Jupiter Referral Program
+
+Wallet connect and a swap UI on top of the signal feed — an integrator fee (bps) on swaps routed through the dashboard via Jupiter's on-chain Referral Program. This monetizes an audience the signal engine must first earn: the trigger is usage, not a date. Stripe billing tiers remain a complementary lever if revenue is needed earlier.
 
 ### Later *(unscheduled)*
 
-- **Monetization** — Stripe billing, public pricing tiers, API keys with rate limiting.
-- **Extended Meteora coverage** — DLMM, DAMM v1, DAMM v1 Farm, Stake2Earn, LST, Multi-Token. Extends the existing extraction pipeline; no architectural changes expected.
-- **RPC upgrade** — Helius `transactionSubscribe` or a managed Yellowstone gRPC (Geyser) provider. Removes the watched-pool allowlist constraint and returns ingestion to fully protocol-centric coverage.
+- **Further Meteora products** — DAMM v1, DAMM v1 Farm, Stake2Earn, LST, Multi-Token.
+- **Second price oracle** — Pyth, reducing the dependency on Jupiter as sole price source.
+- **Stripe billing** — public pricing tiers, API keys with rate limiting.
 
 ---
 
