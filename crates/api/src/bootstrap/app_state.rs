@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use tokio::sync::broadcast;
 use yog_core::domain::{
-    EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventRepository,
-    MeteoraDammV2SwapEventRepository, NetworkStatusRepository, PoolAnalyticsRepository,
-    PoolCurrentStateRepository, PoolRepository, SignalFeedRepository, SignalRecord,
-    TokenMetadataRepository, TokenPriceRepository,
+    EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventFeed,
+    MeteoraDammV2SwapEventFeed, NetworkStatusLookup, PoolAnalyticsRepository, PoolCatalog,
+    PoolCurrentStateLookup, SignalFeed, SignalRecord, TokenMetadataLookup, TokenPriceLookup,
 };
 use yog_persistence::{
     Database, PgEventFreshnessRepository, PgGlobalAnalyticsRepository, PgHealthChecker,
@@ -59,28 +58,27 @@ impl AppState {
         let db_pool = database.pool().clone();
 
         // ── Repositories ────────────────────────────────────────────────
-        let pool_repo: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool.clone()));
+        let pool_repo: Arc<dyn PoolCatalog> = Arc::new(PgPoolRepository::new(db_pool.clone()));
         let global_analytics_repo: Arc<dyn GlobalAnalyticsRepository> =
             Arc::new(PgGlobalAnalyticsRepository::new(db_pool.clone()));
-        let pool_current_state_repo: Arc<dyn PoolCurrentStateRepository> =
+        let pool_current_state_repo: Arc<dyn PoolCurrentStateLookup> =
             Arc::new(PgPoolCurrentStateRepository::new(db_pool.clone()));
-        let swap_event_repo: Arc<dyn MeteoraDammV2SwapEventRepository> =
+        let swap_event_repo: Arc<dyn MeteoraDammV2SwapEventFeed> =
             Arc::new(PgMeteoraDammV2SwapEventRepository::new(db_pool.clone()));
-        let liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventRepository> = Arc::new(
+        let liquidity_event_repo: Arc<dyn MeteoraDammV2LiquidityEventFeed> = Arc::new(
             PgMeteoraDammV2LiquidityEventRepository::new(db_pool.clone()),
         );
-        let network_status_repo: Arc<dyn NetworkStatusRepository> =
+        let network_status_repo: Arc<dyn NetworkStatusLookup> =
             Arc::new(PgNetworkStatusRepository::new(db_pool.clone()));
         let event_freshness_repo: Arc<dyn EventFreshnessRepository> =
             Arc::new(PgEventFreshnessRepository::new(db_pool.clone()));
-        let token_metadata_repo: Arc<dyn TokenMetadataRepository> =
+        let token_metadata_repo: Arc<dyn TokenMetadataLookup> =
             Arc::new(PgTokenMetadataRepository::new(db_pool.clone()));
-        let token_price_repo: Arc<dyn TokenPriceRepository> =
+        let token_price_repo: Arc<dyn TokenPriceLookup> =
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
         let pool_analytics_repo: Arc<dyn PoolAnalyticsRepository> =
             Arc::new(PgPoolAnalyticsRepository::new(db_pool.clone()));
-        let signal_repo: Arc<dyn SignalFeedRepository> =
-            Arc::new(PgSignalRepository::new(db_pool.clone()));
+        let signal_repo: Arc<dyn SignalFeed> = Arc::new(PgSignalRepository::new(db_pool.clone()));
 
         // ── Signal stream (poller → broadcast → SSE handlers) ──────────
         let (signal_stream, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);

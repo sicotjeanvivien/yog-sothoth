@@ -107,10 +107,6 @@ impl TokenMetadataRepository for FakeRepository {
     async fn list_known_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
         Ok(vec![])
     }
-
-    async fn find_by_mint(&self, _mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>> {
-        Ok(None)
-    }
 }
 
 #[derive(Default)]

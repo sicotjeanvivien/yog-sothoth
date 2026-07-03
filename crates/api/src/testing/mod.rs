@@ -4,8 +4,10 @@
 //! every service test (PoolService today, others later) can share the
 //! same mocks instead of redefining them per module.
 //!
-//! The mocks deliberately implement only what the services exercise;
-//! unused trait methods are `unreachable!()`. Each "once" mock yields
+//! The mocks implement the read lenses the services actually consume
+//! (`PoolCatalog`, `TokenPriceLookup`, `SignalFeed`, ...), so there are
+//! no write-side stubs to drag along; a lens method a given test never
+//! exercises is still `unreachable!()`. Each "once" mock yields
 //! its preset value a single time (via `Mutex<Option<...>>`) because
 //! `RepositoryResult` is not necessarily `Clone`. A second call panics
 //! loudly rather than returning a misleading value.
@@ -22,12 +24,12 @@ use yog_core::{
     domain::{
         EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository,
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
-        MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
-        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventRepository,
-        NetworkStatus, NetworkStatusRepository, Pool, PoolAnalytics, PoolAnalyticsRepository,
-        PoolCounts, PoolCurrentState, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-        PoolCursor, PoolRepository, Protocol, Severity, Signal, SignalCursor, SignalFeedRepository,
-        SignalRecord, TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository,
+        MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
+        MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed, NetworkStatus,
+        NetworkStatusLookup, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCounts,
+        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, Protocol, Severity, Signal,
+        SignalCursor, SignalFeed, SignalRecord, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceLookup,
     },
 };
 
@@ -122,7 +124,7 @@ fn take<T>(slot: &Mutex<Option<RepositoryResult<T>>>) -> RepositoryResult<T> {
         .expect("mock method called more than once")
 }
 
-// ── Mock: PoolRepository ────────────────────────────────────────────
+// ── Mock: PoolCatalog ────────────────────────────────────────────
 
 pub(crate) struct PoolRepoOnce {
     paginated: Mutex<Option<RepositoryResult<Page<Pool>>>>,
@@ -164,20 +166,7 @@ impl PoolRepoOnce {
 }
 
 #[async_trait]
-impl PoolRepository for PoolRepoOnce {
-    async fn upsert(&self, _pool: &Pool) -> RepositoryResult<()> {
-        unreachable!("upsert not used by PoolService")
-    }
-    async fn touch_last_seen(&self, _addr: &Pubkey) -> RepositoryResult<()> {
-        unreachable!("touch_last_seen not used by PoolService")
-    }
-    async fn set_fee_bps(
-        &self,
-        _addr: &Pubkey,
-        _fee_bps: rust_decimal::Decimal,
-    ) -> RepositoryResult<()> {
-        unreachable!("set_fee_bps not used by PoolService")
-    }
+impl PoolCatalog for PoolRepoOnce {
     async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
         take(&self.by_address)
     }
@@ -228,9 +217,9 @@ impl GlobalAnalyticsRepository for MockGlobalAnalyticsRepo {
     }
 }
 
-// ── Mock: PoolRepository yielding only counts ───────────────────────
+// ── Mock: PoolCatalog yielding only counts ───────────────────────
 
-/// Minimal `PoolRepository` mock for `StatsService`: only `counts()` is
+/// Minimal `PoolCatalog` mock for `StatsService`: only `counts()` is
 /// exercised; every other method panics if reached.
 pub(crate) struct PoolCountsRepo {
     counts: Mutex<Option<RepositoryResult<PoolCounts>>>,
@@ -250,20 +239,7 @@ impl PoolCountsRepo {
 }
 
 #[async_trait]
-impl PoolRepository for PoolCountsRepo {
-    async fn upsert(&self, _pool: &Pool) -> RepositoryResult<()> {
-        unreachable!("upsert not used by StatsService")
-    }
-    async fn touch_last_seen(&self, _addr: &Pubkey) -> RepositoryResult<()> {
-        unreachable!("touch_last_seen not used by StatsService")
-    }
-    async fn set_fee_bps(
-        &self,
-        _addr: &Pubkey,
-        _fee_bps: rust_decimal::Decimal,
-    ) -> RepositoryResult<()> {
-        unreachable!("set_fee_bps not used by StatsService")
-    }
+impl PoolCatalog for PoolCountsRepo {
     async fn find_by_address(&self, _addr: &Pubkey) -> RepositoryResult<Option<Pool>> {
         unreachable!("find_by_address not used by StatsService")
     }
@@ -370,7 +346,7 @@ impl PoolAnalyticsRepository for MockAnalyticsRepo {
     }
 }
 
-// ── Mock: TokenMetadataRepository ───────────────────────────────────
+// ── Mock: TokenMetadataLookup ───────────────────────────────────
 
 pub(crate) struct MockMetadataRepo {
     by_mint: HashMap<Pubkey, TokenMetadata>,
@@ -399,16 +375,7 @@ impl MockMetadataRepo {
 }
 
 #[async_trait]
-impl TokenMetadataRepository for MockMetadataRepo {
-    async fn upsert(&self, _m: &TokenMetadata) -> RepositoryResult<()> {
-        unreachable!()
-    }
-    async fn list_known_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        unreachable!()
-    }
-    async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        unreachable!()
-    }
+impl TokenMetadataLookup for MockMetadataRepo {
     async fn find_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenMetadata>> {
         if self.fail {
             return Err(RepositoryError::Integrity("metadata boom".into()));
@@ -417,7 +384,7 @@ impl TokenMetadataRepository for MockMetadataRepo {
     }
 }
 
-// ── Mock: TokenPriceRepository ──────────────────────────────────────
+// ── Mock: TokenPriceLookup ──────────────────────────────────────
 
 pub(crate) struct MockPriceRepo {
     by_mint: HashMap<Pubkey, TokenPrice>,
@@ -446,10 +413,7 @@ impl MockPriceRepo {
 }
 
 #[async_trait]
-impl TokenPriceRepository for MockPriceRepo {
-    async fn insert_batch(&self, _p: &[TokenPrice]) -> RepositoryResult<()> {
-        unreachable!()
-    }
+impl TokenPriceLookup for MockPriceRepo {
     async fn find_latest_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenPrice>> {
         if self.fail {
             return Err(RepositoryError::Integrity("price boom".into()));
@@ -458,7 +422,7 @@ impl TokenPriceRepository for MockPriceRepo {
     }
 }
 
-// ── Mock: PoolCurrentStateRepository ───────────────────────────────
+// ── Mock: PoolCurrentStateLookup ───────────────────────────────
 
 pub(crate) struct MockPoolCurrentStateRepo {
     by_address: Mutex<Option<RepositoryResult<Option<PoolCurrentState>>>>,
@@ -483,10 +447,7 @@ impl MockPoolCurrentStateRepo {
 }
 
 #[async_trait]
-impl PoolCurrentStateRepository for MockPoolCurrentStateRepo {
-    async fn upsert(&self, _: &PoolCurrentStateUpsert) -> RepositoryResult<bool> {
-        unreachable!("upsert not used by api services")
-    }
+impl PoolCurrentStateLookup for MockPoolCurrentStateRepo {
     async fn get_by_address(&self, _: &str) -> RepositoryResult<Option<PoolCurrentState>> {
         take(&self.by_address)
     }
@@ -528,10 +489,7 @@ impl MockSwapEventRepo {
 }
 
 #[async_trait]
-impl MeteoraDammV2SwapEventRepository for MockSwapEventRepo {
-    async fn insert(&self, _: &MeteoraDammV2SwapEvent) -> RepositoryResult<()> {
-        unreachable!()
-    }
+impl MeteoraDammV2SwapEventFeed for MockSwapEventRepo {
     async fn find_by_pool_paginated(
         &self,
         _pool_address: &Pubkey,
@@ -573,10 +531,7 @@ impl MockLiquidityEventRepo {
 }
 
 #[async_trait]
-impl MeteoraDammV2LiquidityEventRepository for MockLiquidityEventRepo {
-    async fn insert(&self, _: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()> {
-        unreachable!()
-    }
+impl MeteoraDammV2LiquidityEventFeed for MockLiquidityEventRepo {
     async fn find_by_pool_paginated(
         &self,
         _pool_address: &Pubkey,
@@ -589,7 +544,7 @@ impl MeteoraDammV2LiquidityEventRepository for MockLiquidityEventRepo {
     }
 }
 
-// ── Mock: NetworkStatusRepository ───────────────────────────────────
+// ── Mock: NetworkStatusLookup ───────────────────────────────────
 
 pub(crate) struct MockNetworkStatusRepo {
     get: Mutex<Option<RepositoryResult<Option<NetworkStatus>>>>,
@@ -614,10 +569,7 @@ impl MockNetworkStatusRepo {
 }
 
 #[async_trait]
-impl NetworkStatusRepository for MockNetworkStatusRepo {
-    async fn upsert(&self, _: &NetworkStatus) -> RepositoryResult<()> {
-        unreachable!()
-    }
+impl NetworkStatusLookup for MockNetworkStatusRepo {
     async fn get(&self) -> RepositoryResult<Option<NetworkStatus>> {
         take(&self.get)
     }
@@ -812,7 +764,7 @@ pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
     Signature::from(bytes)
 }
 
-// ── Mock: SignalFeedRepository ──────────────────────────────────────
+// ── Mock: SignalFeed ──────────────────────────────────────
 //
 // The api only ever sees the feed lens; the engine-side contract
 // (insert_batch / latest_severity_by_pool) never reaches this crate,
@@ -857,7 +809,7 @@ impl MockSignalRepo {
 }
 
 #[async_trait]
-impl SignalFeedRepository for MockSignalRepo {
+impl SignalFeed for MockSignalRepo {
     async fn list(
         &self,
         _severity: Option<Severity>,

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use yog_core::{
     RepositoryError,
-    domain::{GlobalAnalytics, GlobalAnalyticsRepository, PoolCounts, PoolRepository},
+    domain::{GlobalAnalytics, GlobalAnalyticsRepository, PoolCatalog, PoolCounts},
 };
 
 // ---------------------------------------------------------------------------
@@ -31,13 +31,13 @@ pub(crate) struct StatsAggregate {
 /// Application service for the global stats query.
 pub(crate) struct StatsService {
     global_analytics_repo: Arc<dyn GlobalAnalyticsRepository>,
-    pool_repo: Arc<dyn PoolRepository>,
+    pool_repo: Arc<dyn PoolCatalog>,
 }
 
 impl StatsService {
     pub(crate) fn new(
         global_analytics_repo: Arc<dyn GlobalAnalyticsRepository>,
-        pool_repo: Arc<dyn PoolRepository>,
+        pool_repo: Arc<dyn PoolCatalog>,
     ) -> Self {
         Self {
             global_analytics_repo,

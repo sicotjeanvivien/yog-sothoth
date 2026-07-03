@@ -57,7 +57,7 @@ pub trait SignalRepository: Send + Sync {
 /// the api mock doesn't have to carry the engine's write/dedup methods
 /// (same reasoning as `PoolAccountResolver` vs `PoolRepository`).
 #[async_trait]
-pub trait SignalFeedRepository: Send + Sync {
+pub trait SignalFeed: Send + Sync {
     /// Paginate the signal feed, ordered by `triggered_at DESC`,
     /// `id DESC` as tiebreaker (newest first).
     ///
@@ -80,7 +80,7 @@ pub trait SignalFeedRepository: Send + Sync {
     /// streaming consumer's watermark so it only sees signals born
     /// after it started (history is the paginated [`list`]'s job).
     ///
-    /// [`list`]: SignalFeedRepository::list
+    /// [`list`]: SignalFeed::list
     async fn latest_cursor(&self) -> RepositoryResult<Option<SignalCursor>>;
 
     /// Every signal strictly after `after` in the feed ordering,
@@ -89,7 +89,7 @@ pub trait SignalFeedRepository: Send + Sync {
     /// the delta since a watermark. A result of exactly `limit` rows
     /// may mean more are pending — the caller's next poll drains them.
     ///
-    /// [`list`]: SignalFeedRepository::list
+    /// [`list`]: SignalFeed::list
     async fn newer_than(
         &self,
         after: &SignalCursor,

@@ -4,4 +4,4 @@ pub mod repository;
 
 pub use detector::{DetectorError, EvalContext, SignalDetector};
 pub use model::{Severity, Signal, SignalRecord};
-pub use repository::{SignalCursor, SignalFeedRepository, SignalRepository};
+pub use repository::{SignalCursor, SignalFeed, SignalRepository};

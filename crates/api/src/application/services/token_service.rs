@@ -8,7 +8,7 @@ use std::sync::Arc;
 use solana_pubkey::Pubkey;
 use yog_core::{
     RepositoryError,
-    domain::{TokenMetadata, TokenMetadataRepository, TokenPrice, TokenPriceRepository},
+    domain::{TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup},
 };
 
 // ---------------------------------------------------------------------------
@@ -28,14 +28,14 @@ pub(crate) struct TokenAggregate {
 
 /// Application service for token queries.
 pub(crate) struct TokenService {
-    metadata_repo: Arc<dyn TokenMetadataRepository>,
-    price_repo: Arc<dyn TokenPriceRepository>,
+    metadata_repo: Arc<dyn TokenMetadataLookup>,
+    price_repo: Arc<dyn TokenPriceLookup>,
 }
 
 impl TokenService {
     pub(crate) fn new(
-        metadata_repo: Arc<dyn TokenMetadataRepository>,
-        price_repo: Arc<dyn TokenPriceRepository>,
+        metadata_repo: Arc<dyn TokenMetadataLookup>,
+        price_repo: Arc<dyn TokenPriceLookup>,
     ) -> Self {
         Self {
             metadata_repo,

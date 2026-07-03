@@ -11,7 +11,9 @@ use crate::{
     domain::{PoolCurrentState, PoolCurrentStateUpsert},
 };
 
-/// Read/write access to the pool-current-state projection.
+/// Write access to the pool-current-state projection — the indexer's lens.
+///
+/// The read side lives in [`PoolCurrentStateLookup`].
 ///
 /// # Contract
 ///
@@ -34,7 +36,14 @@ pub trait PoolCurrentStateRepository: Send + Sync {
     /// Returns `Ok(true)` when the row was updated (or inserted),
     /// `Ok(false)` when the stale-write guard suppressed the update.
     async fn upsert(&self, upsert: &PoolCurrentStateUpsert) -> RepositoryResult<bool>;
+}
 
+/// Consultation of the pool-current-state projection — the api's lens.
+///
+/// Kept separate from [`PoolCurrentStateRepository`] (write side, indexer)
+/// so each binary depends on exactly the methods it uses.
+#[async_trait]
+pub trait PoolCurrentStateLookup: Send + Sync {
     /// Fetch the current state of a single pool, or `Ok(None)` if no event
     /// has been observed for it yet.
     async fn get_by_address(

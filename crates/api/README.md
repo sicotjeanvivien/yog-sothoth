@@ -69,7 +69,7 @@ by per-client DB queries:
 
 - One application-level poller ticks every `API_SIGNAL_STREAM_POLL_SECS`
   (default 3 s), reads signals strictly newer than its watermark
-  (`SignalFeedRepository::newer_than`), and broadcasts them on a
+  (`SignalFeed::newer_than`), and broadcasts them on a
   `tokio::broadcast` channel to every connected client.
 - The watermark is re-anchored to the feed tip on (re)activation — a client
   reconnecting never sees a replay. When `receiver_count() == 0` the DB query

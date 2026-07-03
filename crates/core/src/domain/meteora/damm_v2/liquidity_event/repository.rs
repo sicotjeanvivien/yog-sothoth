@@ -18,15 +18,21 @@ pub struct MeteoraDammV2LiquidityEventCursor {
     pub signature: Signature,
 }
 
-/// Persistence contract for liquidity events.
+/// Persistence contract for liquidity events — the write side, owned by
+/// the indexer's persistor. The read side lives in
+/// [`MeteoraDammV2LiquidityEventFeed`].
 #[async_trait]
 pub trait MeteoraDammV2LiquidityEventRepository: Send + Sync {
-    // ---- Write-side (indexer) -------------------------------------------
-
     async fn insert(&self, event: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()>;
+}
 
-    // ---- Read-side (api) ------------------------------------------------
-
+/// The per-pool liquidity-event feed — the api's lens: a cursor-paginated,
+/// time-ordered listing, same shape as the signal feed (`SignalFeed`).
+///
+/// Kept separate from [`MeteoraDammV2LiquidityEventRepository`] (write
+/// side, indexer) so each binary depends on exactly the methods it uses.
+#[async_trait]
+pub trait MeteoraDammV2LiquidityEventFeed: Send + Sync {
     /// Paginate liquidity events for a given pool, ordered by
     /// `timestamp DESC`, `signature ASC` as tiebreaker. Each item carries its
     /// trade-time USD value (`None` when not computable) — see

@@ -1,14 +1,6 @@
-//! Position fee claim events repository: inserts new claims and lists
-//! them by pool.
-//!
-//! Static SQL on the read (single query, no traversal mode); the row
-//! shape and the mapping to domain live at the bottom of the module.
-mod rows;
-
+//! Position fee claim events repository: inserts new claims.
 use crate::repositories::helper::{convert_u64_to_i64, map_sqlx_error};
 use async_trait::async_trait;
-use rows::MeteoraDammV2ClaimPositionFeeEventRow;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
@@ -54,34 +46,5 @@ impl MeteoraDammV2ClaimPositionFeeEventRepository
         .map_err(map_sqlx_error)?;
 
         Ok(())
-    }
-
-    async fn find_by_pool(
-        &self,
-        pool_address: &Pubkey,
-        limit: i64,
-    ) -> RepositoryResult<Vec<MeteoraDammV2ClaimPositionFeeEvent>> {
-        let rows = sqlx::query_as!(
-            MeteoraDammV2ClaimPositionFeeEventRow,
-            r#"
-            SELECT pool_address, signature,
-                   position, owner,
-                   fee_a_claimed, fee_b_claimed,
-                   timestamp
-            FROM meteora_damm_v2_claim_position_fee_events
-            WHERE pool_address = $1
-            ORDER BY timestamp DESC
-            LIMIT $2
-            "#,
-            pool_address.to_string(),
-            limit,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        rows.into_iter()
-            .map(MeteoraDammV2ClaimPositionFeeEvent::try_from)
-            .collect()
     }
 }

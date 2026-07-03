@@ -8,7 +8,9 @@ use solana_pubkey::Pubkey;
 
 use crate::{RepositoryResult, domain::TokenMetadata};
 
-/// Persistence contract for token metadata.
+/// Persistence contract for token metadata — the enrichment side, owned
+/// by yog-context (writes + work-queue listings). The api's read lens
+/// lives in [`TokenMetadataLookup`].
 #[async_trait]
 pub trait TokenMetadataRepository: Send + Sync {
     /// Insert or update the metadata for a mint.
@@ -30,7 +32,14 @@ pub trait TokenMetadataRepository: Send + Sync {
     /// reads `pools`, but its purpose is metadata enrichment, so the
     /// method belongs to this repository rather than `PoolRepository`.
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>>;
+}
 
+/// Metadata consultation by mint — the api's lens.
+///
+/// Kept separate from [`TokenMetadataRepository`] (enrichment side,
+/// context) so each binary depends on exactly the methods it uses.
+#[async_trait]
+pub trait TokenMetadataLookup: Send + Sync {
     /// Fetch the metadata row for a single mint, or `None` if no row
     /// exists yet for that mint. Used by the `GET /api/tokens/{mint}`
     /// handler.

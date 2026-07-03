@@ -10,7 +10,7 @@ use solana_pubkey::Pubkey;
 use sqlx::{PgPool, QueryBuilder};
 use yog_core::{
     RepositoryResult,
-    domain::{TokenPrice, TokenPriceRepository},
+    domain::{TokenPrice, TokenPriceLookup, TokenPriceRepository},
 };
 
 /// Postgres-backed token price repository.
@@ -58,7 +58,10 @@ impl TokenPriceRepository for PgTokenPriceRepository {
 
         Ok(())
     }
+}
 
+#[async_trait]
+impl TokenPriceLookup for PgTokenPriceRepository {
     async fn find_latest_by_mint(&self, mint: &Pubkey) -> RepositoryResult<Option<TokenPrice>> {
         let row = sqlx::query_as!(
             TokenPriceRow,

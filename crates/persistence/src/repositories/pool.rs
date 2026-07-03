@@ -13,7 +13,8 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
     RepositoryResult,
     domain::{
-        Pool, PoolAccountProperties, PoolAccountResolver, PoolCounts, PoolCursor, PoolRepository,
+        Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor,
+        PoolRepository,
     },
 };
 
@@ -88,7 +89,10 @@ impl PoolRepository for PgPoolRepository {
         .map_err(map_sqlx_error)?;
         Ok(())
     }
+}
 
+#[async_trait]
+impl PoolCatalog for PgPoolRepository {
     async fn find_by_address(&self, pool_address: &Pubkey) -> RepositoryResult<Option<Pool>> {
         let row = sqlx::query_as!(
             PoolRow,

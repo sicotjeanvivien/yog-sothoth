@@ -9,7 +9,7 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     PageDirection, PagePosition, RepositoryError,
     domain::{
-        MeteoraDammV2LiquidityEventCursor, MeteoraDammV2LiquidityEventRepository,
+        MeteoraDammV2LiquidityEventCursor, MeteoraDammV2LiquidityEventFeed,
         MeteoraDammV2LiquidityEventValued,
     },
     tools::Page,
@@ -34,11 +34,11 @@ pub(crate) struct MeteoraDammV2LiquidityListParams {
 
 /// Application service for liquidity event queries.
 pub(crate) struct MeteoraDammV2LiquidityService {
-    repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
+    repo: Arc<dyn MeteoraDammV2LiquidityEventFeed>,
 }
 
 impl MeteoraDammV2LiquidityService {
-    pub(crate) fn new(repo: Arc<dyn MeteoraDammV2LiquidityEventRepository>) -> Self {
+    pub(crate) fn new(repo: Arc<dyn MeteoraDammV2LiquidityEventFeed>) -> Self {
         Self { repo }
     }
 

@@ -10,7 +10,7 @@ use rows::NetworkStatusRow;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryError, RepositoryResult,
-    domain::{NetworkStatus, NetworkStatusRepository},
+    domain::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository},
 };
 
 /// Postgres-backed network status repository.
@@ -57,7 +57,10 @@ impl NetworkStatusRepository for PgNetworkStatusRepository {
 
         Ok(())
     }
+}
 
+#[async_trait]
+impl NetworkStatusLookup for PgNetworkStatusRepository {
     async fn get(&self) -> RepositoryResult<Option<NetworkStatus>> {
         // The singleton row is seeded by the migration, so this
         // normally returns Some. None means the seed row is missing.
