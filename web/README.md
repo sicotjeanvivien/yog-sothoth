@@ -3,8 +3,9 @@
 Next.js 16 frontend for the Yog-Sothoth liquidity intelligence engine.
 
 This package lives next to the Rust crates of the project but is fully
-independent at the Node.js level. It talks to `yog-api` over HTTP through
-a thin BFF layer — it never connects to TimescaleDB directly.
+independent at the Node.js level. It talks to `yog-api` over HTTP only —
+it never connects to TimescaleDB, and there is **no BFF layer**: the
+browser calls the Rust API directly.
 
 ## Stack
 
@@ -14,123 +15,102 @@ a thin BFF layer — it never connects to TimescaleDB directly.
 - **Tailwind CSS** — palette extracted from the Yog-Sothoth mockups
 - **next-intl 4** — i18n with always-visible locale prefix (`/en/...`, `/fr/...`)
 - **zod** — runtime validation of every payload returned by `yog-api`
+- **visx** — low-level chart primitives for the pool time-series charts
 - **Vitest** — unit tests in Node environment
 
 ## Architecture
 
 ```
-┌─────────────┐    HTTP    ┌─────────────────────────┐    HTTP    ┌─────────┐
-│   Browser   │───────────▶│  Next.js (this package) │───────────▶│ yog-api │
-│             │            │                         │            │  (Rust) │
-│             │            │  Server Components +    │            │         │
-│             │            │  Route Handlers (BFF)   │            │         │
-└─────────────┘            └─────────────────────────┘            └─────────┘
-                                       │
-                                       │ Direct DB read is NOT used in
-                                       │ the current shape — yog_web is
-                                       │ kept as a future fallback role.
-                                       ▼
-                              TimescaleDB (yog_web RO)
+┌──────────────────────┐   HTTP (SSR render)    ┌─────────┐
+│  Next.js server      │───────────────────────▶│         │
+│  (Server Components) │  YOG_API_INTERNAL_URL  │ yog-api │
+└──────────────────────┘                        │ (Rust)  │
+┌──────────────────────┐   HTTP + SSE           │         │
+│  Browser             │───────────────────────▶│         │
+│  (Client Components) │  NEXT_PUBLIC_YOG_API…  └─────────┘
+└──────────────────────┘   CORS-locked
 ```
 
-The frontend has two consumers of `yog-api`:
+`yog-api` has two consumers in this package:
 
-- **Server Components** — execute on the Node.js server, read `yog-api` via the
-  typed client (`lib/api/`). They use `API_INTERNAL_URL` to talk over the Docker
-  network (`http://yog-api:5000`).
-- **The browser** — never calls `yog-api` directly. It calls **route handlers**
-  under `app/api/` that act as a BFF (Backend For Frontend), proxying the request
-  and translating HTTP errors into a stable, frontend-friendly shape.
-- **`schema/api-error-body.ts`** — zod schema for the RFC 9457 Problem
-  Details envelope returned by `yog-api` on errors. Used internally by
-  `client.ts` to extract the `detail` field as the remote message
-  attached to `ApiClientError.http(...)`. The BFF route handlers do
-  not see this format — they see `ApiClientError` and produce their
-  own browser-facing envelope.
+- **Server Components** render the initial page data on the Node.js
+  server. They reach the API over the internal network via
+  `YOG_API_INTERNAL_URL` (`http://yog-api:5000` inside Docker).
+- **The browser** calls the API directly for everything dynamic —
+  the signal SSE stream, reconnection refills, the network-status
+  poll. It goes through the public gateway (`https://api.yog-scope.xyz`
+  in production, `http://localhost:5000` in dev) via
+  `NEXT_PUBLIC_YOG_API_URL`. `yog-api`'s CORS layer authorises the
+  dashboard origin.
 
-This split protects the browser from internal details: 5xx responses from
-`yog-api` are collapsed into a generic 502 by the BFF (no leakage of stack
-traces or DB errors), while 4xx pass through unchanged because they describe a
-client-side mistake the caller needs to know about.
+There used to be BFF route handlers under `app/api/` proxying the API
+for the browser. They were removed: pure proxies with no added value —
+their removal collapses one network hop, one error format, and one set
+of duplicated validations. Both runtimes share the same client core, so
+behaviour stays identical on either path.
 
-## Talking to `yog-api`
+## The API layer (`src/lib/api/`)
 
-The integration layer lives under `src/lib/api/`:
+```
+lib/api/
+├── client/
+│   ├── client-core.ts   # runtime-agnostic core: URL building, timeout +
+│   │                    # AbortController, error classification, RFC 9457
+│   │                    # envelope parsing, zod validation
+│   ├── server.ts        # apiGet()        — reads YOG_API_INTERNAL_URL
+│   └── browser.ts       # apiGetBrowser() — reads NEXT_PUBLIC_YOG_API_URL
+├── schema/              # one zod schema per resource (pool, signal, stats,
+│                        # swap-event, …) + shared primitives (BigDecimal,
+│                        # SignedBigDecimal, page envelope, RFC 9457 body)
+├── server/              # one fetcher per resource for Server Components:
+│                        # fetchPools, fetchPool, fetchStats, fetchSignals,
+│                        # fetchPoolHistory, fetchTopPools, …
+├── browser/             # browser-side fetchers for Client Component flows
+│                        # (signals refill on reconnect, network status)
+├── type/                # pagination types shared by fetchers
+├── errors.ts            # ApiClientError — discriminated union
+└── safe-fetch.ts        # safeFetch() — Result-like wrapper for components
+```
 
-- **`client.ts`** — base fetch wrapper with timeout, AbortController, and zod
-  schema validation. Returns a discriminated `Result`-like type.
-- **`errors.ts`** — `ApiClientError` discriminated union with four variants:
-  `timeout`, `unavailable`, `bad_request`, `unexpected`. Server Components and
-  BFF handlers pattern-match on the variant to render the right state.
-- **`pools.ts`, `tokens.ts`, …** — one module per resource, exposing a
-  `fetchXxx()` (throwing) and a `safeFetchXxx()` (returning `Result`).
+Every response body is validated with zod before it reaches a
+component; a payload that violates the schema is a `validation` error,
+not a rendering surprise.
 
-Server Components consume the `safeFetch*` variants directly in the JSX:
+`ApiClientError` has four kinds, and Server Components branch on them
+through `safeFetch` instead of try/catch:
+
+| Kind         | Meaning                                            |
+| ------------ | -------------------------------------------------- |
+| `timeout`    | the call exceeded the configured timeout           |
+| `network`    | fetch failed before an HTTP response existed       |
+| `http`       | non-2xx — the RFC 9457 `detail` field is captured as the remote message |
+| `validation` | 2xx but the body violated the zod schema           |
 
 ```tsx
-// app/[locale]/pools/page.tsx (simplified)
-export default async function PoolsPage() {
-  const result = await safeFetchPools();
-
-  if (!result.ok) {
-    return <PoolsErrorState error={result.error} />;
-  }
-  if (result.value.items.length === 0) {
-    return <PoolsEmptyState />;
-  }
-  return <PoolsTable pools={result.value.items} />;
+const outcome = await safeFetch(() => fetchPools());
+if (outcome.kind === "error") {
+  return <PageError reason={outcome.reason} />;
 }
+return <PoolsTable pools={outcome.data.items} />;
 ```
 
-## Talking to yog-api
+Anything that is *not* an `ApiClientError` is re-thrown so it surfaces
+in the Next.js error boundary instead of being collapsed into a
+block-level error state.
 
-The integration layer lives under `src/lib/api/`:
+## Live signal feed
 
-- **`client.ts`** — server-side fetch wrapper with timeout, AbortController,
-  and zod schema validation. Reads `YOG_API_INTERNAL_URL` from the server env
-  to reach yog-api over the internal network.
-- **`errors.ts`** — `ApiClientError` discriminated union with four variants:
-  `timeout`, `network`, `http`, `validation`. Server Components catch and
-  pattern-match on `details.kind` to render the right state.
-- **`pools.ts`, `tokens.ts`, …** — one module per resource, exposing typed
-  `fetchXxx()` calls used directly by Server Components.
+The `/signals` dashboard page combines both consumers:
 
-The browser does not call yog-api through Next.js. It talks to it directly
-through the public gateway `api.yog-scope.xyz` (Caddy reverse proxy →
-yog-api). The previous BFF route handlers under `app/api/` have been
-removed: they were pure proxies with no added value, and their removal
-collapses one network hop, one error format, and one set of duplicated
-validations.
-
-If a future Client Component needs to call yog-api from the browser, it
-talks directly to `https://api.yog-scope.xyz/...`. yog-api's CORS layer
-authorises the dashboard origin.
-
-## Error responses (browser-facing)
-
-Every BFF route handler returns errors as RFC 9457 Problem Details,
-served with `Content-Type: application/problem+json`. The format
-mirrors what `yog-api` returns for its own errors, so the dashboard
-parses a single shape regardless of whether the failure originates
-in `yog-api` or in the BFF itself.
-
-Wire shape:
-
-    {
-      "type": "about:blank",
-      "title": "Bad Gateway",
-      "status": 502,
-      "detail": "upstream API unreachable"
-    }
-
-The `title` is the discriminator React branches on for localised
-error messages via next-intl. Stable titles in this BFF:
-
-  - "Bad Request"          — local validation or 4xx passthrough from yog-api
-  - "Not Found"            — 404 passthrough from yog-api
-  - "Bad Gateway"          — yog-api unreachable, returned 5xx, or violated its schema
-  - "Gateway Timeout"      — upstream call exceeded the configured timeout
-  - "Internal Server Error" — unexpected failure inside the BFF route itself
+- the first page of signals is fetched server-side (`fetchSignals`) and
+  rendered by the Server Component;
+- the `useSignalStream` hook (`components/dashboard/signals/`) then
+  opens an `EventSource` directly on `GET /api/signals/stream` (SSE).
+  Each event is zod-parsed (malformed → warn + skip) and merged through
+  the pure `mergeSignals` helper (`lib/signals/`): dedup by id, sort by
+  `(triggeredAt, id)` descending, cap at 200 rows. On reconnection the
+  hook refetches page 1 from the browser and reconciles by id, so a
+  connection gap never leaves holes in the feed.
 
 ## Scripts
 
@@ -153,20 +133,22 @@ Copy `.env.example` to `.env.local` and fill in the values you need:
 cp .env.example .env.local
 ```
 
-Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser bundle.
-Anything else (including `API_INTERNAL_URL`) is server-only and stays out of
-the client bundle.
+Both env surfaces are **validated with zod at load time** — a missing or
+malformed value fails fast (mirrors `ConfigError::InvalidValue` in the
+Rust services). Server vars live in `lib/config/server-env.schema.ts`,
+browser vars in `lib/config/client-env.schema.ts`; only `NEXT_PUBLIC_*`
+values ever reach the client bundle.
 
-Notable variables:
+| Variable                          | Surface     | Purpose                                                                                     |
+| --------------------------------- | ----------- | ------------------------------------------------------------------------------------------- |
+| `YOG_API_INTERNAL_URL`            | server only | Base URL for SSR calls to `yog-api`. In Docker, `http://yog-api:5000`; natively, `http://localhost:5000`. No trailing slash. |
+| `YOG_API_TIMEOUT_MS`              | server only | Timeout for SSR → `yog-api` calls.                                                          |
+| `NEXT_PUBLIC_YOG_API_URL`         | browser     | Public gateway URL the browser calls directly (`https://api.yog-scope.xyz` in production).  |
+| `NEXT_PUBLIC_YOG_API_TIMEOUT_MS`  | browser     | Timeout for browser → `yog-api` calls.                                                     |
+| `NEXT_PUBLIC_FEATURE_*`           | browser     | Feature flags (see below).                                                                  |
 
-| Variable                | Where it's read                                      | Purpose                                                                                                       |
-| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `API_INTERNAL_URL`      | Server-side only (Server Components, route handlers) | Base URL the BFF uses to reach `yog-api`. In Docker, `http://yog-api:5000`; locally, `http://127.0.0.1:5000`. |
-| `NEXT_PUBLIC_APP_URL`   | Both                                                 | Public URL of the app, used for Open Graph metadata and absolute links.                                       |
-| `NEXT_PUBLIC_FEATURE_*` | Both                                                 | Feature flags (see below).                                                                                    |
-
-Database credentials must **never** appear in this file — the frontend has no
-business knowing about them.
+Database credentials must **never** appear in this file — the frontend
+has no business knowing about them.
 
 ## Feature flags
 
@@ -196,8 +178,8 @@ parsing avoids silent typo failures.
 Because Next.js inlines `NEXT_PUBLIC_*` values into the client bundle
 at build time, **flipping a flag in production requires a rebuild and
 a redeploy**. This is a build-time toggle, not a hot runtime toggle.
-A runtime toggle system (DB-backed, modifiable via UI) is on the
-roadmap for v0.3 once user accounts and admin areas exist.
+A runtime toggle system (DB-backed, modifiable via UI) only makes sense
+once user accounts and admin areas exist (v0.2).
 
 ### Using a flag in code
 
@@ -224,33 +206,35 @@ if (isFeatureEnabled("alertsPanel")) {
 ```
 web/
 ├── i18n/                            # next-intl routing, request and navigation config
-├── messages/                        # locale message bundles (en, fr)
+├── messages/                        # locale message bundles (en/, fr/)
 ├── public/                          # static assets (favicons, etc.)
 ├── src/
 │   ├── app/
 │   │   ├── globals.css
 │   │   ├── layout.tsx               # root layout (passthrough)
-│   │   ├── [locale]/
-│   │   │   ├── layout.tsx           # html/body, intl provider, sidebar
-│   │   │   ├── page.tsx             # locale home page
-│   │   │   └── pools/page.tsx       # pools listing
-│   │   └── api/
-│   │       └── pools/route.ts       # BFF route handler — proxies yog-api
+│   │   └── [locale]/
+│   │       ├── layout.tsx           # html/body, intl provider
+│   │       ├── (dashboard)/         # app shell: sidebar + network status
+│   │       │   ├── overview/        # global KPIs + top pools
+│   │       │   ├── pools/           # pools listing (cursor pagination)
+│   │       │   ├── pools/[address]/ # pool detail: state, fees, charts
+│   │       │   └── signals/         # live signal feed (SSR + SSE)
+│   │       └── (marketing)/         # public pages: home, about, terms,
+│   │                                # privacy, legal-notice, support-us
 │   ├── components/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
-│   │   └── pools/                   # PoolsTable, PoolsEmptyState, PoolsErrorState, PoolsPagination
+│   │   ├── dashboard/               # per-page sections + shell, sidebar,
+│   │   │                            # signals (SignalFeed, useSignalStream),
+│   │   │                            # pool-detail/charts (visx)
+│   │   ├── marketing/               # navbar, footer, per-page sections
+│   │   └── shared/                  # pagination, buttons, icons, …
 │   ├── config/
-│   │   ├── features.ts              # feature flag registry + helpers
-│   │   └── __tests__/
+│   │   └── features.ts              # feature flag registry + helpers
 │   ├── lib/
-│   │   ├── api/
-│   │   │   ├── client.ts            # fetch wrapper + zod validation
-│   │   │   ├── errors.ts            # ApiClientError (discriminated union)
-│   │   │   ├── pools.ts             # fetchPools / safeFetchPools
-│   │   │   └── tokens.ts            # fetchToken / safeFetchToken
-│   │   └── format/
-│   │       ├── pubkey.ts            # shortenPubkey
-│   │       └── date.ts              # formatRelative / formatAbsolute
+│   │   ├── api/                     # API layer (see above)
+│   │   ├── config/                  # zod-validated env (server + client)
+│   │   ├── format/                  # pubkey, date, number formatters
+│   │   └── signals/                 # mergeSignals (pure, tested)
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   └── proxy.ts                     # locale negotiation (Next 16)
@@ -275,8 +259,9 @@ Visit <http://localhost:3000>; you will be redirected to `/en` by the
 locale proxy. Switch to `/fr` in the URL to see the French version.
 
 The dev server expects `yog-api` to be reachable at the address in
-`API_INTERNAL_URL`. The simplest setup is to run the backend stack in
-Docker and the frontend natively:
+`YOG_API_INTERNAL_URL` — and the browser at the address in
+`NEXT_PUBLIC_YOG_API_URL`. The simplest setup is to run the backend
+stack in Docker and the frontend natively:
 
 ```bash
 # From the repo root: backend stack in Docker
@@ -286,7 +271,12 @@ docker compose --profile backend up -d
 npm run dev
 ```
 
-With this setup, `API_INTERNAL_URL=http://localhost:5000` in `.env.local`.
+With this setup, both URLs point to the same place in `.env.local`:
+
+```
+YOG_API_INTERNAL_URL=http://localhost:5000
+NEXT_PUBLIC_YOG_API_URL=http://localhost:5000
+```
 
 ## Docker
 
@@ -300,8 +290,9 @@ docker build -t yog-sothoth-web:dev .
 docker run --rm -p 3000:3000 --env-file .env.local yog-sothoth-web:dev
 ```
 
-Inside the compose network, the container reads `API_INTERNAL_URL=http://yog-api:5000`
-— set automatically by `docker-compose.yml`.
+Inside the compose network, the container reads
+`YOG_API_INTERNAL_URL=http://yog-api:5000` — set automatically by
+`docker-compose.yml`.
 
 ## Note on the `proxy.ts` naming
 
@@ -329,8 +320,3 @@ routes. It does not push anywhere — it's a regression guard.
 
 - [Root README](../README.md) — project pitch, roadmap, getting started
 - [`crates/README.md`](../crates/README.md) — Rust workspace architecture, the `yog-api` shape this frontend consumes
-
-## Roadmap
-
-See the [project root](../README.md#roadmap) for the full roadmap. The
-v0.1 dashboard (overview + pools pages) is the current focus.
