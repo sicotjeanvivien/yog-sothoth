@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Protocol-centric observer of Meteora's on-chain activity on Solana. It subscribes to Meteora program IDs over WebSocket, decodes Anchor `event_cpi` emissions, reconstructs AMM state, and persists it to TimescaleDB. An HTTP API and a Next.js dashboard read that data. Pools are *discovered* from the transaction stream, not configured upfront — the `pools` table records what was *seen*, not a watchlist.
+Protocol-centric observer of Meteora's on-chain activity on Solana. It subscribes to Meteora program IDs over WebSocket, decodes Anchor `event_cpi` emissions, reconstructs AMM state, and persists it to TimescaleDB. A signal engine runs detectors over that data; an HTTP API and a Next.js dashboard read it. Pools are *discovered* from the transaction stream, not configured upfront — the `pools` table records what was *seen*, not a watchlist.
 
-Four backend processes share one Postgres database and never call each other — all coordination is through the schema: `indexer` (ingest), `context` (token/price enrichment), `api` (axum HTTP), `web` (Next.js BFF).
+Four backend processes share one Postgres database and never call each other — all coordination is through the schema: `indexer` (ingest), `context` (token/price/pool-account enrichment), `signals` (batch detectors → `signals` table), `api` (axum HTTP + SSE). The `web` dashboard (Next.js) never touches the DB and has **no BFF**: Server Components and the browser both call the API directly over HTTP (CORS-locked).
 
 ## Where the real documentation lives
 
-This file is a map, not the territory. Two in-repo READMEs are the authoritative, maintained architecture docs — read them before non-trivial work:
+This file is a map, not the territory. The in-repo READMEs are the authoritative, maintained architecture docs — read them before non-trivial work:
 
-- **`crates/README.md`** — the Rust workspace bible: per-crate responsibilities, the extraction pipeline, the per-protocol table strategy, DB roles, and step-by-step recipes for *Adding a new protocol* and *Adding a new API endpoint*. Follow those recipes verbatim; they list every dispatch point that must change.
-- **`web/README.md`** — the Next.js frontend (BFF architecture, feature flags, i18n).
+- **`crates/README.md`** — the workspace-level doc: dependency graph, conventions, DB roles, local workflows, and the step-by-step recipes for *Adding a new protocol* and *Adding a new API endpoint*. Follow those recipes verbatim; they list every dispatch point that must change.
+- **`crates/<crate>/README.md`** — one per substantial crate (`core`, `persistence`, `indexer`, `api`, `context`, `signals`): layout and internals of that crate. When you change a crate, its README is part of the change.
+- **`web/README.md`** — the Next.js frontend (direct-API architecture, signal feed, feature flags, i18n).
 
 ## Commands
 
@@ -26,7 +27,7 @@ cargo fmt --all
 
 # Lint — native crates only (yog-wasm is excluded; it's a deferred scaffold)
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
-    --all-targets --all-features -- -D warnings
+    -p yog-signals --all-targets --all-features -- -D warnings
 
 # Test — workspace unit tests (DB-free)
 cargo test --workspace --all-features
@@ -41,7 +42,7 @@ cargo test -p yog-core -- --exact <test>   # one exact test
 cargo test -p yog-persistence --features integration-tests -- --include-ignored
 
 # Run a binary natively (see "Local dev" for the DB it expects)
-cargo run -p yog-indexer        # or yog-api, yog-context
+cargo run -p yog-indexer        # or yog-api, yog-context, yog-signals
 cargo run -p yog-persistence --bin yog-migrate   # apply migrations (as yog_migrate)
 ```
 
@@ -81,7 +82,7 @@ Everything is typed per `(platform, protocol, event_kind)`, all the way down: do
 
 - Each table holds only columns relevant to its protocol — no NULL columns for incompatible fields, no JSONB blob.
 - Cross-protocol reads ("all swaps for a pool") go through SQL **VIEW**s (`swap_events`, `liquidity_events`, …) defined at the bottom of the baseline migration, each a `UNION ALL` with a synthesised `protocol` column. Protocol-specific columns are *not* in the VIEWs — read the underlying table when you need them.
-- Adding a protocol touches exactly **three dispatch points** (`ExtractionDispatcher::extract`, `EventPersistor::persist`, the persistor wiring in `Daemon::new`); everything else is isolated per-protocol code. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`) stay generic, single-table.
+- Adding a protocol touches exactly **three dispatch points** (`ExtractionDispatcher::extract`, `EventPersistor::persist`, the persistor wiring in `init_event_persistor`, `indexer/src/bootstrap/daemon.rs`); everything else is isolated per-protocol code. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table.
 
 ## Database privilege model
 
@@ -92,7 +93,8 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | `yog_migrate` | DDL, owns schema | `yog-migrate` |
 | `yog_indexer` | RW on event/pool tables, RO `watched_pools` | indexer |
 | `yog_api` | RO everywhere | api |
-| `yog_context` | RW on `token_metadata` / `token_prices`, RO `pools` | context |
+| `yog_context` | RW on `token_metadata` / `token_prices`, UPDATE on pool-property columns, RO `pools` | context |
+| `yog_signals` | INSERT (append-only) on `signals`, RO on its read VIEWs | signals |
 
 Consequence: calling `insert` from the `api` process fails with `permission denied` *by design* — the role split is the safety net, not a bug. When you add a table in a migration, add its `GRANT INSERT, UPDATE ... TO yog_indexer;` in the same migration (`SELECT` is covered by default privileges in `setup_roles.sql`).
 
@@ -103,7 +105,7 @@ Two workflows (details in `crates/README.md` → *Local development*):
 ```bash
 # A. Docker (easiest) — Postgres only, or the full stack via compose profiles
 docker compose up -d                                   # Postgres only
-docker compose --profile backend up -d --build         # + migrate/indexer/api/context
+docker compose --profile backend up -d --build         # + migrate/indexer/api/context/signals
 docker compose --profile full up -d --build            # + web dashboard
 
 # B. Native cargo (faster inner loop), with Postgres in Docker:
@@ -117,4 +119,4 @@ cargo run -p yog-indexer
 
 ## Observability
 
-The indexer exposes Prometheus metrics on `:9000/metrics`. The API uses RFC 9457 Problem Details (`application/problem+json`) for errors and correlates 500s via the `x-request-id` header. Collection endpoints use opaque base64 cursor pagination (`Page<T>`, default limit 50, hard cap 200).
+The three daemons expose Prometheus metrics on `:9000/metrics` (host-mapped: indexer 9000, context 9001, signals 9002). The API uses RFC 9457 Problem Details (`application/problem+json`) for errors and correlates 500s via the `x-request-id` header. Collection endpoints use opaque base64 cursor pagination (`Page<T>`, default limit 50, hard cap 200).
