@@ -23,7 +23,8 @@
       "closeMenu": "Fermer le menu de navigation",
       "pageInfo": "À propos de cette page",
       "collapseSidebar": "Réduire le menu",
-      "expandSidebar": "Étendre le menu"
+      "expandSidebar": "Étendre le menu",
+      "metricInfo": "Définition"
     },
     "Overview": {
       "page": {
@@ -36,7 +37,13 @@
         "volume24h": "Volume 24h",
         "fees24h": "Frais 24h",
         "pools": "Pools",
-        "discovered": "{count, plural, =0 {Aucune nouvelle pool (24h)} other {+# découvertes (24h)}}"
+        "discovered": "{count, plural, =0 {Aucune nouvelle pool (24h)} other {+# découvertes (24h)}}",
+        "info": {
+          "tvl": "Somme de la valeur des réserves de toutes les pools observées dont les deux tokens ont un prix connu. La ligne dessous donne la couverture : pools valorisées / pools observées.",
+          "volume24h": "Volume d'échange réalisé sur les dernières 24 h, valorisé au prix du moment de chaque trade. Les swaps sans prix connu sont exclus de la somme.",
+          "fees24h": "Frais de trading réellement encaissés sur 24 h (part LP + part protocole), valorisés au prix du moment du trade.",
+          "pools": "Pools découvertes dans le flux de transactions depuis le début de l'observation — ce qui a été vu, pas une liste de suivi."
+        }
       },
       "topPools": {
         "title": "Top pools par volume 24h",
@@ -125,7 +132,14 @@
         "firstSeen": "Première observation",
         "lastActivity": "Dernière activité",
         "copyPoolAddress": "Copier l'adresse de la pool",
-        "copyTokenMint": "Copier le mint du token"
+        "copyTokenMint": "Copier le mint du token",
+        "help": {
+          "feeTier": "Frais de trading de base de la pool (tier de genèse), en points de base — 100 bps = 1 %.",
+          "feeSplit": "Répartition configurée des frais entre Meteora, un éventuel partenaire et le parrainage, lue depuis le compte on-chain de la pool.",
+          "effectiveFee": "Taux réellement constaté : frais encaissés / volume sur 24 h, en points de base. Peut différer du tier de base.",
+          "protocolCut": "Part des frais 24 h revenant à Meteora.",
+          "lpCut": "Part des frais 24 h revenant aux apporteurs de liquidité (total − protocole)."
+        }
       },
       "fees": {
         "title": "Frais",
@@ -137,7 +151,13 @@
         "tvl": "TVL",
         "volume24h": "Volume 24h",
         "fees24h": "Frais 24h",
-        "composition": "Composition de la pool"
+        "composition": "Composition de la pool",
+        "info": {
+          "tvl": "Valeur des réserves de la pool au dernier état observé, au dernier prix connu des deux tokens.",
+          "volume24h": "Volume échangé sur cette pool dans les dernières 24 h, valorisé au prix du moment de chaque trade.",
+          "fees24h": "Frais de trading encaissés par cette pool sur 24 h (part LP + part protocole).",
+          "composition": "Répartition des réserves entre les deux tokens, en valeur USD."
+        }
       },
       "swaps": {
         "title": "Swaps récents",

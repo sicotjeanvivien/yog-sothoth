@@ -19,6 +19,9 @@
  * resolution inside `<svg>`.
  */
 
+import { getTranslations } from "next-intl/server";
+
+import { InfoPopover } from "@/components/shared/info-popover";
 import type { TokenResponse } from "@/lib/api/schema/token";
 import type { PoolComposition } from "@/lib/format/pool-composition";
 import { shareToCircleCoords } from "@/lib/format/pool-composition";
@@ -41,7 +44,7 @@ const CARD_CLASS =
 const LABEL_CLASS =
   "text-[17px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
 
-export function PoolCompositionCard({
+export async function PoolCompositionCard({
   label,
   tokenA,
   tokenB,
@@ -50,6 +53,7 @@ export function PoolCompositionCard({
   reserveA,
   reserveB,
   className,
+  info,
 }: {
   label: string;
   tokenA: TokenResponse;
@@ -61,10 +65,21 @@ export function PoolCompositionCard({
   reserveB: string;
   /** Extra classes from the parent (e.g. `h-full` to match a sibling block). */
   className?: string;
+  /** Definition of the card, shown in an ⓘ popover next to the label. */
+  info?: string;
 }) {
+  const tShell = info ? await getTranslations("Dashboard.shell") : null;
+
   return (
     <div className={`${CARD_CLASS} ${className ?? ""}`}>
-      <p className={LABEL_CLASS}>{label}</p>
+      <div className="flex items-center gap-1.5">
+        <p className={LABEL_CLASS}>{label}</p>
+        {info && tShell && (
+          <InfoPopover label={tShell("metricInfo")} iconSize={14}>
+            {info}
+          </InfoPopover>
+        )}
+      </div>
 
       {/* `flex-1` lets the donut row absorb any extra height when the card is
           stretched to match the KPI block, keeping the donut vertically

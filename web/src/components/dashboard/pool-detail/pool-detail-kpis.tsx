@@ -89,14 +89,20 @@ export async function PoolDetailKpis({
 
   const kpiCards = (
     <>
-      <KpiCard label={t("tvl")} valueCompact={formatUsdCompact(pool.tvlUsd)} />
+      <KpiCard
+        label={t("tvl")}
+        valueCompact={formatUsdCompact(pool.tvlUsd)}
+        info={t("info.tvl")}
+      />
       <KpiCard
         label={t("volume24h")}
         valueCompact={formatUsdCompact(pool.volume24hUsd)}
+        info={t("info.volume24h")}
       />
       <KpiCard
         label={t("fees24h")}
         valueCompact={formatUsdCompact(pool.fees24hUsd)}
+        info={t("info.fees24h")}
       />
       {spotPrice !== null && (
         // Pair notation: "SOL/USDC" reads as "price of SOL in USDC",
@@ -114,6 +120,7 @@ export async function PoolDetailKpis({
   const compositionCard = composition && state && (
     <PoolCompositionCard
       label={t("composition")}
+      info={t("info.composition")}
       tokenA={pool.tokenA}
       tokenB={pool.tokenB}
       composition={composition}

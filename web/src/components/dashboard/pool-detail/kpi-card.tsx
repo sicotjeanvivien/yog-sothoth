@@ -9,11 +9,15 @@
  *
  * Used at the top of the pool detail page for TVL and 24h volume,
  * but designed to be reusable for any future scalar metric on the
- * dashboard.
+ * dashboard. `info` adds an ⓘ popover next to the label — the
+ * metric's definition on demand.
  *
- * Stays a Server Component — no interactivity, just typography
- * inside a styled container.
+ * Stays a Server Component; the popover is the client island.
  */
+
+import { getTranslations } from "next-intl/server";
+
+import { InfoPopover } from "@/components/shared/info-popover";
 
 const CARD_CLASS =
   "flex h-full flex-col justify-center rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/50 px-3 py-2 lg:px-4 lg:py-3";
@@ -24,16 +28,28 @@ const LABEL_CLASS =
 const VALUE_COMPACT_CLASS =
   "font-display text-[21px] text-right font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[24px]";
 
-export function KpiCard({
+export async function KpiCard({
   label,
   valueCompact,
+  info,
 }: {
   label: string;
   valueCompact: string;
+  /** Definition of the metric, shown in an ⓘ popover next to the label. */
+  info?: string;
 }) {
+  const tShell = await getTranslations("Dashboard.shell");
+
   return (
     <div className={CARD_CLASS}>
-      <p className={LABEL_CLASS}>{label}</p>
+      <div className="flex items-center gap-1.5">
+        <p className={LABEL_CLASS}>{label}</p>
+        {info && (
+          <InfoPopover label={tShell("metricInfo")} iconSize={14}>
+            {info}
+          </InfoPopover>
+        )}
+      </div>
       <p className={VALUE_COMPACT_CLASS}>{valueCompact}</p>
     </div>
   );
