@@ -231,14 +231,14 @@ function NavHeader({
         onClick={onToggle}
         aria-label={label}
         aria-expanded={!collapsed}
-        className="group relative hidden rounded-[3px] p-1 text-slate-500 transition-colors hover:bg-sothoth-500/10 hover:text-slate-300 lg:flex"
+        title={collapsed ? label : undefined}
+        className="hidden rounded-[3px] p-1 text-slate-500 transition-colors hover:bg-sothoth-500/10 hover:text-slate-300 lg:flex"
       >
         {collapsed ? (
           <ChevronDoubleRightIcon size={16} />
         ) : (
           <ChevronDoubleLeftIcon size={16} />
         )}
-        {collapsed && <RailTooltip>{label}</RailTooltip>}
       </button>
     </div>
   );
@@ -268,14 +268,8 @@ function SidebarNavLink({
 }) {
   const t = useTranslations("Dashboard.Sidebar.nav");
 
-  // `overflow-hidden` clips the active accent bar to the rounded
-  // corners — but it would also clip the collapsed-mode tooltip, so
-  // it is lifted on lg while collapsed (the bar overflow is invisible
-  // at 3px anyway).
-  const base = `group relative flex items-center gap-3 rounded-[3px] px-3 py-[11px] text-[14px] font-medium transition-colors ${
-    collapsed
-      ? "overflow-hidden lg:justify-center lg:overflow-visible"
-      : "overflow-hidden"
+  const base = `relative flex items-center gap-3 overflow-hidden rounded-[3px] px-3 py-[11px] text-[14px] font-medium transition-colors ${
+    collapsed ? "lg:justify-center" : ""
   }`;
 
   const state = active
@@ -290,25 +284,17 @@ function SidebarNavLink({
       onClick={onNavigate}
       className={`${base} ${state}`}
       aria-current={active ? "page" : undefined}
+      // Native browser tooltip on the collapsed rail — a custom
+      // floating panel would overlap the page content; the OS-managed
+      // one never fights the layout.
+      title={collapsed ? t(item.labelKey) : undefined}
     >
       <Icon size={18} />
       <span className={`leading-none ${collapsed ? "lg:hidden" : ""}`}>
         {t(item.labelKey)}
       </span>
-      {collapsed && <RailTooltip>{t(item.labelKey)}</RailTooltip>}
     </Link>
   );
 }
 
-/**
- * Label tooltip of the collapsed rail — pure CSS (`group-hover`), no
- * JS. Only exists at lg+ (below lg the drawer always shows labels).
- */
-function RailTooltip({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="pointer-events-none absolute left-full z-50 ml-3 hidden w-max rounded-[6px] border border-sothoth-500/25 bg-cosmos-800 px-2.5 py-1.5 text-[13px] font-normal whitespace-nowrap text-slate-200 shadow-[0_8px_24px_rgba(0,0,0,0.45)] lg:group-hover:block">
-      {children}
-    </span>
-  );
-}
 
