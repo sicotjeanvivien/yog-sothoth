@@ -71,6 +71,10 @@ last swap is too old makes the comparison meaningless — no signal is emitted
 rather than a false one. The Warning/Critical scale is validated fail-loud at
 config load (`threshold < critical`, otherwise Warning would be unreachable).
 
+Both detectors record in `signal.threshold` the boundary that justifies the
+emitted severity: the critical threshold on a Critical signal, the warning
+one otherwise — not the emission floor.
+
 ## Configuration
 
 ```env

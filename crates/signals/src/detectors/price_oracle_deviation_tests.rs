@@ -116,6 +116,9 @@ async fn critical_when_deviation_is_extreme() {
     assert_eq!(signals.len(), 1);
     assert_eq!(signals[0].severity, Severity::Critical);
     assert_eq!(signals[0].value, Decimal::from(3));
+    // A critical signal records the *critical* boundary, not the
+    // emission floor — the threshold must justify the severity.
+    assert_eq!(signals[0].threshold, Some(Decimal::new(2, 1)));
 }
 
 #[tokio::test]
