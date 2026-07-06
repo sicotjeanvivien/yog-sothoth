@@ -103,7 +103,12 @@ impl AppState {
                 network_status_repo,
                 event_freshness_repo,
             )),
-            signal_service: Arc::new(SignalService::new(signal_repo)),
+            signal_service: Arc::new(SignalService::new(
+                signal_repo,
+                pool_repo.clone(),
+                token_metadata_repo.clone(),
+                token_price_repo.clone(),
+            )),
             signal_stream,
             stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),

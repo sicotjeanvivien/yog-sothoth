@@ -6,9 +6,9 @@ use axum::{
     response::sse::{Event, KeepAlive, Sse},
 };
 use futures_util::Stream;
-use tracing::info;
-use yog_core::domain::SignalRecord;
+use tracing::{info, warn};
 
+use crate::application::EnrichedSignal;
 use crate::bootstrap::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
@@ -65,16 +65,33 @@ pub(crate) async fn stream_signals(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
     let receiver = state.signal_stream.subscribe();
+    let service = state.signal_service.clone();
     info!("signal stream client connected");
 
-    let stream = futures_util::stream::unfold(receiver, |mut receiver| async move {
-        match receiver.recv().await {
-            Ok(record) => Some((make_event(record), receiver)),
-            // Lagged (client too slow) or Closed (poller gone): end the
-            // stream and let the client reconnect.
-            Err(_) => None,
-        }
-    });
+    let stream = futures_util::stream::unfold(
+        (receiver, service),
+        |(mut receiver, service)| async move {
+            match receiver.recv().await {
+                Ok(record) => {
+                    // The poller broadcasts bare records; the token pair is
+                    // resolved per event, at delivery. On failure the alert
+                    // still goes out, just without its pair — delivering
+                    // beats decorating.
+                    let enriched = match service.enrich_one(record.clone()).await {
+                        Ok(enriched) => enriched,
+                        Err(error) => {
+                            warn!(error = %error, "signal stream: token enrichment failed — emitting bare signal");
+                            EnrichedSignal::bare(record)
+                        }
+                    };
+                    Some((make_event(enriched), (receiver, service)))
+                }
+                // Lagged (client too slow) or Closed (poller gone): end the
+                // stream and let the client reconnect.
+                Err(_) => None,
+            }
+        },
+    );
 
     Sse::new(stream).keep_alive(
         // Comment ping through proxies that would otherwise reap an
@@ -86,9 +103,9 @@ pub(crate) async fn stream_signals(
     )
 }
 
-fn make_event(record: SignalRecord) -> Result<Event, axum::Error> {
-    let id = record.id.to_string();
+fn make_event(enriched: EnrichedSignal) -> Result<Event, axum::Error> {
+    let id = enriched.record.id.to_string();
     Event::default()
-        .json_data(SignalResponse::from(record))
+        .json_data(SignalResponse::from(enriched))
         .map(|event| event.id(id))
 }

@@ -22,7 +22,8 @@ api/src/
 │   │                        SignalService, StatsService, TokenService,
 │   │                        NetworkStatusService, MeteoraDammV2Swap/Liquidity
 │   ├── signal_stream.rs   ← SignalStreamPoller (feeds the SSE broadcast)
-│   └── enriched_pool.rs   ← pool + embedded token/price composition
+│   ├── enriched_pool.rs   ← pool + embedded token/price composition
+│   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
 │   ├── handlers/          ← one module per route family
 │   ├── dto/request/       ← query/path DTOs, validated before any DB call
@@ -54,7 +55,7 @@ mock in tests is free.
 | `GET` | `/api/pools/{address}/swap-events` | Paginated swap events |
 | `GET` | `/api/pools/{address}/liquidity-events` | Paginated liquidity events |
 | `GET` | `/api/network/status` | Latest indexer/RPC slot, RPC latency, observed timestamp |
-| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter) |
+| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, same shape as in `PoolResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/stats` | Global KPIs — total TVL, 24h volume/fees, pool counts |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
@@ -78,6 +79,11 @@ by per-client DB queries:
 - The handler emits each signal as an SSE event (`data` = the JSON
   `SignalResponse`, `id` = the signal id) with a 15 s keep-alive; a lagged or
   closed receiver ends the stream and the browser's `EventSource` reconnects.
+- The poller broadcasts bare `SignalRecord`s; the handler resolves the pool's
+  token pair per event at delivery (`SignalService::enrich_one`), so stream
+  items carry the same embedded `tokenA`/`tokenB` as the paginated feed. If
+  that enrichment fails, the signal is emitted with unresolved sides rather
+  than dropped — delivering the alert beats decorating it.
 
 Poller failures are skip-and-log: a failed tick is logged and the next one
 proceeds. The poller dies with the process — no dedicated graceful shutdown.

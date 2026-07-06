@@ -381,6 +381,20 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 #### Frontend — page /pools (filtres)
 - [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Reliquats v0.1 ci-dessous)
 
+#### Frontend — mise à l'échelle globale des textes (relevé 6 juil. 2026)
+- [ ] Passe globale sur l'échelle typographique du dashboard (pools, pool-detail, overview, sidebar) — problème **global au front**, pas propre aux signaux : le 10–13px gris clair sur fond sombre rend flou/mou sur écran à scaling fractionnaire (constaté à 125 % Windows, cas très répandu). La card signals a servi de pilote (PR #45) : un cran partout. Barème appliqué, à généraliser :
+
+  | Élément | Avant | Après |
+  |---|---|---|
+  | Valeur/chiffre vedette | 20px | 24px |
+  | Texte principal (résumé, cellules) | 13px | 14px |
+  | Texte secondaire (labels, méta) | 12px | 13px |
+  | Tags mono (détecteur, etc.) | 11px | 12px |
+  | Micro-tags uppercase | 10px | 11px |
+  | Espacement interne | py-3, gap-1.5 | py-4, gap-2 |
+
+  Règle retenue : **13px minimum pour le texte secondaire** ; `PoolPairCell` (14px) partagé pools/signals à traiter dans cette passe. L'air (padding/gap) participe à la lisibilité autant que la taille.
+
 #### RGPD / légal — avant déploiement public
 - [ ] Vérifier contenu page Privacy (mentions RGPD complètes)
 - [ ] Vérifier contenu page Mentions légales (SASU AWSD, éditeur, hébergeur)

@@ -112,6 +112,14 @@ The `/signals` dashboard page combines both consumers:
   hook refetches page 1 from the browser and reconciles by id, so a
   connection gap never leaves holes in the feed.
 
+Signals render as cards: token pair (embedded `tokenA`/`tokenB` from the
+API, reusing `PoolPairCell`; short pool address while unresolved), a
+human-readable per-detector headline phrased from the structured `value`
+(i18n, percent-formatted — not the detector's raw English `message`),
+and a detail footer (exact value, threshold, raw detector tag). A
+detector unknown to the UI falls back to `message`, so a new detector
+ships readable before its wording lands here.
+
 ## Scripts
 
 | Command              | Description                            |

@@ -293,29 +293,17 @@ impl PoolService {
         })
     }
 
-    /// Enrich one token side. A pool discovered but not yet resolved by
-    /// yog-context has no mint, so there's nothing to look up.
+    /// Enrich one token side. See [`EnrichedToken::resolve`].
     async fn enrich_side(
         &self,
         mint: Option<solana_pubkey::Pubkey>,
     ) -> RepositoryResult<EnrichedToken> {
-        let Some(mint) = mint else {
-            return Ok(EnrichedToken {
-                mint: None,
-                metadata: None,
-                price: None,
-            });
-        };
-        let metadata = self.token_metadata_repository.find_by_mint(&mint).await?;
-        let price = self
-            .token_price_repository
-            .find_latest_by_mint(&mint)
-            .await?;
-        Ok(EnrichedToken {
-            mint: Some(mint),
-            metadata,
-            price,
-        })
+        EnrichedToken::resolve(
+            mint,
+            self.token_metadata_repository.as_ref(),
+            self.token_price_repository.as_ref(),
+        )
+        .await
     }
 }
 
