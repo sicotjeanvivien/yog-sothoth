@@ -137,7 +137,7 @@ export function Sidebar({
       <BrandBlock collapsed={collapsed} />
       <Divider />
       <nav className="flex flex-1 flex-col gap-[3px]">
-        <NavCaption collapsed={collapsed} />
+        <NavHeader collapsed={collapsed} onToggle={onToggleCollapsed} />
         {SIDEBAR_NAV.map((item) => (
           <SidebarNavLink
             key={item.key}
@@ -148,7 +148,6 @@ export function Sidebar({
           />
         ))}
       </nav>
-      <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
       <NetworkStatusPanel collapsed={collapsed} />
     </aside>
   );
@@ -200,15 +199,48 @@ function Divider() {
 
 // ── Navigation ────────────────────────────────────────────────────────
 
-/** Small uppercase caption above the nav group. */
-function NavCaption({ collapsed }: { collapsed: boolean }) {
+/**
+ * Header row of the nav group: the small uppercase caption on the
+ * left, the collapse/expand toggle on the right (lg+ only — an
+ * off-canvas drawer has nothing to collapse). On the collapsed rail
+ * the caption vanishes and the toggle takes the row, centered — the
+ * first, most visible slot of the rail.
+ */
+function NavHeader({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const t = useTranslations("Dashboard.Sidebar");
+  const tShell = useTranslations("Dashboard.shell");
+  const label = collapsed ? tShell("expandSidebar") : tShell("collapseSidebar");
+
   return (
-    <p
-      className={`mb-2 px-[10px] text-[10px] font-semibold tracking-[0.2em] text-slate-600 uppercase ${collapsed ? "lg:hidden" : ""}`}
+    <div
+      className={`mb-2 flex items-center justify-between px-[10px] ${collapsed ? "lg:justify-center lg:px-0" : ""}`}
     >
-      {t("caption")}
-    </p>
+      <p
+        className={`text-[10px] font-semibold tracking-[0.2em] text-slate-600 uppercase ${collapsed ? "lg:hidden" : ""}`}
+      >
+        {t("caption")}
+      </p>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={label}
+        aria-expanded={!collapsed}
+        className="group relative hidden rounded-[3px] p-1 text-slate-500 transition-colors hover:bg-sothoth-500/10 hover:text-slate-300 lg:flex"
+      >
+        {collapsed ? (
+          <ChevronDoubleRightIcon size={16} />
+        ) : (
+          <ChevronDoubleLeftIcon size={16} />
+        )}
+        {collapsed && <RailTooltip>{label}</RailTooltip>}
+      </button>
+    </div>
   );
 }
 
@@ -280,40 +312,3 @@ function RailTooltip({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * The collapse/expand toggle — lg+ only (an off-canvas drawer has
- * nothing to collapse). Sits above the network panel, styled like a
- * nav item.
- */
-function CollapseToggle({
-  collapsed,
-  onToggle,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  const t = useTranslations("Dashboard.shell");
-  const label = collapsed ? t("expandSidebar") : t("collapseSidebar");
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={label}
-      aria-expanded={!collapsed}
-      className={`group relative hidden items-center gap-3 rounded-[3px] px-3 py-[9px] text-[13px] font-medium text-slate-500 transition-colors hover:bg-sothoth-500/10 hover:text-slate-300 lg:flex ${
-        collapsed ? "lg:justify-center" : ""
-      }`}
-    >
-      {collapsed ? (
-        <ChevronDoubleRightIcon size={16} />
-      ) : (
-        <ChevronDoubleLeftIcon size={16} />
-      )}
-      <span className={`leading-none ${collapsed ? "lg:hidden" : ""}`}>
-        {label}
-      </span>
-      {collapsed && <RailTooltip>{label}</RailTooltip>}
-    </button>
-  );
-}
