@@ -382,7 +382,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Reliquats v0.1 ci-dessous)
 
 #### Frontend — mise à l'échelle globale des textes (relevé 6 juil. 2026)
-- [ ] Passe globale sur l'échelle typographique du dashboard (pools, pool-detail, overview, sidebar) — problème **global au front**, pas propre aux signaux : le 10–13px gris clair sur fond sombre rend flou/mou sur écran à scaling fractionnaire (constaté à 125 % Windows, cas très répandu). La card signals a servi de pilote (PR #45) : un cran partout. Barème appliqué, à généraliser :
+- [x] Passe globale sur l'échelle typographique du dashboard (pools, pool-detail, overview, sidebar) — **livré 6 juil. 2026** (+1 cran sur tout ≤13.5px, 41 occurrences / 18 fichiers ; tailles fractionnaires 10.5/13.5 supprimées ; plancher 10px pour les micro-captions décoratives ex-9px ; valeurs KPI 21/24px display inchangées). Problème **global au front**, pas propre aux signaux : le 10–13px gris clair sur fond sombre rend flou/mou sur écran à scaling fractionnaire (constaté à 125 % Windows, cas très répandu). La card signals a servi de pilote (PR #45) : un cran partout. Barème appliqué :
 
   | Élément | Avant | Après |
   |---|---|---|
@@ -393,7 +393,13 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
   | Micro-tags uppercase | 10px | 11px |
   | Espacement interne | py-3, gap-1.5 | py-4, gap-2 |
 
-  Règle retenue : **13px minimum pour le texte secondaire** ; `PoolPairCell` (14px) partagé pools/signals à traiter dans cette passe. L'air (padding/gap) participe à la lisibilité autant que la taille.
+  Règle retenue : **13px minimum pour le texte secondaire** ; `PoolPairCell` (14px) partagé pools/signals conforme. L'air (padding/gap) participe à la lisibilité autant que la taille.
+
+#### Frontend — dashboard UX (relevé 6 juil. 2026)
+- [ ] **Overview : bloc « 5 derniers signaux »** — réutilise `GET /api/signals?limit=5` et la card signals (variante compacte ?), lien vers `/signals`. Donne à l'Overview sa fonction de tour de contrôle.
+- [ ] **Mode clair / sombre ( ? )** — à trancher avant d'attaquer : le thème « cosmic » est conçu dark-first (fonds, glows, opacités) ; un vrai mode clair = double palette à maintenir sur tout le front, pas un toggle. Évaluer le rapport coût/demande au moment venu.
+- [ ] **Sidebar minimisable** — état réduit « icônes seules » (le set d'icônes de nav existe déjà), persisté (LocalStorage), tooltip au survol pour les labels.
+- [ ] **En-têtes de pages moins présents** — le bloc header des pages dashboard (eyebrow + titre 28/34px + description) prend trop de hauteur au-dessus du contenu ; à condenser (titre plus petit, description raccourcie ou masquée, gagner de la hauteur utile pour les données).
 
 #### RGPD / légal — avant déploiement public
 - [ ] Vérifier contenu page Privacy (mentions RGPD complètes)
