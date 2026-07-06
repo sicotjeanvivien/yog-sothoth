@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { BigDecimal, Rfc3339, SignedBigDecimal } from "./shared";
+import { TokenSchema } from "./token";
 
 // ─────────────────────────────────────────────────────────────────────
 // SignalResponse — mirrors `api::http::dto::response::SignalResponse`
@@ -26,6 +27,12 @@ export const SignalSchema = z.object({
   detector: z.string().min(1),
   protocol: z.string().min(1),
   poolAddress: z.string().min(1),
+  // The pool's token pair, embedded in the same shape as PoolResponse
+  // (`EmbeddedTokenResponse` on the wire). Every field inside is
+  // nullable — an unresolved pool embeds the minimal view and the UI
+  // falls back to the pool address.
+  tokenA: TokenSchema,
+  tokenB: TokenSchema,
   severity: SeveritySchema,
   // The metric that crossed the threshold. Signed: a deviation can be
   // below as well as above the reference.

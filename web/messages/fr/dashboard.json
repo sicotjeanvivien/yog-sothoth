@@ -205,6 +205,21 @@
           "info": "Info",
           "warning": "Alerte",
           "critical": "Critique"
+        },
+        "detectors": {
+          "price_oracle_deviation": {
+            "title": "Écart de prix vs oracle",
+            "summary": "Le prix du pool s'écarte de {deviation} du prix de l'oracle."
+          },
+          "flow_imbalance": {
+            "title": "Flux de swaps déséquilibré",
+            "summaryToward": "Le volume de swaps penche à {percent} vers {token}.",
+            "summary": "Le volume de swaps penche à {percent} dans une seule direction."
+          }
+        },
+        "detail": {
+          "value": "Valeur",
+          "threshold": "Seuil"
         }
       }
     }
