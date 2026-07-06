@@ -44,3 +44,20 @@ export const KNOWN_DETECTORS = new Set([
   "price_oracle_deviation",
   "flow_imbalance",
 ]);
+
+/**
+ * Stream-status dot colors, shared by every consumer of
+ * `useSignalStream` (the `/signals` feed, the Overview block) — a
+ * broken stream must never look like a quiet one, wherever it shows.
+ */
+export const STATUS_DOT: Record<
+  "connecting" | "live" | "reconnecting",
+  string
+> = {
+  connecting: "bg-slate-500",
+  live: "bg-emerald-400",
+  reconnecting: "bg-amber-400",
+};
+
+/** How many signals the Overview's latest-signals block shows. */
+export const LATEST_SIGNALS_COUNT = 5;
