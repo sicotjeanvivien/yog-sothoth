@@ -90,6 +90,9 @@ async fn one_sided_flow_is_critical_with_imbalance_one() {
     assert_eq!(signals.len(), 1);
     assert_eq!(signals[0].severity, Severity::Critical);
     assert_eq!(signals[0].value, Decimal::ONE);
+    // A critical signal records the *critical* boundary, not the
+    // emission floor — the threshold must justify the severity.
+    assert_eq!(signals[0].threshold, Some(Decimal::new(9, 1)));
 }
 
 #[tokio::test]

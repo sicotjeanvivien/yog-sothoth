@@ -109,10 +109,13 @@ impl SignalDetector for FlowImbalanceDetector {
                 continue;
             }
 
-            let severity = if magnitude >= self.settings.critical {
-                Severity::Critical
+            // The recorded threshold is the boundary that *justifies the
+            // severity* — the critical one for a Critical signal — not the
+            // emission floor, which would understate every escalation.
+            let (severity, threshold) = if magnitude >= self.settings.critical {
+                (Severity::Critical, self.settings.critical)
             } else {
-                Severity::Warning
+                (Severity::Warning, self.settings.threshold)
             };
 
             signals.push(Signal {
@@ -121,7 +124,7 @@ impl SignalDetector for FlowImbalanceDetector {
                 pool_address: flow.pool_address,
                 severity,
                 value: imbalance,
-                threshold: Some(self.settings.threshold),
+                threshold: Some(threshold),
                 message: Some(format!(
                     "directional flow imbalance {} (total volume ${})",
                     imbalance.round_dp(4),
