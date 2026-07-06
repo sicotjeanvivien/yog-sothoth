@@ -3,7 +3,8 @@
  *
  * Self-contained async Server Component: fetches `GET /api/pools/top` itself
  * and degrades to a `BlockError` on failure so a ranking hiccup never takes
- * down the KPI strip above it. The page just mounts `<OverviewTopPools />`.
+ * down the KPI strip above it. Layout (spacing, the side-by-side grid with
+ * the latest-signals block) belongs to the page — this renders content only.
  *
  * A compact ranked table — rank · pair · Volume 24h · TVL — each row linking
  * to the pool detail. This is the *only* volume-ranked view of pools: the
@@ -38,17 +39,13 @@ export async function OverviewTopPools() {
     pools = await fetchTopPools();
   } catch (err) {
     if (err instanceof ApiClientError) {
-      return (
-        <section className="mt-8 px-6 lg:px-10">
-          <BlockError title={t("title")} kind={err.details.kind} />
-        </section>
-      );
+      return <BlockError title={t("title")} kind={err.details.kind} />;
     }
     throw err;
   }
 
   return (
-    <section className="mt-8 px-6 lg:px-10">
+    <div>
       <h2 className="mb-4 text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
         {t("title")}
       </h2>
@@ -100,6 +97,6 @@ export async function OverviewTopPools() {
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }

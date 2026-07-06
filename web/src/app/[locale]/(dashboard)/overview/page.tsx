@@ -10,13 +10,16 @@
  *   - ok    → header + `OverviewStats` (the 4-card strip)
  *
  * No ingestion-health hero here on purpose: it already lives everywhere in
- * the dashboard chrome via the sidebar `network-status-panel`. Top-N pools
- * is out of scope for phase 1 (see BACKLOG → Overview phase 1.5).
+ * the dashboard chrome via the sidebar `network-status-panel`. Below the
+ * KPI strip, two self-degrading blocks side by side: top pools by 24h
+ * volume and the 5 latest signals (each fetches its own data and falls
+ * back to a `BlockError` without taking the page down).
  */
 
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { OverviewLatestSignals } from "@/components/dashboard/overview/overview-latest-signals";
 import { OverviewStats } from "@/components/dashboard/overview/overview-stats";
 import { OverviewTopPools } from "@/components/dashboard/overview/overview-top-pools";
 import { PageError } from "@/components/dashboard/page-error";
@@ -72,7 +75,13 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
       </header>
 
       <OverviewStats stats={stats} />
-      <OverviewTopPools />
+
+      {/* Two independent self-degrading blocks, side by side on wide
+          screens: the volume ranking and the latest detector alerts. */}
+      <section className="mt-8 grid items-start gap-8 px-6 pb-10 lg:px-10 xl:grid-cols-2">
+        <OverviewTopPools />
+        <OverviewLatestSignals />
+      </section>
     </>
   );
 }

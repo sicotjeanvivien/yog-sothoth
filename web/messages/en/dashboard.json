@@ -42,6 +42,11 @@
         "volume24h": "Volume 24h",
         "tvl": "TVL",
         "empty": "No pool has recorded volume in the last 24h."
+      },
+      "latestSignals": {
+        "title": "Latest signals",
+        "seeAll": "See all",
+        "empty": "No signal yet — the detectors are watching."
       }
     },
     "Pools": {

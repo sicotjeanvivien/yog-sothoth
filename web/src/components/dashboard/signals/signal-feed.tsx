@@ -27,8 +27,6 @@
  * the engine grows next, just less prettily.
  */
 
-import type { FC } from "react";
-
 import { useLocale, useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
@@ -40,13 +38,12 @@ import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
-import {
-  AlertOctagonIcon,
-  AlertTriangleIcon,
-  InfoIcon,
-  type IconProps,
-} from "@/components/shared/icon";
 import { PoolPairCell } from "../pools/pool-pair-cell";
+import {
+  KNOWN_DETECTORS,
+  SEVERITY_COLOR,
+  SEVERITY_ICON,
+} from "./signal-display";
 import { useSignalStream, type StreamStatus } from "./use-signal-stream";
 
 // ── Severity styling ──────────────────────────────────────────────────
@@ -61,22 +58,6 @@ const SEVERITY_CARD: Record<Severity, string> = {
   critical: "border-rose-400/40 border-l-rose-400 bg-rose-500/[0.10]",
 };
 
-// Icon and headline value inherit the severity color.
-const SEVERITY_COLOR: Record<Severity, string> = {
-  info: "text-sky-300",
-  warning: "text-amber-300",
-  critical: "text-rose-300",
-};
-
-// Two distinct shapes across the escalation (triangle → octagon), so
-// the scale survives color-blindness; the label stays in `title` +
-// sr-only text.
-const SEVERITY_ICON: Record<Severity, FC<IconProps>> = {
-  info: InfoIcon,
-  warning: AlertTriangleIcon,
-  critical: AlertOctagonIcon,
-};
-
 // ── Status dot ────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<StreamStatus, string> = {
@@ -86,9 +67,6 @@ const STATUS_DOT: Record<StreamStatus, string> = {
 };
 
 // ── Per-detector wording ──────────────────────────────────────────────
-
-/** Detectors this feed knows how to phrase (and format as percents). */
-const KNOWN_DETECTORS = new Set(["price_oracle_deviation", "flow_imbalance"]);
 
 type Translate = ReturnType<typeof useTranslations>;
 
