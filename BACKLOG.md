@@ -396,10 +396,11 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
   Règle retenue : **13px minimum pour le texte secondaire** ; `PoolPairCell` (14px) partagé pools/signals conforme. L'air (padding/gap) participe à la lisibilité autant que la taille.
 
 #### Frontend — dashboard UX (relevé 6 juil. 2026)
-- [ ] **Overview : bloc « 5 derniers signaux »** — réutilise `GET /api/signals?limit=5` et la card signals (variante compacte ?), lien vers `/signals`. Donne à l'Overview sa fonction de tour de contrôle.
+- [x] **Overview : bloc « 5 derniers signaux »** — **livré 6 juil. 2026 (PR #48)** : `SignalCard` partagée (densité `compact` : colonne sévérité + paire/temps/valeur), live SSE via `useSignalStream` réutilisé, à côté du top pools (grille 2 col `xl`).
 - [ ] **Mode clair / sombre ( ? )** — à trancher avant d'attaquer : le thème « cosmic » est conçu dark-first (fonds, glows, opacités) ; un vrai mode clair = double palette à maintenir sur tout le front, pas un toggle. Évaluer le rapport coût/demande au moment venu.
 - [ ] **Sidebar minimisable** — état réduit « icônes seules » (le set d'icônes de nav existe déjà), persisté (LocalStorage), tooltip au survol pour les labels.
-- [ ] **En-têtes de pages moins présents** — le bloc header des pages dashboard (eyebrow + titre 28/34px + description) prend trop de hauteur au-dessus du contenu ; à condenser (titre plus petit, description raccourcie ou masquée, gagner de la hauteur utile pour les données).
+- [ ] **Filtres locaux sur `/signals`** (relevé 6 juil. 2026) — filtrage côté client du feed par **tag détecteur** (Prix/Flux, le vocabulaire de `signal-display.ts`) et **sévérité**. Local d'abord : on filtre la liste déjà chargée + le flux SSE entrant, pas de nouveau paramètre API (l'endpoint supporte déjà `?severity=` le jour où on veut pousser le filtre côté serveur — reliquat noté depuis la v1 du feed).
+- [x] **En-têtes de pages moins présents** — **livré 6 juil. 2026 (PR #49)** : eyebrow supprimé, titre 20px, description dans un popover ⓘ au clic (~170px → ~60px). Au passage : composant **`InfoPopover` réutilisable** (`shared/info-popover.tsx`, clic — pas hover, accessible) = le pattern maison pour toute explication à la demande ; à réutiliser pour les définitions de KPI, les explications de détecteurs, etc.
 
 #### RGPD / légal — avant déploiement public
 - [ ] Vérifier contenu page Privacy (mentions RGPD complètes)

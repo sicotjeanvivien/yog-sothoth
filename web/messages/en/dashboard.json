@@ -21,7 +21,9 @@
     "shell": {
       "openMenu": "Open navigation menu",
       "closeMenu": "Close navigation menu",
-      "pageInfo": "About this page"
+      "pageInfo": "About this page",
+      "collapseSidebar": "Collapse the menu",
+      "expandSidebar": "Expand the menu"
     },
     "Overview": {
       "page": {

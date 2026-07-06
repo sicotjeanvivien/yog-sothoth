@@ -15,16 +15,29 @@ export const dynamic = "force-dynamic";
  * chrome.
  *
  * This file is intentionally thin: it is a Server Component and does
- * nothing but mount the (client) shell. All interactivity and layout
- * mechanics live in `DashboardShell`.
+ * nothing but read the sidebar-collapse cookie (so the first paint
+ * already has the user's preferred width — no flash) and mount the
+ * (client) shell. All interactivity and layout mechanics live in
+ * `DashboardShell`.
  */
 
+import { cookies } from "next/headers";
+
+import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <DashboardShell>{children}</DashboardShell>;
+  const cookieStore = await cookies();
+  const initialCollapsed =
+    cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
+
+  return (
+    <DashboardShell initialCollapsed={initialCollapsed}>
+      {children}
+    </DashboardShell>
+  );
 }
