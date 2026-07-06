@@ -221,6 +221,12 @@
         "title": "Derniers signaux",
         "empty": "Aucun signal pour l'instant — les détecteurs veillent.",
         "fallback": "valeur {value} (seuil {threshold})",
+        "filters": {
+          "severity": "Sévérité",
+          "detector": "Type",
+          "emptyFiltered": "Aucun signal ne correspond aux filtres.",
+          "reset": "Réinitialiser"
+        },
         "status": {
           "connecting": "Connexion",
           "live": "En direct",

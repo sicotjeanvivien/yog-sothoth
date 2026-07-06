@@ -221,6 +221,12 @@
         "title": "Latest signals",
         "empty": "No signal yet — the detectors are watching.",
         "fallback": "value {value} (threshold {threshold})",
+        "filters": {
+          "severity": "Severity",
+          "detector": "Type",
+          "emptyFiltered": "No signal matches the filters.",
+          "reset": "Reset"
+        },
         "status": {
           "connecting": "Connecting",
           "live": "Live",
