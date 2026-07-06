@@ -218,7 +218,6 @@
           }
         },
         "detail": {
-          "value": "Valeur",
           "threshold": "Seuil"
         }
       }

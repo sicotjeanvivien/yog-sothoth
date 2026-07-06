@@ -218,7 +218,6 @@
           }
         },
         "detail": {
-          "value": "Value",
           "threshold": "Threshold"
         }
       }
