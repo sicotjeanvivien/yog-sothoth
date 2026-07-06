@@ -240,12 +240,14 @@
         "detectors": {
           "price_oracle_deviation": {
             "tag": "Price",
-            "summary": "The pool's price is {deviation} away from the oracle price."
+            "summary": "The pool's price is {deviation} away from the oracle price.",
+            "explain": "Compares the pool's spot price (derived from its on-chain state) with the two tokens' oracle price (Jupiter). A relative gap beyond the threshold flags a price detached from the market — possible arbitrage or abnormal liquidity. The threshold shown on each signal is the one that was crossed (warning or critical)."
           },
           "flow_imbalance": {
             "tag": "Flow",
             "summaryToward": "Swap volume leans {percent} toward {token}.",
-            "summary": "Swap volume leans {percent} in one direction."
+            "summary": "Swap volume leans {percent} in one direction.",
+            "explain": "Measures the directional imbalance of swap volume over a rolling window: (A→B volume − B→A volume) / total volume, from −100% to +100%. A flow leaning hard one way flags sustained buy or sell pressure. A volume floor filters out near-idle pools."
           }
         },
         "detail": {
