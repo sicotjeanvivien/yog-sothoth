@@ -36,18 +36,44 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Sidebar } from "@/components/dashboard/sidebar/sidebar";
+import {
+  SIDEBAR_COLLAPSED_COOKIE,
+  SIDEBAR_COOKIE_MAX_AGE_S,
+} from "@/components/dashboard/sidebar/sidebar-state";
 import { HamburgerIcon } from "@/components/shared/icon";
 
 // The drawer/fixed switch happens at this width. Kept as a constant
 // for the resize listener; the CSS side uses Tailwind's `lg:`.
 const LG_BREAKPOINT_PX = 1024;
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function DashboardShell({
+  children,
+  initialCollapsed = false,
+}: {
+  children: React.ReactNode;
+  /**
+   * Collapse state read from the cookie by the (server) layout, so
+   * the first paint already has the user's preferred rail width.
+   */
+  initialCollapsed?: boolean;
+}) {
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
+
+  // Toggle the lg+ rail width and persist the preference — a cookie,
+  // not localStorage, so the server layout can render the right
+  // initial state (no expanded→collapsed flash on load).
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((value) => {
+      const next = !value;
+      document.cookie = `${SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE_S}; samesite=lax`;
+      return next;
+    });
+  }, []);
 
   // ── Close on Escape ─────────────────────────────────────────────────
   useEffect(() => {
@@ -98,7 +124,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {isOpen && <Overlay onClick={close} label={t("closeMenu")} />}
 
       {/* The sidebar itself — fixed rail on lg+, drawer below. */}
-      <Sidebar isOpen={isOpen} onNavigate={close} />
+      <Sidebar
+        isOpen={isOpen}
+        onNavigate={close}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+      />
 
       {/*
        * Main content. `pt-14` below lg leaves room for the fixed

@@ -52,7 +52,17 @@ type PanelState =
 
 // ── Component ─────────────────────────────────────────────────────────
 
-export function NetworkStatusPanel() {
+export function NetworkStatusPanel({
+  collapsed = false,
+}: {
+  /**
+   * lg+ collapsed rail: the panel reduces to its status dot — the
+   * "is it alive" signal stays permanently visible, slot/latency
+   * come back on expand. Both variants render from the same polled
+   * state; visibility is pure CSS so the poll never restarts.
+   */
+  collapsed?: boolean;
+}) {
   const t = useTranslations("Dashboard.Sidebar.network");
 
   const [state, setState] = useState<PanelState>({ phase: "loading" });
@@ -95,23 +105,60 @@ export function NetworkStatusPanel() {
   }, [load]);
 
   return (
-    <div className="mt-5 rounded-[4px] border border-sothoth-500/15 bg-cosmos-800/65 p-[14px]">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-[7px]">
-          <SolanaGlyph size={20} />
-          <span className="text-[12px] font-semibold tracking-[0.04em] text-slate-300">
-            {t("title")}
-          </span>
-        </div>
-        <StatusBadge state={state} />
-      </header>
+    <>
+      <div
+        className={`mt-5 rounded-[4px] border border-sothoth-500/15 bg-cosmos-800/65 p-[14px] ${collapsed ? "lg:hidden" : ""}`}
+      >
+        <header className="flex items-center justify-between">
+          <div className="flex items-center gap-[7px]">
+            <SolanaGlyph size={20} />
+            <span className="text-[12px] font-semibold tracking-[0.04em] text-slate-300">
+              {t("title")}
+            </span>
+          </div>
+          <StatusBadge state={state} />
+        </header>
 
-      <dl className="mt-3 flex flex-col gap-[7px]">
-        <StatRow label={t("slot")} value={slotValue(state)} />
-        <StatRow label={t("latency")} value={latencyValue(state)} />
-      </dl>
-    </div>
+        <dl className="mt-3 flex flex-col gap-[7px]">
+          <StatRow label={t("slot")} value={slotValue(state)} />
+          <StatRow label={t("latency")} value={latencyValue(state)} />
+        </dl>
+      </div>
+
+      {collapsed && (
+        <div
+          title={`${t("title")} — ${statusLabel(state, t)}`}
+          className="mt-5 hidden justify-center rounded-[4px] border border-sothoth-500/15 bg-cosmos-800/65 py-3 lg:flex"
+        >
+          <StatusDot
+            colorClass={statusDotClass(state)}
+            pulse={state.phase === "ready" && state.data.freshness === "live"}
+          />
+          <span className="sr-only">{statusLabel(state, t)}</span>
+        </div>
+      )}
+    </>
   );
+}
+
+// ── Collapsed-dot state mapping ───────────────────────────────────────
+
+type TranslateNetwork = ReturnType<typeof useTranslations>;
+
+function statusDotClass(state: PanelState): string {
+  if (state.phase === "loading") return "bg-slate-500";
+  if (state.phase === "error") return "bg-signal-bad";
+  return {
+    live: "bg-signal-good",
+    delayed: "bg-signal-warn",
+    stale: "bg-signal-bad",
+  }[state.data.freshness];
+}
+
+function statusLabel(state: PanelState, t: TranslateNetwork): string {
+  if (state.phase === "loading") return t("connecting");
+  if (state.phase === "error") return t("offline");
+  return t(state.data.freshness);
 }
 
 // ── Value formatting ──────────────────────────────────────────────────
