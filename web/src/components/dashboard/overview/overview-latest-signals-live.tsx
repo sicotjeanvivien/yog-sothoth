@@ -7,8 +7,9 @@
  * then kept live by `useSignalStream` (the same SSE machinery as the
  * `/signals` feed — one more subscriber on the API's shared
  * broadcast costs nothing). Renders the top `LATEST_SIGNALS_COUNT` of
- * the merged list with the exact same `SignalCard` as the feed: one
- * signal, one rendering, wherever it shows.
+ * the merged list with the feed's `SignalCard` in its `compact`
+ * density — severity column + pair/time/value only: a control tower
+ * scans, `/signals` analyses.
  *
  * The header carries the stream-status dot (a broken stream must not
  * look like a quiet one) and the "see all" link to `/signals`.
@@ -64,7 +65,7 @@ export function OverviewLatestSignalsLive({
       ) : (
         <ul className="flex flex-col gap-2">
           {latest.map((signal) => (
-            <SignalCard key={signal.id} signal={signal} />
+            <SignalCard key={signal.id} signal={signal} compact />
           ))}
         </ul>
       )}

@@ -18,6 +18,11 @@
  * `message` (or value/threshold pair): the card must render whatever
  * the engine grows next, just less prettily.
  *
+ * `compact` (the Overview's control-tower density) keeps the severity
+ * column and line 1 only — pair with the relative time beneath it,
+ * value on the right; summary, prices and threshold stay on the full
+ * card. Same component, same visual language, two densities.
+ *
  * Self-sufficient on i18n/locale (own `useTranslations`/`useLocale`)
  * so Server Components can mount it without passing non-serializable
  * props across the client boundary.
@@ -107,12 +112,16 @@ function tokenPriceLine(signal: SignalResponse): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function SignalCard({ signal }: { signal: SignalResponse }) {
+export function SignalCard({
+  signal,
+  compact = false,
+}: {
+  signal: SignalResponse;
+  compact?: boolean;
+}) {
   const t = useTranslations("Dashboard.Signals.feed");
   const locale = useLocale();
 
-  const pairResolved =
-    signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;
   const known = KNOWN_DETECTORS.has(signal.detector);
   const value = known
     ? formatSignedPercent(signal.value, locale)
@@ -127,51 +136,67 @@ export function SignalCard({ signal }: { signal: SignalResponse }) {
   const severityLabel = t(`severity.${signal.severity}`);
   const SeverityIcon = SEVERITY_ICON[signal.severity];
 
+  const severityColumn = (
+    /* Severity icon — a full-height left column, the first thing the
+       eye meets when scanning the feed. Below it, a terse category tag
+       so the detector kind reads at a glance without parsing the
+       summary; the color stays with severity, the tag stays neutral. */
+    <span
+      title={severityLabel}
+      className={`flex w-[44px] flex-col items-center gap-1 ${SEVERITY_COLOR[signal.severity]}`}
+    >
+      <SeverityIcon size={32} />
+      <span className="sr-only">{severityLabel}</span>
+      {known && (
+        <span className="text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase">
+          {t(`detectors.${signal.detector}.tag`)}
+        </span>
+      )}
+    </span>
+  );
+
+  const valueFigure = (
+    <span
+      className={`ml-auto truncate font-mono text-[24px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
+    >
+      {value}
+    </span>
+  );
+
+  if (compact) {
+    return (
+      <li
+        className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
+      >
+        {severityColumn}
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <PairLink signal={signal} />
+          <time
+            dateTime={signal.triggeredAt}
+            className="text-[13px] whitespace-nowrap text-slate-500"
+          >
+            {formatRelativeTime(signal.triggeredAt, locale)}
+          </time>
+        </div>
+        {valueFigure}
+      </li>
+    );
+  }
+
   return (
     <li
       className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-4 ${SEVERITY_CARD[signal.severity]}`}
     >
-      {/* Severity icon — a full-height left column, the first thing
-          the eye meets when scanning the feed. Below it, a terse
-          category tag so the detector kind reads at a glance without
-          parsing the summary; the color stays with severity, the tag
-          stays neutral. */}
-      <span
-        title={severityLabel}
-        className={`flex w-[44px] flex-col items-center gap-1 ${SEVERITY_COLOR[signal.severity]}`}
-      >
-        <SeverityIcon size={32} />
-        <span className="sr-only">{severityLabel}</span>
-        {known && (
-          <span className="text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase">
-            {t(`detectors.${signal.detector}.tag`)}
-          </span>
-        )}
-      </span>
+      {severityColumn}
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {/* Line 1 — pair · protocol · value */}
         <div className="flex items-center gap-3">
-          <Link
-            href={`/pools/${signal.poolAddress}`}
-            className="group inline-block min-w-0 underline-offset-4 hover:underline"
-          >
-            {pairResolved ? (
-              <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
-            ) : (
-              <span className="font-mono text-[14px] text-sothoth-200">
-                {formatShortAddress(signal.poolAddress)}
-              </span>
-            )}
-          </Link>
+          <PairLink signal={signal} />
           <span className="whitespace-nowrap text-[13px] text-slate-500">
             {formatProtocolLabel(signal.protocol)}
           </span>
-          <span
-            className={`ml-auto truncate font-mono text-[24px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
-          >
-            {value}
-          </span>
+          {valueFigure}
         </div>
 
         {/* Line 2 — summary · prices */}
@@ -209,5 +234,29 @@ export function SignalCard({ signal }: { signal: SignalResponse }) {
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * The pool link of a card: the pair when both symbols are resolved,
+ * the short pool address while they aren't.
+ */
+function PairLink({ signal }: { signal: SignalResponse }) {
+  const pairResolved =
+    signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;
+
+  return (
+    <Link
+      href={`/pools/${signal.poolAddress}`}
+      className="group inline-block min-w-0 underline-offset-4 hover:underline"
+    >
+      {pairResolved ? (
+        <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
+      ) : (
+        <span className="font-mono text-[14px] text-sothoth-200">
+          {formatShortAddress(signal.poolAddress)}
+        </span>
+      )}
+    </Link>
   );
 }
