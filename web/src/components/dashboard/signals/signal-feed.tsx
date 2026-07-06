@@ -12,14 +12,15 @@
  * One full-width row card per signal — the feed reads top-down like
  * an alert log, values aligned on the right column. Severity is
  * carried by shape *and* color (icon + left accent bar + tinted
- * background + colored value), never by hue alone. Three lines:
+ * background + colored value), never by hue alone. The severity icon
+ * is a left column spanning the card's height; next to it, three
+ * lines:
  *
- *   1. severity icon · token pair (→ pool; short address while
- *      unresolved) · the metric value, large and severity-colored
- *   2. protocol · human summary phrased from the structured value
- *      (not the detector's raw English `message`) · current USD
- *      prices of the sides
- *   3. crossed threshold · raw detector tag · relative time
+ *   1. token pair (→ pool; short address while unresolved) ·
+ *      protocol · the metric value, large and severity-colored
+ *   2. human summary phrased from the structured value (not the
+ *      detector's raw English `message`) · current USD prices
+ *   3. relative time · raw detector tag · crossed threshold
  *
  * A detector this component doesn't know yet falls back to the raw
  * `message` (or value/threshold pair): the feed must render whatever
@@ -215,69 +216,73 @@ function SignalCard({
 
   return (
     <li
-      className={`flex flex-col gap-1.5 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
+      className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
     >
-      {/* Line 1 — icon · pair · value */}
-      <div className="flex items-center gap-3">
-        <span
-          title={severityLabel}
-          className={SEVERITY_COLOR[signal.severity]}
-        >
-          <SeverityIcon size={20} />
-          <span className="sr-only">{severityLabel}</span>
-        </span>
-        <Link
-          href={`/pools/${signal.poolAddress}`}
-          className="group inline-block min-w-0 underline-offset-4 hover:underline"
-        >
-          {pairResolved ? (
-            <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
-          ) : (
-            <span className="font-mono text-[14px] text-sothoth-200">
-              {formatShortAddress(signal.poolAddress)}
+      {/* Severity icon — a full-height left column, the first thing
+          the eye meets when scanning the feed. */}
+      <span title={severityLabel} className={SEVERITY_COLOR[signal.severity]}>
+        <SeverityIcon size={26} />
+        <span className="sr-only">{severityLabel}</span>
+      </span>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {/* Line 1 — pair · protocol · value */}
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/pools/${signal.poolAddress}`}
+            className="group inline-block min-w-0 underline-offset-4 hover:underline"
+          >
+            {pairResolved ? (
+              <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
+            ) : (
+              <span className="font-mono text-[14px] text-sothoth-200">
+                {formatShortAddress(signal.poolAddress)}
+              </span>
+            )}
+          </Link>
+          <span className="whitespace-nowrap text-[12px] text-slate-500">
+            {formatProtocolLabel(signal.protocol)}
+          </span>
+          <span
+            className={`ml-auto truncate font-mono text-[20px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
+          >
+            {value}
+          </span>
+        </div>
+
+        {/* Line 2 — summary · prices */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
+          <span className="min-w-0 flex-1 leading-[1.5] text-slate-300">
+            {detectorSummary(signal, t, locale)}
+          </span>
+          {prices && (
+            <span className="whitespace-nowrap text-[12px] text-slate-500">
+              {prices}
             </span>
           )}
-        </Link>
-        <span
-          className={`ml-auto truncate font-mono text-[20px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
-        >
-          {value}
-        </span>
-      </div>
+        </div>
 
-      {/* Line 2 — protocol · summary · prices */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
-        <span className="whitespace-nowrap text-[12px] text-slate-500">
-          {formatProtocolLabel(signal.protocol)}
-        </span>
-        <span className="min-w-0 flex-1 leading-[1.5] text-slate-300">
-          {detectorSummary(signal, t, locale)}
-        </span>
-        {prices && (
-          <span className="whitespace-nowrap text-[12px] text-slate-500">
-            {prices}
-          </span>
-        )}
-      </div>
-
-      {/* Line 3 — threshold · detector tag · time */}
-      <div className="flex items-center justify-between gap-2 text-[12px] text-slate-400">
-        <span>
-          {t("detail.threshold")}{" "}
-          <span className="font-mono text-slate-200">{threshold}</span>
-        </span>
-        <span className="flex min-w-0 items-center gap-2 font-mono text-[11px] text-slate-500">
-          <span className="truncate">{signal.detector}</span>
-          <span aria-hidden className="text-slate-600">
-            ·
-          </span>
+        {/* Line 3 — time · detector tag · threshold */}
+        <div className="flex items-center justify-between gap-2 text-[12px] text-slate-400">
           <time
             dateTime={signal.triggeredAt}
-            className="whitespace-nowrap font-sans text-[12px]"
+            className="whitespace-nowrap text-slate-500"
           >
             {formatRelativeTime(signal.triggeredAt, locale)}
           </time>
-        </span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-mono text-[11px] text-slate-500">
+              {signal.detector}
+            </span>
+            <span aria-hidden className="text-slate-600">
+              ·
+            </span>
+            <span className="whitespace-nowrap">
+              {t("detail.threshold")}{" "}
+              <span className="font-mono text-slate-200">{threshold}</span>
+            </span>
+          </span>
+        </div>
       </div>
     </li>
   );
