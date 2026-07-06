@@ -219,10 +219,21 @@ function SignalCard({
       className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
     >
       {/* Severity icon — a full-height left column, the first thing
-          the eye meets when scanning the feed. */}
-      <span title={severityLabel} className={SEVERITY_COLOR[signal.severity]}>
-        <SeverityIcon size={26} />
+          the eye meets when scanning the feed. Below it, a terse
+          category tag so the detector kind reads at a glance without
+          parsing the summary; the color stays with severity, the tag
+          stays neutral. */}
+      <span
+        title={severityLabel}
+        className={`flex w-[44px] flex-col items-center gap-1 ${SEVERITY_COLOR[signal.severity]}`}
+      >
+        <SeverityIcon size={32} />
         <span className="sr-only">{severityLabel}</span>
+        {known && (
+          <span className="text-[10px] font-semibold tracking-[0.08em] text-slate-400 uppercase">
+            {t(`detectors.${signal.detector}.tag`)}
+          </span>
+        )}
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
