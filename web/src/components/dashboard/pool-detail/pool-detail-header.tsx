@@ -47,7 +47,7 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
   const solscanUrl = `https://solscan.io/account/${pool.poolAddress}`;
 
   return (
-    <header className="px-6 pt-8 pb-6 lg:px-10 lg:pt-10">
+    <header className="px-6 pt-6 pb-4 lg:px-10">
       {/* Back link */}
       <Link
         href="/pools"
