@@ -48,6 +48,7 @@ import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { CopyButton } from "@/components/shared/copy-button";
+import { InfoPopover } from "@/components/shared/info-popover";
 
 // ── Tailwind class fragments ─────────────────────────────────────────
 
@@ -96,11 +97,11 @@ export async function PoolDetailInfo({
               <span>{formatProtocolLabel(pool.protocol)}</span>
             </InfoRow>
 
-            <InfoRow label={t("feeTier")}>
+            <InfoRow label={t("feeTier")} info={t("help.feeTier")}>
               <span>{formatFeeBps(pool.feeBps)}</span>
             </InfoRow>
 
-            <InfoRow label={t("feeSplit")}>
+            <InfoRow label={t("feeSplit")} info={t("help.feeSplit")}>
               <span>
                 {formatFeeSplit(
                   pool.protocolFeePercent,
@@ -159,15 +160,15 @@ export async function PoolDetailInfo({
               <span>{formatUsd(pool.fees24hUsd)}</span>
             </InfoRow>
 
-            <InfoRow label={t("effectiveFee")}>
+            <InfoRow label={t("effectiveFee")} info={t("help.effectiveFee")}>
               <span>{formatFeeBps(pool.effectiveFeeBps)}</span>
             </InfoRow>
 
-            <InfoRow label={t("protocolCut")}>
+            <InfoRow label={t("protocolCut")} info={t("help.protocolCut")}>
               <span>{formatUsd(pool.protocolFees24hUsd)}</span>
             </InfoRow>
 
-            <InfoRow label={t("lpCut")}>
+            <InfoRow label={t("lpCut")} info={t("help.lpCut")}>
               <span>{formatUsd(pool.lpFees24hUsd)}</span>
             </InfoRow>
           </div>
@@ -184,16 +185,28 @@ export async function PoolDetailInfo({
  * every row aligns vertically; the value column takes the rest and
  * truncates with ellipsis when needed.
  */
-function InfoRow({
+async function InfoRow({
   label,
   children,
+  info,
 }: {
   label: string;
   children: ReactNode;
+  /** Definition of the row, shown in an ⓘ popover next to the label. */
+  info?: string;
 }) {
+  const tShell = info ? await getTranslations("Dashboard.shell") : null;
+
   return (
     <div className={ROW_CLASS}>
-      <div className={LABEL_CLASS}>{label}</div>
+      <div className={`${LABEL_CLASS} flex items-center gap-1.5`}>
+        {label}
+        {info && tShell && (
+          <InfoPopover label={tShell("metricInfo")} iconSize={14}>
+            {info}
+          </InfoPopover>
+        )}
+      </div>
       <div className={VALUE_CLASS}>{children}</div>
     </div>
   );

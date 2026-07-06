@@ -23,7 +23,8 @@
       "closeMenu": "Close navigation menu",
       "pageInfo": "About this page",
       "collapseSidebar": "Collapse the menu",
-      "expandSidebar": "Expand the menu"
+      "expandSidebar": "Expand the menu",
+      "metricInfo": "Definition"
     },
     "Overview": {
       "page": {
@@ -36,7 +37,13 @@
         "volume24h": "Volume 24h",
         "fees24h": "Fees 24h",
         "pools": "Pools",
-        "discovered": "{count, plural, =0 {No new pools (24h)} other {+# discovered (24h)}}"
+        "discovered": "{count, plural, =0 {No new pools (24h)} other {+# discovered (24h)}}",
+        "info": {
+          "tvl": "Sum of the reserve value of every observed pool whose two tokens have a known price. The line below gives the coverage: priced pools / observed pools.",
+          "volume24h": "Trading volume realized over the last 24h, valued at each trade's own time. Swaps without a known price are excluded from the sum.",
+          "fees24h": "Trading fees actually collected over 24h (LP share + protocol share), valued at trade time.",
+          "pools": "Pools discovered in the transaction stream since observation began — what was seen, not a watchlist."
+        }
       },
       "topPools": {
         "title": "Top pools by 24h volume",
@@ -125,7 +132,14 @@
         "firstSeen": "First seen",
         "lastActivity": "Last activity",
         "copyPoolAddress": "Copy pool address",
-        "copyTokenMint": "Copy token mint"
+        "copyTokenMint": "Copy token mint",
+        "help": {
+          "feeTier": "The pool's base trading fee (genesis tier), in basis points — 100 bps = 1%.",
+          "feeSplit": "Configured split of the trading fee between Meteora, an optional partner and the referral program, read from the pool's on-chain account.",
+          "effectiveFee": "The realized rate: fees collected / volume over 24h, in basis points. Can differ from the base tier.",
+          "protocolCut": "Meteora's share of the 24h fees.",
+          "lpCut": "The liquidity providers' share of the 24h fees (total − protocol)."
+        }
       },
       "fees": {
         "title": "Fees",
@@ -137,7 +151,13 @@
         "tvl": "TVL",
         "volume24h": "Volume 24h",
         "fees24h": "Fees 24h",
-        "composition": "Pool composition"
+        "composition": "Pool composition",
+        "info": {
+          "tvl": "Value of the pool's reserves at the last observed state, at the latest known price of both tokens.",
+          "volume24h": "Volume traded on this pool over the last 24h, valued at each trade's own time.",
+          "fees24h": "Trading fees collected by this pool over 24h (LP share + protocol share).",
+          "composition": "Split of the reserves between the two tokens, in USD value."
+        }
       },
       "swaps": {
         "title": "Recent swaps",

@@ -35,19 +35,23 @@ export async function OverviewStats({ stats }: { stats: StatsResponse }) {
             priced: stats.poolsPriced,
             observed: stats.poolsObserved,
           })}
+          info={t("info.tvl")}
         />
         <StatCard
           label={t("volume24h")}
           value={formatUsdCompact(stats.volume24hUsd)}
+          info={t("info.volume24h")}
         />
         <StatCard
           label={t("fees24h")}
           value={formatUsdCompact(stats.fees24hUsd)}
+          info={t("info.fees24h")}
         />
         <StatCard
           label={t("pools")}
           value={formatCount(stats.poolsObserved)}
           hint={t("discovered", { count: stats.poolsDiscovered24h })}
+          info={t("info.pools")}
         />
       </div>
     </section>
