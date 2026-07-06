@@ -216,7 +216,7 @@ function SignalCard({
 
   return (
     <li
-      className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
+      className={`flex items-center gap-4 rounded-[8px] border border-l-4 px-4 py-4 ${SEVERITY_CARD[signal.severity]}`}
     >
       {/* Severity icon — a full-height left column, the first thing
           the eye meets when scanning the feed. Below it, a terse
@@ -230,13 +230,13 @@ function SignalCard({
         <SeverityIcon size={32} />
         <span className="sr-only">{severityLabel}</span>
         {known && (
-          <span className="text-[10px] font-semibold tracking-[0.08em] text-slate-400 uppercase">
+          <span className="text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase">
             {t(`detectors.${signal.detector}.tag`)}
           </span>
         )}
       </span>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         {/* Line 1 — pair · protocol · value */}
         <div className="flex items-center gap-3">
           <Link
@@ -251,30 +251,30 @@ function SignalCard({
               </span>
             )}
           </Link>
-          <span className="whitespace-nowrap text-[12px] text-slate-500">
+          <span className="whitespace-nowrap text-[13px] text-slate-500">
             {formatProtocolLabel(signal.protocol)}
           </span>
           <span
-            className={`ml-auto truncate font-mono text-[20px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
+            className={`ml-auto truncate font-mono text-[24px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
           >
             {value}
           </span>
         </div>
 
         {/* Line 2 — summary · prices */}
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[14px]">
           <span className="min-w-0 flex-1 leading-[1.5] text-slate-300">
             {detectorSummary(signal, t, locale)}
           </span>
           {prices && (
-            <span className="whitespace-nowrap text-[12px] text-slate-500">
+            <span className="whitespace-nowrap text-[13px] text-slate-500">
               {prices}
             </span>
           )}
         </div>
 
         {/* Line 3 — time · detector tag · threshold */}
-        <div className="flex items-center justify-between gap-2 text-[12px] text-slate-400">
+        <div className="flex items-center justify-between gap-2 text-[13px] text-slate-400">
           <time
             dateTime={signal.triggeredAt}
             className="whitespace-nowrap text-slate-500"
@@ -282,7 +282,7 @@ function SignalCard({
             {formatRelativeTime(signal.triggeredAt, locale)}
           </time>
           <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-mono text-[11px] text-slate-500">
+            <span className="truncate font-mono text-[12px] text-slate-500">
               {signal.detector}
             </span>
             <span aria-hidden className="text-slate-600">
