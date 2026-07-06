@@ -9,7 +9,7 @@ import { SortableHeader } from "./sortable-header";
 export const GRID_COLS =
   "grid-cols-[minmax(200px,1.8fr)_minmax(140px,1fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_minmax(130px,1fr)_minmax(130px,1fr)]";
 const HEAD_CELL_BASE =
-  "flex items-center px-4 py-3 text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
+  "flex items-center px-4 py-3 text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
 const HEAD_CELL_CLASS = HEAD_CELL_BASE;
 const HEAD_CELL_NUMERIC_CLASS = `${HEAD_CELL_BASE} justify-end`;
 const HEAD_CELL_SORTABLE_CLASS = "flex items-center px-4 py-3";

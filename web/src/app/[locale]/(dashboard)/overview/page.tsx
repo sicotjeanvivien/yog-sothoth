@@ -60,7 +60,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
   return (
     <>
       <header className="px-6 pt-8 pb-6 lg:px-10 lg:pt-10">
-        <p className="text-[12px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
+        <p className="text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
           {t("eyebrow")}
         </p>
         <h1 className="mt-2 font-display text-[28px] leading-[1.15] font-bold tracking-[0.03em] text-[#f5f2ff] lg:text-[34px]">

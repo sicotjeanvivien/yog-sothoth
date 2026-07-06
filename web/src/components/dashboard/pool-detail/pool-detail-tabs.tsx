@@ -28,7 +28,7 @@ const NAV_CLASS =
   "flex items-center gap-1 border-b border-sothoth-500/20 px-6 lg:px-10";
 
 const TAB_BASE =
-  "relative px-4 py-3 text-[13px] font-medium tracking-wide transition-colors " +
+  "relative px-4 py-3 text-[14px] font-medium tracking-wide transition-colors " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sothoth-400 rounded-t-md";
 
 const TAB_ACTIVE = "text-slate-100";

@@ -32,7 +32,7 @@ const TITLE_BAR_CLASS =
   "flex items-center justify-between border-b border-amber-500/20 px-6 py-4";
 
 const SECTION_TITLE_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-amber-200/80 uppercase";
+  "text-[12px] font-semibold tracking-[0.2em] text-amber-200/80 uppercase";
 
 const BODY_CLASS = "flex flex-col items-center px-6 py-12 text-center";
 
@@ -40,7 +40,7 @@ const ICON_WRAP_CLASS =
   "inline-flex h-[40px] w-[40px] items-center justify-center rounded-[6px] border border-amber-500/40 bg-amber-500/15 text-amber-400";
 
 const MESSAGE_CLASS =
-  "mt-4 max-w-[52ch] text-[13px] leading-[1.6] text-amber-100/80";
+  "mt-4 max-w-[52ch] text-[14px] leading-[1.6] text-amber-100/80";
 
 export async function BlockError({
   title,

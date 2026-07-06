@@ -27,7 +27,7 @@ const GRID_COLS = "grid-cols-[2rem_1fr_auto_auto]";
 
 const CELL = "px-4 py-3 text-[14px] flex items-center";
 const CELL_NUM = `${CELL} justify-end font-mono text-slate-300`;
-const HEAD = "px-4 py-3 text-[11px] font-semibold tracking-[0.2em] text-slate-500 uppercase flex items-center";
+const HEAD = "px-4 py-3 text-[12px] font-semibold tracking-[0.2em] text-slate-500 uppercase flex items-center";
 const HEAD_NUM = `${HEAD} justify-end`;
 
 export async function OverviewTopPools() {
@@ -49,7 +49,7 @@ export async function OverviewTopPools() {
 
   return (
     <section className="mt-8 px-6 lg:px-10">
-      <h2 className="mb-4 text-[12px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
+      <h2 className="mb-4 text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
         {t("title")}
       </h2>
 

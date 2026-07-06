@@ -46,7 +46,7 @@ const TITLE_BAR_CLASS =
   "flex items-center justify-between border-b border-sothoth-500/20 px-6 py-4";
 
 const SECTION_TITLE_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+  "text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
 
 const TABLE_WRAPPER_CLASS = "overflow-x-auto";
 
@@ -54,10 +54,10 @@ const GRID_COLS =
   "grid-cols-[minmax(110px,0.9fr)_minmax(120px,0.9fr)_minmax(150px,1.3fr)_minmax(150px,1.3fr)_minmax(130px,1.1fr)_minmax(96px,auto)]";
 
 const HEAD_CELL_CLASS =
-  "px-4 py-3 text-left text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
+  "px-4 py-3 text-left text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
 
 const CELL_CLASS =
-  "px-4 py-3 text-[13px] text-slate-300 align-middle whitespace-nowrap flex items-center";
+  "px-4 py-3 text-[14px] text-slate-300 align-middle whitespace-nowrap flex items-center";
 
 const CELL_MONO_CLASS = `${CELL_CLASS} font-mono`;
 
@@ -221,7 +221,7 @@ function SwapRow({
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
-      <p className="max-w-[52ch] text-[13px] leading-[1.6] text-slate-400">
+      <p className="max-w-[52ch] text-[14px] leading-[1.6] text-slate-400">
         {message}
       </p>
     </div>

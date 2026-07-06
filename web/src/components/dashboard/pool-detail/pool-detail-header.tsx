@@ -38,7 +38,7 @@ import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
 import { CopyButton } from "@/components/shared/copy-button";
 
 const CTA_CLASS =
-  "inline-flex items-center justify-center gap-2 rounded-[4px] border border-slate-700 bg-transparent px-4 py-[8px] text-[13px] font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800/40";
+  "inline-flex items-center justify-center gap-2 rounded-[4px] border border-slate-700 bg-transparent px-4 py-[8px] text-[14px] font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800/40";
 
 export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
   const t = await getTranslations("Dashboard.PoolDetail.header");
@@ -51,7 +51,7 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
       {/* Back link */}
       <Link
         href="/pools"
-        className="inline-flex items-center gap-1.5 text-[13px] text-slate-400 transition-colors hover:text-slate-200"
+        className="inline-flex items-center gap-1.5 text-[14px] text-slate-400 transition-colors hover:text-slate-200"
       >
         <ArrowLeftIcon size={14} />
         {t("backToList")}
@@ -66,13 +66,13 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
             <div className="flex items-center gap-3">
               <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
             </div>
-            <span className="rounded-[4px] border border-sothoth-500/20 bg-sothoth-600/10 px-2 py-[3px] text-[11px] font-semibold tracking-[0.12em] text-sothoth-200 uppercase">
+            <span className="rounded-[4px] border border-sothoth-500/20 bg-sothoth-600/10 px-2 py-[3px] text-[12px] font-semibold tracking-[0.12em] text-sothoth-200 uppercase">
               {formatProtocolLabel(pool.protocol)}
             </span>
           </div>
 
           {/* Short address with copy */}
-          <div className="mt-3 flex items-center gap-2 text-[13px] text-slate-400">
+          <div className="mt-3 flex items-center gap-2 text-[14px] text-slate-400">
             <span className="font-mono">
               {formatShortAddress(pool.poolAddress)}
             </span>

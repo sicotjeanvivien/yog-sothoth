@@ -27,9 +27,9 @@ const CARD_CLASS = "rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40"
 const TITLE_BAR_CLASS =
   "flex items-center justify-between border-b border-sothoth-500/20 px-6 py-4";
 const SECTION_TITLE_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+  "text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
 const CHART_TITLE_CLASS =
-  "mb-2 text-[11px] font-semibold tracking-[0.15em] text-slate-400 uppercase";
+  "mb-2 text-[12px] font-semibold tracking-[0.15em] text-slate-400 uppercase";
 
 // Chart colours (passed as plain strings — Client Component boundary).
 const FEE_COLOR = "#5eead4"; // teal
@@ -67,7 +67,7 @@ export async function PoolDetailFees({
 
         {!hasData ? (
           <div className="flex flex-col items-center px-6 py-12 text-center">
-            <p className="max-w-[52ch] text-[13px] leading-[1.6] text-slate-400">
+            <p className="max-w-[52ch] text-[14px] leading-[1.6] text-slate-400">
               {t("empty")}
             </p>
           </div>

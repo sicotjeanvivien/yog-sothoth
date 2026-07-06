@@ -159,7 +159,7 @@ function BrandBlock() {
         <p className="mt-3 font-display text-[17px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
           {t("name")}
         </p>
-        <p className="mt-[7px] text-[9px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
+        <p className="mt-[7px] text-[10px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
           {t("tagline")}
         </p>
       </div>
@@ -180,7 +180,7 @@ function Divider() {
 function NavCaption() {
   const t = useTranslations("Dashboard.Sidebar");
   return (
-    <p className="mb-2 px-[10px] text-[9px] font-semibold tracking-[0.2em] text-slate-600 uppercase">
+    <p className="mb-2 px-[10px] text-[10px] font-semibold tracking-[0.2em] text-slate-600 uppercase">
       {t("caption")}
     </p>
   );
@@ -209,7 +209,7 @@ function SidebarNavLink({
   const t = useTranslations("Dashboard.Sidebar.nav");
 
   const base =
-    "relative flex items-center gap-3 overflow-hidden rounded-[3px] px-3 py-[11px] text-[13.5px] font-medium transition-colors";
+    "relative flex items-center gap-3 overflow-hidden rounded-[3px] px-3 py-[11px] text-[14px] font-medium transition-colors";
 
   const state = active
     ? "bg-sothoth-600/20 text-[#f1ecff] before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-sothoth-500 before:shadow-[0_0_12px_1px_rgba(139,92,246,0.85)]"

@@ -31,7 +31,7 @@ export default async function PoolNotFound() {
         </p>
         <Link
           href="/pools"
-          className="mt-8 inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[10px] text-[13px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30"
+          className="mt-8 inline-flex items-center gap-2 rounded-[4px] border border-sothoth-500/45 bg-sothoth-600/15 px-5 py-[10px] text-[14px] font-semibold text-[#f1ecff] transition-colors hover:border-sothoth-500/70 hover:bg-sothoth-600/30"
         >
           <ArrowLeftIcon size={14} />
           {t("backToList")}
