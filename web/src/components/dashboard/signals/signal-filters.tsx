@@ -18,6 +18,7 @@
 
 import { useTranslations } from "next-intl";
 
+import { InfoPopover } from "@/components/shared/info-popover";
 import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
 
 import { KNOWN_DETECTORS } from "./signal-display";
@@ -71,6 +72,7 @@ export function SignalFilters({
   onToggleDetector: (detector: string) => void;
 }) {
   const t = useTranslations("Dashboard.Signals.feed");
+  const tShell = useTranslations("Dashboard.shell");
 
   const severityCounts = new Map<Severity, number>();
   const detectorCounts = new Map<string, number>();
@@ -100,7 +102,10 @@ export function SignalFilters({
         ))}
       </FilterGroup>
 
-      <FilterGroup label={t("filters.detector")}>
+      <FilterGroup
+        label={t("filters.detector")}
+        info={<DetectorExplanations signals={signals} t={t} tShell={tShell} />}
+      >
         {presentDetectors(signals).map((detector) => (
           <Chip
             key={detector}
@@ -119,17 +124,62 @@ export function SignalFilters({
 function FilterGroup({
   label,
   children,
+  info,
 }: {
   label: string;
   children: React.ReactNode;
+  /** Optional ⓘ popover rendered right after the group label. */
+  info?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[12px] font-semibold tracking-[0.08em] text-slate-500 uppercase">
+      <span className="flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.08em] text-slate-500 uppercase">
         {label}
+        {info}
       </span>
       {children}
     </div>
+  );
+}
+
+/**
+ * What each detector measures, in one ⓘ panel on the "Type" group —
+ * one place instead of one per card (the tag repeats 50×, the concept
+ * doesn't). Lists the KNOWN detectors present in the feed, in chip
+ * order; an unknown detector has no explanation to offer and is
+ * simply omitted. No threshold numbers in the copy — they are env
+ * config, and each card already shows the threshold actually crossed.
+ */
+function DetectorExplanations({
+  signals,
+  t,
+  tShell,
+}: {
+  signals: readonly SignalResponse[];
+  t: Translate;
+  tShell: Translate;
+}) {
+  const knownPresent = presentDetectors(signals).filter((detector) =>
+    KNOWN_DETECTORS.has(detector),
+  );
+  if (knownPresent.length === 0) {
+    return null;
+  }
+
+  return (
+    <InfoPopover label={tShell("metricInfo")} iconSize={14}>
+      <div className="flex flex-col gap-2">
+        {knownPresent.map((detector) => (
+          <p key={detector}>
+            <strong className="font-semibold text-slate-100">
+              {t(`detectors.${detector}.tag`)}
+            </strong>
+            {" — "}
+            {t(`detectors.${detector}.explain`)}
+          </p>
+        ))}
+      </div>
+    </InfoPopover>
   );
 }
 

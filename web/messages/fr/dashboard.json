@@ -240,12 +240,14 @@
         "detectors": {
           "price_oracle_deviation": {
             "tag": "Prix",
-            "summary": "Le prix du pool s'écarte de {deviation} du prix de l'oracle."
+            "summary": "Le prix du pool s'écarte de {deviation} du prix de l'oracle.",
+            "explain": "Compare le prix spot du pool (dérivé de son état on-chain) au prix oracle des deux tokens (Jupiter). Un écart relatif au-delà du seuil signale un prix décroché du marché — arbitrage possible ou liquidité anormale. Le seuil affiché sur chaque signal est celui qui a été franchi (alerte ou critique)."
           },
           "flow_imbalance": {
             "tag": "Flux",
             "summaryToward": "Le volume de swaps penche à {percent} vers {token}.",
-            "summary": "Le volume de swaps penche à {percent} dans une seule direction."
+            "summary": "Le volume de swaps penche à {percent} dans une seule direction.",
+            "explain": "Mesure le déséquilibre directionnel du volume de swaps sur une fenêtre glissante : (volume A→B − volume B→A) / volume total, de −100 % à +100 %. Un flux qui penche fortement d'un côté signale une pression d'achat ou de vente soutenue. Un plancher de volume écarte les pools trop calmes."
           }
         },
         "detail": {
