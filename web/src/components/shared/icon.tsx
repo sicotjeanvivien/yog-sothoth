@@ -476,6 +476,24 @@ export const AlertTriangleIcon: React.FC<IconProps> = ({
 );
 
 /**
+ * Alert octagon — the "stop"-shaped counterpart of
+ * `AlertTriangleIcon`, one rung above it in severity (critical
+ * signals). Two distinct shapes so the severity scale survives
+ * color-blindness, not just hue.
+ */
+export const AlertOctagonIcon: React.FC<IconProps> = ({
+  size = 18,
+  strokeWidth = 1.6,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <path d="M8.2 3h7.6L21 8.2v7.6L15.8 21H8.2L3 15.8V8.2z" />
+    <path d="M12 7.5v5" />
+    <circle cx="12" cy="16" r="0.7" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/**
  * LinkedIn mark — used for share buttons. Authored on the 24x24
  * grid, fill rather than stroke (the geometry is too dense for the
  * 1.6px stroke contract).

@@ -9,18 +9,24 @@
  * small status dot so a broken stream is never mistaken for a quiet
  * one.
  *
- * One card per signal, tinted by severity: severity badge · relative
- * time · token pair (linking to the pool, falling back to the short
- * address while the pair is unresolved) with the metric value as the
- * severity-colored headline figure · a human-readable summary per
- * detector, phrased from the structured value — not the detector's
- * raw English `message` · a footer with the sides' current USD
- * prices, the crossed threshold and the raw detector tag.
+ * One full-width row card per signal — the feed reads top-down like
+ * an alert log, values aligned on the right column. Severity is
+ * carried by shape *and* color (icon + left accent bar + tinted
+ * background + colored value), never by hue alone. Three lines:
+ *
+ *   1. severity icon · token pair (→ pool; short address while
+ *      unresolved) · the metric value, large and severity-colored
+ *   2. protocol · human summary phrased from the structured value
+ *      (not the detector's raw English `message`) · current USD
+ *      prices of the sides
+ *   3. crossed threshold · raw detector tag · relative time
  *
  * A detector this component doesn't know yet falls back to the raw
  * `message` (or value/threshold pair): the feed must render whatever
  * the engine grows next, just less prettily.
  */
+
+import type { FC } from "react";
 
 import { useLocale, useTranslations } from "next-intl";
 
@@ -33,31 +39,41 @@ import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
+import {
+  AlertOctagonIcon,
+  AlertTriangleIcon,
+  InfoIcon,
+  type IconProps,
+} from "@/components/shared/icon";
 import { PoolPairCell } from "../pools/pool-pair-cell";
 import { useSignalStream, type StreamStatus } from "./use-signal-stream";
 
-// ── Severity badge ────────────────────────────────────────────────────
+// ── Severity styling ──────────────────────────────────────────────────
 
-const SEVERITY_BADGE: Record<Severity, string> = {
-  info: "border-sky-400/30 bg-sky-400/10 text-sky-300",
-  warning: "border-amber-400/30 bg-amber-400/10 text-amber-300",
-  critical: "border-rose-400/30 bg-rose-400/10 text-rose-300",
-};
-
-// Card tint per severity — same hues as the badge, at low opacity so a
-// grid of 50 warnings doesn't turn into a wall of amber. Info stays on
-// the neutral card: if everything is tinted, nothing stands out.
+// Row tint per severity: left accent bar + border + background, one
+// clear rung apart (critical > warning > info). Info stays close to
+// neutral — when most of the feed is warning/critical, a tinted info
+// row would flatten the scale.
 const SEVERITY_CARD: Record<Severity, string> = {
-  info: "border-sothoth-500/15 bg-cosmos-700/40",
-  warning: "border-amber-400/25 bg-amber-400/[0.04]",
-  critical: "border-rose-400/30 bg-rose-500/[0.06]",
+  info: "border-sothoth-500/15 border-l-sky-400/60 bg-cosmos-700/40",
+  warning: "border-amber-400/30 border-l-amber-400 bg-amber-400/[0.06]",
+  critical: "border-rose-400/40 border-l-rose-400 bg-rose-500/[0.10]",
 };
 
-// The headline value inherits the severity color.
-const SEVERITY_VALUE: Record<Severity, string> = {
+// Icon and headline value inherit the severity color.
+const SEVERITY_COLOR: Record<Severity, string> = {
   info: "text-sky-300",
   warning: "text-amber-300",
   critical: "text-rose-300",
+};
+
+// Two distinct shapes across the escalation (triangle → octagon), so
+// the scale survives color-blindness; the label stays in `title` +
+// sr-only text.
+const SEVERITY_ICON: Record<Severity, FC<IconProps>> = {
+  info: InfoIcon,
+  warning: AlertTriangleIcon,
+  critical: AlertOctagonIcon,
 };
 
 // ── Status dot ────────────────────────────────────────────────────────
@@ -75,16 +91,8 @@ const KNOWN_DETECTORS = new Set(["price_oracle_deviation", "flow_imbalance"]);
 
 type Translate = ReturnType<typeof useTranslations>;
 
-/** Human title of a card — the detector, in words. */
-function detectorTitle(signal: SignalResponse, t: Translate): string {
-  if (!KNOWN_DETECTORS.has(signal.detector)) {
-    return signal.detector;
-  }
-  return t(`detectors.${signal.detector}.title`);
-}
-
 /**
- * Human headline of a card, phrased from the structured `value` rather
+ * Human summary of a card, phrased from the structured `value` rather
  * than the detector's raw English `message`.
  */
 function detectorSummary(
@@ -123,7 +131,7 @@ function detectorSummary(
  * "birry $0.000007758 · USDC $1.00" — the *current* USD price of each
  * resolved side (latest oracle fetch, not the price at trigger time).
  * Sides without a symbol or a price are skipped; `null` when neither
- * side qualifies, and the card omits the line.
+ * side qualifies, and the card omits the block.
  */
 function tokenPriceLine(signal: SignalResponse): string | null {
   const side = (token: TokenResponse): string | null =>
@@ -168,7 +176,7 @@ export function SignalFeed({
           {t("empty")}
         </p>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="flex flex-col gap-2">
           {signals.map((signal) => (
             <SignalCard key={signal.id} signal={signal} t={t} locale={locale} />
           ))}
@@ -189,7 +197,8 @@ function SignalCard({
   t: Translate;
   locale: string;
 }) {
-  const pairResolved = signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;
+  const pairResolved =
+    signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;
   const known = KNOWN_DETECTORS.has(signal.detector);
   const value = known
     ? formatSignedPercent(signal.value, locale)
@@ -201,70 +210,74 @@ function SignalCard({
         ? formatPercent(signal.threshold, locale)
         : signal.threshold;
   const prices = tokenPriceLine(signal);
+  const severityLabel = t(`severity.${signal.severity}`);
+  const SeverityIcon = SEVERITY_ICON[signal.severity];
 
   return (
     <li
-      className={`flex flex-col gap-3 rounded-[8px] border p-4 ${SEVERITY_CARD[signal.severity]}`}
+      className={`flex flex-col gap-1.5 rounded-[8px] border border-l-4 px-4 py-3 ${SEVERITY_CARD[signal.severity]}`}
     >
-      <div className="flex items-center justify-between">
+      {/* Line 1 — icon · pair · value */}
+      <div className="flex items-center gap-3">
         <span
-          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase ${SEVERITY_BADGE[signal.severity]}`}
+          title={severityLabel}
+          className={SEVERITY_COLOR[signal.severity]}
         >
-          {t(`severity.${signal.severity}`)}
+          <SeverityIcon size={20} />
+          <span className="sr-only">{severityLabel}</span>
         </span>
-        <time
-          dateTime={signal.triggeredAt}
-          className="text-[12px] whitespace-nowrap text-slate-500"
+        <Link
+          href={`/pools/${signal.poolAddress}`}
+          className="group inline-block min-w-0 underline-offset-4 hover:underline"
         >
-          {formatRelativeTime(signal.triggeredAt, locale)}
-        </time>
+          {pairResolved ? (
+            <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
+          ) : (
+            <span className="font-mono text-[14px] text-sothoth-200">
+              {formatShortAddress(signal.poolAddress)}
+            </span>
+          )}
+        </Link>
+        <span
+          className={`ml-auto truncate font-mono text-[20px] font-semibold ${SEVERITY_COLOR[signal.severity]}`}
+        >
+          {value}
+        </span>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href={`/pools/${signal.poolAddress}`}
-            className="group inline-block min-w-0 underline-offset-4 hover:underline"
-          >
-            {pairResolved ? (
-              <PoolPairCell tokenA={signal.tokenA} tokenB={signal.tokenB} />
-            ) : (
-              <span className="font-mono text-[14px] text-sothoth-200">
-                {formatShortAddress(signal.poolAddress)}
-              </span>
-            )}
-          </Link>
-          <span
-            className={`truncate font-mono text-[20px] font-semibold ${SEVERITY_VALUE[signal.severity]}`}
-          >
-            {value}
-          </span>
-        </div>
-        <p className="mt-1 text-[12px] text-slate-500">
+      {/* Line 2 — protocol · summary · prices */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[13px]">
+        <span className="whitespace-nowrap text-[12px] text-slate-500">
           {formatProtocolLabel(signal.protocol)}
-        </p>
-      </div>
-
-      <div>
-        <p className="text-[14px] font-semibold text-slate-100">
-          {detectorTitle(signal, t)}
-        </p>
-        <p className="mt-1 text-[13px] leading-[1.5] text-slate-300">
+        </span>
+        <span className="min-w-0 flex-1 leading-[1.5] text-slate-300">
           {detectorSummary(signal, t, locale)}
-        </p>
+        </span>
+        {prices && (
+          <span className="whitespace-nowrap text-[12px] text-slate-500">
+            {prices}
+          </span>
+        )}
       </div>
 
-      <div className="mt-auto border-t border-sothoth-500/10 pt-3 text-[12px] text-slate-400">
-        {prices && <p className="mb-1 truncate text-slate-500">{prices}</p>}
-        <div className="flex items-center justify-between gap-2">
-          <span>
-            {t("detail.threshold")}{" "}
-            <span className="font-mono text-slate-200">{threshold}</span>
+      {/* Line 3 — threshold · detector tag · time */}
+      <div className="flex items-center justify-between gap-2 text-[12px] text-slate-400">
+        <span>
+          {t("detail.threshold")}{" "}
+          <span className="font-mono text-slate-200">{threshold}</span>
+        </span>
+        <span className="flex min-w-0 items-center gap-2 font-mono text-[11px] text-slate-500">
+          <span className="truncate">{signal.detector}</span>
+          <span aria-hidden className="text-slate-600">
+            ·
           </span>
-          <span className="truncate font-mono text-[11px] text-slate-500">
-            {signal.detector}
-          </span>
-        </div>
+          <time
+            dateTime={signal.triggeredAt}
+            className="whitespace-nowrap font-sans text-[12px]"
+          >
+            {formatRelativeTime(signal.triggeredAt, locale)}
+          </time>
+        </span>
       </div>
     </li>
   );

@@ -208,11 +208,9 @@
         },
         "detectors": {
           "price_oracle_deviation": {
-            "title": "Price vs oracle deviation",
             "summary": "The pool's price is {deviation} away from the oracle price."
           },
           "flow_imbalance": {
-            "title": "One-sided swap flow",
             "summaryToward": "Swap volume leans {percent} toward {token}.",
             "summary": "Swap volume leans {percent} in one direction."
           }
