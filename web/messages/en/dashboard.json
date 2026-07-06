@@ -20,11 +20,11 @@
     },
     "shell": {
       "openMenu": "Open navigation menu",
-      "closeMenu": "Close navigation menu"
+      "closeMenu": "Close navigation menu",
+      "pageInfo": "About this page"
     },
     "Overview": {
       "page": {
-        "eyebrow": "Real-time observation",
         "title": "Overview",
         "description": "Protocol-wide snapshot of every Meteora pool the indexer has observed: total value locked, 24h activity, and discovery."
       },
@@ -51,7 +51,6 @@
     },
     "Pools": {
       "page": {
-        "eyebrow": "Real-time observation",
         "title": "Pools",
         "description": "All Meteora liquidity pools observed by the indexer. Click any row to open the pool's detail page."
       },
@@ -193,7 +192,6 @@
     },
     "Signals": {
       "page": {
-        "eyebrow": "Detection",
         "title": "Signals",
         "description": "Live feed of the detectors' conclusions: flow imbalances, price deviations — every anomaly worth a look, as it is detected."
       },

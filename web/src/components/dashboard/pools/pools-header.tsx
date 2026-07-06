@@ -1,38 +1,36 @@
 /**
  * Pools page header.
  *
- * Title and short description above the table. Intentionally
- * minimal: the future search bar and filter chips will land here,
- * to the right of the eyebrow/title block. For this commit, the
- * right column is empty — keeping the grid in place avoids a
- * layout shift when search/filters are added.
+ * Slim: title + ⓘ popover (the page description on demand) on the
+ * left, the search box on the right. Screen height belongs to the
+ * table below, not to chrome.
  */
 
 import { getTranslations } from "next-intl/server";
+
+import { InfoPopover } from "@/components/shared/info-popover";
+
 import { PoolsSearch } from "./pools-search";
 
 export async function PoolsHeader() {
   const t = await getTranslations("Dashboard.Pools.page");
+  const tShell = await getTranslations("Dashboard.shell");
 
   return (
-    <header className="px-6 pt-8 pb-6 lg:px-10 lg:pt-10">
-      <div className="grid grid-cols-1 items-end gap-4 lg:grid-cols-[1fr_auto]">
-        <div>
-          <p className="text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
-            {t("eyebrow")}
-          </p>
-          <h1 className="mt-2 font-display text-[28px] leading-[1.15] font-bold tracking-[0.03em] text-[#f5f2ff] lg:text-[34px]">
+    <header className="px-6 pt-6 pb-4 lg:px-10">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="flex items-center gap-2.5">
+          <h1 className="font-display text-[20px] leading-[1.2] font-bold tracking-[0.03em] text-[#f5f2ff]">
             {t("title")}
           </h1>
-          <p className="mt-3 max-w-[68ch] text-[15px] leading-[1.6] text-slate-400">
+          <InfoPopover label={tShell("pageInfo")}>
             {t("description")}
-          </p>
+          </InfoPopover>
         </div>
 
-        <div className="flex justify-start lg:justify-end">
+        <div className="ml-auto">
           <PoolsSearch />
         </div>
-        <div />
       </div>
     </header>
   );

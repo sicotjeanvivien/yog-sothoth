@@ -20,11 +20,11 @@
     },
     "shell": {
       "openMenu": "Ouvrir le menu de navigation",
-      "closeMenu": "Fermer le menu de navigation"
+      "closeMenu": "Fermer le menu de navigation",
+      "pageInfo": "À propos de cette page"
     },
     "Overview": {
       "page": {
-        "eyebrow": "Observation temps réel",
         "title": "Vue d'ensemble",
         "description": "Aperçu global de toutes les pools Meteora observées par l'indexer : valeur totale verrouillée, activité 24h et découverte."
       },
@@ -51,7 +51,6 @@
     },
     "Pools": {
       "page": {
-        "eyebrow": "Observation temps réel",
         "title": "Pools",
         "description": "Toutes les pools de liquidité Meteora observées par l'indexeur. Cliquez sur une ligne pour ouvrir la page détail de la pool."
       },
@@ -193,7 +192,6 @@
     },
     "Signals": {
       "page": {
-        "eyebrow": "Détection",
         "title": "Signaux",
         "description": "Flux en direct des conclusions des détecteurs : déséquilibres de flux, déviations de prix — chaque anomalie qui mérite un œil, au moment où elle est détectée."
       },

@@ -19,6 +19,7 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { InfoPopover } from "@/components/shared/info-popover";
 import { OverviewLatestSignals } from "@/components/dashboard/overview/overview-latest-signals";
 import { OverviewStats } from "@/components/dashboard/overview/overview-stats";
 import { OverviewTopPools } from "@/components/dashboard/overview/overview-top-pools";
@@ -49,6 +50,7 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
   setRequestLocale(locale);
 
   const t = await getTranslations("Dashboard.Overview.page");
+  const tShell = await getTranslations("Dashboard.shell");
 
   let stats;
   try {
@@ -62,16 +64,11 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
 
   return (
     <>
-      <header className="px-6 pt-8 pb-6 lg:px-10 lg:pt-10">
-        <p className="text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
-          {t("eyebrow")}
-        </p>
-        <h1 className="mt-2 font-display text-[28px] leading-[1.15] font-bold tracking-[0.03em] text-[#f5f2ff] lg:text-[34px]">
+      <header className="flex items-center gap-2.5 px-6 pt-6 pb-4 lg:px-10">
+        <h1 className="font-display text-[20px] leading-[1.2] font-bold tracking-[0.03em] text-[#f5f2ff]">
           {t("title")}
         </h1>
-        <p className="mt-3 max-w-[68ch] text-[15px] leading-[1.6] text-slate-400">
-          {t("description")}
-        </p>
+        <InfoPopover label={tShell("pageInfo")}>{t("description")}</InfoPopover>
       </header>
 
       <OverviewStats stats={stats} />
