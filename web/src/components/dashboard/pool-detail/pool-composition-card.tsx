@@ -74,7 +74,7 @@ export function PoolCompositionCard({
         <Donut shareA={composition.shareA} tvlUsd={tvlUsd} />
 
         {/* Legend */}
-        <div className="flex flex-1 flex-col gap-3 text-[13px]">
+        <div className="flex flex-1 flex-col gap-3 text-[14px]">
           <LegendRow
             color={COLOR_A}
             symbol={tokenA.symbol ?? "?"}
@@ -150,7 +150,7 @@ function Donut({
         <span className="font-display text-[14px] font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[15px]">
           {formatUsdCompact(tvlUsd)}
         </span>
-        <span className="mt-0.5 text-[9px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
+        <span className="mt-0.5 text-[10px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
           TVL
         </span>
       </div>
@@ -232,7 +232,7 @@ function LegendRow({
           {formatUsdCompact(String(valueUsd))}
         </span>
       </div>
-      <div className="flex items-center justify-between gap-3 pl-[18px] text-[11px] text-slate-400">
+      <div className="flex items-center justify-between gap-3 pl-[18px] text-[12px] text-slate-400">
         <span className="truncate font-mono">
           {formatTokenAmount(reserve, decimals, symbol)}
         </span>

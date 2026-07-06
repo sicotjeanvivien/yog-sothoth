@@ -64,7 +64,7 @@ function TokenLogo({ token }: { token: TokenResponse }) {
   return (
     <div
       aria-hidden="true"
-      className={`${sharedClass} flex items-center justify-center text-[10px] font-bold tracking-wide text-sothoth-300 uppercase`}
+      className={`${sharedClass} flex items-center justify-center text-[11px] font-bold tracking-wide text-sothoth-300 uppercase`}
     >
       {token.symbol ? token.symbol.charAt(0) : "-"}
     </div>

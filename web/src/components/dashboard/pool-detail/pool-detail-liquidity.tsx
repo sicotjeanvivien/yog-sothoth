@@ -48,7 +48,7 @@ const TITLE_BAR_CLASS =
   "flex items-center justify-between border-b border-sothoth-500/20 px-6 py-4";
 
 const SECTION_TITLE_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+  "text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
 
 const TABLE_WRAPPER_CLASS = "overflow-x-auto";
 
@@ -56,10 +56,10 @@ const GRID_COLS =
   "grid-cols-[minmax(110px,1fr)_minmax(100px,0.8fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(120px,1fr)_minmax(96px,auto)]";
 
 const HEAD_CELL_CLASS =
-  "px-4 py-3 text-left text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
+  "px-4 py-3 text-left text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
 
 const CELL_CLASS =
-  "px-4 py-3 text-[13px] text-slate-300 align-middle whitespace-nowrap flex items-center";
+  "px-4 py-3 text-[14px] text-slate-300 align-middle whitespace-nowrap flex items-center";
 
 const CELL_MONO_CLASS = `${CELL_CLASS} font-mono`;
 
@@ -70,10 +70,10 @@ const ACTION_LINK_CLASS =
 // (capital outflow). Translucent backgrounds so the badge sits
 // gently on the dark surface without overpowering the row.
 const BADGE_ADD_CLASS =
-  "inline-flex items-center rounded-[3px] border border-emerald-500/30 bg-emerald-500/10 px-2 py-[2px] text-[11px] font-semibold tracking-[0.1em] text-emerald-300 uppercase";
+  "inline-flex items-center rounded-[3px] border border-emerald-500/30 bg-emerald-500/10 px-2 py-[2px] text-[12px] font-semibold tracking-[0.1em] text-emerald-300 uppercase";
 
 const BADGE_REMOVE_CLASS =
-  "inline-flex items-center rounded-[3px] border border-rose-500/30 bg-rose-500/10 px-2 py-[2px] text-[11px] font-semibold tracking-[0.1em] text-rose-300 uppercase";
+  "inline-flex items-center rounded-[3px] border border-rose-500/30 bg-rose-500/10 px-2 py-[2px] text-[12px] font-semibold tracking-[0.1em] text-rose-300 uppercase";
 
 // ── Component ─────────────────────────────────────────────────────────
 
@@ -221,7 +221,7 @@ function LiquidityRow({
 function EmptyState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
-      <p className="max-w-[52ch] text-[13px] leading-[1.6] text-slate-400">
+      <p className="max-w-[52ch] text-[14px] leading-[1.6] text-slate-400">
         {message}
       </p>
     </div>

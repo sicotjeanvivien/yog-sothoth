@@ -19,7 +19,7 @@ const LABEL_CLASS =
 const VALUE_CLASS =
   "font-display text-[21px] text-right font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[24px]";
 
-const HINT_CLASS = "mt-1 text-right text-[12px] leading-[1.4] text-slate-500";
+const HINT_CLASS = "mt-1 text-right text-[13px] leading-[1.4] text-slate-500";
 
 export function StatCard({
   label,

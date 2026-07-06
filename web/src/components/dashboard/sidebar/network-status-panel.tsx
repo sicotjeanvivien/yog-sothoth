@@ -99,7 +99,7 @@ export function NetworkStatusPanel() {
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-[7px]">
           <SolanaGlyph size={20} />
-          <span className="text-[11px] font-semibold tracking-[0.04em] text-slate-300">
+          <span className="text-[12px] font-semibold tracking-[0.04em] text-slate-300">
             {t("title")}
           </span>
         </div>
@@ -196,7 +196,7 @@ function Badge({
 }) {
   return (
     <span
-      className={`flex items-center gap-[5px] text-[9px] font-semibold tracking-[0.18em] uppercase ${labelClass}`}
+      className={`flex items-center gap-[5px] text-[10px] font-semibold tracking-[0.18em] uppercase ${labelClass}`}
     >
       <StatusDot colorClass={dotClass} pulse={pulse} />
       {children}
@@ -219,8 +219,8 @@ function StatusDot({ colorClass, pulse }: { colorClass: string; pulse: boolean }
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between">
-      <dt className="text-[10.5px] text-slate-500">{label}</dt>
-      <dd className="font-mono text-[11px] text-slate-300">{value}</dd>
+      <dt className="text-[11px] text-slate-500">{label}</dt>
+      <dd className="font-mono text-[12px] text-slate-300">{value}</dd>
     </div>
   );
 }

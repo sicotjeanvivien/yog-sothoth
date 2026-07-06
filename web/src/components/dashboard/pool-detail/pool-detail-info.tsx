@@ -55,12 +55,12 @@ const CARD_CLASS =
   "rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 p-6 lg:p-8";
 
 const SECTION_TITLE_CLASS =
-  "text-[11px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
+  "text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase";
 
 const ROW_CLASS =
   "grid grid-cols-[140px_1fr] gap-4 border-t border-sothoth-500/10 py-3 first:border-t-0";
 
-const LABEL_CLASS = "text-[13px] text-slate-400";
+const LABEL_CLASS = "text-[14px] text-slate-400";
 
 const VALUE_CLASS =
   "flex items-center gap-2 text-[14px] text-slate-200 min-w-0";
