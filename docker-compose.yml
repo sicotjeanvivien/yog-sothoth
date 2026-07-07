@@ -74,7 +74,8 @@ services:
     profiles: ["backend", "full"]
     build:
       context: .
-      dockerfile: docker/migrate.Dockerfile
+      dockerfile: docker/backend.Dockerfile
+      target: yog-migrate
     environment:
       # The binary reads DATABASE_URL_MIGRATE (same convention as
       # cargo run). We rewrite the host on the fly so the same
@@ -98,7 +99,8 @@ services:
     profiles: ["backend", "full"]
     build:
       context: .
-      dockerfile: docker/indexer.Dockerfile
+      dockerfile: docker/backend.Dockerfile
+      target: yog-indexer
     environment:
       DATABASE_URL_INDEXER: ${DATABASE_URL_INDEXER}
       SOLANA_RPC_WS: ${SOLANA_RPC_WS}
@@ -129,7 +131,8 @@ services:
     profiles: ["backend", "full"]
     build:
       context: .
-      dockerfile: docker/api.Dockerfile
+      dockerfile: docker/backend.Dockerfile
+      target: yog-api
     environment:
       DATABASE_URL_API: ${DATABASE_URL_API}
       # Forced to 0.0.0.0 inside the container so the compose port
@@ -160,7 +163,8 @@ services:
     profiles: ["backend", "full"]
     build:
       context: .
-      dockerfile: docker/context.Dockerfile
+      dockerfile: docker/backend.Dockerfile
+      target: yog-context
     environment:
       DATABASE_URL_CONTEXT: ${DATABASE_URL_CONTEXT}
       SOLANA_RPC_HTTP: ${SOLANA_RPC_HTTP}
@@ -193,7 +197,8 @@ services:
     profiles: ["backend", "full"]
     build:
       context: .
-      dockerfile: docker/signals.Dockerfile
+      dockerfile: docker/backend.Dockerfile
+      target: yog-signals
     environment:
       DATABASE_URL_SIGNALS: ${DATABASE_URL_SIGNALS}
       SIGNALS_FLOW_INTERVAL_SECS: ${SIGNALS_FLOW_INTERVAL_SECS:-300}
