@@ -17,6 +17,7 @@ fn valid_query() -> SignalsQuery {
         dir: PageDirectionParam::Next,
         position: None,
         severity: None,
+        pool: None,
         limit: default_limit(),
     }
 }
@@ -37,6 +38,33 @@ fn maps_the_severity_filter() {
     q.severity = Some(SeverityParam::Critical);
     let params = ListSignalsRequest::parse(q).unwrap().into_params();
     assert_eq!(params.severity, Some(Severity::Critical));
+}
+
+#[test]
+fn maps_the_pool_filter() {
+    let mut q = valid_query();
+    let address = solana_pubkey::Pubkey::new_from_array([7; 32]);
+    q.pool = Some(address.to_string());
+    let params = ListSignalsRequest::parse(q).unwrap().into_params();
+    assert_eq!(params.pool, Some(address));
+}
+
+#[test]
+fn rejects_an_invalid_pool_address() {
+    let mut q = valid_query();
+    q.pool = Some("not-a-pubkey".to_string());
+    let err = ListSignalsRequest::parse(q).unwrap_err();
+    assert!(matches!(err, ApiError::BadRequest(_)));
+}
+
+#[test]
+fn empty_pool_param_means_no_filter() {
+    // `?pool=` (present but empty) is treated like an absent param,
+    // same as the cursor's empty-string rule.
+    let mut q = valid_query();
+    q.pool = Some(String::new());
+    let params = ListSignalsRequest::parse(q).unwrap().into_params();
+    assert!(params.pool.is_none());
 }
 
 #[test]

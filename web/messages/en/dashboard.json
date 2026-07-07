@@ -102,7 +102,8 @@
         "info": "Info",
         "swaps": "Swaps",
         "liquidity": "Liquidity",
-        "fees": "Fees"
+        "fees": "Fees",
+        "alerts": "Alerts"
       },
       "header": {
         "backToList": "Back to pools",
@@ -184,6 +185,10 @@
         "add": "Add",
         "remove": "Remove",
         "empty": "No liquidity events observed yet for this pool. They will appear here as soon as on-chain add/remove events are picked up."
+      },
+      "alerts": {
+        "title": "Alerts for this pool",
+        "empty": "No alert for this pool yet. Signals emitted by the detectors will appear here."
       },
       "meta": {
         "title": "Pool {address}",

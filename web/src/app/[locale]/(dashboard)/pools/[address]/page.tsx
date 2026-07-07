@@ -21,11 +21,12 @@
  * only wraps the error fallback in a matching section to keep
  * layout consistent on failure.
  *
- * Pagination state for the two paginated blocks (swaps, liquidity)
- * lives in the URL behind namespaced params: `swapsCursor` / `swapsDir`
- * / `swapsPosition` and `liqCursor` / `liqDir` / `liqPosition`.
- * The two paginations are fully independent — paginating swaps
- * preserves the liquidity cursor and vice versa.
+ * Pagination state for the paginated blocks (swaps, liquidity,
+ * alerts) lives in the URL behind namespaced params: `swapsCursor` /
+ * `swapsDir` / `swapsPosition`, `liqCursor` / `liqDir` / `liqPosition`
+ * and `alertsCursor` / `alertsDir` / `alertsPosition`. The paginations
+ * are fully independent — paginating swaps preserves the liquidity
+ * cursor and vice versa.
  */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
@@ -37,6 +38,7 @@ import { fetchPoolLatestState } from "@/lib/api/server/latest-state";
 import { fetchPoolSwapEvents } from "@/lib/api/server/swap-events";
 import { fetchPoolLiquidityEvents } from "@/lib/api/server/liquidity-events";
 import { fetchPoolHistory } from "@/lib/api/server/pool-history";
+import { fetchSignals } from "@/lib/api/server/signals";
 import { safeFetch, safeFetchOrNotFound } from "@/lib/api/safe-fetch";
 import type {
   PageDir,
@@ -53,6 +55,7 @@ import {
 } from "@/components/dashboard/pool-detail/pool-detail-tabs";
 import { PoolDetailSwaps } from "@/components/dashboard/pool-detail/pool-detail-swaps";
 import { PoolDetailLiquidity } from "@/components/dashboard/pool-detail/pool-detail-liquidity";
+import { PoolDetailAlerts } from "@/components/dashboard/pool-detail/pool-detail-alerts";
 import { BlockError } from "@/components/dashboard/block-error";
 import { PageError } from "@/components/dashboard/page-error";
 import { Pagination } from "@/components/shared/pagination";
@@ -152,24 +155,38 @@ export default async function PoolDetailPage({
     position: parsePosition(sp['liqPosition']),
     limit: 20,
   };
+  const alertsPagination = {
+    cursor: parseCursor(sp['alertsCursor']),
+    dir: parseDir(sp['alertsDir']),
+    position: parsePosition(sp['alertsPosition']),
+    limit: 20,
+  };
 
   const tab = parseTab(sp["tab"]);
 
   // KPIs (state) are always shown above the tabs; only the active tab's data
   // is fetched, in parallel with the state. Inactive tabs resolve to `null`.
-  const [stateOutcome, swapsOutcome, liquidityOutcome, historyOutcome] =
-    await Promise.all([
-      safeFetchOrNotFound(() => fetchPoolLatestState(address)),
-      tab === "swaps"
-        ? safeFetch(() => fetchPoolSwapEvents(address, swapsPagination))
-        : Promise.resolve(null),
-      tab === "liquidity"
-        ? safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination))
-        : Promise.resolve(null),
-      tab === "fees"
-        ? safeFetch(() => fetchPoolHistory(address, HISTORY_DAYS))
-        : Promise.resolve(null),
-    ]);
+  const [
+    stateOutcome,
+    swapsOutcome,
+    liquidityOutcome,
+    historyOutcome,
+    alertsOutcome,
+  ] = await Promise.all([
+    safeFetchOrNotFound(() => fetchPoolLatestState(address)),
+    tab === "swaps"
+      ? safeFetch(() => fetchPoolSwapEvents(address, swapsPagination))
+      : Promise.resolve(null),
+    tab === "liquidity"
+      ? safeFetch(() => fetchPoolLiquidityEvents(address, liqPagination))
+      : Promise.resolve(null),
+    tab === "fees"
+      ? safeFetch(() => fetchPoolHistory(address, HISTORY_DAYS))
+      : Promise.resolve(null),
+    tab === "alerts"
+      ? safeFetch(() => fetchSignals({ pool: address, ...alertsPagination }))
+      : Promise.resolve(null),
+  ]);
 
   // "Latest state" 404 is expected (pool observed via Claim*
   // events only) — collapse it to null so the KPI block adapts.
@@ -180,6 +197,7 @@ export default async function PoolDetailPage({
   const tFees = await getTranslations("Dashboard.PoolDetail.fees");
   const tSwaps = await getTranslations("Dashboard.PoolDetail.swaps");
   const tLiquidity = await getTranslations("Dashboard.PoolDetail.liquidity");
+  const tAlerts = await getTranslations("Dashboard.PoolDetail.alerts");
 
   const basePath = `/pools/${address}`;
 
@@ -251,6 +269,26 @@ export default async function PoolDetailPage({
               title={tLiquidity("title")}
               kind={liquidityOutcome.reason}
             />
+          </section>
+        ))}
+
+      {tab === "alerts" &&
+        alertsOutcome !== null &&
+        (alertsOutcome.kind === "ok" ? (
+          <>
+            <PoolDetailAlerts signals={alertsOutcome.data.items} />
+            {alertsOutcome.data.items.length > 0 && (
+              <Pagination
+                page={alertsOutcome.data}
+                searchParams={sp}
+                paramPrefix="alerts"
+                basePath={basePath}
+              />
+            )}
+          </>
+        ) : (
+          <section className="mt-6 px-6 lg:px-10">
+            <BlockError title={tAlerts("title")} kind={alertsOutcome.reason} />
           </section>
         ))}
     </div>

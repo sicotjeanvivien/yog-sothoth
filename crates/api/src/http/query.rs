@@ -116,8 +116,8 @@ impl From<PoolSortParam> for PoolSort {
 }
 
 /// Query params for `GET /api/signals`: standard cursor pagination plus
-/// an optional exact severity filter. No sort (the feed ordering is
-/// fixed by contract) and no free-text search.
+/// optional exact severity and pool filters. No sort (the feed ordering
+/// is fixed by contract) and no free-text search.
 #[derive(Debug, Deserialize)]
 pub(crate) struct SignalsQuery {
     pub(crate) cursor: Option<String>,
@@ -125,6 +125,7 @@ pub(crate) struct SignalsQuery {
     pub(crate) dir: PageDirectionParam,
     pub(crate) position: Option<PagePositionParam>,
     pub(crate) severity: Option<SeverityParam>,
+    pub(crate) pool: Option<String>,
     #[serde(default = "default_limit")]
     pub(crate) limit: i64,
 }

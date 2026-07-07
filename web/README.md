@@ -120,6 +120,13 @@ and a detail footer (exact value, threshold, raw detector tag). A
 detector unknown to the UI falls back to `message`, so a new detector
 ships readable before its wording lands here.
 
+The pool detail page has an **Alerts tab** (`?tab=alerts`) showing the
+same cards for one pool: the pool-filtered feed (`GET
+/api/signals?pool=`), statically paginated behind namespaced URL params
+(`alertsCursor`/`alertsDir`/`alertsPosition`) like the swaps and
+liquidity tabs. No SSE there — the tab is a per-pool history; the live
+tail stays on `/signals`.
+
 ## Scripts
 
 | Command              | Description                            |

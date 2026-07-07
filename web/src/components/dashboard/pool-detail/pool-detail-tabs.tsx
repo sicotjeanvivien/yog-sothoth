@@ -1,7 +1,7 @@
 /**
  * Pool detail page — tab bar.
  *
- * URL-driven tabs (`?tab=info|swaps|liquidity|fees`): the active tab is known
+ * URL-driven tabs (`?tab=info|swaps|liquidity|fees|alerts`): the active tab is known
  * server-side from the query param, so this is a plain Server Component that
  * renders locale-aware `<Link>`s. Switching a tab is an RSC navigation, and the
  * page only fetches/renders the active tab's data.
@@ -14,7 +14,7 @@ import { getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
 
-export const TAB_IDS = ["info", "swaps", "liquidity", "fees"] as const;
+export const TAB_IDS = ["info", "swaps", "liquidity", "fees", "alerts"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 const DEFAULT_TAB: TabId = "info";

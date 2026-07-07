@@ -102,7 +102,8 @@
         "info": "Infos",
         "swaps": "Swaps",
         "liquidity": "Liquidité",
-        "fees": "Frais"
+        "fees": "Frais",
+        "alerts": "Alertes"
       },
       "header": {
         "backToList": "Retour aux pools",
@@ -184,6 +185,10 @@
         "add": "Ajout",
         "remove": "Retrait",
         "empty": "Aucun événement de liquidité observé pour le moment sur cette pool. Ils apparaîtront ici dès que des ajouts ou retraits seront détectés on-chain."
+      },
+      "alerts": {
+        "title": "Alertes de cette pool",
+        "empty": "Aucune alerte pour cette pool pour l'instant. Les signaux émis par les détecteurs apparaîtront ici."
       },
       "meta": {
         "title": "Pool {address}",

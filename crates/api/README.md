@@ -55,7 +55,7 @@ mock in tests is free.
 | `GET` | `/api/pools/{address}/swap-events` | Paginated swap events |
 | `GET` | `/api/pools/{address}/liquidity-events` | Paginated liquidity events |
 | `GET` | `/api/network/status` | Latest indexer/RPC slot, RPC latency, observed timestamp |
-| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` filter); each item embeds its pool's token pair (`tokenA`/`tokenB`, same shape as in `PoolResponse`) |
+| `GET` | `/api/signals` | Paginated signal feed (`triggered_at DESC, id DESC`; `?severity=` and `?pool=` filters); each item embeds its pool's token pair (`tokenA`/`tokenB`, same shape as in `PoolResponse`) |
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/stats` | Global KPIs — total TVL, 24h volume/fees, pool counts |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
