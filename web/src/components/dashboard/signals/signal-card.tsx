@@ -83,6 +83,10 @@ function detectorSummary(
         ? t("detectors.flow_imbalance.summaryToward", { percent, token: toward })
         : t("detectors.flow_imbalance.summary", { percent });
     }
+    case "tvl_drain":
+      return t("detectors.tvl_drain.summary", {
+        percent: formatPercent(signal.value, locale),
+      });
     default:
       return (
         signal.message ??
@@ -123,9 +127,13 @@ export function SignalCard({
   const locale = useLocale();
 
   const known = KNOWN_DETECTORS.has(signal.detector);
-  const value = known
-    ? formatSignedPercent(signal.value, locale)
-    : signal.value;
+  // The drain ratio is one-sided: a signed "+61%" would read as growth,
+  // so it formats unsigned; the two-sided detectors keep their sign.
+  const value = !known
+    ? signal.value
+    : signal.detector === "tvl_drain"
+      ? formatPercent(signal.value, locale)
+      : formatSignedPercent(signal.value, locale);
   const threshold =
     signal.threshold === null
       ? "—"

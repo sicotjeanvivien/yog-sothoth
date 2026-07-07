@@ -21,6 +21,7 @@ core/src/
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
 │   │                       SignalRepository + SignalFeed, DetectorError)
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)
+│   ├── liquidity_flow/    (PoolLiquidityFlow — windowed add/remove + TVL read model)
 │   ├── pool_price_snapshot/ (spot-vs-oracle read model)
 │   ├── token_metadata/    (TokenMetadata + repo)
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)

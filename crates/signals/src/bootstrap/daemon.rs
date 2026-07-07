@@ -11,16 +11,18 @@ use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_core::domain::{
-    PoolPriceSnapshotRepository, Protocol, SignalDetector, SignalRepository, SwapFlowRepository,
+    LiquidityFlowRepository, PoolPriceSnapshotRepository, Protocol, SignalDetector,
+    SignalRepository, SwapFlowRepository,
 };
 use yog_persistence::{
-    Database, PgPoolPriceSnapshotRepository, PgSignalRepository, PgSwapFlowRepository,
+    Database, PgLiquidityFlowRepository, PgPoolPriceSnapshotRepository, PgSignalRepository,
+    PgSwapFlowRepository,
 };
 
 use crate::bootstrap::Config;
 use crate::detectors::{
     FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
-    PriceOracleDeviationSettings,
+    PriceOracleDeviationSettings, TvlDrainDetector, TvlDrainSettings,
 };
 use crate::engine::SignalEngine;
 use crate::metrics::EngineMetrics;
@@ -45,7 +47,9 @@ impl Daemon {
         let flow_repository: Arc<dyn SwapFlowRepository> =
             Arc::new(PgSwapFlowRepository::new(pool.clone()));
         let snapshot_repository: Arc<dyn PoolPriceSnapshotRepository> =
-            Arc::new(PgPoolPriceSnapshotRepository::new(pool));
+            Arc::new(PgPoolPriceSnapshotRepository::new(pool.clone()));
+        let liquidity_flow_repository: Arc<dyn LiquidityFlowRepository> =
+            Arc::new(PgLiquidityFlowRepository::new(pool));
 
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
@@ -73,11 +77,24 @@ impl Daemon {
                 },
             ));
 
+        let tvl_drain: Arc<dyn SignalDetector> = Arc::new(TvlDrainDetector::new(
+            liquidity_flow_repository,
+            Protocol::MeteoraDammV2,
+            TvlDrainSettings {
+                window: config.tvl_drain_window,
+                interval: config.tvl_drain_interval,
+                cooldown: config.tvl_drain_cooldown,
+                min_tvl_usd: config.tvl_drain_min_tvl_usd,
+                threshold: config.tvl_drain_threshold,
+                critical: config.tvl_drain_critical,
+            },
+        ));
+
         EngineMetrics::register_descriptions();
 
         let engine = SignalEngine::new(
             signal_repository,
-            vec![flow_imbalance, price_oracle_deviation],
+            vec![flow_imbalance, price_oracle_deviation, tvl_drain],
         );
         Ok(Self { engine })
     }
