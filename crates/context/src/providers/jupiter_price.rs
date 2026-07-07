@@ -5,10 +5,14 @@
 //! Mints that Jupiter cannot price (untraded recently, flagged by
 //! their heuristics) are silently dropped: this is documented V3
 //! behaviour and not an error.
+//!
+//! Chunks beyond the first can hit Jupiter's rate limit (429) because
+//! they are sent back-to-back; those are retried a bounded number of
+//! times, pacing on the `Retry-After` header when present.
 
 use super::metrics::ProviderMetrics;
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use rust_decimal::Decimal;
@@ -25,6 +29,21 @@ use crate::{
 /// Maximum number of `ids` accepted by Price API V3 in a single
 /// call. Documented limit: 50.
 const JUPITER_BATCH_MAX: usize = 50;
+
+/// Attempts per chunk when Jupiter answers 429 (1 initial call +
+/// retries). Chunks are sent back-to-back, so the first chunks of a
+/// tick can exhaust the per-second budget and 429 the rest; a short
+/// paced retry recovers them instead of losing a price sample.
+const RATE_LIMIT_MAX_ATTEMPTS: u32 = 3;
+
+/// Backoff before retry attempt `n` (0-based) when the 429 carried
+/// no `Retry-After` header: 1s, then 2s.
+const RATE_LIMIT_BASE_BACKOFF: Duration = Duration::from_secs(1);
+
+/// Upper bound on any single retry sleep, including a server-provided
+/// `Retry-After`. Keeps one bad header from stalling the worker (and
+/// its graceful shutdown) for minutes.
+const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(10);
 
 // ── Wire types ────────────────────────────────────────────────────────
 
@@ -56,7 +75,8 @@ struct JupiterPriceEntry {
 #[derive(Clone)]
 pub struct JupiterPriceClient {
     http: reqwest::Client,
-    /// Price API V3 base URL (e.g. `https://api.jup.ag/price/v3`).
+    /// Jupiter API base URL (e.g. `https://api.jup.ag`); `/price/v3`
+    /// is appended per request.
     base_url: String,
     /// API key — sent on every request via `x-api-key`.
     api_key: String,
@@ -85,6 +105,7 @@ impl JupiterPriceClient {
         let outcome = match &result {
             Ok(_) => "ok",
             Err(SourceError::Http(_)) => "http",
+            Err(SourceError::RateLimited { .. }) => "rate_limited",
             Err(SourceError::Decode(_)) => "decode",
         };
         ProviderMetrics::record_call(PriceProvider::Jupiter.as_str(), outcome, elapsed);
@@ -106,7 +127,15 @@ impl JupiterPriceClient {
             .header("x-api-key", &self.api_key)
             .send()
             .await
-            .map_err(|e| SourceError::Http(e.to_string()))?
+            .map_err(|e| SourceError::Http(e.to_string()))?;
+
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Err(SourceError::RateLimited {
+                retry_after: parse_retry_after(response.headers()),
+            });
+        }
+
+        let response = response
             .error_for_status()
             .map_err(|e| SourceError::Http(e.to_string()))?
             .json::<HashMap<String, JupiterPriceEntry>>()
@@ -120,15 +149,47 @@ impl JupiterPriceClient {
     }
 }
 
+impl JupiterPriceClient {
+    /// One chunk with bounded 429 retries: sleeps `Retry-After` when
+    /// Jupiter provided it, exponential backoff otherwise, then gives
+    /// the chunk up (skip-and-log in the caller). Other errors are
+    /// not retried — they are not pacing problems.
+    async fn fetch_chunk_with_retry(
+        &self,
+        mints: &[Pubkey],
+    ) -> Result<Vec<FetchedPrice>, SourceError> {
+        let mut attempt = 0;
+        loop {
+            match self.fetch_chunk(mints).await {
+                Err(SourceError::RateLimited { retry_after })
+                    if attempt + 1 < RATE_LIMIT_MAX_ATTEMPTS =>
+                {
+                    let delay = rate_limit_backoff(attempt, retry_after);
+                    warn!(
+                        attempt,
+                        delay_ms = delay.as_millis() as u64,
+                        chunk_size = mints.len(),
+                        "jupiter_price: rate-limited, backing off before retry",
+                    );
+                    tokio::time::sleep(delay).await;
+                    attempt += 1;
+                }
+                result => return result,
+            }
+        }
+    }
+}
+
 #[async_trait]
 impl PriceSource for JupiterPriceClient {
     /// Fetches USD prices for an arbitrary number of mints, chunking
-    /// internally on Jupiter's 50-id limit. Chunk-level failures are
-    /// logged and skipped.
+    /// internally on Jupiter's 50-id limit. Rate-limited chunks are
+    /// retried with backoff; chunk-level failures are logged and
+    /// skipped.
     async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
         let mut all = Vec::with_capacity(mints.len());
         for chunk in mints.chunks(JUPITER_BATCH_MAX) {
-            match self.fetch_chunk(chunk).await {
+            match self.fetch_chunk_with_retry(chunk).await {
                 Ok(fetched) => all.extend(fetched),
                 Err(e) => {
                     warn!(
@@ -141,6 +202,30 @@ impl PriceSource for JupiterPriceClient {
         }
         Ok(all)
     }
+}
+
+/// Delay before retry attempt `attempt` (0-based): the server's
+/// `Retry-After` when present, exponential backoff on
+/// `RATE_LIMIT_BASE_BACKOFF` otherwise — both capped at
+/// `RATE_LIMIT_MAX_BACKOFF`.
+fn rate_limit_backoff(attempt: u32, retry_after: Option<Duration>) -> Duration {
+    retry_after
+        .unwrap_or_else(|| RATE_LIMIT_BASE_BACKOFF * 2u32.saturating_pow(attempt))
+        .min(RATE_LIMIT_MAX_BACKOFF)
+}
+
+/// Extract the `Retry-After` header as a duration. Only the
+/// delta-seconds form is handled; the HTTP-date form (which Jupiter
+/// does not use) yields `None` and falls back to our own backoff.
+fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .map(Duration::from_secs)
 }
 
 /// Project one HashMap entry from Jupiter's response into the

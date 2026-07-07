@@ -15,6 +15,14 @@ pub enum SourceError {
     #[error("source HTTP error: {0}")]
     Http(String),
 
+    /// HTTP 429 — the provider is rate-limiting us. Carries the
+    /// `Retry-After` delay when the response provided one, so the
+    /// caller can pace its retry instead of guessing.
+    #[error("source rate-limited (429), retry_after={retry_after:?}")]
+    RateLimited {
+        retry_after: Option<std::time::Duration>,
+    },
+
     /// The response was 2xx but the body could not be decoded into
     /// the expected shape.
     #[error("source decode error: {0}")]

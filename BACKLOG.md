@@ -369,6 +369,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 
 #### yog-context — robustesse pour release
 - [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
+- [x] **Bug 429 Jupiter Price** (observé 6 juil. 2026, corrigé 7 juil. 2026) : les chunks de 50 mints partaient en rafale sans espacement → rate limit Jupiter → chunks suivants perdus (trous de prix). Fix : variant `SourceError::RateLimited` (détection 429 + header `Retry-After`), retry borné par chunk (3 tentatives, backoff `Retry-After` sinon exponentiel 1s/2s, cap 10s), outcome Prometheus `rate_limited`
 
 #### yog-indexer — source de données
 - [ ] Étudier le passage du WebSocket RPC à un **Yellowstone gRPC (Geyser) managé** : stream plus fiable/complet que `logsSubscribe` (reconnexions, trous). Des offres avec free tier existeraient (à vérifier : Shyft, Helius/LaserStream, QuickNode…) — comparer quotas/coûts/latence. Périmètre : seule la couche subscription de l'indexer change, le pipeline extraction → persistance reste. **→ promu en gate Pré-v0.2 (3 juil. 2026), voir section dédiée en fin de fichier** ; l'étude peut démarrer pendant v0.1.1, la migration est le gate

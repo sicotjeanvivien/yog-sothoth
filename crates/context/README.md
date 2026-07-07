@@ -54,6 +54,12 @@ then `continue`). An `Err` returned from a source trait is reserved for
 structural misconfiguration, not partial fetch failures — those are handled
 internally as skip-and-log per chunk.
 
+One refinement on the Jupiter side: chunks are sent back-to-back, so a tick
+with many mints can trip Jupiter's rate limit and 429 the later chunks. The
+client retries a rate-limited chunk a bounded number of times (pacing on the
+`Retry-After` header when present, capped exponential backoff otherwise)
+before falling back to skip-and-log.
+
 Known limitation (tracked for the public release): a worker whose retry budget
 is exhausted currently stays down until the process restarts — there is no
 respawn logic yet.
@@ -68,7 +74,7 @@ tick/upsert/failure counters and per-provider request counters and durations.
 ```env
 DATABASE_URL_CONTEXT=postgresql://yog_context:...@localhost:5433/yog_sothoth
 SOLANA_RPC_HTTP=https://mainnet.helius-rpc.com/?api-key=...
-JUPITER_URL=https://api.jup.ag/price/v3
+JUPITER_URL=https://api.jup.ag
 JUPITER_API_KEY=...
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30

@@ -138,6 +138,7 @@ impl HeliusDasClient {
         let outcome = match &result {
             Ok(_) => "ok",
             Err(SourceError::Http(_)) => "http",
+            Err(SourceError::RateLimited { .. }) => "rate_limited",
             Err(SourceError::Decode(_)) => "decode",
         };
         ProviderMetrics::record_call(PROVIDER_LABEL, outcome, elapsed);
