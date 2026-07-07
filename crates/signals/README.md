@@ -20,7 +20,8 @@ signals/src/
 ├── engine.rs      ← SignalEngine: one poll loop per detector, dedup, persist
 ├── detectors/     ← one module per detector
 │   ├── flow_imbalance.rs
-│   └── price_oracle_deviation.rs
+│   ├── price_oracle_deviation.rs
+│   └── tvl_drain.rs
 ├── bootstrap/     ← Config::load(), Daemon (wires the Pg repos into detectors)
 ├── metrics.rs     ← Prometheus counters/histograms
 └── main.rs
@@ -71,7 +72,17 @@ last swap is too old makes the comparison meaningless — no signal is emitted
 rather than a false one. The Warning/Critical scale is validated fail-loud at
 config load (`threshold < critical`, otherwise Warning would be unreachable).
 
-Both detectors record in `signal.threshold` the boundary that justifies the
+**`tvl_drain`** — a pool being emptied of its liquidity (LP exodus, rug-like
+behaviour): over a rolling window, `drain = net_removed / starting TVL`, where
+`net_removed = removed_usd − added_usd` (LP churn nets out) and the starting
+TVL is the current TVL plus what left. Reads the
+`meteora_damm_v2_pool_hourly_liquidity_flow` VIEW (migration 025) joined with
+`pool_current_tvl` (020). Guards: an unvaluable TVL (unknown price, unresolved
+mints, no reconstructed state) skips the pool — no signal beats a fake one;
+the TVL floor applies to the *starting* TVL so a pool drained within the
+window can't dodge the floor by having drained itself below it.
+
+All detectors record in `signal.threshold` the boundary that justifies the
 emitted severity: the critical threshold on a Critical signal, the warning
 one otherwise — not the emission floor.
 
@@ -95,6 +106,14 @@ SIGNALS_PRICE_DEVIATION_CRITICAL=0.2
 SIGNALS_PRICE_DEVIATION_COOLDOWN_HOURS=6
 SIGNALS_PRICE_DEVIATION_MAX_PRICE_AGE_MINS=15   # oracle freshness guard
 SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS=24   # last-swap freshness guard
+
+# tvl_drain
+SIGNALS_TVL_DRAIN_INTERVAL_SECS=300
+SIGNALS_TVL_DRAIN_WINDOW_HOURS=6      # short on purpose: a drain is fast
+SIGNALS_TVL_DRAIN_MIN_TVL_USD=10000   # floor on the STARTING TVL
+SIGNALS_TVL_DRAIN_THRESHOLD=0.5       # Warning
+SIGNALS_TVL_DRAIN_CRITICAL=0.8        # Critical
+SIGNALS_TVL_DRAIN_COOLDOWN_HOURS=6
 ```
 
 Connects to Postgres as `yog_signals` — `INSERT` (append-only) on `signals`,

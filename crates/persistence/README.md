@@ -15,7 +15,7 @@ migration conventions, see [`migrations/README.md`](./migrations/README.md).
 
 ```
 persistence/
-├── migrations/              ← sqlx migrations, forward-only (001 … 024 today)
+├── migrations/              ← sqlx migrations, forward-only (001 … 025 today)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── setup_roles.sql          ← one-time role provisioning (admin)
 ├── .sqlx/                   ← committed offline query cache (see below)
@@ -27,7 +27,7 @@ persistence/
     │   │                     sqlx error mapping)
     │   ├── meteora/damm_v2/ (per-event-kind event repositories — 11 today)
     │   ├── pool/, pool_current_state/, pool_analytics/, global_analytics/
-    │   ├── signal/, swap_flow/, pool_price_snapshot/
+    │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
     │   ├── token_metadata/, token_price/, network_status/, watched_pool/
     │   └── event_freshness.rs
     ├── bin/migrate.rs       ← yog-migrate binary (~30 lines)
@@ -127,8 +127,9 @@ position-lifecycle and pool-admin event tables → `009` differentiated
 retention/compression → `010`–`013` + `017` hourly continuous aggregates →
 `014`–`016` + `018` pool properties resolved by yog-context (mints, fee_bps,
 fee split) → `019`–`021` analytic VIEWs (hourly activity, current TVL, valued
-liquidity) → `022`–`024` the signal engine (the `signals` hypertable +
-`yog_signals` role grants, the hourly-flow and price-snapshot read VIEWs).
+liquidity) → `022`–`025` the signal engine (the `signals` hypertable +
+`yog_signals` role grants, the hourly swap-flow, price-snapshot and hourly
+liquidity-flow read VIEWs).
 
 ## `setup_roles.sql`
 

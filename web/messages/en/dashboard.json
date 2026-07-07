@@ -253,6 +253,11 @@
             "summaryToward": "Swap volume leans {percent} toward {token}.",
             "summary": "Swap volume leans {percent} in one direction.",
             "explain": "Measures the directional imbalance of swap volume over a rolling window: (A→B volume − B→A volume) / total volume, from −100% to +100%. A flow leaning hard one way flags sustained buy or sell pressure. A volume floor filters out near-idle pools."
+          },
+          "tvl_drain": {
+            "tag": "TVL",
+            "summary": "{percent} of the pool's liquidity has left.",
+            "explain": "Measures, over a rolling window, the share of the pool's starting TVL that has been withdrawn: (removals − adds) / starting TVL. A high drain flags an LP exodus or rug-like behaviour. Withdrawals offset by deposits (rebalancing) cancel out; a TVL floor filters out dust pools, and a pool whose tokens cannot be priced is skipped rather than misread."
           }
         },
         "detail": {

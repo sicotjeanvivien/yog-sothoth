@@ -18,7 +18,7 @@ mod repositories;
 pub use database::Database;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
-    PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
+    PgEventFreshnessRepository, PgGlobalAnalyticsRepository, PgLiquidityFlowRepository,
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
     PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
     PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2LiquidityEventRepository,

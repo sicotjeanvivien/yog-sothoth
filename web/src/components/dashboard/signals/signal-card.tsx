@@ -33,7 +33,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type { SignalResponse, Severity } from "@/lib/api/schema/signal";
 import type { TokenResponse } from "@/lib/api/schema/token";
-import { formatPercent, formatSignedPercent } from "@/lib/format/format-percent";
+import {
+  formatPercent,
+  formatSignedPercent,
+} from "@/lib/format/format-percent";
 import { formatPrice } from "@/lib/format/pool-price";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
@@ -80,9 +83,16 @@ function detectorSummary(
         : signal.tokenB.symbol;
       const percent = formatPercent(signal.value, locale);
       return toward
-        ? t("detectors.flow_imbalance.summaryToward", { percent, token: toward })
+        ? t("detectors.flow_imbalance.summaryToward", {
+            percent,
+            token: toward,
+          })
         : t("detectors.flow_imbalance.summary", { percent });
     }
+    case "tvl_drain":
+      return t("detectors.tvl_drain.summary", {
+        percent: formatPercent(signal.value, locale),
+      });
     default:
       return (
         signal.message ??
@@ -123,9 +133,13 @@ export function SignalCard({
   const locale = useLocale();
 
   const known = KNOWN_DETECTORS.has(signal.detector);
-  const value = known
-    ? formatSignedPercent(signal.value, locale)
-    : signal.value;
+  // The drain ratio is one-sided: a signed "+61%" would read as growth,
+  // so it formats unsigned; the two-sided detectors keep their sign.
+  const value = !known
+    ? signal.value
+    : signal.detector === "tvl_drain"
+      ? formatPercent(signal.value, locale)
+      : formatSignedPercent(signal.value, locale);
   const threshold =
     signal.threshold === null
       ? "—"
@@ -171,9 +185,12 @@ export function SignalCard({
         {severityColumn}
         <div className="flex min-w-0 flex-col gap-0.5">
           <PairLink signal={signal} />
+          {/* suppressHydrationWarning: relative to now, so the SSR text can
+              legitimately lag the client by a minute boundary. */}
           <time
             dateTime={signal.triggeredAt}
             className="text-[13px] whitespace-nowrap text-slate-500"
+            suppressHydrationWarning
           >
             {formatRelativeTime(signal.triggeredAt, locale)}
           </time>
@@ -213,9 +230,11 @@ export function SignalCard({
 
         {/* Line 3 — time · detector tag · threshold */}
         <div className="flex items-center justify-between gap-2 text-[13px] text-slate-400">
+          {/* suppressHydrationWarning: see the <time> in the compact card. */}
           <time
             dateTime={signal.triggeredAt}
             className="whitespace-nowrap text-slate-500"
+            suppressHydrationWarning
           >
             {formatRelativeTime(signal.triggeredAt, locale)}
           </time>

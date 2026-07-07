@@ -43,6 +43,7 @@ export const SEVERITY_ICON: Record<Severity, FC<IconProps>> = {
 export const KNOWN_DETECTORS = new Set([
   "price_oracle_deviation",
   "flow_imbalance",
+  "tvl_drain",
 ]);
 
 /**

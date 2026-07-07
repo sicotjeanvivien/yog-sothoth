@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                f.pool_address                          AS \"pool_address!\",\n                COALESCE(SUM(f.added_usd), 0::NUMERIC)  AS \"added_usd!\",\n                COALESCE(SUM(f.removed_usd), 0::NUMERIC) AS \"removed_usd!\",\n                t.tvl_usd                               AS \"tvl_usd?\"\n            FROM meteora_damm_v2_pool_hourly_liquidity_flow f\n            LEFT JOIN pool_current_tvl t ON t.pool_address = f.pool_address\n            WHERE f.bucket > $1\n            GROUP BY f.pool_address, t.tvl_usd\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "added_usd!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "removed_usd!",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "tvl_usd?",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "26b5015ad6dd7107eca618591891d1bde9dbeb75d3a8eceef387e4d3b61b150e"
+}

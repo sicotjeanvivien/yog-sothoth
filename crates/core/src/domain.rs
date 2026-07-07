@@ -1,6 +1,7 @@
 mod domain_event;
 mod freshness_status;
 mod global_analytics;
+mod liquidity_flow;
 mod meteora;
 mod network_status;
 mod pool;
@@ -18,6 +19,7 @@ mod watched_pool;
 pub use domain_event::DomainEvent;
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};
+pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,

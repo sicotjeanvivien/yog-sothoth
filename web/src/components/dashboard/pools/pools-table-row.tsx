@@ -60,13 +60,23 @@ export function PoolsTableRow({
       <div role="cell" className={CELL_NUMERIC_CLASS}>
         {formatUsdCompact(pool.volume24hUsd)}
       </div>
+      {/* suppressHydrationWarning: relative to now, so the SSR text can
+          legitimately lag the client by a minute boundary. */}
       <div role="cell" className={CELL_CLASS}>
-        <time dateTime={pool.firstSeenAt} className="text-slate-400">
+        <time
+          dateTime={pool.firstSeenAt}
+          className="text-slate-400"
+          suppressHydrationWarning
+        >
           {formatRelativeTime(pool.firstSeenAt, locale)}
         </time>
       </div>
       <div role="cell" className={CELL_CLASS}>
-        <time dateTime={pool.lastSeenAt} className="text-slate-400">
+        <time
+          dateTime={pool.lastSeenAt}
+          className="text-slate-400"
+          suppressHydrationWarning
+        >
           {formatRelativeTime(pool.lastSeenAt, locale)}
         </time>
       </div>

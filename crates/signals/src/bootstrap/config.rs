@@ -46,6 +46,23 @@ const DEFAULT_PRICE_DEVIATION_MAX_PRICE_AGE_MINS: u64 = 15;
 /// `SIGNALS_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS`.
 const DEFAULT_PRICE_DEVIATION_MAX_SPOT_AGE_HOURS: u64 = 24;
 
+/// How often the TVL-drain detector ticks, in seconds.
+/// Overridable via `SIGNALS_TVL_DRAIN_INTERVAL_SECS`.
+const DEFAULT_TVL_DRAIN_INTERVAL_SECS: u64 = 300;
+
+/// Trailing window over which liquidity flow is aggregated, in hours. Short
+/// on purpose: a drain is fast, a 24h window would dilute it.
+/// Overridable via `SIGNALS_TVL_DRAIN_WINDOW_HOURS`.
+const DEFAULT_TVL_DRAIN_WINDOW_HOURS: u64 = 6;
+
+/// Rolling per-pool suppression window, in hours. Overridable via
+/// `SIGNALS_TVL_DRAIN_COOLDOWN_HOURS`.
+const DEFAULT_TVL_DRAIN_COOLDOWN_HOURS: u64 = 6;
+
+/// Minimum starting TVL (USD) for a pool to be considered.
+/// Overridable via `SIGNALS_TVL_DRAIN_MIN_TVL_USD`.
+const DEFAULT_TVL_DRAIN_MIN_TVL_USD: i64 = 10_000;
+
 /// Runtime configuration for the `yog-signals` binary.
 #[derive(Debug, Clone)]
 pub(crate) struct Config {
@@ -87,6 +104,24 @@ pub(crate) struct Config {
 
     /// `|deviation|` at or above which the signal escalates to Critical.
     pub(crate) price_deviation_critical: Decimal,
+
+    /// TVL-drain detector cadence.
+    pub(crate) tvl_drain_interval: Duration,
+
+    /// TVL-drain aggregation window.
+    pub(crate) tvl_drain_window: ChronoDuration,
+
+    /// TVL-drain rolling per-pool suppression window.
+    pub(crate) tvl_drain_cooldown: Duration,
+
+    /// TVL-drain starting-TVL floor, in USD.
+    pub(crate) tvl_drain_min_tvl_usd: Decimal,
+
+    /// Drain ratio at or above which a signal is emitted.
+    pub(crate) tvl_drain_threshold: Decimal,
+
+    /// Drain ratio at or above which the signal escalates to Critical.
+    pub(crate) tvl_drain_critical: Decimal,
 }
 
 impl Config {
@@ -140,6 +175,28 @@ impl Config {
                 "SIGNALS_PRICE_DEVIATION_CRITICAL",
                 Decimal::new(2, 1),
             )?,
+            tvl_drain_interval: Duration::from_secs(duration_var(
+                "SIGNALS_TVL_DRAIN_INTERVAL_SECS",
+                DEFAULT_TVL_DRAIN_INTERVAL_SECS,
+            )?),
+            tvl_drain_window: ChronoDuration::hours(duration_var(
+                "SIGNALS_TVL_DRAIN_WINDOW_HOURS",
+                DEFAULT_TVL_DRAIN_WINDOW_HOURS,
+            )? as i64),
+            tvl_drain_cooldown: Duration::from_secs(
+                duration_var(
+                    "SIGNALS_TVL_DRAIN_COOLDOWN_HOURS",
+                    DEFAULT_TVL_DRAIN_COOLDOWN_HOURS,
+                )? * 3600,
+            ),
+            tvl_drain_min_tvl_usd: decimal_var(
+                "SIGNALS_TVL_DRAIN_MIN_TVL_USD",
+                Decimal::from(DEFAULT_TVL_DRAIN_MIN_TVL_USD),
+            )?,
+            // 0.5 — half the pool's liquidity left within the window.
+            tvl_drain_threshold: decimal_var("SIGNALS_TVL_DRAIN_THRESHOLD", Decimal::new(5, 1))?,
+            // 0.8 — the pool is nearly emptied.
+            tvl_drain_critical: decimal_var("SIGNALS_TVL_DRAIN_CRITICAL", Decimal::new(8, 1))?,
         };
 
         // The two cutoffs of one detector form a ladder: Warning strictly
@@ -155,6 +212,11 @@ impl Config {
             "SIGNALS_PRICE_DEVIATION_THRESHOLD",
             config.price_deviation_threshold,
             config.price_deviation_critical,
+        )?;
+        validate_ladder(
+            "SIGNALS_TVL_DRAIN_THRESHOLD",
+            config.tvl_drain_threshold,
+            config.tvl_drain_critical,
         )?;
 
         Ok(config)
