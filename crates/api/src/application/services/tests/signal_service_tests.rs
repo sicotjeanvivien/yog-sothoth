@@ -13,6 +13,7 @@ use crate::testing::{
 fn default_params() -> SignalListParams {
     SignalListParams {
         severity: None,
+        pool: None,
         cursor: None,
         direction: PageDirection::Next,
         position: None,

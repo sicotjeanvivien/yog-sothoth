@@ -813,6 +813,7 @@ impl SignalFeed for MockSignalRepo {
     async fn list(
         &self,
         _severity: Option<Severity>,
+        _pool: Option<Pubkey>,
         _cursor: Option<SignalCursor>,
         _direction: PageDirection,
         _position: Option<PagePosition>,

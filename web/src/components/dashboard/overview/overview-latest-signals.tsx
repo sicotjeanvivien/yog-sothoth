@@ -24,7 +24,7 @@ export async function OverviewLatestSignals() {
 
   let initial: readonly SignalResponse[];
   try {
-    initial = (await fetchSignals(LATEST_SIGNALS_COUNT)).items;
+    initial = (await fetchSignals({ limit: LATEST_SIGNALS_COUNT })).items;
   } catch (err) {
     if (err instanceof ApiClientError) {
       return <BlockError title={t("title")} kind={err.details.kind} />;

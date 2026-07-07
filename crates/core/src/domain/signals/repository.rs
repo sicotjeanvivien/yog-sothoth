@@ -62,6 +62,9 @@ pub trait SignalFeed: Send + Sync {
     /// `id DESC` as tiebreaker (newest first).
     ///
     /// `severity`, when set, restricts the feed to that exact severity.
+    /// `pool`, when set, restricts the feed to the signals emitted for
+    /// that pool (the pool-detail "Alerts" tab). The two filters
+    /// combine with AND.
     /// `cursor` is `None` for the first page; for subsequent pages, pass
     /// the cursor returned by the previous call. `limit` is the maximum
     /// number of items to return; implementations may cap it to an upper
@@ -69,6 +72,7 @@ pub trait SignalFeed: Send + Sync {
     async fn list(
         &self,
         severity: Option<Severity>,
+        pool: Option<Pubkey>,
         cursor: Option<SignalCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,

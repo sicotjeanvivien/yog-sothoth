@@ -30,6 +30,7 @@ use crate::application::{EnrichedSignal, EnrichedToken};
 /// Input to [`SignalService::list_signals`].
 pub(crate) struct SignalListParams {
     pub severity: Option<Severity>,
+    pub pool: Option<Pubkey>,
     pub cursor: Option<SignalCursor>,
     pub direction: PageDirection,
     pub position: Option<PagePosition>,
@@ -83,6 +84,7 @@ impl SignalService {
             .repo
             .list(
                 params.severity,
+                params.pool,
                 params.cursor,
                 params.direction,
                 params.position,

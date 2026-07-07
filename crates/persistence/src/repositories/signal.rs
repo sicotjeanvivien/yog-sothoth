@@ -126,10 +126,10 @@ impl SignalFeed for PgSignalRepository {
     /// Natural display order is `triggered_at DESC, id DESC` (newest
     /// first, deterministic tie-break on the storage id).
     ///
-    /// - `severity` is an optional exact filter, folded into the static
-    ///   SQL as `$1 IS NULL OR severity = $1` — one optional equality is
-    ///   not a dynamic query shape, so the `query_as!` compile check is
-    ///   kept.
+    /// - `severity` and `pool` are optional exact filters, folded into
+    ///   the static SQL as `$n IS NULL OR <col> = $n` — optional
+    ///   equalities are not a dynamic query shape, so the `query_as!`
+    ///   compile check is kept.
     /// - `cursor` + `direction` cooperate: traverse forward (older
     ///   signals) or backward (newer signals) from the cursor position.
     /// - `position` jumps to a list boundary (`First` = newest, `Last` =
@@ -143,6 +143,7 @@ impl SignalFeed for PgSignalRepository {
     async fn list(
         &self,
         severity: Option<Severity>,
+        pool: Option<Pubkey>,
         cursor: Option<SignalCursor>,
         direction: PageDirection,
         position: Option<PagePosition>,
@@ -160,6 +161,7 @@ impl SignalFeed for PgSignalRepository {
             None => (None, None),
         };
         let severity_filter = severity.map(|s| s.as_str().to_string());
+        let pool_filter = pool.map(|p| p.to_string());
 
         let rows: Vec<SignalRow> = match mode {
             QueryMode::Forward => sqlx::query_as!(
@@ -170,15 +172,17 @@ impl SignalFeed for PgSignalRepository {
                        triggered_at
                 FROM signals
                 WHERE ($1::TEXT IS NULL OR severity = $1)
+                  AND ($2::TEXT IS NULL OR pool_address = $2)
                   AND (
-                      $2::TIMESTAMPTZ IS NULL
-                      OR triggered_at < $2
-                      OR (triggered_at = $2 AND id < $3)
+                      $3::TIMESTAMPTZ IS NULL
+                      OR triggered_at < $3
+                      OR (triggered_at = $3 AND id < $4)
                   )
                 ORDER BY triggered_at DESC, id DESC
-                LIMIT $4
+                LIMIT $5
                 "#,
                 severity_filter,
+                pool_filter,
                 cursor_triggered_at,
                 cursor_id,
                 fetch_limit,
@@ -195,15 +199,17 @@ impl SignalFeed for PgSignalRepository {
                        triggered_at
                 FROM signals
                 WHERE ($1::TEXT IS NULL OR severity = $1)
+                  AND ($2::TEXT IS NULL OR pool_address = $2)
                   AND (
-                      $2::TIMESTAMPTZ IS NULL
-                      OR triggered_at > $2
-                      OR (triggered_at = $2 AND id > $3)
+                      $3::TIMESTAMPTZ IS NULL
+                      OR triggered_at > $3
+                      OR (triggered_at = $3 AND id > $4)
                   )
                 ORDER BY triggered_at ASC, id ASC
-                LIMIT $4
+                LIMIT $5
                 "#,
                 severity_filter,
+                pool_filter,
                 cursor_triggered_at,
                 cursor_id,
                 fetch_limit,
