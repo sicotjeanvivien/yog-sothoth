@@ -28,7 +28,8 @@ pub(crate) struct Config {
     /// Helius RPC base URL (with API key) — used for DAS calls.
     pub(crate) helius_url: SecretUrl,
 
-    /// Jupiter price API base URL (e.g. `https://api.jup.ag/price/v3`).
+    /// Jupiter API base URL (e.g. `https://api.jup.ag`); the client
+    /// appends `/price/v3` itself.
     pub(crate) jupiter_url: SecretUrl,
 
     /// Jupiter API key — sent on every request via `x-api-key`.

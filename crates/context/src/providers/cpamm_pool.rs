@@ -109,6 +109,7 @@ impl CpAmmPoolClient {
         let outcome = match &result {
             Ok(_) => "ok",
             Err(SourceError::Http(_)) => "http",
+            Err(SourceError::RateLimited { .. }) => "rate_limited",
             Err(SourceError::Decode(_)) => "decode",
         };
         ProviderMetrics::record_call(PROVIDER_LABEL, outcome, start.elapsed().as_secs_f64());

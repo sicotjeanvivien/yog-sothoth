@@ -8,8 +8,13 @@
 //!     "no price" cases (value present, `null`, field absent), plus
 //!     forward compatibility with the extra fields V3 returns
 //!     (`createdAt`, `liquidity`, `blockId`, `decimals`, …).
+//!   - 429 handling — `parse_retry_after` (header extraction) and
+//!     `rate_limit_backoff` (delay policy), plus the retry loop
+//!     end-to-end against a hand-rolled local HTTP server (no mock
+//!     dependency): 429-then-200 recovers the chunk, all-429 gives it
+//!     up as skip-and-log.
 //!
-//! The HTTP call itself (`fetch_prices_batch`) is not exercised: it is
+//! The happy-path HTTP call itself is otherwise not exercised: it is
 //! a thin reqwest pipeline whose non-trivial parts are tested above.
 
 use std::collections::HashMap;
@@ -149,6 +154,135 @@ fn full_response_filters_to_priced_mints_only() {
     assert_eq!(projected.len(), 1, "only the priced mint survives");
     assert_eq!(projected[0].mint, mint_a);
     assert_eq!(projected[0].price_usd, dec("0.999"));
+}
+
+// ── 429 handling: Retry-After parsing + backoff policy ──────────────
+
+fn headers_with_retry_after(value: &str) -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::RETRY_AFTER,
+        value.parse().expect("valid header value"),
+    );
+    headers
+}
+
+#[test]
+fn retry_after_parses_delta_seconds() {
+    let headers = headers_with_retry_after("2");
+    assert_eq!(
+        parse_retry_after(&headers),
+        Some(std::time::Duration::from_secs(2))
+    );
+}
+
+#[test]
+fn retry_after_absent_yields_none() {
+    let headers = reqwest::header::HeaderMap::new();
+    assert_eq!(parse_retry_after(&headers), None);
+}
+
+#[test]
+fn retry_after_http_date_form_yields_none() {
+    // The HTTP-date form is valid per RFC 9110 but not handled — it
+    // must fall back to our own backoff, not panic or mis-parse.
+    let headers = headers_with_retry_after("Wed, 21 Oct 2026 07:28:00 GMT");
+    assert_eq!(parse_retry_after(&headers), None);
+}
+
+#[test]
+fn backoff_uses_server_retry_after_when_present() {
+    let delay = rate_limit_backoff(0, Some(std::time::Duration::from_secs(3)));
+    assert_eq!(delay, std::time::Duration::from_secs(3));
+}
+
+#[test]
+fn backoff_grows_exponentially_without_retry_after() {
+    assert_eq!(rate_limit_backoff(0, None), RATE_LIMIT_BASE_BACKOFF);
+    assert_eq!(rate_limit_backoff(1, None), RATE_LIMIT_BASE_BACKOFF * 2);
+}
+
+#[test]
+fn backoff_caps_a_hostile_retry_after() {
+    // A server-provided Retry-After of ten minutes must not stall the
+    // worker: the cap wins.
+    let delay = rate_limit_backoff(0, Some(std::time::Duration::from_secs(600)));
+    assert_eq!(delay, RATE_LIMIT_MAX_BACKOFF);
+}
+
+// ── 429 handling: retry loop against a local HTTP server ────────────
+
+/// Serve `responses` on a fresh localhost listener, one connection per
+/// response (each response closes its connection), and return the base
+/// URL. Requests beyond the scripted responses are not served — a
+/// client retrying more than expected fails loudly on connect/read.
+fn serve_scripted_responses(responses: Vec<String>) -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind localhost");
+    let base_url = format!("http://{}", listener.local_addr().expect("local addr"));
+
+    std::thread::spawn(move || {
+        for response in responses {
+            let (mut stream, _) = listener.accept().expect("accept");
+            // Drain the request head before answering.
+            use std::io::{Read, Write};
+            let mut buf = [0u8; 4096];
+            let mut head = Vec::new();
+            loop {
+                let n = stream.read(&mut buf).expect("read request");
+                head.extend_from_slice(&buf[..n]);
+                if n == 0 || head.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+        }
+    });
+
+    base_url
+}
+
+fn response_429(retry_after_secs: u64) -> String {
+    format!(
+        "HTTP/1.1 429 Too Many Requests\r\nretry-after: {retry_after_secs}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+    )
+}
+
+fn response_200(body: &str) -> String {
+    format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+#[tokio::test]
+async fn rate_limited_chunk_recovers_on_retry() {
+    let mint = pk(20);
+    let body = format!(r#"{{ "{mint}": {{ "usdPrice": 1.5 }} }}"#);
+    // First call 429 (Retry-After: 0 keeps the test instant), second OK.
+    let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
+
+    let client = JupiterPriceClient::new(base_url, "test-key".to_string());
+    let fetched = client.fetch_prices(&[mint]).await.expect("Ok expected");
+
+    assert_eq!(fetched.len(), 1, "the retried chunk yields its price");
+    assert_eq!(fetched[0].mint, mint);
+    assert_eq!(fetched[0].price_usd, dec("1.5"));
+}
+
+#[tokio::test]
+async fn chunk_rate_limited_on_every_attempt_is_skipped() {
+    let responses = (0..RATE_LIMIT_MAX_ATTEMPTS)
+        .map(|_| response_429(0))
+        .collect();
+    let base_url = serve_scripted_responses(responses);
+
+    let client = JupiterPriceClient::new(base_url, "test-key".to_string());
+    let fetched = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
+
+    // Attempts exhausted → skip-and-log, never a hard error.
+    assert!(fetched.is_empty());
 }
 
 #[test]
