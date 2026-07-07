@@ -172,7 +172,13 @@ function SwapRow({
       className={`grid ${GRID_COLS} border-b border-sothoth-500/10 last:border-b-0`}
     >
       <div role="cell" className={CELL_CLASS}>
-        <time dateTime={swap.timestamp} className="text-slate-400">
+        {/* suppressHydrationWarning: relative to now, so the SSR text can
+            legitimately lag the client by a minute boundary. */}
+        <time
+          dateTime={swap.timestamp}
+          className="text-slate-400"
+          suppressHydrationWarning
+        >
           {formatRelativeTime(swap.timestamp, locale)}
         </time>
       </div>
@@ -196,7 +202,11 @@ function SwapRow({
       </div>
 
       <div role="cell" className={CELL_MONO_CLASS}>
-        {formatTokenAmount(swap.claimingFee, feeToken.decimals, feeToken.symbol)}
+        {formatTokenAmount(
+          swap.claimingFee,
+          feeToken.decimals,
+          feeToken.symbol,
+        )}
       </div>
 
       <div role="cell" className={CELL_CLASS}>

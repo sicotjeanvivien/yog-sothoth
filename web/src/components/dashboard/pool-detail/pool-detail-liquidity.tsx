@@ -87,7 +87,7 @@ export async function PoolDetailLiquidity({
   locale: string;
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.liquidity");
-  
+
   return (
     <section className={`mt-6 ${SECTION_CLASS}`}>
       <div className={CARD_CLASS}>
@@ -176,7 +176,13 @@ function LiquidityRow({
       className={`grid ${GRID_COLS} border-b border-sothoth-500/10 last:border-b-0`}
     >
       <div role="cell" className={CELL_CLASS}>
-        <time dateTime={event.timestamp} className="text-slate-400">
+        {/* suppressHydrationWarning: relative to now, so the SSR text can
+            legitimately lag the client by a minute boundary. */}
+        <time
+          dateTime={event.timestamp}
+          className="text-slate-400"
+          suppressHydrationWarning
+        >
           {formatRelativeTime(event.timestamp, locale)}
         </time>
       </div>

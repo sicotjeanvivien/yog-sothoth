@@ -135,7 +135,9 @@ export async function PoolDetailInfo({
             </InfoRow>
 
             <InfoRow label={t("lastActivity")}>
-              <time dateTime={pool.lastSeenAt}>
+              {/* suppressHydrationWarning: relative to now, so the SSR text
+                  can legitimately lag the client by a minute boundary. */}
+              <time dateTime={pool.lastSeenAt} suppressHydrationWarning>
                 {formatRelativeTime(pool.lastSeenAt, locale)}
               </time>
             </InfoRow>
@@ -227,9 +229,7 @@ function TokenLine({
 }) {
   return (
     <>
-      <span className="font-medium text-slate-100">
-        {token.symbol ?? "—"}
-      </span>
+      <span className="font-medium text-slate-100">{token.symbol ?? "—"}</span>
       <span className="truncate font-mono text-slate-400">
         {token.mint ? formatShortAddress(token.mint) : "—"}
       </span>
