@@ -599,3 +599,16 @@ tracker spécifiquement les paires SOL/LST.
 - [ ] UI de swap (Ultra Swap API + Referral Program)
 - [ ] Setup `referralAccount` + `referralTokenAccount` par mint cible
 - [ ] Déclencheur : Signal Engine mature **et utilisé** (pas juste livré) — pas de date, condition d'usage
+
+
+## 📥 Inbox — idées à trier
+
+> Idées brutes, non cadrées. À trier vers une version (ou à rejeter) — ne pas
+> implémenter directement depuis cette section.
+
+- Système d'annonces sur le frontend
+- Changelog des versions visible sur le frontend
+- `/dashboard/pools` : indicateur (icône) quand un pool a un signal actif
+- Préparer l'API comme contrat multi-apps (versioning `/v1`, spec OpenAPI, clés API + rate limiting — lié auth v0.3) — déclencheur : démarrage dev Voorish. Split web/moteur en 2 repos rejeté (9 juil.) : découplage déjà assuré par l'API HTTP sans BFF, réversible via `git filter-repo` si friction concrète
+- Rate limiting (limitation d'appels) sur l'API
+- Clés API pour sécuriser l'accès — à fusionner avec le chantier auth v0.3 au tri
