@@ -56,6 +56,13 @@ function validPool() {
     "protocolFees24hUsd": "23.982486757390302832260330",
     "lpFees24hUsd": "95.929947029561211329041320",
     "effectiveFeeBps": "25",
+    "signals24h": [
+      {
+        "severity": "warning",
+        "detector": "flow_imbalance",
+        "triggeredAt": "2026-05-25T11:47:02.000000Z"
+      }
+    ],
     "firstSeenAt": "2026-05-21T10:01:35.084596Z",
     "lastSeenAt": "2026-05-25T12:14:01.715170Z"
   };
@@ -66,6 +73,26 @@ describe("PoolSchema", () => {
     const parsed = PoolSchema.parse(validPool());
     expect(parsed.poolAddress).toBe("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie");
     expect(parsed.protocol).toBe("meteora_damm_v2");
+  });
+
+  it("accepts an empty signals24h (quiet pool)", () => {
+    const parsed = PoolSchema.parse({ ...validPool(), signals24h: [] });
+    expect(parsed.signals24h).toEqual([]);
+  });
+
+  it("rejects a signals24h entry with an unknown severity", () => {
+    expect(() =>
+      PoolSchema.parse({
+        ...validPool(),
+        signals24h: [
+          {
+            severity: "catastrophic",
+            detector: "flow_imbalance",
+            triggeredAt: "2026-05-25T11:47:02.000000Z",
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("accepts a null feeBps (pool seen before its InitializePool)", () => {

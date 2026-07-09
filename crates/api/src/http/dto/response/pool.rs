@@ -1,12 +1,34 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::{Pool, PoolAnalytics};
+use yog_core::domain::{Pool, PoolAnalytics, SignalRecord};
 
 use crate::{
     application::{EnrichedPool, EnrichedToken},
     http::dto::EmbeddedTokenResponse,
 };
+
+/// Wire shape of one entry of a pool's recent-signals list — the
+/// pools-list signal indicator. Deliberately slimmer than the feed's
+/// `SignalResponse`: the indicator needs severity, kind and recency,
+/// nothing else; the full signal lives on the pool's Alerts tab.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PoolSignalResponse {
+    pub(crate) severity: String,
+    pub(crate) detector: String,
+    pub(crate) triggered_at: DateTime<Utc>,
+}
+
+impl From<SignalRecord> for PoolSignalResponse {
+    fn from(record: SignalRecord) -> Self {
+        Self {
+            severity: record.signal.severity.to_string(),
+            detector: record.signal.detector,
+            triggered_at: record.signal.triggered_at,
+        }
+    }
+}
 
 /// Wire shape of a pool in API responses.
 ///
@@ -48,6 +70,11 @@ pub(crate) struct PoolResponse {
     /// Effective realized fee rate in basis points (`fees / volume * 10000`)
     /// over the 24h window. `None` when volume is absent or zero.
     pub(crate) effective_fee_bps: Option<Decimal>,
+    /// Signals emitted by this pool over the last 24h, newest first,
+    /// capped per pool (service-side). Empty when the pool was quiet —
+    /// the indicator's window is fixed server-side, like the 24h
+    /// analytics above.
+    pub(crate) signals_24h: Vec<PoolSignalResponse>,
     pub(crate) first_seen_at: DateTime<Utc>,
     pub(crate) last_seen_at: DateTime<Utc>,
 }
@@ -74,6 +101,7 @@ impl PoolResponse {
         token_a: EmbeddedTokenResponse,
         token_b: EmbeddedTokenResponse,
         analytics: PoolAnalytics,
+        recent_signals: Vec<SignalRecord>,
     ) -> Self {
         Self {
             pool_address: pool.pool_address.to_string(),
@@ -94,6 +122,10 @@ impl PoolResponse {
                 _ => None,
             },
             effective_fee_bps: effective_fee_bps(analytics.fees_24h_usd, analytics.volume_24h_usd),
+            signals_24h: recent_signals
+                .into_iter()
+                .map(PoolSignalResponse::from)
+                .collect(),
             first_seen_at: pool.first_seen_at,
             last_seen_at: pool.last_seen_at,
         }
@@ -108,7 +140,13 @@ impl From<EnrichedToken> for EmbeddedTokenResponse {
 
 impl From<EnrichedPool> for PoolResponse {
     fn from(e: EnrichedPool) -> Self {
-        PoolResponse::new(e.pool, e.token_a.into(), e.token_b.into(), e.analytics)
+        PoolResponse::new(
+            e.pool,
+            e.token_a.into(),
+            e.token_b.into(),
+            e.analytics,
+            e.recent_signals,
+        )
     }
 }
 

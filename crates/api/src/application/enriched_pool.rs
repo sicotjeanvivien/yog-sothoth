@@ -9,7 +9,8 @@
 use yog_core::{
     RepositoryResult,
     domain::{
-        Pool, PoolAnalytics, TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup,
+        Pool, PoolAnalytics, SignalRecord, TokenMetadata, TokenMetadataLookup, TokenPrice,
+        TokenPriceLookup,
     },
 };
 
@@ -69,4 +70,8 @@ pub(crate) struct EnrichedPool {
     pub(crate) token_a: EnrichedToken,
     pub(crate) token_b: EnrichedToken,
     pub(crate) analytics: PoolAnalytics,
+    /// The pool's signals over the indicator window (newest first,
+    /// per-pool capped) — powers the signal icon on the pools list.
+    /// Empty when the pool emitted nothing in the window.
+    pub(crate) recent_signals: Vec<SignalRecord>,
 }

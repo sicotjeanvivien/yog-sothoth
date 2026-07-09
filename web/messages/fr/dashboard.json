@@ -65,6 +65,9 @@
       },
       "table": {
         "pair": "Paire",
+        "signals": "Signaux",
+        "signalsAria": "{count, plural, one {# signal} other {# signaux}} sur les dernières 24 h — voir les alertes",
+        "signalsPopoverTitle": "Signaux — dernières 24 h",
         "protocol": "Protocole",
         "tvl": "TVL",
         "volume24h": "Volume 24h",

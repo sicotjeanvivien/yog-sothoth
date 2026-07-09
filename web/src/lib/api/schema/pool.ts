@@ -1,6 +1,25 @@
 import * as z from "zod";
 import { BigDecimal, FeePercent, Rfc3339 } from "./shared";
+import { SeveritySchema } from "./signal";
 import { TokenSchema } from "./token";
+
+// ─────────────────────────────────────────────────────────────────────
+// PoolSignalResponse — mirrors `api::http::dto::response::PoolSignalResponse`
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * One entry of a pool's recent-signals list (`signals24h`), the
+ * pools-list signal indicator. Deliberately slimmer than the feed's
+ * `SignalSchema`: severity, kind and recency only — the full signal
+ * lives on the pool's Alerts tab.
+ */
+export const PoolSignalSchema = z.object({
+  severity: SeveritySchema,
+  detector: z.string().min(1),
+  triggeredAt: Rfc3339,
+});
+
+export type PoolSignal = z.infer<typeof PoolSignalSchema>;
 
 // ─────────────────────────────────────────────────────────────────────
 // PoolResponse — mirrors `api::http::dto::response::PoolResponse`
@@ -29,6 +48,7 @@ import { TokenSchema } from "./token";
  *     protocol_fees_24h_usd: Option<Decimal>,
  *     lp_fees_24h_usd: Option<Decimal>,
  *     effective_fee_bps: Option<Decimal>,
+ *     signals_24h: Vec<PoolSignalResponse>,
  *     first_seen_at: DateTime<Utc>,
  *     last_seen_at: DateTime<Utc>,
  * }
@@ -81,6 +101,9 @@ export const PoolSchema = z.object({
   protocolFees24hUsd: BigDecimal.nullable(),
   lpFees24hUsd: BigDecimal.nullable(),
   effectiveFeeBps: BigDecimal.nullable(),
+  // Signals emitted by the pool over the last 24h, newest first,
+  // per-pool capped server-side. Empty when the pool was quiet.
+  signals24h: z.array(PoolSignalSchema),
   firstSeenAt: Rfc3339,
   lastSeenAt: Rfc3339,
 });

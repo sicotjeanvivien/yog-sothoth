@@ -127,6 +127,14 @@ same cards for one pool: the pool-filtered feed (`GET
 liquidity tabs. No SSE there — the tab is a per-pool history; the live
 tail stays on `/signals`.
 
+The `/pools` table surfaces a per-pool **signal indicator**
+(`PoolSignalsCell`): the worst-severity icon of the pool's last-24h
+signals (`signals24h`, embedded in `PoolResponse`), a hover/focus
+popover listing them (severity icon + detector tag), and a click
+through to the Alerts tab. Hover-only is acceptable there because on
+touch the tap lands on the Alerts tab — the full version of what the
+popover previews.
+
 ## Scripts
 
 | Command              | Description                            |

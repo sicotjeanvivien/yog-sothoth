@@ -11,19 +11,32 @@
 //! `RepositoryError` (re-exported through `RepositoryResult`); the HTTP
 //! layer maps them to `ApiError`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
+use solana_pubkey::Pubkey;
 use yog_core::{
     Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
     domain::{
         Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
-        PoolCurrentStateLookup, PoolCursor, PoolHistoryBucket, PoolRankMetric, TokenMetadataLookup,
-        TokenPriceLookup,
+        PoolCurrentStateLookup, PoolCursor, PoolHistoryBucket, PoolRankMetric, SignalFeed,
+        SignalRecord, TokenMetadataLookup, TokenPriceLookup,
     },
 };
 
 use crate::application::{EnrichedPool, EnrichedToken};
+
+/// Window of the pools-list signal indicator. Signals are append-only
+/// conclusions with no "resolved" state, so "this pool has signals" is
+/// *defined* by a lookback window — 24h, consistent with the rest of
+/// the list's analytics (volume/fees 24h).
+const RECENT_SIGNALS_WINDOW_HOURS: i64 = 24;
+
+/// Per-pool cap on the signals returned with a list page. Bounds the
+/// payload against a noisy pool; the hover list has no use for more.
+const RECENT_SIGNALS_PER_POOL: i64 = 20;
 
 // ^ if you keep PoolListParams in its own file; otherwise define it here.
 
@@ -73,6 +86,7 @@ pub(crate) struct PoolService {
     pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
     token_metadata_repository: Arc<dyn TokenMetadataLookup>,
     token_price_repository: Arc<dyn TokenPriceLookup>,
+    signal_feed: Arc<dyn SignalFeed>,
 }
 
 impl PoolService {
@@ -82,6 +96,7 @@ impl PoolService {
         pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
         token_metadata_repository: Arc<dyn TokenMetadataLookup>,
         token_price_repository: Arc<dyn TokenPriceLookup>,
+        signal_feed: Arc<dyn SignalFeed>,
     ) -> Self {
         Self {
             pool_repository,
@@ -89,7 +104,22 @@ impl PoolService {
             pool_analytics_repository,
             token_metadata_repository,
             token_price_repository,
+            signal_feed,
         }
+    }
+
+    /// The recent signals of every address in `addresses`, in one
+    /// batched query — see [`RECENT_SIGNALS_WINDOW_HOURS`] /
+    /// [`RECENT_SIGNALS_PER_POOL`]. Shared by every listing path so
+    /// the wire field means the same thing on all pool endpoints.
+    async fn recent_signals_by_pool(
+        &self,
+        addresses: &[Pubkey],
+    ) -> RepositoryResult<HashMap<Pubkey, Vec<SignalRecord>>> {
+        let since = Utc::now() - Duration::hours(RECENT_SIGNALS_WINDOW_HOURS);
+        self.signal_feed
+            .recent_by_pools(addresses, since, RECENT_SIGNALS_PER_POOL)
+            .await
     }
 
     /// Paginate pools and enrich each with token context and analytics.
@@ -124,13 +154,17 @@ impl PoolService {
             .pool_analytics_repository
             .batch_compute(&addresses)
             .await?;
+        let mut recent_signals = self.recent_signals_by_pool(&addresses).await?;
 
         let mut items = Vec::with_capacity(page.items.len());
         for pool in page.items {
             let pool_analytics = analytics
                 .remove(&pool.pool_address)
                 .unwrap_or_else(PoolAnalytics::empty);
-            items.push(self.enrich(pool, pool_analytics).await?);
+            let signals = recent_signals
+                .remove(&pool.pool_address)
+                .unwrap_or_default();
+            items.push(self.enrich(pool, pool_analytics, signals).await?);
         }
 
         Ok(EnrichedPoolPage {
@@ -170,6 +204,7 @@ impl PoolService {
             .pool_analytics_repository
             .batch_compute(&ranked)
             .await?;
+        let mut recent_signals = self.recent_signals_by_pool(&ranked).await?;
 
         let mut by_address: std::collections::HashMap<solana_pubkey::Pubkey, Pool> =
             pools.into_iter().map(|p| (p.pool_address, p)).collect();
@@ -182,7 +217,8 @@ impl PoolService {
             let pool_analytics = analytics
                 .remove(address)
                 .unwrap_or_else(PoolAnalytics::empty);
-            items.push(self.enrich(pool, pool_analytics).await?);
+            let signals = recent_signals.remove(address).unwrap_or_default();
+            items.push(self.enrich(pool, pool_analytics, signals).await?);
         }
 
         Ok(items)
@@ -205,8 +241,13 @@ impl PoolService {
         let analytics = analytics_map
             .remove(address)
             .unwrap_or_else(PoolAnalytics::empty);
+        let signals = self
+            .recent_signals_by_pool(&[*address])
+            .await?
+            .remove(address)
+            .unwrap_or_default();
 
-        Ok(Some(self.enrich(pool, analytics).await?))
+        Ok(Some(self.enrich(pool, analytics, signals).await?))
     }
 
     pub(crate) async fn get_latest_state(
@@ -281,7 +322,12 @@ impl PoolService {
     ///
     /// Sequential awaits: at single-request latency the four indexed
     /// lookups are cheap, and readability wins over micro-parallelism.
-    async fn enrich(&self, pool: Pool, analytics: PoolAnalytics) -> RepositoryResult<EnrichedPool> {
+    async fn enrich(
+        &self,
+        pool: Pool,
+        analytics: PoolAnalytics,
+        recent_signals: Vec<SignalRecord>,
+    ) -> RepositoryResult<EnrichedPool> {
         let token_a = self.enrich_side(pool.token_a_mint).await?;
         let token_b = self.enrich_side(pool.token_b_mint).await?;
 
@@ -290,6 +336,7 @@ impl PoolService {
             token_b,
             analytics,
             pool,
+            recent_signals,
         })
     }
 

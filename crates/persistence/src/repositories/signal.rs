@@ -284,4 +284,65 @@ impl SignalFeed for PgSignalRepository {
 
         rows.into_iter().map(SignalRecord::try_from).collect()
     }
+
+    async fn recent_by_pools(
+        &self,
+        pools: &[Pubkey],
+        since: DateTime<Utc>,
+        per_pool_limit: i64,
+    ) -> RepositoryResult<HashMap<Pubkey, Vec<SignalRecord>>> {
+        if pools.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let addresses: Vec<String> = pools.iter().map(|p| p.to_string()).collect();
+        let capped = per_pool_limit.clamp(1, MAX_PAGE_SIZE);
+
+        // ROW_NUMBER caps the rows *per pool* in SQL, so one noisy pool
+        // cannot bloat the whole page's payload. The (pool_address,
+        // triggered_at DESC) index (migration 022) drives the window scan.
+        // Columns come through a subquery, so sqlx sees them as nullable —
+        // the `!` markers restore the base table's constraints.
+        let rows: Vec<SignalRow> = sqlx::query_as!(
+            SignalRow,
+            r#"
+            SELECT id           AS "id!",
+                   detector     AS "detector!",
+                   protocol     AS "protocol!",
+                   pool_address AS "pool_address!",
+                   severity     AS "severity!",
+                   value        AS "value!",
+                   threshold,
+                   message,
+                   triggered_at AS "triggered_at!"
+            FROM (
+                SELECT *, ROW_NUMBER() OVER (
+                           PARTITION BY pool_address
+                           ORDER BY triggered_at DESC, id DESC
+                       ) AS rn
+                FROM signals
+                WHERE pool_address = ANY($1) AND triggered_at > $2
+            ) ranked
+            WHERE rn <= $3
+            ORDER BY triggered_at DESC, id DESC
+            "#,
+            &addresses,
+            since,
+            capped,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        // Rows arrive newest-first globally; pushing in order keeps each
+        // pool's vector newest-first too.
+        let mut out: HashMap<Pubkey, Vec<SignalRecord>> = HashMap::new();
+        for row in rows {
+            let record = SignalRecord::try_from(row)?;
+            out.entry(record.signal.pool_address)
+                .or_default()
+                .push(record);
+        }
+        Ok(out)
+    }
 }

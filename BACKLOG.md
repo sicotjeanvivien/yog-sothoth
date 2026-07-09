@@ -367,10 +367,12 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 	- Hors périmètre v1 (reliquats) : pagination UI (« charger plus » — le curseur API existe) ; filtre sévérité UI (l'endpoint le supporte)
 - [x] **Refonte UX de la page Signals (constat au merge PR #40, 2 juil. 2026)** : le pipeline fonctionne de bout en bout mais l'UX front du feed d'alertes est jugée catastrophique — à reprendre en priorité à la prochaine session front (hiérarchie visuelle, lisibilité du feed, présentation des sévérités/valeurs). Occasion naturelle d'embarquer les reliquats ci-dessus (pagination UI, filtre sévérité)
 
-##### Canaux différés :
-- [ ] Telegram opérateur — après le canal web (« ensuite on verra ») ; seul push sortant avec un destinataire réel aujourd'hui (JV)
-- [ ] Email — statut incertain : la forme serait un abonnement newsletter → contraintes RGPD (consentement, désinscription) ; ne se décide pas avant v0.2/auth
-- [-] 🚫 Webhook v0.1.1 (abandonné — pas de destinataire ; à réévaluer en v0.2 avec users + outbox)
+##### Canaux différés → déplacés en v0.3 (9 juil. 2026)
+Les trois canaux push (Telegram, email, webhook) sont regroupés dans **v0.3 →
+*Canaux de diffusion des signaux*** : leurs notes dataient d'avant le
+reséquençage du 3 juil. (« avant v0.2/auth », « en v0.2 avec users ») — les
+users sont désormais en v0.3, et un push par utilisateur n'a de valeur
+qu'adossé à la watchlist.
 
 #### yog-context — robustesse pour release
 - [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
@@ -386,6 +388,20 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 
 #### Frontend — page /pools (filtres)
 - [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Reliquats v0.1 ci-dessous)
+
+#### ✅ Frontend — indicateur de signaux sur la liste /pools (cadré et livré 9 juil. 2026)
+- [x] Colonne icône dans le tableau des pools : **pire sévérité des dernières 24 h** (couleur du système sévérité existant, `signal-display.ts`), rien si aucun signal. « Actif » n'existe pas (signaux append-only) → défini par la fenêtre 24 h. Au survol : liste des signaux de la fenêtre (icône sévérité + tag détecteur par ligne — `title` natif insuffisant, petit popover hover dédié). Clic → fiche pool onglet Alertes (`?tab=alerts`, livré 7 juil.). Implémentation : la requête dynamique `pool/query.rs` **inchangée** — seconde requête batchée dans `PoolService` sur les adresses de la page (`WHERE pool_address = ANY($1)`, `query!` statique, fenêtre 24 h), nouvelle méthode sur `SignalFeed` + champ DTO. Pas de migration. ⚠️ changement de trait `core` → ripple mocks, check workspace complet avant PR — **Livré 9 juil. 2026** : `SignalFeed::recent_by_pools` (cap **par pool** via `ROW_NUMBER`, 20/pool, index migration 022), champ `signals24h` sur les 3 endpoints pool (liste/top/détail — même sens partout), cellule client `PoolSignalsCell` (popover hover/focus — pas le `InfoPopover` clic : le clic signifie déjà « onglet Alertes » ; sur tactile le tap mène à l'onglet, version complète du popover), navigation clavier (Tab + Entrée), i18n en/fr pluriel ICU. Vérifié end-to-end en réel (API + navigateur piloté : hover, clic, clavier, FR/EN, ligne hors icône → fiche pool)
+
+#### Communication utilisateurs — annonces + changelog (cadré 9 juil. 2026, intégré v0.1.1)
+
+> Canal opérateur → utilisateurs, unidirectionnel. Contrainte structurante : une
+> annonce (maintenance, incident, release, beta) doit pouvoir être publiée
+> **sans déployer** → source dynamique via l'API. Le changelog, lui, change
+> exactement au rythme des déploiements → statique dans le repo web. Les deux se
+> rejoignent : une annonce de type « release » pointe vers `/changelog`.
+
+- [ ] Annonces opérateur : table `announcements` (type/sévérité, message, lien optionnel, fenêtre `starts_at`/`ends_at`) + `GET /announcements/active` (RO) + bandeau dismissible sur le web (cookie par id d'annonce, pattern sidebar). Publication par `INSERT` psql — endpoint d'écriture authentifié différé post-auth v0.3. Modale réservée à la sévérité critique — différée jusqu'au premier vrai cas. i18n du message : à trancher au cadrage (une seule langue défendable au début)
+- [ ] Page `/changelog` statique dans le web (markdown/MDX, un bloc par release) — cible des annonces de release
 
 #### ✅ Frontend — mise à l'échelle globale des textes (relevé 6 juil. 2026)
 - [x] Passe globale sur l'échelle typographique du dashboard (pools, pool-detail, overview, sidebar) — **livré 6 juil. 2026** (+1 cran sur tout ≤13.5px, 41 occurrences / 18 fichiers ; tailles fractionnaires 10.5/13.5 supprimées ; plancher 10px pour les micro-captions décoratives ex-9px ; valeurs KPI 21/24px display inchangées). Problème **global au front**, pas propre aux signaux : le 10–13px gris clair sur fond sombre rend flou/mou sur écran à scaling fractionnaire (constaté à 125 % Windows, cas très répandu). La card signals a servi de pilote (PR #45) : un cran partout. Barème appliqué :
@@ -543,12 +559,14 @@ tracker spécifiquement les paires SOL/LST.
 
 ---
 
-## v0.3 — Auth (ex-v0.2, pas encore attaqué)
+## v0.3 — Auth & API plateforme (ex-v0.2, pas encore attaqué)
 
 > Repoussée derrière l'extension protocoles (décision 3 juil. 2026) : la
 > rétention (watchlists, tiers) suppose une audience que la couverture v0.2
 > doit d'abord créer. L'**auth wallet Solana** de cette version est aussi le
 > prérequis technique du wallet-connect de v0.4.
+
+### Auth utilisateurs
 
 - [ ] Tables `users`, `sessions`, `auth_methods`
 - [ ] Auth email + Argon2
@@ -557,6 +575,34 @@ tracker spécifiquement les paires SOL/LST.
 - [ ] Watchlist personnelle par utilisateur
 - [ ] Tiers placeholders (free/solo/pro) sans billing
 - [ ] Réévaluation WASM en début de v0.3
+
+### Canaux de diffusion des signaux (déplacé de v0.1.1, 9 juil. 2026)
+
+> Un canal push par utilisateur n'a de valeur qu'adossé à la **watchlist**
+> (ci-dessus) : pousser tous les signaux à tout le monde est du spam ; c'est le
+> scoping « mes pools » qui rend le push pertinent. Canaux et watchlist sont un
+> seul chantier de rétention. La porte de sortie reste **yog-api** (décision du
+> 2 juil.), pas un pusher dans l'engine — probable consommateur outbox per-user.
+
+- [ ] Telegram opérateur — destinataire unique (JV), **aucune dépendance auth/users** : avançable à tout moment comme outil d'ops si le besoin se fait sentir avant v0.3. Sa généralisation par utilisateur (liaison de compte Telegram) relève, elle, de cette section
+- [ ] Email — forme newsletter/abonnement → contraintes RGPD (consentement, désinscription) ; se décide ici, avec les comptes utilisateurs
+- [ ] Webhook per-user — abandonné en v0.1.1 (aucun destinataire) ; réévaluer ici avec users + outbox
+
+### API plateforme multi-apps (fusionné de l'inbox, 9 juil. 2026)
+
+> Contexte : **Voorish** (app mobile RN/Expo, identificateur de tokens Solana
+> pour débutants FR — synthèse de conception séparée) sera le second
+> consommateur de `yog-api` ; son backend s'intègre à ce workspace via la
+> recette add-endpoint. Le split web/moteur en 2 repos a été **rejeté**
+> (9 juil.) : le découplage existe déjà (pas de BFF, web et mobile sont des
+> clients HTTP directs) — le chantier plateforme, c'est le **contrat**, pas
+> les repos. Déclencheur **indépendant du reste de v0.3** : le démarrage du
+> dev de Voorish peut avancer ce bloc seul, avant l'auth utilisateurs.
+
+- [ ] Versioning de l'API (`/v1/...`) — faire évoluer le dashboard sans casser les autres clients
+- [ ] Spec OpenAPI minimale — le contrat documenté dont dérive le `types/api.ts` de Voorish (contrat JSON figé avant les mocks mobiles)
+- [ ] Clés API — protège les consommateurs identifiés (dashboard, partenaires). ⚠️ Un client mobile public ne peut pas porter de secret (clé embarquée = extractible) : les clés ne protègent pas la surface publique
+- [ ] Rate limiting — la protection réelle de la surface publique (par IP/appareil), complément des clés, pas doublon
 
 ## v0.4 — Monétisation : Jupiter Referral Program
 
@@ -599,3 +645,11 @@ tracker spécifiquement les paires SOL/LST.
 - [ ] UI de swap (Ultra Swap API + Referral Program)
 - [ ] Setup `referralAccount` + `referralTokenAccount` par mint cible
 - [ ] Déclencheur : Signal Engine mature **et utilisé** (pas juste livré) — pas de date, condition d'usage
+
+
+## 📥 Inbox — idées à trier
+
+> Idées brutes, non cadrées. À trier vers une version (ou à rejeter) — ne pas
+> implémenter directement depuis cette section.
+
+_(vide — dernier tri : 9 juil. 2026)_
