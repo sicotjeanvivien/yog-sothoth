@@ -387,6 +387,9 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 #### Frontend — page /pools (filtres)
 - [ ] Filtres TVL min / volume min — dépend de la table `pool_analytics_hourly` matérialisée (voir Reliquats v0.1 ci-dessous)
 
+#### Frontend — indicateur de signaux sur la liste /pools (cadré 9 juil. 2026)
+- [ ] Colonne icône dans le tableau des pools : **pire sévérité des dernières 24 h** (couleur du système sévérité existant, `signal-display.ts`), rien si aucun signal. « Actif » n'existe pas (signaux append-only) → défini par la fenêtre 24 h. Au survol : liste des signaux de la fenêtre (icône sévérité + tag détecteur par ligne — `title` natif insuffisant, petit popover hover dédié). Clic → fiche pool onglet Alertes (`?tab=alerts`, livré 7 juil.). Implémentation : la requête dynamique `pool/query.rs` **inchangée** — seconde requête batchée dans `PoolService` sur les adresses de la page (`WHERE pool_address = ANY($1)`, `query!` statique, fenêtre 24 h), nouvelle méthode sur `SignalFeed` + champ DTO. Pas de migration. ⚠️ changement de trait `core` → ripple mocks, check workspace complet avant PR
+
 #### ✅ Frontend — mise à l'échelle globale des textes (relevé 6 juil. 2026)
 - [x] Passe globale sur l'échelle typographique du dashboard (pools, pool-detail, overview, sidebar) — **livré 6 juil. 2026** (+1 cran sur tout ≤13.5px, 41 occurrences / 18 fichiers ; tailles fractionnaires 10.5/13.5 supprimées ; plancher 10px pour les micro-captions décoratives ex-9px ; valeurs KPI 21/24px display inchangées). Problème **global au front**, pas propre aux signaux : le 10–13px gris clair sur fond sombre rend flou/mou sur écran à scaling fractionnaire (constaté à 125 % Windows, cas très répandu). La card signals a servi de pilote (PR #45) : un cran partout. Barème appliqué :
 
@@ -501,6 +504,17 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] CLMM bien documenté, SDK mature — décodeur + domaine + détecteurs + front
 - [ ] Au 3ᵉ protocole CLMM : évaluer la factorisation de la sémantique bins/ticks partagée DLMM/Raydium/Orca (pas avant — abstraction sous preuve de 3 cas concrets)
 
+### Transverse v0.2 — communication utilisateurs (cadré 9 juil. 2026)
+
+> Canal opérateur → utilisateurs, unidirectionnel. Contrainte structurante : une
+> annonce (maintenance, incident, release, beta) doit pouvoir être publiée
+> **sans déployer** → source dynamique via l'API. Le changelog, lui, change
+> exactement au rythme des déploiements → statique dans le repo web. Les deux se
+> rejoignent : une annonce de type « release » pointe vers `/changelog`.
+
+- [ ] Annonces opérateur : table `announcements` (type/sévérité, message, lien optionnel, fenêtre `starts_at`/`ends_at`) + `GET /announcements/active` (RO) + bandeau dismissible sur le web (cookie par id d'annonce, pattern sidebar). Publication par `INSERT` psql — endpoint d'écriture authentifié différé post-auth v0.3. Modale réservée à la sévérité critique — différée jusqu'au premier vrai cas. i18n du message : à trancher au cadrage (une seule langue défendable au début)
+- [ ] Page `/changelog` statique dans le web (markdown/MDX, un bloc par release) — cible des annonces de release
+
 ### Référence — priorisation multi-protocoles (analyse du 3 juil. 2026)
 
 > Quatre axes de pondération : **fit thèse** (nourrit l'analyse de liquidity
@@ -543,12 +557,14 @@ tracker spécifiquement les paires SOL/LST.
 
 ---
 
-## v0.3 — Auth (ex-v0.2, pas encore attaqué)
+## v0.3 — Auth & API plateforme (ex-v0.2, pas encore attaqué)
 
 > Repoussée derrière l'extension protocoles (décision 3 juil. 2026) : la
 > rétention (watchlists, tiers) suppose une audience que la couverture v0.2
 > doit d'abord créer. L'**auth wallet Solana** de cette version est aussi le
 > prérequis technique du wallet-connect de v0.4.
+
+### Auth utilisateurs
 
 - [ ] Tables `users`, `sessions`, `auth_methods`
 - [ ] Auth email + Argon2
@@ -557,6 +573,22 @@ tracker spécifiquement les paires SOL/LST.
 - [ ] Watchlist personnelle par utilisateur
 - [ ] Tiers placeholders (free/solo/pro) sans billing
 - [ ] Réévaluation WASM en début de v0.3
+
+### API plateforme multi-apps (fusionné de l'inbox, 9 juil. 2026)
+
+> Contexte : **Voorish** (app mobile RN/Expo, identificateur de tokens Solana
+> pour débutants FR — synthèse de conception séparée) sera le second
+> consommateur de `yog-api` ; son backend s'intègre à ce workspace via la
+> recette add-endpoint. Le split web/moteur en 2 repos a été **rejeté**
+> (9 juil.) : le découplage existe déjà (pas de BFF, web et mobile sont des
+> clients HTTP directs) — le chantier plateforme, c'est le **contrat**, pas
+> les repos. Déclencheur **indépendant du reste de v0.3** : le démarrage du
+> dev de Voorish peut avancer ce bloc seul, avant l'auth utilisateurs.
+
+- [ ] Versioning de l'API (`/v1/...`) — faire évoluer le dashboard sans casser les autres clients
+- [ ] Spec OpenAPI minimale — le contrat documenté dont dérive le `types/api.ts` de Voorish (contrat JSON figé avant les mocks mobiles)
+- [ ] Clés API — protège les consommateurs identifiés (dashboard, partenaires). ⚠️ Un client mobile public ne peut pas porter de secret (clé embarquée = extractible) : les clés ne protègent pas la surface publique
+- [ ] Rate limiting — la protection réelle de la surface publique (par IP/appareil), complément des clés, pas doublon
 
 ## v0.4 — Monétisation : Jupiter Referral Program
 
@@ -606,9 +638,4 @@ tracker spécifiquement les paires SOL/LST.
 > Idées brutes, non cadrées. À trier vers une version (ou à rejeter) — ne pas
 > implémenter directement depuis cette section.
 
-- Système d'annonces sur le frontend
-- Changelog des versions visible sur le frontend
-- `/dashboard/pools` : indicateur (icône) quand un pool a un signal actif
-- Préparer l'API comme contrat multi-apps (versioning `/v1`, spec OpenAPI, clés API + rate limiting — lié auth v0.3) — déclencheur : démarrage dev Voorish. Split web/moteur en 2 repos rejeté (9 juil.) : découplage déjà assuré par l'API HTTP sans BFF, réversible via `git filter-repo` si friction concrète
-- Rate limiting (limitation d'appels) sur l'API
-- Clés API pour sécuriser l'accès — à fusionner avec le chantier auth v0.3 au tri
+_(vide — dernier tri : 9 juil. 2026)_
