@@ -5,8 +5,8 @@ use super::PoolListParams;
 use super::PoolService;
 use crate::testing::make_pool_current_state;
 use crate::testing::{
-    MockAnalyticsRepo, MockMetadataRepo, MockPoolCurrentStateRepo, MockPriceRepo, PoolRepoOnce,
-    make_metadata, make_page, make_pool, make_price, pk,
+    MockAnalyticsRepo, MockMetadataRepo, MockPoolCurrentStateRepo, MockPriceRepo, MockSignalRepo,
+    PoolRepoOnce, make_metadata, make_page, make_pool, make_price, make_signal_record, pk,
 };
 use std::sync::Arc;
 
@@ -21,12 +21,33 @@ fn service(
     metadata: MockMetadataRepo,
     price: MockPriceRepo,
 ) -> PoolService {
+    // Most scenarios don't care about the signal indicator: a quiet
+    // window (empty map) is the neutral default.
+    service_with_signals(
+        pool_repo,
+        pool_current_state_repo,
+        analytics,
+        metadata,
+        price,
+        MockSignalRepo::recent_empty(),
+    )
+}
+
+fn service_with_signals(
+    pool_repo: PoolRepoOnce,
+    pool_current_state_repo: MockPoolCurrentStateRepo,
+    analytics: MockAnalyticsRepo,
+    metadata: MockMetadataRepo,
+    price: MockPriceRepo,
+    signals: MockSignalRepo,
+) -> PoolService {
     PoolService::new(
         Arc::new(pool_repo),
         Arc::new(pool_current_state_repo),
         Arc::new(analytics),
         Arc::new(metadata),
         Arc::new(price),
+        Arc::new(signals),
     )
 }
 
@@ -266,6 +287,40 @@ async fn present_analytics_are_attached_to_the_right_pool() {
         analytics.volume_24h_usd,
         Some(rust_decimal::Decimal::new(500, 0))
     );
+}
+
+#[tokio::test]
+async fn recent_signals_are_attached_to_the_right_pool() {
+    let with_signals = pk(1);
+    let quiet = pk(2);
+    let pools = vec![
+        make_pool(with_signals, pk(10), pk(11)),
+        make_pool(quiet, pk(12), pk(13)),
+    ];
+
+    let mut map = HashMap::new();
+    map.insert(
+        with_signals,
+        vec![
+            make_signal_record(2, with_signals),
+            make_signal_record(1, with_signals),
+        ],
+    );
+
+    let svc = service_with_signals(
+        PoolRepoOnce::with_page(make_page(pools, true, true)),
+        MockPoolCurrentStateRepo::not_found(),
+        MockAnalyticsRepo::empty(),
+        MockMetadataRepo::empty(),
+        MockPriceRepo::empty(),
+        MockSignalRepo::with_recent(map),
+    );
+
+    let page = svc.list_pools(default_params()).await.unwrap();
+
+    assert_eq!(page.items[0].recent_signals.len(), 2);
+    assert_eq!(page.items[0].recent_signals[0].id, 2);
+    assert!(page.items[1].recent_signals.is_empty());
 }
 
 // ---------------------------------------------------------------------------

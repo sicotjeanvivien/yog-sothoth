@@ -258,3 +258,75 @@ async fn severity_filter_restricts_the_feed(pool: PgPool) {
     );
     assert!(page.is_first && page.is_last);
 }
+
+// ── recent_by_pools — the pools-list signal indicator ────────────────
+
+#[sqlx::test]
+async fn recent_by_pools_groups_newest_first_and_windows(pool: PgPool) {
+    let repo = PgSignalRepository::new(pool);
+    let now = Utc::now();
+
+    // Pool 1: one stale signal (outside the window) and two recent.
+    // Pool 2: one recent. Pool 3: quiet.
+    repo.insert_batch(&[
+        signal(1, Severity::Info, now - Duration::hours(30)), // id 1 — stale
+        signal(1, Severity::Warning, now - Duration::hours(2)), // id 2
+        signal(2, Severity::Critical, now - Duration::hours(1)), // id 3
+        signal(1, Severity::Info, now - Duration::minutes(5)), // id 4
+    ])
+    .await
+    .unwrap();
+
+    let map = repo
+        .recent_by_pools(&[pk(1), pk(2), pk(3)], now - Duration::hours(24), 20)
+        .await
+        .unwrap();
+
+    // Pool 1: the two in-window signals, newest first; the stale one
+    // filtered out. Pool 2: its single signal. Pool 3: absent.
+    let pool1: Vec<i64> = map[&pk(1)].iter().map(|r| r.id).collect();
+    assert_eq!(pool1, vec![4, 2]);
+    let pool2: Vec<i64> = map[&pk(2)].iter().map(|r| r.id).collect();
+    assert_eq!(pool2, vec![3]);
+    assert!(!map.contains_key(&pk(3)));
+    assert_eq!(map.len(), 2);
+}
+
+#[sqlx::test]
+async fn recent_by_pools_caps_per_pool_not_globally(pool: PgPool) {
+    let repo = PgSignalRepository::new(pool);
+    let now = Utc::now();
+
+    // Pool 1 is noisy (3 signals), pool 2 has one: with a per-pool cap
+    // of 2, pool 1 keeps its 2 newest and pool 2 is untouched.
+    repo.insert_batch(&[
+        signal(1, Severity::Info, now - Duration::hours(3)), // id 1
+        signal(1, Severity::Warning, now - Duration::hours(2)), // id 2
+        signal(1, Severity::Critical, now - Duration::hours(1)), // id 3
+        signal(2, Severity::Info, now - Duration::hours(4)), // id 4
+    ])
+    .await
+    .unwrap();
+
+    let map = repo
+        .recent_by_pools(&[pk(1), pk(2)], now - Duration::hours(24), 2)
+        .await
+        .unwrap();
+
+    let pool1: Vec<i64> = map[&pk(1)].iter().map(|r| r.id).collect();
+    assert_eq!(pool1, vec![3, 2]);
+    let pool2: Vec<i64> = map[&pk(2)].iter().map(|r| r.id).collect();
+    assert_eq!(pool2, vec![4]);
+}
+
+#[sqlx::test]
+async fn recent_by_pools_empty_input_is_a_no_op(pool: PgPool) {
+    let repo = PgSignalRepository::new(pool);
+
+    let map = repo
+        .recent_by_pools(&[], Utc::now() - Duration::hours(24), 20)
+        .await
+        .unwrap();
+
+    assert!(map.is_empty());
+}

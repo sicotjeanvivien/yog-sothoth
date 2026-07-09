@@ -96,6 +96,7 @@ impl AppState {
                 pool_analytics_repo,
                 token_metadata_repo.clone(),
                 token_price_repo.clone(),
+                signal_repo.clone(),
             )),
             swap_service: Arc::new(MeteoraDammV2SwapService::new(swap_event_repo)),
             liquidity_service: Arc::new(MeteoraDammV2LiquidityService::new(liquidity_event_repo)),

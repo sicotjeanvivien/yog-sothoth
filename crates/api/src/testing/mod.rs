@@ -770,10 +770,14 @@ pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
 // (insert_batch / latest_severity_by_pool) never reaches this crate,
 // so the mock has nothing to stub out.
 
+/// What `recent_by_pools` yields: each pool's recent signals.
+pub(crate) type RecentSignalsByPool = HashMap<Pubkey, Vec<SignalRecord>>;
+
 pub(crate) struct MockSignalRepo {
     list: Mutex<Option<RepositoryResult<Page<SignalRecord>>>>,
     latest_cursor: Mutex<Option<RepositoryResult<Option<SignalCursor>>>>,
     newer_than: Mutex<Option<RepositoryResult<Vec<SignalRecord>>>>,
+    recent_by_pools: Mutex<Option<RepositoryResult<RecentSignalsByPool>>>,
 }
 
 impl MockSignalRepo {
@@ -782,6 +786,7 @@ impl MockSignalRepo {
             list: Mutex::new(Some(Ok(page))),
             latest_cursor: Mutex::new(None),
             newer_than: Mutex::new(None),
+            recent_by_pools: Mutex::new(None),
         }
     }
     pub(crate) fn empty() -> Self {
@@ -792,6 +797,7 @@ impl MockSignalRepo {
             list: Mutex::new(Some(Err(RepositoryError::Integrity("signal boom".into())))),
             latest_cursor: Mutex::new(None),
             newer_than: Mutex::new(None),
+            recent_by_pools: Mutex::new(None),
         }
     }
     /// Seed the streaming lens (poller tests): what `latest_cursor` and
@@ -804,7 +810,22 @@ impl MockSignalRepo {
             list: Mutex::new(None),
             latest_cursor: Mutex::new(Some(latest_cursor)),
             newer_than: Mutex::new(Some(newer_than)),
+            recent_by_pools: Mutex::new(None),
         }
+    }
+    /// Seed the pools-list indicator lens: what `recent_by_pools` will
+    /// yield, once.
+    pub(crate) fn with_recent(map: RecentSignalsByPool) -> Self {
+        Self {
+            list: Mutex::new(None),
+            latest_cursor: Mutex::new(None),
+            newer_than: Mutex::new(None),
+            recent_by_pools: Mutex::new(Some(Ok(map))),
+        }
+    }
+    /// The common pool-service case: no signal in the window.
+    pub(crate) fn recent_empty() -> Self {
+        Self::with_recent(HashMap::new())
     }
 }
 
@@ -830,6 +851,14 @@ impl SignalFeed for MockSignalRepo {
         _limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>> {
         take(&self.newer_than)
+    }
+    async fn recent_by_pools(
+        &self,
+        _pools: &[Pubkey],
+        _since: DateTime<Utc>,
+        _per_pool_limit: i64,
+    ) -> RepositoryResult<RecentSignalsByPool> {
+        take(&self.recent_by_pools)
     }
 }
 

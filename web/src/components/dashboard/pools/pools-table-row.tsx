@@ -6,9 +6,10 @@
  * problem to dodge, no Client Component required: the prefetch and
  * accessibility of `<Link>` work out of the box.
  *
- * Five cells: pair, protocol, TVL, 24h volume, last seen. Cell
- * widths are governed by the `GRID_COLS` template shared with the
- * header, so the columns stay aligned regardless of content.
+ * Seven cells: pair, signal indicator, protocol, TVL, 24h volume,
+ * first seen, last seen. Cell widths are governed by the `GRID_COLS`
+ * template shared with the header, so the columns stay aligned
+ * regardless of content.
  *
  * USD values render `—` when null — that path exists when TVL or
  * volume cannot be computed for the pool (missing prices, no
@@ -24,9 +25,21 @@ import type { PoolResponse } from "@/lib/api/schema/pool";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatUsdCompact } from "@/lib/format/format-usd";
+import { worstSeverity } from "@/lib/signals/worst-severity";
 
 import { PoolPairCell } from "./pool-pair-cell";
+import { PoolSignalsCell } from "./pool-signals-cell";
 import { GRID_COLS } from "./pools-table";
+
+/** Labels the signal cell needs, resolved once by the parent table. */
+export type SignalCellLabels = {
+  /** Localized detector tag; falls back to the raw detector name. */
+  tagFor: (detector: string) => string;
+  /** Accessible name of the indicator, given the signal count. */
+  ariaFor: (count: number) => string;
+  /** Popover heading. */
+  title: string;
+};
 
 const CELL_CLASS =
   "px-4 py-3 text-[14px] text-slate-300 align-middle whitespace-nowrap flex items-center";
@@ -36,10 +49,14 @@ const CELL_NUMERIC_CLASS = `${CELL_CLASS} justify-end font-mono`;
 export function PoolsTableRow({
   pool,
   locale,
+  signalLabels,
 }: {
   pool: PoolResponse;
   locale: string;
+  signalLabels: SignalCellLabels;
 }) {
+  const worst = worstSeverity(pool.signals24h);
+
   return (
     <Link
       role="row"
@@ -48,6 +65,22 @@ export function PoolsTableRow({
     >
       <div role="cell" className={CELL_CLASS}>
         <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
+      </div>
+      {/* Signal indicator — empty cell (grid alignment) when the pool
+          emitted nothing in the window. */}
+      <div role="cell" className={CELL_CLASS}>
+        {worst !== null && (
+          <PoolSignalsCell
+            alertsHref={`/pools/${pool.poolAddress}?tab=alerts`}
+            ariaLabel={signalLabels.ariaFor(pool.signals24h.length)}
+            title={signalLabels.title}
+            worst={worst}
+            items={pool.signals24h.map((signal) => ({
+              severity: signal.severity,
+              label: signalLabels.tagFor(signal.detector),
+            }))}
+          />
+        )}
       </div>
       <div role="cell" className={CELL_CLASS}>
         <span className="text-slate-400">

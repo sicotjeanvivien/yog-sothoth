@@ -46,6 +46,13 @@ export function validPool() {
     protocolFees24hUsd: "23.982486757390302832260330",
     lpFees24hUsd: "95.929947029561211329041320",
     effectiveFeeBps: "25",
+    signals24h: [
+      {
+        severity: "warning",
+        detector: "flow_imbalance",
+        triggeredAt: "2026-05-25T11:47:02.000000Z",
+      },
+    ],
     firstSeenAt: "2026-05-21T10:01:35.084596Z",
     lastSeenAt: "2026-05-25T12:14:01.715170Z",
   };

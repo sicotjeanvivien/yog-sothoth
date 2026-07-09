@@ -50,6 +50,8 @@ mock in tests is free.
 | `GET` | `/api/pools` | Paginated list of discovered pools (cursor-based) |
 | `GET` | `/api/pools/top` | Top-N pools by `metric` (volume 24h; non-paginated, capped at 20) |
 | `GET` | `/api/pools/{address}` | Single pool, enriched with token metadata, prices, analytics |
+
+Every pool response (the three endpoints above) also embeds `signals24h`: the pool's signals over the last 24h (newest first, capped per pool, `severity`/`detector`/`triggeredAt` only) — the pools-list signal indicator. One batched query per request (`SignalFeed::recent_by_pools`), not one per pool.
 | `GET` | `/api/pools/{address}/latest-state` | Latest observed AMM state for the pool |
 | `GET` | `/api/pools/{address}/history` | Hourly time-series buckets (`?days=N`) — volume, fees, liquidity, claims, USD-valued |
 | `GET` | `/api/pools/{address}/swap-events` | Paginated swap events |

@@ -99,4 +99,18 @@ pub trait SignalFeed: Send + Sync {
         after: &SignalCursor,
         limit: i64,
     ) -> RepositoryResult<Vec<SignalRecord>>;
+
+    /// The recent signals of each pool in `pools` — the pools-list
+    /// signal indicator, one batched round-trip for a whole page.
+    ///
+    /// For each address, the signals emitted strictly after `since`,
+    /// newest first, capped at `per_pool_limit` *per pool*. Pools with
+    /// no signal in the window are absent from the map, so an empty
+    /// map means "nothing to indicate" — never an error.
+    async fn recent_by_pools(
+        &self,
+        pools: &[Pubkey],
+        since: DateTime<Utc>,
+        per_pool_limit: i64,
+    ) -> RepositoryResult<HashMap<Pubkey, Vec<SignalRecord>>>;
 }
