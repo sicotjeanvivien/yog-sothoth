@@ -19,7 +19,7 @@
 2. **DLMM v0.2.0** — chantier principal jusqu'en septembre, dev sur le WebSocket actuel (indépendant du choix RPC), compatible convalescence. `§ v0.2.0 — Meteora DLMM`
 
 ### Fait — étude comparative RPC (20 juil. 2026)
-- ✅ Shyft/Triton/Helius/QuickNode comparés. Recommandation provisoire **Shyft Build** (199 $/mo, flat, régions UE) ; Triton PAYG à chiffrer avant d'écarter. **Budget réel bien au-dessus du `~20 € HT` provisoire** (plancher ~150–200 $/mois) — à intégrer au plan financier de septembre. Devis directs + décision finale restent à faire en septembre. `§ Pré-v0.2`
+- ✅ Shyft/Triton/Helius/QuickNode/Alchemy comparés. **Recommandation révisée : Alchemy PAYG en tête** (post-payé, plafond de conso « Usage Limit » documenté, pas de dépôt minimum perdu si conso faible en dev) — priorité actée : coût plafonné/maîtrisé en phase de dev plutôt qu'un abonnement récurrent indépendant de la conso. Triton PAYG en second (mécanisme de solde zéro non documenté, resté un inconnu réel). Shyft Build (199 $/mo flat) en repli une fois le volume réel mesuré. **Budget réel bien au-dessus du `~20 € HT` provisoire.** Devis directs + décision finale restent à faire en septembre. `§ Pré-v0.2`
 
 ### Quick wins — pour respirer entre deux blocs DLMM
 - **Colonne fee + filtre sur `/pools`** : le plus rentable des trois — `fee_bps` déjà exposé, filtre dynamique via le `QueryBuilder` existant, **aucune dépendance à `yog-analytic`** contrairement aux filtres TVL/volume. `§ Reliquats v0.1`
@@ -531,7 +531,7 @@ qu'adossé à la watchlist.
 - [ ] Re-mesurer les déclencheurs différés « à l'ouverture de l'allowlist » (perf read-time Overview, table `pool_analytics_hourly` — cf. Reliquats v0.1)
 - [ ] Intégrer le budget RPC mensuel au coût d'infra — **le chiffre `~20 € HT` ci-dessus est caduc**, voir budget réel dans l'étude ci-dessous
 
-### Étude comparative RPC — résultats (20 juillet 2026)
+### Étude comparative RPC — résultats (20 juillet 2026, révisée le 20 juillet après ajout d'Alchemy)
 
 > Chiffres glanés par recherche web le 20 juil. 2026 — SaaS infra, les prix
 > bougent : **à reconfirmer par devis direct avant la décision de septembre**,
@@ -546,15 +546,21 @@ qu'adossé à la watchlist.
 | Provider | Entrée gRPC mainnet | Modèle | Régions UE | Quotas filtre |
 |---|---|---|---|---|
 | **Shyft** | Build, 199 $/mo | Flat, bande passante **non mesurée** | Londres, Amsterdam, Francfort | 150k adresses tx / 400k comptes par filtre — très large pour 1-2 program IDs Meteora |
-| **Triton One** | Pay-as-you-go, dépôt min. 125 $ (12 mois) | 0,08 $/GB, aucun palier | Sélection région (flou pour le PAYG partagé — à vérifier au devis) | Pas de limite artificielle documentée |
+| **Triton One** | Pay-as-you-go, dépôt min. 125 $ (12 mois) | Prépayé — 0,08 $/GB (≈82 $/To), solde qui se vide, rechargeable. **Comportement à solde zéro non documenté publiquement** (coupure nette ? grace period ? throttle ?) malgré recherche approfondie (doc technique, FAQ, blog) — inconnu réel, à lever par question directe avant tout engagement opérationnel dessus | Sélection région (flou pour le PAYG partagé — à vérifier au devis) | Pas de limite artificielle documentée |
+| **Alchemy** | Pay-as-you-go, **pas de dépôt minimum** | **Post-payé** — carte enregistrée (pré-autorisation 5 $ à l'activation), facturé mensuellement sur la conso réelle, 75 $/To. Dashboard propose un **« Usage Limit »** documenté (plafond en CU ou en $, conso coupée au plafond, pas de dépassement facturé) — mécanisme équivalent à un prépaiement plafonné, mais documenté et sans perte sèche si la conso réelle reste sous le plafond | Non vérifié dans cette passe | Non vérifié dans cette passe |
 | **Helius LaserStream** | Business, 499 $/mo (mainnet gRPC verrouillé derrière ce palier) | Req/s + credits/MB au-delà | Amsterdam, Francfort (9 régions au total) | — |
 | **QuickNode** | Scale, **499 $/mo** (build 49 $ et Accelerate 249 $ n'incluent pas le gRPC — Streams ≠ gRPC, voir note) | Credits/bytes | Non documenté clairement en accès libre | 10–50 pubkeys/filtre selon palier (suffisant : on ne filtre que par program ID) |
 
-**Aucun free tier gRPC mainnet chez les 4** — corrige l'hypothèse de départ (« des offres avec free tier existeraient ») : le free tier n'existe que sur le JSON-RPC classique (ce qu'on a déjà), pas sur le firehose gRPC.
+**Aucun free tier gRPC mainnet chez les 5** (le free tier Alchemy, 30M CU/mois, couvre le RPC classique, pas le gRPC) — corrige l'hypothèse de départ (« des offres avec free tier existeraient ») : le free tier n'existe que sur le JSON-RPC classique (ce qu'on a déjà), pas sur le firehose gRPC.
 
-**Budget réel** : plancher ~150–200 $/mois (Shyft) jusqu'à ~500 $/mois (Helius, QuickNode) pour un accès gRPC mainnet géré — bien au-dessus du `~20 € HT` provisoire posé le 3 juillet.
+**Budget réel** : Alchemy/Triton en PAYG peuvent démarrer bien en dessous de 150 $ (facturé/plafonné à la conso réelle, faible en phase de dev) ; sinon plancher flat ~150–200 $/mois (Shyft) jusqu'à ~500 $/mois (Helius, QuickNode) — de toute façon bien au-dessus du `~20 € HT` provisoire posé le 3 juillet.
 
-**Recommandation (sous réserve de devis directs)** : **Shyft Build** en tête — plancher le plus bas, facturation flat (budget prévisible, important en bootstrap), régions UE proches de Paris (fr-par-1 Scaleway), quotas de filtrage très au-dessus du besoin réel (1-2 program IDs Meteora, pas des milliers d'adresses). **Triton PAYG** à chiffrer avant d'écarter — pourrait revenir moins cher au volume réel observé, mais facturation à l'usage = moins prévisible pour une première migration sans mesure de volume préalable. **Helius et QuickNode aux mêmes ~500 $/mo** : Helius écarté en plus pour le critère n°1 (l'empiler sur le même vendeur que le DAS/metadata déjà en place recréerait la dépendance structurelle qu'on cherche à éviter) ; QuickNode reste un candidat neutre à ce prix si Shyft/Triton déçoivent au devis.
+**Recommandation révisée (sous réserve de devis directs) — priorité actée le 20 juillet : coût plafonné et maîtrisé pour la phase de dev/migration, pas un abonnement récurrent indépendant de la conso.**
+
+1. **Alchemy PAYG en tête** — même logique « paye ce que tu consommes » que Triton, mais mécanisme de plafonnement (« Usage Limit ») **documenté** plutôt que supposé, pas de dépôt minimum non remboursable perdu si la conso réelle reste faible en dev, et légèrement moins cher au To (75 $ vs ≈82 $).
+2. **Triton PAYG en second** — le mécanisme de solde zéro reste un inconnu réel malgré recherche approfondie ; à ne retenir qu'après confirmation directe de leur équipe sur le comportement de coupure. Le dépôt de 125 $ est non remboursable même si la conso réelle est faible — désavantage face à Alchemy pour une phase de dev à faible volume.
+3. **Shyft Build (199 $/mo flat)** reste le choix si on préfère la prévisibilité totale d'un forfait plutôt qu'un PAYG, une fois le volume réel connu (post-mesure Alchemy/Triton).
+4. **Helius écarté** pour le critère n°1 (éviter d'empiler le gRPC sur le même vendeur que le DAS/metadata déjà en place) ; **QuickNode** reste un candidat neutre à ~500 $/mo si les options moins chères déçoivent au devis.
 
 ---
 
