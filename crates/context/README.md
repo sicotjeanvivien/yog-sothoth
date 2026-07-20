@@ -60,9 +60,13 @@ client retries a rate-limited chunk a bounded number of times (pacing on the
 `Retry-After` header when present, capped exponential backoff otherwise)
 before falling back to skip-and-log.
 
-Known limitation (tracked for the public release): a worker whose retry budget
-is exhausted currently stays down until the process restarts — there is no
-respawn logic yet.
+There is deliberately no in-process respawn logic: a worker never returns
+`Err` from its loop, and a panic exits the whole process, which the container
+restart policy relaunches with a fresh budget. The failure mode that policy
+cannot see — a provider call hanging forever with the process still alive —
+is closed by the shared `providers::http_client()`: every provider client
+carries a total-request timeout (15 s) and a connect timeout (5 s), so a hang
+degrades into a tick-level `SourceError` absorbed like any other.
 
 ## Observability
 

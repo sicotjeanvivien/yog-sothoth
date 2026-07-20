@@ -86,7 +86,7 @@ impl JupiterPriceClient {
     /// Build the client against the given base URL and API key.
     pub fn new(base_url: String, api_key: String) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: super::http_client(),
             base_url,
             api_key,
         }

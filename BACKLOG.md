@@ -313,6 +313,8 @@
 
 ### v0.1.1 — Signal Engine + prep release (bloque la mise en prod)
 
+> **Re-planification (20 juil. 2026)** : la mise en prod passe à **septembre 2026**. Pas un simple report — une dépendance : la prod n'a de sens qu'une fois le flux RPC choisi (gate Pré-v0.2), et ce choix se fait en septembre. La prime de création d'entreprise (reçue) finance le RPC, mais payer un flux managé pendant la convalescence (post-op 27 août) sans pouvoir l'exploiter serait du gâchis. Le butoir « infra testée avant le 27 août » est **abandonné** : il poussait à déployer un projet qui n'avait pas d'intérêt à l'être. Deux axes actifs d'ici septembre : **(1)** finir les restes v0.1.1 ci-dessous (annonces+changelog, respawn workers context, RGPD), **(2)** DLMM v0.2.0 (dev sur le WebSocket actuel — la couche subscription étant derrière une interface, le chantier ne dépend pas du choix RPC ; travail recetté compatible convalescence). Chaîne de septembre : **choix RPC → audit complet → Scaleway → mise en prod**.
+
 #### ✅ Signal Engine — décisions d'architecture (figées 1 juil. 2026)
 
 Phase conceptuelle bouclée avant tout code. Décisions structurantes :
@@ -374,14 +376,15 @@ reséquençage du 3 juil. (« avant v0.2/auth », « en v0.2 avec users ») — 
 users sont désormais en v0.3, et un push par utilisateur n'a de valeur
 qu'adossé à la watchlist.
 
-#### yog-context — robustesse pour release
-- [ ] Worker respawn logic (actuellement abandon permanent après épuisement retry budget)
+#### ✅ yog-context — robustesse pour release
+- [x] **Worker respawn logic — re-scopé en « timeouts HTTP providers » (livré 20 juil. 2026)**. L'item (1ᵉʳ juin) décrivait un monde disparu : les 3 workers absorbent depuis tout échec au niveau du tick (skip-and-log, `run_one_cycle` ne retourne jamais `Err`) et un panic fait sortir le process, que `restart: unless-stopped` relance (budget remis à zéro) — un superviseur in-process serait redondant avec Docker. Le vrai trou constaté : les 3 clients providers étaient des `reqwest::Client::new()` **sans aucun timeout** (défaut reqwest) → un appel qui pend gelait le worker process vivant, invisible de la restart policy, enrichissement silencieusement mort. Fix : `providers::http_client()` partagé (total 15 s, connect 5 s) pour les 3 clients ; un hang dégrade en `SourceError` de tick déjà absorbée.
 - [x] **Bug 429 Jupiter Price** (observé 6 juil. 2026, corrigé 7 juil. 2026) : les chunks de 50 mints partaient en rafale sans espacement → rate limit Jupiter → chunks suivants perdus (trous de prix). Fix : variant `SourceError::RateLimited` (détection 429 + header `Retry-After`), retry borné par chunk (3 tentatives, backoff `Retry-After` sinon exponentiel 1s/2s, cap 10s), outcome Prometheus `rate_limited`
 
 #### yog-indexer — source de données
 - [ ] Étudier le passage du WebSocket RPC à un **Yellowstone gRPC (Geyser) managé** : stream plus fiable/complet que `logsSubscribe` (reconnexions, trous). Des offres avec free tier existeraient (à vérifier : Shyft, Helius/LaserStream, QuickNode…) — comparer quotas/coûts/latence. Périmètre : seule la couche subscription de l'indexer change, le pipeline extraction → persistance reste. **→ promu en gate Pré-v0.2 (3 juil. 2026), voir section dédiée en fin de fichier** ; l'étude peut démarrer pendant v0.1.1, la migration est le gate
 
-#### Audit complet du code — avant déploiement public
+#### Audit complet du code — avant déploiement public (📅 septembre 2026, après le DLMM — re-séquencé 20 juil.)
+> Positionné **après** le chantier DLMM v0.2.0 : auditer maintenant reviendrait à auditer deux fois, le DLMM étendant largement la surface (tables, repos, VIEWs, endpoints). Maillon 2 de la chaîne de septembre : choix RPC → **audit** → Scaleway → mise en prod.
 - [ ] Audit sécurité (surface API, secrets/env, rôles DB, CORS/headers, dépendances `cargo audit`/`npm audit`)
 - [ ] Audit bonnes pratiques / conventions (cohérence inter-crates, erreurs typées aux frontières, couverture de tests, dette accumulée — leçon des revues PR #37 : vérifier que l'exemple copié est la règle, pas l'exception)
 - [x] **Split ISP des traits repository mixtes** (relevé revue PR #38, mécanique) — livré 3 juil. 2026. L'audit exhaustif des 25 traits de `core` a élargi le scope du BACKLOG : **7 splits** (les 4 listés + `TokenMetadataRepository`, `NetworkStatusRepository`, `PoolCurrentStateRepository`, oubliés mais mêmes symptômes) + **2 méthodes mortes supprimées** (`find_by_pool` des claims — seule trace : des mocks `unimplemented!`). Convention de nommage actée (documentée dans `crates/core/README.md` → *Repository traits*) : le côté write/owner garde `*Repository`, la lunette de lecture est nommée par intention avec un vocabulaire fermé — `*Feed` (listing paginé temporel : `SignalFeed` ex-`SignalFeedRepository` renommé, `MeteoraDammV2Swap/LiquidityEventFeed`), `*Lookup` (lecture ponctuelle : `TokenMetadata/TokenPrice/NetworkStatus/PoolCurrentStateLookup`), `PoolCatalog` (surface de consultation du registre). Gain constaté : plus un seul `unreachable!()`/`unimplemented!` de stub dans les mocks (api, indexer, context). Cache `.sqlx` : 2 fichiers orphelins retirés (aucun SQL modifié)
@@ -432,7 +435,7 @@ qu'adossé à la watchlist.
 - [ ] Vérifier contenu page Mentions légales (SASU AWSD, éditeur, hébergeur)
 - [ ] Vérifier contenu pages Terms / Support / About
 
-#### Déploiement Scaleway — 📅 démarrage 1ʳᵉ semaine d'août 2026 (décidé 2 juil.) · ⚠️ restore testé avant le 27 août (convalescence)
+#### Déploiement Scaleway — 📅 reporté à septembre 2026 (re-décidé 20 juil. ; ex-« démarrage 1ʳᵉ semaine d'août · restore avant le 27 août ») · maillon 3 de la chaîne choix RPC → audit → Scaleway → prod
 - [ ] Provisionner Instance DEV1-M (`fr-par-1`, Ubuntu 24.04)
 - [ ] Hardening SSH (clé uniquement, fail2ban, ufw 22/80/443)
 - [ ] Installer Docker + Compose plugin
@@ -441,7 +444,7 @@ qu'adossé à la watchlist.
 - [ ] Migrer site AWSD (Hugo → rsync → Caddy)
 - [ ] Configurer Caddy + Let's Encrypt pour yog-scope.xyz
 - [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
-- [ ] Tester restore pg_dump avant le 27 août (impératif avant convalescence)
+- [ ] Tester restore pg_dump avant la mise en prod (l'impératif « avant le 27 août » est tombé avec le report du 20 juil. — la convalescence est du dev-only, pas de l'ops)
 - [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
 
 ### Reliquats v0.1 (analyzer — non bloquants, déclenchés au besoin)
@@ -468,6 +471,12 @@ qu'adossé à la watchlist.
 > Le 🚫 de v0.1 (« dépendance structurelle à Helius ») est **levé, pas oublié** :
 > il devient le premier critère de choix — provider interchangeable, pas de
 > couplage structurel.
+>
+> **Calendrier + financement (20 juil. 2026)** : choix et souscription en
+> **septembre** — la prime de création d'entreprise (reçue) finance le flux ;
+> pas de souscription pendant la convalescence (payer sans exploiter). Premier
+> maillon de la chaîne de septembre : **choix RPC → audit → Scaleway → prod**.
+> L'étude comparative, elle, ne coûte rien et peut se faire à tout moment.
 
 - [ ] Comparer les offres **Yellowstone gRPC (Geyser) managées** : Shyft, Triton, Helius LaserStream, QuickNode — quotas / coûts / latence / free tier (reprend l'item d'étude v0.1.1 *yog-indexer — source de données* ; l'étude peut démarrer pendant v0.1.1)
 - [ ] Critère de choix n°1 : **pas de dépendance structurelle à un provider unique** — couche subscription derrière une interface, provider swappable par config
@@ -492,6 +501,13 @@ qu'adossé à la watchlist.
 >    seuils flow/deviation validés sur données réelles Scaleway. Multiplier les
 >    protocoles avant d'avoir validé la valeur des signaux dilue l'effort.
 > 2. **Flux RPC adapté acquis** (section Pré-v0.2 ci-dessus).
+>
+> **Amendement (20 juil. 2026)** : le **développement** DLMM (v0.2.0) démarre
+> avant la prod — axe 2 de la re-planification v0.1.1, compatible convalescence,
+> indépendant du choix RPC (couche subscription derrière une interface). Les
+> gates restent vrais pour la **mise en service** : DAMM v2 et DLMM se
+> calibreront **ensemble** sur les données réelles de septembre. Inversion
+> assumée du gate 1 (calibration jointe), pas un oubli.
 >
 > **Pourquoi une version par protocole** : le coût réel n'est pas le décodeur
 > (event_cpi identique, recette add-protocol) mais la **sémantique domaine** —
