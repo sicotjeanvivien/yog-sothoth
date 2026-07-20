@@ -120,7 +120,7 @@ pub struct HeliusDasClient {
 impl HeliusDasClient {
     pub fn new(rpc_url: String) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: super::http_client(),
             rpc_url,
         }
     }

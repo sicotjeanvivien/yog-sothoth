@@ -97,7 +97,7 @@ pub struct CpAmmPoolClient {
 impl CpAmmPoolClient {
     pub fn new(rpc_url: String) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: super::http_client(),
             rpc_url,
             program_id: Protocol::MeteoraDammV2.program_id().to_string(),
         }
