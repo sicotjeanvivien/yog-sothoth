@@ -135,6 +135,24 @@ through to the Alerts tab. Hover-only is acceptable there because on
 touch the tap lands on the Alerts tab — the full version of what the
 popover previews.
 
+## Operator announcements
+
+The dashboard layout (Server Component) fetches `GET
+/api/announcements/active` on every dashboard render, reads the dismiss
+cookie, and picks the one announcement to show (`pickAnnouncement`,
+`lib/announcements/` — first non-dismissed entry of the API-ordered
+set: most severe first, then most recent). The pick happens server-side
+so the first paint is already correct — the `sidebar-state` cookie
+pattern. The client island (`AnnouncementBanner`) only owns the dismiss
+click: it appends the id to the single CSV cookie
+(`yog_announcements_dismissed`, capped, 90-day max-age) and hides
+itself. A failing announcements call degrades to "no banner" — it never
+takes the dashboard down.
+
+The banner's severity styling is its own mapping (an announcement
+severity is an editorial choice, not a detector conclusion); it shares
+only the design-system color tokens with the signal cards.
+
 ## Scripts
 
 | Command              | Description                            |

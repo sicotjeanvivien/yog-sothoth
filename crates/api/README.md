@@ -61,6 +61,7 @@ Every pool response (the three endpoints above) also embeds `signals24h`: the po
 | `GET` | `/api/signals/stream` | SSE stream of new signals (see below) |
 | `GET` | `/api/stats` | Global KPIs — total TVL, 24h volume/fees, pool counts |
 | `GET` | `/api/tokens/{mint}` | Token metadata + latest price (200 with `price: null` if no price yet) |
+| `GET` | `/api/announcements/active` | Operator announcements whose window is open — most severe first, non-paginated (hard cap); empty array is the nominal case |
 
 Public URLs stay protocol-agnostic (`/swap-events`, not `/damm-v2-swaps`); the
 service resolves the pool's protocol and reads the matching table.

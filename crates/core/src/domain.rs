@@ -1,3 +1,4 @@
+mod announcements;
 mod domain_event;
 mod freshness_status;
 mod global_analytics;
@@ -16,6 +17,7 @@ mod token_price;
 mod trade_direction;
 mod watched_pool;
 
+pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use domain_event::DomainEvent;
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};

@@ -1,3 +1,4 @@
+pub(crate) mod announcement_service;
 pub(crate) mod meteora_damm_v2_liquidity_service;
 pub(crate) mod meteora_damm_v2_swap_service;
 pub(crate) mod network_status_service;
@@ -6,6 +7,7 @@ pub(crate) mod signal_service;
 pub(crate) mod stats_service;
 pub(crate) mod token_service;
 
+pub(crate) use announcement_service::AnnouncementService;
 pub(crate) use meteora_damm_v2_liquidity_service::{
     MeteoraDammV2LiquidityListParams, MeteoraDammV2LiquidityService,
 };

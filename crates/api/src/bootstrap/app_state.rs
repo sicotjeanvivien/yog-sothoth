@@ -2,20 +2,22 @@ use std::sync::Arc;
 
 use tokio::sync::broadcast;
 use yog_core::domain::{
-    EventFreshnessRepository, GlobalAnalyticsRepository, MeteoraDammV2LiquidityEventFeed,
-    MeteoraDammV2SwapEventFeed, NetworkStatusLookup, PoolAnalyticsRepository, PoolCatalog,
-    PoolCurrentStateLookup, SignalFeed, SignalRecord, TokenMetadataLookup, TokenPriceLookup,
+    AnnouncementLookup, EventFreshnessRepository, GlobalAnalyticsRepository,
+    MeteoraDammV2LiquidityEventFeed, MeteoraDammV2SwapEventFeed, NetworkStatusLookup,
+    PoolAnalyticsRepository, PoolCatalog, PoolCurrentStateLookup, SignalFeed, SignalRecord,
+    TokenMetadataLookup, TokenPriceLookup,
 };
 use yog_persistence::{
-    Database, PgEventFreshnessRepository, PgGlobalAnalyticsRepository, PgHealthChecker,
-    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
+    Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
+    PgHealthChecker, PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
     PgPoolRepository, PgSignalRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::application::{
-    MeteoraDammV2LiquidityService, MeteoraDammV2SwapService, NetworkStatusService, PoolService,
-    STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller, StatsService, TokenService,
+    AnnouncementService, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
+    NetworkStatusService, PoolService, STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller,
+    StatsService, TokenService,
 };
 use crate::bootstrap::Config;
 use anyhow::Context;
@@ -40,6 +42,7 @@ pub(crate) struct AppState {
     pub(crate) signal_stream: broadcast::Sender<SignalRecord>,
     pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
+    pub(crate) announcement_service: Arc<AnnouncementService>,
     /// Infra probe — exposed directly because no application logic
     /// surrounds it. See `yog-persistence/health.rs`.
     pub(crate) health_checker: Arc<PgHealthChecker>,
@@ -79,6 +82,8 @@ impl AppState {
         let pool_analytics_repo: Arc<dyn PoolAnalyticsRepository> =
             Arc::new(PgPoolAnalyticsRepository::new(db_pool.clone()));
         let signal_repo: Arc<dyn SignalFeed> = Arc::new(PgSignalRepository::new(db_pool.clone()));
+        let announcement_repo: Arc<dyn AnnouncementLookup> =
+            Arc::new(PgAnnouncementRepository::new(db_pool.clone()));
 
         // ── Signal stream (poller → broadcast → SSE handlers) ──────────
         let (signal_stream, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);
@@ -113,6 +118,7 @@ impl AppState {
             signal_stream,
             stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
+            announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),
         };
         Ok((state, signal_poller))

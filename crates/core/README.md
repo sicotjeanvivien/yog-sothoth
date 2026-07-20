@@ -26,6 +26,8 @@ core/src/
 │   ├── token_metadata/    (TokenMetadata + repo)
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)
 │   ├── network_status/    (singleton snapshot)
+│   ├── announcements/     (Announcement + AnnouncementLookup — operator → users
+│   │                       banner; severity deliberately distinct from signals')
 │   ├── watched_pool/      (allowlist)
 │   ├── protocol/          (Protocol enum), trade_direction.rs, freshness_status/
 │   └── domain_event.rs    (two-level DomainEvent enum)

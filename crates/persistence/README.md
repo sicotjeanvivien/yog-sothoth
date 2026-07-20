@@ -15,7 +15,7 @@ migration conventions, see [`migrations/README.md`](./migrations/README.md).
 
 ```
 persistence/
-├── migrations/              ← sqlx migrations, forward-only (001 … 025 today)
+├── migrations/              ← sqlx migrations, forward-only (001 … 026 today)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── setup_roles.sql          ← one-time role provisioning (admin)
 ├── .sqlx/                   ← committed offline query cache (see below)
