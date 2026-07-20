@@ -78,39 +78,49 @@ export function AnnouncementBanner({
 
   const Icon = BANNER_ICON[announcement.severity];
 
+  // Sticky, not in-flow: browsers restore the scroll position on
+  // reload, so an in-flow banner appearing at the top of the page
+  // would land outside the viewport for anyone scrolled down — an
+  // announcement nobody sees fails its purpose. Sticks below the
+  // fixed mobile header (`top-14`) until lg, where the header is
+  // gone; the near-opaque blurred backing (the mobile header's
+  // recipe) keeps scrolled content from bleeding through the tinted
+  // card. z-20 stays under the header/drawer/overlay (z-30/40).
   return (
-    <div
-      role="status"
-      className={`mb-4 flex items-start gap-3 rounded-lg border border-l-2 px-4 py-3 ${BANNER_STYLE[announcement.severity]}`}
-    >
-      <Icon
-        size={18}
-        className={`mt-0.5 shrink-0 ${BANNER_ICON_COLOR[announcement.severity]}`}
-      />
-      <div className="min-w-0 flex-1">
-        <span className="mr-2 font-mono text-[12px] tracking-wide text-slate-400 uppercase">
-          {t(`kinds.${announcement.kind}`)}
-        </span>
-        <span className="text-[14px] text-slate-200">
-          {announcement.message}
-        </span>
-        {announcement.linkUrl && (
-          <Link
-            href={announcement.linkUrl}
-            className="ml-2 text-[13px] text-sky-300 underline underline-offset-2 hover:text-sky-200"
-          >
-            {t("readMore")}
-          </Link>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={dismiss}
-        aria-label={t("dismiss")}
-        className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
+    <div className="sticky top-14 z-20 bg-cosmos-950/85 px-6 py-3 backdrop-blur-sm lg:top-0 lg:px-10">
+      <div
+        role="status"
+        className={`flex items-start gap-3 rounded-lg border border-l-2 px-4 py-3 ${BANNER_STYLE[announcement.severity]}`}
       >
-        <CloseIcon size={16} />
-      </button>
+        <Icon
+          size={18}
+          className={`mt-0.5 shrink-0 ${BANNER_ICON_COLOR[announcement.severity]}`}
+        />
+        <div className="min-w-0 flex-1">
+          <span className="mr-2 font-mono text-[12px] tracking-wide text-slate-400 uppercase">
+            {t(`kinds.${announcement.kind}`)}
+          </span>
+          <span className="text-[14px] text-slate-200">
+            {announcement.message}
+          </span>
+          {announcement.linkUrl && (
+            <Link
+              href={announcement.linkUrl}
+              className="ml-2 text-[13px] text-sky-300 underline underline-offset-2 hover:text-sky-200"
+            >
+              {t("readMore")}
+            </Link>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          aria-label={t("dismiss")}
+          className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
+        >
+          <CloseIcon size={16} />
+        </button>
+      </div>
     </div>
   );
 }
