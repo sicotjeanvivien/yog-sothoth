@@ -5,6 +5,51 @@
 
 ---
 ---
+
+## 🎯 Reste à faire — vue hiérarchisée (20 juillet 2026)
+
+> Instantané de priorisation, pas une nouvelle source de vérité : le détail,
+> le contexte et le « pourquoi » de chaque item restent dans sa section
+> versionnée plus bas (référencée entre `§`). À rafraîchir quand les axes
+> bougent, pas à chaque coche — sinon c'est une deuxième source à faire
+> dériver.
+
+### Maintenant — les deux axes actifs (re-planification 20 juil.)
+1. **RGPD / légal** — dernier bloquant de v0.1.1, petit (relecture de contenu, pas de code) → clore avant de basculer sur le DLMM. `§ RGPD / légal`
+2. **DLMM v0.2.0** — chantier principal jusqu'en septembre, dev sur le WebSocket actuel (indépendant du choix RPC), compatible convalescence. `§ v0.2.0 — Meteora DLMM`
+
+### En fond, coût nul — n'importe quand entre deux tâches
+- **Étude comparative RPC** (Shyft, Triton, Helius LaserStream, QuickNode — quotas/coûts/latence) : travail de comparaison sur papier, aucune dépendance code. `§ Pré-v0.2`
+
+### Quick wins — pour respirer entre deux blocs DLMM
+- **Colonne fee + filtre sur `/pools`** : le plus rentable des trois — `fee_bps` déjà exposé, filtre dynamique via le `QueryBuilder` existant, **aucune dépendance à `yog-analytic`** contrairement aux filtres TVL/volume. `§ Reliquats v0.1`
+- **Tri TVL sur le top-N Overview** : quasi gratuit, `PoolRankMetric` a été conçu extensible pour exactement ça (5,5 ms mesurés en dev). `§ Reliquats v0.1`
+- **Favoris LocalStorage (PagePool)** : seul levier de rétention avant l'auth v0.3 ; front pur, découpable — bon candidat de convalescence si le DLMM est bouclé avant. Se réutilise comme pattern à la migration vers une watchlist serveur en v0.3. `§ Reliquats v0.1`
+
+### Chaîne de septembre — dans l'ordre, ne pas démarrer avant le DLMM
+1. **Choix + souscription RPC** (financés par la prime de création d'entreprise) → migration de la couche subscription indexer, désactivation de l'allowlist `watched_pools`. `§ Pré-v0.2`
+2. **Audit complet** — sécurité (`cargo audit`/`npm audit`, secrets, rôles DB, CORS) + bonnes pratiques/conventions ; volontairement après le DLMM pour ne pas auditer deux fois. `§ Audit complet du code`
+3. **Réviser `releases.ts`** avec les vraies dates/contenu de release, publier l'annonce release correspondante. `§ Déploiement Scaleway`
+4. **Déploiement Scaleway** (11 items : instance, hardening SSH, Docker, Postgres managé, backups, migration site AWSD, Caddy/Let's Encrypt, CI/CD, restore pg_dump testé, monitoring). `§ Déploiement Scaleway`
+
+### Sur mesure — pas avant une mesure réelle (pas de date)
+- **Crate `yog-analytic`** (matérialisation TVL/volume) — déclencheur : une requête analytique **mesurée** au-dessus d'un seuil réel à l'ouverture de l'allowlist `watched_pools` ; le chiffre de dev (juin 2026) n'est plus représentatif. Débloque en cascade le tri TVL avancé et les filtres min TVL/volume de `/pools`. `§ Reliquats v0.1`
+- **Cache HTTP `Cache-Control` sur `/api/pools`** — à activer au déploiement (zéro trafic en dev aujourd'hui), pas avant. `§ Reliquats v0.1`
+
+### Post-prod — a besoin de trafic réel ou d'un signal utilisateur
+- **Détecteur fee yield spike** — stratégiquement le plus intéressant des deux (1er signal d'*opportunité*, pas que du risque), mais sa sémantique à deux fenêtres se calibre sur données de prod, pas à l'aveugle. `§ Signal Engine — détecteurs suivants`
+- **Détecteur price impact creep** — aucune demande utilisateur à ce jour. `§ Signal Engine — détecteurs suivants`
+
+### Dormant — déclencheur non atteint, ne rien faire
+- **Extraction du `StreamPoller`/handler SSE génériques** — attend un 2ᵉ flux SSE ; le DLMM n'en crée pas (la table `signals` est générique, ses signaux rident le flux existant). `§ Reliquats v0.1`
+
+### Après le DLMM
+- **v0.2.1 Raydium**, **v0.2.2 Orca** — même recette, re-décision throughput avant Raydium (plus gros volume Solana). `§ v0.2.1 / v0.2.2`
+- **v0.3 Auth & API plateforme** — watchlists, canaux push, contrat multi-app Voorish (déclencheur indépendant : démarrage du dev Voorish, peut avancer seul). `§ v0.3`
+- **v0.4 Jupiter Referral** — déclencheur : Signal Engine mature **et utilisé**, pas de date. `§ v0.4`
+
+---
+---
 ## ✅ v0.1 — Analyzer + Signal Engine
 
 > Décision (10 juin 2026) : v0.1 et v0.2 fusionnées. Pas de release publique tant qu'il n'y a pas de signaux à offrir — un analytics Solana sans détecteurs est un viewer d'events, pas un produit. Le découpage interne (v0.1.0 / v0.1.1) reste pour conserver l'ordre de construction.
