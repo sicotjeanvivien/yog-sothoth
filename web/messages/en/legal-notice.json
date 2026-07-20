@@ -15,15 +15,15 @@
         "title": "Editor",
         "fields": {
           "nameLabel": "Name",
-          "name": "[AWSD legal name]",
+          "name": "AWSD",
           "legalFormLabel": "Legal form",
           "legalForm": "SASU (single-shareholder simplified joint-stock company)",
           "capitalLabel": "Share capital",
-          "capital": "[share capital] €",
+          "capital": "€1,000",
           "registeredOfficeLabel": "Registered office",
-          "registeredOffice": "[registered address]",
+          "registeredOffice": "60 rue François Ier, 75008 Paris, France",
           "sirenLabel": "SIREN",
-          "siren": "[SIREN]",
+          "siren": "100 091 446",
           "vatLabel": "Intra-EU VAT number",
           "vat": "[VAT number]"
         }
@@ -32,7 +32,7 @@
         "title": "Publishing director",
         "fields": {
           "nameLabel": "Name",
-          "name": "[publishing director full name]"
+          "name": "Jean-Vivien Sicot"
         }
       },
       "contact": {

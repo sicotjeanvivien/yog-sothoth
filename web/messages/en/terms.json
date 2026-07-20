@@ -17,7 +17,7 @@
       },
       "service": {
         "title": "The service",
-        "body": "Yog-Scope is an open source platform that observes Meteora pools on the Solana mainnet in real time, decodes on-chain events, enriches them with token metadata and USD prices, and exposes the result through a public HTTP API and a web dashboard. The service is operated by [AWSD legal name], the editor identified in the legal notice."
+        "body": "Yog-Scope is an open source platform that observes Meteora pools on the Solana mainnet in real time, decodes on-chain events, enriches them with token metadata and USD prices, and exposes the result through a public HTTP API and a web dashboard. The service is operated by AWSD, the editor identified in the legal notice."
       },
       "audience": {
         "title": "Who can use it",
