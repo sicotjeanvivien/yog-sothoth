@@ -535,20 +535,26 @@ qu'adossé à la watchlist.
 
 > Chiffres glanés par recherche web le 20 juil. 2026 — SaaS infra, les prix
 > bougent : **à reconfirmer par devis direct avant la décision de septembre**,
-> ne pas les prendre pour argent comptant à ce stade.
+> ne pas les prendre pour argent comptant à ce stade. ⚠️ Passage QuickNode
+> **corrigé** le 20 juil. après relecture : le chiffre initial (424 $) était
+> le prix **annuel** du plan confondu avec le mensuel, et le plan d'entrée
+> visible publiquement (« Build », 49 $/mo) est un faux ami — il inclut
+> *Streams* (pipeline webhook/ETL), **pas** le Yellowstone gRPC brut dont
+> l'indexer a besoin. Les deux produits portent des noms proches mais ne
+> sont pas la même chose.
 
 | Provider | Entrée gRPC mainnet | Modèle | Régions UE | Quotas filtre |
 |---|---|---|---|---|
 | **Shyft** | Build, 199 $/mo | Flat, bande passante **non mesurée** | Londres, Amsterdam, Francfort | 150k adresses tx / 400k comptes par filtre — très large pour 1-2 program IDs Meteora |
 | **Triton One** | Pay-as-you-go, dépôt min. 125 $ (12 mois) | 0,08 $/GB, aucun palier | Sélection région (flou pour le PAYG partagé — à vérifier au devis) | Pas de limite artificielle documentée |
 | **Helius LaserStream** | Business, 499 $/mo (mainnet gRPC verrouillé derrière ce palier) | Req/s + credits/MB au-delà | Amsterdam, Francfort (9 régions au total) | — |
-| **QuickNode** | Scale, ~424–499 $/mo (chiffres divergents selon sources, à revérifier) | Credits/bytes | Non documenté clairement en accès libre | 10–50 pubkeys/filtre selon palier (suffisant : on ne filtre que par program ID) |
+| **QuickNode** | Scale, **499 $/mo** (build 49 $ et Accelerate 249 $ n'incluent pas le gRPC — Streams ≠ gRPC, voir note) | Credits/bytes | Non documenté clairement en accès libre | 10–50 pubkeys/filtre selon palier (suffisant : on ne filtre que par program ID) |
 
 **Aucun free tier gRPC mainnet chez les 4** — corrige l'hypothèse de départ (« des offres avec free tier existeraient ») : le free tier n'existe que sur le JSON-RPC classique (ce qu'on a déjà), pas sur le firehose gRPC.
 
-**Budget réel** : plancher ~150–200 $/mois (Shyft) jusqu'à 500 $+/mois (Helius, QuickNode) pour un accès gRPC mainnet géré — bien au-dessus du `~20 € HT` provisoire posé le 3 juillet.
+**Budget réel** : plancher ~150–200 $/mois (Shyft) jusqu'à ~500 $/mois (Helius, QuickNode) pour un accès gRPC mainnet géré — bien au-dessus du `~20 € HT` provisoire posé le 3 juillet.
 
-**Recommandation (sous réserve de devis directs)** : **Shyft Build** en tête — plancher le plus bas, facturation flat (budget prévisible, important en bootstrap), régions UE proches de Paris (fr-par-1 Scaleway), quotas de filtrage très au-dessus du besoin réel (1-2 program IDs Meteora, pas des milliers d'adresses). **Triton PAYG** à chiffrer avant d'écarter — pourrait revenir moins cher au volume réel observé, mais facturation à l'usage = moins prévisible pour une première migration sans mesure de volume préalable. **Helius écarté pour le gRPC** précisément pour le critère n°1 : l'empiler sur le même vendeur que le DAS/metadata déjà en place recréerait la dépendance structurelle qu'on cherche à éviter.
+**Recommandation (sous réserve de devis directs)** : **Shyft Build** en tête — plancher le plus bas, facturation flat (budget prévisible, important en bootstrap), régions UE proches de Paris (fr-par-1 Scaleway), quotas de filtrage très au-dessus du besoin réel (1-2 program IDs Meteora, pas des milliers d'adresses). **Triton PAYG** à chiffrer avant d'écarter — pourrait revenir moins cher au volume réel observé, mais facturation à l'usage = moins prévisible pour une première migration sans mesure de volume préalable. **Helius et QuickNode aux mêmes ~500 $/mo** : Helius écarté en plus pour le critère n°1 (l'empiler sur le même vendeur que le DAS/metadata déjà en place recréerait la dépendance structurelle qu'on cherche à éviter) ; QuickNode reste un candidat neutre à ce prix si Shyft/Triton déçoivent au devis.
 
 ---
 
