@@ -1,0 +1,17 @@
+{
+  "Changelog": {
+    "meta": {
+      "title": "Changelog — Yog-Scope",
+      "description": "Release history of Yog-Scope: new detectors, dashboard features and fixes, one block per release."
+    },
+    "header": {
+      "eyebrow": "Releases",
+      "title": "Changelog",
+      "lead": "What shipped, release by release. Release announcements on the dashboard link here."
+    },
+    "sections": {
+      "features": "Features",
+      "fixes": "Fixes"
+    }
+  }
+}
