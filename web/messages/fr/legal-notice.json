@@ -23,9 +23,7 @@
           "registeredOfficeLabel": "Siège social",
           "registeredOffice": "60 rue François Ier, 75008 Paris",
           "sirenLabel": "SIREN",
-          "siren": "100 091 446",
-          "vatLabel": "N° TVA intracommunautaire",
-          "vat": "[N° TVA]"
+          "siren": "100 091 446"
         }
       },
       "publishingDirector": {

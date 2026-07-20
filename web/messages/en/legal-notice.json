@@ -23,9 +23,7 @@
           "registeredOfficeLabel": "Registered office",
           "registeredOffice": "60 rue François Ier, 75008 Paris, France",
           "sirenLabel": "SIREN",
-          "siren": "100 091 446",
-          "vatLabel": "Intra-EU VAT number",
-          "vat": "[VAT number]"
+          "siren": "100 091 446"
         }
       },
       "publishingDirector": {
