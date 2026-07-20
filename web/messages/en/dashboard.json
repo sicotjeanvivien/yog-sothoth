@@ -267,6 +267,16 @@
           "threshold": "Threshold"
         }
       }
+    },
+    "Announcements": {
+      "kinds": {
+        "maintenance": "Maintenance",
+        "incident": "Incident",
+        "release": "Release",
+        "beta": "Beta"
+      },
+      "readMore": "Read more",
+      "dismiss": "Dismiss this announcement"
     }
   }
 }

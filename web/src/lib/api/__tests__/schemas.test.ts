@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { AnnouncementSchema } from "../schema/announcement";
 import { PoolSchema } from "../schema/pool";
 import { PoolsPageSchema, SignalsPageSchema } from "../schema/page";
 import { PoolHistorySchema } from "../schema/pool-history";
@@ -67,6 +68,49 @@ function validPool() {
     "lastSeenAt": "2026-05-25T12:14:01.715170Z"
   };
 }
+
+// A representative valid announcement payload (yog-api DTO shape).
+function validAnnouncement() {
+  return {
+    id: 1,
+    kind: "release",
+    severity: "info",
+    message: "v0.1.1 is live — signal engine and alerts.",
+    linkUrl: "/changelog#v0.1.1",
+    startsAt: "2026-07-20T10:00:00.000000Z",
+    endsAt: null,
+  };
+}
+
+describe("AnnouncementSchema", () => {
+  it("accepts a complete valid announcement", () => {
+    const parsed = AnnouncementSchema.parse(validAnnouncement());
+    expect(parsed.id).toBe(1);
+    expect(parsed.kind).toBe("release");
+  });
+
+  it("accepts a null linkUrl and a relative one", () => {
+    expect(
+      AnnouncementSchema.parse({ ...validAnnouncement(), linkUrl: null })
+        .linkUrl,
+    ).toBeNull();
+    // Relative in-app paths are the main use case — must not require
+    // an absolute URL.
+    expect(
+      AnnouncementSchema.parse({ ...validAnnouncement(), linkUrl: "/changelog" })
+        .linkUrl,
+    ).toBe("/changelog");
+  });
+
+  it("rejects an unknown kind or severity", () => {
+    expect(() =>
+      AnnouncementSchema.parse({ ...validAnnouncement(), kind: "party" }),
+    ).toThrow();
+    expect(() =>
+      AnnouncementSchema.parse({ ...validAnnouncement(), severity: "loud" }),
+    ).toThrow();
+  });
+});
 
 describe("PoolSchema", () => {
   it("accepts a complete valid pool", () => {

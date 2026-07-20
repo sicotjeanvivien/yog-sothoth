@@ -23,8 +23,29 @@ export const dynamic = "force-dynamic";
 
 import { cookies } from "next/headers";
 
+import { AnnouncementBanner } from "@/components/dashboard/announcements/announcement-banner";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
+import type { AnnouncementResponse } from "@/lib/api/schema/announcement";
+import { fetchActiveAnnouncements } from "@/lib/api/server/announcements";
+import {
+  ANNOUNCEMENTS_DISMISSED_COOKIE,
+  parseDismissedIds,
+  pickAnnouncement,
+} from "@/lib/announcements/announcement-state";
+
+/**
+ * Best-effort read of the active announcements: a broken announcement
+ * channel (API down, schema drift) must never take the dashboard down,
+ * so any failure degrades to "no banner".
+ */
+async function safeActiveAnnouncements(): Promise<AnnouncementResponse[]> {
+  try {
+    return await fetchActiveAnnouncements();
+  } catch {
+    return [];
+  }
+}
 
 export default async function DashboardLayout({
   children,
@@ -35,8 +56,22 @@ export default async function DashboardLayout({
   const initialCollapsed =
     cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
 
+  const dismissedIds = parseDismissedIds(
+    cookieStore.get(ANNOUNCEMENTS_DISMISSED_COOKIE)?.value,
+  );
+  const announcement = pickAnnouncement(
+    await safeActiveAnnouncements(),
+    dismissedIds,
+  );
+
   return (
     <DashboardShell initialCollapsed={initialCollapsed}>
+      {announcement && (
+        <AnnouncementBanner
+          announcement={announcement}
+          dismissedIds={dismissedIds}
+        />
+      )}
       {children}
     </DashboardShell>
   );

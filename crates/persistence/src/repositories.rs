@@ -1,3 +1,4 @@
+mod announcement;
 mod event_freshness;
 mod global_analytics;
 mod helper;
@@ -15,6 +16,7 @@ mod token_metadata;
 mod token_price;
 mod watched_pool;
 
+pub use announcement::PgAnnouncementRepository;
 pub use event_freshness::PgEventFreshnessRepository;
 pub use global_analytics::PgGlobalAnalyticsRepository;
 pub use liquidity_flow::PgLiquidityFlowRepository;

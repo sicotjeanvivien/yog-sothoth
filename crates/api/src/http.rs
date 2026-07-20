@@ -48,6 +48,11 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/readyz", get(handlers::health::readyz));
 
     let app = Router::new()
+        // ── Operator announcements (non-paginated, active window) ───────
+        .route(
+            "/api/announcements/active",
+            get(handlers::announcements::list_active_announcements),
+        )
         // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
         // ── Ranked pools (non-paginated, capped) ─────────────────────────

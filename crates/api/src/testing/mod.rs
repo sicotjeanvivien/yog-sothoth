@@ -22,6 +22,7 @@ use std::sync::Mutex;
 use yog_core::{
     Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
     domain::{
+        Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
         EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository,
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
         MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
@@ -544,6 +545,34 @@ impl MeteoraDammV2LiquidityEventFeed for MockLiquidityEventRepo {
     }
 }
 
+// ── Mock: AnnouncementLookup ────────────────────────────────────────
+
+pub(crate) struct MockAnnouncementRepo {
+    list_active: Mutex<Option<RepositoryResult<Vec<Announcement>>>>,
+}
+
+impl MockAnnouncementRepo {
+    pub(crate) fn active(announcements: Vec<Announcement>) -> Self {
+        Self {
+            list_active: Mutex::new(Some(Ok(announcements))),
+        }
+    }
+    pub(crate) fn failing() -> Self {
+        Self {
+            list_active: Mutex::new(Some(Err(RepositoryError::Integrity(
+                "announcement boom".into(),
+            )))),
+        }
+    }
+}
+
+#[async_trait]
+impl AnnouncementLookup for MockAnnouncementRepo {
+    async fn list_active(&self, _now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
+        take(&self.list_active)
+    }
+}
+
 // ── Mock: NetworkStatusLookup ───────────────────────────────────
 
 pub(crate) struct MockNetworkStatusRepo {
@@ -652,6 +681,18 @@ pub(crate) fn make_network_status() -> NetworkStatus {
         slot: 300_000_000,
         rpc_latency_ms: 42,
         observed_at: ts(2_000),
+    }
+}
+
+pub(crate) fn make_announcement(id: i64) -> Announcement {
+    Announcement {
+        id,
+        kind: AnnouncementKind::Release,
+        severity: AnnouncementSeverity::Info,
+        message: format!("announcement {id}"),
+        link_url: None,
+        starts_at: ts(1_000),
+        ends_at: None,
     }
 }
 

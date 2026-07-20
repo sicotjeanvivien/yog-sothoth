@@ -1,3 +1,4 @@
+pub(crate) mod announcement;
 pub(crate) mod embedded_price;
 pub(crate) mod embedded_token;
 pub(crate) mod liquidity_event;
@@ -14,6 +15,7 @@ pub(crate) mod swap_event;
 pub(crate) mod token;
 pub(crate) mod token_price;
 
+pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use embedded_price::EmbeddedPriceResponse;
 pub(crate) use embedded_token::EmbeddedTokenResponse;
 pub(crate) use liquidity_event::LiquidityEventResponse;
