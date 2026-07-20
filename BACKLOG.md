@@ -446,6 +446,7 @@ qu'adossé à la watchlist.
 - [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
 - [ ] Tester restore pg_dump avant la mise en prod (l'impératif « avant le 27 août » est tombé avec le report du 20 juil. — la convalescence est du dev-only, pas de l'ops)
 - [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
+- [ ] **Changelog : réviser `releases.ts` avant la mise en prod** — les blocs v0.1.0/v0.1.1 livrés le 20 juil. sont synthétisés avec des dates de fin de jalon provisoires ; repasser dessus avec les vraies données de release (dates, contenu final incluant DLMM si v0.2.0 est dans le premier déploiement) et publier l'annonce release pointant `/changelog#<version>`. Rappel de routine : `releases.ts` est à tenir à jour **à chaque release** (les garde-fous vitest vérifient la forme, pas l'exhaustivité)
 
 ### Reliquats v0.1 (analyzer — non bloquants, déclenchés au besoin)
 - [ ] **Overview phase 1.5** : tri par TVL (variante `metric=tvl` + colonne triable / toggle) — quand le besoin se présente
