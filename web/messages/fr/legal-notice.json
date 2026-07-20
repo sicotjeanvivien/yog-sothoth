@@ -15,24 +15,22 @@
         "title": "Éditeur",
         "fields": {
           "nameLabel": "Raison sociale",
-          "name": "[raison sociale AWSD]",
+          "name": "AWSD",
           "legalFormLabel": "Forme juridique",
           "legalForm": "SASU (société par actions simplifiée à associé unique)",
           "capitalLabel": "Capital social",
-          "capital": "[capital social] €",
+          "capital": "1 000 €",
           "registeredOfficeLabel": "Siège social",
-          "registeredOffice": "[adresse du siège]",
+          "registeredOffice": "60 rue François Ier, 75008 Paris",
           "sirenLabel": "SIREN",
-          "siren": "[SIREN]",
-          "vatLabel": "N° TVA intracommunautaire",
-          "vat": "[N° TVA]"
+          "siren": "100 091 446"
         }
       },
       "publishingDirector": {
         "title": "Directeur de la publication",
         "fields": {
           "nameLabel": "Nom",
-          "name": "[nom complet du directeur de publication]"
+          "name": "Jean-Vivien Sicot"
         }
       },
       "contact": {

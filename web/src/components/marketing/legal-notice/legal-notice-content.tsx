@@ -65,14 +65,10 @@ const CARDS: readonly CardSchema[] = [
   {
     key: "editor",
     Icon: UserCardIcon,
-    fields: [
-      "name",
-      "legalForm",
-      "capital",
-      "registeredOffice",
-      "siren",
-      "vat",
-    ],
+    // No VAT line: AWSD is not subject to intra-EU VAT (franchise en
+    // base de TVA) — the standard practice is to omit the field
+    // rather than display a permanent "not applicable".
+    fields: ["name", "legalForm", "capital", "registeredOffice", "siren"],
   },
   {
     key: "publishingDirector",
