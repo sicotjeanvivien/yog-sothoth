@@ -14,7 +14,7 @@
  * and a nav don't list the same things, and forcing a shared list
  * would couple two surfaces that evolve independently.
  */
- 
+
 /**
  * A single footer link.
  *
@@ -43,29 +43,39 @@ export type FooterColumn = {
   namespace: string;
   links: readonly FooterLink[];
 };
- 
+
 /** Product column — all destinations exist today. */
 const PRODUCT_COLUMN: FooterColumn = {
   key: "product",
   namespace: "Marketing.footer.product",
   links: [
     { key: "overview", labelKey: "overview", href: "/overview", kind: "route" },
-    { key: "features", labelKey: "features", href: "/#features", kind: "anchor" },
-    { key: "support-us", labelKey: "support-us", href: "/support-us", kind: "route" },
+    {
+      key: "features",
+      labelKey: "features",
+      href: "/#features",
+      kind: "anchor",
+    },
+    {
+      key: "changelog",
+      labelKey: "changelog",
+      href: "/changelog",
+      kind: "route",
+    },
+    {
+      key: "support-us",
+      labelKey: "support-us",
+      href: "/support-us",
+      kind: "route",
+    },
   ],
 };
- 
+
 /**
- * Company column.
- *
- * TODO: these three routes do not exist yet — they 404 until the
- * pages are created under `(marketing)/`:
- *   - /about    company / project background (editorial);
- *   - /privacy  privacy policy — REQUIRED under GDPR once the site
- *               is publicly deployed;
- *   - /terms    terms of use.
- * France also needs separate "mentions légales". Treat this as a
- * v0.1-deployment task, not a footer detail.
+ * Company column — every destination exists under `(marketing)/`.
+ * (Historical note: these pages were listed here before they were
+ * built; the GDPR content review of privacy/terms/legal-notice remains
+ * a pre-deployment task on the BACKLOG.)
  */
 const COMPANY_COLUMN: FooterColumn = {
   key: "company",
@@ -73,11 +83,16 @@ const COMPANY_COLUMN: FooterColumn = {
   links: [
     { key: "about", labelKey: "about", href: "/about", kind: "route" },
     { key: "privacy", labelKey: "privacy", href: "/privacy", kind: "route" },
-    { key: "legal-notice", labelKey: "legal-notice", href: "/legal-notice", kind: "route" },
+    {
+      key: "legal-notice",
+      labelKey: "legal-notice",
+      href: "/legal-notice",
+      kind: "route",
+    },
     { key: "terms", labelKey: "terms", href: "/terms", kind: "route" },
   ],
 };
- 
+
 /** The footer link columns, in display order. */
 export const FOOTER_COLUMNS: readonly FooterColumn[] = [
   PRODUCT_COLUMN,

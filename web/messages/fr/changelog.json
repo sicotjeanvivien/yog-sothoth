@@ -1,0 +1,17 @@
+{
+  "Changelog": {
+    "meta": {
+      "title": "Changelog — Yog-Scope",
+      "description": "Historique des versions de Yog-Scope : nouveaux détecteurs, fonctionnalités du dashboard et corrections, un bloc par version."
+    },
+    "header": {
+      "eyebrow": "Versions",
+      "title": "Changelog",
+      "lead": "Ce qui a été livré, version par version. Les annonces de release du dashboard pointent ici."
+    },
+    "sections": {
+      "features": "Nouveautés",
+      "fixes": "Corrections"
+    }
+  }
+}
