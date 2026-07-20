@@ -24,10 +24,10 @@ impl AnnouncementService {
         Self { announcement_repo }
     }
 
-    /// The announcements currently in their display window, most severe
-    /// first then most recent (the repository contract's ordering).
-    pub(crate) async fn active(&self) -> Result<Vec<Announcement>, RepositoryError> {
-        self.announcement_repo.active(Utc::now()).await
+    /// List the announcements currently in their display window, most
+    /// severe first then most recent (the repository contract's ordering).
+    pub(crate) async fn list_active(&self) -> Result<Vec<Announcement>, RepositoryError> {
+        self.announcement_repo.list_active(Utc::now()).await
     }
 }
 

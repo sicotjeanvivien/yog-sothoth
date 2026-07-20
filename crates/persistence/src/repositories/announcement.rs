@@ -37,7 +37,7 @@ impl PgAnnouncementRepository {
 
 #[async_trait]
 impl AnnouncementLookup for PgAnnouncementRepository {
-    async fn active(&self, now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
+    async fn list_active(&self, now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
         // Most severe first (the CASE mirrors the enum's escalation
         // order — TEXT would sort alphabetically), then most recent.
         let rows = sqlx::query_as!(

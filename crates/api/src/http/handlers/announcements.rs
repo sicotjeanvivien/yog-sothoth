@@ -17,7 +17,7 @@ use axum::{Json, extract::State};
 pub(crate) async fn list_active_announcements(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<AnnouncementResponse>>, ApiError> {
-    let announcements = state.announcement_service.active().await?;
+    let announcements = state.announcement_service.list_active().await?;
 
     Ok(Json(
         announcements

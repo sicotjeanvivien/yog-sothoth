@@ -14,10 +14,12 @@ use crate::{RepositoryResult, domain::Announcement};
 /// (`*Lookup` convention: point-in-time read, no pagination).
 #[async_trait]
 pub trait AnnouncementLookup: Send + Sync {
-    /// Announcements whose display window contains `now` — most severe
-    /// first, then most recent `starts_at`, bounded by a hard limit.
+    /// List the announcements whose display window contains `now` —
+    /// most severe first, then most recent `starts_at`, bounded by a
+    /// hard limit. `list_*` like every list-shaped read in the
+    /// workspace (`list_missing_mints`, `list_unresolved`).
     ///
     /// `now` is passed in rather than read from the database clock so
     /// the contract stays deterministic and testable.
-    async fn active(&self, now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>>;
+    async fn list_active(&self, now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>>;
 }

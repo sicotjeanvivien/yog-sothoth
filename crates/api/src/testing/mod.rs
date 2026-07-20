@@ -548,18 +548,18 @@ impl MeteoraDammV2LiquidityEventFeed for MockLiquidityEventRepo {
 // ── Mock: AnnouncementLookup ────────────────────────────────────────
 
 pub(crate) struct MockAnnouncementRepo {
-    active: Mutex<Option<RepositoryResult<Vec<Announcement>>>>,
+    list_active: Mutex<Option<RepositoryResult<Vec<Announcement>>>>,
 }
 
 impl MockAnnouncementRepo {
     pub(crate) fn active(announcements: Vec<Announcement>) -> Self {
         Self {
-            active: Mutex::new(Some(Ok(announcements))),
+            list_active: Mutex::new(Some(Ok(announcements))),
         }
     }
     pub(crate) fn failing() -> Self {
         Self {
-            active: Mutex::new(Some(Err(RepositoryError::Integrity(
+            list_active: Mutex::new(Some(Err(RepositoryError::Integrity(
                 "announcement boom".into(),
             )))),
         }
@@ -568,8 +568,8 @@ impl MockAnnouncementRepo {
 
 #[async_trait]
 impl AnnouncementLookup for MockAnnouncementRepo {
-    async fn active(&self, _now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
-        take(&self.active)
+    async fn list_active(&self, _now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
+        take(&self.list_active)
     }
 }
 

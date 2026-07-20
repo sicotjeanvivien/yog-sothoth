@@ -17,7 +17,7 @@ async fn returns_repository_order_untouched() {
         announcements.clone(),
     )));
 
-    let result = svc.active().await.unwrap();
+    let result = svc.list_active().await.unwrap();
 
     assert_eq!(result, announcements);
 }
@@ -26,7 +26,7 @@ async fn returns_repository_order_untouched() {
 async fn empty_active_window_is_not_an_error() {
     let svc = AnnouncementService::new(Arc::new(MockAnnouncementRepo::active(Vec::new())));
 
-    let result = svc.active().await.unwrap();
+    let result = svc.list_active().await.unwrap();
 
     assert!(result.is_empty());
 }
@@ -37,7 +37,7 @@ async fn empty_active_window_is_not_an_error() {
 async fn repo_error_propagates() {
     let svc = AnnouncementService::new(Arc::new(MockAnnouncementRepo::failing()));
 
-    let err = svc.active().await.expect_err("should propagate");
+    let err = svc.list_active().await.expect_err("should propagate");
 
     assert!(matches!(err, RepositoryError::Integrity(_)));
 }
