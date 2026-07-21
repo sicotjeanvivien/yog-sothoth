@@ -9,12 +9,16 @@ use crate::{
 
 /// The metric a top-N pool ranking is ordered by.
 ///
-/// One variant today (`Volume24h`); kept as an enum because the `/api/pools/top`
-/// endpoint contract exposes a `metric` parameter meant to grow (e.g. `Tvl`).
+/// Exposed as the `metric` parameter of `/api/pools/top`. The two lenses
+/// answer different questions: `Volume24h` is *flow* (what is actively traded
+/// right now), `Tvl` is *stock* (where liquidity is parked — the deepest,
+/// most established pools).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolRankMetric {
     /// Realized 24h volume in USD (trade-time valued), descending.
     Volume24h,
+    /// Current total value locked in USD, descending.
+    Tvl,
 }
 
 /// Read-only access to derived analytics over pools.

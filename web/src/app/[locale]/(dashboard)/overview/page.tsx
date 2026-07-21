@@ -11,9 +11,9 @@
  *
  * No ingestion-health hero here on purpose: it already lives everywhere in
  * the dashboard chrome via the sidebar `network-status-panel`. Below the
- * KPI strip, two self-degrading blocks side by side: top pools by 24h
- * volume and the 5 latest signals (each fetches its own data and falls
- * back to a `BlockError` without taking the page down).
+ * KPI strip, two self-degrading blocks side by side: the top pools ranked by
+ * volume or TVL (`?rank=`) and the 5 latest signals (each fetches its own
+ * data and falls back to a `BlockError` without taking the page down).
  */
 
 import type { Metadata } from "next";
@@ -26,10 +26,19 @@ import { OverviewTopPools } from "@/components/dashboard/overview/overview-top-p
 import { PageError } from "@/components/dashboard/page-error";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchStats } from "@/lib/api/server/stats";
+import type { PoolRankMetric } from "@/lib/api/server/top-pools";
 
 type OverviewPageProps = {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+// The top-N ranking metric comes from `?rank=`. Anything other than the
+// explicit `tvl` (including absent or a stale/edited value) falls back to the
+// volume default — a bad URL shouldn't break the page.
+function parseRank(raw: string | string[] | undefined): PoolRankMetric {
+  return raw === "tvl" ? "tvl" : "volume_24h";
+}
 
 export async function generateMetadata({
   params,
@@ -45,9 +54,15 @@ export async function generateMetadata({
   };
 }
 
-export default async function OverviewPage({ params }: OverviewPageProps) {
+export default async function OverviewPage({
+  params,
+  searchParams,
+}: OverviewPageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  const sp = await searchParams;
+  const rankMetric = parseRank(sp["rank"]);
 
   const t = await getTranslations("Dashboard.Overview.page");
   const tShell = await getTranslations("Dashboard.shell");
@@ -74,9 +89,9 @@ export default async function OverviewPage({ params }: OverviewPageProps) {
       <OverviewStats stats={stats} />
 
       {/* Two independent self-degrading blocks, side by side on wide
-          screens: the volume ranking and the latest detector alerts. */}
+          screens: the pool ranking (volume/TVL) and the latest alerts. */}
       <section className="mt-8 grid items-start gap-8 px-6 pb-10 lg:px-10 xl:grid-cols-2">
-        <OverviewTopPools />
+        <OverviewTopPools metric={rankMetric} searchParams={sp} />
         <OverviewLatestSignals />
       </section>
     </>

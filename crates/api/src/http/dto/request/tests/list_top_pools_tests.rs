@@ -23,6 +23,16 @@ fn parses_valid_query() {
 }
 
 #[test]
+fn maps_tvl_metric_to_domain() {
+    let request = ListTopPoolsRequest::parse(TopPoolsQuery {
+        metric: PoolRankMetricParam::Tvl,
+        limit: 10,
+    })
+    .expect("should parse");
+    assert_eq!(request.metric(), PoolRankMetric::Tvl);
+}
+
+#[test]
 fn accepts_limit_at_cap() {
     let request = ListTopPoolsRequest::parse(query(20)).expect("limit at cap should parse");
     assert_eq!(request.limit(), 20);
