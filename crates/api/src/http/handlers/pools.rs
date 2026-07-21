@@ -28,7 +28,7 @@ pub(crate) async fn list_pools(
     Query(query): Query<PageQuery>,
 ) -> Result<Json<PageResponse<PoolResponse>>, ApiError> {
     let request = ListPoolsRequest::parse(query)?;
-    let page = state.pool_service.list_pools(request.into_params()).await?;
+    let page = state.pool_service.list_pools(request.into_query()).await?;
 
     let items: Vec<PoolResponse> = page.items.into_iter().map(PoolResponse::from).collect();
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;

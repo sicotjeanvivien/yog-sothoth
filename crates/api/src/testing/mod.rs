@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, PoolSort, RepositoryError, RepositoryResult,
+    Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
         EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository,
@@ -28,9 +28,9 @@ use yog_core::{
         MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
         MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed, NetworkStatus,
         NetworkStatusLookup, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCounts,
-        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, Protocol, Severity, Signal,
-        SignalCursor, SignalFeed, SignalRecord, TokenMetadata, TokenMetadataLookup, TokenPrice,
-        TokenPriceLookup,
+        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, PoolListQuery, Protocol, Severity,
+        Signal, SignalCursor, SignalFeed, SignalRecord, TokenMetadata, TokenMetadataLookup,
+        TokenPrice, TokenPriceLookup,
     },
 };
 
@@ -177,16 +177,7 @@ impl PoolCatalog for PoolRepoOnce {
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         take(&self.by_addresses)
     }
-    async fn find_paginated(
-        &self,
-        _cursor: Option<PoolCursor>,
-        _direction: PageDirection,
-        _position: Option<PagePosition>,
-        _sort: PoolSort,
-        _search: Option<String>,
-        _fee_bps: Option<rust_decimal::Decimal>,
-        _limit: i64,
-    ) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
         take(&self.paginated)
     }
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {
@@ -254,16 +245,7 @@ impl PoolCatalog for PoolCountsRepo {
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         unreachable!("find_by_addresses not used by StatsService")
     }
-    async fn find_paginated(
-        &self,
-        _cursor: Option<PoolCursor>,
-        _direction: PageDirection,
-        _position: Option<PagePosition>,
-        _sort: PoolSort,
-        _search: Option<String>,
-        _fee_bps: Option<rust_decimal::Decimal>,
-        _limit: i64,
-    ) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
         unreachable!("find_paginated not used by StatsService")
     }
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {

@@ -18,10 +18,10 @@ use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
-    Page, PageDirection, PagePosition, PoolSort, RepositoryResult,
+    Page, RepositoryResult,
     domain::{
         Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
-        PoolCurrentStateLookup, PoolCursor, PoolHistoryBucket, PoolRankMetric, SignalFeed,
+        PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolRankMetric, SignalFeed,
         SignalRecord, TokenMetadataLookup, TokenPriceLookup,
     },
 };
@@ -37,8 +37,6 @@ const RECENT_SIGNALS_WINDOW_HOURS: i64 = 24;
 /// Per-pool cap on the signals returned with a list page. Bounds the
 /// payload against a noisy pool; the hover list has no use for more.
 const RECENT_SIGNALS_PER_POOL: i64 = 20;
-
-// ^ if you keep PoolListParams in its own file; otherwise define it here.
 
 /// A page of enriched pools, preserving the pagination metadata from
 /// the underlying `Page<Pool>`.
@@ -59,23 +57,6 @@ pub(crate) struct EnrichedPoolPage {
 pub(crate) struct PoolCurrentStateView {
     pub(crate) state: PoolCurrentState,
     pub(crate) spot_price_a_in_b: Option<Decimal>,
-}
-
-// ---------------------------------------------------------------------------
-// Params
-// ---------------------------------------------------------------------------
-
-/// All fields are domain types — the HTTP layer is responsible for
-/// parsing query params, decoding the cursor, converting wire enums,
-/// and normalizing the search term before constructing this.
-pub(crate) struct PoolListParams {
-    pub(crate) cursor: Option<PoolCursor>,
-    pub(crate) direction: PageDirection,
-    pub(crate) position: Option<PagePosition>,
-    pub(crate) sort: PoolSort,
-    pub(crate) search: Option<String>,
-    pub(crate) fee_bps: Option<Decimal>,
-    pub(crate) limit: i64,
 }
 
 // ---------------------------------------------------------------------------
@@ -135,20 +116,9 @@ impl PoolService {
     /// (the enriched token carries `None`).
     pub(crate) async fn list_pools(
         &self,
-        params: PoolListParams,
+        query: PoolListQuery,
     ) -> RepositoryResult<EnrichedPoolPage> {
-        let page: Page<Pool> = self
-            .pool_repository
-            .find_paginated(
-                params.cursor,
-                params.direction,
-                params.position,
-                params.sort,
-                params.search,
-                params.fee_bps,
-                params.limit,
-            )
-            .await?;
+        let page: Page<Pool> = self.pool_repository.find_paginated(query).await?;
 
         let addresses: Vec<solana_pubkey::Pubkey> =
             page.items.iter().map(|p| p.pool_address).collect();

@@ -19,7 +19,7 @@ use std::str::FromStr;
 
 use yog_core::{
     PageDirection, PagePosition, PoolSort,
-    domain::{Pool, PoolCatalog, PoolCursor, Protocol},
+    domain::{Pool, PoolCatalog, PoolCursor, PoolListQuery, Protocol},
 };
 use yog_persistence::PgPoolRepository;
 
@@ -85,6 +85,22 @@ fn addrs(pools: &[Pool]) -> Vec<Pubkey> {
     pools.iter().map(|p| p.pool_address).collect()
 }
 
+/// A `PoolListQuery` with the given sort and page size and every other
+/// dimension at its neutral default (no cursor, forward, no position, no
+/// filter). Tests that need a cursor/position/filter override the field
+/// via struct-update syntax: `PoolListQuery { cursor: Some(c), ..base_query(sort, 2) }`.
+fn base_query(sort: PoolSort, limit: i64) -> PoolListQuery {
+    PoolListQuery {
+        cursor: None,
+        direction: PageDirection::Next,
+        position: None,
+        sort,
+        search: None,
+        fee_bps: None,
+        limit,
+    }
+}
+
 // ── Ordering: the four sorts produce the documented order ───────────
 
 #[sqlx::test]
@@ -93,15 +109,7 @@ async fn first_seen_asc_orders_oldest_first(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
 
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::FirstSeenAsc,
-            None,
-            None,
-            50,
-        )
+        .find_paginated(base_query(PoolSort::FirstSeenAsc, 50))
         .await
         .unwrap();
 
@@ -114,15 +122,7 @@ async fn first_seen_desc_orders_newest_first(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
 
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::FirstSeenDesc,
-            None,
-            None,
-            50,
-        )
+        .find_paginated(base_query(PoolSort::FirstSeenDesc, 50))
         .await
         .unwrap();
 
@@ -135,15 +135,7 @@ async fn last_seen_asc_orders_by_last_seen(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
 
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::LastSeenAsc,
-            None,
-            None,
-            50,
-        )
+        .find_paginated(base_query(PoolSort::LastSeenAsc, 50))
         .await
         .unwrap();
 
@@ -157,15 +149,7 @@ async fn last_seen_desc_orders_by_last_seen(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
 
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::LastSeenDesc,
-            None,
-            None,
-            50,
-        )
+        .find_paginated(base_query(PoolSort::LastSeenDesc, 50))
         .await
         .unwrap();
 
@@ -182,10 +166,7 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
     let sort = PoolSort::FirstSeenDesc; // expected order: C, B, A
 
     // Page 1: limit 2 → [C, B], has next.
-    let p1 = repo
-        .find_paginated(None, PageDirection::Next, None, sort, None, None, 2)
-        .await
-        .unwrap();
+    let p1 = repo.find_paginated(base_query(sort, 2)).await.unwrap();
     assert_eq!(addrs(&p1.items), vec![pk(3), pk(2)]);
     assert!(p1.is_first);
     assert!(!p1.is_last);
@@ -194,7 +175,10 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
     // Page 2: from next_cursor → [A], last page.
     let cursor = extract_pool_cursor(p1.next_cursor.as_ref().unwrap());
     let p2 = repo
-        .find_paginated(Some(cursor), PageDirection::Next, None, sort, None, None, 2)
+        .find_paginated(PoolListQuery {
+            cursor: Some(cursor),
+            ..base_query(sort, 2)
+        })
         .await
         .unwrap();
     assert_eq!(addrs(&p2.items), vec![pk(1)]);
@@ -212,14 +196,14 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
     let sort = PoolSort::FirstSeenDesc; // C, B, A
 
     // Page 1 [C, B], go Next to page 2.
-    let p1 = repo
-        .find_paginated(None, PageDirection::Next, None, sort, None, None, 2)
-        .await
-        .unwrap();
+    let p1 = repo.find_paginated(base_query(sort, 2)).await.unwrap();
     let next = extract_pool_cursor(p1.next_cursor.as_ref().unwrap());
 
     let p2 = repo
-        .find_paginated(Some(next), PageDirection::Next, None, sort, None, None, 2)
+        .find_paginated(PoolListQuery {
+            cursor: Some(next),
+            ..base_query(sort, 2)
+        })
         .await
         .unwrap();
     assert_eq!(addrs(&p2.items), vec![pk(1)]);
@@ -227,7 +211,11 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
     // From page 2, go Prev — must return to [C, B] in display order.
     let prev = extract_pool_cursor(p2.prev_cursor.as_ref().unwrap());
     let back = repo
-        .find_paginated(Some(prev), PageDirection::Prev, None, sort, None, None, 2)
+        .find_paginated(PoolListQuery {
+            cursor: Some(prev),
+            direction: PageDirection::Prev,
+            ..base_query(sort, 2)
+        })
         .await
         .unwrap();
     assert_eq!(addrs(&back.items), vec![pk(3), pk(2)]);
@@ -243,15 +231,10 @@ async fn position_last_jumps_to_end(pool: PgPool) {
 
     // Last page with limit 2 → the oldest slice [A], in display order.
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            Some(PagePosition::Last),
-            sort,
-            None,
-            None,
-            2,
-        )
+        .find_paginated(PoolListQuery {
+            position: Some(PagePosition::Last),
+            ..base_query(sort, 2)
+        })
         .await
         .unwrap();
 
@@ -269,21 +252,13 @@ async fn position_first_matches_unanchored_first_page(pool: PgPool) {
     let sort = PoolSort::LastSeenDesc;
 
     let explicit_first = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            Some(PagePosition::First),
-            sort,
-            None,
-            None,
-            2,
-        )
+        .find_paginated(PoolListQuery {
+            position: Some(PagePosition::First),
+            ..base_query(sort, 2)
+        })
         .await
         .unwrap();
-    let implicit_first = repo
-        .find_paginated(None, PageDirection::Next, None, sort, None, None, 2)
-        .await
-        .unwrap();
+    let implicit_first = repo.find_paginated(base_query(sort, 2)).await.unwrap();
 
     assert_eq!(addrs(&explicit_first.items), addrs(&implicit_first.items));
     assert!(explicit_first.is_first);
@@ -296,15 +271,7 @@ async fn empty_table_yields_empty_page_at_both_boundaries(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
 
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::FirstSeenDesc,
-            None,
-            None,
-            50,
-        )
+        .find_paginated(base_query(PoolSort::FirstSeenDesc, 50))
         .await
         .unwrap();
 
@@ -338,15 +305,10 @@ async fn fee_bps_filter_returns_only_matching_tier(pool: PgPool) {
     let repo = PgPoolRepository::new(pool);
 
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::FirstSeenAsc,
-            None,
-            Some(dec(25)),
-            50,
-        )
+        .find_paginated(PoolListQuery {
+            fee_bps: Some(dec(25)),
+            ..base_query(PoolSort::FirstSeenAsc, 50)
+        })
         .await
         .unwrap();
 
@@ -362,15 +324,10 @@ async fn fee_bps_filter_no_match_yields_empty_page(pool: PgPool) {
 
     // A tier no pool carries → an empty page, not an error.
     let page = repo
-        .find_paginated(
-            None,
-            PageDirection::Next,
-            None,
-            PoolSort::FirstSeenAsc,
-            None,
-            Some(dec(9999)),
-            50,
-        )
+        .find_paginated(PoolListQuery {
+            fee_bps: Some(dec(9999)),
+            ..base_query(PoolSort::FirstSeenAsc, 50)
+        })
         .await
         .unwrap();
 

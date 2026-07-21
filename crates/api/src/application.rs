@@ -8,7 +8,7 @@ pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use services::{
     AnnouncementService, MeteoraDammV2LiquidityListParams, MeteoraDammV2LiquidityService,
     MeteoraDammV2SwapListParams, MeteoraDammV2SwapService, NetworkStatusAggregate,
-    NetworkStatusService, PoolCurrentStateView, PoolListParams, PoolService, SignalListParams,
-    SignalService, StatsAggregate, StatsService, TokenAggregate, TokenService,
+    NetworkStatusService, PoolCurrentStateView, PoolService, SignalListParams, SignalService,
+    StatsAggregate, StatsService, TokenAggregate, TokenService,
 };
 pub(crate) use signal_stream::{STREAM_CHANNEL_CAPACITY, SignalStreamPoller};

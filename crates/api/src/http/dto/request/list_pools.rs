@@ -7,10 +7,9 @@
 //! valid; the handler can hand it straight to the service.
 
 use rust_decimal::Decimal;
-use yog_core::domain::PoolCursor;
+use yog_core::domain::{PoolCursor, PoolListQuery};
 use yog_core::{PageDirection, PagePosition, PoolSort};
 
-use crate::application::PoolListParams;
 use crate::http::{
     cursor::decode_pool_cursor,
     error::ApiError,
@@ -59,10 +58,10 @@ impl ListPoolsRequest {
         })
     }
 
-    /// Project into the service-layer params. Consumes self because
-    /// the request DTO has no use past this point.
-    pub(crate) fn into_params(self) -> PoolListParams {
-        PoolListParams {
+    /// Project into the domain query. Consumes self because the request
+    /// DTO has no use past this point.
+    pub(crate) fn into_query(self) -> PoolListQuery {
+        PoolListQuery {
             cursor: self.cursor,
             direction: self.direction,
             position: self.position,

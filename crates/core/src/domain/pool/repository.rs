@@ -24,6 +24,40 @@ pub struct PoolCursor {
     pub pool_address: Pubkey,
 }
 
+/// Everything a paginated pool listing needs — the input of
+/// [`PoolCatalog::find_paginated`].
+///
+/// A single struct rather than a long positional argument list: the
+/// navigation trio (`cursor` / `direction` / `position`), the ordering
+/// (`sort`), the filters (`search`, `fee_bps`) and the page size all
+/// describe one query. The HTTP layer parses query params, decodes the
+/// cursor, converts wire enums and normalizes the filters, then hands a
+/// fully-valid `PoolListQuery` straight to the repository.
+///
+/// - `cursor` + `direction` cooperate: traverse forward (`Next`) or
+///   backward (`Prev`) from the cursor's position. Without a cursor,
+///   `direction` is ignored and the natural ordering is used (newest
+///   first).
+/// - `position` jumps to a list boundary (`First` or `Last`), ignoring
+///   any cursor. Mutually exclusive with `cursor`.
+/// - `search` matches the pool address or a token symbol/name.
+/// - `fee_bps` filters to pools whose base trading fee (basis points)
+///   exactly equals the given tier. `None` leaves the fee dimension
+///   unfiltered. Meant to be fed one of the tiers returned by
+///   [`PoolCatalog::list_fee_tiers`].
+/// - `limit` is the maximum number of items returned; the repository
+///   clamps it defensively.
+#[derive(Debug, Clone)]
+pub struct PoolListQuery {
+    pub cursor: Option<PoolCursor>,
+    pub direction: PageDirection,
+    pub position: Option<PagePosition>,
+    pub sort: PoolSort,
+    pub search: Option<String>,
+    pub fee_bps: Option<rust_decimal::Decimal>,
+    pub limit: i64,
+}
+
 /// Pool inventory counts over the whole observed universe.
 ///
 /// A protocol-centric snapshot of *what was seen*: `observed` is every pool
@@ -96,41 +130,13 @@ pub trait PoolCatalog: Send + Sync {
     /// owns the ordering and reconciles against the addresses it requested.
     async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>>;
 
-    /// Fetch a page of pools.
-    ///
-    /// - `cursor` + `direction` cooperate: traverse forward (`Next`)
-    ///   or backward (`Prev`) from the cursor's position. Without a
-    ///   cursor, `direction` is ignored and the natural ordering is
-    ///   used (newest first).
-    /// - `position` jumps to a list boundary (`First` or `Last`),
-    ///   ignoring any cursor. Mutually exclusive with `cursor`.
-    /// - `PoolSort`
-    /// - `search`
-    /// - `fee_bps` filters to pools whose base trading fee (basis
-    ///   points) exactly equals the given tier. `None` leaves the fee
-    ///   dimension unfiltered. Meant to be fed one of the tiers
-    ///   returned by [`PoolCatalog::list_fee_tiers`].
-    /// - `limit` is the maximum number of items returned; the
-    ///   repository clamps it defensively.
+    /// Fetch a page of pools described by `query` (see [`PoolListQuery`]
+    /// for the navigation / ordering / filter contract).
     ///
     /// The returned `Page<Pool>` carries enough information for the
     /// caller to render Previous / Next / First / Last navigation
     /// without follow-up queries.
-    // The arg list is at the pagination+filter contract's natural size
-    // (cursor/direction/position/sort + per-dimension filters + limit).
-    // Bundling into a struct is a plausible future refactor once a third
-    // filter lands; not worth the churn across every impl/mock for one.
-    #[allow(clippy::too_many_arguments)]
-    async fn find_paginated(
-        &self,
-        cursor: Option<PoolCursor>,
-        direction: PageDirection,
-        position: Option<PagePosition>,
-        sort: PoolSort,
-        search: Option<String>,
-        fee_bps: Option<rust_decimal::Decimal>,
-        limit: i64,
-    ) -> RepositoryResult<Page<Pool>>;
+    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>>;
 
     /// Distinct base trading-fee tiers (basis points) observed across
     /// every pool, ascending. Powers the fee filter's option list

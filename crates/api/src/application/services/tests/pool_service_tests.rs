@@ -1,7 +1,6 @@
 //! Unit tests for `PoolService`. Mocks and fixtures come from
 //! `crate::testing`; this file holds only the scenarios.
 
-use super::PoolListParams;
 use super::PoolService;
 use crate::testing::make_pool_current_state;
 use crate::testing::{
@@ -11,7 +10,7 @@ use crate::testing::{
 use std::sync::Arc;
 
 use std::collections::HashMap;
-use yog_core::domain::{PoolAnalytics, PoolRankMetric};
+use yog_core::domain::{PoolAnalytics, PoolListQuery, PoolRankMetric};
 use yog_core::{PageDirection, PoolSort};
 
 fn service(
@@ -51,8 +50,8 @@ fn service_with_signals(
     )
 }
 
-fn default_params() -> PoolListParams {
-    PoolListParams {
+fn default_params() -> PoolListQuery {
+    PoolListQuery {
         cursor: None,
         direction: PageDirection::Next,
         position: None,

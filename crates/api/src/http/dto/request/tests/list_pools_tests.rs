@@ -16,7 +16,7 @@ use yog_core::{PageDirection, PoolSort};
 #[test]
 fn parses_valid_baseline_query() {
     let request = ListPoolsRequest::parse(valid_page_query()).expect("should parse");
-    let params = request.into_params();
+    let params = request.into_query();
     // The baseline query carries no cursor, no position, no search.
     assert!(params.cursor.is_none());
     assert!(params.position.is_none());
@@ -28,7 +28,7 @@ fn parses_valid_baseline_query() {
 fn preserves_dir_next() {
     let mut q = valid_page_query();
     q.dir = PageDirectionParam::Next;
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert_eq!(params.direction, PageDirection::Next);
 }
 
@@ -36,7 +36,7 @@ fn preserves_dir_next() {
 fn preserves_dir_prev() {
     let mut q = valid_page_query();
     q.dir = PageDirectionParam::Prev;
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert_eq!(params.direction, PageDirection::Prev);
 }
 
@@ -44,7 +44,7 @@ fn preserves_dir_prev() {
 fn preserves_position_first() {
     let mut q = valid_page_query();
     q.position = Some(PagePositionParam::First);
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert!(params.position.is_some());
 }
 
@@ -52,14 +52,14 @@ fn preserves_position_first() {
 fn preserves_limit_within_bounds() {
     let mut q = valid_page_query();
     q.limit = 75;
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert_eq!(params.limit, 75);
 }
 
 #[test]
 fn preserves_default_sort() {
     let q = valid_page_query();
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     // The default sort is whatever the wire default maps to.
     // We only check it's a stable enum variant — concrete value tested
     // in query.rs unit tests.
@@ -72,7 +72,7 @@ fn preserves_default_sort() {
 fn empty_search_normalises_to_none() {
     let mut q = valid_page_query();
     q.q = Some(String::new());
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert!(params.search.is_none());
 }
 
@@ -80,7 +80,7 @@ fn empty_search_normalises_to_none() {
 fn whitespace_search_normalises_to_none() {
     let mut q = valid_page_query();
     q.q = Some("   ".to_string());
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert!(params.search.is_none());
 }
 
@@ -88,7 +88,7 @@ fn whitespace_search_normalises_to_none() {
 fn meaningful_search_is_preserved() {
     let mut q = valid_page_query();
     q.q = Some("SOL".to_string());
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert_eq!(params.search.as_deref(), Some("SOL"));
 }
 
@@ -135,7 +135,7 @@ fn empty_cursor_string_is_treated_as_none() {
     // as cursor absent, not as a malformed cursor.
     let mut q = valid_page_query();
     q.cursor = Some(String::new());
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert!(params.cursor.is_none());
 }
 
@@ -143,6 +143,6 @@ fn empty_cursor_string_is_treated_as_none() {
 fn none_cursor_stays_none() {
     let mut q = valid_page_query();
     q.cursor = None;
-    let params = ListPoolsRequest::parse(q).unwrap().into_params();
+    let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert!(params.cursor.is_none());
 }

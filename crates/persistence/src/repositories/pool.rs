@@ -10,11 +10,10 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
-    RepositoryResult,
+    Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
     domain::{
         Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor,
-        PoolRepository,
+        PoolListQuery, PoolRepository,
     },
 };
 
@@ -155,16 +154,17 @@ impl PoolCatalog for PgPoolRepository {
         rows.into_iter().map(Pool::try_from).collect()
     }
 
-    async fn find_paginated(
-        &self,
-        cursor: Option<PoolCursor>,
-        direction: PageDirection,
-        position: Option<PagePosition>,
-        sort: PoolSort,
-        search: Option<String>,
-        fee_bps: Option<rust_decimal::Decimal>,
-        limit: i64,
-    ) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
+        let PoolListQuery {
+            cursor,
+            direction,
+            position,
+            sort,
+            search,
+            fee_bps,
+            limit,
+        } = query;
+
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
         let fetch_limit = effective_limit + 1;
 
