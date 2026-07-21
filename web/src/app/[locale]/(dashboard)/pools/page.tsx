@@ -168,9 +168,9 @@ export default async function PoolsPage({
   const outcome = await load({ cursor, dir, position, search, sort, feeBps });
 
   // Resolve the effective sort for the header indicators: defaults to
-  // first_seen_desc when the URL doesn't specify one (matches the
-  // backend default).
-  const effectiveSort: PoolSort = sort ?? "first_seen_desc";
+  // last_seen_desc when the URL doesn't specify one (most-recent activity
+  // first — matches the backend default; the two must stay in sync).
+  const effectiveSort: PoolSort = sort ?? "last_seen_desc";
 
   // Any refinement (search or fee filter) turns the empty result into a
   // "no match" state rather than the cold "nothing indexed yet" one.

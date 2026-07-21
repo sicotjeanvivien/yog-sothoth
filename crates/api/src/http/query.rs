@@ -101,9 +101,9 @@ impl From<PagePositionParam> for PagePosition {
 #[derive(Debug, Default, Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum PoolSortParam {
-    #[default]
     FirstSeenDesc,
     FirstSeenAsc,
+    #[default]
     LastSeenDesc,
     LastSeenAsc,
 }
