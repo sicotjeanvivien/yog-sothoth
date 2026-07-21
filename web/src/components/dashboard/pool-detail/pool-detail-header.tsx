@@ -31,10 +31,10 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/shared/icon";
 
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import { formatMeteoraUrl } from "@/lib/format/format-meteora-url";
-import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
+import { ProtocolBadge } from "@/components/dashboard/pools/protocol-badge";
 import { WatchlistToggle } from "@/components/dashboard/watchlist/watchlist-toggle";
 import { CopyButton } from "@/components/shared/copy-button";
 
@@ -67,9 +67,7 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
             <div className="flex items-center gap-3">
               <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
             </div>
-            <span className="rounded-[4px] border border-sothoth-500/20 bg-sothoth-600/10 px-2 py-[3px] text-[12px] font-semibold tracking-[0.12em] text-sothoth-200 uppercase">
-              {formatProtocolLabel(pool.protocol)}
-            </span>
+            <ProtocolBadge protocol={pool.protocol} />
           </div>
 
           {/* Short address with copy */}

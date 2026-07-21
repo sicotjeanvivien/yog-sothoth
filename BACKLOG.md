@@ -19,7 +19,7 @@
 2. **Finir les events DAMM v2** — compléter la couverture d'events du protocole de référence (ClaimProtocolFee, famille rewards, SplitPosition) **avant** d'ajouter un nouveau protocole : DAMM v2 complet d'abord, puis enchaîner le DLMM avec une recette « voie 3 » stabilisée. `§ DAMM v2 — events restants`
 3. **DLMM v0.2.0** — chantier principal jusqu'en septembre, dev sur le WebSocket actuel (indépendant du choix RPC), compatible convalescence. `§ v0.2.0 — Meteora DLMM`
 
-### Fait — étude comparative RPC (20 juil. 2026)
+### ✅ Fait — étude comparative RPC (20 juil. 2026)
 - ✅ Shyft/Triton/Helius/QuickNode/Alchemy comparés. **Recommandation révisée : Alchemy PAYG en tête** (post-payé, plafond de conso « Usage Limit » documenté, pas de dépôt minimum perdu si conso faible en dev) — priorité actée : coût plafonné/maîtrisé en phase de dev plutôt qu'un abonnement récurrent indépendant de la conso. Triton PAYG en second (mécanisme de solde zéro non documenté, resté un inconnu réel). Shyft Build (199 $/mo flat) en repli une fois le volume réel mesuré. **Budget réel bien au-dessus du `~20 € HT` provisoire.** Devis directs + décision finale restent à faire en septembre. `§ Pré-v0.2`
 
 ### ✅ Quick wins — pour respirer entre deux blocs DLMM
