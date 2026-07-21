@@ -76,9 +76,9 @@ type SortableHeaderProps = {
       aria-sort={ariaSort as "ascending" | "descending" | "none"}
       className={`
         inline-flex items-center gap-1.5 ${alignmentClass}
-        text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase
+        text-[11px] font-medium tracking-[0.06em] text-slate-500 uppercase
         whitespace-nowrap
-        transition-colors hover:text-slate-200
+        transition-colors hover:text-slate-300
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sothoth-400
         rounded
       `}

@@ -81,6 +81,10 @@
         "sortedAscending": "{column} (trié croissant)",
         "sortedDescending": "{column} (trié décroissant)"
       },
+      "rowActions": {
+        "copyAddress": "Copier l'adresse",
+        "viewOnSolscan": "Voir sur Solscan"
+      },
       "empty": {
         "title": "Aucune pool observée pour le moment",
         "description": "L'indexeur tourne mais n'a encore capté aucune activité de pool. Les pools apparaîtront ici dès que des événements on-chain seront détectés."
@@ -120,18 +124,12 @@
         "add": "Ajouter à la watchlist",
         "remove": "Retirer de la watchlist"
       },
-      "table": {
-        "pair": "Paire",
-        "tvl": "TVL",
-        "volume24h": "Volume 24h"
-      },
       "empty": {
         "title": "Votre watchlist est vide",
         "hint": "Étoilez une pool depuis sa page pour la garder à l'œil ici.",
         "cta": "Parcourir les pools"
       },
       "loading": "Chargement de votre watchlist…",
-      "removeLabel": "Retirer de la watchlist",
       "partialError": "Certaines pools suivies n'ont pas pu être chargées."
     },
     "PoolDetail": {

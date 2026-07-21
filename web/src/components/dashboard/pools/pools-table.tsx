@@ -4,16 +4,16 @@ import { KNOWN_DETECTORS } from "@/components/dashboard/signals/signal-display";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import type { PoolSort } from "@/lib/api/type/pagination";
 
-import { PoolsTableRow, type SignalCellLabels } from "./pools-table-row";
+import { PoolsTableRow } from "./pools-table-row";
+import {
+  GRID_COLS,
+  HEAD_CELL_CLASS,
+  HEAD_CELL_NUMERIC_CLASS,
+  HEAD_CELL_SORTABLE_CLASS,
+  TABLE_MIN_WIDTH_CLASS,
+  type SignalCellLabels,
+} from "./pools-table-shared";
 import { SortableHeader } from "./sortable-header";
-
-export const GRID_COLS =
-  "grid-cols-[minmax(200px,1.8fr)_minmax(90px,0.5fr)_minmax(140px,1fr)_minmax(90px,0.6fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_minmax(130px,1fr)_minmax(130px,1fr)]";
-const HEAD_CELL_BASE =
-  "flex items-center px-4 py-3 text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
-const HEAD_CELL_CLASS = HEAD_CELL_BASE;
-const HEAD_CELL_NUMERIC_CLASS = `${HEAD_CELL_BASE} justify-end`;
-const HEAD_CELL_SORTABLE_CLASS = "flex items-center px-4 py-3";
 
 type PoolsTableProps = {
   pools: PoolResponse[];
@@ -44,7 +44,7 @@ export async function PoolsTable({
 
   return (
     <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
-      <div role="table" className="min-w-[1120px]">
+      <div role="table" className={TABLE_MIN_WIDTH_CLASS}>
         {/* Header row */}
         <div
           role="rowgroup"
@@ -87,6 +87,13 @@ export async function PoolsTable({
                 basePath="/pools"
               />
             </div>
+            {/* Actions column — icons are self-describing; the header is a
+                spacer that keeps the grid aligned. */}
+            <div
+              role="columnheader"
+              className={HEAD_CELL_NUMERIC_CLASS}
+              aria-hidden="true"
+            />
           </div>
         </div>
 

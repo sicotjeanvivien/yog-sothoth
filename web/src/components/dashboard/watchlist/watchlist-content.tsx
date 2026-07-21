@@ -8,42 +8,48 @@
  * page, in this tab or another) it reconciles: removed pools disappear
  * immediately, added ones are fetched.
  *
+ * Renders the *shared* `PoolsTableRow` — same columns and look as `/pools` —
+ * so the watchlist is visibly "your subset of the pools list". Removal is the
+ * row's own watchlist star (in the actions cell); no bespoke control here.
+ * `signalLabels` and `locale` are resolved client-side and passed to the row.
+ *
  * States: a pre-hydration skeleton (the store reads "empty" until mounted, so
  * we must not flash the empty state), an empty state with a CTA to `/pools`,
- * and the table. Pools that fail to load (e.g. a 404) are simply omitted; if
- * any failed a discreet note says so rather than faking a row.
+ * and the table. Pools that fail to load (e.g. a 404) are omitted; if any
+ * failed a discreet note says so rather than faking a row.
  */
 
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
+import { KNOWN_DETECTORS } from "@/components/dashboard/signals/signal-display";
 import { CtaLink } from "@/components/shared/cta-link";
-import { WatchlistIcon } from "@/components/shared/icon";
-import { Link } from "@/i18n/navigation";
 import { fetchPoolBrowser } from "@/lib/api/browser/pool";
 import type { PoolResponse } from "@/lib/api/schema/pool";
-import { formatUsdCompact } from "@/lib/format/format-usd";
 import { useWatchlist } from "@/lib/watchlist/use-watchlist";
 
-import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
+import { PoolsTableRow } from "@/components/dashboard/pools/pools-table-row";
+import {
+  GRID_COLS,
+  HEAD_CELL_CLASS,
+  HEAD_CELL_NUMERIC_CLASS,
+  TABLE_MIN_WIDTH_CLASS,
+  type SignalCellLabels,
+} from "@/components/dashboard/pools/pools-table-shared";
 
-const GRID_COLS = "grid-cols-[1fr_auto_auto_auto]";
-const CELL = "px-4 py-3 text-[14px] flex items-center";
-const CELL_NUM = `${CELL} justify-end font-mono text-slate-300`;
-const HEAD =
-  "px-4 py-3 text-[12px] font-semibold tracking-[0.2em] text-slate-500 uppercase flex items-center";
-const HEAD_NUM = `${HEAD} justify-end`;
-
-// `useSyncExternalStore` mount flag: `false` on the server / during hydration,
-// `true` once running on the client — no effect, so no cascading-render lint.
 const noopSubscribe = () => () => {};
 
 export function WatchlistContent() {
   const t = useTranslations("Dashboard.Watchlist");
-  const { addresses, remove } = useWatchlist();
+  const tTable = useTranslations("Dashboard.Pools.table");
+  const tSignals = useTranslations("Dashboard.Signals.feed");
+  const locale = useLocale();
+  const { addresses } = useWatchlist();
 
+  // `false` on the server / during hydration, `true` on the client — a
+  // mount flag without an effect, so no cascading-render lint.
   const mounted = useSyncExternalStore(
     noopSubscribe,
     () => true,
@@ -53,8 +59,7 @@ export function WatchlistContent() {
   const [pools, setPools] = useState<PoolResponse[]>([]);
   const [anyError, setAnyError] = useState(false);
   // The address set the last fetch settled for; while it differs from the
-  // current one we're loading. Set only from the async callback (never
-  // synchronously in the effect) to avoid cascading renders.
+  // current one we're loading. Set only from the async callback.
   const [settledKey, setSettledKey] = useState<string | null>(null);
 
   const addressesKey = addresses.join(",");
@@ -66,7 +71,6 @@ export function WatchlistContent() {
     const requestId = ++latestRequest.current;
     Promise.allSettled(addresses.map((a) => fetchPoolBrowser(a))).then(
       (results) => {
-        // Drop a stale response if the address set changed meanwhile.
         if (requestId !== latestRequest.current) return;
         setPools(
           results
@@ -108,7 +112,6 @@ export function WatchlistContent() {
   const isLoading = settledKey !== addressesKey;
 
   if (visible.length === 0) {
-    // Still fetching this set, or every watched pool failed to load.
     return isLoading ? (
       <Skeleton label={t("loading")} />
     ) : (
@@ -116,69 +119,67 @@ export function WatchlistContent() {
     );
   }
 
+  const signalLabels: SignalCellLabels = {
+    tagFor: (detector) =>
+      KNOWN_DETECTORS.has(detector)
+        ? tSignals(`detectors.${detector}.tag`)
+        : detector,
+    ariaFor: (count) => tTable("signalsAria", { count }),
+    title: tTable("signalsPopoverTitle"),
+  };
+
   return (
     <div className="mx-6 lg:mx-10">
-      <div
-        role="table"
-        className="overflow-hidden rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/40"
-      >
-        <div
-          role="row"
-          className={`grid ${GRID_COLS} border-b border-sothoth-500/15`}
-        >
-          <div role="columnheader" className={HEAD}>
-            {t("table.pair")}
-          </div>
-          <div role="columnheader" className={HEAD_NUM}>
-            {t("table.tvl")}
-          </div>
-          <div role="columnheader" className={HEAD_NUM}>
-            {t("table.volume24h")}
-          </div>
-          <div role="columnheader" className={HEAD} aria-hidden="true" />
-        </div>
-
-        {visible.map((pool) => (
+      <div className="overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40">
+        <div role="table" className={TABLE_MIN_WIDTH_CLASS}>
           <div
-            key={pool.poolAddress}
-            role="row"
-            className={`grid ${GRID_COLS} border-b border-sothoth-500/10 transition-colors last:border-b-0 hover:bg-sothoth-500/[0.04]`}
+            role="rowgroup"
+            className="border-b border-sothoth-500/20 bg-cosmos-900/60"
           >
-            {/* The clickable cells are Links; the remove button is a sibling,
-                never nested inside a Link. */}
-            <Link
-              role="cell"
-              href={`/pools/${pool.poolAddress}`}
-              className={`${CELL} min-w-0`}
-            >
-              <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
-            </Link>
-            <Link
-              role="cell"
-              href={`/pools/${pool.poolAddress}`}
-              className={CELL_NUM}
-            >
-              {formatUsdCompact(pool.tvlUsd)}
-            </Link>
-            <Link
-              role="cell"
-              href={`/pools/${pool.poolAddress}`}
-              className={CELL_NUM}
-            >
-              {formatUsdCompact(pool.volume24hUsd)}
-            </Link>
-            <div role="cell" className={`${CELL} justify-end`}>
-              <button
-                type="button"
-                onClick={() => remove(pool.poolAddress)}
-                aria-label={t("removeLabel")}
-                className="inline-flex items-center rounded p-1 text-sothoth-300 transition-colors hover:text-sothoth-100 focus-visible:ring-2 focus-visible:ring-sothoth-400 focus-visible:outline-none"
-              >
-                <WatchlistIcon size={16} className="fill-current" />
-              </button>
+            <div role="row" className={`grid ${GRID_COLS}`}>
+              <div role="columnheader" className={HEAD_CELL_CLASS}>
+                {tTable("pair")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_CLASS}>
+                {tTable("signals")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_CLASS}>
+                {tTable("protocol")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_NUMERIC_CLASS}>
+                {tTable("fee")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_NUMERIC_CLASS}>
+                {tTable("tvl")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_NUMERIC_CLASS}>
+                {tTable("volume24h")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_CLASS}>
+                {tTable("firstSeen")}
+              </div>
+              <div role="columnheader" className={HEAD_CELL_CLASS}>
+                {tTable("lastSeen")}
+              </div>
+              <div
+                role="columnheader"
+                className={HEAD_CELL_NUMERIC_CLASS}
+                aria-hidden="true"
+              />
             </div>
           </div>
-        ))}
+
+          <div role="rowgroup">
+            {visible.map((pool) => (
+              <PoolsTableRow
+                key={pool.poolAddress}
+                pool={pool}
+                locale={locale}
+                signalLabels={signalLabels}
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       {anyError && (
