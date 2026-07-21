@@ -39,5 +39,6 @@ export type SidebarNavItem = {
 export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
   { key: "overview", href: "/overview", labelKey: "overview" },
   { key: "pools", href: "/pools", labelKey: "pools" },
+  { key: "watchlist", href: "/watchlist", labelKey: "watchlist" },
   { key: "signals", href: "/signals", labelKey: "signals" },
 ] as const;

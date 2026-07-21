@@ -5,6 +5,7 @@
       "nav": {
         "overview": "Overview",
         "pools": "Pools",
+        "watchlist": "Watchlist",
         "signals": "Signals"
       },
       "network": {
@@ -80,6 +81,10 @@
         "sortedAscending": "{column} (sorted ascending)",
         "sortedDescending": "{column} (sorted descending)"
       },
+      "rowActions": {
+        "copyAddress": "Copy address",
+        "viewOnSolscan": "View on Solscan"
+      },
       "empty": {
         "title": "No pools observed yet",
         "description": "The indexer is running but hasn't captured any pool activity yet. Pools will appear here as soon as on-chain events are picked up."
@@ -107,6 +112,25 @@
         "clearSearch": "Clear search",
         "clearFilters": "Clear filters"
       }
+    },
+    "Watchlist": {
+      "page": {
+        "title": "Watchlist",
+        "description": "Pools you starred, kept in this browser. No account needed — your watchlist stays on this device until sign-in ships."
+      },
+      "toggle": {
+        "watch": "Watch",
+        "watching": "Watching",
+        "add": "Add to watchlist",
+        "remove": "Remove from watchlist"
+      },
+      "empty": {
+        "title": "Your watchlist is empty",
+        "hint": "Star a pool from its page to keep an eye on it here.",
+        "cta": "Browse pools"
+      },
+      "loading": "Loading your watchlist…",
+      "partialError": "Some watched pools could not be loaded."
     },
     "PoolDetail": {
       "tabs": {

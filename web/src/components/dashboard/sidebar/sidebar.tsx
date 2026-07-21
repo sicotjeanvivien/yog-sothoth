@@ -56,6 +56,7 @@ import {
   OverviewIcon,
   PoolsIcon,
   SignalsIcon,
+  WatchlistIcon,
   type IconProps,
 } from "@/components/shared/icon";
 
@@ -78,6 +79,7 @@ import { NetworkStatusPanel } from "./network-status-panel";
 const NAV_ICONS: Record<SidebarNavKey, FC<IconProps>> = {
   overview: OverviewIcon,
   pools: PoolsIcon,
+  watchlist: WatchlistIcon,
   signals: SignalsIcon,
 };
 
