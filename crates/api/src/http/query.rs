@@ -175,12 +175,15 @@ pub(crate) enum PoolRankMetricParam {
     #[default]
     #[serde(rename = "volume_24h")]
     Volume24h,
+    #[serde(rename = "tvl")]
+    Tvl,
 }
 
 impl From<PoolRankMetricParam> for PoolRankMetric {
     fn from(value: PoolRankMetricParam) -> Self {
         match value {
             PoolRankMetricParam::Volume24h => PoolRankMetric::Volume24h,
+            PoolRankMetricParam::Tvl => PoolRankMetric::Tvl,
         }
     }
 }

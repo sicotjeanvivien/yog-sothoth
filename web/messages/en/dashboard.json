@@ -46,11 +46,14 @@
         }
       },
       "topPools": {
-        "title": "Top pools by 24h volume",
+        "title": "Top pools",
         "pair": "Pair",
         "volume24h": "Volume 24h",
         "tvl": "TVL",
-        "empty": "No pool has recorded volume in the last 24h."
+        "emptyVolume": "No pool has recorded volume in the last 24h.",
+        "emptyTvl": "No pool has priceable liquidity yet.",
+        "rankBy": "Rank by {metric}",
+        "rankedBy": "Ranked by {metric}"
       },
       "latestSignals": {
         "title": "Latest signals",

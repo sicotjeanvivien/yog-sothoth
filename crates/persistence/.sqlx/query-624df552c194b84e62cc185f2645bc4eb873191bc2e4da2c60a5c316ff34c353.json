@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT pool_address AS \"pool_address!\"\n                FROM pool_current_tvl\n                WHERE tvl_usd IS NOT NULL\n                ORDER BY tvl_usd DESC\n                LIMIT $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "624df552c194b84e62cc185f2645bc4eb873191bc2e4da2c60a5c316ff34c353"
+}

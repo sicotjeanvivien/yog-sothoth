@@ -134,8 +134,10 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         metric: PoolRankMetric,
         limit: i64,
     ) -> RepositoryResult<Vec<Pubkey>> {
-        // One metric today → one static, compile-checked query. When a second
-        // metric lands, add its arm (each stays a static query, no dynamic SQL).
+        // One static, compile-checked query per metric — no dynamic SQL. Each
+        // ranks over the priced analytics and drops pools with a NULL metric
+        // value (unpriceable, or no activity in the window) rather than
+        // sorting them last.
         let addresses: Vec<String> = match metric {
             PoolRankMetric::Volume24h => sqlx::query_scalar!(
                 r#"
@@ -145,6 +147,22 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 GROUP BY pool_address
                 HAVING SUM(volume_usd) IS NOT NULL
                 ORDER BY SUM(volume_usd) DESC
+                LIMIT $1
+                "#,
+                limit,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?,
+            // TVL is one row per pool in the `pool_current_tvl` VIEW (no
+            // window/aggregate), so no GROUP BY — just filter out the
+            // unpriceable pools and order by depth.
+            PoolRankMetric::Tvl => sqlx::query_scalar!(
+                r#"
+                SELECT pool_address AS "pool_address!"
+                FROM pool_current_tvl
+                WHERE tvl_usd IS NOT NULL
+                ORDER BY tvl_usd DESC
                 LIMIT $1
                 "#,
                 limit,
