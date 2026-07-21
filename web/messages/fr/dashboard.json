@@ -75,8 +75,8 @@
         "fee": "Frais",
         "tvl": "TVL",
         "volume24h": "Volume 24h",
-        "lastSeen": "Dernière activité",
-        "firstSeen": "Première observation",
+        "lastSeen": "Dernière vue",
+        "firstSeen": "Première vue",
         "sortBy": "Trier par {column}",
         "sortedAscending": "{column} (trié croissant)",
         "sortedDescending": "{column} (trié décroissant)"
