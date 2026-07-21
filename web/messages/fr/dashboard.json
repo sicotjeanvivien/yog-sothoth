@@ -5,6 +5,7 @@
       "nav": {
         "overview": "Vue d'ensemble",
         "pools": "Pools",
+        "watchlist": "Watchlist",
         "signals": "Signaux"
       },
       "network": {
@@ -107,6 +108,31 @@
         "clearSearch": "Effacer la recherche",
         "clearFilters": "Réinitialiser les filtres"
       }
+    },
+    "Watchlist": {
+      "page": {
+        "title": "Watchlist",
+        "description": "Les pools que vous avez suivies, conservées dans ce navigateur. Aucun compte requis — votre watchlist reste sur cet appareil jusqu'à l'arrivée de la connexion."
+      },
+      "toggle": {
+        "watch": "Suivre",
+        "watching": "Suivie",
+        "add": "Ajouter à la watchlist",
+        "remove": "Retirer de la watchlist"
+      },
+      "table": {
+        "pair": "Paire",
+        "tvl": "TVL",
+        "volume24h": "Volume 24h"
+      },
+      "empty": {
+        "title": "Votre watchlist est vide",
+        "hint": "Étoilez une pool depuis sa page pour la garder à l'œil ici.",
+        "cta": "Parcourir les pools"
+      },
+      "loading": "Chargement de votre watchlist…",
+      "removeLabel": "Retirer de la watchlist",
+      "partialError": "Certaines pools suivies n'ont pas pu être chargées."
     },
     "PoolDetail": {
       "tabs": {

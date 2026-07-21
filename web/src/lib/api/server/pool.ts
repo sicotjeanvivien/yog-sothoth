@@ -14,22 +14,13 @@
  */
 
 import { apiGet } from "../client/server";
+import { isValidPoolAddress } from "../pool-address";
 import { PoolSchema, type PoolResponse } from "../schema/pool";
 
-/**
- * Validate that the address looks like a Solana base58 pubkey.
- *
- * Base58 encodes 32 bytes into 43-44 characters from the Bitcoin
- * alphabet (excludes `0`, `O`, `I`, `l`). We perform a syntactic
- * check only — verifying the bytes round-trip into a valid Pubkey is
- * yog-api's job; this guard exists to reject obviously-wrong input
- * (empty string, URL injection, etc.) before going over the wire.
- */
-const BASE58_PUBKEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-
-export function isValidPoolAddress(address: string): boolean {
-  return BASE58_PUBKEY.test(address);
-}
+// Re-exported for the existing server fetchers that import it from here; the
+// implementation now lives in the runtime-neutral `../pool-address` so the
+// browser fetchers can share it without importing this (server) module.
+export { isValidPoolAddress };
 
 /**
  * Fetch a single pool by its on-chain address.

@@ -5,6 +5,7 @@
       "nav": {
         "overview": "Overview",
         "pools": "Pools",
+        "watchlist": "Watchlist",
         "signals": "Signals"
       },
       "network": {
@@ -107,6 +108,31 @@
         "clearSearch": "Clear search",
         "clearFilters": "Clear filters"
       }
+    },
+    "Watchlist": {
+      "page": {
+        "title": "Watchlist",
+        "description": "Pools you starred, kept in this browser. No account needed — your watchlist stays on this device until sign-in ships."
+      },
+      "toggle": {
+        "watch": "Watch",
+        "watching": "Watching",
+        "add": "Add to watchlist",
+        "remove": "Remove from watchlist"
+      },
+      "table": {
+        "pair": "Pair",
+        "tvl": "TVL",
+        "volume24h": "Volume 24h"
+      },
+      "empty": {
+        "title": "Your watchlist is empty",
+        "hint": "Star a pool from its page to keep an eye on it here.",
+        "cta": "Browse pools"
+      },
+      "loading": "Loading your watchlist…",
+      "removeLabel": "Remove from watchlist",
+      "partialError": "Some watched pools could not be loaded."
     },
     "PoolDetail": {
       "tabs": {

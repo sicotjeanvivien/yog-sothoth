@@ -35,6 +35,7 @@ import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
+import { WatchlistToggle } from "@/components/dashboard/watchlist/watchlist-toggle";
 import { CopyButton } from "@/components/shared/copy-button";
 
 const CTA_CLASS =
@@ -83,8 +84,9 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
           </div>
         </div>
 
-        {/* Right — external CTAs */}
+        {/* Right — watchlist toggle + external CTAs */}
         <div className="flex flex-wrap gap-2">
+          <WatchlistToggle address={pool.poolAddress} />
           {meteoraUrl && (
             <a
               href={meteoraUrl}
