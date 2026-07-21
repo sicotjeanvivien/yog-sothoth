@@ -52,8 +52,7 @@
         "tvl": "TVL",
         "emptyVolume": "No pool has recorded volume in the last 24h.",
         "emptyTvl": "No pool has priceable liquidity yet.",
-        "rankBy": "Rank by {metric}",
-        "rankedBy": "Ranked by {metric}"
+        "rankBy": "Rank by {metric}"
       },
       "latestSignals": {
         "title": "Latest signals",

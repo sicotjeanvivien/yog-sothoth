@@ -8,15 +8,18 @@
  * new ranking.
  *
  * The ranking is always descending (biggest first) — there is no
- * asc/desc cycle, so the active header just carries a ▾ indicator and
- * brighter text. `volume_24h` is the default ranking, so selecting it
- * *drops* the `rank` param to keep the URL clean (a bare `/overview`
- * means "by volume").
+ * asc/desc cycle. So the *active* header is deliberately NOT a link: it
+ * renders as plain (brighter) text, because clicking it would re-rank by
+ * what is already selected and do nothing — a no-op click that reads as
+ * broken. Only the *inactive* metric is a clickable link. No direction
+ * chevron either, for the same reason (it implies a toggle that isn't
+ * there). `volume_24h` is the default ranking, so selecting it *drops*
+ * the `rank` param to keep the URL clean (a bare `/overview` means "by
+ * volume").
  */
 
 import { getTranslations } from "next-intl/server";
 
-import { ChevronDownSortableIcon } from "@/components/shared/icon";
 import { Link } from "@/i18n/navigation";
 import type { PoolRankMetric } from "@/lib/api/server/top-pools";
 
@@ -42,29 +45,32 @@ export async function OverviewRankHeader({
   const t = await getTranslations("Dashboard.Overview.topPools");
 
   const isActive = metric === activeMetric;
-  const href = buildHref(searchParams, metric);
 
-  const ariaLabel = isActive
-    ? t("rankedBy", { metric: label })
-    : t("rankBy", { metric: label });
+  const baseClass =
+    "inline-flex items-center justify-end text-[12px] font-semibold tracking-[0.2em] uppercase whitespace-nowrap";
 
+  // Active header: plain text, not a link — nothing to click, so no
+  // misleading no-op. `aria-current` marks it as the current ranking.
+  if (isActive) {
+    return (
+      <span aria-current="true" className={`${baseClass} text-slate-200`}>
+        {label}
+      </span>
+    );
+  }
+
+  // Inactive metric: the clickable switch to that ranking.
   return (
     <Link
-      href={href}
-      aria-label={ariaLabel}
-      aria-current={isActive ? "true" : undefined}
+      href={buildHref(searchParams, metric)}
+      aria-label={t("rankBy", { metric: label })}
       className={`
-        inline-flex items-center justify-end gap-1.5
-        text-[12px] font-semibold tracking-[0.2em] uppercase whitespace-nowrap
-        transition-colors focus-visible:outline-none focus-visible:ring-2
-        focus-visible:ring-sothoth-400 rounded
-        ${isActive ? "text-slate-200" : "text-slate-500 hover:text-slate-300"}
+        ${baseClass} text-slate-500 transition-colors hover:text-slate-300
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sothoth-400
+        rounded
       `}
     >
-      <span>{label}</span>
-      {isActive ? (
-        <ChevronDownSortableIcon className="h-3 w-3" aria-hidden="true" />
-      ) : null}
+      {label}
     </Link>
   );
 }
