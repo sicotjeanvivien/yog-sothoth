@@ -69,6 +69,7 @@
         "signalsAria": "{count, plural, one {# signal} other {# signals}} in the last 24h — view alerts",
         "signalsPopoverTitle": "Signals — last 24h",
         "protocol": "Protocol",
+        "fee": "Fee",
         "tvl": "TVL",
         "volume24h": "Volume 24h",
         "lastSeen": "Last seen",
@@ -93,10 +94,16 @@
         "ariaLabel": "Search pools",
         "clear": "Clear search"
       },
+      "feeFilter": {
+        "ariaLabel": "Filter by fee tier",
+        "all": "All fees"
+      },
       "noResults": {
         "title": "No pool matches \"{query}\"",
+        "titleFiltered": "No pool matches the selected filters",
         "hint": "Check the spelling or try another term.",
-        "clearSearch": "Clear search"
+        "clearSearch": "Clear search",
+        "clearFilters": "Clear filters"
       }
     },
     "PoolDetail": {

@@ -173,6 +173,42 @@ describe("fetchPools — bidirectional pagination params", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// Fee-tier filter
+// ─────────────────────────────────────────────────────────────────────
+
+describe("fetchPools — fee filter", () => {
+  it("forwards feeBps as the fee_bps query param", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ feeBps: "25" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.get("fee_bps")).toBe("25");
+  });
+
+  it("omits fee_bps when not specified", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools();
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.has("fee_bps")).toBe(false);
+  });
+
+  it("drops an empty feeBps instead of sending an empty string", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchPools({ feeBps: "" });
+
+    const calledUrl = new URL(String(fetchSpy.mock.calls[0]?.[0] ?? ""));
+    expect(calledUrl.searchParams.has("fee_bps")).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // Input validation (RangeError, not ApiClientError)
 // ─────────────────────────────────────────────────────────────────────
 

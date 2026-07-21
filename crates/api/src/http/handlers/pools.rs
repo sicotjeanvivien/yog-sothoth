@@ -7,8 +7,8 @@ use crate::bootstrap::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
-        LiquidityEventResponse, PageResponse, PoolCurrentStateResponse, PoolHistoryBucketResponse,
-        PoolResponse, SwapEventResponse,
+        FeeTierResponse, LiquidityEventResponse, PageResponse, PoolCurrentStateResponse,
+        PoolHistoryBucketResponse, PoolResponse, SwapEventResponse,
         request::{
             GetPoolHistoryRequest, GetPoolLatestStateRequest, GetPoolRequest,
             ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest, ListTopPoolsRequest,
@@ -27,7 +27,7 @@ pub(crate) async fn list_pools(
     Query(query): Query<PageQuery>,
 ) -> Result<Json<PageResponse<PoolResponse>>, ApiError> {
     let request = ListPoolsRequest::parse(query)?;
-    let page = state.pool_service.list_pools(request.into_params()).await?;
+    let page = state.pool_service.list_pools(request.into_query()).await?;
 
     let items: Vec<PoolResponse> = page.items.into_iter().map(PoolResponse::from).collect();
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
@@ -40,6 +40,22 @@ pub(crate) async fn list_pools(
         is_first: page.is_first,
         is_last: page.is_last,
     }))
+}
+
+// ===========================================================================
+// GET /api/pools/fee-tiers
+// ===========================================================================
+
+/// The most common base-fee tiers (basis points) with their pool counts,
+/// ascending by fee — the option list of the pools fee filter. A JSON array
+/// of `{ feeBps, poolCount }`; `feeBps` is a decimal string like on the pool
+/// responses, `poolCount` a plain number.
+pub(crate) async fn list_fee_tiers(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<FeeTierResponse>>, ApiError> {
+    let tiers = state.pool_service.list_fee_tiers().await?;
+    let items: Vec<FeeTierResponse> = tiers.into_iter().map(FeeTierResponse::from).collect();
+    Ok(Json(items))
 }
 
 // ===========================================================================

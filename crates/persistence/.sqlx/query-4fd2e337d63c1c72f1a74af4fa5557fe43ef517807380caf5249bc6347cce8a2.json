@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT fee_bps AS \"fee_bps!: rust_decimal::Decimal\", pool_count AS \"pool_count!\"\n            FROM (\n                SELECT fee_bps, COUNT(*) AS pool_count\n                FROM pools\n                WHERE fee_bps IS NOT NULL\n                GROUP BY fee_bps\n                ORDER BY pool_count DESC, fee_bps\n                LIMIT $1\n            ) top\n            ORDER BY fee_bps\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fee_bps!: rust_decimal::Decimal",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "pool_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "4fd2e337d63c1c72f1a74af4fa5557fe43ef517807380caf5249bc6347cce8a2"
+}

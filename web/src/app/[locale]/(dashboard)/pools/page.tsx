@@ -93,6 +93,18 @@ function parseSearch(raw: string | string[] | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+// A fee tier is a decimal string in basis points (e.g. "25", "2.5").
+// We forward any well-formed value to the API and let it decide the
+// match — an unknown tier just yields an empty page, no need to
+// validate against the observed set here. A malformed value is dropped
+// so a stale/edited URL doesn't 400 the whole page.
+function parseFeeBps(raw: string | string[] | undefined): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  return /^\d+(\.\d+)?$/.test(trimmed) ? trimmed : undefined;
+}
+
 function parseSort(raw: string | string[] | undefined): PoolSort | undefined {
   if (
     raw === "first_seen_asc" ||
@@ -117,6 +129,7 @@ async function load(args: {
   position: PagePosition | undefined;
   search: string | undefined;
   sort: PoolSort | undefined;
+  feeBps: string | undefined;
 }): Promise<FetchOutcome> {
   try {
     const data = await fetchPools({
@@ -125,6 +138,7 @@ async function load(args: {
       position: args.position,
       q: args.search,
       sort: args.sort,
+      feeBps: args.feeBps,
     });
     return { kind: "ok", data };
   } catch (err) {
@@ -150,14 +164,17 @@ export default async function PoolsPage({
   const position = parsePosition(sp["position"]);
   const search = parseSearch(sp["q"]);
   const sort = parseSort(sp["sort"]);
-  const outcome = await load({ cursor, dir, position, search, sort });
+  const feeBps = parseFeeBps(sp["fee_bps"]);
+  const outcome = await load({ cursor, dir, position, search, sort, feeBps });
 
   // Resolve the effective sort for the header indicators: defaults to
   // first_seen_desc when the URL doesn't specify one (matches the
   // backend default).
   const effectiveSort: PoolSort = sort ?? "first_seen_desc";
 
-  const hasActiveSearch = search !== undefined;
+  // Any refinement (search or fee filter) turns the empty result into a
+  // "no match" state rather than the cold "nothing indexed yet" one.
+  const hasActiveRefinement = search !== undefined || feeBps !== undefined;
 
   return (
     <div className="pb-16">
@@ -166,8 +183,8 @@ export default async function PoolsPage({
       {outcome.kind === "error" ? (
         <PoolsError kind={outcome.reason} />
       ) : outcome.data.items.length === 0 ? (
-        hasActiveSearch ? (
-          <PoolsNoResults query={search!} />
+        hasActiveRefinement ? (
+          <PoolsNoResults query={search} />
         ) : (
           <PoolsEmpty />
         )

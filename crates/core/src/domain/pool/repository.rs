@@ -24,6 +24,40 @@ pub struct PoolCursor {
     pub pool_address: Pubkey,
 }
 
+/// Everything a paginated pool listing needs — the input of
+/// [`PoolCatalog::find_paginated`].
+///
+/// A single struct rather than a long positional argument list: the
+/// navigation trio (`cursor` / `direction` / `position`), the ordering
+/// (`sort`), the filters (`search`, `fee_bps`) and the page size all
+/// describe one query. The HTTP layer parses query params, decodes the
+/// cursor, converts wire enums and normalizes the filters, then hands a
+/// fully-valid `PoolListQuery` straight to the repository.
+///
+/// - `cursor` + `direction` cooperate: traverse forward (`Next`) or
+///   backward (`Prev`) from the cursor's position. Without a cursor,
+///   `direction` is ignored and the natural ordering is used (newest
+///   first).
+/// - `position` jumps to a list boundary (`First` or `Last`), ignoring
+///   any cursor. Mutually exclusive with `cursor`.
+/// - `search` matches the pool address or a token symbol/name.
+/// - `fee_bps` filters to pools whose base trading fee (basis points)
+///   exactly equals the given tier. `None` leaves the fee dimension
+///   unfiltered. Meant to be fed one of the tiers returned by
+///   [`PoolCatalog::list_fee_tiers`].
+/// - `limit` is the maximum number of items returned; the repository
+///   clamps it defensively.
+#[derive(Debug, Clone)]
+pub struct PoolListQuery {
+    pub cursor: Option<PoolCursor>,
+    pub direction: PageDirection,
+    pub position: Option<PagePosition>,
+    pub sort: PoolSort,
+    pub search: Option<String>,
+    pub fee_bps: Option<rust_decimal::Decimal>,
+    pub limit: i64,
+}
+
 /// Pool inventory counts over the whole observed universe.
 ///
 /// A protocol-centric snapshot of *what was seen*: `observed` is every pool
@@ -34,6 +68,20 @@ pub struct PoolCursor {
 pub struct PoolCounts {
     pub observed: i64,
     pub discovered_24h: i64,
+}
+
+/// One entry of the pools fee-filter option list: a base-fee tier (basis
+/// points) and how many pools carry it.
+///
+/// The observed fee distribution is long-tailed — a handful of real tiers
+/// hold most pools, plus a long tail of one-off values (dynamic-fee / launch
+/// pools). [`PoolCatalog::list_fee_tiers`] returns only the **most common**
+/// tiers so the filter stays short and useful; `pool_count` is surfaced so
+/// the UI can label each option (`0.25% · 166`) and justify the shortlist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeeTier {
+    pub fee_bps: rust_decimal::Decimal,
+    pub pool_count: i64,
 }
 
 /// Persistence contract for Pool — the write side, owned by the indexer.
@@ -96,31 +144,27 @@ pub trait PoolCatalog: Send + Sync {
     /// owns the ordering and reconciles against the addresses it requested.
     async fn find_by_addresses(&self, pool_addresses: &[Pubkey]) -> RepositoryResult<Vec<Pool>>;
 
-    /// Fetch a page of pools.
-    ///
-    /// - `cursor` + `direction` cooperate: traverse forward (`Next`)
-    ///   or backward (`Prev`) from the cursor's position. Without a
-    ///   cursor, `direction` is ignored and the natural ordering is
-    ///   used (newest first).
-    /// - `position` jumps to a list boundary (`First` or `Last`),
-    ///   ignoring any cursor. Mutually exclusive with `cursor`.
-    /// - `PoolSort`
-    /// - `search`
-    /// - `limit` is the maximum number of items returned; the
-    ///   repository clamps it defensively.
+    /// Fetch a page of pools described by `query` (see [`PoolListQuery`]
+    /// for the navigation / ordering / filter contract).
     ///
     /// The returned `Page<Pool>` carries enough information for the
     /// caller to render Previous / Next / First / Last navigation
     /// without follow-up queries.
-    async fn find_paginated(
-        &self,
-        cursor: Option<PoolCursor>,
-        direction: PageDirection,
-        position: Option<PagePosition>,
-        sort: PoolSort,
-        search: Option<String>,
-        limit: i64,
-    ) -> RepositoryResult<Page<Pool>>;
+    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>>;
+
+    /// The **most common** base-fee tiers (basis points), each with its pool
+    /// count — the fee filter's option list (`GET /api/pools/fee-tiers`). The
+    /// client picks one and replays it as the `fee_bps` argument of
+    /// [`PoolCatalog::find_paginated`].
+    ///
+    /// Ranked by pool count and capped (the observed distribution is
+    /// long-tailed: a few real tiers plus ~50 one-off dynamic-fee/launch
+    /// values that would bloat the dropdown without being useful filters),
+    /// then returned **ascending by fee** for natural display order. Pools
+    /// whose `fee_bps` is not yet resolved (`NULL`, before yog-context reads
+    /// their account) are excluded, so the filter never offers an option that
+    /// would match nothing. See [`FeeTier`].
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>>;
 }
 
 /// Resolution of a pool's account-derived properties (token mints, base fee

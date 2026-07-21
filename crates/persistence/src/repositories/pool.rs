@@ -10,11 +10,10 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
-    Cursor, Page, PageDirection, PagePosition, PoolSort, PoolSortColumn, RepositoryError,
-    RepositoryResult,
+    Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
     domain::{
-        Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor,
-        PoolRepository,
+        FeeTier, Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts,
+        PoolCursor, PoolListQuery, PoolRepository,
     },
 };
 
@@ -29,6 +28,11 @@ impl PgPoolRepository {
 }
 
 const MAX_PAGE_SIZE: i64 = 200;
+
+/// How many fee tiers the filter offers. The dozen-or-so real tiers hold the
+/// vast majority of pools; capping at the most common keeps the dropdown short
+/// and drops the long tail of one-off dynamic-fee/launch values.
+const FEE_TIER_LIMIT: i64 = 8;
 
 /// Convert a domain `fee_bps` (`rust_decimal::Decimal`) to the `BigDecimal`
 /// that NUMERIC binds to at the persistence boundary. Round-trips through the
@@ -155,15 +159,17 @@ impl PoolCatalog for PgPoolRepository {
         rows.into_iter().map(Pool::try_from).collect()
     }
 
-    async fn find_paginated(
-        &self,
-        cursor: Option<PoolCursor>,
-        direction: PageDirection,
-        position: Option<PagePosition>,
-        sort: PoolSort,
-        search: Option<String>,
-        limit: i64,
-    ) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
+        let PoolListQuery {
+            cursor,
+            direction,
+            position,
+            sort,
+            search,
+            fee_bps,
+            limit,
+        } = query;
+
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
         let fetch_limit = effective_limit + 1;
 
@@ -176,14 +182,19 @@ impl PoolCatalog for PgPoolRepository {
             None => (None, None),
         };
 
-        // Build the dynamic query (ORDER BY + keyset + search) and run
-        // it. Mapping goes through PoolRow (FromRow) then Pool::try_from.
+        // NUMERIC binds to BigDecimal at the persistence boundary — same
+        // lossless string round-trip as the write path.
+        let fee_bps = fee_bps.map(fee_bps_to_numeric).transpose()?;
+
+        // Build the dynamic query (ORDER BY + keyset + search + fee) and
+        // run it. Mapping goes through PoolRow (FromRow) then Pool::try_from.
         let mut qb = build(PaginatedPoolsQuery {
             mode,
             sort,
             cursor_sort_value,
             cursor_pool_address,
             search,
+            fee_bps,
             fetch_limit,
         });
 
@@ -214,6 +225,40 @@ impl PoolCatalog for PgPoolRepository {
                 })
             }),
         )
+    }
+
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
+        // Rank tiers by pool count and keep the top N (the observed fee
+        // distribution is long-tailed — a few real tiers plus a long tail of
+        // one-off dynamic-fee/launch values), then re-order the survivors
+        // ascending by fee for natural display. The count tie-breaks by fee
+        // so the cut is deterministic.
+        let rows = sqlx::query!(
+            r#"
+            SELECT fee_bps AS "fee_bps!: rust_decimal::Decimal", pool_count AS "pool_count!"
+            FROM (
+                SELECT fee_bps, COUNT(*) AS pool_count
+                FROM pools
+                WHERE fee_bps IS NOT NULL
+                GROUP BY fee_bps
+                ORDER BY pool_count DESC, fee_bps
+                LIMIT $1
+            ) top
+            ORDER BY fee_bps
+            "#,
+            FEE_TIER_LIMIT,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| FeeTier {
+                fee_bps: r.fee_bps,
+                pool_count: r.pool_count,
+            })
+            .collect())
     }
 }
 

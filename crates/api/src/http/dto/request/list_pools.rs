@@ -6,16 +6,16 @@
 //! `ListPoolsRequest` is constructed, every field is guaranteed
 //! valid; the handler can hand it straight to the service.
 
-use yog_core::domain::PoolCursor;
+use rust_decimal::Decimal;
+use yog_core::domain::{PoolCursor, PoolListQuery};
 use yog_core::{PageDirection, PagePosition, PoolSort};
 
-use crate::application::PoolListParams;
 use crate::http::{
     cursor::decode_pool_cursor,
     error::ApiError,
     query::{
-        PageQuery, normalize_search, validate_cursor_sort_consistency, validate_limit,
-        validate_pagination_query, validate_search,
+        PageQuery, normalize_search, parse_fee_bps, validate_cursor_sort_consistency,
+        validate_limit, validate_pagination_query, validate_search,
     },
 };
 
@@ -26,6 +26,7 @@ pub(crate) struct ListPoolsRequest {
     position: Option<PagePosition>,
     sort: PoolSort,
     search: Option<String>,
+    fee_bps: Option<Decimal>,
     limit: i64,
 }
 
@@ -35,6 +36,7 @@ impl ListPoolsRequest {
         validate_limit(query.limit)?;
         validate_pagination_query(&query)?;
         validate_search(query.q.as_deref())?;
+        let fee_bps = parse_fee_bps(query.fee_bps)?;
 
         let cursor = match query.cursor.as_deref() {
             Some(raw) if !raw.is_empty() => Some(decode_pool_cursor(raw)?),
@@ -51,19 +53,21 @@ impl ListPoolsRequest {
             position: query.position.map(Into::into),
             sort,
             search: normalize_search(query.q),
+            fee_bps,
             limit: query.limit,
         })
     }
 
-    /// Project into the service-layer params. Consumes self because
-    /// the request DTO has no use past this point.
-    pub(crate) fn into_params(self) -> PoolListParams {
-        PoolListParams {
+    /// Project into the domain query. Consumes self because the request
+    /// DTO has no use past this point.
+    pub(crate) fn into_query(self) -> PoolListQuery {
+        PoolListQuery {
             cursor: self.cursor,
             direction: self.direction,
             position: self.position,
             sort: self.sort,
             search: self.search,
+            fee_bps: self.fee_bps,
             limit: self.limit,
         }
     }

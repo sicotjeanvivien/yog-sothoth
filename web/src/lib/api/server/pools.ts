@@ -36,6 +36,9 @@ export type FetchPoolsParams = {
   position?: PagePosition | undefined;
   q?: string | undefined;
   sort?: PoolSort | undefined;
+  /** Exact base-fee tier filter (basis points), as the raw decimal string
+   *  from `fetchFeeTiers` — sent through as the `fee_bps` query param. */
+  feeBps?: string | undefined;
   limit?: number;
 };
 
@@ -64,6 +67,8 @@ export async function fetchPools(
       position: params.position,
       q: params.q && params.q.length > 0 ? params.q : undefined,
       sort: params.sort,
+      fee_bps:
+        params.feeBps && params.feeBps.length > 0 ? params.feeBps : undefined,
       limit,
     },
     PoolsPageSchema,

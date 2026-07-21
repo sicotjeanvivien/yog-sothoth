@@ -69,6 +69,7 @@
         "signalsAria": "{count, plural, one {# signal} other {# signaux}} sur les dernières 24 h — voir les alertes",
         "signalsPopoverTitle": "Signaux — dernières 24 h",
         "protocol": "Protocole",
+        "fee": "Frais",
         "tvl": "TVL",
         "volume24h": "Volume 24h",
         "lastSeen": "Dernière activité",
@@ -93,10 +94,16 @@
         "ariaLabel": "Rechercher des pools",
         "clear": "Effacer la recherche"
       },
+      "feeFilter": {
+        "ariaLabel": "Filtrer par palier de frais",
+        "all": "Tous les frais"
+      },
       "noResults": {
         "title": "Aucun pool ne correspond à « {query} »",
+        "titleFiltered": "Aucun pool ne correspond aux filtres sélectionnés",
         "hint": "Vérifiez l'orthographe ou essayez un autre terme.",
-        "clearSearch": "Effacer la recherche"
+        "clearSearch": "Effacer la recherche",
+        "clearFilters": "Réinitialiser les filtres"
       }
     },
     "PoolDetail": {

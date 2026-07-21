@@ -16,6 +16,7 @@ pub(crate) fn valid_page_query() -> PageQuery {
         position: None,
         sort: PoolSortParam::default(),
         q: None,
+        fee_bps: None,
         limit: 50,
     }
 }
