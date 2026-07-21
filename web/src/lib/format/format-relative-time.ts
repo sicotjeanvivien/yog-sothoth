@@ -13,6 +13,12 @@
  * Locale defaults to the active next-intl locale at the call site,
  * but is passed in explicitly to keep the function pure and easy
  * to unit-test.
+ *
+ * `style` maps straight to `Intl.RelativeTimeFormat`'s option:
+ * `"long"` (default) → "2 hours ago" / "il y a 2 heures"; `"short"` →
+ * the compact, locale-aware form ("2 hr. ago" / "il y a 2 h") used in
+ * dense tables. Both stay fully localized — no manual abbreviation.
+ * (`"narrow"` is avoided: in French it drops "il y a" for a bare "-2 h".)
  */
 
 const THRESHOLDS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
@@ -27,8 +33,10 @@ const THRESHOLDS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; seconds: nu
 export function formatRelativeTime(
   isoTimestamp: string,
   locale: string,
-  now: Date = new Date(),
+  options: { now?: Date; style?: Intl.RelativeTimeFormatStyle } = {},
 ): string {
+  const { now = new Date(), style = "long" } = options;
+
   const then = new Date(isoTimestamp);
   if (Number.isNaN(then.getTime())) {
     return "—";
@@ -37,7 +45,10 @@ export function formatRelativeTime(
   const diffSeconds = Math.round((then.getTime() - now.getTime()) / 1000);
   const absSeconds = Math.abs(diffSeconds);
 
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const formatter = new Intl.RelativeTimeFormat(locale, {
+    numeric: "auto",
+    style,
+  });
 
   // Pick the largest unit that still produces a value >= 1.
   for (const { unit, seconds } of THRESHOLDS) {

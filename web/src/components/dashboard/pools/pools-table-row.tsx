@@ -20,7 +20,6 @@ import { Link } from "@/i18n/navigation";
 
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import { formatFeeBps } from "@/lib/format/format-fee";
-import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { worstSeverity } from "@/lib/signals/worst-severity";
@@ -28,6 +27,7 @@ import { worstSeverity } from "@/lib/signals/worst-severity";
 import { PoolPairCell } from "./pool-pair-cell";
 import { PoolRowActions } from "./pool-row-actions";
 import { PoolSignalsCell } from "./pool-signals-cell";
+import { ProtocolBadge } from "./protocol-badge";
 import {
   CELL_CLASS,
   CELL_NUMERIC_CLASS,
@@ -76,9 +76,7 @@ export function PoolsTableRow({
       </div>
 
       <Link role="cell" href={href} className={CELL_CLASS}>
-        <span className="text-slate-400">
-          {formatProtocolLabel(pool.protocol)}
-        </span>
+        <ProtocolBadge protocol={pool.protocol} />
       </Link>
       <Link role="cell" href={href} className={CELL_NUMERIC_CLASS}>
         {formatFeeBps(pool.feeBps)}
@@ -98,7 +96,7 @@ export function PoolsTableRow({
           className="text-slate-400"
           suppressHydrationWarning
         >
-          {formatRelativeTime(pool.firstSeenAt, locale)}
+          {formatRelativeTime(pool.firstSeenAt, locale, { style: "short" })}
         </time>
       </Link>
       <Link role="cell" href={href} className={CELL_CLASS}>
@@ -107,7 +105,7 @@ export function PoolsTableRow({
           className="text-slate-400"
           suppressHydrationWarning
         >
-          {formatRelativeTime(pool.lastSeenAt, locale)}
+          {formatRelativeTime(pool.lastSeenAt, locale, { style: "short" })}
         </time>
       </Link>
 
