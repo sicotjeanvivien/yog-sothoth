@@ -11,6 +11,7 @@
  * via `title` so it stays discoverable on hover and to assistive tech.
  */
 
+import { MeteoraIcon } from "@/components/shared/icon";
 import {
   formatProtocolLabel,
   formatProtocolShortLabel,
@@ -37,20 +38,11 @@ export function ProtocolBadge({ protocol }: { protocol: string }) {
   );
 }
 
-/**
- * Placeholder monogram mark — same initial-badge pattern as `PoolPairCell`'s
- * token fallback. TODO: swap the inner glyph for the official Meteora SVG
- * (drop it into `icon.tsx` as `MeteoraIcon` and render it here) once the asset
- * is available.
- */
+/** The platform's brand mark. Meteora today; add a case per platform as new
+ *  ones (Raydium, Orca) are wired through `protocolPlatform`. */
 function PlatformMark({ platform }: { platform: "meteora" }) {
-  const glyph = platform === "meteora" ? "M" : "?";
-  return (
-    <span
-      aria-hidden="true"
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-sothoth-500/15 text-[11px] font-bold text-sothoth-200"
-    >
-      {glyph}
-    </span>
-  );
+  switch (platform) {
+    case "meteora":
+      return <MeteoraIcon size={16} className="shrink-0" />;
+  }
 }

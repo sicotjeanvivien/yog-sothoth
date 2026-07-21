@@ -501,7 +501,7 @@ qu'adossé à la watchlist.
 > l'ID de programme on-chain — d'où « protocol » et non « program » comme
 > Solscan). Restent :
 - [x] **Temps relatif abrégé** (fait) — param `style: "short"` sur `formatRelativeTime` (`Intl.RelativeTimeFormat`, locale-aware : « il y a 2 h » / « 2 hr. ago »), appliqué dans la ligne partagée → `/pools` + `/watchlist`. `narrow` écarté (perd « il y a » en FR). Autres tables inchangées (défaut `long`).
-- [x] **Cellule protocole compacte** (fait) — `ProtocolBadge` : mark plateforme + libellé court (« DAMM v2 »), nom complet en `title`. ⚠️ **mark = placeholder monogramme « M »** (pattern fallback d'initiale de `PoolPairCell`) — **à remplacer par le SVG officiel Meteora** quand dispo (`icon.tsx` → `MeteoraIcon`, swap dans `PlatformMark`).
+- [x] **Cellule protocole compacte** (fait) — `ProtocolBadge` : mark plateforme + libellé court (« DAMM v2 »), nom complet en `title`. Logo **officiel Meteora** intégré (`icon.tsx` → `MeteoraIcon`, SVG fourni par JV, dégradé conservé). `PlatformMark` mappe plateforme→logo (extensible Raydium/Orca).
 - [ ] **Filtre/tri `/pools` par paire de tokens** (« SOL/USDC ») — **à cadrer avant code** : filtre *paire exacte* (les 2 mints) vs regroupement canonique ; articulation avec la recherche existante (`q` matche déjà symbole/adresse). Pattern à définir.
 - [ ] **Type/mode de fee (statique vs dynamique, scheduler)** sur `/pools` — **dépend** du décodage complet de la fee-config, volontairement différé (voie C : les octets `pool_fees_raw` d'`EvtInitializePool` sont déjà stockés, le décodage scheduler/dynamic-fee est reporté). Backend (finir le décodage) + front (badge/colonne). À investiguer : quelle info est réellement décodable. NB : « concentrated » n'est pas un mode de fee DAMM v2.
 
