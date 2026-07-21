@@ -335,10 +335,9 @@ async fn fee_bps_filter_no_match_yields_empty_page(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn list_fee_tiers_returns_distinct_sorted_tiers(pool: PgPool) {
+async fn list_fee_tiers_returns_distinct_tiers_with_counts_ascending(pool: PgPool) {
     seed_three(&pool).await;
-    // Two pools share 25 bps; one is 100 bps; a fourth pool is left with a
-    // NULL fee and must not surface as a tier.
+    // Two pools share 25 bps; one is 100 bps; NULL-fee pools must not surface.
     set_fee(&pool, pk(1), dec(100)).await;
     set_fee(&pool, pk(2), dec(25)).await;
     set_fee(&pool, pk(3), dec(25)).await;
@@ -346,8 +345,28 @@ async fn list_fee_tiers_returns_distinct_sorted_tiers(pool: PgPool) {
 
     let tiers = repo.list_fee_tiers().await.unwrap();
 
-    // Distinct + ascending: 25, 100 (NULL excluded, 25 not duplicated).
-    assert_eq!(tiers, vec![dec(25), dec(100)]);
+    // Distinct, each with its count, ascending by fee for display (25 not
+    // duplicated, NULL excluded).
+    assert_eq!(tiers, vec![fee_tier(dec(25), 2), fee_tier(dec(100), 1)]);
+}
+
+#[sqlx::test]
+async fn list_fee_tiers_keeps_only_the_most_common_capped(pool: PgPool) {
+    // Nine distinct tiers, one pool each (all count 1). The cap keeps the top
+    // 8; the count tie breaks by fee ASC, so the highest fee (90) is the one
+    // dropped. The survivors come back ascending for display.
+    for i in 1..=9u8 {
+        let addr = pk(50 + i);
+        seed_pool(&pool, addr, ts(i as i64 * 10), ts(i as i64 * 10)).await;
+        set_fee(&pool, addr, dec(i as i64 * 10)).await;
+    }
+    let repo = PgPoolRepository::new(pool);
+
+    let tiers = repo.list_fee_tiers().await.unwrap();
+
+    let fees: Vec<rust_decimal::Decimal> = tiers.iter().map(|t| t.fee_bps).collect();
+    assert_eq!(fees, (1..=8i64).map(|i| dec(i * 10)).collect::<Vec<_>>());
+    assert!(!fees.contains(&dec(90)));
 }
 
 #[sqlx::test]
@@ -363,6 +382,14 @@ async fn list_fee_tiers_empty_when_no_fees_resolved(pool: PgPool) {
 /// Small `Decimal` literal helper for the fee tiers.
 fn dec(n: i64) -> rust_decimal::Decimal {
     rust_decimal::Decimal::from(n)
+}
+
+/// Build an expected `FeeTier` for assertions.
+fn fee_tier(fee_bps: rust_decimal::Decimal, pool_count: i64) -> yog_core::domain::FeeTier {
+    yog_core::domain::FeeTier {
+        fee_bps,
+        pool_count,
+    }
 }
 
 // ── Helper: pull a PoolCursor out of the Cursor enum ────────────────

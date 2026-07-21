@@ -14,7 +14,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { InfoPopover } from "@/components/shared/info-popover";
-import { fetchFeeTiers } from "@/lib/api/server/fee-tiers";
+import { fetchFeeTiers, type FeeTier } from "@/lib/api/server/fee-tiers";
 
 import { PoolsFeeFilter } from "./pools-fee-filter";
 import { PoolsSearch } from "./pools-search";
@@ -23,7 +23,7 @@ export async function PoolsHeader() {
   const t = await getTranslations("Dashboard.Pools.page");
   const tShell = await getTranslations("Dashboard.shell");
 
-  const tiers = await fetchFeeTiers().catch(() => [] as string[]);
+  const tiers = await fetchFeeTiers().catch(() => [] as FeeTier[]);
 
   return (
     <header className="px-6 pt-6 pb-4 lg:px-10">

@@ -40,7 +40,7 @@ pub use meteora::{
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use pool::{
-    Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor,
+    FeeTier, Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor,
     PoolListQuery, PoolRepository,
 };
 pub use pool_analytics::{

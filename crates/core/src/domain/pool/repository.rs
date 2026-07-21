@@ -70,6 +70,20 @@ pub struct PoolCounts {
     pub discovered_24h: i64,
 }
 
+/// One entry of the pools fee-filter option list: a base-fee tier (basis
+/// points) and how many pools carry it.
+///
+/// The observed fee distribution is long-tailed — a handful of real tiers
+/// hold most pools, plus a long tail of one-off values (dynamic-fee / launch
+/// pools). [`PoolCatalog::list_fee_tiers`] returns only the **most common**
+/// tiers so the filter stays short and useful; `pool_count` is surfaced so
+/// the UI can label each option (`0.25% · 166`) and justify the shortlist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeeTier {
+    pub fee_bps: rust_decimal::Decimal,
+    pub pool_count: i64,
+}
+
 /// Persistence contract for Pool — the write side, owned by the indexer.
 ///
 /// Implemented by the infrastructure layer (`yog-persistence`).
@@ -138,16 +152,19 @@ pub trait PoolCatalog: Send + Sync {
     /// without follow-up queries.
     async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>>;
 
-    /// Distinct base trading-fee tiers (basis points) observed across
-    /// every pool, ascending. Powers the fee filter's option list
-    /// (`GET /api/pools/fee-tiers`) — the client picks one and replays
-    /// it as the `fee_bps` argument of [`PoolCatalog::find_paginated`].
+    /// The **most common** base-fee tiers (basis points), each with its pool
+    /// count — the fee filter's option list (`GET /api/pools/fee-tiers`). The
+    /// client picks one and replays it as the `fee_bps` argument of
+    /// [`PoolCatalog::find_paginated`].
     ///
-    /// Pools whose `fee_bps` is not yet resolved (`NULL`, before
-    /// yog-context reads their account) are excluded: a tier appears
-    /// only once a real pool carries it, so the filter never offers an
-    /// option that would match nothing.
-    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>>;
+    /// Ranked by pool count and capped (the observed distribution is
+    /// long-tailed: a few real tiers plus ~50 one-off dynamic-fee/launch
+    /// values that would bloat the dropdown without being useful filters),
+    /// then returned **ascending by fee** for natural display order. Pools
+    /// whose `fee_bps` is not yet resolved (`NULL`, before yog-context reads
+    /// their account) are excluded, so the filter never offers an option that
+    /// would match nothing. See [`FeeTier`].
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>>;
 }
 
 /// Resolution of a pool's account-derived properties (token mints, base fee

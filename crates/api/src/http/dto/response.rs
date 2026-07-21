@@ -1,6 +1,7 @@
 pub(crate) mod announcement;
 pub(crate) mod embedded_price;
 pub(crate) mod embedded_token;
+pub(crate) mod fee_tier;
 pub(crate) mod liquidity_event;
 pub(crate) mod network_status;
 pub(crate) mod page;
@@ -18,6 +19,7 @@ pub(crate) mod token_price;
 pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use embedded_price::EmbeddedPriceResponse;
 pub(crate) use embedded_token::EmbeddedTokenResponse;
+pub(crate) use fee_tier::FeeTierResponse;
 pub(crate) use liquidity_event::LiquidityEventResponse;
 pub(crate) use network_status::NetworkStatusResponse;
 pub(crate) use page::PageResponse;

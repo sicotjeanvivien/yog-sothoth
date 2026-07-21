@@ -23,7 +23,7 @@ use yog_core::{
     Cursor, Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity,
-        EventFreshnessRepository, GlobalAnalytics, GlobalAnalyticsRepository,
+        EventFreshnessRepository, FeeTier, GlobalAnalytics, GlobalAnalyticsRepository,
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventCursor,
         MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
         MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed, NetworkStatus,
@@ -180,7 +180,7 @@ impl PoolCatalog for PoolRepoOnce {
     async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
         take(&self.paginated)
     }
-    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
         unreachable!("list_fee_tiers not used by PoolService tests")
     }
 }
@@ -248,7 +248,7 @@ impl PoolCatalog for PoolCountsRepo {
     async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
         unreachable!("find_paginated not used by StatsService")
     }
-    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
         unreachable!("list_fee_tiers not used by StatsService")
     }
 }

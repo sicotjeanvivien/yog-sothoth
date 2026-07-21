@@ -2,14 +2,13 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
-use rust_decimal::Decimal;
 
 use crate::bootstrap::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
-        LiquidityEventResponse, PageResponse, PoolCurrentStateResponse, PoolHistoryBucketResponse,
-        PoolResponse, SwapEventResponse,
+        FeeTierResponse, LiquidityEventResponse, PageResponse, PoolCurrentStateResponse,
+        PoolHistoryBucketResponse, PoolResponse, SwapEventResponse,
         request::{
             GetPoolHistoryRequest, GetPoolLatestStateRequest, GetPoolRequest,
             ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest, ListTopPoolsRequest,
@@ -47,15 +46,16 @@ pub(crate) async fn list_pools(
 // GET /api/pools/fee-tiers
 // ===========================================================================
 
-/// The distinct base-fee tiers (basis points) observed across all pools,
-/// ascending — the option list of the pools fee filter. A bare JSON array of
-/// decimal strings (e.g. `["2.5","25","100"]`), matching how `feeBps` is
-/// serialised on the pool responses.
+/// The most common base-fee tiers (basis points) with their pool counts,
+/// ascending by fee — the option list of the pools fee filter. A JSON array
+/// of `{ feeBps, poolCount }`; `feeBps` is a decimal string like on the pool
+/// responses, `poolCount` a plain number.
 pub(crate) async fn list_fee_tiers(
     State(state): State<AppState>,
-) -> Result<Json<Vec<Decimal>>, ApiError> {
+) -> Result<Json<Vec<FeeTierResponse>>, ApiError> {
     let tiers = state.pool_service.list_fee_tiers().await?;
-    Ok(Json(tiers))
+    let items: Vec<FeeTierResponse> = tiers.into_iter().map(FeeTierResponse::from).collect();
+    Ok(Json(items))
 }
 
 // ===========================================================================

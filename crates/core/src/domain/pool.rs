@@ -3,5 +3,6 @@ pub mod repository;
 
 pub use model::{Pool, PoolAccountProperties};
 pub use repository::{
-    PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository,
+    FeeTier, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery,
+    PoolRepository,
 };

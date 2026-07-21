@@ -20,7 +20,7 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
+        FeeTier, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
         PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolRankMetric, SignalFeed,
         SignalRecord, TokenMetadataLookup, TokenPriceLookup,
     },
@@ -148,10 +148,10 @@ impl PoolService {
         })
     }
 
-    /// The distinct base-fee tiers observed across all pools, ascending —
-    /// powers the fee filter's option list (`GET /api/pools/fee-tiers`). A
-    /// thin pass-through: no enrichment, just the repository's list.
-    pub(crate) async fn list_fee_tiers(&self) -> RepositoryResult<Vec<Decimal>> {
+    /// The most common base-fee tiers (with pool counts) — powers the fee
+    /// filter's option list (`GET /api/pools/fee-tiers`). A thin pass-through:
+    /// no enrichment, just the repository's ranked list.
+    pub(crate) async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
         self.pool_repository.list_fee_tiers().await
     }
 

@@ -27,13 +27,14 @@ import { useTranslations } from "next-intl";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
 import { useRouter, usePathname } from "@/i18n/navigation";
+import type { FeeTier } from "@/lib/api/server/fee-tiers";
 import { formatFeeBps } from "@/lib/format/format-fee";
 
 /** Sentinel `<option>` value for "no fee filter". Empty string can't be a
  *  real tier, so it unambiguously means "all". */
 const ALL = "";
 
-export function PoolsFeeFilter({ tiers }: { tiers: string[] }) {
+export function PoolsFeeFilter({ tiers }: { tiers: FeeTier[] }) {
   const t = useTranslations("Dashboard.Pools.feeFilter");
   const router = useRouter();
   const pathname = usePathname();
@@ -78,8 +79,8 @@ export function PoolsFeeFilter({ tiers }: { tiers: string[] }) {
       >
         <option value={ALL}>{t("all")}</option>
         {tiers.map((tier) => (
-          <option key={tier} value={tier}>
-            {formatFeeBps(tier)}
+          <option key={tier.feeBps} value={tier.feeBps}>
+            {`${formatFeeBps(tier.feeBps)} · ${tier.poolCount}`}
           </option>
         ))}
       </select>
