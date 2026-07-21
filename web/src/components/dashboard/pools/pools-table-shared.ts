@@ -12,10 +12,14 @@
  */
 
 export const GRID_COLS =
-  "grid-cols-[minmax(200px,1.8fr)_minmax(90px,0.5fr)_minmax(140px,1fr)_minmax(90px,0.6fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_minmax(130px,1fr)_minmax(130px,1fr)_minmax(112px,0.7fr)]";
+  "grid-cols-[minmax(190px,1.8fr)_minmax(84px,0.5fr)_minmax(112px,0.9fr)_minmax(84px,0.6fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(104px,0.7fr)]";
 
-/** Min width below which the table scrolls horizontally instead of squashing. */
-export const TABLE_MIN_WIDTH_CLASS = "min-w-[1232px]";
+/** Min width below which the table scrolls horizontally instead of squashing.
+ *  Sized to the sum of the column minimums (~1022px) so the grid uses those
+ *  minimums exactly, with no forced extra slack. Trimmed once the protocol
+ *  cell (icon + "DAMM v2") and the relative-time cells ("il y a 2 h") went
+ *  compact — the old 1232px predated that and forced an avoidable scroll. */
+export const TABLE_MIN_WIDTH_CLASS = "min-w-[1030px]";
 
 // ── Header cells ──────────────────────────────────────────────────────
 // Deliberately understated (11px, medium weight, dim, tight tracking) so the

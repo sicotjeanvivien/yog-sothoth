@@ -129,8 +129,8 @@ export function WatchlistContent() {
   };
 
   return (
-    <div className="mx-6 lg:mx-10">
-      <div className="overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40">
+    <>
+      <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
         <div role="table" className={TABLE_MIN_WIDTH_CLASS}>
           <div
             role="rowgroup"
@@ -183,9 +183,11 @@ export function WatchlistContent() {
       </div>
 
       {anyError && (
-        <p className="mt-3 text-[13px] text-slate-500">{t("partialError")}</p>
+        <p className="mx-6 mt-3 text-[13px] text-slate-500 lg:mx-10">
+          {t("partialError")}
+        </p>
       )}
-    </div>
+    </>
   );
 }
 

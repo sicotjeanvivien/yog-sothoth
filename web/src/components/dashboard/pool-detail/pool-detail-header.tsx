@@ -6,21 +6,20 @@
  *   ┌───────────────────────────────────────────────────┐
  *   │  ← Back to Pools                                  │
  *   │                                                   │
- *   │  [logos] SOL / USDC          [Meteora] [Solscan]  │
- *   │          Meteora DAMM v2                          │
- *   │          7xKX...23Ab  [copy]                      │
+ *   │  [logos] SOL / USDC        [★ Watch] [Solscan]    │
+ *   │  [icon] DAMM v2                                   │
  *   └───────────────────────────────────────────────────┘
  *
- * The back link and the two external CTAs land on the same row as
- * the identity block on desktop, stack vertically on mobile.
+ * The back link and the right-hand actions (watchlist toggle + external
+ * CTAs) land on the same row as the identity block on desktop, stack
+ * vertically on mobile. The pool address + copy now live in the Pool info
+ * block below (and in each pool row's actions), so the header stays lean.
  *
- * All identifying labels (symbols, protocol display name, short
- * address) flow from already-validated server data — there is no
- * conditional fallback in this component; if a token has no symbol
- * the empty string flows through and the layout simply shows
- * nothing for that side. That happens rarely enough not to warrant
- * special UI; the Pool info block below will surface the mints
- * verbatim if the visitor cares.
+ * The pair symbols and the protocol badge flow from already-validated
+ * server data — no conditional fallback here; if a token has no symbol the
+ * empty string flows through and the layout simply shows nothing for that
+ * side. That happens rarely enough not to warrant special UI; the Pool info
+ * block below surfaces the mints verbatim if the visitor cares.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -31,12 +30,10 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/shared/icon";
 
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import { formatMeteoraUrl } from "@/lib/format/format-meteora-url";
-import { formatShortAddress } from "@/lib/format/format-short-address";
 
 import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
 import { ProtocolBadge } from "@/components/dashboard/pools/protocol-badge";
 import { WatchlistToggle } from "@/components/dashboard/watchlist/watchlist-toggle";
-import { CopyButton } from "@/components/shared/copy-button";
 
 const CTA_CLASS =
   "inline-flex items-center justify-center gap-2 rounded-[4px] border border-slate-700 bg-transparent px-4 py-[8px] text-[14px] font-semibold text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-800/40";
@@ -62,23 +59,13 @@ export async function PoolDetailHeader({ pool }: { pool: PoolResponse }) {
       <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_auto]">
         {/* Left — pair identity */}
         <div>
-          {/* Logos + pair + protocol on a single line, wrapping when narrow */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="flex items-center gap-3">
-              <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
-            </div>
-            <ProtocolBadge protocol={pool.protocol} />
+          {/* Token pair */}
+          <div className="flex items-center gap-3">
+            <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
           </div>
-
-          {/* Short address with copy */}
+          {/* Protocol badge on its own line below the pair */}
           <div className="mt-3 flex items-center gap-2 text-[14px] text-slate-400">
-            <span className="font-mono">
-              {formatShortAddress(pool.poolAddress)}
-            </span>
-            <CopyButton
-              value={pool.poolAddress}
-              label={t("copyAddress")}
-            />
+            <ProtocolBadge protocol={pool.protocol} />
           </div>
         </div>
 
