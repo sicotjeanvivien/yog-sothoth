@@ -184,9 +184,13 @@ impl PoolCatalog for PoolRepoOnce {
         _position: Option<PagePosition>,
         _sort: PoolSort,
         _search: Option<String>,
+        _fee_bps: Option<rust_decimal::Decimal>,
         _limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
         take(&self.paginated)
+    }
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {
+        unreachable!("list_fee_tiers not used by PoolService tests")
     }
 }
 
@@ -257,9 +261,13 @@ impl PoolCatalog for PoolCountsRepo {
         _position: Option<PagePosition>,
         _sort: PoolSort,
         _search: Option<String>,
+        _fee_bps: Option<rust_decimal::Decimal>,
         _limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
         unreachable!("find_paginated not used by StatsService")
+    }
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {
+        unreachable!("list_fee_tiers not used by StatsService")
     }
 }
 

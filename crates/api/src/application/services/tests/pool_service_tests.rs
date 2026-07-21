@@ -58,6 +58,7 @@ fn default_params() -> PoolListParams {
         position: None,
         sort: PoolSort::FirstSeenAsc,
         search: None,
+        fee_bps: None,
         limit: 50,
     }
 }

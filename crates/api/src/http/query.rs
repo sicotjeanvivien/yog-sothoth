@@ -2,6 +2,7 @@
 //! pool endpoints. Pure HTTP-layer plumbing: translates raw query
 //! strings into clean inputs, with no business logic.
 
+use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
@@ -28,6 +29,9 @@ pub(crate) struct PageQuery {
     #[serde(default)]
     pub(crate) sort: PoolSortParam,
     pub(crate) q: Option<String>,
+    /// Exact base-fee tier filter (basis points), as a decimal string on the
+    /// wire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.
+    pub(crate) fee_bps: Option<String>,
     #[serde(default = "default_limit")]
     pub(crate) limit: i64,
 }
@@ -257,6 +261,29 @@ pub(crate) fn validate_cursor_sort_consistency(
 /// `%%`).
 pub(crate) fn normalize_search(raw: Option<String>) -> Option<String> {
     raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// Parse the optional `fee_bps` filter into a domain `Decimal`.
+///
+/// A blank value collapses to `None` (no filter) — same tolerance as the
+/// search term, so an empty `?fee_bps=` from the UI clearing the selection
+/// is a valid "unfiltered" request, not a 400. A non-numeric or negative
+/// value is a client bug worth surfacing (a fee tier is never negative).
+pub(crate) fn parse_fee_bps(raw: Option<String>) -> Result<Option<Decimal>, ApiError> {
+    let Some(trimmed) = raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+
+    let value = Decimal::from_str(&trimmed)
+        .map_err(|_| ApiError::BadRequest(format!("`fee_bps` must be a number, got {trimmed}")))?;
+
+    if value.is_sign_negative() {
+        return Err(ApiError::BadRequest(
+            "`fee_bps` must not be negative".to_string(),
+        ));
+    }
+
+    Ok(Some(value))
 }
 
 /// Parse a base58 pool address from the path, or return a 400.

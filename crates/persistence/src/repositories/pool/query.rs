@@ -16,6 +16,7 @@
 //! integration tests rather than the macro.
 
 use chrono::{DateTime, Utc};
+use sqlx::types::BigDecimal;
 use sqlx::{Postgres, QueryBuilder};
 use yog_core::{PoolSort, PoolSortColumn};
 
@@ -28,6 +29,10 @@ pub(super) struct PaginatedPoolsQuery {
     pub(super) cursor_sort_value: Option<DateTime<Utc>>,
     pub(super) cursor_pool_address: Option<String>,
     pub(super) search: Option<String>,
+    /// Exact base-fee tier filter (basis points), already converted to the
+    /// `NUMERIC`-compatible `BigDecimal` by the repository. `None` leaves the
+    /// fee dimension unfiltered.
+    pub(super) fee_bps: Option<BigDecimal>,
     pub(super) fetch_limit: i64,
 }
 
@@ -140,6 +145,15 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
         qb.push(" || '%') OR tm.name ILIKE ('%' || ");
         qb.push_bind(term);
         qb.push(" || '%'))))");
+    }
+
+    // ── Fee-tier filter ──────────────────────────────────────────
+    // Exact match on the base fee. The value is a closed set (a tier
+    // returned by `list_fee_tiers`), but it is still user-supplied, so
+    // it goes through `push_bind` like every other value.
+    if let Some(fee) = q.fee_bps {
+        qb.push(" AND fee_bps = ");
+        qb.push_bind(fee);
     }
 
     // ── Order + limit ────────────────────────────────────────────

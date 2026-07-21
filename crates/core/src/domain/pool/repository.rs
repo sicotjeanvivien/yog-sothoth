@@ -106,12 +106,21 @@ pub trait PoolCatalog: Send + Sync {
     ///   ignoring any cursor. Mutually exclusive with `cursor`.
     /// - `PoolSort`
     /// - `search`
+    /// - `fee_bps` filters to pools whose base trading fee (basis
+    ///   points) exactly equals the given tier. `None` leaves the fee
+    ///   dimension unfiltered. Meant to be fed one of the tiers
+    ///   returned by [`PoolCatalog::list_fee_tiers`].
     /// - `limit` is the maximum number of items returned; the
     ///   repository clamps it defensively.
     ///
     /// The returned `Page<Pool>` carries enough information for the
     /// caller to render Previous / Next / First / Last navigation
     /// without follow-up queries.
+    // The arg list is at the pagination+filter contract's natural size
+    // (cursor/direction/position/sort + per-dimension filters + limit).
+    // Bundling into a struct is a plausible future refactor once a third
+    // filter lands; not worth the churn across every impl/mock for one.
+    #[allow(clippy::too_many_arguments)]
     async fn find_paginated(
         &self,
         cursor: Option<PoolCursor>,
@@ -119,8 +128,20 @@ pub trait PoolCatalog: Send + Sync {
         position: Option<PagePosition>,
         sort: PoolSort,
         search: Option<String>,
+        fee_bps: Option<rust_decimal::Decimal>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>>;
+
+    /// Distinct base trading-fee tiers (basis points) observed across
+    /// every pool, ascending. Powers the fee filter's option list
+    /// (`GET /api/pools/fee-tiers`) — the client picks one and replays
+    /// it as the `fee_bps` argument of [`PoolCatalog::find_paginated`].
+    ///
+    /// Pools whose `fee_bps` is not yet resolved (`NULL`, before
+    /// yog-context reads their account) are excluded: a tier appears
+    /// only once a real pool carries it, so the filter never offers an
+    /// option that would match nothing.
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>>;
 }
 
 /// Resolution of a pool's account-derived properties (token mints, base fee

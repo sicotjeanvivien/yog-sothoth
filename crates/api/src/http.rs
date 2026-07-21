@@ -55,6 +55,8 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         )
         // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
+        // ── Fee-tier option list (non-paginated) — powers the fee filter ──
+        .route("/api/pools/fee-tiers", get(handlers::pools::list_fee_tiers))
         // ── Ranked pools (non-paginated, capped) ─────────────────────────
         .route("/api/pools/top", get(handlers::pools::list_top_pools))
         // ── Single-pool resources ───────────────────────────────────────

@@ -50,11 +50,13 @@
 
 ---
 ---
+
 ## ✅ v0.1 — Analyzer + Signal Engine
 
 > Décision (10 juin 2026) : v0.1 et v0.2 fusionnées. Pas de release publique tant qu'il n'y a pas de signaux à offrir — un analytics Solana sans détecteurs est un viewer d'events, pas un produit. Le découpage interne (v0.1.0 / v0.1.1) reste pour conserver l'ordre de construction.
 
 ---
+
 ### ✅ v0.1.0 — Analyzer (POC, pas de release publique)
 
 #### ✅ Indexer — Cercle 2 events
@@ -392,7 +394,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 - [ ] Détecteur Fee yield spike — signal d'opportunité (fees/TVL vs baseline) ; données prêtes (VIEWs 019+020), sémantique à deux fenêtres à cadrer le moment venu
 - [ ] Détecteur Price impact creep (selon retour utilisateur — aucun à ce jour)
 
-#### Signal Engine — canaux de diffusion (recadré 2 juil. 2026)
+#### ✅ Signal Engine — canaux de diffusion (recadré 2 juil. 2026)
 > **Décision** : la porte de sortie des signaux est **yog-api**, pas un pusher dans l'engine. Le canal prioritaire est le **web live** (page ouverte qui s'update à l'arrivée d'un signal) — SSE servi par l'API, alimenté par un **poller interne** (~3 s, keyset `triggered_at`, broadcast tokio vers les clients connectés). LISTEN/NOTIFY rejeté pour l'instant (contrat inter-processus, aucun gain au tempo réel des détecteurs : tick 5 min) — escalade documentée si le tempo change. **Webhook abandonné pour v0.1.1** : aucun destinataire n'existe (pas d'users avant v0.2) ; reviendra en v0.2 comme consommateur outbox per-user si besoin.
 
 ##### ✅ Canal web (focus) — 3 PRs :
@@ -414,7 +416,7 @@ Phase conceptuelle bouclée avant tout code. Décisions structurantes :
 	- Hors périmètre v1 (reliquats) : pagination UI (« charger plus » — le curseur API existe) ; filtre sévérité UI (l'endpoint le supporte)
 - [x] **Refonte UX de la page Signals (constat au merge PR #40, 2 juil. 2026)** : le pipeline fonctionne de bout en bout mais l'UX front du feed d'alertes est jugée catastrophique — à reprendre en priorité à la prochaine session front (hiérarchie visuelle, lisibilité du feed, présentation des sévérités/valeurs). Occasion naturelle d'embarquer les reliquats ci-dessus (pagination UI, filtre sévérité)
 
-##### Canaux différés → déplacés en v0.3 (9 juil. 2026)
+##### ✅ Canaux différés → déplacés en v0.3 (9 juil. 2026)
 Les trois canaux push (Telegram, email, webhook) sont regroupés dans **v0.3 →
 *Canaux de diffusion des signaux*** : leurs notes dataient d'avant le
 reséquençage du 3 juil. (« avant v0.2/auth », « en v0.2 avec users ») — les
@@ -498,7 +500,7 @@ qu'adossé à la watchlist.
 - [ ] **Overview phase 2** : crate `yog-analytic` — calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker)
 - [ ] **Overview phase 2** : déclencheur — quand une requête analytique **mesurée** franchit un seuil réel (notamment à l'ouverture de l'allowlist `watched_pools` ; re-mesurer, le chiffre dev de juin 2026 n'est plus représentatif)
 - [ ] **Frontend / PagePool** : système de favoris stocké en LocalStorage (sinon back pour récupérer plusieurs pools par PubKey)
-- [ ] **Frontend / PagePool** : ajout colonne fee + filtre (faisabilité à confirmer)
+- [x] **Frontend / PagePool** : ajout colonne fee + filtre (fait) — colonne `Frais` (formatée %) sur `/pools` + filtre par palier observé : endpoint `GET /api/pools/fee-tiers` (paliers distincts en base), param `fee_bps` sur `GET /api/pools` (match exact via le `QueryBuilder` existant), `<select>` client qui pilote l'URL et reset la pagination. Aucune dépendance à `yog-analytic`.
 - [ ] **Transverse** : VIEW cross-protocole au-dessus des CA — à créer au 2ᵉ protocole (DLMM/Raydium), comme la VIEW `swap_events` ; lecture mono-protocole directe en attendant
 - [ ] **Transverse** : extraction d'un `StreamPoller`/handler SSE **génériques** — **au 2ᵉ flux SSE** (relevé revue PR #39 : `SignalStreamPoller` + handler sont volontairement couplés aux signaux). Le squelette mécanique (tick + `receiver_count` + watermark + unfold/keep-alive/`Lagged`) est généralisable (trait `StreamSource` : curseur + `tip()`/`delta()`) ; extraction mécanique avec 2 cas concrets sous les yeux — pas avant, une abstraction déduite d'un seul exemple encoderait les hypothèses du feed signaux (global, basse fréquence, broadcast partagé). ⚠️ Au 2ᵉ flux, **re-questionner le substrat** selon sa fréquence : swaps live = haute fréquence + filtre par pool → broadcast partagé insuffisant, LISTEN/NOTIFY redevient peut-être pertinent
 - [ ] **Transverse / perf** : table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relève du crate `Yog-Analytic` ; pas encore le déclencheur (5–47 ms read-time en dev), re-mesurer à l'ouverture de `watched_pools`
@@ -744,5 +746,8 @@ tracker spécifiquement les paires SOL/LST.
 
 > Idées brutes, non cadrées. À trier vers une version (ou à rejeter) — ne pas
 > implémenter directement depuis cette section.
+
+- tri pool par pair de token exemple "SOL USDC" pattern à définir
+- 
 
 _(vide — dernier tri : 9 juil. 2026)_

@@ -38,6 +38,7 @@ fn validate_pagination_rejects_cursor_with_position() {
         sort: PoolSortParam::FirstSeenAsc,
         position: Some(PagePositionParam::Last),
         q: None,
+        fee_bps: None,
         limit: 50,
     };
     assert!(validate_pagination_query(&q).is_err());
@@ -51,6 +52,7 @@ fn validate_pagination_allows_cursor_alone() {
         sort: PoolSortParam::FirstSeenAsc,
         position: None,
         q: None,
+        fee_bps: None,
         limit: 50,
     };
     assert!(validate_pagination_query(&q).is_ok());

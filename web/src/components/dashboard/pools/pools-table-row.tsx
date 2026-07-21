@@ -2,11 +2,11 @@
  * One row in the pools table.
  *
  * The row is an `<a>` (via next-intl's locale-aware `<Link>`)
- * directly wrapping its five cells. No native `<table>` nesting
- * problem to dodge, no Client Component required: the prefetch and
- * accessibility of `<Link>` work out of the box.
+ * directly wrapping its cells. No native `<table>` nesting problem to
+ * dodge, no Client Component required: the prefetch and accessibility
+ * of `<Link>` work out of the box.
  *
- * Seven cells: pair, signal indicator, protocol, TVL, 24h volume,
+ * Eight cells: pair, signal indicator, protocol, fee, TVL, 24h volume,
  * first seen, last seen. Cell widths are governed by the `GRID_COLS`
  * template shared with the header, so the columns stay aligned
  * regardless of content.
@@ -22,6 +22,7 @@
 import { Link } from "@/i18n/navigation";
 
 import type { PoolResponse } from "@/lib/api/schema/pool";
+import { formatFeeBps } from "@/lib/format/format-fee";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatUsdCompact } from "@/lib/format/format-usd";
@@ -86,6 +87,9 @@ export function PoolsTableRow({
         <span className="text-slate-400">
           {formatProtocolLabel(pool.protocol)}
         </span>
+      </div>
+      <div role="cell" className={CELL_NUMERIC_CLASS}>
+        {formatFeeBps(pool.feeBps)}
       </div>
       <div role="cell" className={CELL_NUMERIC_CLASS}>
         {formatUsdCompact(pool.tvlUsd)}

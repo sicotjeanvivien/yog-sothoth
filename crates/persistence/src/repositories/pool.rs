@@ -162,6 +162,7 @@ impl PoolCatalog for PgPoolRepository {
         position: Option<PagePosition>,
         sort: PoolSort,
         search: Option<String>,
+        fee_bps: Option<rust_decimal::Decimal>,
         limit: i64,
     ) -> RepositoryResult<Page<Pool>> {
         let effective_limit = limit.clamp(1, MAX_PAGE_SIZE);
@@ -176,14 +177,19 @@ impl PoolCatalog for PgPoolRepository {
             None => (None, None),
         };
 
-        // Build the dynamic query (ORDER BY + keyset + search) and run
-        // it. Mapping goes through PoolRow (FromRow) then Pool::try_from.
+        // NUMERIC binds to BigDecimal at the persistence boundary — same
+        // lossless string round-trip as the write path.
+        let fee_bps = fee_bps.map(fee_bps_to_numeric).transpose()?;
+
+        // Build the dynamic query (ORDER BY + keyset + search + fee) and
+        // run it. Mapping goes through PoolRow (FromRow) then Pool::try_from.
         let mut qb = build(PaginatedPoolsQuery {
             mode,
             sort,
             cursor_sort_value,
             cursor_pool_address,
             search,
+            fee_bps,
             fetch_limit,
         });
 
@@ -214,6 +220,22 @@ impl PoolCatalog for PgPoolRepository {
                 })
             }),
         )
+    }
+
+    async fn list_fee_tiers(&self) -> RepositoryResult<Vec<rust_decimal::Decimal>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT fee_bps AS "fee_bps!: rust_decimal::Decimal"
+            FROM pools
+            WHERE fee_bps IS NOT NULL
+            ORDER BY fee_bps
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(rows.into_iter().map(|r| r.fee_bps).collect())
     }
 }
 

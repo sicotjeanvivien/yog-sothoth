@@ -15,6 +15,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
+use std::str::FromStr;
 
 use yog_core::{
     PageDirection, PagePosition, PoolSort,
@@ -98,6 +99,7 @@ async fn first_seen_asc_orders_oldest_first(pool: PgPool) {
             None,
             PoolSort::FirstSeenAsc,
             None,
+            None,
             50,
         )
         .await
@@ -118,6 +120,7 @@ async fn first_seen_desc_orders_newest_first(pool: PgPool) {
             None,
             PoolSort::FirstSeenDesc,
             None,
+            None,
             50,
         )
         .await
@@ -137,6 +140,7 @@ async fn last_seen_asc_orders_by_last_seen(pool: PgPool) {
             PageDirection::Next,
             None,
             PoolSort::LastSeenAsc,
+            None,
             None,
             50,
         )
@@ -159,6 +163,7 @@ async fn last_seen_desc_orders_by_last_seen(pool: PgPool) {
             None,
             PoolSort::LastSeenDesc,
             None,
+            None,
             50,
         )
         .await
@@ -178,7 +183,7 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
 
     // Page 1: limit 2 → [C, B], has next.
     let p1 = repo
-        .find_paginated(None, PageDirection::Next, None, sort, None, 2)
+        .find_paginated(None, PageDirection::Next, None, sort, None, None, 2)
         .await
         .unwrap();
     assert_eq!(addrs(&p1.items), vec![pk(3), pk(2)]);
@@ -189,7 +194,7 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
     // Page 2: from next_cursor → [A], last page.
     let cursor = extract_pool_cursor(p1.next_cursor.as_ref().unwrap());
     let p2 = repo
-        .find_paginated(Some(cursor), PageDirection::Next, None, sort, None, 2)
+        .find_paginated(Some(cursor), PageDirection::Next, None, sort, None, None, 2)
         .await
         .unwrap();
     assert_eq!(addrs(&p2.items), vec![pk(1)]);
@@ -208,13 +213,13 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
 
     // Page 1 [C, B], go Next to page 2.
     let p1 = repo
-        .find_paginated(None, PageDirection::Next, None, sort, None, 2)
+        .find_paginated(None, PageDirection::Next, None, sort, None, None, 2)
         .await
         .unwrap();
     let next = extract_pool_cursor(p1.next_cursor.as_ref().unwrap());
 
     let p2 = repo
-        .find_paginated(Some(next), PageDirection::Next, None, sort, None, 2)
+        .find_paginated(Some(next), PageDirection::Next, None, sort, None, None, 2)
         .await
         .unwrap();
     assert_eq!(addrs(&p2.items), vec![pk(1)]);
@@ -222,7 +227,7 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
     // From page 2, go Prev — must return to [C, B] in display order.
     let prev = extract_pool_cursor(p2.prev_cursor.as_ref().unwrap());
     let back = repo
-        .find_paginated(Some(prev), PageDirection::Prev, None, sort, None, 2)
+        .find_paginated(Some(prev), PageDirection::Prev, None, sort, None, None, 2)
         .await
         .unwrap();
     assert_eq!(addrs(&back.items), vec![pk(3), pk(2)]);
@@ -243,6 +248,7 @@ async fn position_last_jumps_to_end(pool: PgPool) {
             PageDirection::Next,
             Some(PagePosition::Last),
             sort,
+            None,
             None,
             2,
         )
@@ -269,12 +275,13 @@ async fn position_first_matches_unanchored_first_page(pool: PgPool) {
             Some(PagePosition::First),
             sort,
             None,
+            None,
             2,
         )
         .await
         .unwrap();
     let implicit_first = repo
-        .find_paginated(None, PageDirection::Next, None, sort, None, 2)
+        .find_paginated(None, PageDirection::Next, None, sort, None, None, 2)
         .await
         .unwrap();
 
@@ -295,6 +302,7 @@ async fn empty_table_yields_empty_page_at_both_boundaries(pool: PgPool) {
             None,
             PoolSort::FirstSeenDesc,
             None,
+            None,
             50,
         )
         .await
@@ -305,6 +313,99 @@ async fn empty_table_yields_empty_page_at_both_boundaries(pool: PgPool) {
     assert!(page.is_last);
     assert!(page.next_cursor.is_none());
     assert!(page.prev_cursor.is_none());
+}
+
+// ── Fee-tier filter + option list ───────────────────────────────────
+
+/// Set a pool's base fee, so the fee-filter tests can seed distinct tiers
+/// on top of the timestamp-only `seed_pool`.
+async fn set_fee(pool: &PgPool, addr: Pubkey, fee_bps: rust_decimal::Decimal) {
+    sqlx::query("UPDATE pools SET fee_bps = $2 WHERE pool_address = $1")
+        .bind(addr.to_string())
+        .bind(sqlx::types::BigDecimal::from_str(&fee_bps.to_string()).unwrap())
+        .execute(pool)
+        .await
+        .expect("set fee failed");
+}
+
+#[sqlx::test]
+async fn fee_bps_filter_returns_only_matching_tier(pool: PgPool) {
+    seed_three(&pool).await;
+    // A, B on the 25 bps tier; C on 100 bps.
+    set_fee(&pool, pk(1), dec(25)).await;
+    set_fee(&pool, pk(2), dec(25)).await;
+    set_fee(&pool, pk(3), dec(100)).await;
+    let repo = PgPoolRepository::new(pool);
+
+    let page = repo
+        .find_paginated(
+            None,
+            PageDirection::Next,
+            None,
+            PoolSort::FirstSeenAsc,
+            None,
+            Some(dec(25)),
+            50,
+        )
+        .await
+        .unwrap();
+
+    // Only the 25 bps pools, in first_seen ASC order: A, B (C excluded).
+    assert_eq!(addrs(&page.items), vec![pk(1), pk(2)]);
+}
+
+#[sqlx::test]
+async fn fee_bps_filter_no_match_yields_empty_page(pool: PgPool) {
+    seed_three(&pool).await;
+    set_fee(&pool, pk(1), dec(25)).await;
+    let repo = PgPoolRepository::new(pool);
+
+    // A tier no pool carries → an empty page, not an error.
+    let page = repo
+        .find_paginated(
+            None,
+            PageDirection::Next,
+            None,
+            PoolSort::FirstSeenAsc,
+            None,
+            Some(dec(9999)),
+            50,
+        )
+        .await
+        .unwrap();
+
+    assert!(page.items.is_empty());
+}
+
+#[sqlx::test]
+async fn list_fee_tiers_returns_distinct_sorted_tiers(pool: PgPool) {
+    seed_three(&pool).await;
+    // Two pools share 25 bps; one is 100 bps; a fourth pool is left with a
+    // NULL fee and must not surface as a tier.
+    set_fee(&pool, pk(1), dec(100)).await;
+    set_fee(&pool, pk(2), dec(25)).await;
+    set_fee(&pool, pk(3), dec(25)).await;
+    let repo = PgPoolRepository::new(pool);
+
+    let tiers = repo.list_fee_tiers().await.unwrap();
+
+    // Distinct + ascending: 25, 100 (NULL excluded, 25 not duplicated).
+    assert_eq!(tiers, vec![dec(25), dec(100)]);
+}
+
+#[sqlx::test]
+async fn list_fee_tiers_empty_when_no_fees_resolved(pool: PgPool) {
+    seed_three(&pool).await; // all three left with NULL fee_bps
+    let repo = PgPoolRepository::new(pool);
+
+    let tiers = repo.list_fee_tiers().await.unwrap();
+
+    assert!(tiers.is_empty());
+}
+
+/// Small `Decimal` literal helper for the fee tiers.
+fn dec(n: i64) -> rust_decimal::Decimal {
+    rust_decimal::Decimal::from(n)
 }
 
 // ── Helper: pull a PoolCursor out of the Cursor enum ────────────────

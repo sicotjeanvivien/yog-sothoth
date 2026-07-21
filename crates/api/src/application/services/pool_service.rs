@@ -74,6 +74,7 @@ pub(crate) struct PoolListParams {
     pub(crate) position: Option<PagePosition>,
     pub(crate) sort: PoolSort,
     pub(crate) search: Option<String>,
+    pub(crate) fee_bps: Option<Decimal>,
     pub(crate) limit: i64,
 }
 
@@ -144,6 +145,7 @@ impl PoolService {
                 params.position,
                 params.sort,
                 params.search,
+                params.fee_bps,
                 params.limit,
             )
             .await?;
@@ -174,6 +176,13 @@ impl PoolService {
             is_first: page.is_first,
             is_last: page.is_last,
         })
+    }
+
+    /// The distinct base-fee tiers observed across all pools, ascending —
+    /// powers the fee filter's option list (`GET /api/pools/fee-tiers`). A
+    /// thin pass-through: no enrichment, just the repository's list.
+    pub(crate) async fn list_fee_tiers(&self) -> RepositoryResult<Vec<Decimal>> {
+        self.pool_repository.list_fee_tiers().await
     }
 
     /// Top-N pools ranked by `metric`, each enriched with token context and

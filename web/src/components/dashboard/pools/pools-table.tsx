@@ -8,7 +8,7 @@ import { PoolsTableRow, type SignalCellLabels } from "./pools-table-row";
 import { SortableHeader } from "./sortable-header";
 
 export const GRID_COLS =
-  "grid-cols-[minmax(200px,1.8fr)_minmax(90px,0.5fr)_minmax(140px,1fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_minmax(130px,1fr)_minmax(130px,1fr)]";
+  "grid-cols-[minmax(200px,1.8fr)_minmax(90px,0.5fr)_minmax(140px,1fr)_minmax(90px,0.6fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_minmax(130px,1fr)_minmax(130px,1fr)]";
 const HEAD_CELL_BASE =
   "flex items-center px-4 py-3 text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase whitespace-nowrap";
 const HEAD_CELL_CLASS = HEAD_CELL_BASE;
@@ -44,7 +44,7 @@ export async function PoolsTable({
 
   return (
     <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
-      <div role="table" className="min-w-[1030px]">
+      <div role="table" className="min-w-[1120px]">
         {/* Header row */}
         <div
           role="rowgroup"
@@ -59,6 +59,9 @@ export async function PoolsTable({
             </div>
             <div role="columnheader" className={HEAD_CELL_CLASS}>
               {t("protocol")}
+            </div>
+            <div role="columnheader" className={HEAD_CELL_NUMERIC_CLASS}>
+              {t("fee")}
             </div>
             <div role="columnheader" className={HEAD_CELL_NUMERIC_CLASS}>
               {t("tvl")}

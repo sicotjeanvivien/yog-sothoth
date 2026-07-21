@@ -2,6 +2,7 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use rust_decimal::Decimal;
 
 use crate::bootstrap::AppState;
 use crate::http::{
@@ -40,6 +41,21 @@ pub(crate) async fn list_pools(
         is_first: page.is_first,
         is_last: page.is_last,
     }))
+}
+
+// ===========================================================================
+// GET /api/pools/fee-tiers
+// ===========================================================================
+
+/// The distinct base-fee tiers (basis points) observed across all pools,
+/// ascending — the option list of the pools fee filter. A bare JSON array of
+/// decimal strings (e.g. `["2.5","25","100"]`), matching how `feeBps` is
+/// serialised on the pool responses.
+pub(crate) async fn list_fee_tiers(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Decimal>>, ApiError> {
+    let tiers = state.pool_service.list_fee_tiers().await?;
+    Ok(Json(tiers))
 }
 
 // ===========================================================================
