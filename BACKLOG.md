@@ -14,14 +14,15 @@
 > bougent, pas à chaque coche — sinon c'est une deuxième source à faire
 > dériver.
 
-### Maintenant — les deux axes actifs (re-planification 20 juil.)
-1. **RGPD / légal** — dernier bloquant de v0.1.1, petit (relecture de contenu, pas de code) → clore avant de basculer sur le DLMM. `§ RGPD / légal`
-2. **DLMM v0.2.0** — chantier principal jusqu'en septembre, dev sur le WebSocket actuel (indépendant du choix RPC), compatible convalescence. `§ v0.2.0 — Meteora DLMM`
+### Maintenant — séquence active (re-planification 21 juil. 2026)
+1. **RGPD / légal** — dernier bloquant de v0.1.1, petit (relecture de contenu, pas de code) → clore avant tout. `§ RGPD / légal`
+2. **Finir les events DAMM v2** — compléter la couverture d'events du protocole de référence (ClaimProtocolFee, famille rewards, SplitPosition) **avant** d'ajouter un nouveau protocole : DAMM v2 complet d'abord, puis enchaîner le DLMM avec une recette « voie 3 » stabilisée. `§ DAMM v2 — events restants`
+3. **DLMM v0.2.0** — chantier principal jusqu'en septembre, dev sur le WebSocket actuel (indépendant du choix RPC), compatible convalescence. `§ v0.2.0 — Meteora DLMM`
 
 ### Fait — étude comparative RPC (20 juil. 2026)
 - ✅ Shyft/Triton/Helius/QuickNode/Alchemy comparés. **Recommandation révisée : Alchemy PAYG en tête** (post-payé, plafond de conso « Usage Limit » documenté, pas de dépôt minimum perdu si conso faible en dev) — priorité actée : coût plafonné/maîtrisé en phase de dev plutôt qu'un abonnement récurrent indépendant de la conso. Triton PAYG en second (mécanisme de solde zéro non documenté, resté un inconnu réel). Shyft Build (199 $/mo flat) en repli une fois le volume réel mesuré. **Budget réel bien au-dessus du `~20 € HT` provisoire.** Devis directs + décision finale restent à faire en septembre. `§ Pré-v0.2`
 
-### Quick wins — pour respirer entre deux blocs DLMM
+### ✅ Quick wins — pour respirer entre deux blocs DLMM
 - **Colonne fee + filtre sur `/pools`** : le plus rentable des trois — `fee_bps` déjà exposé, filtre dynamique via le `QueryBuilder` existant, **aucune dépendance à `yog-analytic`** contrairement aux filtres TVL/volume. `§ Reliquats v0.1`
 - **Tri TVL sur le top-N Overview** : quasi gratuit, `PoolRankMetric` a été conçu extensible pour exactement ça (5,5 ms mesurés en dev). `§ Reliquats v0.1`
 - **Favoris LocalStorage (PagePool)** : seul levier de rétention avant l'auth v0.3 ; front pur, découpable — bon candidat de convalescence si le DLMM est bouclé avant. Se réutilise comme pattern à la migration vers une watchlist serveur en v0.3. `§ Reliquats v0.1`
@@ -138,7 +139,7 @@
 	- [x] **Front** : la carte « Current price » consomme `spotPriceAInB` (schema `pool-current-state.ts` + `pool-detail-kpis.tsx`) ; `computePoolPrice` (ratio réserves) supprimé, `formatPrice` conservé, `pool-price.ts` réduit au formatage. Le front est purement affichage. Flag `poolPriceImbalance` conservé. typecheck/lint/136 tests verts
 	- Reliquat **Imbalance %** (différé au Signal Engine) → regroupé en fin de fichier.
 
-##### PagePool
+##### ✅ PagePool
 > Reliquats `[ ]` (favoris localStorage, colonne fee + filtre) → regroupés dans **« Reste à faire »** en fin de fichier.
 - [x] Tableau liquidity — colonne « Value (USD) » : valeur USD de l'événement (amountA·prixA + amountB·prixB, valorisation **trade-time** = prix as-of le timestamp de l'event). **Backend** : VIEW `meteora_damm_v2_liquidity_events_valued` (migration 021, LATERAL `token_prices` as-of + jointure décimales, GRANT `yog_api`) — les 2 chemins cursor (forward/backward) lisent la VIEW (colonnes forcées `!` car sqlx infère nullable sur une VIEW) ; read-model `MeteoraDammV2LiquidityEventValued { event, value_usd: Option<Decimal> }` (séparé de l'event brut → infra-neutral, l'INSERT indexer inchangé) ; `LiquidityEventResponse.valueUsd`. **Front** : 6ᵉ colonne, `formatUsd` plein, `—` si null. Test d'intégration VIEW (as-of correct + NULL si jambe non pricée). Vérifié live : SOL/USDC remove → $41.26. NB : `liquidityDelta` (u128 brut, unités L sans décimales) écarté car illisible.
 
@@ -456,14 +457,14 @@ qu'adossé à la watchlist.
 #### ✅ Frontend — mise à l'échelle globale des textes (relevé 6 juil. 2026)
 - [x] Passe globale sur l'échelle typographique du dashboard (pools, pool-detail, overview, sidebar) — **livré 6 juil. 2026** (+1 cran sur tout ≤13.5px, 41 occurrences / 18 fichiers ; tailles fractionnaires 10.5/13.5 supprimées ; plancher 10px pour les micro-captions décoratives ex-9px ; valeurs KPI 21/24px display inchangées). Problème **global au front**, pas propre aux signaux : le 10–13px gris clair sur fond sombre rend flou/mou sur écran à scaling fractionnaire (constaté à 125 % Windows, cas très répandu). La card signals a servi de pilote (PR #45) : un cran partout. Barème appliqué :
 
-  | Élément | Avant | Après |
-  |---|---|---|
-  | Valeur/chiffre vedette | 20px | 24px |
-  | Texte principal (résumé, cellules) | 13px | 14px |
-  | Texte secondaire (labels, méta) | 12px | 13px |
-  | Tags mono (détecteur, etc.) | 11px | 12px |
-  | Micro-tags uppercase | 10px | 11px |
-  | Espacement interne | py-3, gap-1.5 | py-4, gap-2 |
+  | Élément                            | Avant         | Après       |
+  | ---------------------------------- | ------------- | ----------- |
+  | Valeur/chiffre vedette             | 20px          | 24px        |
+  | Texte principal (résumé, cellules) | 13px          | 14px        |
+  | Texte secondaire (labels, méta)    | 12px          | 13px        |
+  | Tags mono (détecteur, etc.)        | 11px          | 12px        |
+  | Micro-tags uppercase               | 10px          | 11px        |
+  | Espacement interne                 | py-3, gap-1.5 | py-4, gap-2 |
 
   Règle retenue : **13px minimum pour le texte secondaire** ; `PoolPairCell` (14px) partagé pools/signals conforme. L'air (padding/gap) participe à la lisibilité autant que la taille.
 
@@ -482,19 +483,6 @@ qu'adossé à la watchlist.
 - [ ] Vérifier contenu page Mentions légales (SASU AWSD, éditeur, hébergeur)
 - [ ] Vérifier contenu pages Terms / Support / About
 
-#### Déploiement Scaleway — 📅 reporté à septembre 2026 (re-décidé 20 juil. ; ex-« démarrage 1ʳᵉ semaine d'août · restore avant le 27 août ») · maillon 3 de la chaîne choix RPC → audit → Scaleway → prod
-- [ ] Provisionner Instance DEV1-M (`fr-par-1`, Ubuntu 24.04)
-- [ ] Hardening SSH (clé uniquement, fail2ban, ufw 22/80/443)
-- [ ] Installer Docker + Compose plugin
-- [ ] Provisionner Managed PostgreSQL, activer TimescaleDB
-- [ ] Créer bucket Object Storage `yog-backups` One Zone IA
-- [ ] Migrer site AWSD (Hugo → rsync → Caddy)
-- [ ] Configurer Caddy + Let's Encrypt pour yog-scope.xyz
-- [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
-- [ ] Tester restore pg_dump avant la mise en prod (l'impératif « avant le 27 août » est tombé avec le report du 20 juil. — la convalescence est du dev-only, pas de l'ops)
-- [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
-- [ ] **Changelog : réviser `releases.ts` avant la mise en prod** — les blocs v0.1.0/v0.1.1 livrés le 20 juil. sont synthétisés avec des dates de fin de jalon provisoires ; repasser dessus avec les vraies données de release (dates, contenu final incluant DLMM si v0.2.0 est dans le premier déploiement) et publier l'annonce release pointant `/changelog#<version>`. Rappel de routine : `releases.ts` est à tenir à jour **à chaque release** (les garde-fous vitest vérifient la forme, pas l'exhaustivité)
-
 ### Reliquats v0.1 (analyzer — non bloquants, déclenchés au besoin)
 - [x] **Overview phase 1.5** : tri par TVL (fait, PR #67) — variante `metric=tvl` sur `/api/pools/top` (VIEW `pool_current_tvl` existante, aucune migration) + en-têtes Volume/TVL cliquables sur l'Overview (`?rank=`, colonne active non-cliquable). Deux lentilles flux vs profondeur.
 - [ ] **Overview phase 2** : crate `yog-analytic` — calcul + stockage de l'analytique matérialisée (forme TBD : `MATERIALIZED VIEW` rafraîchi vs table + worker)
@@ -505,6 +493,50 @@ qu'adossé à la watchlist.
 - [ ] **Transverse** : extraction d'un `StreamPoller`/handler SSE **génériques** — **au 2ᵉ flux SSE** (relevé revue PR #39 : `SignalStreamPoller` + handler sont volontairement couplés aux signaux). Le squelette mécanique (tick + `receiver_count` + watermark + unfold/keep-alive/`Lagged`) est généralisable (trait `StreamSource` : curseur + `tip()`/`delta()`) ; extraction mécanique avec 2 cas concrets sous les yeux — pas avant, une abstraction déduite d'un seul exemple encoderait les hypothèses du feed signaux (global, basse fréquence, broadcast partagé). ⚠️ Au 2ᵉ flux, **re-questionner le substrat** selon sa fréquence : swaps live = haute fréquence + filtre par pool → broadcast partagé insuffisant, LISTEN/NOTIFY redevient peut-être pertinent
 - [ ] **Transverse / perf** : table `pool_analytics_hourly` matérialisée (débloquera tri TVL/Volume + filtres) — relève du crate `Yog-Analytic` ; pas encore le déclencheur (5–47 ms read-time en dev), re-mesurer à l'ouverture de `watched_pools`
 - [ ] **Transverse / perf** : cache HTTP `Cache-Control: max-age=30` sur `GET /api/pools`
+
+#### Polish table `/pools` (front, petits, triés de l'Inbox 21 juil. 2026)
+> Le volet **taille/couleur des en-têtes** est déjà fait (PR #68 : 11px, medium,
+> slate-500, tracking réduit) et le **nommage de la colonne « Protocol »** est
+> tranché (on garde « Protocol » : la cellule montre le produit Meteora, pas
+> l'ID de programme on-chain — d'où « protocol » et non « program » comme
+> Solscan). Restent :
+- [x] **Temps relatif abrégé** (fait) — param `style: "short"` sur `formatRelativeTime` (`Intl.RelativeTimeFormat`, locale-aware : « il y a 2 h » / « 2 hr. ago »), appliqué dans la ligne partagée → `/pools` + `/watchlist`. `narrow` écarté (perd « il y a » en FR). Autres tables inchangées (défaut `long`).
+- [x] **Cellule protocole compacte** (fait) — `ProtocolBadge` : mark plateforme + libellé court (« DAMM v2 »), nom complet en `title`. ⚠️ **mark = placeholder monogramme « M »** (pattern fallback d'initiale de `PoolPairCell`) — **à remplacer par le SVG officiel Meteora** quand dispo (`icon.tsx` → `MeteoraIcon`, swap dans `PlatformMark`).
+- [ ] **Filtre/tri `/pools` par paire de tokens** (« SOL/USDC ») — **à cadrer avant code** : filtre *paire exacte* (les 2 mints) vs regroupement canonique ; articulation avec la recherche existante (`q` matche déjà symbole/adresse). Pattern à définir.
+- [ ] **Type/mode de fee (statique vs dynamique, scheduler)** sur `/pools` — **dépend** du décodage complet de la fee-config, volontairement différé (voie C : les octets `pool_fees_raw` d'`EvtInitializePool` sont déjà stockés, le décodage scheduler/dynamic-fee est reporté). Backend (finir le décodage) + front (badge/colonne). À investiguer : quelle info est réellement décodable. NB : « concentrated » n'est pas un mode de fee DAMM v2.
+
+### DAMM v2 — events restants (à finir avant le DLMM, cadré 21 juil. 2026)
+
+> Compléter la couverture d'events du **protocole de référence** avant d'en
+> ajouter un nouveau (DLMM). Choix de séquençage (JV, 21 juil.) : finir DAMM v2
+> de bout en bout, puis enchaîner le DLMM avec une recette « voie 3 »
+> stabilisée. Non bloquant produit, mais placé **avant** v0.2.0 par ce choix.
+>
+> **Scope par event = voie 3 complète** : type domaine (`MeteoraDammV2XxxEvent`),
+> table `meteora_damm_v2_xxx_events` (+ GRANTs), repo `Pg…`, sous-persistor, et
+> les 3 points de dispatch (`ExtractionDispatcher::extract`,
+> `EventPersistor::persist`, `init_event_persistor`). Fixtures + tests par event
+> (pattern « cercle 2 »). Déjà couverts : Swap, Liquidity, `EvtClaimPositionFee`,
+> `EvtClaimReward` (le *claim* de récompense), + le cycle de vie position/pool
+> (Initialize/Create/Close/Lock/…). Ce qui reste :
+
+- [ ] `EvtClaimProtocolFee` — claim de la part **protocole** des fees (distinct du `ClaimPositionFee` déjà couvert)
+- [ ] **Famille rewards / farming** (events d'admin des récompenses, distincts du `ClaimReward` déjà couvert) — cluster cohérent, à traiter ensemble :
+  - [ ] `EvtInitializeReward`
+  - [ ] `EvtFundReward`
+  - [ ] `EvtUpdateRewardDuration`
+  - [ ] `EvtUpdateRewardFunder`
+  - [ ] `EvtWithdrawIneligibleReward`
+- [ ] `EvtSplitPosition` — **relever d'abord** quelles variantes sont réellement émises on-chain (Solscan, comme pour le cercle 2) : `SplitPosition2` (déprécié ?) vs `SplitPosition3` — n'intégrer que la/les version(s) vivante(s)
+- [ ] Par event, décider s'il porte une **valeur produit** (affichage/signal) ou reste une simple trace indexée — la famille rewards ouvre potentiellement un angle « farming/incentives » à cadrer le moment venu
+
+### v0.1.2 — Meteora DLMM (à cadrer) 
+
+- [ ] Décodeur event_cpi + recette add-protocol (3 dispatch points, cf. `crates/README.md`)
+- [ ] Sémantique domaine **bins concentrés** (≠ x·y=k) : `PoolCurrentState`, prix spot, AMM math DLMM (`core::amm`)
+- [ ] VIEW cross-protocole au-dessus des CA — le déclencheur « au 2ᵉ protocole » des Reliquats v0.1 est atteint
+- [ ] Couverture détecteurs : flow imbalance + price deviation adaptés au modèle bins (VIEWs de lecture dédiées, façon migrations 023/024)
+- [ ] Front : fiche pool DLMM (les champs DAMM v2-spécifiques ne s'appliquent pas tels quels)
 
 ## Pré-v0.2 — Acquisition d'un flux RPC adapté (gate de viabilité, décidé 3 juil. 2026)
 
@@ -545,13 +577,13 @@ qu'adossé à la watchlist.
 > l'indexer a besoin. Les deux produits portent des noms proches mais ne
 > sont pas la même chose.
 
-| Provider | Entrée gRPC mainnet | Modèle | Régions UE | Quotas filtre |
-|---|---|---|---|---|
-| **Shyft** | Build, 199 $/mo | Flat, bande passante **non mesurée** | Londres, Amsterdam, Francfort | 150k adresses tx / 400k comptes par filtre — très large pour 1-2 program IDs Meteora |
-| **Triton One** | Pay-as-you-go, dépôt min. 125 $ (12 mois) | Prépayé — 0,08 $/GB (≈82 $/To), solde qui se vide, rechargeable. **Comportement à solde zéro non documenté publiquement** (coupure nette ? grace period ? throttle ?) malgré recherche approfondie (doc technique, FAQ, blog) — inconnu réel, à lever par question directe avant tout engagement opérationnel dessus | Sélection région (flou pour le PAYG partagé — à vérifier au devis) | Pas de limite artificielle documentée |
-| **Alchemy** | Pay-as-you-go, **pas de dépôt minimum** | **Post-payé** — carte enregistrée (pré-autorisation 5 $ à l'activation), facturé mensuellement sur la conso réelle, 75 $/To. Dashboard propose un **« Usage Limit »** documenté (plafond en CU ou en $, conso coupée au plafond, pas de dépassement facturé) — mécanisme équivalent à un prépaiement plafonné, mais documenté et sans perte sèche si la conso réelle reste sous le plafond | Non vérifié dans cette passe | Non vérifié dans cette passe |
-| **Helius LaserStream** | Business, 499 $/mo (mainnet gRPC verrouillé derrière ce palier) | Req/s + credits/MB au-delà | Amsterdam, Francfort (9 régions au total) | — |
-| **QuickNode** | Scale, **499 $/mo** (build 49 $ et Accelerate 249 $ n'incluent pas le gRPC — Streams ≠ gRPC, voir note) | Credits/bytes | Non documenté clairement en accès libre | 10–50 pubkeys/filtre selon palier (suffisant : on ne filtre que par program ID) |
+| Provider               | Entrée gRPC mainnet                                                                                     | Modèle                                                                                                                                                                                                                                                                                                                                                                                     | Régions UE                                                         | Quotas filtre                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **Shyft**              | Build, 199 $/mo                                                                                         | Flat, bande passante **non mesurée**                                                                                                                                                                                                                                                                                                                                                       | Londres, Amsterdam, Francfort                                      | 150k adresses tx / 400k comptes par filtre — très large pour 1-2 program IDs Meteora |
+| **Triton One**         | Pay-as-you-go, dépôt min. 125 $ (12 mois)                                                               | Prépayé — 0,08 $/GB (≈82 $/To), solde qui se vide, rechargeable. **Comportement à solde zéro non documenté publiquement** (coupure nette ? grace period ? throttle ?) malgré recherche approfondie (doc technique, FAQ, blog) — inconnu réel, à lever par question directe avant tout engagement opérationnel dessus                                                                       | Sélection région (flou pour le PAYG partagé — à vérifier au devis) | Pas de limite artificielle documentée                                                |
+| **Alchemy**            | Pay-as-you-go, **pas de dépôt minimum**                                                                 | **Post-payé** — carte enregistrée (pré-autorisation 5 $ à l'activation), facturé mensuellement sur la conso réelle, 75 $/To. Dashboard propose un **« Usage Limit »** documenté (plafond en CU ou en $, conso coupée au plafond, pas de dépassement facturé) — mécanisme équivalent à un prépaiement plafonné, mais documenté et sans perte sèche si la conso réelle reste sous le plafond | Non vérifié dans cette passe                                       | Non vérifié dans cette passe                                                         |
+| **Helius LaserStream** | Business, 499 $/mo (mainnet gRPC verrouillé derrière ce palier)                                         | Req/s + credits/MB au-delà                                                                                                                                                                                                                                                                                                                                                                 | Amsterdam, Francfort (9 régions au total)                          | —                                                                                    |
+| **QuickNode**          | Scale, **499 $/mo** (build 49 $ et Accelerate 249 $ n'incluent pas le gRPC — Streams ≠ gRPC, voir note) | Credits/bytes                                                                                                                                                                                                                                                                                                                                                                              | Non documenté clairement en accès libre                            | 10–50 pubkeys/filtre selon palier (suffisant : on ne filtre que par program ID)      |
 
 **Aucun free tier gRPC mainnet chez les 5** (le free tier Alchemy, 30M CU/mois, couvre le RPC classique, pas le gRPC) — corrige l'hypothèse de départ (« des offres avec free tier existeraient ») : le free tier n'existe que sur le JSON-RPC classique (ce qu'on a déjà), pas sur le firehose gRPC.
 
@@ -565,6 +597,21 @@ qu'adossé à la watchlist.
 4. **Helius écarté** pour le critère n°1 (éviter d'empiler le gRPC sur le même vendeur que le DAS/metadata déjà en place) ; **QuickNode** reste un candidat neutre à ~500 $/mo si les options moins chères déçoivent au devis.
 
 ---
+
+---
+
+#### Déploiement Scaleway — 📅 reporté à septembre 2026 (re-décidé 20 juil. ; ex-« démarrage 1ʳᵉ semaine d'août · restore avant le 27 août ») · maillon 3 de la chaîne choix RPC → audit → Scaleway → prod
+- [ ] Provisionner Instance DEV1-M (`fr-par-1`, Ubuntu 24.04)
+- [ ] Hardening SSH (clé uniquement, fail2ban, ufw 22/80/443)
+- [ ] Installer Docker + Compose plugin
+- [ ] Provisionner Managed PostgreSQL, activer TimescaleDB
+- [ ] Créer bucket Object Storage `yog-backups` One Zone IA
+- [ ] Migrer site AWSD (Hugo → rsync → Caddy)
+- [ ] Configurer Caddy + Let's Encrypt pour yog-scope.xyz
+- [ ] CI/CD : GitHub Actions → registry Scaleway → SSH deploy (`docker compose pull && up -d`)
+- [ ] Tester restore pg_dump avant la mise en prod (l'impératif « avant le 27 août » est tombé avec le report du 20 juil. — la convalescence est du dev-only, pas de l'ops)
+- [ ] Uptime Kuma + Healthchecks.io dead man switch indexer
+- [ ] **Changelog : réviser `releases.ts` avant la mise en prod** — les blocs v0.1.0/v0.1.1 livrés le 20 juil. sont synthétisés avec des dates de fin de jalon provisoires ; repasser dessus avec les vraies données de release (dates, contenu final incluant DLMM si v0.2.0 est dans le premier déploiement) et publier l'annonce release pointant `/changelog#<version>`. Rappel de routine : `releases.ts` est à tenir à jour **à chaque release** (les garde-fous vitest vérifient la forme, pas l'exhaustivité)
 
 ## v0.2 — Extension multi-protocoles (découpée en v0.2.x)
 
@@ -594,14 +641,6 @@ qu'adossé à la watchlist.
 > des détecteurs. Chaque v0.2.x livre un protocole **de bout en bout, détecteurs
 > compris**, pas trois décodeurs sans signaux.
 
-### v0.2.0 — Meteora DLMM
-
-- [ ] Décodeur event_cpi + recette add-protocol (3 dispatch points, cf. `crates/README.md`)
-- [ ] Sémantique domaine **bins concentrés** (≠ x·y=k) : `PoolCurrentState`, prix spot, AMM math DLMM (`core::amm`)
-- [ ] VIEW cross-protocole au-dessus des CA — le déclencheur « au 2ᵉ protocole » des Reliquats v0.1 est atteint
-- [ ] Couverture détecteurs : flow imbalance + price deviation adaptés au modèle bins (VIEWs de lecture dédiées, façon migrations 023/024)
-- [ ] Front : fiche pool DLMM (les champs DAMM v2-spécifiques ne s'appliquent pas tels quels)
-
 ### v0.2.1 — Raydium CLMM/CPMM
 
 - [ ] Nouvel IDL, même modèle conceptuel CLMM — décodeur + domaine + détecteurs + front
@@ -621,25 +660,25 @@ qu'adossé à la watchlist.
 
 **Tier 1 — extension directe (même famille de données, même pattern event_cpi) → c'est le périmètre v0.2.x**
 
-| Protocole | Fit thèse | Coût intégration | Valeur signal | Poids marché |
-|---|---|---|---|---|
-| Meteora DLMM | 10/10 | Faible — même écosystème Meteora | 10/10 — bins concentrés, imbalance plus riche | 1,1 Md$ TVL |
-| Raydium CLMM/CPMM | 9/10 | Moyen — nouvel IDL, même modèle conceptuel | 9/10 — plus gros volume réel (147M$/j) | 2,3 Md$ TVL, #1 fees (~222M$/an) |
-| Orca Whirlpools | 9/10 | Moyen — CLMM bien documenté, SDK mature | 8/10 | Leader volume 24h (162M$) |
+| Protocole         | Fit thèse | Coût intégration                           | Valeur signal                                 | Poids marché                     |
+| ----------------- | --------- | ------------------------------------------ | --------------------------------------------- | -------------------------------- |
+| Meteora DLMM      | 10/10     | Faible — même écosystème Meteora           | 10/10 — bins concentrés, imbalance plus riche | 1,1 Md$ TVL                      |
+| Raydium CLMM/CPMM | 9/10      | Moyen — nouvel IDL, même modèle conceptuel | 9/10 — plus gros volume réel (147M$/j)        | 2,3 Md$ TVL, #1 fees (~222M$/an) |
+| Orca Whirlpools   | 9/10      | Moyen — CLMM bien documenté, SDK mature    | 8/10                                          | Leader volume 24h (162M$)        |
 
 **Tier 2 — couche transversale (prix, exécution) → pas dans v0.2.x, réévalué ensuite**
 
-| Protocole | Fit thèse | Coût intégration | Valeur signal | Poids marché |
-|---|---|---|---|---|
-| Jupiter (deepen) | 7/10 | Faible — Price V3 déjà intégré | 6/10 — pas un signal de pool, génère du revenu (cf. v0.4) | 70-85% du volume agrégé |
-| Pyth Network | 6/10 | Moyen — nouvel oracle, réduit la dépendance à Jupiter comme source de prix unique | 7/10 — fiabilité sub-seconde | Standard de facto Solana |
+| Protocole        | Fit thèse | Coût intégration                                                                  | Valeur signal                                             | Poids marché             |
+| ---------------- | --------- | --------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------ |
+| Jupiter (deepen) | 7/10      | Faible — Price V3 déjà intégré                                                    | 6/10 — pas un signal de pool, génère du revenu (cf. v0.4) | 70-85% du volume agrégé  |
+| Pyth Network     | 6/10      | Moyen — nouvel oracle, réduit la dépendance à Jupiter comme source de prix unique | 7/10 — fiabilité sub-seconde                              | Standard de facto Solana |
 
 **Tier 3 — adjacent, hors thèse (à surveiller comme bruit, pas à intégrer)**
 
-| Protocole | Fit thèse | Coût intégration | Valeur signal | Poids marché |
-|---|---|---|---|---|
-| Kamino Finance | 4/10 | Élevé — nouveau domaine (lending + vaults) | 5/10 — ses vaults wrappent des positions Orca/Raydium CLMM → source de faux positifs possibles sur un futur détecteur TVL drain | ~2-3 Md$ TVL, #1 Solana |
-| Drift Protocol | 2/10 | Élevé — perps, virtual AMM, modèle de données différent | 3/10 | 150-400M$ TVL |
+| Protocole      | Fit thèse | Coût intégration                                        | Valeur signal                                                                                                                   | Poids marché            |
+| -------------- | --------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| Kamino Finance | 4/10      | Élevé — nouveau domaine (lending + vaults)              | 5/10 — ses vaults wrappent des positions Orca/Raydium CLMM → source de faux positifs possibles sur un futur détecteur TVL drain | ~2-3 Md$ TVL, #1 Solana |
+| Drift Protocol | 2/10      | Élevé — perps, virtual AMM, modèle de données différent | 3/10                                                                                                                            | 150-400M$ TVL           |
 
 **Tier 4 — hors périmètre**
 
@@ -747,7 +786,9 @@ tracker spécifiquement les paires SOL/LST.
 > Idées brutes, non cadrées. À trier vers une version (ou à rejeter) — ne pas
 > implémenter directement depuis cette section.
 
-- tri pool par pair de token exemple "SOL USDC" pattern à définir
-- 
+_(vide — dernier tri : 21 juil. 2026)_
 
-_(vide — dernier tri : 9 juil. 2026)_
+> Tri du 21 juil. 2026 (7 items) :
+> - « paire de tokens », « minutes→mins », « icône Meteora + DAMM v2 », « type de fee » → `§ Reliquats v0.1 → Polish table /pools`
+> - « revoir en-têtes (taille/couleur) » → **déjà fait** (PR #68) ; « protocol → program » → **rejeté** (on garde « Protocol »)
+> - « finir events DAMM v2 » → `§ DAMM v2 — events restants` (séquencé avant le DLMM)
