@@ -273,6 +273,7 @@ fn decodes_initialize_pool_fixtures() {
         "damm_v2_initialize_pool.json",
         "damm_v2_initialize_pool_2.json",
         "damm_v2_initialize_pool_3.json",
+        "damm_v2_initialize_pool_4.json",
     ] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
@@ -365,6 +366,16 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
         ),
         (
             "damm_v2_initialize_pool_3.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::Constant,
+                has_dynamic_fee: true,
+            },
+        ),
+        // fixture_4: distinct real tx, but its fee sub-blob is byte-identical
+        // to fixture_3 (constant 100 bps + dynamic) — no new fee-config case,
+        // kept as another extraction/layout data point.
+        (
+            "damm_v2_initialize_pool_4.json",
             FeeConfig {
                 base_kind: BaseFeeKind::Constant,
                 has_dynamic_fee: true,
