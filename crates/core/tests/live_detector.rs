@@ -339,6 +339,42 @@ fn decodes_initialize_pool_fixtures() {
     }
 }
 
+/// The claim-protocol-fee fixture must decode cleanly to an
+/// `EvtClaimProtocolFee` — the operator withdrawing Meteora's accrued protocol
+/// fee share (the `emit_cpi!` variant, `ix_claim_protocol_fee`). Guards the
+/// wire layout on real data.
+#[test]
+fn decodes_claim_protocol_fee_fixture() {
+    let tx = load_fixture("damm_v2_claim_protocol_fee.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+    assert!(
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
+    );
+
+    let cpf = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::ClaimProtocolFee(e) => Some(e),
+            _ => None,
+        })
+        .expect("no ClaimProtocolFee event extracted");
+
+    assert_ne!(
+        cpf.pool,
+        Pubkey::default(),
+        "pool all-zero — wire layout drift"
+    );
+    // A real withdrawal transfers at least one side (this fixture: only B).
+    assert!(
+        cpf.token_a_amount > 0 || cpf.token_b_amount > 0,
+        "both claimed amounts zero — layout drift"
+    );
+}
+
 /// `decode_fee_config` must run cleanly on the **real** genesis blobs (not
 /// hand-built bytes), and classify each fixture's fee shape correctly. This
 /// ties the decoder to live data: a `PoolFeeParameters` layout drift would

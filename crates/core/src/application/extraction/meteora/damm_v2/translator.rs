@@ -14,20 +14,21 @@ use solana_signature::Signature;
 
 use crate::{
     domain::{
-        MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimRewardEvent,
-        MeteoraDammV2ClosePositionEvent, MeteoraDammV2CreatePositionEvent,
-        MeteoraDammV2InitializePoolEvent, MeteoraDammV2LiquidityEvent,
-        MeteoraDammV2LiquidityEventKind, MeteoraDammV2LockPositionEvent,
-        MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2SetPoolStatusEvent,
-        MeteoraDammV2SwapEvent, MeteoraDammV2UpdatePoolFeesEvent, TradeDirection,
+        MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimProtocolFeeEvent,
+        MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClosePositionEvent,
+        MeteoraDammV2CreatePositionEvent, MeteoraDammV2InitializePoolEvent,
+        MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
+        MeteoraDammV2LockPositionEvent, MeteoraDammV2PermanentLockPositionEvent,
+        MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SwapEvent, MeteoraDammV2UpdatePoolFeesEvent,
+        TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
-    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
-    EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition,
-    EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
+    DammV2WireEvent, EvtClaimPositionFee, EvtClaimProtocolFee, EvtClaimReward, EvtClosePosition,
+    EvtCreatePosition, EvtInitializePool, EvtLiquidityChange, EvtLockPosition,
+    EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
 };
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,23 @@ pub(super) fn translate_claim_reward(
         mint_reward: wire.mint_reward,
         reward_index: wire.reward_index,
         total_reward: wire.total_reward,
+    }
+}
+
+/// Translate an [`EvtClaimProtocolFee`] into a [`MeteoraDammV2ClaimProtocolFeeEvent`].
+///
+/// This translation is infallible — every field maps directly.
+pub(super) fn translate_claim_protocol_fee(
+    wire: &EvtClaimProtocolFee,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2ClaimProtocolFeeEvent {
+    MeteoraDammV2ClaimProtocolFeeEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        token_a_amount: wire.token_a_amount,
+        token_b_amount: wire.token_b_amount,
     }
 }
 
@@ -369,6 +387,9 @@ pub(super) fn translate_wire_event(
         DammV2WireEvent::ClaimReward(e) => {
             MeteoraDammV2Event::ClaimReward(translate_claim_reward(e, signature, timestamp))
         }
+        DammV2WireEvent::ClaimProtocolFee(e) => MeteoraDammV2Event::ClaimProtocolFee(
+            translate_claim_protocol_fee(e, signature, timestamp),
+        ),
         DammV2WireEvent::CreatePosition(e) => {
             MeteoraDammV2Event::CreatePosition(translate_create_position(e, signature, timestamp))
         }

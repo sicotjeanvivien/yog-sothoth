@@ -105,6 +105,7 @@ fn wire_event_name(wire: &events::DammV2WireEvent) -> &'static str {
         events::DammV2WireEvent::LiquidityChange(_) => "EvtLiquidityChange",
         events::DammV2WireEvent::ClaimPositionFee(_) => "EvtClaimPositionFee",
         events::DammV2WireEvent::ClaimReward(_) => "EvtClaimReward",
+        events::DammV2WireEvent::ClaimProtocolFee(_) => "EvtClaimProtocolFee",
         events::DammV2WireEvent::CreatePosition(_) => "EvtCreatePosition",
         events::DammV2WireEvent::ClosePosition(_) => "EvtClosePosition",
         events::DammV2WireEvent::LockPosition(_) => "EvtLockPosition",

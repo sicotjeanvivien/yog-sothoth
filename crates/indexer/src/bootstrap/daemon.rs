@@ -24,9 +24,10 @@ use tracing::info;
 use yog_core::application::extraction::ExtrationDispacher;
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
-    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
-    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
+    PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
+    PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
+    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgMeteoraDammV2UpdatePoolFeesEventRepository, PgNetworkStatusRepository,
@@ -194,6 +195,7 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         swap_event: Arc::new(PgMeteoraDammV2SwapEventRepository::new(pool())),
         liquidity_event: Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(pool())),
         claim_position_fee: Arc::new(PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool())),
+        claim_protocol_fee: Arc::new(PgMeteoraDammV2ClaimProtocolFeeEventRepository::new(pool())),
         claim_reward: Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(pool())),
         create_position: Arc::new(PgMeteoraDammV2CreatePositionEventRepository::new(pool())),
         close_position: Arc::new(PgMeteoraDammV2ClosePositionEventRepository::new(pool())),

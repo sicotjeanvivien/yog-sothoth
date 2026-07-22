@@ -24,6 +24,7 @@ pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
+    MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
     MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,

@@ -10,6 +10,7 @@ use std::time::Instant;
 use tracing::{error, warn};
 use yog_core::domain::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
+    MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
     MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
@@ -32,6 +33,7 @@ pub(crate) struct DammV2Repos {
     pub swap_event: Arc<dyn MeteoraDammV2SwapEventRepository>,
     pub liquidity_event: Arc<dyn MeteoraDammV2LiquidityEventRepository>,
     pub claim_position_fee: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
+    pub claim_protocol_fee: Arc<dyn MeteoraDammV2ClaimProtocolFeeEventRepository>,
     pub claim_reward: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
     pub create_position: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
     pub close_position: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
@@ -69,6 +71,7 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::Swap(e) => self.persist_swap(e).await,
             MeteoraDammV2Event::Liquidity(e) => self.persist_liquidity(e).await,
             MeteoraDammV2Event::ClaimPositionFee(e) => self.persist_claim_position_fee(e).await,
+            MeteoraDammV2Event::ClaimProtocolFee(e) => self.persist_claim_protocol_fee(e).await,
             MeteoraDammV2Event::ClaimReward(e) => self.persist_claim_reward(e).await,
             MeteoraDammV2Event::CreatePosition(e) => self.persist_create_position(e).await,
             MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
@@ -153,6 +156,20 @@ impl MeteoraDammV2EventPersistor {
             .await;
         self.repos
             .claim_position_fee
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    async fn persist_claim_protocol_fee(
+        &self,
+        event: &MeteoraDammV2ClaimProtocolFeeEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .claim_protocol_fee
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

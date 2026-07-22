@@ -35,11 +35,12 @@ use crate::{
 };
 
 use super::events::{
-    DammV2WireEvent, EvtClaimPositionFee, EvtClaimReward, EvtClosePosition, EvtCreatePosition,
-    EvtInitializePool, EvtLiquidityChange, EvtLockPosition, EvtPermanentLockPosition,
-    EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees, discriminator_claim_position_fee,
-    discriminator_claim_reward, discriminator_close_position, discriminator_create_position,
-    discriminator_initialize_pool, discriminator_liquidity_change, discriminator_lock_position,
+    DammV2WireEvent, EvtClaimPositionFee, EvtClaimProtocolFee, EvtClaimReward, EvtClosePosition,
+    EvtCreatePosition, EvtInitializePool, EvtLiquidityChange, EvtLockPosition,
+    EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
+    discriminator_claim_position_fee, discriminator_claim_protocol_fee, discriminator_claim_reward,
+    discriminator_close_position, discriminator_create_position, discriminator_initialize_pool,
+    discriminator_liquidity_change, discriminator_lock_position,
     discriminator_permanent_lock_position, discriminator_set_pool_status, discriminator_swap2,
     discriminator_update_pool_fees,
 };
@@ -133,6 +134,7 @@ pub fn extract_wire_events(
         liquidity: discriminator_liquidity_change(),
         claim_pos_fee: discriminator_claim_position_fee(),
         claim_reward: discriminator_claim_reward(),
+        claim_protocol_fee: discriminator_claim_protocol_fee(),
         create_position: discriminator_create_position(),
         close_position: discriminator_close_position(),
         lock_position: discriminator_lock_position(),
@@ -182,6 +184,7 @@ struct KnownDiscriminators {
     liquidity: [u8; DISCRIMINATOR_LEN],
     claim_pos_fee: [u8; DISCRIMINATOR_LEN],
     claim_reward: [u8; DISCRIMINATOR_LEN],
+    claim_protocol_fee: [u8; DISCRIMINATOR_LEN],
     create_position: [u8; DISCRIMINATOR_LEN],
     close_position: [u8; DISCRIMINATOR_LEN],
     lock_position: [u8; DISCRIMINATOR_LEN],
@@ -228,6 +231,13 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
             .map(|e| Dispatch::Recognized(DammV2WireEvent::ClaimReward(e)))
             .unwrap_or_else(|reason| Dispatch::BorshFailed {
                 event_name: "EvtClaimReward",
+                reason,
+            })
+    } else if disc == &known.claim_protocol_fee {
+        deserialize::<EvtClaimProtocolFee>(body, "EvtClaimProtocolFee")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::ClaimProtocolFee(e)))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtClaimProtocolFee",
                 reason,
             })
     } else if disc == &known.create_position {

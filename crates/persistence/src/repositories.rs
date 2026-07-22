@@ -21,10 +21,10 @@ pub use event_freshness::PgEventFreshnessRepository;
 pub use global_analytics::PgGlobalAnalyticsRepository;
 pub use liquidity_flow::PgLiquidityFlowRepository;
 pub use meteora::{
-    PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
-    PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
-    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2LiquidityEventRepository,
-    PgMeteoraDammV2LockPositionEventRepository,
+    PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,
+    PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
+    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgMeteoraDammV2UpdatePoolFeesEventRepository,
