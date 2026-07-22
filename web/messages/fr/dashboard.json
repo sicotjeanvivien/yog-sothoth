@@ -97,8 +97,8 @@
         "validation": "Le service en amont a retourné une réponse inattendue."
       },
       "search": {
-        "placeholder": "Rechercher par adresse ou token…",
-        "ariaLabel": "Rechercher des pools",
+        "placeholder": "Adresse, token, ou paire (SOL/USDC)…",
+        "ariaLabel": "Rechercher des pools par adresse, token ou paire",
         "clear": "Effacer la recherche"
       },
       "feeFilter": {

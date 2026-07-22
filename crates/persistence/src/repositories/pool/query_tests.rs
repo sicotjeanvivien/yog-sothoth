@@ -238,3 +238,95 @@ fn first_and_last_seen_are_symmetric() {
         }
     }
 }
+
+// ── Search filter: single term vs token pair ──────────────────
+//
+// The built SQL is inspected structurally (bind *values* are `$n`
+// placeholders, not literals, so only the shape is asserted). The
+// actual filtering behaviour is covered by the DB-backed integration
+// test in `pool/tests`.
+
+/// Build the query for a given search term and return its SQL text.
+fn sql_for_search(search: Option<&str>) -> String {
+    build(PaginatedPoolsQuery {
+        mode: QueryMode::Forward,
+        sort: PoolSort::LastSeenDesc,
+        cursor_sort_value: None,
+        cursor_pool_address: None,
+        search: search.map(str::to_owned),
+        fee_bps: None,
+        fetch_limit: 50,
+    })
+    .into_sql()
+}
+
+/// The single-token form matches the address or either token, via one
+/// `EXISTS` over both mints — and never touches the pair branch.
+#[test]
+fn single_term_uses_address_or_either_token() {
+    let sql = sql_for_search(Some("SOL"));
+    assert!(
+        sql.contains("pool_address = "),
+        "single term should keep the address match: {sql}"
+    );
+    assert!(
+        sql.contains("tm.mint IN (pools.token_a_mint, pools.token_b_mint)"),
+        "single term should match either token in one EXISTS: {sql}"
+    );
+}
+
+/// A `X/Y` term becomes a pair filter: one token per side, on the two
+/// distinct mint columns, both orderings accepted — and it drops the
+/// address / either-token single-term shape entirely.
+#[test]
+fn pair_term_requires_one_token_per_side() {
+    let sql = sql_for_search(Some("SOL/USDC"));
+
+    assert!(
+        sql.contains("tm.mint = pools.token_a_mint"),
+        "pair should read token_a directly: {sql}"
+    );
+    assert!(
+        sql.contains("tm.mint = pools.token_b_mint"),
+        "pair should read token_b directly: {sql}"
+    );
+    // Four EXISTS: (a=X AND b=Y) OR (a=Y AND b=X).
+    assert_eq!(
+        sql.matches("EXISTS").count(),
+        4,
+        "pair should expand to four EXISTS predicates: {sql}"
+    );
+    assert!(
+        sql.contains(") OR ("),
+        "pair should accept either side ordering: {sql}"
+    );
+    assert!(
+        !sql.contains("tm.mint IN ("),
+        "pair must not fall back to the single-term either-token form: {sql}"
+    );
+}
+
+/// A blank side ("SOL/") collapses to the single-term search on the
+/// non-empty side, not a pair.
+#[test]
+fn pair_with_blank_side_falls_back_to_single() {
+    let sql = sql_for_search(Some("SOL/"));
+    assert!(
+        sql.contains("tm.mint IN (pools.token_a_mint, pools.token_b_mint)"),
+        "blank side should behave as a single term: {sql}"
+    );
+    assert!(
+        !sql.contains("tm.mint = pools.token_a_mint"),
+        "blank side must not build a pair filter: {sql}"
+    );
+}
+
+/// No search term → no token filtering at all.
+#[test]
+fn no_search_term_adds_no_token_filter() {
+    let sql = sql_for_search(None);
+    assert!(
+        !sql.contains("token_metadata"),
+        "absent search must not touch token_metadata: {sql}"
+    );
+}

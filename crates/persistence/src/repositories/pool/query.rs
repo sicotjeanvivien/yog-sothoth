@@ -103,6 +103,50 @@ fn keyset_operators(sort: PoolSort, mode: QueryMode) -> (&'static str, &'static 
     )
 }
 
+/// How the free-text search term was interpreted.
+///
+/// A `/` splits the term into a token *pair* ("SOL/USDC"); anything
+/// else (no slash, or one side blank once trimmed) is a single term.
+enum ParsedSearch {
+    /// Both sides non-empty: require one token matching each side.
+    Pair(String, String),
+    /// A lone free-text term: address or either token symbol/name.
+    Single(String),
+}
+
+/// Split the raw search term on its first `/`. Each side is trimmed;
+/// a blank side collapses the request back to a single-term search on
+/// the other side, so "SOL/" behaves like "SOL".
+fn parse_search(raw: &str) -> ParsedSearch {
+    match raw.split_once('/') {
+        Some((left, right)) => {
+            let (left, right) = (left.trim(), right.trim());
+            match (left.is_empty(), right.is_empty()) {
+                (false, false) => ParsedSearch::Pair(left.to_owned(), right.to_owned()),
+                (false, true) => ParsedSearch::Single(left.to_owned()),
+                (true, false) => ParsedSearch::Single(right.to_owned()),
+                (true, true) => ParsedSearch::Single(raw.trim().to_owned()),
+            }
+        }
+        None => ParsedSearch::Single(raw.trim().to_owned()),
+    }
+}
+
+/// Push an `EXISTS` predicate: the token at the pool's `mint_col`
+/// column has a symbol or name matching `term` (case-insensitive
+/// substring). `mint_col` is a caller-supplied static column name
+/// (never user input), so it is interpolated directly; `term` is
+/// bound.
+fn push_side_match(qb: &mut QueryBuilder<'static, Postgres>, mint_col: &str, term: &str) {
+    qb.push("EXISTS (SELECT 1 FROM token_metadata tm WHERE tm.mint = pools.");
+    qb.push(mint_col);
+    qb.push(" AND (tm.symbol ILIKE ('%' || ");
+    qb.push_bind(term.to_owned());
+    qb.push(" || '%') OR tm.name ILIKE ('%' || ");
+    qb.push_bind(term.to_owned());
+    qb.push(" || '%')))");
+}
+
 /// Build the full paginated query.
 pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
     let sort_col = column_sql(q.sort.column());
@@ -131,20 +175,43 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
     }
 
     // ── Search filter ────────────────────────────────────────────
-    if let Some(term) = q.search {
-        qb.push(" AND (pool_address = ");
-        qb.push_bind(term.clone());
-        qb.push(
-            " OR EXISTS (SELECT 1 FROM token_metadata tm \
-             WHERE tm.mint IN (pools.token_a_mint, pools.token_b_mint) \
-             AND (tm.symbol ILIKE ",
-        );
-        // Wrap the term in % wildcards via SQL concat to keep it bound.
-        qb.push("('%' || ");
-        qb.push_bind(term.clone());
-        qb.push(" || '%') OR tm.name ILIKE ('%' || ");
-        qb.push_bind(term);
-        qb.push(" || '%'))))");
+    // A term containing `/` ("SOL/USDC") is a *pair* filter: the pool
+    // must hold one token matching each side, on the two distinct
+    // sides. Otherwise the term is a single free-text match on the
+    // address or either token's symbol/name. Parsing the `/` here (not
+    // upstream) keeps every search-semantics decision in one place —
+    // this module already owns the address-vs-symbol interpretation.
+    match q.search.as_deref().map(parse_search) {
+        Some(ParsedSearch::Pair(left, right)) => {
+            // (a matches X AND b matches Y) OR (a matches Y AND b matches X).
+            // Reading each side off a distinct mint column enforces that
+            // the two matched tokens are different by construction.
+            qb.push(" AND ((");
+            push_side_match(&mut qb, "token_a_mint", &left);
+            qb.push(" AND ");
+            push_side_match(&mut qb, "token_b_mint", &right);
+            qb.push(") OR (");
+            push_side_match(&mut qb, "token_a_mint", &right);
+            qb.push(" AND ");
+            push_side_match(&mut qb, "token_b_mint", &left);
+            qb.push("))");
+        }
+        Some(ParsedSearch::Single(term)) => {
+            qb.push(" AND (pool_address = ");
+            qb.push_bind(term.clone());
+            qb.push(
+                " OR EXISTS (SELECT 1 FROM token_metadata tm \
+                 WHERE tm.mint IN (pools.token_a_mint, pools.token_b_mint) \
+                 AND (tm.symbol ILIKE ",
+            );
+            // Wrap the term in % wildcards via SQL concat to keep it bound.
+            qb.push("('%' || ");
+            qb.push_bind(term.clone());
+            qb.push(" || '%') OR tm.name ILIKE ('%' || ");
+            qb.push_bind(term);
+            qb.push(" || '%'))))");
+        }
+        None => {}
     }
 
     // ── Fee-tier filter ──────────────────────────────────────────
