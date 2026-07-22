@@ -24,3 +24,6 @@ Thumbs.db
 *.swp
 
 /log
+
+# Project workflow / backlog — lives in its own private repo
+.project/
