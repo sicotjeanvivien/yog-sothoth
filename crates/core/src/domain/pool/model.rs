@@ -53,6 +53,18 @@ pub struct Pool {
     /// carries a referral account). `None` until resolved.
     pub referral_fee_percent: Option<u8>,
 
+    /// How the base fee behaves over time, decoded from the genesis fee config
+    /// (`InitializePool`). An opaque per-protocol string (DAMM v2's values come
+    /// from `amm::damm_v2::BaseFeeKind::as_str`: `constant`, `scheduler_linear`,
+    /// `scheduler_exponential`, `rate_limiter`). `None` until that event is seen
+    /// or if the fee blob failed to decode. Kept as a string here so this
+    /// cross-protocol type stays free of any protocol-specific enum.
+    pub base_fee_kind: Option<String>,
+
+    /// Whether a volatility-based dynamic fee sits on top of the base fee,
+    /// decoded from the same genesis config. `None` until decoded.
+    pub has_dynamic_fee: Option<bool>,
+
     /// When Yog-Sothoth first observed this pool in the transaction stream.
     pub first_seen_at: DateTime<Utc>,
 

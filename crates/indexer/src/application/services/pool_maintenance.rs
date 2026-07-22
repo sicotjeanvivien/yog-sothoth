@@ -51,6 +51,8 @@ impl PoolMaintenance {
             protocol_fee_percent: None,
             partner_fee_percent: None,
             referral_fee_percent: None,
+            base_fee_kind: None,
+            has_dynamic_fee: None,
             first_seen_at: now,
             last_seen_at: now,
         };

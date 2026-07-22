@@ -152,10 +152,18 @@
         "poolAddress": "Adresse de la pool",
         "protocol": "Protocole",
         "feeTier": "Frais",
+        "feeType": "Type de frais",
         "feeSplit": "Répartition des frais",
         "feeSplitProtocol": "Protocole",
         "feeSplitPartner": "Partenaire",
         "feeSplitReferral": "Référent",
+        "feeKind": {
+          "constant": "Fixe",
+          "schedulerLinear": "Scheduler (linéaire)",
+          "schedulerExponential": "Scheduler (exponentiel)",
+          "rateLimiter": "Rate-limiter",
+          "dynamic": "Dynamique"
+        },
         "analyticsTitle": "Analytique sur la pool",
         "tvl": "TVL",
         "volume24h": "Volume (24h)",
@@ -172,6 +180,7 @@
         "copyTokenMint": "Copier le mint du token",
         "help": {
           "feeTier": "Frais de trading de base de la pool (tier de genèse), en points de base — 100 bps = 1 %.",
+          "feeType": "Comment le frais de base évolue : fixe, scheduler anti-sniper (décroissance linéaire/exponentielle) ou rate-limiter — décodé à la genèse. « Dynamique » signale en plus un frais variable selon la volatilité.",
           "feeSplit": "Répartition configurée des frais entre Meteora, un éventuel partenaire et le parrainage, lue depuis le compte on-chain de la pool.",
           "effectiveFee": "Taux réellement constaté : frais encaissés / volume sur 24 h, en points de base. Peut différer du tier de base.",
           "protocolCut": "Part des frais 24 h revenant à Meteora.",

@@ -155,6 +155,7 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
         "SELECT pool_address, protocol, token_a_mint, token_b_mint, \
          fee_bps, protocol_fee_percent, partner_fee_percent, referral_fee_percent, \
+         base_fee_kind, has_dynamic_fee, \
          first_seen_at, last_seen_at FROM pools WHERE 1=1",
     );
 

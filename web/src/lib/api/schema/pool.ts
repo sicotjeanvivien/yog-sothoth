@@ -95,6 +95,13 @@ export const PoolSchema = z.object({
   protocolFeePercent: FeePercent.nullable(),
   partnerFeePercent: FeePercent.nullable(),
   referralFeePercent: FeePercent.nullable(),
+  // How the base fee behaves over time — an opaque per-protocol string
+  // ("constant" | "scheduler_linear" | "scheduler_exponential" |
+  // "rate_limiter"), and whether a volatility dynamic fee sits on top. Both
+  // decoded from the genesis fee config; null until InitializePool is indexed
+  // (or if the fee blob failed to decode).
+  baseFeeKind: z.string().nullable(),
+  hasDynamicFee: z.boolean().nullable(),
   tvlUsd: BigDecimal.nullable(),
   volume24hUsd: BigDecimal.nullable(),
   fees24hUsd: BigDecimal.nullable(),
