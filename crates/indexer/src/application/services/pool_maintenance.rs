@@ -92,6 +92,40 @@ impl PoolMaintenance {
         }
     }
 
+    /// Record a pool's decoded fee *shape* (base-fee kind + dynamic-fee flag),
+    /// decoded from its genesis fee config alongside the fee tier. Best-effort:
+    /// a failure here is logged but never aborts the caller — the pool simply
+    /// keeps NULL fee-shape columns.
+    pub(crate) async fn set_fee_config(
+        &self,
+        protocol: Protocol,
+        pool_address: &solana_pubkey::Pubkey,
+        base_fee_kind: &str,
+        has_dynamic_fee: bool,
+    ) {
+        let start = Instant::now();
+        match self
+            .pool_repo
+            .set_fee_config(pool_address, base_fee_kind, has_dynamic_fee)
+            .await
+        {
+            Ok(()) => {
+                EventPersistorMetrics::record_persist_duration(
+                    &protocol,
+                    "pool_set_fee_config",
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(
+                    protocol = %protocol.as_str(),
+                    error = %err,
+                    "pool set_fee_config failed"
+                );
+            }
+        }
+    }
+
     /// Refresh `last_seen_at` for a pool. No-op if the pool is unknown
     /// (will be created when a Swap or Liquidity event arrives later).
     /// Used by ClaimPositionFee and ClaimReward events of any protocol.

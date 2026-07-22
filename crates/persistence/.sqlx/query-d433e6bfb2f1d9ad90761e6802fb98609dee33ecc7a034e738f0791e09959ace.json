@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pools SET base_fee_kind = $2, has_dynamic_fee = $3 WHERE pool_address = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d433e6bfb2f1d9ad90761e6802fb98609dee33ecc7a034e738f0791e09959ace"
+}

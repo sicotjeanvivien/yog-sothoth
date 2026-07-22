@@ -93,6 +93,24 @@ impl PoolRepository for PgPoolRepository {
         .map_err(map_sqlx_error)?;
         Ok(())
     }
+
+    async fn set_fee_config(
+        &self,
+        pool_address: &Pubkey,
+        base_fee_kind: &str,
+        has_dynamic_fee: bool,
+    ) -> RepositoryResult<()> {
+        sqlx::query!(
+            r#"UPDATE pools SET base_fee_kind = $2, has_dynamic_fee = $3 WHERE pool_address = $1"#,
+            pool_address.to_string(),
+            base_fee_kind,
+            has_dynamic_fee,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
 }
 
 #[async_trait]
