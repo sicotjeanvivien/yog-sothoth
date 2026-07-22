@@ -275,6 +275,7 @@ fn decodes_initialize_pool_fixtures() {
         "damm_v2_initialize_pool_3.json",
         "damm_v2_initialize_pool_4.json",
         "damm_v2_initialize_pool_5.json",
+        "damm_v2_initialize_pool_6.json",
     ] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
@@ -347,9 +348,9 @@ fn decodes_initialize_pool_fixtures() {
 fn decode_fee_config_matches_real_genesis_fixtures() {
     use yog_core::amm::damm_v2::{BaseFeeKind, FeeConfig, decode_fee_config};
 
-    // (fixture, expected) — fixture_2 (25 bps) and fixture_3 (100 bps) are
-    // constant-fee pools; fixture_1 an anti-sniper linear fee scheduler (144
-    // periods). All three carry a dynamic fee.
+    // (fixture, expected) — real-data coverage of ALL FOUR base_fee_kind
+    // variants: Constant (2/3/4), SchedulerLinear (1), SchedulerExponential
+    // (5), RateLimiter (6); and both has_dynamic_fee values (false only on 5).
     let cases = [
         (
             "damm_v2_initialize_pool.json",
@@ -391,6 +392,17 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
             FeeConfig {
                 base_kind: BaseFeeKind::SchedulerExponential,
                 has_dynamic_fee: false,
+            },
+        ),
+        // fixture_6: the first real-data rate limiter (mode 2, cliff 4%). Its
+        // bytes 8..26 are reinterpreted rate-limiter params — decode_fee_config
+        // must classify it as RateLimiter WITHOUT reading them as scheduler
+        // fields (and decode_base_fee_bps still reads the shared leading u64).
+        (
+            "damm_v2_initialize_pool_6.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::RateLimiter,
+                has_dynamic_fee: true,
             },
         ),
     ];
