@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_claim_protocol_fee_events (\n                pool_address, signature,\n                token_a_amount, token_b_amount,\n                timestamp\n            )\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (signature, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6f90064965565f4ceb4b8ad06a20b2255ae7ba689570f853dab840cc2a527056"
+}

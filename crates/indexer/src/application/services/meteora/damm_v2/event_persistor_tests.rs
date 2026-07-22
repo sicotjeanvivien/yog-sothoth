@@ -71,6 +71,12 @@ insert_only_mock!(
     MeteoraDammV2UpdatePoolFeesEvent,
     "insert:update_pool_fees"
 );
+insert_only_mock!(
+    MockClaimProtocolFee,
+    MeteoraDammV2ClaimProtocolFeeEventRepository,
+    MeteoraDammV2ClaimProtocolFeeEvent,
+    "insert:claim_protocol_fee"
+);
 
 // Ring-1 repos: record `insert`; their read methods are never hit by
 // `persist()`, so they stub out.
@@ -153,6 +159,7 @@ fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
         swap_event: Arc::new(MockSwap(calls.clone())),
         liquidity_event: Arc::new(MockLiquidity(calls.clone())),
         claim_position_fee: Arc::new(MockClaimFee(calls.clone())),
+        claim_protocol_fee: Arc::new(MockClaimProtocolFee(calls.clone())),
         claim_reward: Arc::new(MockClaimReward(calls.clone())),
         create_position: Arc::new(MockCreate(calls.clone())),
         close_position: Arc::new(MockClose(calls.clone())),
@@ -263,6 +270,21 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         )
         .await,
         ["pool:touch", "insert:claim_reward"]
+    );
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::ClaimProtocolFee(MeteoraDammV2ClaimProtocolFeeEvent {
+                pool_address: pk(1),
+                signature: sg(),
+                timestamp: ts(),
+                token_a_amount: 0,
+                token_b_amount: 1_421_627_556,
+            })
+        )
+        .await,
+        ["pool:touch", "insert:claim_protocol_fee"]
     );
 
     // create / close: touch + insert.
