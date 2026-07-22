@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pool_address, protocol, token_a_mint, token_b_mint,\n                   fee_bps AS \"fee_bps?: rust_decimal::Decimal\",\n                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,\n                   first_seen_at, last_seen_at\n            FROM pools\n            WHERE pool_address = $1\n            ",
+  "query": "\n            SELECT pool_address, protocol, token_a_mint, token_b_mint,\n                   fee_bps AS \"fee_bps?: rust_decimal::Decimal\",\n                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,\n                   base_fee_kind, has_dynamic_fee,\n                   first_seen_at, last_seen_at\n            FROM pools\n            WHERE pool_address = ANY($1::TEXT[])\n            ",
   "describe": {
     "columns": [
       {
@@ -45,18 +45,28 @@
       },
       {
         "ordinal": 8,
+        "name": "base_fee_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "has_dynamic_fee",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
         "name": "first_seen_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "last_seen_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "TextArray"
       ]
     },
     "nullable": [
@@ -68,9 +78,11 @@
       true,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "40c5102af655f19b1f159465d8a0f2b1368a46cb0c063e4ba00707b7f35f0b23"
+  "hash": "692cfed3a3c47b520363ff8374620f6586613303e195792800043228ea43edbe"
 }

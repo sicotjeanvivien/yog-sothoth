@@ -134,6 +134,143 @@ fn decode_base_fee_bps_too_short_errors() {
     ));
 }
 
+// ── decode_fee_config ───────────────────────────────────────────────────
+
+/// Full 63-byte `pool_fees_raw` from `damm_v2_initialize_pool_2.json`: a
+/// constant-fee pool (mode 0, number_of_period 0) carrying a dynamic fee.
+const REAL_CONSTANT_BLOB: [u8; 63] = [
+    160, 37, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 39, 0,
+    1, 1, 0, 203, 16, 199, 186, 184, 141, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 120, 0, 136, 19, 96,
+    164, 220, 0, 239, 0, 0, 0,
+];
+
+/// Full 63-byte `pool_fees_raw` from `damm_v2_initialize_pool.json`: an
+/// anti-sniper linear fee scheduler (mode 0, number_of_period 144) with a
+/// dynamic fee.
+const REAL_SCHEDULER_BLOB: [u8; 63] = [
+    0, 101, 205, 29, 0, 0, 0, 0, 144, 0, 88, 2, 0, 0, 0, 0, 0, 0, 196, 159, 46, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 1, 1, 0, 203, 16, 199, 186, 184, 141, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 120, 0,
+    136, 19, 96, 164, 220, 0, 107, 22, 0, 0,
+];
+
+/// Build a minimal synthetic `PoolFeeParameters` blob for the branches with no
+/// captured fixture (rate limiter, exponential scheduler, dynamic-fee off).
+/// Only the bytes `decode_fee_config` reads are set; length is exactly enough
+/// to reach the dynamic-fee tag.
+fn synth_fee_blob(
+    mode: u8,
+    number_of_period: u16,
+    dynamic_tag: u8,
+) -> [u8; DYNAMIC_FEE_TAG_OFFSET + 1] {
+    let mut b = [0u8; DYNAMIC_FEE_TAG_OFFSET + 1];
+    b[NUMBER_OF_PERIOD_OFFSET..NUMBER_OF_PERIOD_OFFSET + 2]
+        .copy_from_slice(&number_of_period.to_le_bytes());
+    b[BASE_FEE_MODE_OFFSET] = mode;
+    b[DYNAMIC_FEE_TAG_OFFSET] = dynamic_tag;
+    b
+}
+
+/// Real constant-fee pool: mode 0 + zero periods → `Constant`, dynamic on.
+#[test]
+fn decode_fee_config_real_constant_pool() {
+    assert_eq!(
+        decode_fee_config(&REAL_CONSTANT_BLOB).unwrap(),
+        FeeConfig {
+            base_kind: BaseFeeKind::Constant,
+            has_dynamic_fee: true,
+        }
+    );
+}
+
+/// Real scheduler pool: mode 0 + 144 periods → `SchedulerLinear`, dynamic on.
+/// The crux — same mode byte as the constant pool, told apart only by the
+/// period count.
+#[test]
+fn decode_fee_config_real_scheduler_pool() {
+    assert_eq!(
+        decode_fee_config(&REAL_SCHEDULER_BLOB).unwrap(),
+        FeeConfig {
+            base_kind: BaseFeeKind::SchedulerLinear,
+            has_dynamic_fee: true,
+        }
+    );
+}
+
+/// A scheduler *mode* with zero periods is a constant fee, not a scheduler.
+#[test]
+fn decode_fee_config_scheduler_mode_zero_periods_is_constant() {
+    let blob = synth_fee_blob(0, 0, 0);
+    assert_eq!(
+        decode_fee_config(&blob).unwrap().base_kind,
+        BaseFeeKind::Constant
+    );
+}
+
+/// Mode 1 with periods → exponential scheduler.
+#[test]
+fn decode_fee_config_exponential_scheduler() {
+    let blob = synth_fee_blob(1, 10, 0);
+    assert_eq!(
+        decode_fee_config(&blob).unwrap().base_kind,
+        BaseFeeKind::SchedulerExponential
+    );
+}
+
+/// Mode 2 → rate limiter, regardless of the bytes that mean "periods" for a
+/// scheduler (they are reinterpreted and must not be consulted here).
+#[test]
+fn decode_fee_config_rate_limiter() {
+    let blob = synth_fee_blob(2, 999, 0);
+    assert_eq!(
+        decode_fee_config(&blob).unwrap().base_kind,
+        BaseFeeKind::RateLimiter
+    );
+}
+
+/// The dynamic-fee flag reads the `Option` tag: 0 → absent.
+#[test]
+fn decode_fee_config_dynamic_fee_absent() {
+    let blob = synth_fee_blob(0, 0, 0);
+    assert!(!decode_fee_config(&blob).unwrap().has_dynamic_fee);
+}
+
+/// … 1 → present.
+#[test]
+fn decode_fee_config_dynamic_fee_present() {
+    let blob = synth_fee_blob(0, 0, 1);
+    assert!(decode_fee_config(&blob).unwrap().has_dynamic_fee);
+}
+
+/// A blob too short to hold the dynamic-fee tag is rejected fail-loud.
+#[test]
+fn decode_fee_config_too_short_errors() {
+    let short = [0u8; DYNAMIC_FEE_TAG_OFFSET]; // one byte shy of the tag
+    assert!(matches!(
+        decode_fee_config(&short),
+        Err(CoreError::FeeDecode { .. })
+    ));
+}
+
+/// An unknown base-fee mode is rejected, never guessed.
+#[test]
+fn decode_fee_config_unknown_mode_errors() {
+    let blob = synth_fee_blob(7, 0, 0);
+    assert!(matches!(
+        decode_fee_config(&blob),
+        Err(CoreError::FeeDecode { .. })
+    ));
+}
+
+/// A malformed borsh `Option` tag (neither 0 nor 1) is rejected.
+#[test]
+fn decode_fee_config_bad_dynamic_tag_errors() {
+    let blob = synth_fee_blob(0, 0, 2);
+    assert!(matches!(
+        decode_fee_config(&blob),
+        Err(CoreError::FeeDecode { .. })
+    ));
+}
+
 // ── decode_updated_base_fee_bps ─────────────────────────────────────────
 
 /// Real `params_raw` bytes from `damm_v2_update_pool_fees.json`:

@@ -59,6 +59,14 @@ pub(crate) struct PoolResponse {
     pub(crate) protocol_fee_percent: Option<u8>,
     pub(crate) partner_fee_percent: Option<u8>,
     pub(crate) referral_fee_percent: Option<u8>,
+    /// How the base fee behaves over time — an opaque per-protocol string
+    /// (`constant`, `scheduler_linear`, `scheduler_exponential`,
+    /// `rate_limiter`). `None` until the pool's `InitializePool` event is
+    /// indexed (or if the fee blob failed to decode).
+    pub(crate) base_fee_kind: Option<String>,
+    /// Whether a volatility-based dynamic fee sits on top of the base fee.
+    /// `None` until decoded.
+    pub(crate) has_dynamic_fee: Option<bool>,
     pub(crate) tvl_usd: Option<Decimal>,
     pub(crate) volume_24h_usd: Option<Decimal>,
     /// Realized trading fee over the last 24h (USD), and its split: Meteora's
@@ -112,6 +120,8 @@ impl PoolResponse {
             protocol_fee_percent: pool.protocol_fee_percent,
             partner_fee_percent: pool.partner_fee_percent,
             referral_fee_percent: pool.referral_fee_percent,
+            base_fee_kind: pool.base_fee_kind,
+            has_dynamic_fee: pool.has_dynamic_fee,
             tvl_usd: analytics.tvl_usd,
             volume_24h_usd: analytics.volume_24h_usd,
             fees_24h_usd: analytics.fees_24h_usd,

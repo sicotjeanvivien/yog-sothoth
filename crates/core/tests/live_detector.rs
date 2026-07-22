@@ -272,6 +272,10 @@ fn decodes_initialize_pool_fixtures() {
     for fixture in [
         "damm_v2_initialize_pool.json",
         "damm_v2_initialize_pool_2.json",
+        "damm_v2_initialize_pool_3.json",
+        "damm_v2_initialize_pool_4.json",
+        "damm_v2_initialize_pool_5.json",
+        "damm_v2_initialize_pool_6.json",
     ] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
@@ -332,6 +336,94 @@ fn decodes_initialize_pool_fixtures() {
         // `initialize_pool_events` table stores this native order as-is; the
         // pool *registry* upsert re-sorts to the canonical convention shared
         // with the swap/liquidity tables (see persist_initialize_pool).
+    }
+}
+
+/// `decode_fee_config` must run cleanly on the **real** genesis blobs (not
+/// hand-built bytes), and classify each fixture's fee shape correctly. This
+/// ties the decoder to live data: a `PoolFeeParameters` layout drift would
+/// break the classification here even if the standalone unit tests (which use
+/// captured byte arrays) stayed green.
+#[test]
+fn decode_fee_config_matches_real_genesis_fixtures() {
+    use yog_core::amm::damm_v2::{BaseFeeKind, FeeConfig, decode_fee_config};
+
+    // (fixture, expected) — real-data coverage of ALL FOUR base_fee_kind
+    // variants: Constant (2/3/4), SchedulerLinear (1), SchedulerExponential
+    // (5), RateLimiter (6); and both has_dynamic_fee values (false only on 5).
+    let cases = [
+        (
+            "damm_v2_initialize_pool.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::SchedulerLinear,
+                has_dynamic_fee: true,
+            },
+        ),
+        (
+            "damm_v2_initialize_pool_2.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::Constant,
+                has_dynamic_fee: true,
+            },
+        ),
+        (
+            "damm_v2_initialize_pool_3.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::Constant,
+                has_dynamic_fee: true,
+            },
+        ),
+        // fixture_4: distinct real tx, but its fee sub-blob is byte-identical
+        // to fixture_3 (constant 100 bps + dynamic) — no new fee-config case,
+        // kept as another extraction/layout data point.
+        (
+            "damm_v2_initialize_pool_4.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::Constant,
+                has_dynamic_fee: true,
+            },
+        ),
+        // fixture_5: the first real-data validation of two branches previously
+        // covered only synthetically — the exponential scheduler AND a pool
+        // with NO dynamic fee (Option tag 0, so the blob ends at 31 bytes, no
+        // trailing DynamicFeeParameters — exercising the length boundary too).
+        (
+            "damm_v2_initialize_pool_5.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::SchedulerExponential,
+                has_dynamic_fee: false,
+            },
+        ),
+        // fixture_6: the first real-data rate limiter (mode 2, cliff 4%). Its
+        // bytes 8..26 are reinterpreted rate-limiter params — decode_fee_config
+        // must classify it as RateLimiter WITHOUT reading them as scheduler
+        // fields (and decode_base_fee_bps still reads the shared leading u64).
+        (
+            "damm_v2_initialize_pool_6.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::RateLimiter,
+                has_dynamic_fee: true,
+            },
+        ),
+    ];
+
+    for (fixture, expected) in cases {
+        let tx = load_fixture(fixture);
+        let init = extract_wire_events(&tx, CP_AMM_PROGRAM_ID)
+            .events
+            .into_iter()
+            .find_map(|e| match e {
+                DammV2WireEvent::InitializePool(e) => Some(e),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{fixture}: no InitializePool event"));
+
+        let raw = borsh::to_vec(&init.pool_fees).expect("borsh serialize is infallible");
+        assert_eq!(
+            decode_fee_config(&raw).unwrap(),
+            expected,
+            "{fixture}: unexpected fee config"
+        );
     }
 }
 

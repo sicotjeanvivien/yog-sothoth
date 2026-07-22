@@ -50,6 +50,8 @@ import { formatShortAddress } from "@/lib/format/format-short-address";
 import { CopyButton } from "@/components/shared/copy-button";
 import { InfoPopover } from "@/components/shared/info-popover";
 
+import { FeeTypeBadge } from "./fee-type-badge";
+
 // ── Tailwind class fragments ─────────────────────────────────────────
 
 const CARD_CLASS =
@@ -99,6 +101,22 @@ export async function PoolDetailInfo({
 
             <InfoRow label={t("feeTier")} info={t("help.feeTier")}>
               <span>{formatFeeBps(pool.feeBps)}</span>
+            </InfoRow>
+
+            <InfoRow label={t("feeType")} info={t("help.feeType")}>
+              <FeeTypeBadge
+                baseFeeKind={pool.baseFeeKind}
+                hasDynamicFee={pool.hasDynamicFee}
+                labels={{
+                  kinds: {
+                    constant: t("feeKind.constant"),
+                    scheduler_linear: t("feeKind.schedulerLinear"),
+                    scheduler_exponential: t("feeKind.schedulerExponential"),
+                    rate_limiter: t("feeKind.rateLimiter"),
+                  },
+                  dynamic: t("feeKind.dynamic"),
+                }}
+              />
             </InfoRow>
 
             <InfoRow label={t("feeSplit")} info={t("help.feeSplit")}>

@@ -32,6 +32,8 @@ fn valid_row() -> PoolRow {
         protocol_fee_percent: Some(20),
         partner_fee_percent: Some(0),
         referral_fee_percent: Some(20),
+        base_fee_kind: Some("constant".to_string()),
+        has_dynamic_fee: Some(false),
         first_seen_at: now,
         last_seen_at: now,
     }
@@ -49,6 +51,8 @@ fn try_from_valid_row_returns_pool_with_all_fields_mapped() {
     assert_eq!(pool.protocol_fee_percent, Some(20));
     assert_eq!(pool.partner_fee_percent, Some(0));
     assert_eq!(pool.referral_fee_percent, Some(20));
+    assert_eq!(pool.base_fee_kind.as_deref(), Some("constant"));
+    assert_eq!(pool.has_dynamic_fee, Some(false));
 }
 
 #[test]

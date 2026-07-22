@@ -124,6 +124,10 @@ impl PoolRepository for MockPoolRepo {
         rec(&self.0, "pool:set_fee_bps");
         Ok(())
     }
+    async fn set_fee_config(&self, _: &Pubkey, _: &str, _: bool) -> RepositoryResult<()> {
+        rec(&self.0, "pool:set_fee_config");
+        Ok(())
+    }
 }
 struct MockPcsRepo(Calls);
 #[async_trait]
@@ -337,7 +341,10 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
     // initialize_pool: full upsert + decode/record fee + insert, NO
     // projection. The 27-byte fee blob (numerator 2_500_000, mode 0)
     // decodes cleanly, so the fee_bps step fires between upsert and insert.
-    let mut fee_blob = vec![0u8; 27];
+    // 31 bytes: enough for both decodes — set_fee_bps (cliff numerator @ 0..8,
+    // 2_500_000 → 25 bps) and set_fee_config (mode @26, dynamic-fee tag @30).
+    // All-zero tail → mode 0, no periods, no dynamic fee → constant fee shape.
+    let mut fee_blob = vec![0u8; 31];
     fee_blob[0..8].copy_from_slice(&2_500_000u64.to_le_bytes());
     assert_eq!(
         route(
@@ -370,7 +377,12 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
             })
         )
         .await,
-        ["pool:upsert", "pool:set_fee_bps", "insert:initialize_pool"]
+        [
+            "pool:upsert",
+            "pool:set_fee_bps",
+            "pool:set_fee_config",
+            "insert:initialize_pool"
+        ]
     );
 
     // set_pool_status / update_pool_fees: touch + insert.

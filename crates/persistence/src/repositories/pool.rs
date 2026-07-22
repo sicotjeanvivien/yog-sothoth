@@ -93,6 +93,24 @@ impl PoolRepository for PgPoolRepository {
         .map_err(map_sqlx_error)?;
         Ok(())
     }
+
+    async fn set_fee_config(
+        &self,
+        pool_address: &Pubkey,
+        base_fee_kind: &str,
+        has_dynamic_fee: bool,
+    ) -> RepositoryResult<()> {
+        sqlx::query!(
+            r#"UPDATE pools SET base_fee_kind = $2, has_dynamic_fee = $3 WHERE pool_address = $1"#,
+            pool_address.to_string(),
+            base_fee_kind,
+            has_dynamic_fee,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -104,6 +122,7 @@ impl PoolCatalog for PgPoolRepository {
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
                    protocol_fee_percent, partner_fee_percent, referral_fee_percent,
+                   base_fee_kind, has_dynamic_fee,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = $1
@@ -146,6 +165,7 @@ impl PoolCatalog for PgPoolRepository {
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
                    protocol_fee_percent, partner_fee_percent, referral_fee_percent,
+                   base_fee_kind, has_dynamic_fee,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = ANY($1::TEXT[])

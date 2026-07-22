@@ -267,6 +267,25 @@ impl MeteoraDammV2EventPersistor {
                 warn!(error = %err, kind = "initialize_pool", "fee_bps decode failed");
             }
         }
+        // Decode the fee *shape* (base-fee kind + dynamic-fee flag) from the
+        // same genesis blob and record it. Independent of the fee tier above:
+        // one may decode while the other fails. Skip-and-log keeps the columns
+        // NULL rather than wrong.
+        match yog_core::amm::damm_v2::decode_fee_config(&event.pool_fees_raw) {
+            Ok(cfg) => {
+                self.pool_maintenance
+                    .set_fee_config(
+                        Self::PROTOCOL,
+                        &event.pool_address,
+                        cfg.base_kind.as_str(),
+                        cfg.has_dynamic_fee,
+                    )
+                    .await;
+            }
+            Err(err) => {
+                warn!(error = %err, kind = "initialize_pool", "fee_config decode failed");
+            }
+        }
         self.repos
             .initialize_pool
             .insert(event)

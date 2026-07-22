@@ -19,6 +19,8 @@ pub(super) struct PoolRow {
     pub(super) protocol_fee_percent: Option<i16>,
     pub(super) partner_fee_percent: Option<i16>,
     pub(super) referral_fee_percent: Option<i16>,
+    pub(super) base_fee_kind: Option<String>,
+    pub(super) has_dynamic_fee: Option<bool>,
     pub(super) first_seen_at: DateTime<Utc>,
     pub(super) last_seen_at: DateTime<Utc>,
 }
@@ -55,6 +57,8 @@ impl TryFrom<PoolRow> for Pool {
             protocol_fee_percent: percent_to_u8(row.protocol_fee_percent, "protocol_fee_percent")?,
             partner_fee_percent: percent_to_u8(row.partner_fee_percent, "partner_fee_percent")?,
             referral_fee_percent: percent_to_u8(row.referral_fee_percent, "referral_fee_percent")?,
+            base_fee_kind: row.base_fee_kind,
+            has_dynamic_fee: row.has_dynamic_fee,
             first_seen_at: row.first_seen_at,
             last_seen_at: row.last_seen_at,
         })

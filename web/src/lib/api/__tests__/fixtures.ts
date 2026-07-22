@@ -40,6 +40,8 @@ export function validPool() {
     protocolFeePercent: 20,
     partnerFeePercent: 0,
     referralFeePercent: 20,
+    baseFeeKind: "constant",
+    hasDynamicFee: false,
     tvlUsd: "1332007.7148736200400326721044",
     volume24hUsd: "47964.973514780605664520660399",
     fees24hUsd: "119.912433786951514161301650",

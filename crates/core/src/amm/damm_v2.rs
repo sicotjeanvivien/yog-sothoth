@@ -15,6 +15,68 @@ const BASE_FEE_LEN: usize = 27;
 /// Byte offset, within the base-fee blob, of the `BaseFeeMode` discriminant.
 const BASE_FEE_MODE_OFFSET: usize = 26;
 
+/// Byte offset, within the base-fee blob, of the fee-scheduler period count
+/// (`number_of_period: u16`, little-endian). A count of zero means the base
+/// fee never moves — a *constant* fee — even under a scheduler mode; a
+/// non-zero count is what makes a mode 0/1 pool an actual decaying scheduler.
+/// Only meaningful for modes 0/1: mode 2 (rate limiter) reinterprets these
+/// bytes.
+const NUMBER_OF_PERIOD_OFFSET: usize = 8;
+
+/// Byte offset, within the full `PoolFeeParameters` blob, of the borsh
+/// `Option<DynamicFeeParameters>` tag. It follows the 27-byte base fee, a
+/// `u16 compounding_fee_bps` and a `u8` padding: 27 + 2 + 1 = 30. A tag of
+/// `1` means a volatility-based dynamic fee sits on top of the base fee.
+const DYNAMIC_FEE_TAG_OFFSET: usize = 30;
+
+/// How a DAMM v2 pool's **base** trading fee behaves over time.
+///
+/// Decoded from the `BaseFeeMode` discriminant plus the scheduler period
+/// count — the mode byte alone is not enough, since a scheduler mode with
+/// zero periods is a constant fee (see [`decode_fee_config`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BaseFeeKind {
+    /// Fixed fee — no scheduling (modes 0/1 with `number_of_period == 0`).
+    Constant,
+    /// Fee scheduler with linear decay (mode 0, `number_of_period > 0`).
+    SchedulerLinear,
+    /// Fee scheduler with exponential decay (mode 1, `number_of_period > 0`).
+    SchedulerExponential,
+    /// Rate limiter / anti-sniper (mode 2). Its internal parameters are
+    /// deliberately not decoded — that layout reuses bytes 8..26 and has no
+    /// captured fixture to validate against.
+    RateLimiter,
+}
+
+impl BaseFeeKind {
+    /// Stable, lowercase discriminant for persistence / the wire. Kept in
+    /// sync with the DB `base_fee_kind` column values.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Constant => "constant",
+            Self::SchedulerLinear => "scheduler_linear",
+            Self::SchedulerExponential => "scheduler_exponential",
+            Self::RateLimiter => "rate_limiter",
+        }
+    }
+}
+
+/// The decodable shape of a pool's fee configuration.
+///
+/// Two orthogonal dimensions — a pool can run a base-fee scheduler *and* a
+/// volatility dynamic fee at once. Only what the stored genesis blob lets us
+/// decode without guessing an unvalidated layout is surfaced here; the live
+/// decayed rate, the dynamic-fee magnitude, and the rate-limiter internals
+/// are intentionally out of scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FeeConfig {
+    /// How the base fee behaves over time.
+    pub base_kind: BaseFeeKind,
+    /// Whether a volatility-based dynamic fee is enabled on top of the base
+    /// fee (the `Option<DynamicFeeParameters>` is present).
+    pub has_dynamic_fee: bool,
+}
+
 /// Decode the pool's base trading fee, in basis points, from the raw borsh
 /// `PoolFeeParameters` blob captured at pool genesis under "voie C"
 /// (`MeteoraDammV2InitializePoolEvent::pool_fees_raw`).
@@ -59,6 +121,73 @@ pub fn decode_base_fee_bps(pool_fees_raw: &[u8]) -> CoreResult<Decimal> {
     );
 
     Ok(fee_numerator_to_bps(cliff_fee_numerator))
+}
+
+/// Decode the pool's fee *shape* — base-fee kind and whether a volatility
+/// dynamic fee is enabled — from the same genesis `PoolFeeParameters` blob
+/// that [`decode_base_fee_bps`] reads (`pool_fees_raw`).
+///
+/// Companion to `decode_base_fee_bps`: that returns the headline fee *tier*,
+/// this returns how the fee *behaves*. The two are read from the same bytes
+/// and typically persisted together.
+///
+/// The base-fee kind comes from the `BaseFeeMode` discriminant (byte
+/// [`BASE_FEE_MODE_OFFSET`]) **combined with** the scheduler period count
+/// (bytes at [`NUMBER_OF_PERIOD_OFFSET`]): the mode alone cannot tell a
+/// constant fee from a scheduler, because a scheduler mode with zero periods
+/// is constant. `has_dynamic_fee` is the borsh `Option` tag at
+/// [`DYNAMIC_FEE_TAG_OFFSET`].
+///
+/// Fails loud (never guesses) on a blob too short to hold the dynamic-fee
+/// tag, an unknown `BaseFeeMode`, or a malformed `Option` tag — the caller
+/// skips-and-logs, leaving the fee shape unknown rather than wrong.
+pub fn decode_fee_config(pool_fees_raw: &[u8]) -> CoreResult<FeeConfig> {
+    // Need the base fee blob and the dynamic-fee Option tag that follows it.
+    if pool_fees_raw.len() <= DYNAMIC_FEE_TAG_OFFSET {
+        return Err(CoreError::FeeDecode {
+            reason: format!(
+                "blob too short: {} bytes, need at least {}",
+                pool_fees_raw.len(),
+                DYNAMIC_FEE_TAG_OFFSET + 1
+            ),
+        });
+    }
+
+    let mode = pool_fees_raw[BASE_FEE_MODE_OFFSET];
+    let number_of_period = u16::from_le_bytes([
+        pool_fees_raw[NUMBER_OF_PERIOD_OFFSET],
+        pool_fees_raw[NUMBER_OF_PERIOD_OFFSET + 1],
+    ]);
+
+    let base_kind = match mode {
+        // Scheduler modes with no periods never move → a constant fee.
+        0 | 1 if number_of_period == 0 => BaseFeeKind::Constant,
+        0 => BaseFeeKind::SchedulerLinear,
+        1 => BaseFeeKind::SchedulerExponential,
+        // Rate limiter: bytes 8..26 mean something else here, so
+        // `number_of_period` above is not consulted for this arm.
+        2 => BaseFeeKind::RateLimiter,
+        other => {
+            return Err(CoreError::FeeDecode {
+                reason: format!("unknown BaseFeeMode discriminant: {other}"),
+            });
+        }
+    };
+
+    let has_dynamic_fee = match pool_fees_raw[DYNAMIC_FEE_TAG_OFFSET] {
+        0 => false,
+        1 => true,
+        other => {
+            return Err(CoreError::FeeDecode {
+                reason: format!("invalid dynamic_fee Option tag: {other}"),
+            });
+        }
+    };
+
+    Ok(FeeConfig {
+        base_kind,
+        has_dynamic_fee,
+    })
 }
 
 /// Decode the new base trading fee (basis points) from an `EvtUpdatePoolFees`

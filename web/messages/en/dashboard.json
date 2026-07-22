@@ -152,7 +152,15 @@
         "poolAddress": "Pool address",
         "protocol": "Protocol",
         "feeTier": "Fee tier",
+        "feeType": "Fee type",
         "feeSplit": "Fee split",
+        "feeKind": {
+          "constant": "Fixed",
+          "schedulerLinear": "Scheduler (linear)",
+          "schedulerExponential": "Scheduler (exponential)",
+          "rateLimiter": "Rate limiter",
+          "dynamic": "Dynamic"
+        },
         "feeSplitProtocol": "Protocol",
         "feeSplitPartner": "Partner",
         "feeSplitReferral": "Referral",
@@ -172,6 +180,7 @@
         "copyTokenMint": "Copy token mint",
         "help": {
           "feeTier": "The pool's base trading fee (genesis tier), in basis points — 100 bps = 1%.",
+          "feeType": "How the base fee behaves: fixed, an anti-sniper scheduler (linear/exponential decay), or a rate limiter — decoded at genesis. \"Dynamic\" additionally flags a volatility-based variable fee.",
           "feeSplit": "Configured split of the trading fee between Meteora, an optional partner and the referral program, read from the pool's on-chain account.",
           "effectiveFee": "The realized rate: fees collected / volume over 24h, in basis points. Can differ from the base tier.",
           "protocolCut": "Meteora's share of the 24h fees.",

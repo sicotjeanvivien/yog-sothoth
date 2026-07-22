@@ -118,6 +118,25 @@ pub trait PoolRepository: Send + Sync {
         pool_address: &Pubkey,
         fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()>;
+
+    /// Set the pool's decoded fee *shape*: how the base fee behaves
+    /// (`base_fee_kind`) and whether a volatility dynamic fee is enabled
+    /// (`has_dynamic_fee`), decoded from the same genesis fee config as
+    /// [`set_fee_bps`]. A column-level `UPDATE`; a no-op if the pool row does
+    /// not exist yet. Idempotent.
+    ///
+    /// `base_fee_kind` is an opaque string at this boundary — the pools table
+    /// is cross-protocol, so each protocol writes its own fee-kind vocabulary
+    /// into the same column (DAMM v2's values come from
+    /// `amm::damm_v2::BaseFeeKind::as_str`). Keeps this generic trait free of
+    /// any protocol-specific enum, exactly as `set_fee_bps` takes a plain
+    /// `Decimal`.
+    async fn set_fee_config(
+        &self,
+        pool_address: &Pubkey,
+        base_fee_kind: &str,
+        has_dynamic_fee: bool,
+    ) -> RepositoryResult<()>;
 }
 
 /// The consultation surface of the pool registry — the api's read lens.
