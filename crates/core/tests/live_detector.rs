@@ -335,6 +335,54 @@ fn decodes_initialize_pool_fixtures() {
     }
 }
 
+/// `decode_fee_config` must run cleanly on the **real** genesis blobs (not
+/// hand-built bytes), and classify each fixture's fee shape correctly. This
+/// ties the decoder to live data: a `PoolFeeParameters` layout drift would
+/// break the classification here even if the standalone unit tests (which use
+/// captured byte arrays) stayed green.
+#[test]
+fn decode_fee_config_matches_real_genesis_fixtures() {
+    use yog_core::amm::damm_v2::{BaseFeeKind, FeeConfig, decode_fee_config};
+
+    // (fixture, expected) — fixture_2 is a constant 25 bps pool; fixture_1 an
+    // anti-sniper linear fee scheduler (144 periods). Both carry a dynamic fee.
+    let cases = [
+        (
+            "damm_v2_initialize_pool.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::SchedulerLinear,
+                has_dynamic_fee: true,
+            },
+        ),
+        (
+            "damm_v2_initialize_pool_2.json",
+            FeeConfig {
+                base_kind: BaseFeeKind::Constant,
+                has_dynamic_fee: true,
+            },
+        ),
+    ];
+
+    for (fixture, expected) in cases {
+        let tx = load_fixture(fixture);
+        let init = extract_wire_events(&tx, CP_AMM_PROGRAM_ID)
+            .events
+            .into_iter()
+            .find_map(|e| match e {
+                DammV2WireEvent::InitializePool(e) => Some(e),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{fixture}: no InitializePool event"));
+
+        let raw = borsh::to_vec(&init.pool_fees).expect("borsh serialize is infallible");
+        assert_eq!(
+            decode_fee_config(&raw).unwrap(),
+            expected,
+            "{fixture}: unexpected fee config"
+        );
+    }
+}
+
 /// `EvtCreatePosition` rides along in the genesis transactions (a pool is
 /// created and its first position opened together), so the initialize_pool
 /// fixtures double as real-data validation for it: clean decode, sane fields,
