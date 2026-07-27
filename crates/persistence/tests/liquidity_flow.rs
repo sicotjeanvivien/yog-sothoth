@@ -8,19 +8,13 @@
 //! the repository sums the window and joins the pool's current TVL
 //! (`pool_current_tvl`, nullable).
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::LiquidityFlowRepository;
 use yog_persistence::PgLiquidityFlowRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 async fn insert_liquidity_event(
     pool: &PgPool,

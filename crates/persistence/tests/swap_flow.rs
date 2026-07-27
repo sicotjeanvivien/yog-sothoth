@@ -7,19 +7,13 @@
 //! trade-time price WITHOUT collapsing them (unlike view 019) — a_to_b priced
 //! by token A's input side, b_to_a by token B's — summed over the window.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::SwapFlowRepository;
 use yog_persistence::PgSwapFlowRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_swap(

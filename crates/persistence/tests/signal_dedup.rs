@@ -3,18 +3,12 @@
 //! DISTINCT-ON latest-per-pool pick, the `since` window filter, and the
 //! per-detector scoping.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{Duration, Utc};
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::{Severity, SignalRepository};
 use yog_persistence::PgSignalRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 async fn insert_signal(
     pool: &PgPool,

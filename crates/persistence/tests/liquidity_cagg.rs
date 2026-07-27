@@ -7,15 +7,9 @@
 //! Real-time aggregation means the just-inserted rows are visible without a
 //! manual refresh.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_liquidity(

@@ -6,19 +6,13 @@
 //! tokens comes back as one complete snapshot; a pool missing any input
 //! (no swap yet, or an unpriced token) is absent rather than half-populated.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, SubsecRound, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::{PoolPriceSnapshotRepository, Protocol};
 use yog_persistence::PgPoolPriceSnapshotRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 async fn insert_pool(pool: &PgPool, pool_addr: &str, mint_a: &str, mint_b: &str) {
     sqlx::query(

@@ -7,8 +7,7 @@
 //! search SQL actually runs against a real dataset and filters correctly,
 //! including case-insensitivity and pair order-independence.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
@@ -20,10 +19,6 @@ use yog_core::{
 use yog_persistence::PgPoolRepository;
 
 // ── Seed helpers ────────────────────────────────────────────────────
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()

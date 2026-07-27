@@ -57,6 +57,15 @@
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
 //!
+//! ## Rewards family (farming / liquidity mining)
+//!
+//! A pool carries up to `NUM_REWARDS` reward slots (2 in cp-amm today),
+//! addressed by `reward_index`. Each slot streams one reward token to in-range
+//! LPs at a constant rate over a duration window. [`EvtInitializeReward`],
+//! [`EvtFundReward`], [`EvtUpdateRewardDuration`], [`EvtUpdateRewardFunder`],
+//! [`EvtWithdrawIneligibleReward`] and [`EvtWithdrawDeadLiquidityReward`] are
+//! the admin/funder side of that farm; [`EvtClaimReward`] is the LP side.
+//!
 //! ## Events mirrored without an on-chain fixture
 //!
 //! Most structs here are validated against a real mainnet transaction saved in
@@ -114,14 +123,67 @@
 //! still propagates — but this is the one emission site where the framework is
 //! not doing the work for us.
 
-use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
 use solana_pubkey::Pubkey;
 
 use crate::application::extraction::DISCRIMINATOR_LEN;
 
+mod evt_claim_position_fee;
+mod evt_claim_protocol_fee;
+mod evt_claim_reward;
+mod evt_close_position;
+mod evt_create_position;
+mod evt_fund_reward;
+mod evt_initialize_pool;
+mod evt_initialize_reward;
+mod evt_liquidity_change;
+mod evt_lock_position;
+mod evt_permanent_lock_position;
+mod evt_set_pool_status;
+mod evt_split_position3;
+mod evt_swap2;
+mod evt_update_pool_fees;
+mod evt_update_reward_duration;
+mod evt_update_reward_funder;
+mod evt_withdraw_dead_liquidity_reward;
+mod evt_withdraw_ineligible_reward;
+
+pub use evt_claim_position_fee::{EvtClaimPositionFee, discriminator_claim_position_fee};
+pub use evt_claim_protocol_fee::{EvtClaimProtocolFee, discriminator_claim_protocol_fee};
+pub use evt_claim_reward::{EvtClaimReward, discriminator_claim_reward};
+pub use evt_close_position::{EvtClosePosition, discriminator_close_position};
+pub use evt_create_position::{EvtCreatePosition, discriminator_create_position};
+pub use evt_fund_reward::{EvtFundReward, discriminator_fund_reward};
+pub use evt_initialize_pool::{
+    BaseFeeParameters, DynamicFeeParameters, EvtInitializePool, PoolFeeParameters,
+    discriminator_initialize_pool,
+};
+pub use evt_initialize_reward::{EvtInitializeReward, discriminator_initialize_reward};
+pub use evt_liquidity_change::{EvtLiquidityChange, discriminator_liquidity_change};
+pub use evt_lock_position::{EvtLockPosition, discriminator_lock_position};
+pub use evt_permanent_lock_position::{
+    EvtPermanentLockPosition, discriminator_permanent_lock_position,
+};
+pub use evt_set_pool_status::{EvtSetPoolStatus, discriminator_set_pool_status};
+pub use evt_split_position3::{
+    EvtSplitPosition3, SplitAmountInfo2, SplitPositionInfo2, SplitPositionParameters3,
+    discriminator_split_position2, discriminator_split_position3,
+};
+pub use evt_swap2::{EvtSwap2, SwapParameters2, SwapResult2, discriminator_swap2};
+pub use evt_update_pool_fees::{EvtUpdatePoolFees, discriminator_update_pool_fees};
+pub use evt_update_reward_duration::{
+    EvtUpdateRewardDuration, discriminator_update_reward_duration,
+};
+pub use evt_update_reward_funder::{EvtUpdateRewardFunder, discriminator_update_reward_funder};
+pub use evt_withdraw_dead_liquidity_reward::{
+    EvtWithdrawDeadLiquidityReward, discriminator_withdraw_dead_liquidity_reward,
+};
+pub use evt_withdraw_ineligible_reward::{
+    EvtWithdrawIneligibleReward, discriminator_withdraw_ineligible_reward,
+};
+
 // ---------------------------------------------------------------------------
-// Discriminator helpers
+// Discriminator helper
 // ---------------------------------------------------------------------------
 
 /// Compute the 8-byte Anchor event discriminator for an event named `name`.
@@ -135,725 +197,6 @@ fn compute_discriminator(name: &str) -> [u8; DISCRIMINATOR_LEN] {
     let mut out = [0u8; DISCRIMINATOR_LEN];
     out.copy_from_slice(&full[..DISCRIMINATOR_LEN]);
     out
-}
-
-/// Discriminator for [`EvtSwap2`].
-pub fn discriminator_swap2() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtSwap2")
-}
-
-/// Discriminator for [`EvtLiquidityChange`].
-pub fn discriminator_liquidity_change() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtLiquidityChange")
-}
-
-/// Discriminator for [`EvtClaimPositionFee`].
-pub fn discriminator_claim_position_fee() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtClaimPositionFee")
-}
-
-/// Discriminator for [`EvtClaimReward`].
-pub fn discriminator_claim_reward() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtClaimReward")
-}
-
-/// Discriminator for [`EvtClaimProtocolFee`].
-pub fn discriminator_claim_protocol_fee() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtClaimProtocolFee")
-}
-
-/// Discriminator for [`EvtInitializeReward`].
-pub fn discriminator_initialize_reward() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtInitializeReward")
-}
-
-/// Discriminator for [`EvtFundReward`].
-pub fn discriminator_fund_reward() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtFundReward")
-}
-
-/// Discriminator for [`EvtWithdrawIneligibleReward`].
-pub fn discriminator_withdraw_ineligible_reward() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtWithdrawIneligibleReward")
-}
-
-/// Discriminator for [`EvtUpdateRewardDuration`].
-pub fn discriminator_update_reward_duration() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtUpdateRewardDuration")
-}
-
-/// Discriminator for [`EvtUpdateRewardFunder`].
-pub fn discriminator_update_reward_funder() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtUpdateRewardFunder")
-}
-
-/// Discriminator for [`EvtWithdrawDeadLiquidityReward`].
-pub fn discriminator_withdraw_dead_liquidity_reward() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtWithdrawDeadLiquidityReward")
-}
-
-/// Discriminator for [`EvtSplitPosition3`].
-pub fn discriminator_split_position3() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtSplitPosition3")
-}
-
-/// Discriminator for the deprecated `EvtSplitPosition2`.
-///
-/// No mirror struct exists for it on purpose — see [`EvtSplitPosition3`]. We
-/// still compute the discriminator so the extractor can recognise the event and
-/// drop it *deliberately*, instead of letting it fall through to the
-/// "unknown discriminator" bucket on every single split.
-pub fn discriminator_split_position2() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtSplitPosition2")
-}
-
-/// Discriminator for [`EvtCreatePosition`].
-pub fn discriminator_create_position() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtCreatePosition")
-}
-
-/// Discriminator for [`EvtClosePosition`].
-pub fn discriminator_close_position() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtClosePosition")
-}
-
-/// Discriminator for [`EvtLockPosition`].
-pub fn discriminator_lock_position() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtLockPosition")
-}
-
-/// Discriminator for [`EvtPermanentLockPosition`].
-pub fn discriminator_permanent_lock_position() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtPermanentLockPosition")
-}
-
-/// Discriminator for [`EvtInitializePool`].
-pub fn discriminator_initialize_pool() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtInitializePool")
-}
-
-/// Discriminator for [`EvtSetPoolStatus`].
-pub fn discriminator_set_pool_status() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtSetPoolStatus")
-}
-
-/// Discriminator for [`EvtUpdatePoolFees`].
-pub fn discriminator_update_pool_fees() -> [u8; DISCRIMINATOR_LEN] {
-    compute_discriminator("EvtUpdatePoolFees")
-}
-
-// ---------------------------------------------------------------------------
-// Sub-types referenced by EvtSwap2
-// ---------------------------------------------------------------------------
-
-/// Mirror of `cp-amm::SwapParameters2`.
-///
-/// The semantics of `amount_0` and `amount_1` depend on `swap_mode`:
-/// - `ExactIn` / `PartialFill`: `amount_0 = amount_in`, `amount_1 = minimum_amount_out`
-/// - `ExactOut`: `amount_0 = amount_out`, `amount_1 = maximum_amount_in`
-///
-/// `swap_mode` corresponds to cp-amm's `SwapMode` enum:
-/// - `0` = `ExactIn`
-/// - `1` = `PartialFill`
-/// - `2` = `ExactOut`
-///
-/// A legacy `swap` instruction never reaches us as a distinct shape: its
-/// two-field `SwapParameters { amount_in, minimum_amount_out }` is widened by
-/// cp-amm's entrypoint into `SwapParameters2 { amount_0: amount_in, amount_1:
-/// minimum_amount_out, swap_mode: ExactIn }` before the shared handler runs. So
-/// `swap_mode == 0` on a legacy swap is the program's own normalisation, not an
-/// assumption of ours.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct SwapParameters2 {
-    pub amount_0: u64,
-    pub amount_1: u64,
-    pub swap_mode: u8,
-}
-
-/// Mirror of `cp-amm::SwapResult2`.
-///
-/// Captures every fee component computed by the swap engine. The four fee
-/// fields (`claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee`)
-/// must be summed to obtain the total fee charged on the swap.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct SwapResult2 {
-    pub included_fee_input_amount: u64,
-    pub excluded_fee_input_amount: u64,
-    pub amount_left: u64,
-    pub output_amount: u64,
-    pub next_sqrt_price: u128,
-    pub claiming_fee: u64,
-    pub protocol_fee: u64,
-    pub compounding_fee: u64,
-    pub referral_fee: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Wire events — Cercle 1
-// ---------------------------------------------------------------------------
-
-/// Mirror of `cp-amm::EvtSwap2`.
-///
-/// Emitted by the cp-amm program for every executed swap, including those
-/// initiated through the legacy `swap` instruction — both `swap` and `swap2`
-/// are routed by cp-amm's custom entrypoint to the *same* handler
-/// (`p_handle_swap`), the legacy parameters being widened to
-/// [`SwapParameters2`] on the way in. There is exactly one emission site and no
-/// `EvtSwap` v1 event exists, so this single mirror covers every swap and
-/// carries no double-counting risk.
-///
-/// **This event is not emitted via `emit_cpi!`** — cp-amm hand-rolls the same
-/// wire format on its pinocchio fast path. See the module-level section "The
-/// swap path does NOT go through `emit_cpi!`" before auditing or changing
-/// anything here.
-///
-/// The `reserve_*` fields hold the pool reserves **after** the swap, in the
-/// canonical `(token_a, token_b)` ordering defined by the pool — this is
-/// the stable convention we want for time-series analytics, regardless of
-/// swap direction.
-///
-/// `trade_direction` reflects the direction the user requested:
-/// - `0` (`AtoB`): user provided token A, received token B
-/// - `1` (`BtoA`): user provided token B, received token A
-///
-/// `collect_fee_mode` corresponds to cp-amm's `CollectFeeMode` enum:
-/// - `0` = `BothToken`
-/// - `1` = `OnlyB`
-/// - `2` = `Compounding`
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtSwap2 {
-    pub pool: Pubkey,
-    pub trade_direction: u8,
-    pub collect_fee_mode: u8,
-    pub has_referral: bool,
-    pub params: SwapParameters2,
-    pub swap_result: SwapResult2,
-    pub included_transfer_fee_amount_in: u64,
-    pub included_transfer_fee_amount_out: u64,
-    pub excluded_transfer_fee_amount_out: u64,
-    pub current_timestamp: u64,
-    pub reserve_a_amount: u64,
-    pub reserve_b_amount: u64,
-}
-
-/// Mirror of `cp-amm::EvtLiquidityChange`.
-///
-/// Unified event covering both add and remove liquidity operations. The
-/// `change_type` field discriminates:
-/// - `0`: liquidity added
-/// - `1`: liquidity removed
-///
-/// `reserve_a_amount` / `reserve_b_amount` are post-change reserves in the
-/// canonical pool ordering — same convention as [`EvtSwap2`].
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtLiquidityChange {
-    pub pool: Pubkey,
-    pub position: Pubkey,
-    pub owner: Pubkey,
-    pub token_a_amount: u64,
-    pub token_b_amount: u64,
-    pub transfer_fee_included_token_a_amount: u64,
-    pub transfer_fee_included_token_b_amount: u64,
-    pub reserve_a_amount: u64,
-    pub reserve_b_amount: u64,
-    pub liquidity_delta: u128,
-    pub token_a_amount_threshold: u64,
-    pub token_b_amount_threshold: u64,
-    pub change_type: u8,
-}
-
-/// Mirror of `cp-amm::EvtClaimPositionFee`.
-///
-/// Emitted when an LP claims accumulated trading fees on their position.
-/// `fee_a_claimed` / `fee_b_claimed` are absolute amounts in each token —
-/// the protocol does not expose a "since-last-claim" delta, only the
-/// amount transferred in this specific claim.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtClaimPositionFee {
-    pub pool: Pubkey,
-    pub position: Pubkey,
-    pub owner: Pubkey,
-    pub fee_a_claimed: u64,
-    pub fee_b_claimed: u64,
-}
-
-/// Mirror of `cp-amm::EvtClaimReward`.
-///
-/// Emitted when an LP claims farming rewards distributed by a separate
-/// `mint_reward` token. `reward_index` identifies the reward stream within
-/// the pool (a pool can have multiple concurrent reward streams).
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtClaimReward {
-    pub pool: Pubkey,
-    pub position: Pubkey,
-    pub owner: Pubkey,
-    pub mint_reward: Pubkey,
-    pub reward_index: u8,
-    pub total_reward: u64,
-}
-
-/// Mirror of `cp-amm::EvtClaimProtocolFee`.
-///
-/// Emitted when the protocol operator withdraws Meteora's accrued **protocol**
-/// share of trading fees from a pool (distinct from [`EvtClaimPositionFee`],
-/// which is an LP claiming *their position's* fees). `token_a_amount` /
-/// `token_b_amount` are the absolute amounts withdrawn in this claim, aligned
-/// with the canonical pool ordering.
-///
-/// This is the `emit_cpi!` variant (`ix_claim_protocol_fee`), the one carried
-/// as a self-CPI inner instruction and thus decodable here. cp-amm also has an
-/// `EvtClaimProtocolFee2` (`ix_claim_protocol_fee2`) with a different schema
-/// (single `token_mint` + `amount` + receiver) emitted via a plain `emit!`
-/// *log* — not an event_cpi — so it is **not** captured by this pipeline (and
-/// cp-amm itself notes that log "could be truncated. should not rely on this").
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtClaimProtocolFee {
-    pub pool: Pubkey,
-    pub token_a_amount: u64,
-    pub token_b_amount: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Wire events — rewards / farming (liquidity mining)
-// ---------------------------------------------------------------------------
-//
-// A pool carries up to `NUM_REWARDS` reward slots, addressed by `reward_index`.
-// Each slot streams one reward token to in-range LPs at a constant rate over a
-// duration window. These are the admin/funder side of the farm; the LP side
-// (`EvtClaimReward`) is modelled above.
-
-/// Mirror of `cp-amm::EvtInitializeReward`.
-///
-/// Emitted when an admin **opens a reward slot** on a pool: it declares which
-/// token will be distributed (`reward_mint`), who is allowed to fund it
-/// (`funder`), which of the pool's slots is being opened (`reward_index`) and
-/// the length of a funding window in seconds (`reward_duration`).
-///
-/// Opening a slot distributes nothing on its own — the tokens and the emission
-/// rate arrive with [`EvtFundReward`], which typically follows in the same
-/// transaction.
-///
-/// `funder` and `creator` are frequently the same wallet, so a fixture cannot
-/// discriminate their order — it comes from the cp-amm source.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtInitializeReward {
-    pub pool: Pubkey,
-    pub reward_mint: Pubkey,
-    pub funder: Pubkey,
-    pub creator: Pubkey,
-    pub reward_index: u8,
-    pub reward_duration: u64,
-}
-
-/// Mirror of `cp-amm::EvtFundReward`.
-///
-/// The economic core of the farm: the funder deposits `amount` reward tokens
-/// into a slot and the program **recomputes the emission rate** over the slot's
-/// configured duration.
-///
-/// ## Rate scale — Q64.64
-///
-/// `pre_reward_rate` / `post_reward_rate` are reward base units per second in
-/// **Q64.64 fixed point**: divide by `2^64` to read them as a plain rate. On a
-/// freshly opened slot this holds exactly:
-///
-/// ```text
-/// post_reward_rate == (amount << 64) / reward_duration
-/// ```
-///
-/// ## Carry-forward
-///
-/// Funding an already-running slot does not discard what is left of the current
-/// window: the program folds the undistributed remainder into the new window, so
-/// `post_reward_rate` reflects `amount + leftover`, not `amount` alone. cp-amm
-/// exposes this only through the rate pair — there is no explicit
-/// `carry_forward` field on the event. The leftover is therefore recoverable as
-/// `(post_reward_rate * duration >> 64) - amount`.
-///
-/// `amount` is what the funder sent; `transfer_fee_excluded_amount_in` is what
-/// actually landed in the vault. They differ only for Token-2022 mints charging
-/// a transfer fee.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtFundReward {
-    pub pool: Pubkey,
-    pub funder: Pubkey,
-    pub mint_reward: Pubkey,
-    pub reward_index: u8,
-    pub amount: u64,
-    pub transfer_fee_excluded_amount_in: u64,
-    /// Unix timestamp (seconds) at which the current emission window ends.
-    pub reward_duration_end: u64,
-    pub pre_reward_rate: u128,
-    pub post_reward_rate: u128,
-}
-
-/// Mirror of `cp-amm::EvtWithdrawIneligibleReward`.
-///
-/// Emitted when the funder reclaims reward tokens that **nobody could earn**:
-/// rewards that accrued while the pool held no eligible (in-range) liquidity
-/// would otherwise stay locked in the vault forever. Withdrawable only after
-/// the emission window has ended.
-///
-/// A high `amount` relative to what was funded means the farm largely missed
-/// its target — it emitted into an empty pool.
-///
-/// Note: cp-amm has a second, structurally identical event,
-/// `EvtWithdrawDeadLiquidityReward` (same three fields), covering the reward
-/// share of permanently locked liquidity with no owner to claim it. It is a
-/// *distinct* event with its own discriminator and is not decoded here — no
-/// fixture has been captured for it yet.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtWithdrawIneligibleReward {
-    pub pool: Pubkey,
-    pub reward_mint: Pubkey,
-    pub amount: u64,
-}
-
-/// Mirror of `cp-amm::EvtUpdateRewardDuration`.
-///
-/// Emitted when an admin **re-paces a slot**: the length of a funding window
-/// changes, which changes the emission rate every subsequent
-/// [`EvtFundReward`] will compute (`rate = amount / duration`). It does not
-/// re-rate the *current* window on its own.
-///
-/// Admin-gated: the signer is either the pool creator or an operator holding
-/// the `UpdateRewardDuration` permission.
-///
-/// Durations are in seconds. Layout taken from the cp-amm source
-/// (`ix_update_reward_duration.rs`, single `emit_cpi!` site); no on-chain
-/// fixture has been captured for this event — see the module-level note on
-/// fixture-less events.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtUpdateRewardDuration {
-    pub pool: Pubkey,
-    pub reward_index: u8,
-    pub old_reward_duration: u64,
-    pub new_reward_duration: u64,
-}
-
-/// Mirror of `cp-amm::EvtUpdateRewardFunder`.
-///
-/// Emitted when an admin **transfers the right to fund a slot** from one wallet
-/// to another. Moves no tokens and does not touch the emission rate — it only
-/// changes who may call `fund_reward` on this `reward_index`.
-///
-/// Admin-gated: pool creator, or an operator holding the `UpdateRewardFunder`
-/// permission. Layout taken from the cp-amm source
-/// (`ix_update_reward_funder.rs`, single `emit_cpi!` site); no on-chain fixture
-/// captured.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtUpdateRewardFunder {
-    pub pool: Pubkey,
-    pub reward_index: u8,
-    pub old_funder: Pubkey,
-    pub new_funder: Pubkey,
-}
-
-/// Mirror of `cp-amm::EvtWithdrawDeadLiquidityReward`.
-///
-/// Emitted when the funder reclaims the reward share that accrued to **dead
-/// liquidity** — liquidity permanently locked with no owner left to claim it.
-/// Like [`EvtWithdrawIneligibleReward`], it returns tokens that would otherwise
-/// sit in the vault forever.
-///
-/// **Emitted conditionally**: cp-amm wraps the `emit_cpi!` in
-/// `if dead_liquidity_reward > 0`, so — unlike `EvtWithdrawIneligibleReward`,
-/// which emits even for a zero amount — this event never carries `amount == 0`.
-///
-/// Byte-identical in shape to [`EvtWithdrawIneligibleReward`] (same three
-/// fields, same 72-byte payload); only the discriminator separates them. They
-/// stay distinct types because they describe different on-chain facts. Layout
-/// taken from the cp-amm source (`ix_withdraw_dead_liquidity_reward.rs`); no
-/// on-chain fixture captured.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtWithdrawDeadLiquidityReward {
-    pub pool: Pubkey,
-    pub reward_mint: Pubkey,
-    pub amount: u64,
-}
-
-// ---------------------------------------------------------------------------
-// Sub-types referenced by EvtSplitPosition3
-// ---------------------------------------------------------------------------
-//
-// ⚠️ `SplitAmountInfo2` and `SplitPositionInfo2` carry the SAME seven fields but
-// NOT in the same order: the two leading `u128`s are swapped. cp-amm declares
-// `permanent_locked_liquidity` first in the former, `unlocked_liquidity` first
-// in the latter. Both are `u128`, so a mix-up cannot fail to deserialize — it
-// silently swaps two liquidity figures. Do not "harmonise" these two structs.
-
-/// Mirror of `cp-amm::SplitAmountInfo2` — what actually moved from the first
-/// position to the second.
-///
-/// Field order note: `permanent_locked_liquidity` comes **first** here, unlike
-/// [`SplitPositionInfo2`]. See the module comment above.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct SplitAmountInfo2 {
-    pub permanent_locked_liquidity: u128,
-    pub unlocked_liquidity: u128,
-    pub vested_liquidity: u128,
-    pub fee_a: u64,
-    pub fee_b: u64,
-    pub reward_0: u64,
-    pub reward_1: u64,
-}
-
-/// Mirror of `cp-amm::SplitPositionInfo2` — the state of one position **after**
-/// the split.
-///
-/// Field order note: `unlocked_liquidity` comes **first** here, unlike
-/// [`SplitAmountInfo2`]. See the module comment above.
-///
-/// This is the v3 shape: v2's `SplitPositionInfo` had a single `liquidity`
-/// field conflating the three buckets, which is precisely why cp-amm versioned
-/// the event.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct SplitPositionInfo2 {
-    pub unlocked_liquidity: u128,
-    pub permanent_locked_liquidity: u128,
-    pub vested_liquidity: u128,
-    pub fee_a: u64,
-    pub fee_b: u64,
-    pub reward_0: u64,
-    pub reward_1: u64,
-}
-
-/// Mirror of `cp-amm::SplitPositionParameters3` — the fractions the caller
-/// asked for, each a numerator over `SPLIT_POSITION_DENOMINATOR` (1e9).
-///
-/// Requested fractions, not outcomes: the amounts actually moved are in
-/// [`SplitAmountInfo2`]. `inner_vesting_liquidity_numerator` is the v3
-/// addition — v2 could not express a split of vesting liquidity.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct SplitPositionParameters3 {
-    pub unlocked_liquidity_numerator: u32,
-    pub permanent_locked_liquidity_numerator: u32,
-    pub fee_a_numerator: u32,
-    pub fee_b_numerator: u32,
-    pub reward_0_numerator: u32,
-    pub reward_1_numerator: u32,
-    pub inner_vesting_liquidity_numerator: u32,
-}
-
-/// Mirror of `cp-amm::EvtSplitPosition3`.
-///
-/// A position transfers a **fraction of its contents to another position**,
-/// possibly owned by a different wallet. Each component is split independently
-/// by its own numerator over 1e9: unlocked liquidity, permanently locked
-/// liquidity, vesting liquidity, pending fees A/B, and pending farm rewards 0/1.
-///
-/// Product angle: a split moves liquidity **between two wallets and leaves a
-/// traceable event**, unlike transferring the position NFT outright — the blind
-/// spot of any LP-concentration score. Splits are therefore visible to
-/// concentration analytics.
-///
-/// ## Why v3, when the instructions are `split_position` / `split_position2`
-///
-/// cp-amm versions events and instructions independently, and the numbers never
-/// line up. There is no `split_position3` instruction and no `EvtSplitPosition`
-/// v1: both `split_position` and `split_position2` route to the same handler,
-/// which emits **`EvtSplitPosition2` and `EvtSplitPosition3` unconditionally,
-/// on every split** (the `#[allow(deprecated)]` block around the v2 emission is
-/// an attribute scope, not a condition).
-///
-/// We mirror **v3 only**. It is a strict superset: v2 conflates the three
-/// liquidity buckets into one `liquidity` field, lacks `vested_liquidity` in
-/// the amounts, and lacks `inner_vesting_liquidity_numerator` in the
-/// parameters. Indexing both would be pure double counting, so the v2
-/// discriminator is recognised and dropped (see
-/// [`discriminator_split_position2`]).
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtSplitPosition3 {
-    pub pool: Pubkey,
-    pub first_owner: Pubkey,
-    pub second_owner: Pubkey,
-    pub first_position: Pubkey,
-    pub second_position: Pubkey,
-    pub current_sqrt_price: u128,
-    pub amount_splits: SplitAmountInfo2,
-    pub first_position_info: SplitPositionInfo2,
-    pub second_position_info: SplitPositionInfo2,
-    pub split_position_parameters: SplitPositionParameters3,
-}
-
-/// Mirror of `cp-amm::EvtCreatePosition`.
-///
-/// Emitted when an LP opens a new position on a pool. The position is
-/// represented on-chain by an NFT (`position_nft_mint`); `position` is the
-/// PDA holding the position state. Carries no token amounts — a freshly
-/// created position is empty until liquidity is added (see
-/// [`EvtLiquidityChange`]).
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtCreatePosition {
-    pub pool: Pubkey,
-    pub owner: Pubkey,
-    pub position: Pubkey,
-    pub position_nft_mint: Pubkey,
-}
-
-/// Mirror of `cp-amm::EvtClosePosition`.
-///
-/// Emitted when an LP closes a position and the position account is torn
-/// down on-chain. Same field shape as [`EvtCreatePosition`]; any remaining
-/// liquidity/fees are withdrawn through separate events prior to closing.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtClosePosition {
-    pub pool: Pubkey,
-    pub owner: Pubkey,
-    pub position: Pubkey,
-    pub position_nft_mint: Pubkey,
-}
-
-/// Mirror of `cp-amm::EvtLockPosition`.
-///
-/// Emitted when an LP locks a position under a vesting schedule. The locked
-/// liquidity unlocks linearly: `cliff_unlock_liquidity` becomes available at
-/// `cliff_point`, then `liquidity_per_period` every `period_frequency` for
-/// `number_of_period` periods. `vesting` is the account holding the schedule.
-///
-/// Field order mirrors the on-chain struct exactly (pool, position, owner,
-/// vesting, …) — do not reorder, it is the borsh contract.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtLockPosition {
-    pub pool: Pubkey,
-    pub position: Pubkey,
-    pub owner: Pubkey,
-    pub vesting: Pubkey,
-    pub cliff_point: u64,
-    pub period_frequency: u64,
-    pub cliff_unlock_liquidity: u128,
-    pub liquidity_per_period: u128,
-    pub number_of_period: u16,
-}
-
-/// Mirror of `cp-amm::EvtPermanentLockPosition`.
-///
-/// Emitted when an LP permanently locks part of a position's liquidity (no
-/// vesting, never unlocks). `lock_liquidity_amount` is the amount locked by
-/// this action; `total_permanent_locked_liquidity` is the position's running
-/// total after it. Carries no owner field — only pool and position identify
-/// it on-chain.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtPermanentLockPosition {
-    pub pool: Pubkey,
-    pub position: Pubkey,
-    pub lock_liquidity_amount: u128,
-    pub total_permanent_locked_liquidity: u128,
-}
-
-// ---------------------------------------------------------------------------
-// Sub-types referenced by EvtInitializePool
-// ---------------------------------------------------------------------------
-
-/// Mirror of `cp-amm::BaseFeeParameters`.
-///
-/// An opaque 27-byte packed blob on the program side (fee scheduler config).
-/// We do not interpret it here — it is captured losslessly and decoded later
-/// by the dedicated fee-tier work. Reproduced as a fixed array so the borsh
-/// layout of the surrounding [`PoolFeeParameters`] stays byte-exact.
-#[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
-pub struct BaseFeeParameters {
-    pub data: [u8; 27],
-}
-
-/// Mirror of `cp-amm::DynamicFeeParameters`.
-#[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
-pub struct DynamicFeeParameters {
-    pub bin_step: u16,
-    pub bin_step_u128: u128,
-    pub filter_period: u16,
-    pub decay_period: u16,
-    pub reduction_factor: u16,
-    pub max_volatility_accumulator: u32,
-    pub variable_fee_control: u32,
-}
-
-/// Mirror of `cp-amm::PoolFeeParameters`.
-///
-/// `dynamic_fee` is borsh-`Option`: a 1-byte tag precedes the inner struct
-/// when present. Field order mirrors the on-chain struct exactly — it sits
-/// in the middle of [`EvtInitializePool`], so any drift here corrupts every
-/// field after it. `BorshSerialize` is derived so the whole blob can be
-/// re-serialized and persisted raw (undecoded) under "voie C".
-#[derive(Debug, Clone, Copy, BorshDeserialize, BorshSerialize)]
-pub struct PoolFeeParameters {
-    pub base_fee: BaseFeeParameters,
-    pub compounding_fee_bps: u16,
-    pub padding: u8,
-    pub dynamic_fee: Option<DynamicFeeParameters>,
-}
-
-/// Mirror of `cp-amm::EvtInitializePool`.
-///
-/// Pool genesis: carries both mints, the initial AMM state (sqrt price /
-/// bounds, liquidity), the fee configuration, and the seeded token amounts.
-/// `pool_fees` is captured but not interpreted (see [`PoolFeeParameters`]).
-///
-/// Field order mirrors the on-chain struct exactly — do not reorder.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtInitializePool {
-    pub pool: Pubkey,
-    pub token_a_mint: Pubkey,
-    pub token_b_mint: Pubkey,
-    pub creator: Pubkey,
-    pub payer: Pubkey,
-    pub alpha_vault: Pubkey,
-    pub pool_fees: PoolFeeParameters,
-    pub sqrt_min_price: u128,
-    pub sqrt_max_price: u128,
-    pub activation_type: u8,
-    pub collect_fee_mode: u8,
-    pub liquidity: u128,
-    pub sqrt_price: u128,
-    pub activation_point: u64,
-    pub token_a_flag: u8,
-    pub token_b_flag: u8,
-    pub token_a_amount: u64,
-    pub token_b_amount: u64,
-    pub total_amount_a: u64,
-    pub total_amount_b: u64,
-    pub pool_type: u8,
-}
-
-/// Mirror of `cp-amm::EvtSetPoolStatus`.
-///
-/// Emitted when a pool's status flag is changed (e.g. enabled/disabled).
-/// `status` is the raw on-chain status byte — not interpreted here.
-#[derive(Debug, Clone, Copy, BorshDeserialize)]
-pub struct EvtSetPoolStatus {
-    pub pool: Pubkey,
-    pub status: u8,
-}
-
-/// Mirror of `cp-amm::EvtUpdatePoolFees`.
-///
-/// Emitted when a pool's fee parameters are updated by an operator. The
-/// nested `UpdatePoolFeesParameters` is **not** modelled — there is no test
-/// fixture to validate its (version-sensitive) layout, and "voie C" defers
-/// fee interpretation anyway. Instead, [`BorshDeserialize`] reads the two
-/// leading pubkeys and captures the remaining payload bytes verbatim into
-/// `params_raw`. This is robust to fee-struct schema changes: a later decode
-/// works from these stored bytes.
-#[derive(Debug, Clone)]
-pub struct EvtUpdatePoolFees {
-    pub pool: Pubkey,
-    pub operator: Pubkey,
-    /// Raw, undecoded bytes of the trailing `UpdatePoolFeesParameters`.
-    pub params_raw: Vec<u8>,
-}
-
-impl BorshDeserialize for EvtUpdatePoolFees {
-    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
-        let pool = Pubkey::deserialize_reader(reader)?;
-        let operator = Pubkey::deserialize_reader(reader)?;
-        let mut params_raw = Vec::new();
-        reader.read_to_end(&mut params_raw)?;
-        Ok(Self {
-            pool,
-            operator,
-            params_raw,
-        })
-    }
 }
 
 // ---------------------------------------------------------------------------

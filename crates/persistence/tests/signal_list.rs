@@ -6,11 +6,9 @@
 //! forward/backward keyset navigation, boundary flags, the id tie-break on
 //! equal timestamps, and the optional severity and pool filters.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::{
@@ -18,10 +16,6 @@ use yog_core::{
     domain::{Protocol, Severity, Signal, SignalCursor, SignalFeed, SignalRepository},
 };
 use yog_persistence::PgSignalRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 fn signal(pool: u8, severity: Severity, triggered_at: DateTime<Utc>) -> Signal {
     Signal {
