@@ -37,13 +37,14 @@ use crate::{
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimProtocolFee, EvtClaimReward, EvtClosePosition,
     EvtCreatePosition, EvtFundReward, EvtInitializePool, EvtInitializeReward, EvtLiquidityChange,
-    EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
-    EvtUpdateRewardDuration, EvtUpdateRewardFunder, EvtWithdrawDeadLiquidityReward,
-    EvtWithdrawIneligibleReward, discriminator_claim_position_fee,
+    EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus, EvtSplitPosition3, EvtSwap2,
+    EvtUpdatePoolFees, EvtUpdateRewardDuration, EvtUpdateRewardFunder,
+    EvtWithdrawDeadLiquidityReward, EvtWithdrawIneligibleReward, discriminator_claim_position_fee,
     discriminator_claim_protocol_fee, discriminator_claim_reward, discriminator_close_position,
     discriminator_create_position, discriminator_fund_reward, discriminator_initialize_pool,
     discriminator_initialize_reward, discriminator_liquidity_change, discriminator_lock_position,
-    discriminator_permanent_lock_position, discriminator_set_pool_status, discriminator_swap2,
+    discriminator_permanent_lock_position, discriminator_set_pool_status,
+    discriminator_split_position2, discriminator_split_position3, discriminator_swap2,
     discriminator_update_pool_fees, discriminator_update_reward_duration,
     discriminator_update_reward_funder, discriminator_withdraw_dead_liquidity_reward,
     discriminator_withdraw_ineligible_reward,
@@ -145,6 +146,8 @@ pub fn extract_wire_events(
         update_reward_duration: discriminator_update_reward_duration(),
         update_reward_funder: discriminator_update_reward_funder(),
         withdraw_dead_liquidity_reward: discriminator_withdraw_dead_liquidity_reward(),
+        split_position3: discriminator_split_position3(),
+        split_position2_deprecated: discriminator_split_position2(),
         create_position: discriminator_create_position(),
         close_position: discriminator_close_position(),
         lock_position: discriminator_lock_position(),
@@ -159,6 +162,8 @@ pub fn extract_wire_events(
         match decode_anchor_event_cpi(&raw) {
             Ok((disc, body)) => match dispatch(&disc, &body, &known) {
                 Dispatch::Recognized(event) => out.events.push(event),
+                // Deliberately dropped: recorded nowhere, by design.
+                Dispatch::Ignored => {}
                 Dispatch::Unknown => out.unknown.push(UnknownEvent {
                     discriminator: disc,
                 }),
@@ -201,6 +206,9 @@ struct KnownDiscriminators {
     update_reward_duration: [u8; DISCRIMINATOR_LEN],
     update_reward_funder: [u8; DISCRIMINATOR_LEN],
     withdraw_dead_liquidity_reward: [u8; DISCRIMINATOR_LEN],
+    split_position3: [u8; DISCRIMINATOR_LEN],
+    /// Recognised only so it can be dropped on purpose — never decoded.
+    split_position2_deprecated: [u8; DISCRIMINATOR_LEN],
     create_position: [u8; DISCRIMINATOR_LEN],
     close_position: [u8; DISCRIMINATOR_LEN],
     lock_position: [u8; DISCRIMINATOR_LEN],
@@ -213,6 +221,10 @@ struct KnownDiscriminators {
 /// Outcome of dispatching a single decoded event by its discriminator.
 enum Dispatch {
     Recognized(DammV2WireEvent),
+    /// Discriminator we know, and deliberately do not index. Distinct from
+    /// [`Dispatch::Unknown`], which must keep meaning "an event type we are
+    /// missing" — a deprecated duplicate is not a gap in coverage.
+    Ignored,
     Unknown,
     BorshFailed {
         event_name: &'static str,
@@ -298,6 +310,19 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
                 event_name: "EvtWithdrawDeadLiquidityReward",
                 reason,
             })
+    } else if disc == &known.split_position3 {
+        deserialize::<EvtSplitPosition3>(body, "EvtSplitPosition3")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::SplitPosition3(Box::new(e))))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtSplitPosition3",
+                reason,
+            })
+    } else if disc == &known.split_position2_deprecated {
+        // cp-amm emits EvtSplitPosition2 alongside EvtSplitPosition3 on every
+        // split, for backwards compatibility. v3 is a strict superset, so
+        // indexing both would double-count the same split. Drop it here rather
+        // than let it register as an unknown discriminator once per split.
+        Dispatch::Ignored
     } else if disc == &known.create_position {
         deserialize::<EvtCreatePosition>(body, "EvtCreatePosition")
             .map(|e| Dispatch::Recognized(DammV2WireEvent::CreatePosition(e)))

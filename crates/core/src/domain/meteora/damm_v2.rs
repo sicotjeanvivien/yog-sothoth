@@ -10,6 +10,7 @@ mod liquidity_event;
 mod lock_position_event;
 mod permanent_lock_position_event;
 mod set_pool_status_event;
+mod split_position_event;
 mod swap_event;
 mod update_pool_fees_event;
 mod update_reward_duration_event;
@@ -57,6 +58,10 @@ pub use permanent_lock_position_event::{
 pub use set_pool_status_event::{
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
 };
+pub use split_position_event::{
+    MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
+    MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,
+};
 pub use swap_event::{
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed,
     MeteoraDammV2SwapEventRepository,
@@ -95,6 +100,7 @@ pub enum MeteoraDammV2Event {
     UpdateRewardDuration(MeteoraDammV2UpdateRewardDurationEvent),
     UpdateRewardFunder(MeteoraDammV2UpdateRewardFunderEvent),
     WithdrawDeadLiquidityReward(MeteoraDammV2WithdrawDeadLiquidityRewardEvent),
+    SplitPosition(MeteoraDammV2SplitPositionEvent),
     CreatePosition(MeteoraDammV2CreatePositionEvent),
     ClosePosition(MeteoraDammV2ClosePositionEvent),
     LockPosition(MeteoraDammV2LockPositionEvent),
@@ -118,6 +124,7 @@ impl MeteoraDammV2Event {
             Self::UpdateRewardDuration(e) => e.pool_address,
             Self::UpdateRewardFunder(e) => e.pool_address,
             Self::WithdrawDeadLiquidityReward(e) => e.pool_address,
+            Self::SplitPosition(e) => e.pool_address,
             Self::CreatePosition(e) => e.pool_address,
             Self::ClosePosition(e) => e.pool_address,
             Self::LockPosition(e) => e.pool_address,
@@ -141,6 +148,7 @@ impl MeteoraDammV2Event {
             Self::UpdateRewardDuration(e) => e.signature,
             Self::UpdateRewardFunder(e) => e.signature,
             Self::WithdrawDeadLiquidityReward(e) => e.signature,
+            Self::SplitPosition(e) => e.signature,
             Self::CreatePosition(e) => e.signature,
             Self::ClosePosition(e) => e.signature,
             Self::LockPosition(e) => e.signature,
@@ -164,6 +172,7 @@ impl MeteoraDammV2Event {
             Self::UpdateRewardDuration(e) => e.timestamp,
             Self::UpdateRewardFunder(e) => e.timestamp,
             Self::WithdrawDeadLiquidityReward(e) => e.timestamp,
+            Self::SplitPosition(e) => e.timestamp,
             Self::CreatePosition(e) => e.timestamp,
             Self::ClosePosition(e) => e.timestamp,
             Self::LockPosition(e) => e.timestamp,
@@ -187,6 +196,7 @@ impl MeteoraDammV2Event {
             Self::UpdateRewardDuration(_) => "update_reward_duration",
             Self::UpdateRewardFunder(_) => "update_reward_funder",
             Self::WithdrawDeadLiquidityReward(_) => "withdraw_dead_liquidity_reward",
+            Self::SplitPosition(_) => "split_position",
             Self::CreatePosition(_) => "create_position",
             Self::ClosePosition(_) => "close_position",
             Self::LockPosition(_) => "lock_position",

@@ -6,7 +6,8 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEventKind, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+    MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
+    MeteoraDammV2SplitPositionState, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
     PoolRepository, TradeDirection,
 };
 
@@ -113,6 +114,12 @@ insert_only_mock!(
     MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
     "insert:withdraw_dead_liquidity_reward"
 );
+insert_only_mock!(
+    MockSplitPosition,
+    MeteoraDammV2SplitPositionEventRepository,
+    MeteoraDammV2SplitPositionEvent,
+    "insert:split_position"
+);
 
 // Ring-1 repos: record `insert`; their read methods are never hit by
 // `persist()`, so they stub out.
@@ -209,6 +216,7 @@ fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
         permanent_lock_position: Arc::new(MockPermLock(calls.clone())),
         initialize_pool: Arc::new(MockInit(calls.clone())),
         set_pool_status: Arc::new(MockSetStatus(calls.clone())),
+        split_position: Arc::new(MockSplitPosition(calls.clone())),
         update_pool_fees: Arc::new(MockUpdateFees(calls.clone())),
     };
     let pm = Arc::new(PoolMaintenance::new(
@@ -226,6 +234,40 @@ async fn route(
     calls.lock().unwrap().clear();
     p.persist(&ev).await;
     calls.lock().unwrap().clone()
+}
+
+fn split_amounts() -> MeteoraDammV2SplitAmounts {
+    MeteoraDammV2SplitAmounts {
+        permanent_locked_liquidity: 0,
+        unlocked_liquidity: 10,
+        vested_liquidity: 0,
+        fee_a: 1,
+        fee_b: 2,
+        reward_0: 0,
+        reward_1: 0,
+    }
+}
+fn split_state() -> MeteoraDammV2SplitPositionState {
+    MeteoraDammV2SplitPositionState {
+        unlocked_liquidity: 10,
+        permanent_locked_liquidity: 0,
+        vested_liquidity: 0,
+        fee_a: 1,
+        fee_b: 2,
+        reward_0: 0,
+        reward_1: 0,
+    }
+}
+fn split_numerators() -> MeteoraDammV2SplitNumerators {
+    MeteoraDammV2SplitNumerators {
+        unlocked_liquidity: 500_000_000,
+        permanent_locked_liquidity: 0,
+        fee_a: 0,
+        fee_b: 0,
+        reward_0: 0,
+        reward_1: 0,
+        inner_vesting_liquidity: 0,
+    }
 }
 
 fn swap() -> MeteoraDammV2SwapEvent {
@@ -433,6 +475,28 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         )
         .await,
         ["pool:touch", "insert:withdraw_dead_liquidity_reward"]
+    );
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::SplitPosition(MeteoraDammV2SplitPositionEvent {
+                pool_address: pk(1),
+                signature: sg(),
+                timestamp: ts(),
+                first_owner: pk(2),
+                second_owner: pk(3),
+                first_position: pk(4),
+                second_position: pk(5),
+                current_sqrt_price: 1,
+                amounts: split_amounts(),
+                first_position_after: split_state(),
+                second_position_after: split_state(),
+                numerators: split_numerators(),
+            })
+        )
+        .await,
+        ["pool:touch", "insert:split_position"]
     );
 
     // create / close: touch + insert.
