@@ -1,0 +1,74 @@
+{
+  "blockTime": 1783511795,
+  "meta": {
+    "computeUnitsConsumed": 1771,
+    "costUnits": 3645,
+    "err": null,
+    "fee": 5000,
+    "innerInstructions": [],
+    "logMessages": [
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: SetPairStatusPermissionless",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 1771 of 200000 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success"
+    ],
+    "postBalances": [
+      1284754402,
+      7182720,
+      37027465
+    ],
+    "postTokenBalances": [],
+    "preBalances": [
+      1284759402,
+      7182720,
+      37027465
+    ],
+    "preTokenBalances": [],
+    "rewards": [],
+    "status": {
+      "Ok": null
+    }
+  },
+  "slot": 431584259,
+  "transaction": {
+    "message": {
+      "accountKeys": [
+        {
+          "pubkey": "7tHdKLCm9wFJhSBbKZSSBkv7dFzGkWjfs7gZw7y2o4FP",
+          "signer": true,
+          "source": "transaction",
+          "writable": true
+        },
+        {
+          "pubkey": "3Ch94TdQmfKChFj9dvPJ8dmcso9q4r7AWKQ3HGesDesP",
+          "signer": false,
+          "source": "transaction",
+          "writable": true
+        },
+        {
+          "pubkey": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "signer": false,
+          "source": "transaction",
+          "writable": false
+        }
+      ],
+      "instructions": [
+        {
+          "accounts": [
+            "3Ch94TdQmfKChFj9dvPJ8dmcso9q4r7AWKQ3HGesDesP",
+            "7tHdKLCm9wFJhSBbKZSSBkv7dFzGkWjfs7gZw7y2o4FP"
+          ],
+          "data": "zksn8yfQsHFN",
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "stackHeight": 1
+        }
+      ],
+      "recentBlockhash": "AWYz4AYsiZeQqsiPZcKcGu6i4uPNQN2vpi4fWTwQ8pmX"
+    },
+    "signatures": [
+      "5pQqQPNxW8P8ziSCA5XfSy1sEiAWKgMJWoopyLj7QzbmzwyhJ5dbYKPy8XgAhbCsad4j2WGdmSDNXoiBrTJ6odNG"
+    ]
+  },
+  "transactionIndex": 0,
+  "version": "legacy"
+}

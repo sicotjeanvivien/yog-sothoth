@@ -1,0 +1,83 @@
+{
+  "slot": 419643043,
+  "transaction": {
+    "signatures": [
+      "1L63sHCSk88rLwUdG6hmvJvuS5KinYN5itGgfSc4Uv4z24Qrvv2tPzKrGqehC8T8wqKEfUTgA25CvE8JicTHWKX"
+    ],
+    "message": {
+      "accountKeys": [
+        {
+          "pubkey": "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE",
+          "writable": true,
+          "signer": true,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "D8uyvAwJ9ac5PUtrGVwAnHyi7CShqERvsM7fYSr5AmPk",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "3ufqCAjSypP51HbMf8LRFzdtknjDpXyEqvBR665PcgHa",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        }
+      ],
+      "recentBlockhash": "58WaDVciir2rATcM39V6a5cc556S2BkreyXmqAA1KkpC",
+      "instructions": [
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "D8uyvAwJ9ac5PUtrGVwAnHyi7CShqERvsM7fYSr5AmPk",
+            "3ufqCAjSypP51HbMf8LRFzdtknjDpXyEqvBR665PcgHa",
+            "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE",
+            "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE"
+          ],
+          "data": "mSEaKGShfi",
+          "stackHeight": 1
+        }
+      ]
+    }
+  },
+  "meta": {
+    "err": null,
+    "status": {
+      "Ok": null
+    },
+    "fee": 5000,
+    "preBalances": [
+      4439591102,
+      1141440,
+      1392000,
+      34988462
+    ],
+    "postBalances": [
+      4440727542,
+      0,
+      1392000,
+      34988462
+    ],
+    "innerInstructions": [],
+    "logMessages": [
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: ClosePresetParameter",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 1965 of 200000 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success"
+    ],
+    "preTokenBalances": [],
+    "postTokenBalances": [],
+    "rewards": [],
+    "computeUnitsConsumed": 1965,
+    "costUnits": 3807
+  },
+  "version": "legacy",
+  "blockTime": 1778744238
+}

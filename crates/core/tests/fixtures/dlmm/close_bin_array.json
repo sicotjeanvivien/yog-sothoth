@@ -1,0 +1,198 @@
+{
+  "slot": 419394184,
+  "transaction": {
+    "signatures": [
+      "3g6RERW6BKnkqq9FdxMuWvP8PcxugbvCYCH2dByPbSi2RU9rd9uat4kESKYBfJQDXWc4k83W2CFb3S6fmQNn2uuM"
+    ],
+    "message": {
+      "accountKeys": [
+        {
+          "pubkey": "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+          "writable": true,
+          "signer": true,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "4kMoeUkoE2ioP3JUMxxLF5xLWHWXHMh39PCNjcKf1oGS",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "9VeCoRZMnhXmx8VQe1vMBXYTbyFjXnL1DbJL7buAZ5th",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "AcmduUyF3uBN5oFdX4MauG5vJBHgemqmpSezRqgZTpPU",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "AmzAbuV5LqwFFQjKUm85cJmJB42s3dppKyG9ATXtuP9r",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "Edn21hKx4jtANxijvDGioRZJWQoAFPwpvzAUNfBe812H",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "JDM79gBDNHvDHHNE1ZobQKDG2nN9D5zbXQmGTXQBp1e6",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        }
+      ],
+      "recentBlockhash": "9hNeD5c8vCeUF6xFq3WeDGy27co1zYfTvAZq89drKM1Y",
+      "instructions": [
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+            "Edn21hKx4jtANxijvDGioRZJWQoAFPwpvzAUNfBe812H",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "CVHwY5b9oWw",
+          "stackHeight": 1
+        },
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+            "JDM79gBDNHvDHHNE1ZobQKDG2nN9D5zbXQmGTXQBp1e6",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "CVHwY5b9oWw",
+          "stackHeight": 1
+        },
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+            "4kMoeUkoE2ioP3JUMxxLF5xLWHWXHMh39PCNjcKf1oGS",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "CVHwY5b9oWw",
+          "stackHeight": 1
+        },
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+            "AcmduUyF3uBN5oFdX4MauG5vJBHgemqmpSezRqgZTpPU",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "CVHwY5b9oWw",
+          "stackHeight": 1
+        },
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+            "AmzAbuV5LqwFFQjKUm85cJmJB42s3dppKyG9ATXtuP9r",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "CVHwY5b9oWw",
+          "stackHeight": 1
+        },
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3",
+            "9VeCoRZMnhXmx8VQe1vMBXYTbyFjXnL1DbJL7buAZ5th",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "CVHwY5b9oWw",
+          "stackHeight": 1
+        }
+      ]
+    }
+  },
+  "meta": {
+    "err": null,
+    "status": {
+      "Ok": null
+    },
+    "fee": 5000,
+    "preBalances": [
+      48218916365,
+      71437440,
+      71437440,
+      71437440,
+      71437440,
+      71437440,
+      71437440,
+      7182720,
+      34988462
+    ],
+    "postBalances": [
+      48647536005,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      7182720,
+      34988462
+    ],
+    "innerInstructions": [],
+    "logMessages": [
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseBinArray",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 6950 of 1200000 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseBinArray",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 6950 of 1193050 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseBinArray",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 6950 of 1186100 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseBinArray",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 6950 of 1179150 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseBinArray",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 6950 of 1172200 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseBinArray",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 6950 of 1165250 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success"
+    ],
+    "preTokenBalances": [],
+    "postTokenBalances": [],
+    "rewards": [],
+    "computeUnitsConsumed": 41700,
+    "costUnits": 45068
+  },
+  "version": "legacy",
+  "blockTime": 1778644915
+}
