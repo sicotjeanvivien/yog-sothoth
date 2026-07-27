@@ -46,7 +46,7 @@ fn load_fixture(name: &str) -> EncodedConfirmedTransactionWithStatusMeta {
 /// The extractor must surface both as `DammV2WireEvent::Swap2`.
 #[test]
 fn extracts_both_swaps_from_double_swap_tx() {
-    let tx = load_fixture("damm_v2_swap_double.json");
+    let tx = load_fixture("damm_v2/swap_double.json");
 
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     // Sanity: no failure path triggered.
@@ -88,7 +88,7 @@ fn extracts_both_swaps_from_double_swap_tx() {
 /// pool state. So we don't compare event reserves to `post_token_balances`.
 #[test]
 fn decoded_swap_values_match_onchain_reality() {
-    let tx = load_fixture("damm_v2_swap_double.json");
+    let tx = load_fixture("damm_v2/swap_double.json");
 
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert_eq!(extracted.events.len(), 2, "expected 2 events");
@@ -154,7 +154,7 @@ fn decoded_swap_values_match_onchain_reality() {
 /// mints, non-zero amounts/reserves/liquidity_delta, translation preserved.
 #[test]
 fn decodes_liquidity_add_fixtures() {
-    for fixture in ["damm_v2_liquidity_add.json", "damm_v2_liquidity_add_2.json"] {
+    for fixture in ["damm_v2/liquidity_add.json", "damm_v2/liquidity_add_2.json"] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
         assert!(
@@ -215,7 +215,7 @@ fn extracts_swap_via_router_correctly() {
     // Expected: exactly one EvtSwap2 extracted and successfully translated
     // into a SwapEvent with correct mints (SOL, USDC sorted by raw bytes).
 
-    let json = include_str!("fixtures/damm_v2_swap_via_router.json");
+    let json = include_str!("fixtures/damm_v2/swap_via_router.json");
     let tx: EncodedConfirmedTransactionWithStatusMeta =
         serde_json::from_str(json).expect("failed to deserialize transaction");
 
@@ -270,12 +270,12 @@ fn extracts_swap_via_router_correctly() {
 #[test]
 fn decodes_initialize_pool_fixtures() {
     for fixture in [
-        "damm_v2_initialize_pool.json",
-        "damm_v2_initialize_pool_2.json",
-        "damm_v2_initialize_pool_3.json",
-        "damm_v2_initialize_pool_4.json",
-        "damm_v2_initialize_pool_5.json",
-        "damm_v2_initialize_pool_6.json",
+        "damm_v2/initialize_pool.json",
+        "damm_v2/initialize_pool_2.json",
+        "damm_v2/initialize_pool_3.json",
+        "damm_v2/initialize_pool_4.json",
+        "damm_v2/initialize_pool_5.json",
+        "damm_v2/initialize_pool_6.json",
     ] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
@@ -345,7 +345,7 @@ fn decodes_initialize_pool_fixtures() {
 /// wire layout on real data.
 #[test]
 fn decodes_claim_protocol_fee_fixture() {
-    let tx = load_fixture("damm_v2_claim_protocol_fee.json");
+    let tx = load_fixture("damm_v2/claim_protocol_fee.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
 
     assert!(
@@ -386,7 +386,7 @@ fn decodes_claim_protocol_fee_fixture() {
 /// that comes from the cp-amm source.
 #[test]
 fn decodes_initialize_reward_fixture() {
-    let tx = load_fixture("damm_v2_initialize_reward.json");
+    let tx = load_fixture("damm_v2/initialize_reward.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
 
     assert!(
@@ -429,15 +429,15 @@ fn decodes_initialize_reward_fixture() {
 /// funder depositing rewards and (re)setting the slot's emission rate.
 ///
 /// Two fixtures covering both regimes:
-/// - `damm_v2_initialize_reward.json`: slot funded for the *first* time
+/// - `damm_v2/initialize_reward.json`: slot funded for the *first* time
 ///   (`pre_reward_rate == 0`), in the same transaction that opened it.
-/// - `damm_v2_fund_reward.json`: a *re-fund* of a live slot
+/// - `damm_v2/fund_reward.json`: a *re-fund* of a live slot
 ///   (`pre_reward_rate > 0`), where the undistributed remainder is carried
 ///   forward into the new window.
 #[test]
 fn decodes_fund_reward_fixtures() {
     // Fresh slot: opened and funded in one transaction.
-    let tx = load_fixture("damm_v2_initialize_reward.json");
+    let tx = load_fixture("damm_v2/initialize_reward.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(
         extracted.failures.is_empty(),
@@ -487,7 +487,7 @@ fn decodes_fund_reward_fixtures() {
     );
 
     // Re-fund of a live slot: carry-forward regime.
-    let tx = load_fixture("damm_v2_fund_reward.json");
+    let tx = load_fixture("damm_v2/fund_reward.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(
         extracted.failures.is_empty(),
@@ -546,7 +546,7 @@ fn decodes_fund_reward_fixtures() {
 /// the amount field is pinned but not discriminating. The two pubkeys are.
 #[test]
 fn decodes_withdraw_ineligible_reward_fixture() {
-    let tx = load_fixture("damm_v2_withdraw_ineligible_reward.json");
+    let tx = load_fixture("damm_v2/withdraw_ineligible_reward.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
 
     assert!(
@@ -610,7 +610,7 @@ fn decodes_withdraw_ineligible_reward_fixture() {
 /// skipped silently rather than counted as unknown discriminators or failures.
 #[test]
 fn zap_protocol_fee_emits_no_event_of_its_own() {
-    let tx = load_fixture("damm_v2_zap_protocol_fee.json");
+    let tx = load_fixture("damm_v2/zap_protocol_fee.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
 
     assert!(
@@ -654,14 +654,14 @@ fn zap_protocol_fee_emits_no_event_of_its_own() {
 /// attribute scope, not a condition), and they describe the *same* split. v3 is
 /// a strict superset, so v2 is recognised and discarded at extraction.
 ///
-/// `damm_v2_split_position2.json` additionally carries an `EvtCreatePosition`:
+/// `damm_v2/split_position2.json` additionally carries an `EvtCreatePosition`:
 /// a split needs a second position to split into, so the same transaction
 /// creates it first. That event is indexed normally.
 #[test]
 fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
     for fixture in [
-        "damm_v2_split_position.json",
-        "damm_v2_split_position2.json",
+        "damm_v2/split_position.json",
+        "damm_v2/split_position2.json",
     ] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
@@ -744,7 +744,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
     }
 
     // The second fixture creates the receiving position in the same tx.
-    let tx = load_fixture("damm_v2_split_position2.json");
+    let tx = load_fixture("damm_v2/split_position2.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(
         extracted
@@ -769,21 +769,21 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
     // (5), RateLimiter (6); and both has_dynamic_fee values (false only on 5).
     let cases = [
         (
-            "damm_v2_initialize_pool.json",
+            "damm_v2/initialize_pool.json",
             FeeConfig {
                 base_kind: BaseFeeKind::SchedulerLinear,
                 has_dynamic_fee: true,
             },
         ),
         (
-            "damm_v2_initialize_pool_2.json",
+            "damm_v2/initialize_pool_2.json",
             FeeConfig {
                 base_kind: BaseFeeKind::Constant,
                 has_dynamic_fee: true,
             },
         ),
         (
-            "damm_v2_initialize_pool_3.json",
+            "damm_v2/initialize_pool_3.json",
             FeeConfig {
                 base_kind: BaseFeeKind::Constant,
                 has_dynamic_fee: true,
@@ -793,7 +793,7 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
         // to fixture_3 (constant 100 bps + dynamic) — no new fee-config case,
         // kept as another extraction/layout data point.
         (
-            "damm_v2_initialize_pool_4.json",
+            "damm_v2/initialize_pool_4.json",
             FeeConfig {
                 base_kind: BaseFeeKind::Constant,
                 has_dynamic_fee: true,
@@ -804,7 +804,7 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
         // with NO dynamic fee (Option tag 0, so the blob ends at 31 bytes, no
         // trailing DynamicFeeParameters — exercising the length boundary too).
         (
-            "damm_v2_initialize_pool_5.json",
+            "damm_v2/initialize_pool_5.json",
             FeeConfig {
                 base_kind: BaseFeeKind::SchedulerExponential,
                 has_dynamic_fee: false,
@@ -815,7 +815,7 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
         // must classify it as RateLimiter WITHOUT reading them as scheduler
         // fields (and decode_base_fee_bps still reads the shared leading u64).
         (
-            "damm_v2_initialize_pool_6.json",
+            "damm_v2/initialize_pool_6.json",
             FeeConfig {
                 base_kind: BaseFeeKind::RateLimiter,
                 has_dynamic_fee: true,
@@ -850,8 +850,8 @@ fn decode_fee_config_matches_real_genesis_fixtures() {
 #[test]
 fn decodes_create_position_from_genesis_fixtures() {
     for fixture in [
-        "damm_v2_initialize_pool.json",
-        "damm_v2_initialize_pool_2.json",
+        "damm_v2/initialize_pool.json",
+        "damm_v2/initialize_pool_2.json",
     ] {
         let tx = load_fixture(fixture);
         let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
@@ -914,7 +914,7 @@ fn decodes_create_position_from_genesis_fixtures() {
 /// close transaction: clean decode, sane distinct fields, translation preserved.
 #[test]
 fn decodes_close_position_fixture() {
-    let tx = load_fixture("damm_v2_close_position.json");
+    let tx = load_fixture("damm_v2/close_position.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(extracted.failures.is_empty(), "{:?}", extracted.failures);
 
@@ -959,7 +959,7 @@ fn decodes_close_position_fixture() {
 /// numerics are checked for coherence and round-tripped through the domain.
 #[test]
 fn decodes_lock_position_fixture() {
-    let tx = load_fixture("damm_v2_lock_position.json");
+    let tx = load_fixture("damm_v2/lock_position.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(extracted.failures.is_empty(), "{:?}", extracted.failures);
 
@@ -1029,7 +1029,7 @@ fn decodes_lock_position_fixture() {
 /// scrambled layout would almost certainly violate.
 #[test]
 fn decodes_permanent_lock_position_fixture() {
-    let tx = load_fixture("damm_v2_permanent_lock_position.json");
+    let tx = load_fixture("damm_v2/permanent_lock_position.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     // This tx also contains an 8-byte tag-only cp-amm self-CPI that trips the
     // anchor decoder (a benign, pre-existing skip-and-log case). Tolerate that
@@ -1093,7 +1093,7 @@ fn decodes_permanent_lock_position_fixture() {
 /// pubkeys, and a full wire→domain translation preserving every field.
 #[test]
 fn decodes_claim_position_fee_fixture() {
-    let tx = load_fixture("damm_v2_claim_position_fee.json");
+    let tx = load_fixture("damm_v2/claim_position_fee.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(
         !extracted
@@ -1136,7 +1136,7 @@ fn decodes_claim_position_fee_fixture() {
 /// on a real reward claim. `reward_index` disambiguates the reward stream.
 #[test]
 fn decodes_claim_reward_fixture() {
-    let tx = load_fixture("damm_v2_claim_reward.json");
+    let tx = load_fixture("damm_v2/claim_reward.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
     assert!(
         !extracted
@@ -1184,7 +1184,7 @@ fn decodes_claim_reward_fixture() {
 /// (pool, operator) is correct on a real on-chain transaction.
 #[test]
 fn decodes_update_pool_fees_fixture() {
-    let tx = load_fixture("damm_v2_update_pool_fees.json");
+    let tx = load_fixture("damm_v2/update_pool_fees.json");
     let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
 
     assert!(

@@ -69,7 +69,7 @@ fn test_net_price_impact_higher_than_without_fee() {
 
 // ── decode_base_fee_bps ─────────────────────────────────────────────────
 
-/// Real `base_fee` bytes captured from `damm_v2_initialize_pool_2.json`:
+/// Real `base_fee` bytes captured from `damm_v2/initialize_pool_2.json`:
 /// a constant-fee pool, cliff_fee_numerator = 2_500_000 → 0.25 % = 25 bps,
 /// mode 0 (linear scheduler, no periods).
 #[test]
@@ -84,7 +84,7 @@ fn decode_base_fee_bps_constant_25bps() {
     );
 }
 
-/// Real `base_fee` bytes from `damm_v2_initialize_pool.json`: an anti-sniper
+/// Real `base_fee` bytes from `damm_v2/initialize_pool.json`: an anti-sniper
 /// fee-scheduler pool starting at 50% — cliff_fee_numerator = 500_000_000 →
 /// 5000 bps. We surface the genesis cliff, not the decayed value.
 #[test]
@@ -136,7 +136,7 @@ fn decode_base_fee_bps_too_short_errors() {
 
 // ── decode_fee_config ───────────────────────────────────────────────────
 
-/// Full 63-byte `pool_fees_raw` from `damm_v2_initialize_pool_2.json`: a
+/// Full 63-byte `pool_fees_raw` from `damm_v2/initialize_pool_2.json`: a
 /// constant-fee pool (mode 0, number_of_period 0) carrying a dynamic fee.
 const REAL_CONSTANT_BLOB: [u8; 63] = [
     160, 37, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 39, 0,
@@ -144,7 +144,7 @@ const REAL_CONSTANT_BLOB: [u8; 63] = [
     164, 220, 0, 239, 0, 0, 0,
 ];
 
-/// Full 63-byte `pool_fees_raw` from `damm_v2_initialize_pool.json`: an
+/// Full 63-byte `pool_fees_raw` from `damm_v2/initialize_pool.json`: an
 /// anti-sniper linear fee scheduler (mode 0, number_of_period 144) with a
 /// dynamic fee.
 const REAL_SCHEDULER_BLOB: [u8; 63] = [
@@ -273,7 +273,7 @@ fn decode_fee_config_bad_dynamic_tag_errors() {
 
 // ── decode_updated_base_fee_bps ─────────────────────────────────────────
 
-/// Real `params_raw` bytes from `damm_v2_update_pool_fees.json`:
+/// Real `params_raw` bytes from `damm_v2/update_pool_fees.json`:
 /// cliff_fee_numerator = Some(12_800_000) → 128 bps, followed by a
 /// dynamic_fee (Some) and NO compounding_fee_bps field (the tx predates it)
 /// — which the leading-field decode ignores.

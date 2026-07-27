@@ -11,7 +11,7 @@ use super::helpers::{pk, sg, ts};
 #[sqlx::test]
 async fn fund_reward_preserves_q64_rates(pool: PgPool) {
     let repo = PgMeteoraDammV2FundRewardEventRepository::new(pool.clone());
-    // Real fixture values (damm_v2_initialize_reward.json): a slot's first
+    // Real fixture values (damm_v2/initialize_reward.json): a slot's first
     // funding, so pre_reward_rate is 0 and post = (amount << 64) / 604800.
     const POST_RATE: u128 = 3_050_056_890_494_304_169_312_169;
     let event = MeteoraDammV2FundRewardEvent {
