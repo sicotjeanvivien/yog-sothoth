@@ -26,11 +26,13 @@ use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
     PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
     PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
-    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2FundRewardEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2InitializeRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
     PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
-    PgMeteoraDammV2UpdatePoolFeesEventRepository, PgNetworkStatusRepository,
+    PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
     PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository,
 };
 
@@ -197,6 +199,11 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         claim_position_fee: Arc::new(PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool())),
         claim_protocol_fee: Arc::new(PgMeteoraDammV2ClaimProtocolFeeEventRepository::new(pool())),
         claim_reward: Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(pool())),
+        initialize_reward: Arc::new(PgMeteoraDammV2InitializeRewardEventRepository::new(pool())),
+        fund_reward: Arc::new(PgMeteoraDammV2FundRewardEventRepository::new(pool())),
+        withdraw_ineligible_reward: Arc::new(
+            PgMeteoraDammV2WithdrawIneligibleRewardEventRepository::new(pool()),
+        ),
         create_position: Arc::new(PgMeteoraDammV2CreatePositionEventRepository::new(pool())),
         close_position: Arc::new(PgMeteoraDammV2ClosePositionEventRepository::new(pool())),
         lock_position: Arc::new(PgMeteoraDammV2LockPositionEventRepository::new(pool())),

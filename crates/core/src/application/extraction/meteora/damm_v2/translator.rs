@@ -16,19 +16,21 @@ use crate::{
     domain::{
         MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimProtocolFeeEvent,
         MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClosePositionEvent,
-        MeteoraDammV2CreatePositionEvent, MeteoraDammV2InitializePoolEvent,
+        MeteoraDammV2CreatePositionEvent, MeteoraDammV2FundRewardEvent,
+        MeteoraDammV2InitializePoolEvent, MeteoraDammV2InitializeRewardEvent,
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
         MeteoraDammV2LockPositionEvent, MeteoraDammV2PermanentLockPositionEvent,
         MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SwapEvent, MeteoraDammV2UpdatePoolFeesEvent,
-        TradeDirection,
+        MeteoraDammV2WithdrawIneligibleRewardEvent, TradeDirection,
     },
     error::TranslationError,
 };
 
 use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimProtocolFee, EvtClaimReward, EvtClosePosition,
-    EvtCreatePosition, EvtInitializePool, EvtLiquidityChange, EvtLockPosition,
-    EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
+    EvtCreatePosition, EvtFundReward, EvtInitializePool, EvtInitializeReward, EvtLiquidityChange,
+    EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
+    EvtWithdrawIneligibleReward,
 };
 
 // ---------------------------------------------------------------------------
@@ -179,6 +181,68 @@ pub(super) fn translate_claim_protocol_fee(
         timestamp,
         token_a_amount: wire.token_a_amount,
         token_b_amount: wire.token_b_amount,
+    }
+}
+
+/// Translate an [`EvtInitializeReward`] into a [`MeteoraDammV2InitializeRewardEvent`].
+///
+/// This translation is infallible — every field maps directly.
+pub(super) fn translate_initialize_reward(
+    wire: &EvtInitializeReward,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2InitializeRewardEvent {
+    MeteoraDammV2InitializeRewardEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        reward_mint: wire.reward_mint,
+        funder: wire.funder,
+        creator: wire.creator,
+        reward_index: wire.reward_index,
+        reward_duration: wire.reward_duration,
+    }
+}
+
+/// Translate an [`EvtFundReward`] into a [`MeteoraDammV2FundRewardEvent`].
+///
+/// This translation is infallible — every field maps directly. The Q64.64 rate
+/// pair is carried through unscaled; interpreting it is the reader's job.
+pub(super) fn translate_fund_reward(
+    wire: &EvtFundReward,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2FundRewardEvent {
+    MeteoraDammV2FundRewardEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        funder: wire.funder,
+        mint_reward: wire.mint_reward,
+        reward_index: wire.reward_index,
+        amount: wire.amount,
+        transfer_fee_excluded_amount_in: wire.transfer_fee_excluded_amount_in,
+        reward_duration_end: wire.reward_duration_end,
+        pre_reward_rate: wire.pre_reward_rate,
+        post_reward_rate: wire.post_reward_rate,
+    }
+}
+
+/// Translate an [`EvtWithdrawIneligibleReward`] into a
+/// [`MeteoraDammV2WithdrawIneligibleRewardEvent`].
+///
+/// This translation is infallible — every field maps directly.
+pub(super) fn translate_withdraw_ineligible_reward(
+    wire: &EvtWithdrawIneligibleReward,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2WithdrawIneligibleRewardEvent {
+    MeteoraDammV2WithdrawIneligibleRewardEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        reward_mint: wire.reward_mint,
+        amount: wire.amount,
     }
 }
 
@@ -390,6 +454,17 @@ pub(super) fn translate_wire_event(
         DammV2WireEvent::ClaimProtocolFee(e) => MeteoraDammV2Event::ClaimProtocolFee(
             translate_claim_protocol_fee(e, signature, timestamp),
         ),
+        DammV2WireEvent::InitializeReward(e) => MeteoraDammV2Event::InitializeReward(
+            translate_initialize_reward(e, signature, timestamp),
+        ),
+        DammV2WireEvent::FundReward(e) => {
+            MeteoraDammV2Event::FundReward(translate_fund_reward(e, signature, timestamp))
+        }
+        DammV2WireEvent::WithdrawIneligibleReward(e) => {
+            MeteoraDammV2Event::WithdrawIneligibleReward(translate_withdraw_ineligible_reward(
+                e, signature, timestamp,
+            ))
+        }
         DammV2WireEvent::CreatePosition(e) => {
             MeteoraDammV2Event::CreatePosition(translate_create_position(e, signature, timestamp))
         }

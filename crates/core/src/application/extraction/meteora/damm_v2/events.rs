@@ -39,6 +39,9 @@
 //!   `change_type`)
 //! - [`EvtClaimPositionFee`] — LP claims accumulated trading fees
 //! - [`EvtClaimReward`] — LP claims farming rewards
+//! - [`EvtInitializeReward`] — admin opens a farming reward slot on a pool
+//! - [`EvtFundReward`] — funder deposits rewards and (re)sets the emission rate
+//! - [`EvtWithdrawIneligibleReward`] — funder reclaims rewards nobody could earn
 //! - [`EvtCreatePosition`] — LP opens a new (empty) position
 //! - [`EvtClosePosition`] — LP closes a position
 //! - [`EvtLockPosition`] — LP locks a position under a vesting schedule
@@ -96,6 +99,21 @@ pub fn discriminator_claim_reward() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtClaimProtocolFee`].
 pub fn discriminator_claim_protocol_fee() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtClaimProtocolFee")
+}
+
+/// Discriminator for [`EvtInitializeReward`].
+pub fn discriminator_initialize_reward() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtInitializeReward")
+}
+
+/// Discriminator for [`EvtFundReward`].
+pub fn discriminator_fund_reward() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtFundReward")
+}
+
+/// Discriminator for [`EvtWithdrawIneligibleReward`].
+pub fn discriminator_withdraw_ineligible_reward() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtWithdrawIneligibleReward")
 }
 
 /// Discriminator for [`EvtCreatePosition`].
@@ -286,6 +304,102 @@ pub struct EvtClaimProtocolFee {
     pub pool: Pubkey,
     pub token_a_amount: u64,
     pub token_b_amount: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Wire events — rewards / farming (liquidity mining)
+// ---------------------------------------------------------------------------
+//
+// A pool carries up to `NUM_REWARDS` reward slots, addressed by `reward_index`.
+// Each slot streams one reward token to in-range LPs at a constant rate over a
+// duration window. These are the admin/funder side of the farm; the LP side
+// (`EvtClaimReward`) is modelled above.
+
+/// Mirror of `cp-amm::EvtInitializeReward`.
+///
+/// Emitted when an admin **opens a reward slot** on a pool: it declares which
+/// token will be distributed (`reward_mint`), who is allowed to fund it
+/// (`funder`), which of the pool's slots is being opened (`reward_index`) and
+/// the length of a funding window in seconds (`reward_duration`).
+///
+/// Opening a slot distributes nothing on its own — the tokens and the emission
+/// rate arrive with [`EvtFundReward`], which typically follows in the same
+/// transaction.
+///
+/// `funder` and `creator` are frequently the same wallet, so a fixture cannot
+/// discriminate their order — it comes from the cp-amm source.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtInitializeReward {
+    pub pool: Pubkey,
+    pub reward_mint: Pubkey,
+    pub funder: Pubkey,
+    pub creator: Pubkey,
+    pub reward_index: u8,
+    pub reward_duration: u64,
+}
+
+/// Mirror of `cp-amm::EvtFundReward`.
+///
+/// The economic core of the farm: the funder deposits `amount` reward tokens
+/// into a slot and the program **recomputes the emission rate** over the slot's
+/// configured duration.
+///
+/// ## Rate scale — Q64.64
+///
+/// `pre_reward_rate` / `post_reward_rate` are reward base units per second in
+/// **Q64.64 fixed point**: divide by `2^64` to read them as a plain rate. On a
+/// freshly opened slot this holds exactly:
+///
+/// ```text
+/// post_reward_rate == (amount << 64) / reward_duration
+/// ```
+///
+/// ## Carry-forward
+///
+/// Funding an already-running slot does not discard what is left of the current
+/// window: the program folds the undistributed remainder into the new window, so
+/// `post_reward_rate` reflects `amount + leftover`, not `amount` alone. cp-amm
+/// exposes this only through the rate pair — there is no explicit
+/// `carry_forward` field on the event. The leftover is therefore recoverable as
+/// `(post_reward_rate * duration >> 64) - amount`.
+///
+/// `amount` is what the funder sent; `transfer_fee_excluded_amount_in` is what
+/// actually landed in the vault. They differ only for Token-2022 mints charging
+/// a transfer fee.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtFundReward {
+    pub pool: Pubkey,
+    pub funder: Pubkey,
+    pub mint_reward: Pubkey,
+    pub reward_index: u8,
+    pub amount: u64,
+    pub transfer_fee_excluded_amount_in: u64,
+    /// Unix timestamp (seconds) at which the current emission window ends.
+    pub reward_duration_end: u64,
+    pub pre_reward_rate: u128,
+    pub post_reward_rate: u128,
+}
+
+/// Mirror of `cp-amm::EvtWithdrawIneligibleReward`.
+///
+/// Emitted when the funder reclaims reward tokens that **nobody could earn**:
+/// rewards that accrued while the pool held no eligible (in-range) liquidity
+/// would otherwise stay locked in the vault forever. Withdrawable only after
+/// the emission window has ended.
+///
+/// A high `amount` relative to what was funded means the farm largely missed
+/// its target — it emitted into an empty pool.
+///
+/// Note: cp-amm has a second, structurally identical event,
+/// `EvtWithdrawDeadLiquidityReward` (same three fields), covering the reward
+/// share of permanently locked liquidity with no owner to claim it. It is a
+/// *distinct* event with its own discriminator and is not decoded here — no
+/// fixture has been captured for it yet.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtWithdrawIneligibleReward {
+    pub pool: Pubkey,
+    pub reward_mint: Pubkey,
+    pub amount: u64,
 }
 
 /// Mirror of `cp-amm::EvtCreatePosition`.
@@ -485,6 +599,9 @@ pub enum DammV2WireEvent {
     ClaimPositionFee(EvtClaimPositionFee),
     ClaimReward(EvtClaimReward),
     ClaimProtocolFee(EvtClaimProtocolFee),
+    InitializeReward(EvtInitializeReward),
+    FundReward(EvtFundReward),
+    WithdrawIneligibleReward(EvtWithdrawIneligibleReward),
     CreatePosition(EvtCreatePosition),
     ClosePosition(EvtClosePosition),
     LockPosition(EvtLockPosition),
@@ -506,6 +623,9 @@ impl DammV2WireEvent {
             Self::ClaimPositionFee(e) => e.pool,
             Self::ClaimReward(e) => e.pool,
             Self::ClaimProtocolFee(e) => e.pool,
+            Self::InitializeReward(e) => e.pool,
+            Self::FundReward(e) => e.pool,
+            Self::WithdrawIneligibleReward(e) => e.pool,
             Self::CreatePosition(e) => e.pool,
             Self::ClosePosition(e) => e.pool,
             Self::LockPosition(e) => e.pool,

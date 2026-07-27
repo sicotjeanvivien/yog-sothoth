@@ -8,6 +8,12 @@ fn discriminators_are_eight_bytes() {
     assert_eq!(discriminator_claim_position_fee().len(), DISCRIMINATOR_LEN);
     assert_eq!(discriminator_claim_reward().len(), DISCRIMINATOR_LEN);
     assert_eq!(discriminator_claim_protocol_fee().len(), DISCRIMINATOR_LEN);
+    assert_eq!(discriminator_initialize_reward().len(), DISCRIMINATOR_LEN);
+    assert_eq!(discriminator_fund_reward().len(), DISCRIMINATOR_LEN);
+    assert_eq!(
+        discriminator_withdraw_ineligible_reward().len(),
+        DISCRIMINATOR_LEN
+    );
     assert_eq!(discriminator_create_position().len(), DISCRIMINATOR_LEN);
     assert_eq!(discriminator_close_position().len(), DISCRIMINATOR_LEN);
     assert_eq!(discriminator_lock_position().len(), DISCRIMINATOR_LEN);
@@ -31,6 +37,9 @@ fn discriminators_are_unique() {
         discriminator_claim_position_fee(),
         discriminator_claim_reward(),
         discriminator_claim_protocol_fee(),
+        discriminator_initialize_reward(),
+        discriminator_fund_reward(),
+        discriminator_withdraw_ineligible_reward(),
         discriminator_create_position(),
         discriminator_close_position(),
         discriminator_lock_position(),

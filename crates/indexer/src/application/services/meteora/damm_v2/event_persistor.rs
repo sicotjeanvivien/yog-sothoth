@@ -14,14 +14,16 @@ use yog_core::domain::{
     MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
     MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
-    MeteoraDammV2Event, MeteoraDammV2InitializePoolEvent,
-    MeteoraDammV2InitializePoolEventRepository, MeteoraDammV2LiquidityEvent,
-    MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LockPositionEvent,
-    MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
-    MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2SetPoolStatusEvent,
-    MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SwapEvent,
-    MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
-    MeteoraDammV2UpdatePoolFeesEventRepository, Protocol,
+    MeteoraDammV2Event, MeteoraDammV2FundRewardEvent, MeteoraDammV2FundRewardEventRepository,
+    MeteoraDammV2InitializePoolEvent, MeteoraDammV2InitializePoolEventRepository,
+    MeteoraDammV2InitializeRewardEvent, MeteoraDammV2InitializeRewardEventRepository,
+    MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
+    MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
+    MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
+    MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
+    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
+    MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2WithdrawIneligibleRewardEvent,
+    MeteoraDammV2WithdrawIneligibleRewardEventRepository, Protocol,
 };
 
 use crate::application::services::{EventPersistorMetrics, PoolMaintenance};
@@ -35,6 +37,9 @@ pub(crate) struct DammV2Repos {
     pub claim_position_fee: Arc<dyn MeteoraDammV2ClaimPositionFeeEventRepository>,
     pub claim_protocol_fee: Arc<dyn MeteoraDammV2ClaimProtocolFeeEventRepository>,
     pub claim_reward: Arc<dyn MeteoraDammV2ClaimRewardEventRepository>,
+    pub initialize_reward: Arc<dyn MeteoraDammV2InitializeRewardEventRepository>,
+    pub fund_reward: Arc<dyn MeteoraDammV2FundRewardEventRepository>,
+    pub withdraw_ineligible_reward: Arc<dyn MeteoraDammV2WithdrawIneligibleRewardEventRepository>,
     pub create_position: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
     pub close_position: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
     pub lock_position: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
@@ -73,6 +78,11 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::ClaimPositionFee(e) => self.persist_claim_position_fee(e).await,
             MeteoraDammV2Event::ClaimProtocolFee(e) => self.persist_claim_protocol_fee(e).await,
             MeteoraDammV2Event::ClaimReward(e) => self.persist_claim_reward(e).await,
+            MeteoraDammV2Event::InitializeReward(e) => self.persist_initialize_reward(e).await,
+            MeteoraDammV2Event::FundReward(e) => self.persist_fund_reward(e).await,
+            MeteoraDammV2Event::WithdrawIneligibleReward(e) => {
+                self.persist_withdraw_ineligible_reward(e).await
+            }
             MeteoraDammV2Event::CreatePosition(e) => self.persist_create_position(e).await,
             MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
             MeteoraDammV2Event::LockPosition(e) => self.persist_lock_position(e).await,
@@ -184,6 +194,56 @@ impl MeteoraDammV2EventPersistor {
             .await;
         self.repos
             .claim_reward
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Opening a farm reward slot carries no mints or reserves for the *pool*
+    /// (the reward mint is a third token, not a pool side) — so it only
+    /// refreshes the pool's last-seen marker and records the event.
+    async fn persist_initialize_reward(
+        &self,
+        event: &MeteoraDammV2InitializeRewardEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .initialize_reward
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Funding a farm moves the reward token, not a pool side — no reserve or
+    /// mint update for the pool itself. Touch + insert, like the other
+    /// non-AMM-mutating events.
+    async fn persist_fund_reward(
+        &self,
+        event: &MeteoraDammV2FundRewardEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .fund_reward
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Returning unearnable rewards moves the reward token out of its vault,
+    /// not a pool side — touch + insert, no reserve or projection update.
+    async fn persist_withdraw_ineligible_reward(
+        &self,
+        event: &MeteoraDammV2WithdrawIneligibleRewardEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .withdraw_ineligible_reward
             .insert(event)
             .await
             .map_err(anyhow::Error::new)
