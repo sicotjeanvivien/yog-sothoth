@@ -577,6 +577,74 @@ fn decodes_withdraw_ineligible_reward_fixture() {
     assert_eq!(wir.amount, 0);
 }
 
+/// A `zap_protocol_fee` transaction must yield **exactly one** event — and not
+/// the one you might expect.
+///
+/// `zap_protocol_fee` is the operator-only instruction that harvests a pool's
+/// accrued protocol fees in a long-tail token and immediately sells them toward
+/// SOL/USDC. It is the documented blind spot of our indexing: it mutates pool
+/// state through `pool.claim_protocol_fee()` but emits **no event at all**, so
+/// the harvest itself is invisible to an `event_cpi` pipeline by construction.
+/// This fixture turns that claim from a source-code reading into a fact checked
+/// against real bytes.
+///
+/// The transaction's shape is what makes it interesting — two unrelated
+/// top-level instructions that are easy to conflate:
+///
+/// ```text
+/// [3] cp-amm  zap_protocol_fee   -> inner: one SPL transfer, ZERO event
+/// [4] zapvX9M…  zap_out          -> Jupiter route
+///                                     -> cp-amm swap (legacy v1)  => EvtSwap2
+///                                     -> Whirlpool x2             (not ours)
+/// ```
+///
+/// So the single `EvtSwap2` here belongs to instruction `[4]`: Jupiter routed
+/// part of the sale through an *unrelated* cp-amm pool. Its pool key is
+/// deliberately asserted below to be a different pool from the ones
+/// `zap_protocol_fee` touches — seeing an event in this transaction does not
+/// mean the fee harvest was captured.
+///
+/// Two decoder behaviours are pinned by the `unknown` / `failures` assertions:
+/// the top-level `zap_protocol_fee` call and the nested legacy `swap` call are
+/// both cp-amm instructions that are *not* `event_cpi` payloads, and must be
+/// skipped silently rather than counted as unknown discriminators or failures.
+#[test]
+fn zap_protocol_fee_emits_no_event_of_its_own() {
+    let tx = load_fixture("damm_v2_zap_protocol_fee.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+    assert!(
+        extracted.failures.is_empty(),
+        "non-event cp-amm instructions must be skipped, not failed: {:?}",
+        extracted.failures
+    );
+    assert!(
+        extracted.unknown.is_empty(),
+        "non-event cp-amm instructions must not surface as unknown discriminators: {} entries",
+        extracted.unknown.len()
+    );
+    assert_eq!(
+        extracted.events.len(),
+        1,
+        "expected exactly one event (the Jupiter-routed swap), got {}",
+        extracted.events.len()
+    );
+
+    let DammV2WireEvent::Swap2(swap) = &extracted.events[0] else {
+        panic!("the only event must be a Swap2: {:?}", extracted.events[0]);
+    };
+    // The pool Jupiter routed through while selling the harvested token — NOT a
+    // pool that `zap_protocol_fee` harvested from.
+    assert_eq!(
+        swap.pool,
+        pubkey!("4C47JJgDHztupNHeU9da7MroH676eXbPoUhEvx3FpfR3")
+    );
+    // An ordinary swap in every respect: real amounts, real post-swap reserves.
+    assert_eq!(swap.included_transfer_fee_amount_in, 1_228_454_277_679);
+    assert_eq!(swap.included_transfer_fee_amount_out, 1_615_941_369);
+    assert!(swap.reserve_a_amount > 0 && swap.reserve_b_amount > 0);
+}
+
 /// `decode_fee_config` must run cleanly on the **real** genesis blobs (not
 /// hand-built bytes), and classify each fixture's fee shape correctly. This
 /// ties the decoder to live data: a `PoolFeeParameters` layout drift would
