@@ -69,7 +69,7 @@
 //! ## Events mirrored without an on-chain fixture
 //!
 //! Most structs here are validated against a real mainnet transaction saved in
-//! `core/tests/fixtures/` — the strongest guarantee, since it proves the borsh
+//! `core/tests/fixtures/damm_v2/` — the strongest guarantee, since it proves the borsh
 //! mirror decodes bytes the program actually emitted.
 //!
 //! Some are not: low-frequency admin events for which no transaction has been
@@ -113,7 +113,7 @@
 //! discriminator, same payload, same one-account shape, same signer. Our
 //! generic decoder (`decode_anchor_event_cpi`, in
 //! `application/extraction/anchor_event.rs`) cannot tell the two apart and does not need to — the swap fixtures in
-//! `core/tests/fixtures/` are the empirical proof.
+//! `core/tests/fixtures/damm_v2/` are the empirical proof.
 //!
 //! One consequence worth keeping in mind: for every other event, `emit_cpi!`
 //! re-derives the whole wire format from the struct, so a schema change

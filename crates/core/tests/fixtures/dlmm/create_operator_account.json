@@ -1,0 +1,129 @@
+{
+  "slot": 419672173,
+  "transaction": {
+    "signatures": [
+      "mCYqUDyWu2rhZs2LBkNHtXxt9iYXeB4PBDp3mRHnQDsNMyMjXuiayKAFrPhTHqt6yehZ1jnf3UzkcvjHmgGVCbV"
+    ],
+    "message": {
+      "accountKeys": [
+        {
+          "pubkey": "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+          "writable": true,
+          "signer": true,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "3ufqCAjSypP51HbMf8LRFzdtknjDpXyEqvBR665PcgHa",
+          "writable": true,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "11111111111111111111111111111111",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        },
+        {
+          "pubkey": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "writable": false,
+          "signer": false,
+          "source": "transaction"
+        }
+      ],
+      "recentBlockhash": "4GCmbKtjBQZLZvNXgoeuMarPTXsjvdYvz8zwXiQXwq67",
+      "instructions": [
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "3ufqCAjSypP51HbMf8LRFzdtknjDpXyEqvBR665PcgHa",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi"
+          ],
+          "data": "VcHdvCeefGg",
+          "stackHeight": 1
+        },
+        {
+          "programId": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+          "accounts": [
+            "3ufqCAjSypP51HbMf8LRFzdtknjDpXyEqvBR665PcgHa",
+            "8dgGvhgEpJrz1HQAATMJR3ydfE5TXVQ4BzKbjF1yW5AE",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+            "11111111111111111111111111111111"
+          ],
+          "data": "MAtA7spQ8d7xhBZdscxMmTouB7BKU6qgs",
+          "stackHeight": 1
+        }
+      ]
+    }
+  },
+  "meta": {
+    "err": null,
+    "status": {
+      "Ok": null
+    },
+    "fee": 5000,
+    "preBalances": [
+      34735809901,
+      1392000,
+      1,
+      3718710142,
+      34988462
+    ],
+    "postBalances": [
+      34735804901,
+      1392000,
+      1,
+      3718710142,
+      34988462
+    ],
+    "innerInstructions": [
+      {
+        "index": 1,
+        "instructions": [
+          {
+            "program": "system",
+            "programId": "11111111111111111111111111111111",
+            "parsed": {
+              "info": {
+                "lamports": 1392000,
+                "newAccount": "3ufqCAjSypP51HbMf8LRFzdtknjDpXyEqvBR665PcgHa",
+                "owner": "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+                "source": "5unTfT2kssBuNvHPY6LbJfJpLqEcdMxGYLWHwShaeTLi",
+                "space": 72
+              },
+              "type": "createAccount"
+            },
+            "stackHeight": 2
+          }
+        ]
+      }
+    ],
+    "logMessages": [
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CloseOperatorAccount",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 1535 of 400000 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo invoke [1]",
+      "Program log: Instruction: CreateOperatorAccount",
+      "Program 11111111111111111111111111111111 invoke [2]",
+      "Program 11111111111111111111111111111111 success",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo consumed 10258 of 398465 compute units",
+      "Program LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo success"
+    ],
+    "preTokenBalances": [],
+    "postTokenBalances": [],
+    "rewards": [],
+    "computeUnitsConsumed": 11793,
+    "costUnits": 13641
+  },
+  "version": "legacy",
+  "blockTime": 1778755874
+}
