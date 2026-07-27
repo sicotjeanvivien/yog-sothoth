@@ -29,6 +29,9 @@ pub use meteora::{
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2UpdateRewardDurationEventRepository,
+    PgMeteoraDammV2UpdateRewardFunderEventRepository,
+    PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
 pub use network_status::PgNetworkStatusRepository;

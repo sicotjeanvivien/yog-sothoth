@@ -30,6 +30,10 @@ use yog_core::domain::{
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
+    MeteoraDammV2UpdateRewardDurationEvent, MeteoraDammV2UpdateRewardDurationEventRepository,
+    MeteoraDammV2UpdateRewardFunderEvent, MeteoraDammV2UpdateRewardFunderEventRepository,
+    MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
+    MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     MeteoraDammV2WithdrawIneligibleRewardEvent,
     MeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
@@ -40,6 +44,9 @@ use yog_persistence::{
     PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2UpdateRewardDurationEventRepository,
+    PgMeteoraDammV2UpdateRewardFunderEventRepository,
+    PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
 
@@ -291,6 +298,146 @@ async fn withdraw_ineligible_reward_inserts_and_is_idempotent(pool: PgPool) {
     .unwrap();
     assert_eq!(mint, pk(2).to_string());
     assert_eq!(amount, 0);
+}
+
+// ── update_reward_duration: persists, idempotent per slot ───────────
+
+#[sqlx::test]
+async fn update_reward_duration_inserts_and_is_idempotent(pool: PgPool) {
+    let repo = PgMeteoraDammV2UpdateRewardDurationEventRepository::new(pool.clone());
+    // 7 days -> 14 days: a re-pacing that halves the emission rate of every
+    // subsequent funding. Distinct old/new values so an inverted pair fails.
+    let event = MeteoraDammV2UpdateRewardDurationEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        reward_index: 0,
+        old_reward_duration: 604_800,
+        new_reward_duration: 1_209_600,
+    };
+
+    repo.insert(&event).await.unwrap();
+    repo.insert(&event).await.unwrap();
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_update_reward_duration_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 1,
+        "duplicate (signature, reward_index, timestamp) must not insert twice"
+    );
+
+    // Second slot in the same transaction: distinct event, not a duplicate.
+    repo.insert(&MeteoraDammV2UpdateRewardDurationEvent {
+        reward_index: 1,
+        ..event.clone()
+    })
+    .await
+    .unwrap();
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_update_reward_duration_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 2, "a second slot in the same tx must insert");
+
+    let (old, new): (i64, i64) = sqlx::query_as(
+        "SELECT old_reward_duration, new_reward_duration FROM meteora_damm_v2_update_reward_duration_events WHERE reward_index = 0",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((old, new), (604_800, 1_209_600));
+}
+
+// ── update_reward_funder: persists, old/new not swapped ─────────────
+
+#[sqlx::test]
+async fn update_reward_funder_inserts_and_is_idempotent(pool: PgPool) {
+    let repo = PgMeteoraDammV2UpdateRewardFunderEventRepository::new(pool.clone());
+    let event = MeteoraDammV2UpdateRewardFunderEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        reward_index: 0,
+        old_funder: pk(2),
+        new_funder: pk(3),
+    };
+
+    repo.insert(&event).await.unwrap();
+    repo.insert(&event).await.unwrap();
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_update_reward_funder_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 1,
+        "duplicate (signature, reward_index, timestamp) must not insert twice"
+    );
+
+    // Distinct sentinels: a swapped INSERT binding would surface here.
+    let (old, new): (String, String) = sqlx::query_as(
+        "SELECT old_funder, new_funder FROM meteora_damm_v2_update_reward_funder_events LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(old, pk(2).to_string());
+    assert_eq!(new, pk(3).to_string());
+}
+
+// ── withdraw_dead_liquidity_reward: persists, own table ─────────────
+
+#[sqlx::test]
+async fn withdraw_dead_liquidity_reward_inserts_and_is_idempotent(pool: PgPool) {
+    let repo = PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository::new(pool.clone());
+    // cp-amm only emits this event inside `if dead_liquidity_reward > 0`, so a
+    // realistic row always carries a non-zero amount — unlike the
+    // ineligible-reward table, whose real fixture is amount = 0.
+    let event = MeteoraDammV2WithdrawDeadLiquidityRewardEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        reward_mint: pk(2),
+        amount: 42_000,
+    };
+
+    repo.insert(&event).await.unwrap();
+    repo.insert(&event).await.unwrap();
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM meteora_damm_v2_withdraw_dead_liquidity_reward_events",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        count, 1,
+        "duplicate (signature, timestamp) must not insert twice"
+    );
+
+    // The identically-shaped ineligible-reward table must be untouched: these
+    // are two different on-chain facts and two different tables.
+    let other: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM meteora_damm_v2_withdraw_ineligible_reward_events",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(other, 0, "dead-liquidity rows must not land in 031's table");
+
+    let (mint, amount): (String, i64) = sqlx::query_as(
+        "SELECT reward_mint, amount FROM meteora_damm_v2_withdraw_dead_liquidity_reward_events LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(mint, pk(2).to_string());
+    assert_eq!(amount, 42_000);
 }
 
 // ── close_position: persists ─────────────────────────────────────────
