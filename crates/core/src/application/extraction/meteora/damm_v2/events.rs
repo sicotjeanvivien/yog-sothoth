@@ -19,8 +19,8 @@
 //! self-CPI to the program with the event payload as instruction data,
 //! prefixed by Anchor's framework-wide `EVENT_IX_TAG_LE` constant followed
 //! by the event-specific 8-byte discriminator. See
-//! [`crate::protocols::anchor_event`] for the wire format and the generic
-//! decoder.
+//! `application/extraction/anchor_event.rs` for the wire format and the
+//! generic decoder.
 //!
 //! ## Discriminators
 //!
@@ -68,6 +68,50 @@
 //! and a layout-pinning test in `events_tests.rs` that asserts the payload size
 //! and field offsets. Both catch a *future* drift in our mirror; neither can
 //! catch a misreading of the source. Each such struct says so in its docs.
+//!
+//! ## The swap path does NOT go through `emit_cpi!` — read this before auditing
+//!
+//! Every event above is emitted by cp-amm through Anchor's `emit_cpi!` macro
+//! **except [`EvtSwap2`]**. Auditing the swap path by grepping the cp-amm source
+//! for `emit_cpi!(EvtSwap2` returns *nothing*, and reading the `swap` / `swap2`
+//! handlers in `lib.rs` shows an empty `Ok(())` body. Both observations are
+//! traps: swap is emitted, and we decode it correctly. Here is why.
+//!
+//! Swap is cp-amm's hot path, so Meteora rewrote it on **pinocchio** (a
+//! zero-copy `no_std` Solana SDK) to save compute units, and installed a custom
+//! `#[no_mangle] entrypoint` (`programs/cp-amm/src/entrypoint.rs`) that runs
+//! *before* Anchor's. That entrypoint matches the leading instruction bytes:
+//!
+//! - `Swap::DISCRIMINATOR` or `Swap2::DISCRIMINATOR` → handled entirely in
+//!   pinocchio by `p_handle_swap`; Anchor is never entered.
+//! - `EVENT_IX_TAG_LE` → `p_event_dispatch`, which only validates that the
+//!   event authority is a signer and matches the expected PDA.
+//! - anything else → falls back to the regular Anchor `entry()`.
+//!
+//! The `swap` / `swap2` functions in `lib.rs` are therefore deliberate stubs
+//! (`_ctx`, `_params`, empty body). They exist only so Anchor still generates
+//! the instruction discriminator and the IDL entry; they never execute.
+//!
+//! Because the pinocchio path has no Anchor `Context`, it cannot call
+//! `emit_cpi!`, so cp-amm rebuilds the emission by hand in `p_emit_cpi`
+//! (`instructions/swap/ix_p_swap.rs`): it concatenates `EVENT_IX_TAG_LE` with
+//! `anchor_lang::Event::data(&EvtSwap2 { .. })` — itself discriminator + borsh
+//! body — and self-CPIs to the program with the single event-authority account,
+//! `invoke_signed` under the event-authority seeds.
+//!
+//! That is byte-for-byte what `emit_cpi!` produces: same tag, same
+//! discriminator, same payload, same one-account shape, same signer. Our
+//! generic decoder (`decode_anchor_event_cpi`, in
+//! `application/extraction/anchor_event.rs`) cannot tell the two apart and does not need to — the swap fixtures in
+//! `core/tests/fixtures/` are the empirical proof.
+//!
+//! One consequence worth keeping in mind: for every other event, `emit_cpi!`
+//! re-derives the whole wire format from the struct, so a schema change
+//! propagates automatically. Here the tag concatenation and the CPI shape are
+//! hand-written code that can be edited independently of [`EvtSwap2`] itself.
+//! The discriminator is still macro-derived (via `Event::data`), so a rename
+//! still propagates — but this is the one emission site where the framework is
+//! not doing the work for us.
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
@@ -196,6 +240,13 @@ pub fn discriminator_update_pool_fees() -> [u8; DISCRIMINATOR_LEN] {
 /// - `0` = `ExactIn`
 /// - `1` = `PartialFill`
 /// - `2` = `ExactOut`
+///
+/// A legacy `swap` instruction never reaches us as a distinct shape: its
+/// two-field `SwapParameters { amount_in, minimum_amount_out }` is widened by
+/// cp-amm's entrypoint into `SwapParameters2 { amount_0: amount_in, amount_1:
+/// minimum_amount_out, swap_mode: ExactIn }` before the shared handler runs. So
+/// `swap_mode == 0` on a legacy swap is the program's own normalisation, not an
+/// assumption of ours.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct SwapParameters2 {
     pub amount_0: u64,
@@ -229,7 +280,16 @@ pub struct SwapResult2 {
 ///
 /// Emitted by the cp-amm program for every executed swap, including those
 /// initiated through the legacy `swap` instruction — both `swap` and `swap2`
-/// share the same handler and emit this event.
+/// are routed by cp-amm's custom entrypoint to the *same* handler
+/// (`p_handle_swap`), the legacy parameters being widened to
+/// [`SwapParameters2`] on the way in. There is exactly one emission site and no
+/// `EvtSwap` v1 event exists, so this single mirror covers every swap and
+/// carries no double-counting risk.
+///
+/// **This event is not emitted via `emit_cpi!`** — cp-amm hand-rolls the same
+/// wire format on its pinocchio fast path. See the module-level section "The
+/// swap path does NOT go through `emit_cpi!`" before auditing or changing
+/// anything here.
 ///
 /// The `reserve_*` fields hold the pool reserves **after** the swap, in the
 /// canonical `(token_a, token_b)` ordering defined by the pool — this is
