@@ -2,6 +2,10 @@
 name = "yog-persistence"
 version = "0.1.0"
 edition = "2024"
+# Every `.rs` directly under tests/ would otherwise become its own test binary,
+# relinking the whole crate each time. One declared target (see [[test]] below),
+# every other file is a plain module of it.
+autotests = false
 
 [[bin]]
 name = "yog-migrate"
@@ -12,6 +16,10 @@ path = "src/bin/migrate.rs"
 # a plain `cargo test` stays fast and DB-free; the CI job
 # `test-integration` turns it on against a real Postgres.
 integration-tests = []
+
+[[test]]
+name = "integration"
+path = "tests/main.rs"
 
 [dependencies]
 # Workspace crates

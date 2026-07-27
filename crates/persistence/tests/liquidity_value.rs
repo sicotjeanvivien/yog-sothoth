@@ -6,15 +6,9 @@
 //! uses the price *as-of the event* (not a later price), and it is NULL when a
 //! leg has no price as-of the event (rather than fabricating a partial value).
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 async fn insert_pool(pool: &PgPool, pool_addr: &str, mint_a: &str, mint_b: &str) {
     sqlx::query(

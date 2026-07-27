@@ -7,17 +7,12 @@
 //! asserts the ranking is by TVL descending, capped by `limit`, with the
 //! NULL-TVL pool excluded rather than sorted last.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::{PoolAnalyticsRepository, PoolRankMetric};
 use yog_persistence::PgPoolAnalyticsRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 /// Register a token with metadata (0 decimals) and, optionally, a $1 price.
 /// Omitting the price is how we build an unpriceable pool.

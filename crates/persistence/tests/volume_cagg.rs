@@ -8,19 +8,13 @@
 //! only the INPUT side of each swap (a_to_b → amount_a, b_to_a → amount_b),
 //! over the trailing 24h window.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::PoolAnalyticsRepository;
 use yog_persistence::PgPoolAnalyticsRepository;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 async fn insert_swap(
     pool: &PgPool,

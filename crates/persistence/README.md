@@ -32,6 +32,9 @@ persistence/
     │   └── event_freshness.rs
     ├── bin/migrate.rs       ← yog-migrate binary (~30 lines)
     └── tests/               ← DB-backed integration tests (#[ignore]d by default)
+        ├── main.rs          ← the ONLY test target; declares every file below
+        ├── helpers.rs       ← shared sentinels (pk, sg, ts)
+        └── <subject>.rs     ← one file per event / read path
 ```
 
 ## Repository implementations
@@ -168,6 +171,15 @@ They need a live Postgres running with `timescaledb.max_background_workers = 0`
 per test, and the cagg refresh policies from migrations 010–013 otherwise have
 the TimescaleDB job scheduler race the next test's migration DDL on the shared
 catalog ("tuple concurrently deleted").
+
+**One file per subject, one single binary.** Cargo auto-discovers every `.rs`
+directly under `tests/` as its own test target, which relinks the whole crate
+once per file. `autotests = false` in `Cargo.toml` turns that off and declares
+`tests/main.rs` as the only target (`--test integration`); every other file is a
+plain module of it, and `tests/helpers.rs` holds the sentinels they share
+(`pk`, `sg`, `ts`). Adding a test file means creating `tests/<subject>.rs` **and
+declaring it in `tests/main.rs`** — without that `mod` line it compiles to
+nothing and runs silently.
 
 ---
 

@@ -4,15 +4,9 @@
 //! path yet, so the tests assert the CA aggregates directly. Real-time
 //! aggregation makes the just-inserted rows visible without a manual refresh.
 
-#![cfg(feature = "integration-tests")]
-
+use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
-use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-
-fn pk(seed: u8) -> Pubkey {
-    Pubkey::new_from_array([seed; 32])
-}
 
 async fn insert_position_fee(
     pool: &PgPool,
