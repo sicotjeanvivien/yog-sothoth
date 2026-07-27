@@ -3,6 +3,7 @@ use crate::application::extraction::meteora::damm_v2::events::{
     EvtClosePosition, EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus,
     EvtUpdateRewardDuration, EvtUpdateRewardFunder, EvtWithdrawDeadLiquidityReward,
 };
+use crate::domain::{MeteoraDammV2LiquidityEventKind, TradeDirection};
 use solana_pubkey::Pubkey;
 
 fn pk(b: u8) -> Pubkey {
