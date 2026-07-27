@@ -1,4 +1,7 @@
 use super::*;
+// `try_from_slice` comes from this trait; the parent module no longer imports
+// borsh now that each event struct lives in its own file.
+use borsh::BorshDeserialize;
 
 /// Sanity check: discriminators are 8 bytes and stable across runs.
 #[test]
