@@ -42,6 +42,9 @@
 //! - [`EvtInitializeReward`] — admin opens a farming reward slot on a pool
 //! - [`EvtFundReward`] — funder deposits rewards and (re)sets the emission rate
 //! - [`EvtWithdrawIneligibleReward`] — funder reclaims rewards nobody could earn
+//! - [`EvtUpdateRewardDuration`] — admin re-paces a slot's emission window
+//! - [`EvtUpdateRewardFunder`] — admin transfers the right to fund a slot
+//! - [`EvtWithdrawDeadLiquidityReward`] — funder reclaims dead liquidity's share
 //! - [`EvtCreatePosition`] — LP opens a new (empty) position
 //! - [`EvtClosePosition`] — LP closes a position
 //! - [`EvtLockPosition`] — LP locks a position under a vesting schedule
@@ -52,6 +55,19 @@
 //!
 //! The remaining position-lifecycle, pool-initialization and admin events
 //! are added incrementally, one per change.
+//!
+//! ## Events mirrored without an on-chain fixture
+//!
+//! Most structs here are validated against a real mainnet transaction saved in
+//! `core/tests/fixtures/` — the strongest guarantee, since it proves the borsh
+//! mirror decodes bytes the program actually emitted.
+//!
+//! Some are not: low-frequency admin events for which no transaction has been
+//! captured yet. For those the layout comes from the cp-amm source alone, and
+//! is guarded two ways instead: a field-mapping test in `translator_tests.rs`,
+//! and a layout-pinning test in `events_tests.rs` that asserts the payload size
+//! and field offsets. Both catch a *future* drift in our mirror; neither can
+//! catch a misreading of the source. Each such struct says so in its docs.
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use sha2::{Digest, Sha256};
@@ -114,6 +130,21 @@ pub fn discriminator_fund_reward() -> [u8; DISCRIMINATOR_LEN] {
 /// Discriminator for [`EvtWithdrawIneligibleReward`].
 pub fn discriminator_withdraw_ineligible_reward() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtWithdrawIneligibleReward")
+}
+
+/// Discriminator for [`EvtUpdateRewardDuration`].
+pub fn discriminator_update_reward_duration() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtUpdateRewardDuration")
+}
+
+/// Discriminator for [`EvtUpdateRewardFunder`].
+pub fn discriminator_update_reward_funder() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtUpdateRewardFunder")
+}
+
+/// Discriminator for [`EvtWithdrawDeadLiquidityReward`].
+pub fn discriminator_withdraw_dead_liquidity_reward() -> [u8; DISCRIMINATOR_LEN] {
+    compute_discriminator("EvtWithdrawDeadLiquidityReward")
 }
 
 /// Discriminator for [`EvtCreatePosition`].
@@ -402,6 +433,69 @@ pub struct EvtWithdrawIneligibleReward {
     pub amount: u64,
 }
 
+/// Mirror of `cp-amm::EvtUpdateRewardDuration`.
+///
+/// Emitted when an admin **re-paces a slot**: the length of a funding window
+/// changes, which changes the emission rate every subsequent
+/// [`EvtFundReward`] will compute (`rate = amount / duration`). It does not
+/// re-rate the *current* window on its own.
+///
+/// Admin-gated: the signer is either the pool creator or an operator holding
+/// the `UpdateRewardDuration` permission.
+///
+/// Durations are in seconds. Layout taken from the cp-amm source
+/// (`ix_update_reward_duration.rs`, single `emit_cpi!` site); no on-chain
+/// fixture has been captured for this event — see the module-level note on
+/// fixture-less events.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtUpdateRewardDuration {
+    pub pool: Pubkey,
+    pub reward_index: u8,
+    pub old_reward_duration: u64,
+    pub new_reward_duration: u64,
+}
+
+/// Mirror of `cp-amm::EvtUpdateRewardFunder`.
+///
+/// Emitted when an admin **transfers the right to fund a slot** from one wallet
+/// to another. Moves no tokens and does not touch the emission rate — it only
+/// changes who may call `fund_reward` on this `reward_index`.
+///
+/// Admin-gated: pool creator, or an operator holding the `UpdateRewardFunder`
+/// permission. Layout taken from the cp-amm source
+/// (`ix_update_reward_funder.rs`, single `emit_cpi!` site); no on-chain fixture
+/// captured.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtUpdateRewardFunder {
+    pub pool: Pubkey,
+    pub reward_index: u8,
+    pub old_funder: Pubkey,
+    pub new_funder: Pubkey,
+}
+
+/// Mirror of `cp-amm::EvtWithdrawDeadLiquidityReward`.
+///
+/// Emitted when the funder reclaims the reward share that accrued to **dead
+/// liquidity** — liquidity permanently locked with no owner left to claim it.
+/// Like [`EvtWithdrawIneligibleReward`], it returns tokens that would otherwise
+/// sit in the vault forever.
+///
+/// **Emitted conditionally**: cp-amm wraps the `emit_cpi!` in
+/// `if dead_liquidity_reward > 0`, so — unlike `EvtWithdrawIneligibleReward`,
+/// which emits even for a zero amount — this event never carries `amount == 0`.
+///
+/// Byte-identical in shape to [`EvtWithdrawIneligibleReward`] (same three
+/// fields, same 72-byte payload); only the discriminator separates them. They
+/// stay distinct types because they describe different on-chain facts. Layout
+/// taken from the cp-amm source (`ix_withdraw_dead_liquidity_reward.rs`); no
+/// on-chain fixture captured.
+#[derive(Debug, Clone, Copy, BorshDeserialize)]
+pub struct EvtWithdrawDeadLiquidityReward {
+    pub pool: Pubkey,
+    pub reward_mint: Pubkey,
+    pub amount: u64,
+}
+
 /// Mirror of `cp-amm::EvtCreatePosition`.
 ///
 /// Emitted when an LP opens a new position on a pool. The position is
@@ -602,6 +696,9 @@ pub enum DammV2WireEvent {
     InitializeReward(EvtInitializeReward),
     FundReward(EvtFundReward),
     WithdrawIneligibleReward(EvtWithdrawIneligibleReward),
+    UpdateRewardDuration(EvtUpdateRewardDuration),
+    UpdateRewardFunder(EvtUpdateRewardFunder),
+    WithdrawDeadLiquidityReward(EvtWithdrawDeadLiquidityReward),
     CreatePosition(EvtCreatePosition),
     ClosePosition(EvtClosePosition),
     LockPosition(EvtLockPosition),
@@ -626,6 +723,9 @@ impl DammV2WireEvent {
             Self::InitializeReward(e) => e.pool,
             Self::FundReward(e) => e.pool,
             Self::WithdrawIneligibleReward(e) => e.pool,
+            Self::UpdateRewardDuration(e) => e.pool,
+            Self::UpdateRewardFunder(e) => e.pool,
+            Self::WithdrawDeadLiquidityReward(e) => e.pool,
             Self::CreatePosition(e) => e.pool,
             Self::ClosePosition(e) => e.pool,
             Self::LockPosition(e) => e.pool,

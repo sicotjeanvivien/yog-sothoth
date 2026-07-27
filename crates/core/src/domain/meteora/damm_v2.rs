@@ -12,6 +12,9 @@ mod permanent_lock_position_event;
 mod set_pool_status_event;
 mod swap_event;
 mod update_pool_fees_event;
+mod update_reward_duration_event;
+mod update_reward_funder_event;
+mod withdraw_dead_liquidity_reward_event;
 mod withdraw_ineligible_reward_event;
 
 use chrono::{DateTime, Utc};
@@ -61,6 +64,16 @@ pub use swap_event::{
 pub use update_pool_fees_event::{
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
 };
+pub use update_reward_duration_event::{
+    MeteoraDammV2UpdateRewardDurationEvent, MeteoraDammV2UpdateRewardDurationEventRepository,
+};
+pub use update_reward_funder_event::{
+    MeteoraDammV2UpdateRewardFunderEvent, MeteoraDammV2UpdateRewardFunderEventRepository,
+};
+pub use withdraw_dead_liquidity_reward_event::{
+    MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
+    MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
+};
 pub use withdraw_ineligible_reward_event::{
     MeteoraDammV2WithdrawIneligibleRewardEvent,
     MeteoraDammV2WithdrawIneligibleRewardEventRepository,
@@ -79,6 +92,9 @@ pub enum MeteoraDammV2Event {
     InitializeReward(MeteoraDammV2InitializeRewardEvent),
     FundReward(MeteoraDammV2FundRewardEvent),
     WithdrawIneligibleReward(MeteoraDammV2WithdrawIneligibleRewardEvent),
+    UpdateRewardDuration(MeteoraDammV2UpdateRewardDurationEvent),
+    UpdateRewardFunder(MeteoraDammV2UpdateRewardFunderEvent),
+    WithdrawDeadLiquidityReward(MeteoraDammV2WithdrawDeadLiquidityRewardEvent),
     CreatePosition(MeteoraDammV2CreatePositionEvent),
     ClosePosition(MeteoraDammV2ClosePositionEvent),
     LockPosition(MeteoraDammV2LockPositionEvent),
@@ -99,6 +115,9 @@ impl MeteoraDammV2Event {
             Self::InitializeReward(e) => e.pool_address,
             Self::FundReward(e) => e.pool_address,
             Self::WithdrawIneligibleReward(e) => e.pool_address,
+            Self::UpdateRewardDuration(e) => e.pool_address,
+            Self::UpdateRewardFunder(e) => e.pool_address,
+            Self::WithdrawDeadLiquidityReward(e) => e.pool_address,
             Self::CreatePosition(e) => e.pool_address,
             Self::ClosePosition(e) => e.pool_address,
             Self::LockPosition(e) => e.pool_address,
@@ -119,6 +138,9 @@ impl MeteoraDammV2Event {
             Self::InitializeReward(e) => e.signature,
             Self::FundReward(e) => e.signature,
             Self::WithdrawIneligibleReward(e) => e.signature,
+            Self::UpdateRewardDuration(e) => e.signature,
+            Self::UpdateRewardFunder(e) => e.signature,
+            Self::WithdrawDeadLiquidityReward(e) => e.signature,
             Self::CreatePosition(e) => e.signature,
             Self::ClosePosition(e) => e.signature,
             Self::LockPosition(e) => e.signature,
@@ -139,6 +161,9 @@ impl MeteoraDammV2Event {
             Self::InitializeReward(e) => e.timestamp,
             Self::FundReward(e) => e.timestamp,
             Self::WithdrawIneligibleReward(e) => e.timestamp,
+            Self::UpdateRewardDuration(e) => e.timestamp,
+            Self::UpdateRewardFunder(e) => e.timestamp,
+            Self::WithdrawDeadLiquidityReward(e) => e.timestamp,
             Self::CreatePosition(e) => e.timestamp,
             Self::ClosePosition(e) => e.timestamp,
             Self::LockPosition(e) => e.timestamp,
@@ -159,6 +184,9 @@ impl MeteoraDammV2Event {
             Self::InitializeReward(_) => "initialize_reward",
             Self::FundReward(_) => "fund_reward",
             Self::WithdrawIneligibleReward(_) => "withdraw_ineligible_reward",
+            Self::UpdateRewardDuration(_) => "update_reward_duration",
+            Self::UpdateRewardFunder(_) => "update_reward_funder",
+            Self::WithdrawDeadLiquidityReward(_) => "withdraw_dead_liquidity_reward",
             Self::CreatePosition(_) => "create_position",
             Self::ClosePosition(_) => "close_position",
             Self::LockPosition(_) => "lock_position",

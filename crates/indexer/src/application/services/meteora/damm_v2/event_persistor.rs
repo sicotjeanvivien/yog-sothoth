@@ -22,7 +22,11 @@ use yog_core::domain::{
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
-    MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2WithdrawIneligibleRewardEvent,
+    MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2UpdateRewardDurationEvent,
+    MeteoraDammV2UpdateRewardDurationEventRepository, MeteoraDammV2UpdateRewardFunderEvent,
+    MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
+    MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
+    MeteoraDammV2WithdrawIneligibleRewardEvent,
     MeteoraDammV2WithdrawIneligibleRewardEventRepository, Protocol,
 };
 
@@ -40,6 +44,10 @@ pub(crate) struct DammV2Repos {
     pub initialize_reward: Arc<dyn MeteoraDammV2InitializeRewardEventRepository>,
     pub fund_reward: Arc<dyn MeteoraDammV2FundRewardEventRepository>,
     pub withdraw_ineligible_reward: Arc<dyn MeteoraDammV2WithdrawIneligibleRewardEventRepository>,
+    pub update_reward_duration: Arc<dyn MeteoraDammV2UpdateRewardDurationEventRepository>,
+    pub update_reward_funder: Arc<dyn MeteoraDammV2UpdateRewardFunderEventRepository>,
+    pub withdraw_dead_liquidity_reward:
+        Arc<dyn MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository>,
     pub create_position: Arc<dyn MeteoraDammV2CreatePositionEventRepository>,
     pub close_position: Arc<dyn MeteoraDammV2ClosePositionEventRepository>,
     pub lock_position: Arc<dyn MeteoraDammV2LockPositionEventRepository>,
@@ -82,6 +90,13 @@ impl MeteoraDammV2EventPersistor {
             MeteoraDammV2Event::FundReward(e) => self.persist_fund_reward(e).await,
             MeteoraDammV2Event::WithdrawIneligibleReward(e) => {
                 self.persist_withdraw_ineligible_reward(e).await
+            }
+            MeteoraDammV2Event::UpdateRewardDuration(e) => {
+                self.persist_update_reward_duration(e).await
+            }
+            MeteoraDammV2Event::UpdateRewardFunder(e) => self.persist_update_reward_funder(e).await,
+            MeteoraDammV2Event::WithdrawDeadLiquidityReward(e) => {
+                self.persist_withdraw_dead_liquidity_reward(e).await
             }
             MeteoraDammV2Event::CreatePosition(e) => self.persist_create_position(e).await,
             MeteoraDammV2Event::ClosePosition(e) => self.persist_close_position(e).await,
@@ -244,6 +259,52 @@ impl MeteoraDammV2EventPersistor {
             .await;
         self.repos
             .withdraw_ineligible_reward
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Re-pacing a farm slot changes no pool reserve — touch + insert.
+    async fn persist_update_reward_duration(
+        &self,
+        event: &MeteoraDammV2UpdateRewardDurationEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .update_reward_duration
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Moving the funding right moves no tokens at all — touch + insert.
+    async fn persist_update_reward_funder(
+        &self,
+        event: &MeteoraDammV2UpdateRewardFunderEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .update_reward_funder
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// Reclaiming dead liquidity's reward share moves the reward token out of
+    /// its vault, not a pool side — touch + insert.
+    async fn persist_withdraw_dead_liquidity_reward(
+        &self,
+        event: &MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .withdraw_dead_liquidity_reward
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

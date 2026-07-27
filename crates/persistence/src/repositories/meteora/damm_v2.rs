@@ -12,6 +12,9 @@ mod permanent_lock_position;
 mod set_pool_status;
 mod swap_event;
 mod update_pool_fees;
+mod update_reward_duration;
+mod update_reward_funder;
+mod withdraw_dead_liquidity_reward;
 mod withdraw_ineligible_reward;
 
 pub use claim_position_fee::PgMeteoraDammV2ClaimPositionFeeEventRepository;
@@ -28,4 +31,7 @@ pub use permanent_lock_position::PgMeteoraDammV2PermanentLockPositionEventReposi
 pub use set_pool_status::PgMeteoraDammV2SetPoolStatusEventRepository;
 pub use swap_event::PgMeteoraDammV2SwapEventRepository;
 pub use update_pool_fees::PgMeteoraDammV2UpdatePoolFeesEventRepository;
+pub use update_reward_duration::PgMeteoraDammV2UpdateRewardDurationEventRepository;
+pub use update_reward_funder::PgMeteoraDammV2UpdateRewardFunderEventRepository;
+pub use withdraw_dead_liquidity_reward::PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository;
 pub use withdraw_ineligible_reward::PgMeteoraDammV2WithdrawIneligibleRewardEventRepository;

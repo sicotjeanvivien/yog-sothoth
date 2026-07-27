@@ -32,6 +32,9 @@ use yog_persistence::{
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2UpdateRewardDurationEventRepository,
+    PgMeteoraDammV2UpdateRewardFunderEventRepository,
+    PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
     PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository,
 };
@@ -203,6 +206,15 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         fund_reward: Arc::new(PgMeteoraDammV2FundRewardEventRepository::new(pool())),
         withdraw_ineligible_reward: Arc::new(
             PgMeteoraDammV2WithdrawIneligibleRewardEventRepository::new(pool()),
+        ),
+        update_reward_duration: Arc::new(PgMeteoraDammV2UpdateRewardDurationEventRepository::new(
+            pool(),
+        )),
+        update_reward_funder: Arc::new(PgMeteoraDammV2UpdateRewardFunderEventRepository::new(
+            pool(),
+        )),
+        withdraw_dead_liquidity_reward: Arc::new(
+            PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository::new(pool()),
         ),
         create_position: Arc::new(PgMeteoraDammV2CreatePositionEventRepository::new(pool())),
         close_position: Arc::new(PgMeteoraDammV2ClosePositionEventRepository::new(pool())),

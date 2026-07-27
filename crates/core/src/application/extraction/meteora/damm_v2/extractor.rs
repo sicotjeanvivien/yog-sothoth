@@ -38,12 +38,15 @@ use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimProtocolFee, EvtClaimReward, EvtClosePosition,
     EvtCreatePosition, EvtFundReward, EvtInitializePool, EvtInitializeReward, EvtLiquidityChange,
     EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
+    EvtUpdateRewardDuration, EvtUpdateRewardFunder, EvtWithdrawDeadLiquidityReward,
     EvtWithdrawIneligibleReward, discriminator_claim_position_fee,
     discriminator_claim_protocol_fee, discriminator_claim_reward, discriminator_close_position,
     discriminator_create_position, discriminator_fund_reward, discriminator_initialize_pool,
     discriminator_initialize_reward, discriminator_liquidity_change, discriminator_lock_position,
     discriminator_permanent_lock_position, discriminator_set_pool_status, discriminator_swap2,
-    discriminator_update_pool_fees, discriminator_withdraw_ineligible_reward,
+    discriminator_update_pool_fees, discriminator_update_reward_duration,
+    discriminator_update_reward_funder, discriminator_withdraw_dead_liquidity_reward,
+    discriminator_withdraw_ineligible_reward,
 };
 
 // ---------------------------------------------------------------------------
@@ -139,6 +142,9 @@ pub fn extract_wire_events(
         initialize_reward: discriminator_initialize_reward(),
         fund_reward: discriminator_fund_reward(),
         withdraw_ineligible_reward: discriminator_withdraw_ineligible_reward(),
+        update_reward_duration: discriminator_update_reward_duration(),
+        update_reward_funder: discriminator_update_reward_funder(),
+        withdraw_dead_liquidity_reward: discriminator_withdraw_dead_liquidity_reward(),
         create_position: discriminator_create_position(),
         close_position: discriminator_close_position(),
         lock_position: discriminator_lock_position(),
@@ -192,6 +198,9 @@ struct KnownDiscriminators {
     initialize_reward: [u8; DISCRIMINATOR_LEN],
     fund_reward: [u8; DISCRIMINATOR_LEN],
     withdraw_ineligible_reward: [u8; DISCRIMINATOR_LEN],
+    update_reward_duration: [u8; DISCRIMINATOR_LEN],
+    update_reward_funder: [u8; DISCRIMINATOR_LEN],
+    withdraw_dead_liquidity_reward: [u8; DISCRIMINATOR_LEN],
     create_position: [u8; DISCRIMINATOR_LEN],
     close_position: [u8; DISCRIMINATOR_LEN],
     lock_position: [u8; DISCRIMINATOR_LEN],
@@ -266,6 +275,27 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
             .map(|e| Dispatch::Recognized(DammV2WireEvent::WithdrawIneligibleReward(e)))
             .unwrap_or_else(|reason| Dispatch::BorshFailed {
                 event_name: "EvtWithdrawIneligibleReward",
+                reason,
+            })
+    } else if disc == &known.update_reward_duration {
+        deserialize::<EvtUpdateRewardDuration>(body, "EvtUpdateRewardDuration")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::UpdateRewardDuration(e)))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtUpdateRewardDuration",
+                reason,
+            })
+    } else if disc == &known.update_reward_funder {
+        deserialize::<EvtUpdateRewardFunder>(body, "EvtUpdateRewardFunder")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::UpdateRewardFunder(e)))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtUpdateRewardFunder",
+                reason,
+            })
+    } else if disc == &known.withdraw_dead_liquidity_reward {
+        deserialize::<EvtWithdrawDeadLiquidityReward>(body, "EvtWithdrawDeadLiquidityReward")
+            .map(|e| Dispatch::Recognized(DammV2WireEvent::WithdrawDeadLiquidityReward(e)))
+            .unwrap_or_else(|reason| Dispatch::BorshFailed {
+                event_name: "EvtWithdrawDeadLiquidityReward",
                 reason,
             })
     } else if disc == &known.create_position {

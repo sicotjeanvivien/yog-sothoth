@@ -1,6 +1,7 @@
 use super::*;
 use crate::application::extraction::meteora::damm_v2::events::{
     EvtClosePosition, EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus,
+    EvtUpdateRewardDuration, EvtUpdateRewardFunder, EvtWithdrawDeadLiquidityReward,
 };
 use solana_pubkey::Pubkey;
 
@@ -120,4 +121,60 @@ fn enum_from_u8_decoders() {
         Ok(MeteoraDammV2LiquidityEventKind::Remove)
     );
     assert_eq!(MeteoraDammV2LiquidityEventKind::from_u8(9), Err(9));
+}
+
+// ── rewards family: admin/funder events with no on-chain fixture ─────
+//
+// Same guard as the lifecycle events above: one distinct sentinel per field,
+// asserting each lands in the right domain field. Catches a swap or typo in the
+// translator. The borsh layout itself is pinned separately in `events_tests.rs`.
+
+#[test]
+fn update_reward_duration_maps_every_field() {
+    let wire = EvtUpdateRewardDuration {
+        pool: pk(1),
+        reward_index: 1,
+        old_reward_duration: 604_800,
+        new_reward_duration: 1_209_600,
+    };
+    let d = translate_update_reward_duration(&wire, sig(), ts());
+    assert_eq!(d.pool_address, pk(1));
+    assert_eq!(d.reward_index, 1);
+    assert_eq!(d.old_reward_duration, 604_800);
+    assert_eq!(d.new_reward_duration, 1_209_600);
+    assert_eq!(d.signature, sig());
+    assert_eq!(d.timestamp, ts());
+}
+
+#[test]
+fn update_reward_funder_maps_every_field() {
+    // Distinct old/new sentinels: an inverted pair would survive equal values.
+    let wire = EvtUpdateRewardFunder {
+        pool: pk(1),
+        reward_index: 0,
+        old_funder: pk(2),
+        new_funder: pk(3),
+    };
+    let d = translate_update_reward_funder(&wire, sig(), ts());
+    assert_eq!(d.pool_address, pk(1));
+    assert_eq!(d.reward_index, 0);
+    assert_eq!(d.old_funder, pk(2));
+    assert_eq!(d.new_funder, pk(3));
+    assert_eq!(d.signature, sig());
+    assert_eq!(d.timestamp, ts());
+}
+
+#[test]
+fn withdraw_dead_liquidity_reward_maps_every_field() {
+    let wire = EvtWithdrawDeadLiquidityReward {
+        pool: pk(1),
+        reward_mint: pk(2),
+        amount: 42_000,
+    };
+    let d = translate_withdraw_dead_liquidity_reward(&wire, sig(), ts());
+    assert_eq!(d.pool_address, pk(1));
+    assert_eq!(d.reward_mint, pk(2));
+    assert_eq!(d.amount, 42_000);
+    assert_eq!(d.signature, sig());
+    assert_eq!(d.timestamp, ts());
 }

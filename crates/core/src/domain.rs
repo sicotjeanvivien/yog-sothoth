@@ -39,7 +39,11 @@ pub use meteora::{
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed,
     MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
-    MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2WithdrawIneligibleRewardEvent,
+    MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2UpdateRewardDurationEvent,
+    MeteoraDammV2UpdateRewardDurationEventRepository, MeteoraDammV2UpdateRewardFunderEvent,
+    MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
+    MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
+    MeteoraDammV2WithdrawIneligibleRewardEvent,
     MeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};

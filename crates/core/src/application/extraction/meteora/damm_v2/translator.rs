@@ -21,7 +21,9 @@ use crate::{
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventKind,
         MeteoraDammV2LockPositionEvent, MeteoraDammV2PermanentLockPositionEvent,
         MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SwapEvent, MeteoraDammV2UpdatePoolFeesEvent,
-        MeteoraDammV2WithdrawIneligibleRewardEvent, TradeDirection,
+        MeteoraDammV2UpdateRewardDurationEvent, MeteoraDammV2UpdateRewardFunderEvent,
+        MeteoraDammV2WithdrawDeadLiquidityRewardEvent, MeteoraDammV2WithdrawIneligibleRewardEvent,
+        TradeDirection,
     },
     error::TranslationError,
 };
@@ -30,6 +32,7 @@ use super::events::{
     DammV2WireEvent, EvtClaimPositionFee, EvtClaimProtocolFee, EvtClaimReward, EvtClosePosition,
     EvtCreatePosition, EvtFundReward, EvtInitializePool, EvtInitializeReward, EvtLiquidityChange,
     EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus, EvtSwap2, EvtUpdatePoolFees,
+    EvtUpdateRewardDuration, EvtUpdateRewardFunder, EvtWithdrawDeadLiquidityReward,
     EvtWithdrawIneligibleReward,
 };
 
@@ -238,6 +241,56 @@ pub(super) fn translate_withdraw_ineligible_reward(
     timestamp: DateTime<Utc>,
 ) -> MeteoraDammV2WithdrawIneligibleRewardEvent {
     MeteoraDammV2WithdrawIneligibleRewardEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        reward_mint: wire.reward_mint,
+        amount: wire.amount,
+    }
+}
+
+/// Translate an [`EvtUpdateRewardDuration`] into a
+/// [`MeteoraDammV2UpdateRewardDurationEvent`]. Infallible.
+pub(super) fn translate_update_reward_duration(
+    wire: &EvtUpdateRewardDuration,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2UpdateRewardDurationEvent {
+    MeteoraDammV2UpdateRewardDurationEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        reward_index: wire.reward_index,
+        old_reward_duration: wire.old_reward_duration,
+        new_reward_duration: wire.new_reward_duration,
+    }
+}
+
+/// Translate an [`EvtUpdateRewardFunder`] into a
+/// [`MeteoraDammV2UpdateRewardFunderEvent`]. Infallible.
+pub(super) fn translate_update_reward_funder(
+    wire: &EvtUpdateRewardFunder,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2UpdateRewardFunderEvent {
+    MeteoraDammV2UpdateRewardFunderEvent {
+        pool_address: wire.pool,
+        signature,
+        timestamp,
+        reward_index: wire.reward_index,
+        old_funder: wire.old_funder,
+        new_funder: wire.new_funder,
+    }
+}
+
+/// Translate an [`EvtWithdrawDeadLiquidityReward`] into a
+/// [`MeteoraDammV2WithdrawDeadLiquidityRewardEvent`]. Infallible.
+pub(super) fn translate_withdraw_dead_liquidity_reward(
+    wire: &EvtWithdrawDeadLiquidityReward,
+    signature: Signature,
+    timestamp: DateTime<Utc>,
+) -> MeteoraDammV2WithdrawDeadLiquidityRewardEvent {
+    MeteoraDammV2WithdrawDeadLiquidityRewardEvent {
         pool_address: wire.pool,
         signature,
         timestamp,
@@ -464,6 +517,17 @@ pub(super) fn translate_wire_event(
             MeteoraDammV2Event::WithdrawIneligibleReward(translate_withdraw_ineligible_reward(
                 e, signature, timestamp,
             ))
+        }
+        DammV2WireEvent::UpdateRewardDuration(e) => MeteoraDammV2Event::UpdateRewardDuration(
+            translate_update_reward_duration(e, signature, timestamp),
+        ),
+        DammV2WireEvent::UpdateRewardFunder(e) => MeteoraDammV2Event::UpdateRewardFunder(
+            translate_update_reward_funder(e, signature, timestamp),
+        ),
+        DammV2WireEvent::WithdrawDeadLiquidityReward(e) => {
+            MeteoraDammV2Event::WithdrawDeadLiquidityReward(
+                translate_withdraw_dead_liquidity_reward(e, signature, timestamp),
+            )
         }
         DammV2WireEvent::CreatePosition(e) => {
             MeteoraDammV2Event::CreatePosition(translate_create_position(e, signature, timestamp))
