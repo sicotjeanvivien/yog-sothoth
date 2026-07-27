@@ -645,6 +645,116 @@ fn zap_protocol_fee_emits_no_event_of_its_own() {
     assert!(swap.reserve_a_amount > 0 && swap.reserve_b_amount > 0);
 }
 
+/// The split-position fixtures must decode to `EvtSplitPosition3`, and the
+/// deprecated `EvtSplitPosition2` that cp-amm emits alongside it must be
+/// **dropped silently** — not counted as an unknown discriminator.
+///
+/// This is the double-counting guard. cp-amm emits both events unconditionally
+/// on every split (the `#[allow(deprecated)]` block around the v2 emission is an
+/// attribute scope, not a condition), and they describe the *same* split. v3 is
+/// a strict superset, so v2 is recognised and discarded at extraction.
+///
+/// `damm_v2_split_position2.json` additionally carries an `EvtCreatePosition`:
+/// a split needs a second position to split into, so the same transaction
+/// creates it first. That event is indexed normally.
+#[test]
+fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
+    for fixture in [
+        "damm_v2_split_position.json",
+        "damm_v2_split_position2.json",
+    ] {
+        let tx = load_fixture(fixture);
+        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+        assert!(
+            extracted.failures.is_empty(),
+            "{fixture}: {:?}",
+            extracted.failures
+        );
+        // The whole point: EvtSplitPosition2 is emitted by every split. If it
+        // ever shows up here, our deliberate drop stopped working and the
+        // "unknown" metric is being polluted once per split.
+        assert!(
+            extracted.unknown.is_empty(),
+            "{fixture}: the deprecated EvtSplitPosition2 must be dropped, not \
+             reported as unknown ({} entries)",
+            extracted.unknown.len()
+        );
+
+        let splits: Vec<_> = extracted
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                DammV2WireEvent::SplitPosition3(e) => Some(e),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            splits.len(),
+            1,
+            "{fixture}: expected exactly one split event, got {}",
+            splits.len()
+        );
+        let sp = splits[0];
+
+        assert_ne!(sp.pool, Pubkey::default(), "{fixture}: pool all-zero");
+        assert_ne!(
+            sp.first_position, sp.second_position,
+            "{fixture}: a split must target two distinct positions"
+        );
+        assert!(
+            sp.current_sqrt_price > 0,
+            "{fixture}: sqrt_price should be non-zero"
+        );
+        // Numerators are fractions over SPLIT_POSITION_DENOMINATOR = 1e9 and are
+        // validated on-chain to stay within it. Garbage from a layout drift in
+        // the trailing parameters struct would blow past this.
+        const DENOMINATOR: u32 = 1_000_000_000;
+        let n = &sp.split_position_parameters;
+        for (label, value) in [
+            ("unlocked_liquidity", n.unlocked_liquidity_numerator),
+            (
+                "permanent_locked_liquidity",
+                n.permanent_locked_liquidity_numerator,
+            ),
+            ("fee_a", n.fee_a_numerator),
+            ("fee_b", n.fee_b_numerator),
+            ("reward_0", n.reward_0_numerator),
+            ("reward_1", n.reward_1_numerator),
+            (
+                "inner_vesting_liquidity",
+                n.inner_vesting_liquidity_numerator,
+            ),
+        ] {
+            assert!(
+                value <= DENOMINATOR,
+                "{fixture}: numerator {label} = {value} exceeds 1e9 — layout drift"
+            );
+        }
+        // A split moves something, otherwise the instruction would be pointless.
+        let a = &sp.amount_splits;
+        assert!(
+            a.unlocked_liquidity > 0
+                || a.permanent_locked_liquidity > 0
+                || a.vested_liquidity > 0
+                || a.fee_a > 0
+                || a.fee_b > 0,
+            "{fixture}: split moved nothing at all"
+        );
+    }
+
+    // The second fixture creates the receiving position in the same tx.
+    let tx = load_fixture("damm_v2_split_position2.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(
+        extracted
+            .events
+            .iter()
+            .any(|e| matches!(e, DammV2WireEvent::CreatePosition(_))),
+        "expected the second position's creation in the same transaction"
+    );
+}
+
 /// `decode_fee_config` must run cleanly on the **real** genesis blobs (not
 /// hand-built bytes), and classify each fixture's fee shape correctly. This
 /// ties the decoder to live data: a `PoolFeeParameters` layout drift would

@@ -21,6 +21,7 @@ use yog_core::domain::{
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
+    MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionEventRepository,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
     MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2UpdateRewardDurationEvent,
     MeteoraDammV2UpdateRewardDurationEventRepository, MeteoraDammV2UpdateRewardFunderEvent,
@@ -54,6 +55,7 @@ pub(crate) struct DammV2Repos {
     pub permanent_lock_position: Arc<dyn MeteoraDammV2PermanentLockPositionEventRepository>,
     pub initialize_pool: Arc<dyn MeteoraDammV2InitializePoolEventRepository>,
     pub set_pool_status: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
+    pub split_position: Arc<dyn MeteoraDammV2SplitPositionEventRepository>,
     pub update_pool_fees: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
 }
 
@@ -106,6 +108,7 @@ impl MeteoraDammV2EventPersistor {
             }
             MeteoraDammV2Event::InitializePool(e) => self.persist_initialize_pool(e).await,
             MeteoraDammV2Event::SetPoolStatus(e) => self.persist_set_pool_status(e).await,
+            MeteoraDammV2Event::SplitPosition(e) => self.persist_split_position(e).await,
             MeteoraDammV2Event::UpdatePoolFees(e) => self.persist_update_pool_fees(e).await,
         };
 
@@ -426,6 +429,23 @@ impl MeteoraDammV2EventPersistor {
         }
         self.repos
             .initialize_pool
+            .insert(event)
+            .await
+            .map_err(anyhow::Error::new)
+    }
+
+    /// A split redistributes an existing position's contents between two
+    /// positions. Pool reserves are unchanged — nothing enters or leaves the
+    /// pool — so this is touch + insert, with no current-state projection.
+    async fn persist_split_position(
+        &self,
+        event: &MeteoraDammV2SplitPositionEvent,
+    ) -> anyhow::Result<()> {
+        self.pool_maintenance
+            .touch_pool(Self::PROTOCOL, &event.pool_address)
+            .await;
+        self.repos
+            .split_position
             .insert(event)
             .await
             .map_err(anyhow::Error::new)

@@ -112,6 +112,7 @@ fn wire_event_name(wire: &events::DammV2WireEvent) -> &'static str {
         events::DammV2WireEvent::UpdateRewardDuration(_) => "EvtUpdateRewardDuration",
         events::DammV2WireEvent::UpdateRewardFunder(_) => "EvtUpdateRewardFunder",
         events::DammV2WireEvent::WithdrawDeadLiquidityReward(_) => "EvtWithdrawDeadLiquidityReward",
+        events::DammV2WireEvent::SplitPosition3(_) => "EvtSplitPosition3",
         events::DammV2WireEvent::CreatePosition(_) => "EvtCreatePosition",
         events::DammV2WireEvent::ClosePosition(_) => "EvtClosePosition",
         events::DammV2WireEvent::LockPosition(_) => "EvtLockPosition",
