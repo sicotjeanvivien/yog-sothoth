@@ -77,6 +77,24 @@ insert_only_mock!(
     MeteoraDammV2ClaimProtocolFeeEvent,
     "insert:claim_protocol_fee"
 );
+insert_only_mock!(
+    MockInitializeReward,
+    MeteoraDammV2InitializeRewardEventRepository,
+    MeteoraDammV2InitializeRewardEvent,
+    "insert:initialize_reward"
+);
+insert_only_mock!(
+    MockFundReward,
+    MeteoraDammV2FundRewardEventRepository,
+    MeteoraDammV2FundRewardEvent,
+    "insert:fund_reward"
+);
+insert_only_mock!(
+    MockWithdrawIneligibleReward,
+    MeteoraDammV2WithdrawIneligibleRewardEventRepository,
+    MeteoraDammV2WithdrawIneligibleRewardEvent,
+    "insert:withdraw_ineligible_reward"
+);
 
 // Ring-1 repos: record `insert`; their read methods are never hit by
 // `persist()`, so they stub out.
@@ -161,6 +179,9 @@ fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
         claim_position_fee: Arc::new(MockClaimFee(calls.clone())),
         claim_protocol_fee: Arc::new(MockClaimProtocolFee(calls.clone())),
         claim_reward: Arc::new(MockClaimReward(calls.clone())),
+        initialize_reward: Arc::new(MockInitializeReward(calls.clone())),
+        fund_reward: Arc::new(MockFundReward(calls.clone())),
+        withdraw_ineligible_reward: Arc::new(MockWithdrawIneligibleReward(calls.clone())),
         create_position: Arc::new(MockCreate(calls.clone())),
         close_position: Arc::new(MockClose(calls.clone())),
         lock_position: Arc::new(MockLock(calls.clone())),
@@ -285,6 +306,62 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         )
         .await,
         ["pool:touch", "insert:claim_protocol_fee"]
+    );
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::InitializeReward(MeteoraDammV2InitializeRewardEvent {
+                pool_address: pk(1),
+                signature: sg(),
+                timestamp: ts(),
+                reward_mint: pk(6),
+                funder: pk(7),
+                creator: pk(7),
+                reward_index: 0,
+                reward_duration: 604_800,
+            })
+        )
+        .await,
+        ["pool:touch", "insert:initialize_reward"]
+    );
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::FundReward(MeteoraDammV2FundRewardEvent {
+                pool_address: pk(1),
+                signature: sg(),
+                timestamp: ts(),
+                funder: pk(7),
+                mint_reward: pk(6),
+                reward_index: 0,
+                amount: 100_000_000_000,
+                transfer_fee_excluded_amount_in: 100_000_000_000,
+                reward_duration_end: 1_785_727_188,
+                pre_reward_rate: 0,
+                post_reward_rate: 3_050_056_890_494_304_169_312_169,
+            })
+        )
+        .await,
+        ["pool:touch", "insert:fund_reward"]
+    );
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::WithdrawIneligibleReward(
+                MeteoraDammV2WithdrawIneligibleRewardEvent {
+                    pool_address: pk(1),
+                    signature: sg(),
+                    timestamp: ts(),
+                    reward_mint: pk(6),
+                    amount: 0,
+                }
+            )
+        )
+        .await,
+        ["pool:touch", "insert:withdraw_ineligible_reward"]
     );
 
     // create / close: touch + insert.

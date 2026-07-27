@@ -1,6 +1,8 @@
 mod close_position;
 mod create_position;
+mod fund_reward;
 mod initialize_pool;
+mod initialize_reward;
 mod liquidity_event;
 mod lock_position;
 mod permanent_lock_position;
@@ -10,10 +12,13 @@ mod reward_claim;
 mod set_pool_status;
 mod swap_event;
 mod update_pool_fees;
+mod withdraw_ineligible_reward;
 
 pub use close_position::PgMeteoraDammV2ClosePositionEventRepository;
 pub use create_position::PgMeteoraDammV2CreatePositionEventRepository;
+pub use fund_reward::PgMeteoraDammV2FundRewardEventRepository;
 pub use initialize_pool::PgMeteoraDammV2InitializePoolEventRepository;
+pub use initialize_reward::PgMeteoraDammV2InitializeRewardEventRepository;
 pub use liquidity_event::PgMeteoraDammV2LiquidityEventRepository;
 pub use lock_position::PgMeteoraDammV2LockPositionEventRepository;
 pub use permanent_lock_position::PgMeteoraDammV2PermanentLockPositionEventRepository;
@@ -23,3 +28,4 @@ pub use reward_claim::PgMeteoraDammV2ClaimRewardEventRepository;
 pub use set_pool_status::PgMeteoraDammV2SetPoolStatusEventRepository;
 pub use swap_event::PgMeteoraDammV2SwapEventRepository;
 pub use update_pool_fees::PgMeteoraDammV2UpdatePoolFeesEventRepository;
+pub use withdraw_ineligible_reward::PgMeteoraDammV2WithdrawIneligibleRewardEventRepository;

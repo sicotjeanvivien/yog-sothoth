@@ -23,18 +23,24 @@ use yog_core::domain::{
     MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
     MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
     MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
+    MeteoraDammV2FundRewardEvent, MeteoraDammV2FundRewardEventRepository,
     MeteoraDammV2InitializePoolEvent, MeteoraDammV2InitializePoolEventRepository,
+    MeteoraDammV2InitializeRewardEvent, MeteoraDammV2InitializeRewardEventRepository,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2UpdatePoolFeesEvent, MeteoraDammV2UpdatePoolFeesEventRepository,
+    MeteoraDammV2WithdrawIneligibleRewardEvent,
+    MeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
 use yog_persistence::{
     PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2FundRewardEventRepository,
+    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2InitializeRewardEventRepository,
     PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
 
 fn pk(seed: u8) -> Pubkey {
@@ -121,6 +127,170 @@ async fn claim_protocol_fee_inserts_and_is_idempotent(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!((a, b), (0, 1_421_627_556));
+}
+
+// ── initialize_reward: persists, idempotent per slot, multi-slot tx ──
+
+#[sqlx::test]
+async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
+    let repo = PgMeteoraDammV2InitializeRewardEventRepository::new(pool.clone());
+    // Real fixture shape: funder == creator, 7-day window on slot 0.
+    let event = MeteoraDammV2InitializeRewardEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        reward_mint: pk(2),
+        funder: pk(3),
+        creator: pk(3),
+        reward_index: 0,
+        reward_duration: 604_800,
+    };
+
+    repo.insert(&event).await.unwrap();
+    // Same (signature, reward_index, timestamp) again — ON CONFLICT DO NOTHING.
+    repo.insert(&event).await.unwrap();
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_initialize_reward_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        count, 1,
+        "duplicate (signature, reward_index, timestamp) must not insert twice"
+    );
+
+    // A single transaction may open more than one slot: the same signature with
+    // a different reward_index is a distinct event, not a duplicate. This is why
+    // reward_index is part of the idempotency key.
+    repo.insert(&MeteoraDammV2InitializeRewardEvent {
+        reward_index: 1,
+        ..event.clone()
+    })
+    .await
+    .unwrap();
+
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_initialize_reward_events")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 2, "a second slot in the same tx must insert");
+
+    let (mint, funder, creator, duration): (String, String, String, i64) = sqlx::query_as(
+        "SELECT reward_mint, funder, creator, reward_duration \
+         FROM meteora_damm_v2_initialize_reward_events WHERE reward_index = 0",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(mint, pk(2).to_string());
+    assert_eq!(funder, pk(3).to_string());
+    assert_eq!(creator, pk(3).to_string());
+    assert_eq!(duration, 604_800);
+}
+
+// ── fund_reward: persists, idempotent, u128 Q64.64 rates survive ─────
+
+#[sqlx::test]
+async fn fund_reward_preserves_q64_rates(pool: PgPool) {
+    let repo = PgMeteoraDammV2FundRewardEventRepository::new(pool.clone());
+    // Real fixture values (damm_v2_initialize_reward.json): a slot's first
+    // funding, so pre_reward_rate is 0 and post = (amount << 64) / 604800.
+    const POST_RATE: u128 = 3_050_056_890_494_304_169_312_169;
+    let event = MeteoraDammV2FundRewardEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        funder: pk(2),
+        mint_reward: pk(3),
+        reward_index: 0,
+        amount: 100_000_000_000,
+        transfer_fee_excluded_amount_in: 100_000_000_000,
+        reward_duration_end: 1_785_727_188,
+        pre_reward_rate: 0,
+        post_reward_rate: POST_RATE,
+    };
+
+    repo.insert(&event).await.unwrap();
+    // Same (signature, reward_index, timestamp) again — ON CONFLICT DO NOTHING.
+    repo.insert(&event).await.unwrap();
+
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_fund_reward_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        count, 1,
+        "duplicate (signature, reward_index, timestamp) must not insert twice"
+    );
+
+    // A second slot funded by the same transaction is a distinct event.
+    repo.insert(&MeteoraDammV2FundRewardEvent {
+        reward_index: 1,
+        ..event.clone()
+    })
+    .await
+    .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_fund_reward_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 2, "a second slot in the same tx must insert");
+
+    // The Q64.64 rate is a 25-digit u128: NUMERIC(39,0) must return it to the
+    // last digit. Any silent narrowing to f64/i64 would corrupt it here.
+    let (pre, post, end): (String, String, i64) = sqlx::query_as(
+        "SELECT pre_reward_rate::TEXT, post_reward_rate::TEXT, reward_duration_end \
+         FROM meteora_damm_v2_fund_reward_events WHERE reward_index = 0",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(pre, "0");
+    assert_eq!(post, POST_RATE.to_string());
+    assert_eq!(end, 1_785_727_188);
+}
+
+// ── withdraw_ineligible_reward: persists, idempotent, zero amount ────
+
+#[sqlx::test]
+async fn withdraw_ineligible_reward_inserts_and_is_idempotent(pool: PgPool) {
+    let repo = PgMeteoraDammV2WithdrawIneligibleRewardEventRepository::new(pool.clone());
+    // Real fixture shape: amount is legitimately zero — nothing was reclaimable.
+    // NOT NULL + BIGINT must accept it as a value, not treat it as missing.
+    let event = MeteoraDammV2WithdrawIneligibleRewardEvent {
+        pool_address: pk(1),
+        signature: sg(),
+        timestamp: ts(),
+        reward_mint: pk(2),
+        amount: 0,
+    };
+
+    repo.insert(&event).await.unwrap();
+    // Same (signature, timestamp) again — ON CONFLICT DO NOTHING.
+    repo.insert(&event).await.unwrap();
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM meteora_damm_v2_withdraw_ineligible_reward_events",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        count, 1,
+        "duplicate (signature, timestamp) must not insert twice"
+    );
+
+    let (mint, amount): (String, i64) = sqlx::query_as(
+        "SELECT reward_mint, amount \
+         FROM meteora_damm_v2_withdraw_ineligible_reward_events LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(mint, pk(2).to_string());
+    assert_eq!(amount, 0);
 }
 
 // ── close_position: persists ─────────────────────────────────────────

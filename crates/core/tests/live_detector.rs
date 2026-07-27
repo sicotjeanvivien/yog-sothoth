@@ -375,6 +375,208 @@ fn decodes_claim_protocol_fee_fixture() {
     );
 }
 
+/// The initialize-reward fixture must decode cleanly to an
+/// `EvtInitializeReward` — an admin opening a farming reward slot on a pool.
+///
+/// This fixture is a real "farm launch" transaction: it opens slot 0 with a
+/// 7-day window and funds it in the same transaction, so it also carries an
+/// `EvtFundReward` (asserted separately). Every field is pinned to its
+/// on-chain value: `funder` and `creator` are the same wallet here, so this
+/// fixture cannot by itself discriminate their order in the borsh layout —
+/// that comes from the cp-amm source.
+#[test]
+fn decodes_initialize_reward_fixture() {
+    let tx = load_fixture("damm_v2_initialize_reward.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+    assert!(
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
+    );
+
+    let ir = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::InitializeReward(e) => Some(e),
+            _ => None,
+        })
+        .expect("no InitializeReward event extracted");
+
+    assert_eq!(
+        ir.pool,
+        pubkey!("8UBoT36exEV5g7GyzfrR6YMmKL2SMhdFNTqjTbP9vJZt")
+    );
+    assert_eq!(
+        ir.reward_mint,
+        pubkey!("KMtG8obzMXtJkL6EKwd6faxvgyRWxBHwd68SQv9PLEX")
+    );
+    assert_eq!(
+        ir.funder,
+        pubkey!("HkcPD14egD2cR4Rd189zqbxYGmyanbPGUFLVH4zFcYXe")
+    );
+    assert_eq!(
+        ir.creator,
+        pubkey!("HkcPD14egD2cR4Rd189zqbxYGmyanbPGUFLVH4zFcYXe")
+    );
+    assert_eq!(ir.reward_index, 0);
+    // 604800 s = 7 days. A one-byte misalignment upstream would wreck this.
+    assert_eq!(ir.reward_duration, 604_800);
+}
+
+/// The fund-reward fixtures must decode cleanly to an `EvtFundReward` — a
+/// funder depositing rewards and (re)setting the slot's emission rate.
+///
+/// Two fixtures covering both regimes:
+/// - `damm_v2_initialize_reward.json`: slot funded for the *first* time
+///   (`pre_reward_rate == 0`), in the same transaction that opened it.
+/// - `damm_v2_fund_reward.json`: a *re-fund* of a live slot
+///   (`pre_reward_rate > 0`), where the undistributed remainder is carried
+///   forward into the new window.
+#[test]
+fn decodes_fund_reward_fixtures() {
+    // Fresh slot: opened and funded in one transaction.
+    let tx = load_fixture("damm_v2_initialize_reward.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
+    );
+
+    let fr = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::FundReward(e) => Some(e),
+            _ => None,
+        })
+        .expect("no FundReward event extracted from the initialize fixture");
+
+    assert_eq!(
+        fr.pool,
+        pubkey!("8UBoT36exEV5g7GyzfrR6YMmKL2SMhdFNTqjTbP9vJZt")
+    );
+    assert_eq!(
+        fr.funder,
+        pubkey!("HkcPD14egD2cR4Rd189zqbxYGmyanbPGUFLVH4zFcYXe")
+    );
+    assert_eq!(
+        fr.mint_reward,
+        pubkey!("KMtG8obzMXtJkL6EKwd6faxvgyRWxBHwd68SQv9PLEX")
+    );
+    assert_eq!(fr.reward_index, 0);
+    assert_eq!(fr.amount, 100_000_000_000);
+    // No Token-2022 transfer fee on this mint: everything sent landed.
+    assert_eq!(fr.transfer_fee_excluded_amount_in, fr.amount);
+    // Slot opened at blockTime 1785122388 with a 604800 s window.
+    assert_eq!(fr.reward_duration_end, 1_785_727_188);
+    // First funding of the slot — nothing was emitting before.
+    assert_eq!(fr.pre_reward_rate, 0);
+
+    // The load-bearing assertion of this whole event: the rate is Q64.64.
+    // On a fresh slot there is no carry-forward, so the program's rate must
+    // equal (amount << 64) / duration exactly. A wrong scale assumption (or a
+    // u128 field misread) breaks this; a mere non-zero check would not.
+    let duration: u128 = 604_800;
+    assert_eq!(
+        fr.post_reward_rate,
+        (u128::from(fr.amount) << 64) / duration,
+        "post_reward_rate is not (amount << 64) / duration — Q64.64 scale drift"
+    );
+
+    // Re-fund of a live slot: carry-forward regime.
+    let tx = load_fixture("damm_v2_fund_reward.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    assert!(
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
+    );
+
+    let fr = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::FundReward(e) => Some(e),
+            _ => None,
+        })
+        .expect("no FundReward event extracted");
+
+    assert_eq!(
+        fr.pool,
+        pubkey!("C21PsA1opG7wogPyk8vYjKw7K1J8hooDrK3rHg6LTThV")
+    );
+    assert_eq!(
+        fr.funder,
+        pubkey!("HkRUrQh9H6s129v1DP5xFwL5uNsmfS3STTbGEKwehcxt")
+    );
+    assert_eq!(
+        fr.mint_reward,
+        pubkey!("DwAgR3U6tDoQMiBtJq3YVjoeK6hapYvxc8ZHeAQgjups")
+    );
+    assert_eq!(fr.reward_index, 0);
+    assert_eq!(fr.amount, 29_529_966_570);
+    assert_eq!(fr.transfer_fee_excluded_amount_in, fr.amount);
+    assert_eq!(fr.reward_duration_end, 1_785_711_398);
+    // A live slot was already emitting, and topping it up raised the rate.
+    assert!(fr.pre_reward_rate > 0, "expected a live slot");
+    assert!(
+        fr.post_reward_rate > fr.pre_reward_rate,
+        "funding a slot must not lower its emission rate"
+    );
+    // Carry-forward: the new window distributes far more than this deposit
+    // alone, because the remainder of the previous window was folded in.
+    // total = post_rate * duration >> 64.
+    let total = (fr.post_reward_rate * duration) >> 64;
+    assert!(
+        total > u128::from(fr.amount),
+        "expected carry-forward: total ({total}) should exceed the deposit ({})",
+        fr.amount
+    );
+}
+
+/// The withdraw-ineligible-reward fixture must decode cleanly to an
+/// `EvtWithdrawIneligibleReward` — the funder reclaiming rewards that accrued
+/// while the pool had no eligible liquidity, so nobody could ever claim them.
+///
+/// Caveat on this fixture's strength: its `amount` is legitimately **zero**
+/// (the instruction runs and emits even when there is nothing to reclaim), so
+/// the amount field is pinned but not discriminating. The two pubkeys are.
+#[test]
+fn decodes_withdraw_ineligible_reward_fixture() {
+    let tx = load_fixture("damm_v2_withdraw_ineligible_reward.json");
+    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+    assert!(
+        extracted.failures.is_empty(),
+        "unexpected extraction failures: {:?}",
+        extracted.failures
+    );
+
+    let wir = extracted
+        .events
+        .iter()
+        .find_map(|e| match e {
+            DammV2WireEvent::WithdrawIneligibleReward(e) => Some(e),
+            _ => None,
+        })
+        .expect("no WithdrawIneligibleReward event extracted");
+
+    assert_eq!(
+        wir.pool,
+        pubkey!("2jmzTgpVpPdDbHWJBeJHYSbY4YFiycdbXuovAGBrGMVp")
+    );
+    assert_eq!(
+        wir.reward_mint,
+        pubkey!("venum8bXEakzg6eSQWikT51EoeuAsR51Wxn7JfQc4QX")
+    );
+    // Nothing was reclaimable in this transaction. Pinned rather than asserted
+    // non-zero: a >0 check here would be a false guarantee.
+    assert_eq!(wir.amount, 0);
+}
+
 /// `decode_fee_config` must run cleanly on the **real** genesis blobs (not
 /// hand-built bytes), and classify each fixture's fee shape correctly. This
 /// ties the decoder to live data: a `PoolFeeParameters` layout drift would

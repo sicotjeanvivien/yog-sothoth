@@ -23,11 +23,13 @@ pub use liquidity_flow::PgLiquidityFlowRepository;
 pub use meteora::{
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,
     PgMeteoraDammV2ClaimRewardEventRepository, PgMeteoraDammV2ClosePositionEventRepository,
-    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2CreatePositionEventRepository, PgMeteoraDammV2FundRewardEventRepository,
+    PgMeteoraDammV2InitializePoolEventRepository, PgMeteoraDammV2InitializeRewardEventRepository,
     PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2LockPositionEventRepository,
     PgMeteoraDammV2PermanentLockPositionEventRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SwapEventRepository,
     PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2WithdrawIneligibleRewardEventRepository,
 };
 pub use network_status::PgNetworkStatusRepository;
 pub use pool::PgPoolRepository;
