@@ -9,6 +9,7 @@
 //! (`foreign_account_is_not_decoded_at_our_offsets`).
 
 use super::*;
+use crate::application::decoder::PoolAccountRejection;
 use crate::application::decoder::meteora::damm_v2::{
     CLIFF_FEE_NUMERATOR_OFFSET, PARTNER_FEE_PERCENT_OFFSET, POOL_DISCRIMINATOR,
     PROTOCOL_FEE_PERCENT_OFFSET, REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET,
@@ -69,24 +70,48 @@ fn decodes_cp_amm_fields_at_their_offsets() {
 
 // ── The two guards ──────────────────────────────────────────────────
 
+// Each rejection is asserted by *variant*, not merely as "not decoded": the
+// whole point of the typed rejection is that these four situations mean
+// different things and must stay distinguishable to whoever logs them.
+
 #[test]
-fn unknown_owner_is_not_decoded() {
+fn an_unindexed_program_is_rejected_as_such() {
     let data = cp_amm_account(2_500_000, (20, 0, 20), pk(2), pk(3));
 
-    assert!(decode_pool_account(&pk(99), &data).is_none());
+    assert_eq!(
+        decode_pool_account(&pk(99), &data),
+        Err(PoolAccountRejection::UnknownProgram { program_id: pk(99) })
+    );
 }
 
 #[test]
-fn wrong_discriminator_is_not_decoded() {
+fn wrong_discriminator_is_rejected_as_not_a_pool_account() {
     let mut data = cp_amm_account(2_500_000, (20, 0, 20), pk(2), pk(3));
     data[..8].fill(0);
 
-    assert!(decode_pool_account(&cp_amm_owner(), &data).is_none());
+    assert_eq!(
+        decode_pool_account(&cp_amm_owner(), &data),
+        Err(PoolAccountRejection::NotAPoolAccount {
+            protocol: Protocol::MeteoraDammV2
+        })
+    );
 }
 
+/// Distinct from the discriminator case on purpose: a short account is the
+/// signature of an ABI change, and that must not read the same as "wrong
+/// account".
 #[test]
-fn account_too_short_for_the_layout_is_not_decoded() {
-    assert!(decode_pool_account(&cp_amm_owner(), &[0u8; 16]).is_none());
+fn a_short_account_is_rejected_as_truncated_with_its_sizes() {
+    let err = decode_pool_account(&cp_amm_owner(), &[0u8; 16]).expect_err("should reject");
+
+    match err {
+        PoolAccountRejection::Truncated { protocol, len, min } => {
+            assert_eq!(protocol, Protocol::MeteoraDammV2);
+            assert_eq!(len, 16);
+            assert!(min > len, "the layout must need more than we were given");
+        }
+        other => panic!("expected Truncated, got {other:?}"),
+    }
 }
 
 /// **The case the guards exist for.** A DLMM `LbPair` account holds valid,
@@ -106,27 +131,35 @@ fn foreign_account_is_not_decoded_at_our_offsets() {
     lb_pair[152..184].copy_from_slice(pk(77).as_ref()); // reserve_x
     lb_pair[184..216].copy_from_slice(pk(88).as_ref()); // reserve_y
 
-    // Rejected on owner…
-    let dlmm_owner = Protocol::MeteoraDlmm.program_id();
-    assert!(decode_pool_account(&dlmm_owner, &lb_pair).is_none());
+    // Rejected on the program id…
+    assert_eq!(
+        decode_pool_account(&Protocol::MeteoraDlmm.program_id(), &lb_pair),
+        Err(PoolAccountRejection::NoDecoder {
+            protocol: Protocol::MeteoraDlmm
+        })
+    );
 
     // …and, were it ever routed here, on the discriminator too.
-    assert!(
-        super::meteora::damm_v2::decode_pool_account(&lb_pair).is_none(),
+    assert_eq!(
+        super::meteora::damm_v2::decode_pool_account(&lb_pair),
+        Err(PoolAccountRejection::NotAPoolAccount {
+            protocol: Protocol::MeteoraDammV2
+        }),
         "cp-amm decoder must reject an LbPair even if handed one directly"
     );
 }
 
 // ── Protocols recognized but not decoded yet ────────────────────────
 
+/// A known protocol without a decoder is a **coverage gap**, and must not be
+/// reported as an unindexed program — the two call for different reactions.
 #[test]
-fn known_protocol_without_a_decoder_yields_none() {
-    // DAMM v1 and DLMM are valid program ids — they must not be mistaken for
-    // unknown owners, but they have no pool-account decoder yet.
+fn known_protocol_without_a_decoder_is_rejected_as_a_coverage_gap() {
     for protocol in [Protocol::MeteoraDammV1, Protocol::MeteoraDlmm] {
-        assert!(
-            decode_pool_account(&protocol.program_id(), &[0u8; 1112]).is_none(),
-            "{protocol} should decode to None"
+        assert_eq!(
+            decode_pool_account(&protocol.program_id(), &[0u8; 1112]),
+            Err(PoolAccountRejection::NoDecoder { protocol }),
+            "{protocol} should be a coverage gap, not an unknown program"
         );
     }
 }

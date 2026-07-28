@@ -27,7 +27,8 @@
 use solana_pubkey::Pubkey;
 
 use crate::amm::damm_v2::fee_numerator_to_bps;
-use crate::domain::MeteoraDammV2PoolAccountProperties;
+use crate::application::decoder::PoolAccountRejection;
+use crate::domain::{MeteoraDammV2PoolAccountProperties, Protocol};
 
 /// Anchor account discriminator for the cp-amm `Pool` account
 /// (`sha256("account:Pool")[..8]`).
@@ -54,27 +55,40 @@ const MIN_LEN: usize = TOKEN_B_MINT_OFFSET + 32;
 
 /// Decode a cp-amm `Pool` account.
 ///
-/// `None` when the bytes are not a cp-amm `Pool`: wrong discriminator, or too
-/// short for the layout. The caller has already routed on the owner, so this is
-/// the second of the two guards described in [`super::super`].
+/// The caller has already routed on the program id, so this carries the second
+/// of the two guards described in [`super::super`] — the discriminator — and
+/// distinguishes it from a truncated account, because the two mean very
+/// different things: a wrong discriminator is the wrong account, a short one is
+/// most likely an ABI change.
 pub(in crate::application::decoder) fn decode_pool_account(
     data: &[u8],
-) -> Option<MeteoraDammV2PoolAccountProperties> {
-    if data.len() < MIN_LEN || data[..8] != POOL_DISCRIMINATOR {
-        return None;
+) -> Result<MeteoraDammV2PoolAccountProperties, PoolAccountRejection> {
+    const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
+
+    if data.len() < MIN_LEN {
+        return Err(PoolAccountRejection::Truncated {
+            protocol: PROTOCOL,
+            len: data.len(),
+            min: MIN_LEN,
+        });
+    }
+    if data[..8] != POOL_DISCRIMINATOR {
+        return Err(PoolAccountRejection::NotAPoolAccount { protocol: PROTOCOL });
     }
 
+    // Every slice below is in bounds: the length check above covers the whole
+    // layout, so these conversions cannot fail.
     let cliff_fee_numerator = u64::from_le_bytes(
         data[CLIFF_FEE_NUMERATOR_OFFSET..CLIFF_FEE_NUMERATOR_OFFSET + 8]
             .try_into()
-            .ok()?,
+            .expect("8 bytes, length checked above"),
     );
 
-    Some(MeteoraDammV2PoolAccountProperties {
+    Ok(MeteoraDammV2PoolAccountProperties {
         token_a_mint: Pubkey::try_from(&data[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32])
-            .ok()?,
+            .expect("32 bytes, length checked above"),
         token_b_mint: Pubkey::try_from(&data[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32])
-            .ok()?,
+            .expect("32 bytes, length checked above"),
         fee_bps: fee_numerator_to_bps(cliff_fee_numerator),
         protocol_fee_percent: data[PROTOCOL_FEE_PERCENT_OFFSET],
         partner_fee_percent: data[PARTNER_FEE_PERCENT_OFFSET],

@@ -109,13 +109,29 @@ impl PoolAccountWorker {
         };
 
         let mut decoded = 0usize;
+        let mut rejected = 0usize;
         let mut ok = 0usize;
         for account in &accounts {
-            // Decoding routes on the account's owner, so a pool that changed
-            // hands — or a resolver whose queue over-reaches — yields None here
-            // rather than being decoded at the wrong layout.
-            let Some(properties) = decode_pool_account(&account.program_id, &account.data) else {
-                continue;
+            // Decoding routes on the account's program id, so a pool that
+            // changed hands — or a resolver whose queue over-reaches — is
+            // rejected here rather than decoded at the wrong layout.
+            //
+            // Every rejection is logged. In this path none of them is routine:
+            // the accounts belong to pools this very queue asked for, so a
+            // rejection always means something is off — a stale row, a missing
+            // decoder, or the program having changed its layout.
+            let properties = match decode_pool_account(&account.program_id, &account.data) {
+                Ok(properties) => properties,
+                Err(rejection) => {
+                    warn!(
+                        protocol = %protocol,
+                        pool = %account.pool_address,
+                        reason = %rejection,
+                        "pool-account worker: account rejected",
+                    );
+                    rejected += 1;
+                    continue;
+                }
             };
             decoded += 1;
 
@@ -146,6 +162,7 @@ impl PoolAccountWorker {
             requested = unresolved.len(),
             fetched = accounts.len(),
             decoded,
+            rejected,
             written = ok,
             elapsed_s = start.elapsed().as_secs_f64(),
             "pool-account worker: cycle done",
