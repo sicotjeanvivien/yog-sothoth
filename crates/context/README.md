@@ -54,8 +54,8 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   It **names no protocol**. It holds one `PoolAccountResolver` per protocol —
   each owning its own queue and its own tables — plus the shared
   `SolanaAccountClient`, and iterates. Decoding happens in
-  `yog_core::application::decode_pool_account`, routed on the account's `owner`
-  (which on Solana *is* its program id), so one RPC client serves every
+  `yog_core::application::decode_pool_account`, routed on the account's owning
+  program id (what the chain calls its `owner`), so one client serves every
   protocol. Adding one means pushing a resolver into the vec in `bootstrap`;
   not a line of the worker changes.
 

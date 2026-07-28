@@ -23,7 +23,7 @@ fn pk(seed: u8) -> Pubkey {
 }
 
 /// A cp-amm `Pool` account buffer. Offsets mirror
-/// `core::application::pool_account::meteora::damm_v2` — if they ever drift,
+/// `core::application::decoder::meteora::damm_v2` — if they ever drift,
 /// these fail alongside the decoder's own tests.
 fn cp_amm_account(token_a: Pubkey, token_b: Pubkey) -> Vec<u8> {
     let mut bytes = vec![0u8; 1112];
@@ -81,7 +81,10 @@ struct FakeSource {
 
 #[async_trait]
 impl PoolAccountSource for FakeSource {
-    async fn fetch_accounts(&self, _addresses: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError> {
+    async fn fetch_accounts(
+        &self,
+        _pool_addresses: &[Pubkey],
+    ) -> Result<Vec<RawAccount>, SourceError> {
         Ok(self.accounts.clone())
     }
 }
@@ -98,8 +101,8 @@ async fn decodes_and_writes_the_account_properties() {
     });
     let source = Arc::new(FakeSource {
         accounts: vec![RawAccount {
-            address: pk(1),
-            owner: Protocol::MeteoraDammV2.program_id(),
+            pool_address: pk(1),
+            program_id: Protocol::MeteoraDammV2.program_id(),
             data: cp_amm_account(pk(2), pk(3)),
         }],
     });
@@ -135,8 +138,8 @@ async fn an_undecodable_account_is_skipped() {
     });
     let source = Arc::new(FakeSource {
         accounts: vec![RawAccount {
-            address: pk(1),
-            owner: pk(99), // a program we do not index
+            pool_address: pk(1),
+            program_id: pk(99), // a program we do not index
             data: cp_amm_account(pk(2), pk(3)),
         }],
     });
@@ -157,8 +160,8 @@ async fn an_account_of_another_protocol_is_not_written() {
     });
     let source = Arc::new(FakeSource {
         accounts: vec![RawAccount {
-            address: pk(1),
-            owner: Protocol::MeteoraDlmm.program_id(),
+            pool_address: pk(1),
+            program_id: Protocol::MeteoraDlmm.program_id(),
             data: vec![0u8; 904],
         }],
     });

@@ -35,19 +35,19 @@ use crate::domain::MeteoraDammV2PoolAccountProperties;
 /// Checked on every decode, and **not** redundant with the owner dispatch: it
 /// is the guard against decoding a *different* account of the same program at
 /// this layout.
-pub(in crate::application::pool_account) const POOL_DISCRIMINATOR: [u8; 8] =
+pub(in crate::application::decoder) const POOL_DISCRIMINATOR: [u8; 8] =
     [0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc];
 
 /// `cliff_fee_numerator`: the leading `u64` of `pool_fees`, right after the
 /// 8-byte discriminator. The same quantity decoded from the genesis event.
-pub(in crate::application::pool_account) const CLIFF_FEE_NUMERATOR_OFFSET: usize = 8;
+pub(in crate::application::decoder) const CLIFF_FEE_NUMERATOR_OFFSET: usize = 8;
 /// Fee-split percents (`u8` each), immediately after the 40-byte `BaseFeeStruct`
 /// inside `PoolFeesStruct`.
-pub(in crate::application::pool_account) const PROTOCOL_FEE_PERCENT_OFFSET: usize = 48;
-pub(in crate::application::pool_account) const PARTNER_FEE_PERCENT_OFFSET: usize = 49;
-pub(in crate::application::pool_account) const REFERRAL_FEE_PERCENT_OFFSET: usize = 50;
-pub(in crate::application::pool_account) const TOKEN_A_MINT_OFFSET: usize = 168;
-pub(in crate::application::pool_account) const TOKEN_B_MINT_OFFSET: usize = 200;
+pub(in crate::application::decoder) const PROTOCOL_FEE_PERCENT_OFFSET: usize = 48;
+pub(in crate::application::decoder) const PARTNER_FEE_PERCENT_OFFSET: usize = 49;
+pub(in crate::application::decoder) const REFERRAL_FEE_PERCENT_OFFSET: usize = 50;
+pub(in crate::application::decoder) const TOKEN_A_MINT_OFFSET: usize = 168;
+pub(in crate::application::decoder) const TOKEN_B_MINT_OFFSET: usize = 200;
 
 /// Minimum length for every field above to be in bounds.
 const MIN_LEN: usize = TOKEN_B_MINT_OFFSET + 32;
@@ -57,7 +57,7 @@ const MIN_LEN: usize = TOKEN_B_MINT_OFFSET + 32;
 /// `None` when the bytes are not a cp-amm `Pool`: wrong discriminator, or too
 /// short for the layout. The caller has already routed on the owner, so this is
 /// the second of the two guards described in [`super::super`].
-pub(in crate::application::pool_account) fn decode_pool_account(
+pub(in crate::application::decoder) fn decode_pool_account(
     data: &[u8],
 ) -> Option<MeteoraDammV2PoolAccountProperties> {
     if data.len() < MIN_LEN || data[..8] != POOL_DISCRIMINATOR {

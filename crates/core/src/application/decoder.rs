@@ -63,5 +63,5 @@ pub fn decode_pool_account(owner: &Pubkey, data: &[u8]) -> Option<PoolAccountPro
 }
 
 #[cfg(test)]
-#[path = "pool_account_tests.rs"]
+#[path = "decoder_tests.rs"]
 mod tests;

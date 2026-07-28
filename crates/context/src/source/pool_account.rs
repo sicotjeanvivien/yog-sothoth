@@ -3,17 +3,21 @@ use solana_pubkey::Pubkey;
 
 use crate::error::SourceError;
 
-/// A raw on-chain account, as fetched — not interpreted.
+/// A raw on-chain pool account, as fetched — not interpreted.
 ///
-/// `owner` is the program that owns the account, which on Solana *is* its
-/// program id; it is what [`yog_core::application::decode_pool_account`] routes
-/// on to pick a layout. `data` is already base64-decoded — base64 is the RPC's
-/// encoding, not the chain's, so it stops at this boundary and never reaches
-/// `core`.
+/// `program_id` is the account's on-chain *owner*, which for a program-owned
+/// account **is** the program that owns it — here, the protocol's program. It is
+/// what [`yog_core::application::decode_pool_account`] routes on to pick a
+/// layout. Named `program_id` rather than `owner` on purpose: `owner` is the
+/// RPC's vocabulary and stays on the wire struct, this is ours and matches
+/// [`yog_core::domain::Protocol::program_id`].
+///
+/// `data` is already base64-decoded — base64 is the RPC's encoding, not the
+/// chain's, so it stops at this boundary and never reaches `core`.
 #[derive(Debug, Clone)]
 pub(crate) struct RawAccount {
-    pub(crate) address: Pubkey,
-    pub(crate) owner: Pubkey,
+    pub(crate) pool_address: Pubkey,
+    pub(crate) program_id: Pubkey,
     pub(crate) data: Vec<u8>,
 }
 
@@ -28,10 +32,13 @@ pub(crate) struct RawAccount {
 /// the layouts live in `core`.
 #[async_trait]
 pub trait PoolAccountSource: Send + Sync {
-    /// Fetch the accounts for a batch of addresses.
+    /// Fetch the accounts for a batch of pool addresses.
     ///
-    /// Addresses the source cannot fetch (the account does not exist, the entry
-    /// is malformed) are silently absent from the result — they'll be retried on
+    /// Pools the source cannot fetch (the account does not exist, the entry is
+    /// malformed) are silently absent from the result — they'll be retried on
     /// the next poll cycle. Only a hard transport failure is an error.
-    async fn fetch_accounts(&self, addresses: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError>;
+    async fn fetch_accounts(
+        &self,
+        pool_addresses: &[Pubkey],
+    ) -> Result<Vec<RawAccount>, SourceError>;
 }

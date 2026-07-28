@@ -114,7 +114,7 @@ impl PoolAccountWorker {
             // Decoding routes on the account's owner, so a pool that changed
             // hands — or a resolver whose queue over-reaches — yields None here
             // rather than being decoded at the wrong layout.
-            let Some(properties) = decode_pool_account(&account.owner, &account.data) else {
+            let Some(properties) = decode_pool_account(&account.program_id, &account.data) else {
                 continue;
             };
             decoded += 1;
@@ -123,19 +123,19 @@ impl PoolAccountWorker {
                 warn!(
                     protocol = %protocol,
                     decoded_as = %properties.protocol(),
-                    pool = %account.address,
+                    pool = %account.pool_address,
                     "pool-account worker: queue and account disagree on protocol — skipping",
                 );
                 continue;
             }
 
             match resolver
-                .set_pool_account(&account.address, &properties)
+                .set_pool_account(&account.pool_address, &properties)
                 .await
             {
                 Ok(()) => ok += 1,
                 Err(e) => {
-                    warn!(protocol = %protocol, pool = %account.address, error = %e,
+                    warn!(protocol = %protocol, pool = %account.pool_address, error = %e,
                           "pool-account worker: set_pool_account failed")
                 }
             }

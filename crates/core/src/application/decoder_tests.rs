@@ -9,7 +9,7 @@
 //! (`foreign_account_is_not_decoded_at_our_offsets`).
 
 use super::*;
-use crate::application::pool_account::meteora::damm_v2::{
+use crate::application::decoder::meteora::damm_v2::{
     CLIFF_FEE_NUMERATOR_OFFSET, PARTNER_FEE_PERCENT_OFFSET, POOL_DISCRIMINATOR,
     PROTOCOL_FEE_PERCENT_OFFSET, REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET,
     TOKEN_B_MINT_OFFSET,

@@ -78,9 +78,9 @@ impl SolanaAccountClient {
         }
     }
 
-    async fn fetch_chunk(&self, pools: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError> {
+    async fn fetch_chunk(&self, pool_addresses: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError> {
         let start = Instant::now();
-        let result = self.fetch_chunk_inner(pools).await;
+        let result = self.fetch_chunk_inner(pool_addresses).await;
         let outcome = match &result {
             Ok(_) => "ok",
             Err(SourceError::Http(_)) => "http",
@@ -91,8 +91,11 @@ impl SolanaAccountClient {
         result
     }
 
-    async fn fetch_chunk_inner(&self, pools: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError> {
-        let keys: Vec<String> = pools.iter().map(|p| p.to_string()).collect();
+    async fn fetch_chunk_inner(
+        &self,
+        pool_addresses: &[Pubkey],
+    ) -> Result<Vec<RawAccount>, SourceError> {
+        let keys: Vec<String> = pool_addresses.iter().map(|p| p.to_string()).collect();
         let request = RpcRequest {
             jsonrpc: "2.0",
             id: "yog-context",
@@ -115,18 +118,20 @@ impl SolanaAccountClient {
 
         // Zip each requested address with its (possibly null) account. Missing
         // accounts and undecodable base64 are dropped — retried next cycle.
-        Ok(pools
+        Ok(pool_addresses
             .iter()
             .zip(response.result.value)
-            .filter_map(|(address, account)| {
+            .filter_map(|(pool_address, account)| {
                 let account = account?;
-                let owner = Pubkey::try_from(account.owner.as_str()).ok()?;
+                // `owner` on the wire becomes `program_id` on our side: same
+                // pubkey, our vocabulary.
+                let program_id = Pubkey::try_from(account.owner.as_str()).ok()?;
                 let data = base64::engine::general_purpose::STANDARD
                     .decode(account.data.0)
                     .ok()?;
                 Some(RawAccount {
-                    address: *address,
-                    owner,
+                    pool_address: *pool_address,
+                    program_id,
                     data,
                 })
             })
@@ -136,9 +141,12 @@ impl SolanaAccountClient {
 
 #[async_trait]
 impl PoolAccountSource for SolanaAccountClient {
-    async fn fetch_accounts(&self, pools: &[Pubkey]) -> Result<Vec<RawAccount>, SourceError> {
-        let mut all = Vec::with_capacity(pools.len());
-        for chunk in pools.chunks(ACCOUNTS_BATCH_MAX) {
+    async fn fetch_accounts(
+        &self,
+        pool_addresses: &[Pubkey],
+    ) -> Result<Vec<RawAccount>, SourceError> {
+        let mut all = Vec::with_capacity(pool_addresses.len());
+        for chunk in pool_addresses.chunks(ACCOUNTS_BATCH_MAX) {
             all.extend(self.fetch_chunk(chunk).await?);
         }
         Ok(all)
