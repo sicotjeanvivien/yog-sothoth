@@ -185,6 +185,10 @@ impl MeteoraDammV2PoolPropertiesRepository for MockPoolProperties {
         rec(&self.0, "pool:set_fee_config");
         Ok(())
     }
+    async fn set_has_dynamic_fee(&self, _: &Pubkey, _: bool) -> RepositoryResult<()> {
+        rec(&self.0, "pool:set_has_dynamic_fee");
+        Ok(())
+    }
     async fn find_by_pool(
         &self,
         _: &Pubkey,
@@ -661,10 +665,96 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 operator: pk(12),
                 // cliff_fee_numerator = Some(2_500_000) → 25 bps: refreshes
                 // the fee tier, so set_fee_bps fires between touch and insert.
+                // The blob ends there — an older build with no dynamic field —
+                // so the dynamic fee is left alone.
                 params_raw: vec![1, 160, 37, 38, 0, 0, 0, 0, 0],
             })
         )
         .await,
         ["pool:touch", "pool:set_fee_bps", "insert:update_pool_fees"]
     );
+}
+
+/// An operator can toggle the dynamic fee in the same event, and
+/// `has_dynamic_fee` must follow — it is written at genesis only otherwise, and
+/// the pool detail sheet shows it.
+#[tokio::test]
+async fn update_pool_fees_enabling_the_dynamic_fee_writes_the_flag() {
+    let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+    let p = build(calls.clone());
+
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::UpdatePoolFees(MeteoraDammV2UpdatePoolFeesEvent {
+                pool_address: pk(1),
+                signature: sg(),
+                timestamp: ts(),
+                operator: pk(12),
+                params_raw: update_pool_fees_blob(Some(true)),
+            })
+        )
+        .await,
+        [
+            "pool:touch",
+            "pool:set_fee_bps",
+            "pool:set_has_dynamic_fee",
+            "insert:update_pool_fees"
+        ]
+    );
+}
+
+/// The disable case, which no fixture shows: cp-amm signals it with
+/// `Some(DynamicFeeParameters::default())` — an all-zero payload. It must reach
+/// the repository just like enabling does, not be mistaken for "no change".
+#[tokio::test]
+async fn update_pool_fees_disabling_the_dynamic_fee_also_writes_the_flag() {
+    let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+    let p = build(calls.clone());
+
+    assert_eq!(
+        route(
+            &p,
+            &calls,
+            MeteoraDammV2Event::UpdatePoolFees(MeteoraDammV2UpdatePoolFeesEvent {
+                pool_address: pk(1),
+                signature: sg(),
+                timestamp: ts(),
+                operator: pk(12),
+                params_raw: update_pool_fees_blob(Some(false)),
+            })
+        )
+        .await,
+        [
+            "pool:touch",
+            "pool:set_fee_bps",
+            "pool:set_has_dynamic_fee",
+            "insert:update_pool_fees"
+        ]
+    );
+}
+
+/// `cliff_fee_numerator = Some(25 bps)` followed by the dynamic field:
+/// `None` → absent, `Some(true)` → real values, `Some(false)` → all zeros.
+fn update_pool_fees_blob(dynamic: Option<bool>) -> Vec<u8> {
+    let mut blob = vec![1u8, 160, 37, 38, 0, 0, 0, 0, 0];
+    match dynamic {
+        None => blob.push(0),
+        Some(enabled) => {
+            blob.push(1);
+            if enabled {
+                blob.extend_from_slice(&1u16.to_le_bytes());
+                blob.extend_from_slice(&1_844_674_407_370_955u128.to_le_bytes());
+                blob.extend_from_slice(&10u16.to_le_bytes());
+                blob.extend_from_slice(&120u16.to_le_bytes());
+                blob.extend_from_slice(&5000u16.to_le_bytes());
+                blob.extend_from_slice(&14_460_000u32.to_le_bytes());
+                blob.extend_from_slice(&1224u32.to_le_bytes());
+            } else {
+                blob.extend_from_slice(&[0u8; 32]);
+            }
+        }
+    }
+    blob
 }

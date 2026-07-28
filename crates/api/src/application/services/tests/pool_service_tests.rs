@@ -67,6 +67,13 @@ impl yog_core::domain::MeteoraDammV2PoolPropertiesRepository for MockPoolPropert
     ) -> yog_core::RepositoryResult<()> {
         unreachable!("write side belongs to the indexer, never called by the api")
     }
+    async fn set_has_dynamic_fee(
+        &self,
+        _: &solana_pubkey::Pubkey,
+        _: bool,
+    ) -> yog_core::RepositoryResult<()> {
+        unreachable!("write side belongs to the indexer, never called by the api")
+    }
     async fn find_by_pool(
         &self,
         _: &solana_pubkey::Pubkey,

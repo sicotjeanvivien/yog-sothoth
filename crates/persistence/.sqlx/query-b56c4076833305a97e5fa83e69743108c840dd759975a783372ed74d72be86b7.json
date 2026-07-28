@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_pool_properties (pool_address, has_dynamic_fee)\n            VALUES ($1, $2)\n            ON CONFLICT (pool_address) DO UPDATE\n                SET has_dynamic_fee = EXCLUDED.has_dynamic_fee\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b56c4076833305a97e5fa83e69743108c840dd759975a783372ed74d72be86b7"
+}

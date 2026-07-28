@@ -233,6 +233,114 @@ pub fn decode_updated_base_fee_bps(params_raw: &[u8]) -> CoreResult<Option<Decim
     }
 }
 
+/// Byte length of a borsh-encoded `DynamicFeeParameters`.
+///
+/// `bin_step` u16 (2), `bin_step_u128` u128 (16), `filter_period` u16 (2),
+/// `decay_period` u16 (2), `reduction_factor` u16 (2),
+/// `max_volatility_accumulator` u32 (4), `variable_fee_control` u32 (4).
+const DYNAMIC_FEE_PARAMS_LEN: usize = 32;
+
+/// What an `UpdatePoolFees` did to a pool's dynamic fee.
+///
+/// Mirrors cp-amm's own `DynamicFeeUpdateMode`
+/// (`instructions/operator/ix_update_pool_fees.rs`). Three states, and the
+/// program encodes them in a **two-state `Option`** — which is why this cannot
+/// be read as a plain boolean:
+///
+/// ```text
+/// None                        → Skip     (leave the dynamic fee alone)
+/// Some(DynamicFeeParameters::default())  → Disable
+/// Some(anything else)         → Enable   (turn on, or update the parameters)
+/// ```
+///
+/// `DynamicFeeParameters` derives `Default` over integer fields, so "default"
+/// on the wire is simply **all zero bytes**. Nothing in the payload announces
+/// the disable intent; it is inferred from that value alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DynamicFeeUpdate {
+    /// The update left the dynamic fee untouched — do not write the column.
+    Skip,
+    /// The dynamic fee was turned off.
+    Disable,
+    /// The dynamic fee was turned on, or its parameters were changed. Either
+    /// way it is enabled afterwards, which is all `has_dynamic_fee` records.
+    Enable,
+}
+
+/// Decode what an `UpdatePoolFees` did to the pool's dynamic fee, from the raw
+/// `UpdatePoolFeesParameters` blob captured under "voie C"
+/// (`MeteoraDammV2UpdatePoolFeesEvent::params_raw`).
+///
+/// # Why this reads sequentially rather than at a fixed offset
+///
+/// The dynamic-fee field sits behind `cliff_fee_numerator: Option<u64>`, and
+/// borsh writes an `Option`'s payload **only when it is `Some`**. The dynamic
+/// tag is therefore at byte 9 when the base fee was updated and at byte 1 when
+/// it was not — unlike the genesis blob, whose layout is fixed (see
+/// [`DYNAMIC_FEE_TAG_OFFSET`]). A constant offset here would silently misread
+/// every update that leaves the base fee alone.
+///
+/// # Tolerant on absence, strict on malformed
+///
+/// A blob that simply ends before the dynamic field yields [`DynamicFeeUpdate::Skip`]
+/// rather than an error: `params_raw` is captured verbatim precisely because
+/// this struct's layout is version-sensitive, and an older or newer program
+/// build must not turn into a failed decode. A malformed `Option` tag, or a
+/// truncated payload after a `Some`, does fail — that is drift worth surfacing.
+pub fn decode_updated_dynamic_fee(params_raw: &[u8]) -> CoreResult<DynamicFeeUpdate> {
+    // Step over `cliff_fee_numerator: Option<u64>`.
+    let Some((&base_tag, rest)) = params_raw.split_first() else {
+        return Err(CoreError::FeeDecode {
+            reason: "empty UpdatePoolFeesParameters blob".to_string(),
+        });
+    };
+    let rest = match base_tag {
+        0 => rest,
+        1 => rest.get(8..).ok_or_else(|| CoreError::FeeDecode {
+            reason: format!(
+                "cliff_fee_numerator truncated: {} bytes after tag, need 8",
+                rest.len()
+            ),
+        })?,
+        other => {
+            return Err(CoreError::FeeDecode {
+                reason: format!("invalid cliff_fee_numerator Option tag: {other}"),
+            });
+        }
+    };
+
+    // `dynamic_fee: Option<DynamicFeeParameters>`.
+    let Some((&dynamic_tag, params)) = rest.split_first() else {
+        // Layout ends here — an older build that predates the field. Say
+        // nothing about the dynamic fee rather than guess.
+        return Ok(DynamicFeeUpdate::Skip);
+    };
+    match dynamic_tag {
+        0 => Ok(DynamicFeeUpdate::Skip),
+        1 => {
+            let params = params.get(..DYNAMIC_FEE_PARAMS_LEN).ok_or_else(|| {
+                CoreError::FeeDecode {
+                    reason: format!(
+                        "dynamic_fee truncated: {} bytes after tag, need {DYNAMIC_FEE_PARAMS_LEN}",
+                        params.len()
+                    ),
+                }
+            })?;
+            // The default value is the disable sentinel, and `Default` over
+            // integers is all zeros. Any trailing bytes are deliberately
+            // ignored — see the tolerance note above.
+            if params.iter().all(|&b| b == 0) {
+                Ok(DynamicFeeUpdate::Disable)
+            } else {
+                Ok(DynamicFeeUpdate::Enable)
+            }
+        }
+        other => Err(CoreError::FeeDecode {
+            reason: format!("invalid dynamic_fee Option tag: {other}"),
+        }),
+    }
+}
+
 /// Convert a cp-amm fee numerator to basis points. The fee fraction is
 /// `numerator / FEE_DENOMINATOR`; in bps that is `numerator / 100_000`. Exact
 /// in `Decimal` (e.g. 2_500_000 → 25, 500_000_000 → 5000, 250_000 → 2.5).
