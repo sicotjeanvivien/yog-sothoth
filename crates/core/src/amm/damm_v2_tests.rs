@@ -384,3 +384,117 @@ fn sqrt_price_large_value_no_overflow() {
 fn sqrt_price_zero_is_none() {
     assert!(sqrt_price_to_price_a_in_b(0, 9, 6).is_none());
 }
+
+// ── decode_updated_dynamic_fee ──────────────────────────────────────────
+//
+// The three modes are cp-amm's own (`DynamicFeeUpdateMode`), and the disable
+// case is the one no fixture shows: the program signals it with
+// `Some(DynamicFeeParameters::default())`, i.e. an all-zero payload. Nothing in
+// the bytes announces the intent, so it has to be tested explicitly.
+
+/// `Option<DynamicFeeParameters>` payload: 32 bytes.
+fn dynamic_fee_payload(enabled: bool) -> Vec<u8> {
+    if enabled {
+        // The real mainnet values from the update_pool_fees fixture.
+        let mut p = Vec::new();
+        p.extend_from_slice(&1u16.to_le_bytes()); // bin_step
+        p.extend_from_slice(&1_844_674_407_370_955u128.to_le_bytes()); // bin_step_u128
+        p.extend_from_slice(&10u16.to_le_bytes()); // filter_period
+        p.extend_from_slice(&120u16.to_le_bytes()); // decay_period
+        p.extend_from_slice(&5000u16.to_le_bytes()); // reduction_factor
+        p.extend_from_slice(&14_460_000u32.to_le_bytes()); // max_volatility_accumulator
+        p.extend_from_slice(&1224u32.to_le_bytes()); // variable_fee_control
+        p
+    } else {
+        vec![0u8; 32]
+    }
+}
+
+/// `cliff_fee_numerator: Some(128 bps)` followed by the given dynamic field.
+fn update_params(dynamic: Option<bool>) -> Vec<u8> {
+    let mut blob = vec![1u8];
+    blob.extend_from_slice(&12_800_000u64.to_le_bytes());
+    match dynamic {
+        None => blob.push(0),
+        Some(enabled) => {
+            blob.push(1);
+            blob.extend_from_slice(&dynamic_fee_payload(enabled));
+        }
+    }
+    blob
+}
+
+#[test]
+fn updated_dynamic_fee_none_tag_is_skip() {
+    assert_eq!(
+        decode_updated_dynamic_fee(&update_params(None)).unwrap(),
+        DynamicFeeUpdate::Skip
+    );
+}
+
+#[test]
+fn updated_dynamic_fee_default_value_is_disable() {
+    // Some(all zeros) — the program's disable sentinel.
+    assert_eq!(
+        decode_updated_dynamic_fee(&update_params(Some(false))).unwrap(),
+        DynamicFeeUpdate::Disable
+    );
+}
+
+#[test]
+fn updated_dynamic_fee_real_values_are_enable() {
+    let blob = update_params(Some(true));
+    assert_eq!(blob.len(), 42, "must match the captured fixture's length");
+    assert_eq!(
+        decode_updated_dynamic_fee(&blob).unwrap(),
+        DynamicFeeUpdate::Enable
+    );
+}
+
+/// The dynamic tag sits at byte 1 when the base fee was **not** updated, and at
+/// byte 9 when it was. A fixed offset would misread every update that leaves the
+/// base fee alone — this is the regression guard for that.
+#[test]
+fn updated_dynamic_fee_is_found_when_the_base_fee_was_not_updated() {
+    let mut blob = vec![0u8]; // cliff_fee_numerator: None — no payload follows
+    blob.push(1);
+    blob.extend_from_slice(&dynamic_fee_payload(true));
+
+    assert_eq!(blob.len(), 34, "1 base tag + 1 dynamic tag + 32 payload");
+    assert_eq!(
+        decode_updated_dynamic_fee(&blob).unwrap(),
+        DynamicFeeUpdate::Enable
+    );
+}
+
+/// Tolerant on absence: a blob that ends before the dynamic field is an older
+/// program build, not a failure. Saying `Skip` leaves the column untouched;
+/// erroring would log noise on every legacy event.
+#[test]
+fn updated_dynamic_fee_absent_field_is_skip_not_an_error() {
+    // Exactly the shape of the 9-byte blob the indexer tests use.
+    let blob = update_params(None)[..9].to_vec();
+
+    assert_eq!(
+        decode_updated_dynamic_fee(&blob).unwrap(),
+        DynamicFeeUpdate::Skip
+    );
+}
+
+/// Strict on malformed, though: a `Some` whose payload is cut short is real
+/// drift and must surface.
+#[test]
+fn updated_dynamic_fee_truncated_payload_fails() {
+    let mut blob = update_params(Some(true));
+    blob.truncate(blob.len() - 1);
+
+    assert!(decode_updated_dynamic_fee(&blob).is_err());
+}
+
+#[test]
+fn updated_dynamic_fee_invalid_tag_fails() {
+    let mut blob = update_params(None);
+    *blob.last_mut().unwrap() = 7;
+
+    assert!(decode_updated_dynamic_fee(&blob).is_err());
+}

@@ -32,6 +32,26 @@ pub trait MeteoraDammV2PoolPropertiesRepository: Send + Sync {
         has_dynamic_fee: bool,
     ) -> RepositoryResult<()>;
 
+    /// Record whether a volatility dynamic fee is enabled, **without touching
+    /// `base_fee_kind`**.
+    ///
+    /// Separate from [`set_fee_config`] because an `UpdatePoolFees` event can
+    /// toggle the dynamic fee but carries no base-fee *mode* — the program only
+    /// lets an operator change the cliff numerator, and only while the base fee
+    /// is static. Reusing `set_fee_config` here would mean re-reading
+    /// `base_fee_kind` just to write it back, racily and for nothing.
+    ///
+    /// Column-level upsert, same shape as
+    /// [`crate::domain::PoolRepository::set_fee_bps`]. Creates the satellite row
+    /// if the genesis event was never seen.
+    ///
+    /// [`set_fee_config`]: Self::set_fee_config
+    async fn set_has_dynamic_fee(
+        &self,
+        pool_address: &Pubkey,
+        has_dynamic_fee: bool,
+    ) -> RepositoryResult<()>;
+
     /// The properties of one pool, or `None` when no satellite row exists yet
     /// (pool discovered but neither enriched nor seen at genesis).
     ///

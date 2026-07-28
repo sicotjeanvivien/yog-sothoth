@@ -84,6 +84,28 @@ impl MeteoraDammV2PoolPropertiesRepository for PgMeteoraDammV2PoolPropertiesRepo
         Ok(())
     }
 
+    async fn set_has_dynamic_fee(
+        &self,
+        pool_address: &Pubkey,
+        has_dynamic_fee: bool,
+    ) -> RepositoryResult<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO meteora_damm_v2_pool_properties (pool_address, has_dynamic_fee)
+            VALUES ($1, $2)
+            ON CONFLICT (pool_address) DO UPDATE
+                SET has_dynamic_fee = EXCLUDED.has_dynamic_fee
+            "#,
+            pool_address.to_string(),
+            has_dynamic_fee,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
     async fn find_by_pool(
         &self,
         pool_address: &Pubkey,

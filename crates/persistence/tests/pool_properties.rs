@@ -227,3 +227,59 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
          and a batch of 2"
     );
 }
+
+/// `set_has_dynamic_fee` must touch **only** its column. An `UpdatePoolFees`
+/// event can toggle the dynamic fee but carries no base-fee mode, so writing
+/// through `set_fee_config` would have meant inventing a `base_fee_kind` — or
+/// re-reading it just to write it back.
+#[sqlx::test]
+async fn set_has_dynamic_fee_leaves_base_fee_kind_alone(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+
+    // Genesis wrote the shape…
+    repo.set_fee_config(&pk(1), "scheduler_linear", false)
+        .await
+        .expect("set_fee_config failed");
+    // …then an operator turns the dynamic fee on.
+    repo.set_has_dynamic_fee(&pk(1), true)
+        .await
+        .expect("set_has_dynamic_fee failed");
+
+    let props = repo
+        .find_by_pool(&pk(1))
+        .await
+        .expect("find_by_pool failed")
+        .expect("row should exist");
+    assert_eq!(
+        props.has_dynamic_fee,
+        Some(true),
+        "the flag must be updated"
+    );
+    assert_eq!(
+        props.base_fee_kind.as_deref(),
+        Some("scheduler_linear"),
+        "base_fee_kind must survive — it cannot change through this event"
+    );
+}
+
+/// …and it creates the row when the genesis event was never seen, which is the
+/// common case: a pool's creation is only observable if we were already
+/// watching.
+#[sqlx::test]
+async fn set_has_dynamic_fee_creates_the_row_when_genesis_was_missed(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+
+    repo.set_has_dynamic_fee(&pk(1), true)
+        .await
+        .expect("set_has_dynamic_fee failed");
+
+    let props = repo
+        .find_by_pool(&pk(1))
+        .await
+        .expect("find_by_pool failed")
+        .expect("row should have been created");
+    assert_eq!(props.has_dynamic_fee, Some(true));
+    assert_eq!(props.base_fee_kind, None);
+}

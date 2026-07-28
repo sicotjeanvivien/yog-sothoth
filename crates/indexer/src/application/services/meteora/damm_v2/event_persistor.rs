@@ -8,6 +8,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, warn};
+use yog_core::amm::damm_v2::DynamicFeeUpdate;
 use yog_core::domain::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
@@ -414,6 +415,34 @@ impl MeteoraDammV2EventPersistor {
         }
     }
 
+    /// Record whether the dynamic fee is enabled, on the DAMM v2 satellite.
+    /// Best-effort, like [`Self::set_fee_config`]: a failure is logged but never
+    /// aborts the caller.
+    async fn set_has_dynamic_fee(
+        &self,
+        pool_address: &solana_pubkey::Pubkey,
+        has_dynamic_fee: bool,
+    ) {
+        let start = Instant::now();
+        match self
+            .repos
+            .pool_properties
+            .set_has_dynamic_fee(pool_address, has_dynamic_fee)
+            .await
+        {
+            Ok(()) => {
+                EventPersistorMetrics::record_persist_duration(
+                    &Self::PROTOCOL,
+                    "pool_set_has_dynamic_fee",
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(error = %err, kind = "update_pool_fees", "pool set_has_dynamic_fee failed");
+            }
+        }
+    }
+
     /// Pool genesis carries both mints, so it registers the pool authoritatively
     /// (full upsert) rather than just touching last-seen. It does not feed the
     /// current-state projection — there is no price/reserve trajectory yet.
@@ -520,6 +549,24 @@ impl MeteoraDammV2EventPersistor {
             Ok(None) => {}
             Err(err) => {
                 warn!(error = %err, kind = "update_pool_fees", "fee_bps decode failed");
+            }
+        }
+        // The same event can toggle the dynamic fee, which `has_dynamic_fee`
+        // would otherwise keep at its genesis value forever — a stale flag shown
+        // in the pool detail sheet. `base_fee_kind` is deliberately left alone:
+        // the program only lets an operator change the cliff numerator, and only
+        // while the base fee is static, so the mode cannot drift.
+        match yog_core::amm::damm_v2::decode_updated_dynamic_fee(&event.params_raw) {
+            Ok(DynamicFeeUpdate::Skip) => {}
+            Ok(update) => {
+                self.set_has_dynamic_fee(
+                    &event.pool_address,
+                    matches!(update, DynamicFeeUpdate::Enable),
+                )
+                .await;
+            }
+            Err(err) => {
+                warn!(error = %err, kind = "update_pool_fees", "dynamic_fee decode failed");
             }
         }
         self.repos
