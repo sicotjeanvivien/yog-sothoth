@@ -49,9 +49,7 @@ mock in tests is free.
 | `GET` | `/readyz` | Readiness — pings the DB; 503 with per-check detail when it fails |
 | `GET` | `/api/pools` | Paginated list of discovered pools (cursor-based) |
 | `GET` | `/api/pools/top` | Top-N pools by `metric` (volume 24h; non-paginated, capped at 20) |
-| `GET` | `/api/pools/{address}` | Single pool, enriched with token metadata, prices, analytics |
-
-Every pool response (the three endpoints above) also embeds `signals24h`: the pool's signals over the last 24h (newest first, capped per pool, `severity`/`detector`/`triggeredAt` only) — the pools-list signal indicator. One batched query per request (`SignalFeed::recent_by_pools`), not one per pool.
+| `GET` | `/api/pools/{address}` | Single pool — everything the list returns, **plus** its protocol's own properties (see below) |
 | `GET` | `/api/pools/{address}/latest-state` | Latest observed AMM state for the pool |
 | `GET` | `/api/pools/{address}/history` | Hourly time-series buckets (`?days=N`) — volume, fees, liquidity, claims, USD-valued |
 | `GET` | `/api/pools/{address}/swap-events` | Paginated swap events |
@@ -65,6 +63,45 @@ Every pool response (the three endpoints above) also embeds `signals24h`: the po
 
 Public URLs stay protocol-agnostic (`/swap-events`, not `/damm-v2-swaps`); the
 service resolves the pool's protocol and reads the matching table.
+
+### Pool response shapes
+
+The three pool endpoints share a base shape and the detail one extends it.
+
+**List and top** (`/api/pools`, `/api/pools/top`) return the cross-protocol
+fields only: identity, the token pair, `feeBps`, the analytics block and
+`signals24h`. Nothing protocol-specific — one protocol's vocabulary has no place
+in every protocol's row.
+
+**Detail** (`/api/pools/{address}`) returns the same fields **flattened at the
+top level**, plus one optional block named after the pool's protocol:
+
+```jsonc
+{
+  "poolAddress": "…", "protocol": "meteora_damm_v2", "feeBps": "25",
+  "tokenA": { … }, "tokenB": { … }, "tvlUsd": "…", "signals24h": [ … ],
+
+  // Present only for a DAMM v2 pool that has resolved properties.
+  "meteoraDammV2": {
+    "protocolFeePercent": 20, "partnerFeePercent": 0, "referralFeePercent": 20,
+    "baseFeeKind": "constant", "hasDynamicFee": false
+  }
+}
+```
+
+Two consequences worth knowing:
+
+- the shared fields are flattened, so **a client holding the list schema parses a
+  detail payload** and simply ignores the extra block;
+- the block is **absent, not `null`**, when the pool belongs to another protocol
+  or has no resolved properties yet. Adding DLMM means adding a sibling field
+  (`meteoraDlmm`), not changing this one.
+
+Every pool response — all three endpoints — embeds `signals24h`: the pool's
+signals over the last 24h (newest first, capped per pool,
+`severity`/`detector`/`triggeredAt` only), which powers the pools-list signal
+indicator. One batched query per request (`SignalFeed::recent_by_pools`), not one
+per pool.
 
 ## The SSE signal stream
 
