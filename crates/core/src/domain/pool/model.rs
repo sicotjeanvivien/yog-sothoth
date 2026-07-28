@@ -38,32 +38,13 @@ pub struct Pool {
     /// config (`InitializePool`). `None` until that event is seen (or if the
     /// fee blob failed to decode). For a fee-scheduler pool this is the genesis
     /// cliff, not the live decayed rate.
+    ///
+    /// The one fee property that belongs here rather than in a per-protocol
+    /// satellite: it is a normalized cross-protocol notion (every AMM has an
+    /// effective base fee in bps) *and* a read surface — filtered by the
+    /// pool-list fee-tier filter and aggregated by
+    /// [`super::PoolCatalog::list_fee_tiers`].
     pub fee_bps: Option<Decimal>,
-
-    /// Meteora's cut of the trading fee, as a whole percent (0..=100), decoded
-    /// from the on-chain `Pool` account. `None` until yog-context resolves it.
-    pub protocol_fee_percent: Option<u8>,
-
-    /// A partner's cut of the trading fee, as a whole percent (0..=100), decoded
-    /// from the on-chain `Pool` account (often 0). `None` until resolved.
-    pub partner_fee_percent: Option<u8>,
-
-    /// A referrer's cut of the trading fee, as a whole percent (0..=100),
-    /// decoded from the on-chain `Pool` account (only charged when a swap
-    /// carries a referral account). `None` until resolved.
-    pub referral_fee_percent: Option<u8>,
-
-    /// How the base fee behaves over time, decoded from the genesis fee config
-    /// (`InitializePool`). An opaque per-protocol string (DAMM v2's values come
-    /// from `amm::damm_v2::BaseFeeKind::as_str`: `constant`, `scheduler_linear`,
-    /// `scheduler_exponential`, `rate_limiter`). `None` until that event is seen
-    /// or if the fee blob failed to decode. Kept as a string here so this
-    /// cross-protocol type stays free of any protocol-specific enum.
-    pub base_fee_kind: Option<String>,
-
-    /// Whether a volatility-based dynamic fee sits on top of the base fee,
-    /// decoded from the same genesis config. `None` until decoded.
-    pub has_dynamic_fee: Option<bool>,
 
     /// When Yog-Sothoth first observed this pool in the transaction stream.
     pub first_seen_at: DateTime<Utc>,
@@ -72,12 +53,21 @@ pub struct Pool {
     pub last_seen_at: DateTime<Utc>,
 }
 
-/// The properties of a pool that are resolved authoritatively from its on-chain
-/// cp-amm `Pool` account (not inferable from the event stream): the token mints,
-/// the base trading fee, and the fee-split percents. Written as a unit by
-/// yog-context via [`super::PoolAccountResolver::set_pool_account`].
+/// Everything one read of a cp-amm `Pool` account yields — the properties that
+/// are not inferable from the event stream. Written as a unit by yog-context via
+/// [`super::PoolAccountResolver::set_pool_account`].
+///
+/// **Protocol-specific by construction**, hence the name: the fee-split percents
+/// are cp-amm concepts, and the mints are read at cp-amm's byte offsets. A DLMM
+/// `LbPair` account has a different layout and a different property set, so it
+/// gets its own type rather than widening this one — that is what keeps the
+/// cross-protocol [`Pool`] free of NULL columns for incompatible fields.
+///
+/// The fields straddle two tables: `token_a_mint` / `token_b_mint` / `fee_bps`
+/// land on the neutral `pools` registry, the three percents on the per-protocol
+/// satellite. The repository writes both from this one value.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoolAccountProperties {
+pub struct MeteoraDammV2PoolAccountProperties {
     pub token_a_mint: Pubkey,
     pub token_b_mint: Pubkey,
     /// Base trading fee in basis points (genesis cliff for a scheduler pool).

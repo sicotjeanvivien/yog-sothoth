@@ -36,6 +36,7 @@ pub use meteora::{
     MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
+    MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository,
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
     MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
     MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,
@@ -50,8 +51,8 @@ pub use meteora::{
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use pool::{
-    FeeTier, Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts, PoolCursor,
-    PoolListQuery, PoolRepository,
+    FeeTier, MeteoraDammV2PoolAccountProperties, Pool, PoolAccountResolver, PoolCatalog,
+    PoolCounts, PoolCursor, PoolListQuery, PoolRepository,
 };
 pub use pool_analytics::{
     PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket, PoolRankMetric,

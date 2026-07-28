@@ -4,7 +4,7 @@ use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
-use crate::{RepositoryResult, domain::Pool, domain::PoolAccountProperties};
+use crate::{RepositoryResult, domain::MeteoraDammV2PoolAccountProperties, domain::Pool};
 
 /// Cursor identifying a position in a pool ordering.
 ///
@@ -119,24 +119,14 @@ pub trait PoolRepository: Send + Sync {
         fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()>;
 
-    /// Set the pool's decoded fee *shape*: how the base fee behaves
-    /// (`base_fee_kind`) and whether a volatility dynamic fee is enabled
-    /// (`has_dynamic_fee`), decoded from the same genesis fee config as
-    /// [`set_fee_bps`]. A column-level `UPDATE`; a no-op if the pool row does
-    /// not exist yet. Idempotent.
-    ///
-    /// `base_fee_kind` is an opaque string at this boundary — the pools table
-    /// is cross-protocol, so each protocol writes its own fee-kind vocabulary
-    /// into the same column (DAMM v2's values come from
-    /// `amm::damm_v2::BaseFeeKind::as_str`). Keeps this generic trait free of
-    /// any protocol-specific enum, exactly as `set_fee_bps` takes a plain
-    /// `Decimal`.
-    async fn set_fee_config(
-        &self,
-        pool_address: &Pubkey,
-        base_fee_kind: &str,
-        has_dynamic_fee: bool,
-    ) -> RepositoryResult<()>;
+    // NOTE: the fee *shape* (`base_fee_kind` / `has_dynamic_fee`) used to live
+    // here as `set_fee_config`. It moved to
+    // [`crate::domain::MeteoraDammV2PoolPropertiesRepository`] with migration
+    // 036: both columns are cp-amm concepts, and passing `base_fee_kind` as an
+    // opaque string was the tell that a protocol-specific notion was being
+    // squeezed through a cross-protocol trait. `set_fee_bps` stays — a base fee
+    // in bps is genuinely cross-protocol, and it is a read surface here
+    // (fee-tier filter, `PoolCatalog::list_fee_tiers`).
 }
 
 /// The consultation surface of the pool registry — the api's read lens.
@@ -202,16 +192,34 @@ pub trait PoolCatalog: Send + Sync {
 /// indexer crates don't have to carry these methods.
 #[async_trait]
 pub trait PoolAccountResolver: Send + Sync {
-    /// Pools missing at least one account-derived property — a `NULL` mint, a
-    /// `NULL` `fee_bps`, or a `NULL` fee-split percent — capped at `limit`.
+    /// DAMM v2 pools missing at least one account-derived property — a `NULL`
+    /// mint, a `NULL` `fee_bps`, or a missing/incomplete satellite row — capped
+    /// at `limit`.
+    ///
+    /// **Scoped to DAMM v2 by construction**, not by a `protocol` predicate: the
+    /// fee-split percents it tests live in the per-protocol satellite
+    /// (migration 036), so no other protocol's pool can match. This matters —
+    /// before 036 the equivalent query had no protocol filter at all, and since
+    /// a pool it cannot resolve is never removed from the result set while the
+    /// ordering is by `first_seen_at` ascending, foreign-protocol pools would
+    /// accumulate at the head of the queue and eventually starve DAMM v2
+    /// enrichment entirely. Making the scope structural removes the failure mode
+    /// rather than guarding against it.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
-    /// Set a pool's account-derived properties (mints, base fee and fee-split
-    /// percents), as decoded from its on-chain account. A single column-level
-    /// UPDATE; idempotent.
+    /// Set a pool's account-derived properties, as decoded from its on-chain
+    /// cp-amm account. Idempotent.
+    ///
+    /// Writes **two tables** from one account read — the mints and base fee onto
+    /// the neutral `pools` registry, the fee-split percents onto the DAMM v2
+    /// satellite. Implementations must do so atomically: a partial write leaves a
+    /// half-enriched pool that [`list_unresolved`] will keep re-proposing every
+    /// cycle.
+    ///
+    /// [`list_unresolved`]: Self::list_unresolved
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
-        properties: &PoolAccountProperties,
+        properties: &MeteoraDammV2PoolAccountProperties,
     ) -> RepositoryResult<()>;
 }
