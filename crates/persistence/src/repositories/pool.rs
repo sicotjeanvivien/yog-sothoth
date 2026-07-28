@@ -13,7 +13,7 @@ use yog_core::{
     Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
     domain::{
         FeeTier, MeteoraDammV2PoolAccountProperties, Pool, PoolAccountResolver, PoolCatalog,
-        PoolCounts, PoolCursor, PoolListQuery, PoolRepository,
+        PoolCounts, PoolCursor, PoolListQuery, PoolRepository, Protocol,
     },
 };
 
@@ -262,10 +262,11 @@ impl PoolCatalog for PgPoolRepository {
 
 #[async_trait]
 impl PoolAccountResolver for PgPoolRepository {
-    /// Scoped to DAMM v2 without naming the protocol: the fee-split percents are
-    /// tested through the DAMM v2 satellite, so `JOIN pools` can only yield
-    /// DAMM v2 rows. A pool of any other protocol is structurally not a
-    /// candidate — see the trait doc for why that matters.
+    /// The protocol predicate is **required**, not decorative — see the trait
+    /// doc. Joining the DAMM v2 satellite does not scope the query on its own:
+    /// "no satellite row yet" is one of the conditions that makes a pool a
+    /// candidate, and that is true of every pool of every other protocol,
+    /// forever. Only `p.protocol` excludes them.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         let rows = sqlx::query!(
             r#"
@@ -273,15 +274,17 @@ impl PoolAccountResolver for PgPoolRepository {
             FROM pools p
             LEFT JOIN meteora_damm_v2_pool_properties props
                    ON props.pool_address = p.pool_address
-            WHERE p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
-               OR props.pool_address           IS NULL
-               OR props.protocol_fee_percent   IS NULL
-               OR props.partner_fee_percent    IS NULL
-               OR props.referral_fee_percent   IS NULL
+            WHERE p.protocol = $2
+              AND (p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
+                OR props.pool_address           IS NULL
+                OR props.protocol_fee_percent   IS NULL
+                OR props.partner_fee_percent    IS NULL
+                OR props.referral_fee_percent   IS NULL)
             ORDER BY p.first_seen_at
             LIMIT $1
             "#,
             limit,
+            Protocol::MeteoraDammV2.as_str(),
         )
         .fetch_all(&self.pool)
         .await

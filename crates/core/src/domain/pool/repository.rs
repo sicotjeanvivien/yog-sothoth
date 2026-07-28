@@ -196,15 +196,20 @@ pub trait PoolAccountResolver: Send + Sync {
     /// mint, a `NULL` `fee_bps`, or a missing/incomplete satellite row — capped
     /// at `limit`.
     ///
-    /// **Scoped to DAMM v2 by construction**, not by a `protocol` predicate: the
-    /// fee-split percents it tests live in the per-protocol satellite
-    /// (migration 036), so no other protocol's pool can match. This matters —
-    /// before 036 the equivalent query had no protocol filter at all, and since
-    /// a pool it cannot resolve is never removed from the result set while the
-    /// ordering is by `first_seen_at` ascending, foreign-protocol pools would
-    /// accumulate at the head of the queue and eventually starve DAMM v2
-    /// enrichment entirely. Making the scope structural removes the failure mode
-    /// rather than guarding against it.
+    /// **Implementations must filter on the protocol.** It is tempting to think
+    /// the per-protocol satellite table scopes the query by itself — it does
+    /// not: "has no satellite row yet" is one of the conditions that makes a
+    /// pool a candidate, and that condition is permanently true for every pool
+    /// of every other protocol. Joining the satellite therefore *includes* them
+    /// rather than excluding them.
+    ///
+    /// The consequence of getting this wrong is severe and silent. A pool this
+    /// query proposes but the account source cannot decode is never resolved,
+    /// so it never leaves the result set; with the ordering by `first_seen_at`
+    /// ascending and a capped batch, such pools accumulate at the head of the
+    /// queue and eventually starve enrichment for every pool behind them —
+    /// which stops mints, then token metadata, then prices, then TVL, with no
+    /// error anywhere. Covered by `tests/pool_properties.rs`.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
 
     /// Set a pool's account-derived properties, as decoded from its on-chain
