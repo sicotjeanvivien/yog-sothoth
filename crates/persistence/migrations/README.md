@@ -54,6 +54,50 @@ sequences default) live in `setup_roles.sql` at the parent directory —
 that file is the provisioning one-shot, applied by hand with the
 admin role when a new database is created.
 
+## The compression WARNINGs are expected
+
+Enabling compression on an event hypertable makes TimescaleDB emit, once per
+table:
+
+```
+WARNING:  column "id" should be used for segmenting or ordering
+WARNING:  column "signature" should be used for segmenting or ordering
+```
+
+They appear in bulk during the integration suite, because `sqlx::test`
+provisions a freshly migrated database per test and every `ALTER TABLE … SET
+(timescaledb.compress, …)` warns again. Nothing is wrong.
+
+**What it means.** Our unique indexes cover columns — `id` through the primary
+key, `signature`, and `second_position` on the split-position table — that are
+in neither `compress_segmentby` (`pool_address`) nor `compress_orderby`
+(`timestamp`). TimescaleDB warns that it cannot check those constraints against
+compressed rows *cheaply*.
+
+**It says "should", not "cannot": uniqueness is still enforced.** Verified
+empirically on TimescaleDB 2.27 — inserting a duplicate into a compressed chunk
+raises `duplicate key value violates unique constraint`, and the
+`ON CONFLICT … DO NOTHING` idempotency guard behaves exactly as on an
+uncompressed chunk. TimescaleDB decompresses the candidate segments to check.
+So the warning is about **cost**, not correctness.
+
+⚠️ *If you re-test this, use a fixed timestamp literal.* Two statements each
+calling `now()` produce two different timestamps, so a `(signature, timestamp)`
+index sees no conflict at all — a probe written that way "proves" a hole that
+does not exist.
+
+**Why we leave it alone.** The compression policy is 7 days and the indexer is
+live: events carry a current timestamp and always land in the open, uncompressed
+chunk. The expensive path is never taken. Putting `signature` into
+`compress_segmentby` would silence the warning at the cost of destroying the
+compression ratio — it is maximum-cardinality, so each segment would hold a
+single row.
+
+**When it would start to cost.** Backfilling events older than the compression
+delay — every insert would decompress to check uniqueness. Correct, but slow.
+Worth remembering the day historical replay becomes possible (see the gRPC
+migration in the project tracker).
+
 ## Local development workflow
 
 When you add a new migration:
