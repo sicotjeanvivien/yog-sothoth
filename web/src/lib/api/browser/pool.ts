@@ -15,12 +15,12 @@
 import { apiGetBrowser } from "@/lib/api/client/browser";
 
 import { isValidPoolAddress } from "../pool-address";
-import { PoolSchema, type PoolResponse } from "../schema/pool";
+import { PoolDetailSchema, type PoolDetailResponse } from "../schema/pool";
 
-export async function fetchPoolBrowser(address: string): Promise<PoolResponse> {
+export async function fetchPoolBrowser(address: string): Promise<PoolDetailResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
 
-  return apiGetBrowser(`/api/pools/${address}`, {}, PoolSchema);
+  return apiGetBrowser(`/api/pools/${address}`, {}, PoolDetailSchema);
 }

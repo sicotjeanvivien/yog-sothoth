@@ -37,7 +37,7 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import type { PoolResponse } from "@/lib/api/schema/pool";
+import type { PoolDetailResponse } from "@/lib/api/schema/pool";
 import type { TokenResponse } from "@/lib/api/schema/token";
 
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
@@ -74,7 +74,7 @@ export async function PoolDetailInfo({
   pool,
   locale,
 }: {
-  pool: PoolResponse;
+  pool: PoolDetailResponse;
   locale: string;
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.info");
@@ -105,8 +105,8 @@ export async function PoolDetailInfo({
 
             <InfoRow label={t("feeType")} info={t("help.feeType")}>
               <FeeTypeBadge
-                baseFeeKind={pool.baseFeeKind}
-                hasDynamicFee={pool.hasDynamicFee}
+                baseFeeKind={pool.meteoraDammV2?.baseFeeKind ?? null}
+                hasDynamicFee={pool.meteoraDammV2?.hasDynamicFee ?? null}
                 labels={{
                   kinds: {
                     constant: t("feeKind.constant"),
@@ -122,9 +122,9 @@ export async function PoolDetailInfo({
             <InfoRow label={t("feeSplit")} info={t("help.feeSplit")}>
               <span>
                 {formatFeeSplit(
-                  pool.protocolFeePercent,
-                  pool.partnerFeePercent,
-                  pool.referralFeePercent,
+                  pool.meteoraDammV2?.protocolFeePercent ?? null,
+                  pool.meteoraDammV2?.partnerFeePercent ?? null,
+                  pool.meteoraDammV2?.referralFeePercent ?? null,
                   {
                     protocol: t("feeSplitProtocol"),
                     partner: t("feeSplitPartner"),

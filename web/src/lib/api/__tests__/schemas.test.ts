@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { AnnouncementSchema } from "../schema/announcement";
-import { PoolSchema } from "../schema/pool";
+import { PoolDetailSchema, PoolSchema } from "../schema/pool";
 import { PoolsPageSchema, SignalsPageSchema } from "../schema/page";
 import { PoolHistorySchema } from "../schema/pool-history";
 import { ApiErrorBodySchema } from "../schema/api-error-body";
@@ -48,11 +48,6 @@ function validPool() {
       }
     },
     "feeBps": "25",
-    "protocolFeePercent": 20,
-    "partnerFeePercent": 0,
-    "referralFeePercent": 20,
-    "baseFeeKind": "constant",
-    "hasDynamicFee": false,
     "tvlUsd": "1332007.7148736200400326721044",
     "volume24hUsd": "47964.973514780605664520660399",
     "fees24hUsd": "119.912433786951514161301650",
@@ -146,29 +141,57 @@ describe("PoolSchema", () => {
     expect(parsed.feeBps).toBeNull();
   });
 
-  it("accepts a null fee shape (pool seen before its InitializePool)", () => {
-    const parsed = PoolSchema.parse({
-      ...validPool(),
-      baseFeeKind: null,
-      hasDynamicFee: null,
-    });
-    expect(parsed.baseFeeKind).toBeNull();
-    expect(parsed.hasDynamicFee).toBeNull();
+  // The cp-amm fee properties moved to PoolDetailSchema's `meteoraDammV2`
+  // block — they are protocol-specific and only the detail endpoint returns
+  // them. Their coverage moved with them, below.
+
+  it("omits the protocol block on a list payload", () => {
+    const parsed = PoolDetailSchema.parse(validPool());
+    expect(parsed.meteoraDammV2).toBeUndefined();
   });
 
-  it("accepts null fee-split percents (pool account not resolved yet)", () => {
-    const parsed = PoolSchema.parse({
+  it("accepts a DAMM v2 block with a null fee shape (genesis never seen)", () => {
+    const parsed = PoolDetailSchema.parse({
       ...validPool(),
-      protocolFeePercent: null,
-      partnerFeePercent: null,
-      referralFeePercent: null,
+      meteoraDammV2: {
+        protocolFeePercent: 20,
+        partnerFeePercent: 0,
+        referralFeePercent: 20,
+        baseFeeKind: null,
+        hasDynamicFee: null,
+      },
     });
-    expect(parsed.protocolFeePercent).toBeNull();
+    expect(parsed.meteoraDammV2?.baseFeeKind).toBeNull();
+    expect(parsed.meteoraDammV2?.protocolFeePercent).toBe(20);
+  });
+
+  it("accepts a DAMM v2 block with null fee-split percents (account unresolved)", () => {
+    const parsed = PoolDetailSchema.parse({
+      ...validPool(),
+      meteoraDammV2: {
+        protocolFeePercent: null,
+        partnerFeePercent: null,
+        referralFeePercent: null,
+        baseFeeKind: "constant",
+        hasDynamicFee: false,
+      },
+    });
+    expect(parsed.meteoraDammV2?.protocolFeePercent).toBeNull();
+    expect(parsed.meteoraDammV2?.baseFeeKind).toBe("constant");
   });
 
   it("rejects a fee-split percent out of the 0..=100 range", () => {
     expect(() =>
-      PoolSchema.parse({ ...validPool(), protocolFeePercent: 101 }),
+      PoolDetailSchema.parse({
+        ...validPool(),
+        meteoraDammV2: {
+          protocolFeePercent: 101,
+          partnerFeePercent: 0,
+          referralFeePercent: 0,
+          baseFeeKind: "constant",
+          hasDynamicFee: false,
+        },
+      }),
     ).toThrow();
   });
 
