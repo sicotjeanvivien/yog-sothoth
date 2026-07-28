@@ -29,7 +29,7 @@ use yog_persistence::{
     PgMeteoraDammV2FundRewardEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
     PgMeteoraDammV2InitializeRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
     PgMeteoraDammV2LockPositionEventRepository,
-    PgMeteoraDammV2PermanentLockPositionEventRepository,
+    PgMeteoraDammV2PermanentLockPositionEventRepository, PgMeteoraDammV2PoolPropertiesRepository,
     PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SplitPositionEventRepository,
     PgMeteoraDammV2SwapEventRepository, PgMeteoraDammV2UpdatePoolFeesEventRepository,
     PgMeteoraDammV2UpdateRewardDurationEventRepository,
@@ -226,6 +226,7 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
         set_pool_status: Arc::new(PgMeteoraDammV2SetPoolStatusEventRepository::new(pool())),
         split_position: Arc::new(PgMeteoraDammV2SplitPositionEventRepository::new(pool())),
         update_pool_fees: Arc::new(PgMeteoraDammV2UpdatePoolFeesEventRepository::new(pool())),
+        pool_properties: Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(pool())),
     };
 
     let meteora_damm_v2 = Arc::new(MeteoraDammV2EventPersistor::new(

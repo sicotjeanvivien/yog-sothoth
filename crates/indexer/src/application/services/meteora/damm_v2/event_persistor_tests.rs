@@ -6,9 +6,9 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
-    MeteoraDammV2SplitPositionState, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-    PoolRepository, TradeDirection,
+    MeteoraDammV2LiquidityEventKind, MeteoraDammV2PoolPropertiesRepository,
+    MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, TradeDirection,
 };
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
@@ -173,11 +173,26 @@ impl PoolRepository for MockPoolRepo {
         rec(&self.0, "pool:set_fee_bps");
         Ok(())
     }
+}
+
+// The DAMM v2 pool-properties satellite (migration 036). `pool:set_fee_config`
+// keeps its historical call label so the existing assertions still read the same
+// sequence — only the repository it lands on changed.
+struct MockPoolProperties(Calls);
+#[async_trait]
+impl MeteoraDammV2PoolPropertiesRepository for MockPoolProperties {
     async fn set_fee_config(&self, _: &Pubkey, _: &str, _: bool) -> RepositoryResult<()> {
         rec(&self.0, "pool:set_fee_config");
         Ok(())
     }
+    async fn find_by_pool(
+        &self,
+        _: &Pubkey,
+    ) -> RepositoryResult<Option<yog_core::domain::MeteoraDammV2PoolProperties>> {
+        unreachable!("read side is the api's, never exercised by the persistor")
+    }
 }
+
 struct MockPcsRepo(Calls);
 #[async_trait]
 impl PoolCurrentStateRepository for MockPcsRepo {
@@ -218,6 +233,7 @@ fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
         set_pool_status: Arc::new(MockSetStatus(calls.clone())),
         split_position: Arc::new(MockSplitPosition(calls.clone())),
         update_pool_fees: Arc::new(MockUpdateFees(calls.clone())),
+        pool_properties: Arc::new(MockPoolProperties(calls.clone())),
     };
     let pm = Arc::new(PoolMaintenance::new(
         Arc::new(MockPoolRepo(calls.clone())),

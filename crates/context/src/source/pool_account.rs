@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use yog_core::domain::PoolAccountProperties;
+use yog_core::domain::MeteoraDammV2PoolAccountProperties;
 
 use crate::error::SourceError;
 
@@ -13,7 +13,7 @@ use crate::error::SourceError;
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedPoolAccount {
     pub(crate) pool: Pubkey,
-    pub(crate) properties: PoolAccountProperties,
+    pub(crate) properties: MeteoraDammV2PoolAccountProperties,
 }
 
 /// Abstraction over a source of on-chain pool account state.

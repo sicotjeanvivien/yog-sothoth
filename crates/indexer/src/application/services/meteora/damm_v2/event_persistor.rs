@@ -20,9 +20,10 @@ use yog_core::domain::{
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
-    MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
-    MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionEventRepository,
-    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
+    MeteoraDammV2PoolPropertiesRepository, MeteoraDammV2SetPoolStatusEvent,
+    MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SplitPositionEvent,
+    MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SwapEvent,
+    MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
     MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2UpdateRewardDurationEvent,
     MeteoraDammV2UpdateRewardDurationEventRepository, MeteoraDammV2UpdateRewardFunderEvent,
     MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
@@ -57,6 +58,10 @@ pub(crate) struct DammV2Repos {
     pub set_pool_status: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
     pub split_position: Arc<dyn MeteoraDammV2SplitPositionEventRepository>,
     pub update_pool_fees: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
+    /// Not an event table: the DAMM v2 pool-properties satellite (migration
+    /// 036). Written here rather than through `PoolMaintenance` because its
+    /// columns are cp-amm concepts, not cross-protocol ones.
+    pub pool_properties: Arc<dyn MeteoraDammV2PoolPropertiesRepository>,
 }
 
 pub(crate) struct MeteoraDammV2EventPersistor {
@@ -376,6 +381,39 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
+    /// Record the pool's decoded fee *shape* on the DAMM v2 satellite.
+    /// Best-effort: a failure is logged but never aborts the caller — the pool
+    /// simply keeps NULL fee-shape columns, never wrong ones.
+    ///
+    /// Lives here rather than on `PoolMaintenance` since migration 036:
+    /// `base_fee_kind` / `has_dynamic_fee` are cp-amm notions, so they belong to
+    /// the protocol's own persistor and its own table.
+    async fn set_fee_config(
+        &self,
+        pool_address: &solana_pubkey::Pubkey,
+        base_fee_kind: &str,
+        has_dynamic_fee: bool,
+    ) {
+        let start = Instant::now();
+        match self
+            .repos
+            .pool_properties
+            .set_fee_config(pool_address, base_fee_kind, has_dynamic_fee)
+            .await
+        {
+            Ok(()) => {
+                EventPersistorMetrics::record_persist_duration(
+                    &Self::PROTOCOL,
+                    "pool_set_fee_config",
+                    start.elapsed().as_secs_f64(),
+                );
+            }
+            Err(err) => {
+                warn!(error = %err, kind = "initialize_pool", "pool set_fee_config failed");
+            }
+        }
+    }
+
     /// Pool genesis carries both mints, so it registers the pool authoritatively
     /// (full upsert) rather than just touching last-seen. It does not feed the
     /// current-state projection — there is no price/reserve trajectory yet.
@@ -414,14 +452,12 @@ impl MeteoraDammV2EventPersistor {
         // NULL rather than wrong.
         match yog_core::amm::damm_v2::decode_fee_config(&event.pool_fees_raw) {
             Ok(cfg) => {
-                self.pool_maintenance
-                    .set_fee_config(
-                        Self::PROTOCOL,
-                        &event.pool_address,
-                        cfg.base_kind.as_str(),
-                        cfg.has_dynamic_fee,
-                    )
-                    .await;
+                self.set_fee_config(
+                    &event.pool_address,
+                    cfg.base_kind.as_str(),
+                    cfg.has_dynamic_fee,
+                )
+                .await;
             }
             Err(err) => {
                 warn!(error = %err, kind = "initialize_pool", "fee_config decode failed");
