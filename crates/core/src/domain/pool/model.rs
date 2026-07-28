@@ -52,29 +52,3 @@ pub struct Pool {
     /// Last time any event touched this pool.
     pub last_seen_at: DateTime<Utc>,
 }
-
-/// Everything one read of a cp-amm `Pool` account yields — the properties that
-/// are not inferable from the event stream. Written as a unit by yog-context via
-/// [`super::PoolAccountResolver::set_pool_account`].
-///
-/// **Protocol-specific by construction**, hence the name: the fee-split percents
-/// are cp-amm concepts, and the mints are read at cp-amm's byte offsets. A DLMM
-/// `LbPair` account has a different layout and a different property set, so it
-/// gets its own type rather than widening this one — that is what keeps the
-/// cross-protocol [`Pool`] free of NULL columns for incompatible fields.
-///
-/// The fields straddle two tables: `token_a_mint` / `token_b_mint` / `fee_bps`
-/// land on the neutral `pools` registry, the three percents on the per-protocol
-/// satellite. The repository writes both from this one value.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MeteoraDammV2PoolAccountProperties {
-    pub token_a_mint: Pubkey,
-    pub token_b_mint: Pubkey,
-    /// Base trading fee in basis points (genesis cliff for a scheduler pool).
-    pub fee_bps: Decimal,
-    /// Fee-split percents (0..=100): Meteora's, a partner's, and a referrer's
-    /// cut of the trading fee.
-    pub protocol_fee_percent: u8,
-    pub partner_fee_percent: u8,
-    pub referral_fee_percent: u8,
-}

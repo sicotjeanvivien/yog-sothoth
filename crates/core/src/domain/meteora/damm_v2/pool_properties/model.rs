@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
@@ -56,4 +57,38 @@ pub struct MeteoraDammV2PoolProperties {
     /// decoded from the same genesis config. Orthogonal to `base_fee_kind` — a
     /// pool can run a scheduler and a dynamic fee at once. `None` until decoded.
     pub has_dynamic_fee: Option<bool>,
+}
+
+/// Everything one read of a cp-amm `Pool` account yields — the properties that
+/// are not inferable from the event stream. Written as a unit by yog-context via
+/// [`super::MeteoraDammV2PoolAccountResolver::set_pool_account`].
+///
+/// Lives here, next to [`MeteoraDammV2PoolProperties`], and **not** in the
+/// cross-protocol `pool` module: the fee-split percents are cp-amm concepts and
+/// the mints are read at cp-amm's byte offsets. A DLMM `LbPair` account has a
+/// different layout and a different property set, so it gets its own type rather
+/// than widening this one — which is what keeps [`crate::domain::Pool`] free of
+/// one protocol's vocabulary.
+///
+/// # Not the same type as [`MeteoraDammV2PoolProperties`]
+///
+/// This one is **total**: it is what a successful account read produces, so
+/// every field is present. The other is **partial** (`Option` everywhere)
+/// because it is what the database holds, filled by two independent writers at
+/// different times. Merging them would force one of the two to lie.
+///
+/// The fields straddle two tables: `token_a_mint` / `token_b_mint` / `fee_bps`
+/// land on the neutral `pools` registry, the three percents on this protocol's
+/// satellite. The resolver writes both from this one value, atomically.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeteoraDammV2PoolAccountProperties {
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
+    /// Base trading fee in basis points (genesis cliff for a scheduler pool).
+    pub fee_bps: Decimal,
+    /// Fee-split percents (0..=100): Meteora's, a partner's, and a referrer's
+    /// cut of the trading fee.
+    pub protocol_fee_percent: u8,
+    pub partner_fee_percent: u8,
+    pub referral_fee_percent: u8,
 }

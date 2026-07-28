@@ -4,7 +4,7 @@ use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
-use crate::{RepositoryResult, domain::MeteoraDammV2PoolAccountProperties, domain::Pool};
+use crate::{RepositoryResult, domain::Pool};
 
 /// Cursor identifying a position in a pool ordering.
 ///
@@ -135,9 +135,10 @@ pub trait PoolRepository: Send + Sync {
 /// was *seen*, and this trait is how the API browses it — point lookup,
 /// batch lookup, paginated listing, inventory counts.
 ///
-/// Kept separate from [`PoolRepository`] (write side, indexer) and
-/// [`PoolAccountResolver`] (property backfill, context) so each binary
-/// depends on exactly the methods it uses and mocks carry no dead stubs.
+/// Kept separate from [`PoolRepository`] (write side, indexer) and from each
+/// protocol's account resolver (property backfill, context — e.g.
+/// [`crate::domain::MeteoraDammV2PoolAccountResolver`]) so each binary depends
+/// on exactly the methods it uses and mocks carry no dead stubs.
 #[async_trait]
 pub trait PoolCatalog: Send + Sync {
     /// Fetch a single pool by its on-chain address.
@@ -174,57 +175,4 @@ pub trait PoolCatalog: Send + Sync {
     /// their account) are excluded, so the filter never offers an option that
     /// would match nothing. See [`FeeTier`].
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>>;
-}
-
-/// Resolution of a pool's account-derived properties (token mints, base fee
-/// and fee-split percents) from its on-chain cp-amm `Pool` account, performed
-/// by yog-context
-/// (which holds column-level UPDATE on those columns).
-///
-/// These properties can't be inferred reliably from the event stream: the
-/// mints were mis-resolved by a per-event heuristic, and the base fee is only
-/// emitted at pool genesis (`InitializePool`) — which the indexer never sees
-/// for pools created before it started watching. Reading the account back-fills
-/// both for every pool, old or new.
-///
-/// Kept separate from [`PoolRepository`] so the resolver worker depends
-/// only on what it uses, and the read/write mocks in the api and
-/// indexer crates don't have to carry these methods.
-#[async_trait]
-pub trait PoolAccountResolver: Send + Sync {
-    /// DAMM v2 pools missing at least one account-derived property — a `NULL`
-    /// mint, a `NULL` `fee_bps`, or a missing/incomplete satellite row — capped
-    /// at `limit`.
-    ///
-    /// **Implementations must filter on the protocol.** It is tempting to think
-    /// the per-protocol satellite table scopes the query by itself — it does
-    /// not: "has no satellite row yet" is one of the conditions that makes a
-    /// pool a candidate, and that condition is permanently true for every pool
-    /// of every other protocol. Joining the satellite therefore *includes* them
-    /// rather than excluding them.
-    ///
-    /// The consequence of getting this wrong is severe and silent. A pool this
-    /// query proposes but the account source cannot decode is never resolved,
-    /// so it never leaves the result set; with the ordering by `first_seen_at`
-    /// ascending and a capped batch, such pools accumulate at the head of the
-    /// queue and eventually starve enrichment for every pool behind them —
-    /// which stops mints, then token metadata, then prices, then TVL, with no
-    /// error anywhere. Covered by `tests/pool_properties.rs`.
-    async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
-
-    /// Set a pool's account-derived properties, as decoded from its on-chain
-    /// cp-amm account. Idempotent.
-    ///
-    /// Writes **two tables** from one account read — the mints and base fee onto
-    /// the neutral `pools` registry, the fee-split percents onto the DAMM v2
-    /// satellite. Implementations must do so atomically: a partial write leaves a
-    /// half-enriched pool that [`list_unresolved`] will keep re-proposing every
-    /// cycle.
-    ///
-    /// [`list_unresolved`]: Self::list_unresolved
-    async fn set_pool_account(
-        &self,
-        pool_address: &Pubkey,
-        properties: &MeteoraDammV2PoolAccountProperties,
-    ) -> RepositoryResult<()>;
 }
