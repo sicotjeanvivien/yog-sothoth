@@ -1,33 +1,44 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use yog_core::domain::MeteoraDammV2PoolAccountProperties;
-
 use crate::error::SourceError;
 
-/// A pool address paired with the properties decoded from its on-chain account
-/// (mints, base fee, fee-split percents). The authoritative source for all of
-/// them — the mints because the per-event transferChecked heuristic mis-resolved
-/// them, the fee/percents because the genesis event is invisible for pools that
-/// predate the indexer.
+/// A raw on-chain pool account, as fetched — not interpreted.
+///
+/// `program_id` is the account's on-chain *owner*, which for a program-owned
+/// account **is** the program that owns it — here, the protocol's program. It is
+/// what [`yog_core::application::decode_pool_account`] routes on to pick a
+/// layout. Named `program_id` rather than `owner` on purpose: `owner` is the
+/// RPC's vocabulary and stays on the wire struct, this is ours and matches
+/// [`yog_core::domain::Protocol::program_id`].
+///
+/// `data` is already base64-decoded — base64 is the RPC's encoding, not the
+/// chain's, so it stops at this boundary and never reaches `core`.
 #[derive(Debug, Clone)]
-pub(crate) struct ResolvedPoolAccount {
-    pub(crate) pool: Pubkey,
-    pub(crate) properties: MeteoraDammV2PoolAccountProperties,
+pub(crate) struct RawAccount {
+    pub(crate) pool_address: Pubkey,
+    pub(crate) program_id: Pubkey,
+    pub(crate) data: Vec<u8>,
 }
 
-/// Abstraction over a source of on-chain pool account state.
+/// Abstraction over a source of raw on-chain accounts.
 ///
-/// Implemented by `CpAmmPoolClient`. Behind a trait so the resolver
-/// worker can be unit-tested against a fake source.
+/// Implemented by `SolanaAccountClient`. Behind a trait so the resolver worker
+/// can be unit-tested against a fake source.
+///
+/// **Protocol-agnostic on purpose.** It used to return decoded cp-amm
+/// properties, which made every consumer cp-amm-specific by construction — the
+/// worker included. It now returns bytes: one client serves every protocol, and
+/// the layouts live in `core`.
 #[async_trait]
 pub trait PoolAccountSource: Send + Sync {
-    /// Fetch and decode the account properties for a batch of pool addresses.
-    /// Pools the source can't fetch or decode (unknown account, wrong
-    /// owner, short data) are silently dropped — they'll be retried on
-    /// the next poll cycle.
+    /// Fetch the accounts for a batch of pool addresses.
+    ///
+    /// Pools the source cannot fetch (the account does not exist, the entry is
+    /// malformed) are silently absent from the result — they'll be retried on
+    /// the next poll cycle. Only a hard transport failure is an error.
     async fn fetch_accounts(
         &self,
-        pools: &[Pubkey],
-    ) -> Result<Vec<ResolvedPoolAccount>, SourceError>;
+        pool_addresses: &[Pubkey],
+    ) -> Result<Vec<RawAccount>, SourceError>;
 }

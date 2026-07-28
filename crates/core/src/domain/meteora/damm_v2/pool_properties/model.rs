@@ -61,7 +61,8 @@ pub struct MeteoraDammV2PoolProperties {
 
 /// Everything one read of a cp-amm `Pool` account yields — the properties that
 /// are not inferable from the event stream. Written as a unit by yog-context via
-/// [`super::MeteoraDammV2PoolAccountResolver::set_pool_account`].
+/// [`crate::domain::PoolAccountResolver::set_pool_account`], wrapped in the
+/// [`crate::domain::PoolAccountProperties`] enum.
 ///
 /// Lives here, next to [`MeteoraDammV2PoolProperties`], and **not** in the
 /// cross-protocol `pool` module: the fee-split percents are cp-amm concepts and

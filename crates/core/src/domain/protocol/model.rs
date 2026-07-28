@@ -32,6 +32,23 @@ impl Protocol {
         }
     }
 
+    /// The protocol a program id belongs to, or `None` for a program we do not
+    /// index.
+    ///
+    /// The reverse of [`Self::program_id`]. On Solana an account's `owner` *is*
+    /// the program that owns it, so this is what lets a decoder route a raw
+    /// account to the right per-protocol layout without the caller having to
+    /// know which protocol it asked for.
+    ///
+    /// Returning `None` rather than erroring is deliberate: an account owned by
+    /// an unknown program is not a failure, it is simply not ours.
+    pub fn from_program_id(program_id: &Pubkey) -> Option<Protocol> {
+        Self::all()
+            .iter()
+            .copied()
+            .find(|protocol| &protocol.program_id() == program_id)
+    }
+
     /// Returns the canonical snake_case string representation.
     /// Used for SQL INSERTs and log output.
     pub fn as_str(&self) -> &'static str {

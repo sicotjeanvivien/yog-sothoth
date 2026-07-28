@@ -15,7 +15,7 @@ roles), see [`crates/README.md`](../README.md).
 context/src/
 ├── source/       ← ports: MetadataSource, PriceSource, PoolAccountSource
 ├── providers/    ← adapters: HeliusDasClient, JupiterPriceClient,
-│                   CpammPoolClient (+ provider metrics)
+│                   SolanaAccountClient (+ provider metrics)
 ├── workers/      ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
 │                   (+ per-worker metrics)
 ├── bootstrap/    ← Config::load(), Daemon::new — composition root
@@ -28,6 +28,10 @@ The ports/providers split keeps the workers testable: a worker depends on a
 internally; a worker makes a single `fetch_*` call per tick and upserts what
 came back.
 
+Providers are **transport only** — they do not interpret payloads. The account
+source returns raw bytes plus the owner; base64 is the RPC's encoding, so it is
+decoded at this boundary and never reaches `core`, which stays free of it.
+
 ## Three workers, two cadences
 
 - **`MetadataWorker`** — every `CONTEXT_METADATA_POLL_SECS` (default 10 s),
@@ -39,12 +43,21 @@ came back.
   inserting them with a single shared `fetched_at` per tick.
 - **`PoolAccountWorker`** — same cadence as the metadata worker. Backfills the
   nullable pool properties that events alone leave NULL for pools created
-  before the indexer started: it reads the cp-amm `Pool` account directly and
-  resolves the **mints**, the **base fee** (`cliff_fee_numerator`, u64 at
-  offset 8 → `fee_bps`), and the **fee split**
-  (`protocol/partner/referral_fee_percent`, u8 at offsets 48/49/50). The
-  event-driven paths in the indexer remain the live refreshers; this worker is
-  the catch-up for pre-existing pools.
+  before the indexer started: mints, base fee and fee split. The event-driven
+  paths in the indexer remain the live refreshers; this worker is the catch-up
+  for pre-existing pools.
+
+  ⚠️ Worth knowing, because the crate's name does not suggest it: **yog-context
+  reads on-chain pool *accounts*, not just token metadata and prices.** That is
+  what this worker is.
+
+  It **names no protocol**. It holds one `PoolAccountResolver` per protocol —
+  each owning its own queue and its own tables — plus the shared
+  `SolanaAccountClient`, and iterates. Decoding happens in
+  `yog_core::application::decode_pool_account`, routed on the account's owning
+  program id (what the chain calls its `owner`), so one client serves every
+  protocol. Adding one means pushing a resolver into the vec in `bootstrap`;
+  not a line of the worker changes.
 
 ## Resilience contract
 

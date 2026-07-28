@@ -30,13 +30,15 @@ core/src/
 │   │                       banner; severity deliberately distinct from signals')
 │   ├── watched_pool/      (allowlist)
 │   ├── protocol/          (Protocol enum), trade_direction.rs, freshness_status/
-│   └── domain_event.rs    (two-level DomainEvent enum)
+│   ├── domain_event.rs    (two-level DomainEvent enum)
+│   └── pool_account/      (two-level PoolAccountProperties + PoolAccountResolver)
 ├── application/
-│   └── extraction/        ← transaction → domain events use case
-│       ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
-│       ├── anchor_event.rs  (generic Anchor event_cpi decoder)
-│       ├── event_extractor.rs / extraction_dispatcher.rs
-│       └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
+│   ├── extraction/        ← transaction → domain events use case
+│   │   ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
+│   │   ├── anchor_event.rs  (generic Anchor event_cpi decoder)
+│   │   ├── event_extractor.rs / extraction_dispatcher.rs
+│   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
+│   └── decoder/           ← account bytes → pool properties use case
 ├── amm/                   ← pure AMM math (common.rs + damm_v2.rs)
 ├── tools/pagination.rs    ← Page<T>, Cursor enum
 ├── error/                 ← CoreError, RepositoryError, CoreResult<T>
@@ -50,8 +52,9 @@ File trees here are kept coarse on purpose — the module structure is the contr
 - **Domain models** (`domain/`) — entities and the repository traits behind every persistence contract. Per-protocol events live under `domain/<platform>/<product>/`; cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenPrice`, `Signal`, …) sit at the root of `domain/`. Read models used by a single consumer (e.g. `swap_flow` for the flow-imbalance detector, `global_analytics` for `/api/stats`) get their own slim module rather than widening an existing trait.
 - **Two-level `DomainEvent`** (`domain/domain_event.rs`) — sum type with one outer variant per protocol, delegating to a sub-enum per event kind. `DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(...))` is the canonical shape. Accessors (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) delegate to the inner sub-enum.
 - **Event extraction** (`application/extraction/`) — turns raw Solana transactions into protocol-agnostic `DomainEvent`s. Lives in `application/` rather than `domain/` because it orchestrates an external concern (the Solana transaction shape) into the domain language.
+- **Account decoding** (`application/decoder/`) — the counterpart of the above: turns an on-chain account's raw bytes into `PoolAccountProperties`, the properties events never carry (mints, base fee, fee split). Dispatches on the account's owning program id — which is what the chain calls its `owner` — via `Protocol::from_program_id`, so callers need not know which protocol they asked for and one client can serve them all. Named for what it does, not for where the bytes came from: they may arrive over JSON-RPC today and over gRPC tomorrow, and nothing here changes. Two guards on every decode, neither redundant: the program id (by dispatch) and the account's Anchor discriminator. They are not defensive — at cp-amm's mint offsets a DLMM `LbPair` holds `reserve_x`/`reserve_y`, valid aligned `Pubkey`s, so an unguarded decode succeeds and writes vault addresses into mint columns. Failure is a typed `PoolAccountRejection`, not a bare `None`: in the only call path the caller asks for accounts of pools it queued itself, so *every* rejection signals a problem — an unindexed program, a missing decoder, the wrong account, or (the one to watch) a truncated account, the signature of an ABI change. `core` does no I/O, so it returns the reason and the caller logs and counts it — the same discipline as `ExtractionOutcome`.
 - **Signals domain** (`domain/signals/`) — the write model (`Signal`, `Severity`) and the contracts of the signal engine: the `SignalDetector` trait (see below), the thin `EvalContext` (carries the tick clock, nothing else), `SignalRepository` (write + cooldown lookup) and `SignalFeed` (the API's read side: paginated feed, SSE delta reads, and the batched per-pool recent-signals lookup behind the pools-list indicator). The read model `SignalRecord { id, signal }` exists because the id only exists after insert — it never sits on the write-side `Signal`.
-- **AMM math** (`amm/`) — price, reserves, slippage, imbalance formulas, plus DAMM v2-specific decoding: `sqrt_price_to_price_a_in_b` (Q64.64 spot price) and the base-fee decoders (`decode_base_fee_bps`, `decode_updated_base_fee_bps`) used on raw on-chain fee bytes. Kept here because these formulas will eventually run in the browser via WASM.
+- **AMM math** (`amm/`) — price, reserves, slippage, imbalance formulas, plus `sqrt_price_to_price_a_in_b` (Q64.64 spot price). Kept here because these formulas will eventually run in the browser via WASM. ⚠️ The base-fee decoders (`decode_base_fee_bps`, `decode_fee_config`, `decode_updated_base_fee_bps`) also live here and are on the wrong side of the line — they decode bytes, they are not math, and they belong with `application/decoder/`. Left in place deliberately: moving them churns the indexer for no functional gain, so it waits for a change that already touches those call sites.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method.
 - **Solana SDK indirection** (`solana_types.rs`) — single point of contact for types reshuffled by Solana SDK releases. When the SDK restructures, only this file changes.
 - **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.

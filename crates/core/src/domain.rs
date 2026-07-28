@@ -6,6 +6,7 @@ mod liquidity_flow;
 mod meteora;
 mod network_status;
 mod pool;
+mod pool_account;
 mod pool_analytics;
 mod pool_current_state;
 mod pool_price_snapshot;
@@ -36,10 +37,10 @@ pub use meteora::{
     MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LiquidityEventValued,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver,
-    MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository,
-    MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
-    MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
+    MeteoraDammV2PoolPropertiesRepository, MeteoraDammV2SetPoolStatusEvent,
+    MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SplitAmounts,
+    MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
     MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SplitPositionState,
     MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed,
     MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
@@ -52,6 +53,7 @@ pub use meteora::{
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use pool::{FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository};
+pub use pool_account::{PoolAccountProperties, PoolAccountResolver};
 pub use pool_analytics::{
     PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket, PoolRankMetric,
 };
