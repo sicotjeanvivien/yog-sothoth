@@ -11,9 +11,12 @@ use anyhow::Context;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::domain::{PoolAccountResolver, TokenMetadataRepository, TokenPriceRepository};
+use yog_core::domain::{
+    MeteoraDammV2PoolAccountResolver, TokenMetadataRepository, TokenPriceRepository,
+};
 use yog_persistence::{
-    Database, PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
+    Database, PgMeteoraDammV2PoolPropertiesRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository,
 };
 
 use crate::bootstrap::Config;
@@ -37,7 +40,7 @@ pub(crate) struct Daemon {
     /// Jupiter price source client.
     price_source: Arc<dyn PriceSource>,
     /// Pool-mint resolution persistence.
-    pool_account_resolver: Arc<dyn PoolAccountResolver>,
+    pool_account_resolver: Arc<dyn MeteoraDammV2PoolAccountResolver>,
     /// cp-amm pool account source.
     pool_account_source: Arc<dyn PoolAccountSource>,
     /// Context METADATA poll secs
@@ -66,8 +69,11 @@ impl Daemon {
         let token_price_repository: Arc<dyn TokenPriceRepository> =
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
 
-        let pool_account_resolver: Arc<dyn PoolAccountResolver> =
-            Arc::new(PgPoolRepository::new(db_pool));
+        // One resolver per protocol: the DAMM v2 satellite repository owns both
+        // the enrichment queue and the two-table write. A DLMM equivalent will be
+        // a sibling worker with its own resolver, not a parameter on this one.
+        let pool_account_resolver: Arc<dyn MeteoraDammV2PoolAccountResolver> =
+            Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(db_pool));
 
         // Two independent HTTP clients — one per external source.
         let metadata_source =
@@ -187,7 +193,7 @@ fn spawn_price_worker(
 
 /// Spawn the pool-account resolver worker task.
 fn spawn_pool_account_worker(
-    repository: Arc<dyn PoolAccountResolver>,
+    repository: Arc<dyn MeteoraDammV2PoolAccountResolver>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
     shutdown: CancellationToken,

@@ -24,7 +24,7 @@ use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use yog_core::domain::PoolAccountResolver;
+use yog_core::domain::MeteoraDammV2PoolAccountResolver;
 
 use crate::error::WorkerError;
 use crate::source::PoolAccountSource;
@@ -34,14 +34,14 @@ use crate::source::PoolAccountSource;
 const RESOLVE_BATCH_MAX: i64 = 100;
 
 pub struct PoolAccountWorker {
-    repository: Arc<dyn PoolAccountResolver>,
+    repository: Arc<dyn MeteoraDammV2PoolAccountResolver>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
 }
 
 impl PoolAccountWorker {
     pub fn new(
-        repository: Arc<dyn PoolAccountResolver>,
+        repository: Arc<dyn MeteoraDammV2PoolAccountResolver>,
         source: Arc<dyn PoolAccountSource>,
         poll_interval: std::time::Duration,
     ) -> Self {

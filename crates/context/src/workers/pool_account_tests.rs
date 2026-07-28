@@ -7,7 +7,7 @@ use solana_pubkey::Pubkey;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 
-use yog_core::domain::MeteoraDammV2PoolAccountProperties;
+use yog_core::domain::{MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver};
 
 use crate::error::SourceError;
 use crate::source::ResolvedPoolAccount;
@@ -23,7 +23,7 @@ struct FakeRepo {
 }
 
 #[async_trait]
-impl PoolAccountResolver for FakeRepo {
+impl MeteoraDammV2PoolAccountResolver for FakeRepo {
     async fn list_unresolved(&self, _limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         Ok(self.unresolved.clone())
     }
