@@ -10,8 +10,9 @@
 //! - [`MeteoraDammV2PoolPropertiesRepository`] — the indexer writes the fee shape
 //!   (`base_fee_kind`, `has_dynamic_fee`) decoded from the genesis
 //!   `InitializePool` blob; the api reads the whole row for the detail sheet.
-//! - [`MeteoraDammV2PoolAccountResolver`] — yog-context's enrichment queue and
-//!   its two-table write.
+//! - [`PoolAccountResolver`] — yog-context's enrichment queue and its two-table
+//!   write. Generic trait, per-protocol implementation: the queue below filters
+//!   on this protocol, the write accepts only this protocol's variant.
 //!
 //! Each upsert touches only its own columns on conflict: neither writer may
 //! clobber the other's, and either may land first.
@@ -37,8 +38,8 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver,
-        MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository, Protocol,
+        MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository, PoolAccountProperties,
+        PoolAccountResolver, Protocol,
     },
 };
 
@@ -106,7 +107,11 @@ impl MeteoraDammV2PoolPropertiesRepository for PgMeteoraDammV2PoolPropertiesRepo
 }
 
 #[async_trait]
-impl MeteoraDammV2PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
+impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
+    fn protocol(&self) -> Protocol {
+        Protocol::MeteoraDammV2
+    }
+
     /// The protocol predicate is **required**, not decorative — see the trait
     /// doc. Joining this satellite does not scope the query on its own: "no
     /// satellite row yet" is one of the conditions that makes a pool a
@@ -144,19 +149,23 @@ impl MeteoraDammV2PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepositor
     ///
     /// The atomicity is load-bearing, not defensive: committing the mints
     /// without the percents (or the reverse) leaves a pool that
-    /// [`MeteoraDammV2PoolAccountResolver::list_unresolved`] keeps re-proposing
-    /// every cycle, which is exactly the re-fetch loop migration 036 set out to
-    /// remove.
+    /// [`PoolAccountResolver::list_unresolved`] keeps re-proposing every cycle,
+    /// which is exactly the re-fetch loop migration 036 set out to remove.
     ///
     /// The satellite side is an upsert — unlike the columns it replaces, its row
     /// is not created with the pool, so an `UPDATE` would silently do nothing on
     /// first resolution. `ON CONFLICT` touches only the percents, leaving the
     /// indexer-owned fee-shape columns alone.
+    /// Rejects a payload of another protocol rather than silently doing nothing:
+    /// the worker routes by [`PoolAccountProperties::protocol`], so a mismatch
+    /// here is a wiring bug, not a runtime condition.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
-        properties: &MeteoraDammV2PoolAccountProperties,
+        properties: &PoolAccountProperties,
     ) -> RepositoryResult<()> {
+        let PoolAccountProperties::MeteoraDammV2(properties) = properties;
+
         let fee_bps = crate::repositories::pool::fee_bps_to_numeric(properties.fee_bps)?;
         // u8 → i16 (SMALLINT) is always lossless.
         let (protocol_pct, partner_pct, referral_pct) = (

@@ -57,8 +57,8 @@ pub use permanent_lock_position_event::{
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
 };
 pub use pool_properties::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver,
-    MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
+    MeteoraDammV2PoolPropertiesRepository,
 };
 pub use set_pool_status_event::{
     MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,

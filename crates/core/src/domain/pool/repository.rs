@@ -135,10 +135,9 @@ pub trait PoolRepository: Send + Sync {
 /// was *seen*, and this trait is how the API browses it — point lookup,
 /// batch lookup, paginated listing, inventory counts.
 ///
-/// Kept separate from [`PoolRepository`] (write side, indexer) and from each
-/// protocol's account resolver (property backfill, context — e.g.
-/// [`crate::domain::MeteoraDammV2PoolAccountResolver`]) so each binary depends
-/// on exactly the methods it uses and mocks carry no dead stubs.
+/// Kept separate from [`PoolRepository`] (write side, indexer) and from
+/// [`crate::domain::PoolAccountResolver`] (property backfill, context) so each
+/// binary depends on exactly the methods it uses and mocks carry no dead stubs.
 #[async_trait]
 pub trait PoolCatalog: Send + Sync {
     /// Fetch a single pool by its on-chain address.

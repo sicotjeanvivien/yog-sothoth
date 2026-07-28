@@ -14,6 +14,7 @@ use crate::application::pool_account::meteora::damm_v2::{
     PROTOCOL_FEE_PERCENT_OFFSET, REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET,
     TOKEN_B_MINT_OFFSET,
 };
+use crate::domain::PoolAccountProperties;
 use rust_decimal::Decimal;
 
 fn pk(seed: u8) -> Pubkey {

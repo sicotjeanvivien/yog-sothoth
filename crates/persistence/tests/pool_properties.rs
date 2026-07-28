@@ -20,8 +20,8 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver,
-    MeteoraDammV2PoolPropertiesRepository, Protocol,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolPropertiesRepository,
+    PoolAccountProperties, PoolAccountResolver, Protocol,
 };
 use yog_persistence::PgMeteoraDammV2PoolPropertiesRepository;
 
@@ -47,15 +47,15 @@ async fn seed_pool(pool: &PgPool, addr: Pubkey, protocol: Protocol, seq: i64) {
     .expect("seed pool failed");
 }
 
-fn account_properties() -> MeteoraDammV2PoolAccountProperties {
-    MeteoraDammV2PoolAccountProperties {
+fn account_properties() -> PoolAccountProperties {
+    PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
         token_a_mint: pk(10),
         token_b_mint: pk(11),
         fee_bps: Decimal::new(25, 0),
         protocol_fee_percent: 20,
         partner_fee_percent: 0,
         referral_fee_percent: 20,
-    }
+    })
 }
 
 // ── set_pool_account: one account read, two tables ──────────────────
@@ -64,8 +64,8 @@ fn account_properties() -> MeteoraDammV2PoolAccountProperties {
 async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
     // One Pg type, both traits: the enrichment queue + two-table write
-    // (MeteoraDammV2PoolAccountResolver) and the satellite's own read/write
-    // (MeteoraDammV2PoolPropertiesRepository).
+    // (PoolAccountResolver, generic trait / per-protocol impl) and the
+    // satellite's own read/write (MeteoraDammV2PoolPropertiesRepository).
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     repo.set_pool_account(&pk(1), &account_properties())
@@ -118,8 +118,8 @@ async fn fee_config_and_percents_coexist_whichever_lands_first(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
     seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
     // One Pg type, both traits: the enrichment queue + two-table write
-    // (MeteoraDammV2PoolAccountResolver) and the satellite's own read/write
-    // (MeteoraDammV2PoolPropertiesRepository).
+    // (PoolAccountResolver, generic trait / per-protocol impl) and the
+    // satellite's own read/write (MeteoraDammV2PoolPropertiesRepository).
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     // Pool 1: indexer first (fee shape), then context (percents).

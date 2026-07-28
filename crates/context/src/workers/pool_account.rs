@@ -1,22 +1,29 @@
 //! Pool-account resolver worker — fills account-derived pool properties.
 //!
-//! The indexer records a pool by address with `NULL` mints (it can't infer
-//! them reliably from the transaction) and a `NULL` `fee_bps` for any pool
-//! whose genesis `InitializePool` event it never saw. Every `poll_interval`
+//! The indexer records a pool by address with `NULL` mints (it can't infer them
+//! reliably from the transaction) and a `NULL` `fee_bps` for any pool whose
+//! genesis event it never saw. Every `poll_interval`, and **for each protocol**,
 //! this worker:
-//!   1. lists pools missing any account-derived property (`list_unresolved`:
-//!      a NULL mint, a NULL fee, or a NULL fee-split percent);
-//!   2. fetches and decodes each pool's on-chain account (the authoritative
-//!      source for mints, base fee and fee-split percents) via
-//!      `PoolAccountSource`;
-//!   3. writes the resolved mints + fee + percents back (`set_pool_account`).
+//!   1. asks that protocol's resolver which of its pools are unresolved;
+//!   2. fetches their raw accounts through the shared [`PoolAccountSource`];
+//!   3. decodes each account in `core`, routed on its owner;
+//!   4. writes the decoded properties back through the resolver.
+//!
+//! # Protocol-agnostic
+//!
+//! The worker names no protocol. It holds `Vec<Arc<dyn PoolAccountResolver>>`
+//! and one shared account source, and the decoding routes itself on the
+//! account's owner — the same shape as the indexer's `EventPersistor` over
+//! `DomainEvent`. Adding a protocol means adding a resolver to the list; not a
+//! line here changes.
 //!
 //! # Resilience
 //!
-//! Like the other yog-context workers, a single failed tick must not bring
-//! the daemon down: source and per-pool persistence errors are logged and the
-//! loop continues. It must run before metadata/price enrichment can do
-//! anything — those key off the resolved mints.
+//! Like the other yog-context workers, a single failed tick must not bring the
+//! daemon down: source and per-pool persistence errors are logged and the loop
+//! continues. A failure for one protocol does not skip the others. It must run
+//! before metadata/price enrichment can do anything — those key off the resolved
+//! mints.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -24,7 +31,8 @@ use std::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use yog_core::domain::MeteoraDammV2PoolAccountResolver;
+use yog_core::application::decode_pool_account;
+use yog_core::domain::PoolAccountResolver;
 
 use crate::error::WorkerError;
 use crate::source::PoolAccountSource;
@@ -34,19 +42,21 @@ use crate::source::PoolAccountSource;
 const RESOLVE_BATCH_MAX: i64 = 100;
 
 pub struct PoolAccountWorker {
-    repository: Arc<dyn MeteoraDammV2PoolAccountResolver>,
+    /// One per protocol. Each owns its own queue and its own tables; the worker
+    /// only iterates.
+    resolvers: Vec<Arc<dyn PoolAccountResolver>>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
 }
 
 impl PoolAccountWorker {
     pub fn new(
-        repository: Arc<dyn MeteoraDammV2PoolAccountResolver>,
+        resolvers: Vec<Arc<dyn PoolAccountResolver>>,
         source: Arc<dyn PoolAccountSource>,
         poll_interval: std::time::Duration,
     ) -> Self {
         Self {
-            repository,
+            resolvers,
             source,
             poll_interval,
         }
@@ -66,45 +76,76 @@ impl PoolAccountWorker {
         }
     }
 
+    /// One pass over every protocol. A failure for one is logged and the loop
+    /// moves to the next — a broken resolver must not stop the others.
     async fn run_one_cycle(&self) {
+        for resolver in &self.resolvers {
+            self.run_one_protocol(resolver.as_ref()).await;
+        }
+    }
+
+    async fn run_one_protocol(&self, resolver: &dyn PoolAccountResolver) {
+        let protocol = resolver.protocol();
         let start = Instant::now();
-        let unresolved = match self.repository.list_unresolved(RESOLVE_BATCH_MAX).await {
+
+        let unresolved = match resolver.list_unresolved(RESOLVE_BATCH_MAX).await {
             Ok(pools) => pools,
             Err(e) => {
-                warn!(error = %e, "pool-account worker: list_unresolved failed");
+                warn!(protocol = %protocol, error = %e, "pool-account worker: list_unresolved failed");
                 return;
             }
         };
         if unresolved.is_empty() {
-            debug!("pool-account worker: no unresolved pools — sleeping");
+            debug!(protocol = %protocol, "pool-account worker: no unresolved pools");
             return;
         }
 
-        let resolved = match self.source.fetch_accounts(&unresolved).await {
-            Ok(resolved) => resolved,
+        let accounts = match self.source.fetch_accounts(&unresolved).await {
+            Ok(accounts) => accounts,
             Err(e) => {
-                warn!(error = %e, "pool-account worker: source returned a hard error");
+                warn!(protocol = %protocol, error = %e, "pool-account worker: source returned a hard error");
                 return;
             }
         };
 
+        let mut decoded = 0usize;
         let mut ok = 0usize;
-        for r in &resolved {
-            match self
-                .repository
-                .set_pool_account(&r.pool, &r.properties)
+        for account in &accounts {
+            // Decoding routes on the account's owner, so a pool that changed
+            // hands — or a resolver whose queue over-reaches — yields None here
+            // rather than being decoded at the wrong layout.
+            let Some(properties) = decode_pool_account(&account.owner, &account.data) else {
+                continue;
+            };
+            decoded += 1;
+
+            if properties.protocol() != protocol {
+                warn!(
+                    protocol = %protocol,
+                    decoded_as = %properties.protocol(),
+                    pool = %account.address,
+                    "pool-account worker: queue and account disagree on protocol — skipping",
+                );
+                continue;
+            }
+
+            match resolver
+                .set_pool_account(&account.address, &properties)
                 .await
             {
                 Ok(()) => ok += 1,
                 Err(e) => {
-                    warn!(pool = %r.pool, error = %e, "pool-account worker: set_pool_account failed")
+                    warn!(protocol = %protocol, pool = %account.address, error = %e,
+                          "pool-account worker: set_pool_account failed")
                 }
             }
         }
 
         debug!(
+            protocol = %protocol,
             requested = unresolved.len(),
-            resolved = resolved.len(),
+            fetched = accounts.len(),
+            decoded,
             written = ok,
             elapsed_s = start.elapsed().as_secs_f64(),
             "pool-account worker: cycle done",

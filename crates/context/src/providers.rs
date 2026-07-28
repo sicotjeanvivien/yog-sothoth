@@ -1,14 +1,14 @@
-mod cpamm_pool;
 mod helius_das;
 mod jupiter_price;
 mod metrics;
+mod solana_account;
 
 use std::time::Duration;
 
-pub(crate) use cpamm_pool::CpAmmPoolClient;
 pub(crate) use helius_das::HeliusDasClient;
 pub(crate) use jupiter_price::JupiterPriceClient;
 pub(crate) use metrics::ProviderMetrics;
+pub(crate) use solana_account::SolanaAccountClient;
 
 /// Overall per-request deadline shared by the provider clients.
 ///

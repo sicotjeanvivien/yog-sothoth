@@ -38,29 +38,7 @@ mod meteora;
 
 use solana_pubkey::Pubkey;
 
-use crate::domain::{MeteoraDammV2PoolAccountProperties, Protocol};
-
-/// Everything one read of a pool account can yield, grouped by protocol.
-///
-/// Two-level, exactly like [`crate::domain::DomainEvent`]: the outer variant is
-/// the protocol, the inner type is that protocol's own property set. Per-protocol
-/// account layouts have nothing in common, so a flat struct would mean `Option`
-/// fields that are permanently `None` for every protocol but one.
-///
-/// Consumers match on this to pick the repository that knows how to store it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PoolAccountProperties {
-    MeteoraDammV2(MeteoraDammV2PoolAccountProperties),
-}
-
-impl PoolAccountProperties {
-    /// The protocol this payload belongs to. Determined by the variant.
-    pub fn protocol(&self) -> Protocol {
-        match self {
-            Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
-        }
-    }
-}
+use crate::domain::{PoolAccountProperties, Protocol};
 
 /// Decode a raw pool account into its protocol's properties.
 ///
