@@ -29,6 +29,7 @@ mod permanent_lock_position;
 mod pool_analytics_ranking;
 mod pool_pagination;
 mod pool_price_snapshot;
+mod pool_properties;
 mod pool_search;
 mod set_pool_status;
 mod signal_dedup;

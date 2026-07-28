@@ -26,7 +26,7 @@ use base64::Engine;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 
-use yog_core::domain::{PoolAccountProperties, Protocol};
+use yog_core::domain::{MeteoraDammV2PoolAccountProperties, Protocol};
 
 use super::metrics::ProviderMetrics;
 use crate::error::SourceError;
@@ -173,7 +173,7 @@ impl CpAmmPoolClient {
             Pubkey::try_from(&bytes[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32]).ok()?;
         Some(ResolvedPoolAccount {
             pool,
-            properties: PoolAccountProperties {
+            properties: MeteoraDammV2PoolAccountProperties {
                 token_a_mint,
                 token_b_mint,
                 fee_bps: yog_core::amm::damm_v2::fee_numerator_to_bps(cliff_fee_numerator),

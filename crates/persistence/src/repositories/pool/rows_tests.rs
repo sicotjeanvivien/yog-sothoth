@@ -29,11 +29,6 @@ fn valid_row() -> PoolRow {
         token_a_mint: Some(VALID_TOKEN_A.into()),
         token_b_mint: Some(VALID_TOKEN_B.into()),
         fee_bps: Some(Decimal::new(25, 0)),
-        protocol_fee_percent: Some(20),
-        partner_fee_percent: Some(0),
-        referral_fee_percent: Some(20),
-        base_fee_kind: Some("constant".to_string()),
-        has_dynamic_fee: Some(false),
         first_seen_at: now,
         last_seen_at: now,
     }
@@ -48,39 +43,11 @@ fn try_from_valid_row_returns_pool_with_all_fields_mapped() {
     assert_eq!(pool.token_a_mint.unwrap().to_string(), VALID_TOKEN_A);
     assert_eq!(pool.token_b_mint.unwrap().to_string(), VALID_TOKEN_B);
     assert_eq!(pool.fee_bps, Some(Decimal::new(25, 0)));
-    assert_eq!(pool.protocol_fee_percent, Some(20));
-    assert_eq!(pool.partner_fee_percent, Some(0));
-    assert_eq!(pool.referral_fee_percent, Some(20));
-    assert_eq!(pool.base_fee_kind.as_deref(), Some("constant"));
-    assert_eq!(pool.has_dynamic_fee, Some(false));
 }
 
-#[test]
-fn try_from_null_fee_percents_maps_to_none() {
-    let row = PoolRow {
-        protocol_fee_percent: None,
-        partner_fee_percent: None,
-        referral_fee_percent: None,
-        ..valid_row()
-    };
-    let pool = Pool::try_from(row).expect("null percents should convert");
-    assert!(pool.protocol_fee_percent.is_none());
-    assert!(pool.partner_fee_percent.is_none());
-    assert!(pool.referral_fee_percent.is_none());
-}
-
-#[test]
-fn try_from_out_of_range_percent_returns_integrity() {
-    let row = PoolRow {
-        protocol_fee_percent: Some(-1),
-        ..valid_row()
-    };
-    let err = Pool::try_from(row).expect_err("negative percent should fail");
-    assert!(
-        matches!(err, RepositoryError::Integrity(_)),
-        "expected Integrity, got {err:?}"
-    );
-}
+// NOTE: the fee-split percent tests (null mapping, out-of-range guard) moved to
+// `meteora/damm_v2/pool_properties_tests.rs` with migration 036, along with the
+// columns and `percent_to_u8` itself.
 
 #[test]
 fn try_from_null_mints_maps_to_none() {

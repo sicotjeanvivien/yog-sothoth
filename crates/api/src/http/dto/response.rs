@@ -23,7 +23,7 @@ pub(crate) use fee_tier::FeeTierResponse;
 pub(crate) use liquidity_event::LiquidityEventResponse;
 pub(crate) use network_status::NetworkStatusResponse;
 pub(crate) use page::PageResponse;
-pub(crate) use pool::PoolResponse;
+pub(crate) use pool::{PoolDetailResponse, PoolResponse};
 pub(crate) use pool_current_state::PoolCurrentStateResponse;
 pub(crate) use pool_history::PoolHistoryBucketResponse;
 pub(crate) use problem::{PROBLEM_CONTENT_TYPE, ProblemDetails};

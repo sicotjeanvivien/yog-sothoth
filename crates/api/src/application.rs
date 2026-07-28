@@ -3,7 +3,7 @@ pub(crate) mod enriched_signal;
 pub(crate) mod services;
 pub(crate) mod signal_stream;
 
-pub(crate) use enriched_pool::{EnrichedPool, EnrichedToken};
+pub(crate) use enriched_pool::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 pub(crate) use enriched_signal::EnrichedSignal;
 pub(crate) use services::{
     AnnouncementService, MeteoraDammV2LiquidityListParams, MeteoraDammV2LiquidityService,

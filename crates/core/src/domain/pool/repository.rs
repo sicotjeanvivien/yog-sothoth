@@ -4,7 +4,7 @@ use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
-use crate::{RepositoryResult, domain::Pool, domain::PoolAccountProperties};
+use crate::{RepositoryResult, domain::Pool};
 
 /// Cursor identifying a position in a pool ordering.
 ///
@@ -119,24 +119,14 @@ pub trait PoolRepository: Send + Sync {
         fee_bps: rust_decimal::Decimal,
     ) -> RepositoryResult<()>;
 
-    /// Set the pool's decoded fee *shape*: how the base fee behaves
-    /// (`base_fee_kind`) and whether a volatility dynamic fee is enabled
-    /// (`has_dynamic_fee`), decoded from the same genesis fee config as
-    /// [`set_fee_bps`]. A column-level `UPDATE`; a no-op if the pool row does
-    /// not exist yet. Idempotent.
-    ///
-    /// `base_fee_kind` is an opaque string at this boundary — the pools table
-    /// is cross-protocol, so each protocol writes its own fee-kind vocabulary
-    /// into the same column (DAMM v2's values come from
-    /// `amm::damm_v2::BaseFeeKind::as_str`). Keeps this generic trait free of
-    /// any protocol-specific enum, exactly as `set_fee_bps` takes a plain
-    /// `Decimal`.
-    async fn set_fee_config(
-        &self,
-        pool_address: &Pubkey,
-        base_fee_kind: &str,
-        has_dynamic_fee: bool,
-    ) -> RepositoryResult<()>;
+    // NOTE: the fee *shape* (`base_fee_kind` / `has_dynamic_fee`) used to live
+    // here as `set_fee_config`. It moved to
+    // [`crate::domain::MeteoraDammV2PoolPropertiesRepository`] with migration
+    // 036: both columns are cp-amm concepts, and passing `base_fee_kind` as an
+    // opaque string was the tell that a protocol-specific notion was being
+    // squeezed through a cross-protocol trait. `set_fee_bps` stays — a base fee
+    // in bps is genuinely cross-protocol, and it is a read surface here
+    // (fee-tier filter, `PoolCatalog::list_fee_tiers`).
 }
 
 /// The consultation surface of the pool registry — the api's read lens.
@@ -145,9 +135,10 @@ pub trait PoolRepository: Send + Sync {
 /// was *seen*, and this trait is how the API browses it — point lookup,
 /// batch lookup, paginated listing, inventory counts.
 ///
-/// Kept separate from [`PoolRepository`] (write side, indexer) and
-/// [`PoolAccountResolver`] (property backfill, context) so each binary
-/// depends on exactly the methods it uses and mocks carry no dead stubs.
+/// Kept separate from [`PoolRepository`] (write side, indexer) and from each
+/// protocol's account resolver (property backfill, context — e.g.
+/// [`crate::domain::MeteoraDammV2PoolAccountResolver`]) so each binary depends
+/// on exactly the methods it uses and mocks carry no dead stubs.
 #[async_trait]
 pub trait PoolCatalog: Send + Sync {
     /// Fetch a single pool by its on-chain address.
@@ -184,34 +175,4 @@ pub trait PoolCatalog: Send + Sync {
     /// their account) are excluded, so the filter never offers an option that
     /// would match nothing. See [`FeeTier`].
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>>;
-}
-
-/// Resolution of a pool's account-derived properties (token mints, base fee
-/// and fee-split percents) from its on-chain cp-amm `Pool` account, performed
-/// by yog-context
-/// (which holds column-level UPDATE on those columns).
-///
-/// These properties can't be inferred reliably from the event stream: the
-/// mints were mis-resolved by a per-event heuristic, and the base fee is only
-/// emitted at pool genesis (`InitializePool`) — which the indexer never sees
-/// for pools created before it started watching. Reading the account back-fills
-/// both for every pool, old or new.
-///
-/// Kept separate from [`PoolRepository`] so the resolver worker depends
-/// only on what it uses, and the read/write mocks in the api and
-/// indexer crates don't have to carry these methods.
-#[async_trait]
-pub trait PoolAccountResolver: Send + Sync {
-    /// Pools missing at least one account-derived property — a `NULL` mint, a
-    /// `NULL` `fee_bps`, or a `NULL` fee-split percent — capped at `limit`.
-    async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>>;
-
-    /// Set a pool's account-derived properties (mints, base fee and fee-split
-    /// percents), as decoded from its on-chain account. A single column-level
-    /// UPDATE; idempotent.
-    async fn set_pool_account(
-        &self,
-        pool_address: &Pubkey,
-        properties: &PoolAccountProperties,
-    ) -> RepositoryResult<()>;
 }

@@ -8,7 +8,7 @@ use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
         FeeTierResponse, LiquidityEventResponse, PageResponse, PoolCurrentStateResponse,
-        PoolHistoryBucketResponse, PoolResponse, SwapEventResponse,
+        PoolDetailResponse, PoolHistoryBucketResponse, PoolResponse, SwapEventResponse,
         request::{
             GetPoolHistoryRequest, GetPoolLatestStateRequest, GetPoolRequest,
             ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest, ListTopPoolsRequest,
@@ -83,16 +83,16 @@ pub(crate) async fn list_top_pools(
 pub(crate) async fn get_pool(
     State(state): State<AppState>,
     Path(address): Path<String>,
-) -> Result<Json<PoolResponse>, ApiError> {
+) -> Result<Json<PoolDetailResponse>, ApiError> {
     let request = GetPoolRequest::parse(address)?;
 
-    let enriched = state
+    let detail = state
         .pool_service
-        .get_pool(&request.pool_address)
+        .get_pool_detail(&request.pool_address)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("pool not found: {}", request.pool_address)))?;
 
-    Ok(Json(PoolResponse::from(enriched)))
+    Ok(Json(PoolDetailResponse::from(detail)))
 }
 
 // ===========================================================================

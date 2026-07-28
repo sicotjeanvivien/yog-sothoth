@@ -153,10 +153,12 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
     let (primary_order, tiebreak_order) = effective_order(q.sort, q.mode);
 
     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+        // NOTE: runtime SQL — NOT checked by the sqlx macros. The column list
+        // must stay in lockstep with `PoolRow` by hand; the DB-backed
+        // integration tests are the only guard. The cp-amm fee properties left
+        // this list with migration 036 (satellite table).
         "SELECT pool_address, protocol, token_a_mint, token_b_mint, \
-         fee_bps, protocol_fee_percent, partner_fee_percent, referral_fee_percent, \
-         base_fee_kind, has_dynamic_fee, \
-         first_seen_at, last_seen_at FROM pools WHERE 1=1",
+         fee_bps, first_seen_at, last_seen_at FROM pools WHERE 1=1",
     );
 
     // ── Keyset cursor predicate ──────────────────────────────────

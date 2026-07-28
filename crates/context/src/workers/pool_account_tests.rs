@@ -7,7 +7,7 @@ use solana_pubkey::Pubkey;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 
-use yog_core::domain::PoolAccountProperties;
+use yog_core::domain::{MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver};
 
 use crate::error::SourceError;
 use crate::source::ResolvedPoolAccount;
@@ -19,18 +19,18 @@ fn pk(seed: u8) -> Pubkey {
 #[derive(Default)]
 struct FakeRepo {
     unresolved: Vec<Pubkey>,
-    written: Mutex<Vec<(Pubkey, PoolAccountProperties)>>,
+    written: Mutex<Vec<(Pubkey, MeteoraDammV2PoolAccountProperties)>>,
 }
 
 #[async_trait]
-impl PoolAccountResolver for FakeRepo {
+impl MeteoraDammV2PoolAccountResolver for FakeRepo {
     async fn list_unresolved(&self, _limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         Ok(self.unresolved.clone())
     }
     async fn set_pool_account(
         &self,
         pool: &Pubkey,
-        properties: &PoolAccountProperties,
+        properties: &MeteoraDammV2PoolAccountProperties,
     ) -> RepositoryResult<()> {
         self.written
             .lock()
@@ -64,7 +64,7 @@ async fn resolves_and_writes_mints_and_fee() {
         unresolved: vec![pk(1)],
         written: Mutex::new(Vec::new()),
     });
-    let properties = PoolAccountProperties {
+    let properties = MeteoraDammV2PoolAccountProperties {
         token_a_mint: pk(2),
         token_b_mint: pk(3),
         fee_bps: Decimal::new(25, 0),

@@ -9,8 +9,8 @@
 use yog_core::{
     RepositoryResult,
     domain::{
-        Pool, PoolAnalytics, SignalRecord, TokenMetadata, TokenMetadataLookup, TokenPrice,
-        TokenPriceLookup,
+        MeteoraDammV2PoolProperties, Pool, PoolAnalytics, SignalRecord, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceLookup,
     },
 };
 
@@ -74,4 +74,18 @@ pub(crate) struct EnrichedPool {
     /// per-pool capped) — powers the signal icon on the pools list.
     /// Empty when the pool emitted nothing in the window.
     pub(crate) recent_signals: Vec<SignalRecord>,
+}
+
+/// An [`EnrichedPool`] plus the properties specific to its protocol — the
+/// aggregate behind the pool *detail* sheet.
+///
+/// Separate from [`EnrichedPool`] on purpose: the protocol-specific block costs
+/// one extra query per pool, and the list endpoints neither need it nor display
+/// it. Keeping it out of `EnrichedPool` means the paginated listing does not pay
+/// for it.
+pub(crate) struct EnrichedPoolDetail {
+    pub(crate) pool: EnrichedPool,
+    /// `None` for a pool of another protocol, or for a DAMM v2 pool with no
+    /// satellite row yet (discovered, but neither enriched nor seen at genesis).
+    pub(crate) meteora_damm_v2_properties: Option<MeteoraDammV2PoolProperties>,
 }

@@ -1,7 +1,6 @@
 mod query;
 mod rows;
 
-use crate::repositories::helper::convert_string_to_pubkey;
 use crate::repositories::helper::{PageBuilder, map_sqlx_error, resolve_query_mode};
 use async_trait::async_trait;
 use query::{PaginatedPoolsQuery, build};
@@ -11,10 +10,7 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
-    domain::{
-        FeeTier, Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts,
-        PoolCursor, PoolListQuery, PoolRepository,
-    },
+    domain::{FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository},
 };
 
 pub struct PgPoolRepository {
@@ -37,7 +33,9 @@ const FEE_TIER_LIMIT: i64 = 8;
 /// Convert a domain `fee_bps` (`rust_decimal::Decimal`) to the `BigDecimal`
 /// that NUMERIC binds to at the persistence boundary. Round-trips through the
 /// exact decimal string — never lossy for the small fee values we store.
-fn fee_bps_to_numeric(fee_bps: rust_decimal::Decimal) -> RepositoryResult<sqlx::types::BigDecimal> {
+pub(super) fn fee_bps_to_numeric(
+    fee_bps: rust_decimal::Decimal,
+) -> RepositoryResult<sqlx::types::BigDecimal> {
     sqlx::types::BigDecimal::from_str(&fee_bps.to_string())
         .map_err(|e| RepositoryError::Integrity(format!("invalid fee_bps decimal: {e}")))
 }
@@ -93,24 +91,6 @@ impl PoolRepository for PgPoolRepository {
         .map_err(map_sqlx_error)?;
         Ok(())
     }
-
-    async fn set_fee_config(
-        &self,
-        pool_address: &Pubkey,
-        base_fee_kind: &str,
-        has_dynamic_fee: bool,
-    ) -> RepositoryResult<()> {
-        sqlx::query!(
-            r#"UPDATE pools SET base_fee_kind = $2, has_dynamic_fee = $3 WHERE pool_address = $1"#,
-            pool_address.to_string(),
-            base_fee_kind,
-            has_dynamic_fee,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -121,8 +101,6 @@ impl PoolCatalog for PgPoolRepository {
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
-                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,
-                   base_fee_kind, has_dynamic_fee,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = $1
@@ -164,8 +142,6 @@ impl PoolCatalog for PgPoolRepository {
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
-                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,
-                   base_fee_kind, has_dynamic_fee,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = ANY($1::TEXT[])
@@ -279,59 +255,5 @@ impl PoolCatalog for PgPoolRepository {
                 pool_count: r.pool_count,
             })
             .collect())
-    }
-}
-
-#[async_trait]
-impl PoolAccountResolver for PgPoolRepository {
-    async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT pool_address
-            FROM pools
-            WHERE token_a_mint IS NULL OR token_b_mint IS NULL OR fee_bps IS NULL
-               OR protocol_fee_percent IS NULL OR partner_fee_percent IS NULL
-               OR referral_fee_percent IS NULL
-            ORDER BY first_seen_at
-            LIMIT $1
-            "#,
-            limit,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        rows.into_iter()
-            .map(|r| convert_string_to_pubkey(r.pool_address, "pool_address"))
-            .collect()
-    }
-
-    async fn set_pool_account(
-        &self,
-        pool_address: &Pubkey,
-        properties: &PoolAccountProperties,
-    ) -> RepositoryResult<()> {
-        let fee_bps = fee_bps_to_numeric(properties.fee_bps)?;
-        // u8 → i16 (SMALLINT) is always lossless.
-        sqlx::query!(
-            r#"
-            UPDATE pools
-            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4,
-                protocol_fee_percent = $5, partner_fee_percent = $6,
-                referral_fee_percent = $7
-            WHERE pool_address = $1
-            "#,
-            pool_address.to_string(),
-            properties.token_a_mint.to_string(),
-            properties.token_b_mint.to_string(),
-            fee_bps,
-            i16::from(properties.protocol_fee_percent),
-            i16::from(properties.partner_fee_percent),
-            i16::from(properties.referral_fee_percent),
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-        Ok(())
     }
 }

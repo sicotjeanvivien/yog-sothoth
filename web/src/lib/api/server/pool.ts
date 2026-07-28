@@ -15,7 +15,7 @@
 
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../pool-address";
-import { PoolSchema, type PoolResponse } from "../schema/pool";
+import { PoolDetailSchema, type PoolDetailResponse } from "../schema/pool";
 
 // Re-exported for the existing server fetchers that import it from here; the
 // implementation now lives in the runtime-neutral `../pool-address` so the
@@ -29,10 +29,10 @@ export { isValidPoolAddress };
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  *         A 404 from yog-api surfaces as `kind: "http", status: 404`.
  */
-export async function fetchPool(address: string): Promise<PoolResponse> {
+export async function fetchPool(address: string): Promise<PoolDetailResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
 
-  return apiGet(`/api/pools/${address}`, {}, PoolSchema);
+  return apiGet(`/api/pools/${address}`, {}, PoolDetailSchema);
 }

@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, protocol, token_a_mint, token_b_mint,\n                   fee_bps AS \"fee_bps?: rust_decimal::Decimal\",\n                   first_seen_at, last_seen_at\n            FROM pools\n            WHERE pool_address = ANY($1::TEXT[])\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_a_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_b_mint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "fee_bps?: rust_decimal::Decimal",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_seen_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "be74e8bde4c9c05b0f7655739770d817a28696504a694a358888f767194776b2"
+}

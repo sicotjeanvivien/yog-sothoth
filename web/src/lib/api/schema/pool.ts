@@ -39,9 +39,6 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  *     token_a: EmbeddedTokenResponse,
  *     token_b: EmbeddedTokenResponse,
  *     fee_bps: Option<Decimal>,
- *     protocol_fee_percent: Option<u8>,
- *     partner_fee_percent: Option<u8>,
- *     referral_fee_percent: Option<u8>,
  *     tvl_usd: Option<Decimal>,
  *     volume_24h_usd: Option<Decimal>,
  *     fees_24h_usd: Option<Decimal>,
@@ -57,11 +54,9 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  * `feeBps` is the pool's base trading fee in basis points (its genesis
  * fee tier), null until the `InitializePool` event has been indexed.
  *
- * `protocolFeePercent` / `partnerFeePercent` / `referralFeePercent` are the
- * *configured* split of the trading fee (whole percents, 0..=100), read from
- * the pool account. All three are null together until yog-context resolves
- * the account. This is the configured split, distinct from the *realized*
- * `protocolFees24hUsd` below.
+ * The cp-amm fee properties (the configured fee split, the fee shape) are NOT
+ * here: they are protocol-specific and live on `PoolDetailSchema`'s
+ * `meteoraDammV2` block, returned only by `GET /api/pools/{address}`.
  *
  * The `*Fees24hUsd` block is the *realized* fee over the last 24h, valued
  * at trade-time prices like `volume24hUsd` (same null rules): total
@@ -89,19 +84,6 @@ export const PoolSchema = z.object({
   tokenA: TokenSchema,
   tokenB: TokenSchema,
   feeBps: BigDecimal.nullable(),
-  // Fee-split percents are u8 (0..=100) on the wire — JSON numbers, not
-  // BigDecimal strings. Resolved as a unit from the pool account, so all
-  // three are null together until yog-context resolves it.
-  protocolFeePercent: FeePercent.nullable(),
-  partnerFeePercent: FeePercent.nullable(),
-  referralFeePercent: FeePercent.nullable(),
-  // How the base fee behaves over time — an opaque per-protocol string
-  // ("constant" | "scheduler_linear" | "scheduler_exponential" |
-  // "rate_limiter"), and whether a volatility dynamic fee sits on top. Both
-  // decoded from the genesis fee config; null until InitializePool is indexed
-  // (or if the fee blob failed to decode).
-  baseFeeKind: z.string().nullable(),
-  hasDynamicFee: z.boolean().nullable(),
   tvlUsd: BigDecimal.nullable(),
   volume24hUsd: BigDecimal.nullable(),
   fees24hUsd: BigDecimal.nullable(),
@@ -116,3 +98,43 @@ export const PoolSchema = z.object({
 });
 
 export type PoolResponse = z.infer<typeof PoolSchema>;
+
+/**
+ * Pool properties that only exist for Meteora DAMM v2 (cp-amm).
+ *
+ * `protocolFeePercent` / `partnerFeePercent` / `referralFeePercent` are the
+ * *configured* split of the trading fee (whole percents, 0..=100), read from
+ * the pool account — all three null together until yog-context resolves it.
+ * Distinct from the *realized* `protocolFees24hUsd` on the pool itself.
+ *
+ * `baseFeeKind` is how the base fee behaves over time — an opaque string
+ * ("constant" | "scheduler_linear" | "scheduler_exponential" |
+ * "rate_limiter") — and `hasDynamicFee` whether a volatility fee sits on top.
+ * Both decoded from the genesis fee config; null until InitializePool is
+ * indexed, or if the fee blob failed to decode.
+ *
+ * The two groups have different writers and either can land first, so a block
+ * with only one group filled is a normal state.
+ */
+export const MeteoraDammV2PropertiesSchema = z.object({
+  protocolFeePercent: FeePercent.nullable(),
+  partnerFeePercent: FeePercent.nullable(),
+  referralFeePercent: FeePercent.nullable(),
+  baseFeeKind: z.string().nullable(),
+  hasDynamicFee: z.boolean().nullable(),
+});
+
+/**
+ * `GET /api/pools/{address}` — everything in {@link PoolSchema}, plus the
+ * block of properties specific to the pool's own protocol.
+ *
+ * The shared fields are flattened server-side, so this extends the list schema
+ * rather than nesting it. The protocol block is keyed by protocol name and is
+ * **absent** (not null) when the pool belongs to another protocol, or has no
+ * resolved properties yet — hence `.optional()`.
+ */
+export const PoolDetailSchema = PoolSchema.extend({
+  meteoraDammV2: MeteoraDammV2PropertiesSchema.optional(),
+});
+
+export type PoolDetailResponse = z.infer<typeof PoolDetailSchema>;
