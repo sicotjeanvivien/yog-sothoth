@@ -1,7 +1,6 @@
 mod query;
 mod rows;
 
-use crate::repositories::helper::convert_string_to_pubkey;
 use crate::repositories::helper::{PageBuilder, map_sqlx_error, resolve_query_mode};
 use async_trait::async_trait;
 use query::{PaginatedPoolsQuery, build};
@@ -11,10 +10,7 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
-    domain::{
-        FeeTier, MeteoraDammV2PoolAccountProperties, Pool, PoolAccountResolver, PoolCatalog,
-        PoolCounts, PoolCursor, PoolListQuery, PoolRepository, Protocol,
-    },
+    domain::{FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository},
 };
 
 pub struct PgPoolRepository {
@@ -37,7 +33,9 @@ const FEE_TIER_LIMIT: i64 = 8;
 /// Convert a domain `fee_bps` (`rust_decimal::Decimal`) to the `BigDecimal`
 /// that NUMERIC binds to at the persistence boundary. Round-trips through the
 /// exact decimal string — never lossy for the small fee values we store.
-fn fee_bps_to_numeric(fee_bps: rust_decimal::Decimal) -> RepositoryResult<sqlx::types::BigDecimal> {
+pub(super) fn fee_bps_to_numeric(
+    fee_bps: rust_decimal::Decimal,
+) -> RepositoryResult<sqlx::types::BigDecimal> {
     sqlx::types::BigDecimal::from_str(&fee_bps.to_string())
         .map_err(|e| RepositoryError::Integrity(format!("invalid fee_bps decimal: {e}")))
 }
@@ -257,106 +255,5 @@ impl PoolCatalog for PgPoolRepository {
                 pool_count: r.pool_count,
             })
             .collect())
-    }
-}
-
-#[async_trait]
-impl PoolAccountResolver for PgPoolRepository {
-    /// The protocol predicate is **required**, not decorative — see the trait
-    /// doc. Joining the DAMM v2 satellite does not scope the query on its own:
-    /// "no satellite row yet" is one of the conditions that makes a pool a
-    /// candidate, and that is true of every pool of every other protocol,
-    /// forever. Only `p.protocol` excludes them.
-    async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT p.pool_address
-            FROM pools p
-            LEFT JOIN meteora_damm_v2_pool_properties props
-                   ON props.pool_address = p.pool_address
-            WHERE p.protocol = $2
-              AND (p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
-                OR props.pool_address           IS NULL
-                OR props.protocol_fee_percent   IS NULL
-                OR props.partner_fee_percent    IS NULL
-                OR props.referral_fee_percent   IS NULL)
-            ORDER BY p.first_seen_at
-            LIMIT $1
-            "#,
-            limit,
-            Protocol::MeteoraDammV2.as_str(),
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        rows.into_iter()
-            .map(|r| convert_string_to_pubkey(r.pool_address, "pool_address"))
-            .collect()
-    }
-
-    /// Two writes from one account read, in a single transaction.
-    ///
-    /// The atomicity is load-bearing, not defensive: committing the mints
-    /// without the percents (or the reverse) leaves a pool that
-    /// [`PoolAccountResolver::list_unresolved`] keeps re-proposing every cycle,
-    /// which is exactly the re-fetch loop migration 036 set out to remove.
-    ///
-    /// The satellite side is an upsert — unlike the columns it replaces, its row
-    /// is not created with the pool, so an `UPDATE` would silently do nothing on
-    /// first resolution. `ON CONFLICT` touches only the percents, leaving the
-    /// indexer-owned fee-shape columns alone.
-    async fn set_pool_account(
-        &self,
-        pool_address: &Pubkey,
-        properties: &MeteoraDammV2PoolAccountProperties,
-    ) -> RepositoryResult<()> {
-        let fee_bps = fee_bps_to_numeric(properties.fee_bps)?;
-        // u8 → i16 (SMALLINT) is always lossless.
-        let (protocol_pct, partner_pct, referral_pct) = (
-            i16::from(properties.protocol_fee_percent),
-            i16::from(properties.partner_fee_percent),
-            i16::from(properties.referral_fee_percent),
-        );
-
-        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
-
-        sqlx::query!(
-            r#"
-            UPDATE pools
-            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4
-            WHERE pool_address = $1
-            "#,
-            pool_address.to_string(),
-            properties.token_a_mint.to_string(),
-            properties.token_b_mint.to_string(),
-            fee_bps,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        sqlx::query!(
-            r#"
-            INSERT INTO meteora_damm_v2_pool_properties
-                (pool_address, protocol_fee_percent, partner_fee_percent,
-                 referral_fee_percent)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (pool_address) DO UPDATE
-                SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
-                    partner_fee_percent  = EXCLUDED.partner_fee_percent,
-                    referral_fee_percent = EXCLUDED.referral_fee_percent
-            "#,
-            pool_address.to_string(),
-            protocol_pct,
-            partner_pct,
-            referral_pct,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        tx.commit().await.map_err(map_sqlx_error)?;
-        Ok(())
     }
 }

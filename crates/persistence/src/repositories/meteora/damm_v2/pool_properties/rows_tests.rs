@@ -1,18 +1,18 @@
-//! Unit tests for `TryFrom<PoolPropertiesRow> for MeteoraDammV2PoolProperties`.
+//! Unit tests for
+//! `TryFrom<MeteoraDammV2PoolPropertiesRow> for MeteoraDammV2PoolProperties`.
 //!
 //! Pure parser tests, no DB. The percent tests here were previously in
 //! `pool/rows_tests.rs` and moved with the columns in migration 036 — the guard
-//! against a corrupt SMALLINT is the reason `percent_to_u8` exists, so it keeps
-//! its coverage.
+//! against a corrupt SMALLINT keeps its coverage.
 
 use yog_core::{RepositoryError, domain::MeteoraDammV2PoolProperties};
 
-use super::PoolPropertiesRow;
+use super::MeteoraDammV2PoolPropertiesRow;
 
 const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
 
-fn valid_row() -> PoolPropertiesRow {
-    PoolPropertiesRow {
+fn valid_row() -> MeteoraDammV2PoolPropertiesRow {
+    MeteoraDammV2PoolPropertiesRow {
         pool_address: VALID_POOL.into(),
         protocol_fee_percent: Some(20),
         partner_fee_percent: Some(0),
@@ -37,7 +37,7 @@ fn try_from_valid_row_maps_every_field() {
 
 #[test]
 fn try_from_null_fee_percents_maps_to_none() {
-    let row = PoolPropertiesRow {
+    let row = MeteoraDammV2PoolPropertiesRow {
         protocol_fee_percent: None,
         partner_fee_percent: None,
         referral_fee_percent: None,
@@ -54,7 +54,7 @@ fn try_from_null_fee_percents_maps_to_none() {
 /// first, so a row with only the fee shape — no percents — is a normal state.
 #[test]
 fn try_from_fee_shape_without_percents_converts() {
-    let row = PoolPropertiesRow {
+    let row = MeteoraDammV2PoolPropertiesRow {
         protocol_fee_percent: None,
         partner_fee_percent: None,
         referral_fee_percent: None,
@@ -73,7 +73,7 @@ fn try_from_fee_shape_without_percents_converts() {
 /// if we were already watching).
 #[test]
 fn try_from_percents_without_fee_shape_converts() {
-    let row = PoolPropertiesRow {
+    let row = MeteoraDammV2PoolPropertiesRow {
         base_fee_kind: None,
         has_dynamic_fee: None,
         ..valid_row()
@@ -86,7 +86,7 @@ fn try_from_percents_without_fee_shape_converts() {
 
 #[test]
 fn try_from_out_of_range_percent_returns_integrity() {
-    let row = PoolPropertiesRow {
+    let row = MeteoraDammV2PoolPropertiesRow {
         protocol_fee_percent: Some(-1),
         ..valid_row()
     };
@@ -100,7 +100,7 @@ fn try_from_out_of_range_percent_returns_integrity() {
 
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {
-    let row = PoolPropertiesRow {
+    let row = MeteoraDammV2PoolPropertiesRow {
         pool_address: "not-a-pubkey".into(),
         ..valid_row()
     };

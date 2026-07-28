@@ -20,10 +20,10 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolPropertiesRepository, PoolAccountResolver,
-    Protocol,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolAccountResolver,
+    MeteoraDammV2PoolPropertiesRepository, Protocol,
 };
-use yog_persistence::{PgMeteoraDammV2PoolPropertiesRepository, PgPoolRepository};
+use yog_persistence::PgMeteoraDammV2PoolPropertiesRepository;
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
@@ -63,8 +63,10 @@ fn account_properties() -> MeteoraDammV2PoolAccountProperties {
 #[sqlx::test]
 async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgPoolRepository::new(pool.clone());
-    let props_repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    // One Pg type, both traits: the enrichment queue + two-table write
+    // (MeteoraDammV2PoolAccountResolver) and the satellite's own read/write
+    // (MeteoraDammV2PoolPropertiesRepository).
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     repo.set_pool_account(&pk(1), &account_properties())
         .await
@@ -82,7 +84,7 @@ async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPoo
     assert_eq!(row.1, Some(Decimal::new(25, 0)));
 
     // …and the cp-amm percents on the satellite, created by the same call.
-    let props = props_repo
+    let props = repo
         .find_by_pool(&pk(1))
         .await
         .expect("find_by_pool failed")
@@ -97,7 +99,7 @@ async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPoo
 /// than a silent no-op — and the transaction must leave nothing behind.
 #[sqlx::test]
 async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
-    let repo = PgPoolRepository::new(pool.clone());
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     let result = repo.set_pool_account(&pk(99), &account_properties()).await;
 
@@ -115,12 +117,13 @@ async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
 async fn fee_config_and_percents_coexist_whichever_lands_first(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
     seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
-    let repo = PgPoolRepository::new(pool.clone());
-    let props_repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    // One Pg type, both traits: the enrichment queue + two-table write
+    // (MeteoraDammV2PoolAccountResolver) and the satellite's own read/write
+    // (MeteoraDammV2PoolPropertiesRepository).
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
     // Pool 1: indexer first (fee shape), then context (percents).
-    props_repo
-        .set_fee_config(&pk(1), "scheduler_linear", true)
+    repo.set_fee_config(&pk(1), "scheduler_linear", true)
         .await
         .expect("set_fee_config failed");
     repo.set_pool_account(&pk(1), &account_properties())
@@ -131,13 +134,12 @@ async fn fee_config_and_percents_coexist_whichever_lands_first(pool: PgPool) {
     repo.set_pool_account(&pk(2), &account_properties())
         .await
         .expect("set_pool_account failed");
-    props_repo
-        .set_fee_config(&pk(2), "scheduler_linear", true)
+    repo.set_fee_config(&pk(2), "scheduler_linear", true)
         .await
         .expect("set_fee_config failed");
 
     for addr in [pk(1), pk(2)] {
-        let props = props_repo
+        let props = repo
             .find_by_pool(&addr)
             .await
             .expect("find_by_pool failed")
@@ -160,7 +162,7 @@ async fn fee_config_and_percents_coexist_whichever_lands_first(pool: PgPool) {
 #[sqlx::test]
 async fn list_unresolved_returns_a_freshly_discovered_damm_v2_pool(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgPoolRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
 
     let unresolved = repo.list_unresolved(100).await.expect("query failed");
 
@@ -170,7 +172,7 @@ async fn list_unresolved_returns_a_freshly_discovered_damm_v2_pool(pool: PgPool)
 #[sqlx::test]
 async fn list_unresolved_drops_a_pool_once_its_account_is_resolved(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgPoolRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
 
     repo.set_pool_account(&pk(1), &account_properties())
         .await
@@ -194,7 +196,7 @@ async fn list_unresolved_never_returns_a_pool_of_another_protocol(pool: PgPool) 
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
     seed_pool(&pool, pk(2), Protocol::MeteoraDammV1, 2).await;
     seed_pool(&pool, pk(3), Protocol::MeteoraDammV2, 3).await;
-    let repo = PgPoolRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
 
     let unresolved = repo.list_unresolved(100).await.expect("query failed");
 
@@ -214,7 +216,7 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
         seed_pool(&pool, pk(seq as u8), Protocol::MeteoraDlmm, seq).await;
     }
     seed_pool(&pool, pk(50), Protocol::MeteoraDammV2, 99).await;
-    let repo = PgPoolRepository::new(pool);
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
 
     let unresolved = repo.list_unresolved(2).await.expect("query failed");
 
