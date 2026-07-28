@@ -12,8 +12,8 @@ use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
     domain::{
-        FeeTier, Pool, PoolAccountProperties, PoolAccountResolver, PoolCatalog, PoolCounts,
-        PoolCursor, PoolListQuery, PoolRepository,
+        FeeTier, MeteoraDammV2PoolAccountProperties, Pool, PoolAccountResolver, PoolCatalog,
+        PoolCounts, PoolCursor, PoolListQuery, PoolRepository,
     },
 };
 
@@ -93,24 +93,6 @@ impl PoolRepository for PgPoolRepository {
         .map_err(map_sqlx_error)?;
         Ok(())
     }
-
-    async fn set_fee_config(
-        &self,
-        pool_address: &Pubkey,
-        base_fee_kind: &str,
-        has_dynamic_fee: bool,
-    ) -> RepositoryResult<()> {
-        sqlx::query!(
-            r#"UPDATE pools SET base_fee_kind = $2, has_dynamic_fee = $3 WHERE pool_address = $1"#,
-            pool_address.to_string(),
-            base_fee_kind,
-            has_dynamic_fee,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -121,8 +103,6 @@ impl PoolCatalog for PgPoolRepository {
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
-                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,
-                   base_fee_kind, has_dynamic_fee,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = $1
@@ -164,8 +144,6 @@ impl PoolCatalog for PgPoolRepository {
             r#"
             SELECT pool_address, protocol, token_a_mint, token_b_mint,
                    fee_bps AS "fee_bps?: rust_decimal::Decimal",
-                   protocol_fee_percent, partner_fee_percent, referral_fee_percent,
-                   base_fee_kind, has_dynamic_fee,
                    first_seen_at, last_seen_at
             FROM pools
             WHERE pool_address = ANY($1::TEXT[])
@@ -284,15 +262,23 @@ impl PoolCatalog for PgPoolRepository {
 
 #[async_trait]
 impl PoolAccountResolver for PgPoolRepository {
+    /// Scoped to DAMM v2 without naming the protocol: the fee-split percents are
+    /// tested through the DAMM v2 satellite, so `JOIN pools` can only yield
+    /// DAMM v2 rows. A pool of any other protocol is structurally not a
+    /// candidate — see the trait doc for why that matters.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         let rows = sqlx::query!(
             r#"
-            SELECT pool_address
-            FROM pools
-            WHERE token_a_mint IS NULL OR token_b_mint IS NULL OR fee_bps IS NULL
-               OR protocol_fee_percent IS NULL OR partner_fee_percent IS NULL
-               OR referral_fee_percent IS NULL
-            ORDER BY first_seen_at
+            SELECT p.pool_address
+            FROM pools p
+            LEFT JOIN meteora_damm_v2_pool_properties props
+                   ON props.pool_address = p.pool_address
+            WHERE p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
+               OR props.pool_address           IS NULL
+               OR props.protocol_fee_percent   IS NULL
+               OR props.partner_fee_percent    IS NULL
+               OR props.referral_fee_percent   IS NULL
+            ORDER BY p.first_seen_at
             LIMIT $1
             "#,
             limit,
@@ -306,32 +292,68 @@ impl PoolAccountResolver for PgPoolRepository {
             .collect()
     }
 
+    /// Two writes from one account read, in a single transaction.
+    ///
+    /// The atomicity is load-bearing, not defensive: committing the mints
+    /// without the percents (or the reverse) leaves a pool that
+    /// [`PoolAccountResolver::list_unresolved`] keeps re-proposing every cycle,
+    /// which is exactly the re-fetch loop migration 036 set out to remove.
+    ///
+    /// The satellite side is an upsert — unlike the columns it replaces, its row
+    /// is not created with the pool, so an `UPDATE` would silently do nothing on
+    /// first resolution. `ON CONFLICT` touches only the percents, leaving the
+    /// indexer-owned fee-shape columns alone.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
-        properties: &PoolAccountProperties,
+        properties: &MeteoraDammV2PoolAccountProperties,
     ) -> RepositoryResult<()> {
         let fee_bps = fee_bps_to_numeric(properties.fee_bps)?;
         // u8 → i16 (SMALLINT) is always lossless.
+        let (protocol_pct, partner_pct, referral_pct) = (
+            i16::from(properties.protocol_fee_percent),
+            i16::from(properties.partner_fee_percent),
+            i16::from(properties.referral_fee_percent),
+        );
+
+        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
+
         sqlx::query!(
             r#"
             UPDATE pools
-            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4,
-                protocol_fee_percent = $5, partner_fee_percent = $6,
-                referral_fee_percent = $7
+            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4
             WHERE pool_address = $1
             "#,
             pool_address.to_string(),
             properties.token_a_mint.to_string(),
             properties.token_b_mint.to_string(),
             fee_bps,
-            i16::from(properties.protocol_fee_percent),
-            i16::from(properties.partner_fee_percent),
-            i16::from(properties.referral_fee_percent),
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(map_sqlx_error)?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO meteora_damm_v2_pool_properties
+                (pool_address, protocol_fee_percent, partner_fee_percent,
+                 referral_fee_percent)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (pool_address) DO UPDATE
+                SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
+                    partner_fee_percent  = EXCLUDED.partner_fee_percent,
+                    referral_fee_percent = EXCLUDED.referral_fee_percent
+            "#,
+            pool_address.to_string(),
+            protocol_pct,
+            partner_pct,
+            referral_pct,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.pool_address\n            FROM pools p\n            LEFT JOIN meteora_damm_v2_pool_properties props\n                   ON props.pool_address = p.pool_address\n            WHERE p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL\n               OR props.pool_address           IS NULL\n               OR props.protocol_fee_percent   IS NULL\n               OR props.partner_fee_percent    IS NULL\n               OR props.referral_fee_percent   IS NULL\n            ORDER BY p.first_seen_at\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b347dc0136db02fe8dc0be170db51642a8a1053f9a9180f07bafbd25f6b36da1"
+}
