@@ -3,13 +3,14 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use yog_core::domain::{
     AnnouncementLookup, EventFreshnessRepository, GlobalAnalyticsRepository,
-    MeteoraDammV2LiquidityEventFeed, MeteoraDammV2SwapEventFeed, NetworkStatusLookup,
-    PoolAnalyticsRepository, PoolCatalog, PoolCurrentStateLookup, SignalFeed, SignalRecord,
-    TokenMetadataLookup, TokenPriceLookup,
+    MeteoraDammV2LiquidityEventFeed, MeteoraDammV2PoolPropertiesRepository,
+    MeteoraDammV2SwapEventFeed, NetworkStatusLookup, PoolAnalyticsRepository, PoolCatalog,
+    PoolCurrentStateLookup, SignalFeed, SignalRecord, TokenMetadataLookup, TokenPriceLookup,
 };
 use yog_persistence::{
     Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
-    PgHealthChecker, PgMeteoraDammV2LiquidityEventRepository, PgMeteoraDammV2SwapEventRepository,
+    PgHealthChecker, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDammV2SwapEventRepository,
     PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
     PgPoolRepository, PgSignalRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
@@ -62,6 +63,9 @@ impl AppState {
 
         // ── Repositories ────────────────────────────────────────────────
         let pool_repo: Arc<dyn PoolCatalog> = Arc::new(PgPoolRepository::new(db_pool.clone()));
+        let pool_properties_repo: Arc<dyn MeteoraDammV2PoolPropertiesRepository> = Arc::new(
+            PgMeteoraDammV2PoolPropertiesRepository::new(db_pool.clone()),
+        );
         let global_analytics_repo: Arc<dyn GlobalAnalyticsRepository> =
             Arc::new(PgGlobalAnalyticsRepository::new(db_pool.clone()));
         let pool_current_state_repo: Arc<dyn PoolCurrentStateLookup> =
@@ -102,6 +106,7 @@ impl AppState {
                 token_metadata_repo.clone(),
                 token_price_repo.clone(),
                 signal_repo.clone(),
+                pool_properties_repo,
             )),
             swap_service: Arc::new(MeteoraDammV2SwapService::new(swap_event_repo)),
             liquidity_service: Arc::new(MeteoraDammV2LiquidityService::new(liquidity_event_repo)),

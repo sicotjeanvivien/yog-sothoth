@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::{Pool, PoolAnalytics, SignalRecord};
+use yog_core::domain::{MeteoraDammV2PoolProperties, Pool, PoolAnalytics, SignalRecord};
 
 use crate::{
-    application::{EnrichedPool, EnrichedToken},
+    application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken},
     http::dto::EmbeddedTokenResponse,
 };
 
@@ -53,20 +53,10 @@ pub(crate) struct PoolResponse {
     /// Base trading fee in basis points (genesis fee tier). `None` until the
     /// pool's `InitializePool` event has been indexed.
     pub(crate) fee_bps: Option<Decimal>,
-    /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's,
-    /// a partner's, and a referrer's cut of the trading fee. `None` until
-    /// yog-context resolves the pool account.
-    pub(crate) protocol_fee_percent: Option<u8>,
-    pub(crate) partner_fee_percent: Option<u8>,
-    pub(crate) referral_fee_percent: Option<u8>,
-    /// How the base fee behaves over time — an opaque per-protocol string
-    /// (`constant`, `scheduler_linear`, `scheduler_exponential`,
-    /// `rate_limiter`). `None` until the pool's `InitializePool` event is
-    /// indexed (or if the fee blob failed to decode).
-    pub(crate) base_fee_kind: Option<String>,
-    /// Whether a volatility-based dynamic fee sits on top of the base fee.
-    /// `None` until decoded.
-    pub(crate) has_dynamic_fee: Option<bool>,
+    // NOTE: the cp-amm fee properties (fee-split percents, fee shape) are NOT
+    // here. They are protocol-specific, and only the pool *detail* sheet shows
+    // them — see `PoolDetailResponse`. Keeping them on the list payload would
+    // put one protocol's vocabulary in every protocol's row.
     pub(crate) tvl_usd: Option<Decimal>,
     pub(crate) volume_24h_usd: Option<Decimal>,
     /// Realized trading fee over the last 24h (USD), and its split: Meteora's
@@ -117,11 +107,6 @@ impl PoolResponse {
             token_a,
             token_b,
             fee_bps: pool.fee_bps,
-            protocol_fee_percent: pool.protocol_fee_percent,
-            partner_fee_percent: pool.partner_fee_percent,
-            referral_fee_percent: pool.referral_fee_percent,
-            base_fee_kind: pool.base_fee_kind,
-            has_dynamic_fee: pool.has_dynamic_fee,
             tvl_usd: analytics.tvl_usd,
             volume_24h_usd: analytics.volume_24h_usd,
             fees_24h_usd: analytics.fees_24h_usd,
@@ -157,6 +142,71 @@ impl From<EnrichedPool> for PoolResponse {
             e.analytics,
             e.recent_signals,
         )
+    }
+}
+
+/// The pool detail sheet: everything in [`PoolResponse`], plus the properties
+/// that only exist for the pool's own protocol.
+///
+/// Flattened on the wire, so the shared fields stay at the top level exactly as
+/// on the list — a client can parse a detail payload with the list schema and
+/// simply ignore the extra block.
+///
+/// The protocol block is named after its protocol rather than tagged, so adding
+/// DLMM later means adding a sibling field (`meteoraDlmm`) and no change to the
+/// existing one. `None` when the pool has no satellite row yet: discovered, but
+/// neither enriched by yog-context nor seen at genesis.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PoolDetailResponse {
+    #[serde(flatten)]
+    pub(crate) pool: PoolResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) meteora_damm_v2: Option<MeteoraDammV2PropertiesResponse>,
+}
+
+/// DAMM v2-only pool properties (migration 036's satellite table).
+///
+/// Every field is independently optional: the fee-split percents are resolved
+/// by yog-context from the on-chain account, the fee shape is decoded from the
+/// genesis `InitializePool` event, and either group can be present without the
+/// other.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MeteoraDammV2PropertiesResponse {
+    /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's,
+    /// a partner's, and a referrer's cut of the trading fee.
+    pub(crate) protocol_fee_percent: Option<u8>,
+    pub(crate) partner_fee_percent: Option<u8>,
+    pub(crate) referral_fee_percent: Option<u8>,
+    /// How the base fee behaves over time: `constant`, `scheduler_linear`,
+    /// `scheduler_exponential` or `rate_limiter`. `None` if the genesis event
+    /// was never seen, or if its fee blob failed to decode.
+    pub(crate) base_fee_kind: Option<String>,
+    /// Whether a volatility-based dynamic fee sits on top of the base fee.
+    pub(crate) has_dynamic_fee: Option<bool>,
+}
+
+impl From<MeteoraDammV2PoolProperties> for MeteoraDammV2PropertiesResponse {
+    fn from(p: MeteoraDammV2PoolProperties) -> Self {
+        Self {
+            protocol_fee_percent: p.protocol_fee_percent,
+            partner_fee_percent: p.partner_fee_percent,
+            referral_fee_percent: p.referral_fee_percent,
+            base_fee_kind: p.base_fee_kind,
+            has_dynamic_fee: p.has_dynamic_fee,
+        }
+    }
+}
+
+impl From<EnrichedPoolDetail> for PoolDetailResponse {
+    fn from(d: EnrichedPoolDetail) -> Self {
+        Self {
+            pool: PoolResponse::from(d.pool),
+            meteora_damm_v2: d
+                .meteora_damm_v2_properties
+                .map(MeteoraDammV2PropertiesResponse::from),
+        }
     }
 }
 

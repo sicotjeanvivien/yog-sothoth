@@ -47,7 +47,32 @@ fn service_with_signals(
         Arc::new(metadata),
         Arc::new(price),
         Arc::new(signals),
+        Arc::new(MockPoolPropertiesRepo),
     )
+}
+
+/// The DAMM v2 satellite is not what these tests exercise: they cover the
+/// enrichment pipeline (tokens, analytics, signals). An empty satellite is the
+/// realistic default anyway — most pools have no row until yog-context or a
+/// genesis event fills one.
+struct MockPoolPropertiesRepo;
+
+#[async_trait::async_trait]
+impl yog_core::domain::MeteoraDammV2PoolPropertiesRepository for MockPoolPropertiesRepo {
+    async fn set_fee_config(
+        &self,
+        _: &solana_pubkey::Pubkey,
+        _: &str,
+        _: bool,
+    ) -> yog_core::RepositoryResult<()> {
+        unreachable!("write side belongs to the indexer, never called by the api")
+    }
+    async fn find_by_pool(
+        &self,
+        _: &solana_pubkey::Pubkey,
+    ) -> yog_core::RepositoryResult<Option<yog_core::domain::MeteoraDammV2PoolProperties>> {
+        Ok(None)
+    }
 }
 
 fn default_params() -> PoolListQuery {
@@ -205,7 +230,7 @@ async fn get_pool_returns_none_for_unknown_pool() {
         MockPriceRepo::empty(),
     );
 
-    assert!(svc.get_pool(&pk(99)).await.unwrap().is_none());
+    assert!(svc.get_pool_detail(&pk(99)).await.unwrap().is_none());
 }
 
 #[tokio::test]
@@ -222,7 +247,8 @@ async fn get_pool_enriches_found_pool() {
         MockPriceRepo::empty(),
     );
 
-    let enriched = svc.get_pool(&addr).await.unwrap().unwrap();
+    let detail = svc.get_pool_detail(&addr).await.unwrap().unwrap();
+    let enriched = detail.pool;
     assert_eq!(enriched.pool.pool_address, addr);
     assert_eq!(
         enriched.token_a.metadata.as_ref().unwrap().symbol,
@@ -447,7 +473,7 @@ async fn get_pool_attaches_analytics_correctly() {
         MockPriceRepo::empty(),
     );
 
-    let enriched = svc.get_pool(&addr).await.unwrap().unwrap();
+    let enriched = svc.get_pool_detail(&addr).await.unwrap().unwrap().pool;
     assert_eq!(
         enriched.analytics.tvl_usd,
         Some(rust_decimal::Decimal::new(2000, 0))
