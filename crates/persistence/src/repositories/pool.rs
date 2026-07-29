@@ -11,7 +11,7 @@ use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
     domain::{
-        FeeTier, Pool, PoolAccountCore, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery,
+        FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRegistryProperties,
         PoolRepository,
     },
 };
@@ -92,10 +92,10 @@ impl PoolRepository for PgPoolRepository {
     /// One statement, so the properties and the flag can never disagree: either
     /// the refreshed values and the lowered flag both commit, or neither does
     /// and the pool is proposed again next cycle.
-    async fn set_account_core(
+    async fn set_registry_properties(
         &self,
         pool_address: &Pubkey,
-        core: &PoolAccountCore,
+        core: &PoolRegistryProperties,
     ) -> RepositoryResult<()> {
         let fee_bps = fee_bps_to_numeric(core.fee_bps)?;
         sqlx::query!(

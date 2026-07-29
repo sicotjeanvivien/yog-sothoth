@@ -77,7 +77,7 @@ pub struct MeteoraDammV2PoolProperties {
 ///
 /// Every field here lands on **this protocol's satellite and nowhere else**. The
 /// neutral half of the same account read — the mints and the base fee, which
-/// every protocol has — travels as [`crate::domain::PoolAccountCore`] and is
+/// every protocol has — travels as [`crate::domain::PoolRegistryProperties`] and is
 /// written by the `pools` registry's own repository. That separation is what
 /// gives each table a single writer.
 #[derive(Debug, Clone, PartialEq, Eq)]

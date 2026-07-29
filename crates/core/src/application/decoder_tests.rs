@@ -87,9 +87,9 @@ fn decodes_cp_amm_fields_at_their_offsets() {
 
     assert_eq!(decoded.protocol(), Protocol::MeteoraDammV2);
     // The neutral half — what the `pools` registry stores.
-    assert_eq!(decoded.core.token_a_mint, pk(2));
-    assert_eq!(decoded.core.token_b_mint, pk(3));
-    assert_eq!(decoded.core.fee_bps, Decimal::new(25, 0));
+    assert_eq!(decoded.registry.token_a_mint, pk(2));
+    assert_eq!(decoded.registry.token_b_mint, pk(3));
+    assert_eq!(decoded.registry.fee_bps, Decimal::new(25, 0));
     // …and the cp-amm half, which goes to this protocol's satellite.
     let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties;
     assert_eq!(props.protocol_fee_percent, 20);
@@ -176,9 +176,13 @@ fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
 
     let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("must still decode");
 
-    assert_eq!(decoded.core.token_a_mint, pk(2), "the mints must survive");
     assert_eq!(
-        decoded.core.fee_bps,
+        decoded.registry.token_a_mint,
+        pk(2),
+        "the mints must survive"
+    );
+    assert_eq!(
+        decoded.registry.fee_bps,
         Decimal::new(25, 0),
         "the tier must survive"
     );

@@ -180,13 +180,13 @@ impl PoolAccountWorker {
 
             match self
                 .pool_repository
-                .set_account_core(&account.pool_address, &decoded_account.core)
+                .set_registry_properties(&account.pool_address, &decoded_account.registry)
                 .await
             {
                 Ok(()) => ok += 1,
                 Err(e) => {
                     warn!(protocol = %protocol, pool = %account.pool_address, error = %e,
-                          "pool-account worker: set_account_core failed")
+                          "pool-account worker: set_registry_properties failed")
                 }
             }
         }

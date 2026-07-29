@@ -13,8 +13,8 @@ use yog_core::RepositoryResult;
 use yog_core::amm::damm_v2::BaseFeeKind;
 
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, PoolAccountCore, PoolAccountProperties,
-    PoolAccountResolver, PoolRepository, Protocol,
+    MeteoraDammV2PoolAccountProperties, PoolAccountProperties, PoolAccountResolver,
+    PoolRegistryProperties, PoolRepository, Protocol,
 };
 
 use crate::error::SourceError;
@@ -51,8 +51,8 @@ fn expected_properties() -> PoolAccountProperties {
     })
 }
 
-fn expected_core(token_a: Pubkey, token_b: Pubkey) -> PoolAccountCore {
-    PoolAccountCore {
+fn expected_core(token_a: Pubkey, token_b: Pubkey) -> PoolRegistryProperties {
+    PoolRegistryProperties {
         token_a_mint: token_a,
         token_b_mint: token_b,
         fee_bps: Decimal::new(25, 0),
@@ -66,7 +66,7 @@ type Journal = Arc<Mutex<Vec<Write>>>;
 #[derive(Debug, PartialEq, Eq)]
 enum Write {
     Satellite(Pubkey, PoolAccountProperties),
-    Registry(Pubkey, PoolAccountCore),
+    Registry(Pubkey, PoolRegistryProperties),
 }
 
 #[derive(Default)]
@@ -120,15 +120,15 @@ impl PoolRepository for FakePoolRepo {
     async fn mark_needs_refresh(&self, _: &Pubkey) -> RepositoryResult<()> {
         unreachable!("raising the flag is the indexer's job, never this worker's")
     }
-    async fn set_account_core(
+    async fn set_registry_properties(
         &self,
         pool: &Pubkey,
-        core: &PoolAccountCore,
+        registry: &PoolRegistryProperties,
     ) -> RepositoryResult<()> {
         self.journal
             .lock()
             .unwrap()
-            .push(Write::Registry(*pool, core.clone()));
+            .push(Write::Registry(*pool, registry.clone()));
         Ok(())
     }
 }

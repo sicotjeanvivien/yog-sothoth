@@ -54,7 +54,7 @@ pub use meteora::{
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use pool::{FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository};
 pub use pool_account::{
-    DecodedPoolAccount, PoolAccountCore, PoolAccountProperties, PoolAccountResolver,
+    DecodedPoolAccount, PoolAccountProperties, PoolAccountResolver, PoolRegistryProperties,
 };
 pub use pool_analytics::{
     PoolAnalytics, PoolAnalyticsRepository, PoolHistoryBucket, PoolRankMetric,

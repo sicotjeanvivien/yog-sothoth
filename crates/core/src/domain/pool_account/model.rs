@@ -3,21 +3,24 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::{MeteoraDammV2PoolAccountProperties, Protocol};
 
-/// The properties every protocol's pool account yields, in the vocabulary the
-/// neutral [`crate::domain::Pool`] registry speaks.
+/// The half of a pool account that belongs to the cross-protocol `pools`
+/// registry.
 ///
-/// A token pair and a base fee are not cp-amm concepts — a DLMM `LbPair` has
-/// both, read at its own offsets — so they belong to the registry, not to a
-/// protocol's satellite. Keeping them in their own type is what lets each table
-/// have exactly one writer: this goes to
-/// [`crate::domain::PoolRepository::set_account_core`], the rest to that
-/// protocol's resolver.
+/// **Named by its destination, not by its content.** A token pair and a base fee
+/// are not cp-amm concepts — a DLMM `LbPair` has both, read at its own offsets —
+/// so they land on the registry rather than on any protocol's satellite. Giving
+/// them their own type is what lets each table have exactly one writer: this goes
+/// to [`crate::domain::PoolRepository::set_registry_properties`], the rest to
+/// that protocol's resolver.
+///
+/// Reads as the counterpart of [`PoolAccountProperties`]: registry properties vs
+/// satellite properties, both from the same account.
 ///
 /// Total, not partial: it is what a *successful* account read produces. The
 /// nullability of the matching `pools` columns describes rows that have not been
 /// read yet, which is a different fact.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoolAccountCore {
+pub struct PoolRegistryProperties {
     pub token_a_mint: Pubkey,
     pub token_b_mint: Pubkey,
     /// Base trading fee in basis points (genesis cliff for a scheduler pool).
@@ -34,7 +37,7 @@ pub struct PoolAccountCore {
 ///
 /// Consumed by [`PoolAccountResolver::set_pool_account`], which matches on it to
 /// pick the table that knows how to store it. The neutral half of the same
-/// account read travels separately, as [`PoolAccountCore`].
+/// account read travels separately, as [`PoolRegistryProperties`].
 ///
 /// [`PoolAccountResolver::set_pool_account`]: super::PoolAccountResolver::set_pool_account
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +66,9 @@ impl PoolAccountProperties {
 /// Produced by [`crate::application::decode_pool_account`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodedPoolAccount {
-    pub core: PoolAccountCore,
+    /// Goes to the cross-protocol `pools` registry.
+    pub registry: PoolRegistryProperties,
+    /// Goes to this protocol's satellite.
     pub properties: PoolAccountProperties,
 }
 

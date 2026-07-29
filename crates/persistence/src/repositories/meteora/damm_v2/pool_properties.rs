@@ -165,7 +165,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     /// One write, to this satellite only.
     ///
     /// The neutral columns of the same account read go through
-    /// [`yog_core::domain::PoolRepository::set_account_core`] — one table, one
+    /// [`yog_core::domain::PoolRepository::set_registry_properties`] — one table, one
     /// writer. The caller sequences the two: **this first, the registry last**,
     /// because the registry write is what lowers `pools.needs_refresh`. A failure
     /// here therefore leaves the flag raised and the pool queued, rather than

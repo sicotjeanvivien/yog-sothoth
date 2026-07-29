@@ -175,12 +175,12 @@ impl PoolRepository for MockPoolRepo {
     }
     /// Never called from this crate: the registry's account-derived columns are
     /// written by yog-context alone. Present only to satisfy the trait.
-    async fn set_account_core(
+    async fn set_registry_properties(
         &self,
         _: &Pubkey,
-        _: &yog_core::domain::PoolAccountCore,
+        _: &yog_core::domain::PoolRegistryProperties,
     ) -> RepositoryResult<()> {
-        unreachable!("set_account_core belongs to yog-context, never the indexer")
+        unreachable!("set_registry_properties belongs to yog-context, never the indexer")
     }
 }
 

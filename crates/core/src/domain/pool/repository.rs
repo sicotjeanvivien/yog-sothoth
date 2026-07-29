@@ -6,7 +6,7 @@ use crate::tools::Page;
 use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
 use crate::{
     RepositoryResult,
-    domain::{Pool, PoolAccountCore},
+    domain::{Pool, PoolRegistryProperties},
 };
 
 /// Cursor identifying a position in a pool ordering.
@@ -149,15 +149,15 @@ pub trait PoolRepository: Send + Sync {
     /// A no-op if the pool row does not exist. Idempotent.
     ///
     /// [`mark_needs_refresh`]: Self::mark_needs_refresh
-    async fn set_account_core(
+    async fn set_registry_properties(
         &self,
         pool_address: &Pubkey,
-        core: &PoolAccountCore,
+        core: &PoolRegistryProperties,
     ) -> RepositoryResult<()>;
 
     // NOTE: `set_fee_bps` used to live here, writing the base fee decoded from a
     // genesis or fee-update event. It went with the indexer's property writes:
-    // `fee_bps` now reaches `pools` only through `set_account_core`, from the
+    // `fee_bps` now reaches `pools` only through `set_registry_properties`, from the
     // account. The column itself stays on `pools` — a base fee in bps is
     // genuinely cross-protocol, and it is a read surface (fee-tier filter,
     // `PoolCatalog::list_fee_tiers`).

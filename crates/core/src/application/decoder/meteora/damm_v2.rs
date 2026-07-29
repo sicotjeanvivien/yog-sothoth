@@ -53,8 +53,8 @@ use solana_pubkey::Pubkey;
 use crate::amm::damm_v2::fee_numerator_to_bps;
 use crate::application::decoder::PoolAccountRejection;
 use crate::domain::{
-    DecodedPoolAccount, MeteoraDammV2PoolAccountProperties, PoolAccountCore, PoolAccountProperties,
-    Protocol,
+    DecodedPoolAccount, MeteoraDammV2PoolAccountProperties, PoolAccountProperties,
+    PoolRegistryProperties, Protocol,
 };
 
 /// Anchor account discriminator for the cp-amm `Pool` account
@@ -151,7 +151,7 @@ pub(in crate::application::decoder) fn decode_pool_account(
     );
 
     Ok(DecodedPoolAccount {
-        core: PoolAccountCore {
+        registry: PoolRegistryProperties {
             token_a_mint: Pubkey::try_from(&data[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32])
                 .expect("32 bytes, length checked above"),
             token_b_mint: Pubkey::try_from(&data[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32])

@@ -21,8 +21,8 @@ use sqlx::PgPool;
 
 use yog_core::amm::damm_v2::BaseFeeKind;
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties, PoolAccountCore,
-    PoolAccountProperties, PoolAccountResolver, PoolProperties, PoolPropertiesLookup,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties, PoolAccountProperties,
+    PoolAccountResolver, PoolProperties, PoolPropertiesLookup, PoolRegistryProperties,
     PoolRepository, Protocol,
 };
 use yog_persistence::{PgMeteoraDammV2PoolPropertiesRepository, PgPoolRepository};
@@ -75,8 +75,8 @@ fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties 
 }
 
 /// The neutral half — what the registry repository receives.
-fn account_core() -> PoolAccountCore {
-    PoolAccountCore {
+fn account_core() -> PoolRegistryProperties {
+    PoolRegistryProperties {
         token_a_mint: pk(10),
         token_b_mint: pk(11),
         fee_bps: Decimal::new(25, 0),
@@ -97,9 +97,9 @@ async fn resolve(
         .await
         .expect("set_pool_account failed");
     registry
-        .set_account_core(addr, &account_core())
+        .set_registry_properties(addr, &account_core())
         .await
-        .expect("set_account_core failed");
+        .expect("set_registry_properties failed");
 }
 
 // ── One account read, two owners ────────────────────────────────────
