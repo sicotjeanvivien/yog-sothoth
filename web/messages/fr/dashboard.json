@@ -161,6 +161,8 @@
           "schedulerLinear": "Scheduler (linéaire)",
           "schedulerExponential": "Scheduler (exponentiel)",
           "rateLimiter": "Rate-limiter",
+          "marketCapSchedulerLinear": "Scheduler market-cap (linéaire)",
+          "marketCapSchedulerExponential": "Scheduler market-cap (exponentiel)",
           "dynamic": "Dynamique"
         },
         "analyticsTitle": "Analytique sur la pool",

@@ -15,6 +15,12 @@ const BASE_FEE_LEN: usize = 27;
 /// Byte offset, within the base-fee blob, of the `BaseFeeMode` discriminant.
 const BASE_FEE_MODE_OFFSET: usize = 26;
 
+/// Highest `BaseFeeMode` discriminant cp-amm defines: `FeeTimeSchedulerLinear`,
+/// `FeeTimeSchedulerExponential`, `RateLimiter`, `FeeMarketCapSchedulerLinear`,
+/// `FeeMarketCapSchedulerExponential`. Anything above is a mode the program
+/// gained after this was written — refused rather than guessed.
+const MAX_BASE_FEE_MODE: u8 = 4;
+
 /// Byte offset, within the base-fee blob, of the fee-scheduler period count
 /// (`number_of_period: u16`, little-endian). A count of zero means the base
 /// fee never moves — a *constant* fee — even under a scheduler mode; a
@@ -46,6 +52,11 @@ pub enum BaseFeeKind {
     /// deliberately not decoded — that layout reuses bytes 8..26 and has no
     /// captured fixture to validate against.
     RateLimiter,
+    /// Market-cap scheduler with linear decay (mode 3, `number_of_period > 0`).
+    MarketCapSchedulerLinear,
+    /// Market-cap scheduler with exponential decay (mode 4,
+    /// `number_of_period > 0`).
+    MarketCapSchedulerExponential,
 }
 
 impl BaseFeeKind {
@@ -57,8 +68,50 @@ impl BaseFeeKind {
             Self::SchedulerLinear => "scheduler_linear",
             Self::SchedulerExponential => "scheduler_exponential",
             Self::RateLimiter => "rate_limiter",
+            Self::MarketCapSchedulerLinear => "market_cap_scheduler_linear",
+            Self::MarketCapSchedulerExponential => "market_cap_scheduler_exponential",
         }
     }
+}
+
+/// Map a `BaseFeeMode` discriminant and a scheduler period count to the fee
+/// *shape*.
+///
+/// Shared by both sources of this pair, which read the same two quantities at
+/// **different offsets**: the genesis event's borsh blob (mode at 26, period
+/// count at 8) and the on-chain account's zero-copy struct (mode at 16, period
+/// count at 22). Only the offsets differ — the meaning does not, so the mapping
+/// lives here once rather than being restated per call site.
+///
+/// # Why the period count is part of the decision
+///
+/// The mode byte alone cannot tell a constant fee from a scheduler: every
+/// scheduler mode with `number_of_period == 0` never moves, and is therefore a
+/// constant fee. This holds for all four scheduler modes (0, 1, 3, 4), whose
+/// layouts all place `number_of_period` at the same spot within their variant.
+///
+/// **Mode 2 (rate limiter) is the exception** and must not consult it: its
+/// layout puts `fee_increment_bps` where the schedulers keep the period count,
+/// so the value passed in is meaningless for that arm.
+///
+/// Fails loud on an unrecognised discriminant — the caller decides whether that
+/// is fatal or merely leaves the shape unknown.
+pub fn base_fee_kind_from(mode: u8, number_of_period: u16) -> CoreResult<BaseFeeKind> {
+    Ok(match mode {
+        // Scheduler modes with no periods never move → a constant fee.
+        0 | 1 | 3 | 4 if number_of_period == 0 => BaseFeeKind::Constant,
+        0 => BaseFeeKind::SchedulerLinear,
+        1 => BaseFeeKind::SchedulerExponential,
+        // Rate limiter: `number_of_period` is not consulted — see above.
+        2 => BaseFeeKind::RateLimiter,
+        3 => BaseFeeKind::MarketCapSchedulerLinear,
+        4 => BaseFeeKind::MarketCapSchedulerExponential,
+        other => {
+            return Err(CoreError::FeeDecode {
+                reason: format!("unknown BaseFeeMode discriminant: {other}"),
+            });
+        }
+    })
 }
 
 /// The decodable shape of a pool's fee configuration.
@@ -108,7 +161,7 @@ pub fn decode_base_fee_bps(pool_fees_raw: &[u8]) -> CoreResult<Decimal> {
     }
 
     let mode = pool_fees_raw[BASE_FEE_MODE_OFFSET];
-    if mode > 2 {
+    if mode > MAX_BASE_FEE_MODE {
         return Err(CoreError::FeeDecode {
             reason: format!("unknown BaseFeeMode discriminant: {mode}"),
         });
@@ -159,20 +212,7 @@ pub fn decode_fee_config(pool_fees_raw: &[u8]) -> CoreResult<FeeConfig> {
         pool_fees_raw[NUMBER_OF_PERIOD_OFFSET + 1],
     ]);
 
-    let base_kind = match mode {
-        // Scheduler modes with no periods never move → a constant fee.
-        0 | 1 if number_of_period == 0 => BaseFeeKind::Constant,
-        0 => BaseFeeKind::SchedulerLinear,
-        1 => BaseFeeKind::SchedulerExponential,
-        // Rate limiter: bytes 8..26 mean something else here, so
-        // `number_of_period` above is not consulted for this arm.
-        2 => BaseFeeKind::RateLimiter,
-        other => {
-            return Err(CoreError::FeeDecode {
-                reason: format!("unknown BaseFeeMode discriminant: {other}"),
-            });
-        }
-    };
+    let base_kind = base_fee_kind_from(mode, number_of_period)?;
 
     let has_dynamic_fee = match pool_fees_raw[DYNAMIC_FEE_TAG_OFFSET] {
         0 => false,

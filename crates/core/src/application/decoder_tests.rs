@@ -9,9 +9,11 @@
 //! (`foreign_account_is_not_decoded_at_our_offsets`).
 
 use super::*;
+use crate::amm::damm_v2::BaseFeeKind;
 use crate::application::decoder::PoolAccountRejection;
 use crate::application::decoder::meteora::damm_v2::{
-    CLIFF_FEE_NUMERATOR_OFFSET, POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET,
+    BASE_FEE_MODE_OFFSET, CLIFF_FEE_NUMERATOR_OFFSET, DYNAMIC_FEE_INITIALIZED_OFFSET,
+    NUMBER_OF_PERIOD_OFFSET, POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET,
     REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET, TOKEN_B_MINT_OFFSET,
 };
 use crate::domain::PoolAccountProperties;
@@ -45,6 +47,22 @@ fn cp_amm_account(
     bytes[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32].copy_from_slice(token_a.as_ref());
     bytes[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32].copy_from_slice(token_b.as_ref());
     bytes
+}
+
+/// Overwrite the fee-shape bytes of an account buffer: `BaseFeeMode`, the
+/// scheduler period count, and the dynamic-fee flag.
+fn with_fee_shape(mut bytes: Vec<u8>, mode: u8, number_of_period: u16, dynamic: bool) -> Vec<u8> {
+    bytes[BASE_FEE_MODE_OFFSET] = mode;
+    bytes[NUMBER_OF_PERIOD_OFFSET..NUMBER_OF_PERIOD_OFFSET + 2]
+        .copy_from_slice(&number_of_period.to_le_bytes());
+    bytes[DYNAMIC_FEE_INITIALIZED_OFFSET] = u8::from(dynamic);
+    bytes
+}
+
+fn decode_shape(bytes: &[u8]) -> (Option<BaseFeeKind>, bool) {
+    let decoded = decode_pool_account(&cp_amm_owner(), bytes).expect("should decode");
+    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
+    (props.base_fee_kind, props.has_dynamic_fee)
 }
 
 fn cp_amm_owner() -> Pubkey {
@@ -88,6 +106,90 @@ fn padding_between_the_percents_is_not_decoded() {
     let PoolAccountProperties::MeteoraDammV2(props) = decoded;
     assert_eq!(props.protocol_fee_percent, 20, "byte 48 must be untouched");
     assert_eq!(props.referral_fee_percent, 20, "byte 50 must be untouched");
+}
+
+// ── Fee shape ───────────────────────────────────────────────────────
+
+/// Every `BaseFeeMode` cp-amm defines, including the two market-cap schedulers.
+///
+/// The period count is what separates a constant fee from a decaying one, so
+/// each scheduler mode is asserted **both ways** — the mode byte alone is not
+/// the answer.
+#[test]
+fn every_base_fee_mode_maps_to_its_kind() {
+    let base = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+
+    for (mode, periods, expected) in [
+        (0u8, 0u16, BaseFeeKind::Constant),
+        (0, 12, BaseFeeKind::SchedulerLinear),
+        (1, 0, BaseFeeKind::Constant),
+        (1, 12, BaseFeeKind::SchedulerExponential),
+        (3, 0, BaseFeeKind::Constant),
+        (3, 12, BaseFeeKind::MarketCapSchedulerLinear),
+        (4, 0, BaseFeeKind::Constant),
+        (4, 12, BaseFeeKind::MarketCapSchedulerExponential),
+    ] {
+        let data = with_fee_shape(base.clone(), mode, periods, false);
+        assert_eq!(
+            decode_shape(&data).0,
+            Some(expected),
+            "mode {mode} with {periods} periods"
+        );
+    }
+}
+
+/// The rate limiter is the one mode that must **not** consult the period count:
+/// its layout puts `fee_increment_bps` at those bytes. A non-zero value there is
+/// therefore meaningless, and must not turn it into a "constant" fee.
+#[test]
+fn the_rate_limiter_ignores_the_period_count() {
+    let base = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+
+    for bytes_at_period_offset in [0u16, 250] {
+        let data = with_fee_shape(base.clone(), 2, bytes_at_period_offset, false);
+        assert_eq!(decode_shape(&data).0, Some(BaseFeeKind::RateLimiter));
+    }
+}
+
+/// **The starvation guard.** An unknown `BaseFeeMode` — a mode cp-amm adds after
+/// this build — must cost the fee shape and *nothing else*: the account still
+/// decodes, so the mints and the fee tier still land.
+///
+/// Rejecting the account instead would strand the pool in
+/// `list_unresolved` forever, and since that queue is ordered by `first_seen_at`
+/// and capped, such pools would accumulate at its head and starve every pool
+/// behind them.
+#[test]
+fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
+    let data = with_fee_shape(
+        cp_amm_account(2_500_000, (20, 20), pk(2), pk(3)),
+        99,
+        0,
+        true,
+    );
+
+    let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("must still decode");
+
+    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
+    assert_eq!(props.base_fee_kind, None, "the unmappable mode yields None");
+    assert!(props.has_dynamic_fee, "the flag is independent of the mode");
+    assert_eq!(props.token_a_mint, pk(2), "the mints must survive");
+    assert_eq!(props.fee_bps, Decimal::new(25, 0), "the tier must survive");
+}
+
+/// `dynamic_fee.initialized` is a flag, not a borsh `Option` tag: any non-zero
+/// value means enabled. It sits at a fixed offset, so unlike the genesis blob it
+/// cannot move with what precedes it.
+#[test]
+fn the_dynamic_fee_flag_is_any_non_zero_byte() {
+    let base = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+
+    assert!(!decode_shape(&with_fee_shape(base.clone(), 0, 0, false)).1);
+    assert!(decode_shape(&with_fee_shape(base.clone(), 0, 0, true)).1);
+
+    let mut odd = with_fee_shape(base, 0, 0, false);
+    odd[DYNAMIC_FEE_INITIALIZED_OFFSET] = 7;
+    assert!(decode_shape(&odd).1, "non-zero is enabled, not just 1");
 }
 
 // ── The two guards ──────────────────────────────────────────────────

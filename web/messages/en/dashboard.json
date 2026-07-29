@@ -159,6 +159,8 @@
           "schedulerLinear": "Scheduler (linear)",
           "schedulerExponential": "Scheduler (exponential)",
           "rateLimiter": "Rate limiter",
+          "marketCapSchedulerLinear": "Market-cap scheduler (linear)",
+          "marketCapSchedulerExponential": "Market-cap scheduler (exponential)",
           "dynamic": "Dynamic"
         },
         "feeSplitProtocol": "Protocol",

@@ -2,6 +2,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
+use crate::amm::damm_v2::BaseFeeKind;
+
 /// Pool properties that only exist for DAMM v2 — the per-protocol satellite of
 /// the cross-protocol [`crate::domain::Pool`] registry.
 ///
@@ -92,4 +94,21 @@ pub struct MeteoraDammV2PoolAccountProperties {
     /// from (migration 037).
     pub protocol_fee_percent: u8,
     pub referral_fee_percent: u8,
+
+    /// How the base fee behaves over time, from the account's `BaseFeeMode`
+    /// discriminant and scheduler period count.
+    ///
+    /// **The only optional field of this otherwise-total type**, and
+    /// deliberately so. cp-amm can gain a `BaseFeeMode` we do not know; refusing
+    /// the whole account in that case would drop the mints and the fee tier with
+    /// it, and — since a pool that never resolves never leaves
+    /// [`crate::domain::PoolAccountResolver::list_unresolved`] — it would sit at
+    /// the head of the queue forever, starving every pool behind it. An unknown
+    /// mode therefore costs this one field and nothing else.
+    pub base_fee_kind: Option<BaseFeeKind>,
+
+    /// Whether a volatility-based dynamic fee is enabled, from
+    /// `DynamicFeeStruct::initialized`. Always decodable — it is a flag byte at
+    /// a fixed offset, with no mode to recognise and no tri-state to resolve.
+    pub has_dynamic_fee: bool,
 }

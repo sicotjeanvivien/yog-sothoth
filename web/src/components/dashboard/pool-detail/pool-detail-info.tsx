@@ -113,6 +113,12 @@ export async function PoolDetailInfo({
                     scheduler_linear: t("feeKind.schedulerLinear"),
                     scheduler_exponential: t("feeKind.schedulerExponential"),
                     rate_limiter: t("feeKind.rateLimiter"),
+                    market_cap_scheduler_linear: t(
+                      "feeKind.marketCapSchedulerLinear",
+                    ),
+                    market_cap_scheduler_exponential: t(
+                      "feeKind.marketCapSchedulerExponential",
+                    ),
                   },
                   dynamic: t("feeKind.dynamic"),
                 }}
