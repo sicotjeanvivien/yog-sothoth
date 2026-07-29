@@ -104,7 +104,7 @@ top level**, plus one optional block named after the pool's protocol:
 
   // Present only for a DAMM v2 pool that has resolved properties.
   "meteoraDammV2": {
-    "protocolFeePercent": 20, "partnerFeePercent": 0, "referralFeePercent": 20,
+    "protocolFeePercent": 20, "referralFeePercent": 20,
     "baseFeeKind": "constant", "hasDynamicFee": false
   }
 }

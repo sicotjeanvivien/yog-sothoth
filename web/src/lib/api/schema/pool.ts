@@ -102,10 +102,13 @@ export type PoolResponse = z.infer<typeof PoolSchema>;
 /**
  * Pool properties that only exist for Meteora DAMM v2 (cp-amm).
  *
- * `protocolFeePercent` / `partnerFeePercent` / `referralFeePercent` are the
- * *configured* split of the trading fee (whole percents, 0..=100), read from
- * the pool account — all three null together until yog-context resolves it.
- * Distinct from the *realized* `protocolFees24hUsd` on the pool itself.
+ * `protocolFeePercent` / `referralFeePercent` are the *configured* split of the
+ * trading fee (whole percents, 0..=100), read from the pool account — both null
+ * together until yog-context resolves it. Distinct from the *realized*
+ * `protocolFees24hUsd` on the pool itself.
+ *
+ * There is no partner cut: `partnerFeePercent` was served until migration 037,
+ * decoded a padding byte of the account, and was always 0.
  *
  * `baseFeeKind` is how the base fee behaves over time — an opaque string
  * ("constant" | "scheduler_linear" | "scheduler_exponential" |
@@ -118,7 +121,6 @@ export type PoolResponse = z.infer<typeof PoolSchema>;
  */
 export const MeteoraDammV2PropertiesSchema = z.object({
   protocolFeePercent: FeePercent.nullable(),
-  partnerFeePercent: FeePercent.nullable(),
   referralFeePercent: FeePercent.nullable(),
   baseFeeKind: z.string().nullable(),
   hasDynamicFee: z.boolean().nullable(),

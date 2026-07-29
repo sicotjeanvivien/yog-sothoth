@@ -111,7 +111,6 @@ fn damm_v2_properties(addr: solana_pubkey::Pubkey) -> PoolProperties {
     PoolProperties::MeteoraDammV2(MeteoraDammV2PoolProperties {
         pool_address: addr,
         protocol_fee_percent: Some(20),
-        partner_fee_percent: None,
         referral_fee_percent: None,
         base_fee_kind: Some("constant".to_string()),
         has_dynamic_fee: Some(false),

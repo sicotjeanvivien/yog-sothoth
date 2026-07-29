@@ -12,7 +12,6 @@ use crate::repositories::helper::{convert_i16_to_u8, convert_string_to_pubkey};
 pub(super) struct MeteoraDammV2PoolPropertiesRow {
     pub(super) pool_address: String,
     pub(super) protocol_fee_percent: Option<i16>,
-    pub(super) partner_fee_percent: Option<i16>,
     pub(super) referral_fee_percent: Option<i16>,
     pub(super) base_fee_kind: Option<String>,
     pub(super) has_dynamic_fee: Option<bool>,
@@ -32,7 +31,6 @@ impl TryFrom<MeteoraDammV2PoolPropertiesRow> for MeteoraDammV2PoolProperties {
         Ok(MeteoraDammV2PoolProperties {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             protocol_fee_percent: percent(row.protocol_fee_percent, "protocol_fee_percent")?,
-            partner_fee_percent: percent(row.partner_fee_percent, "partner_fee_percent")?,
             referral_fee_percent: percent(row.referral_fee_percent, "referral_fee_percent")?,
             base_fee_kind: row.base_fee_kind,
             has_dynamic_fee: row.has_dynamic_fee,

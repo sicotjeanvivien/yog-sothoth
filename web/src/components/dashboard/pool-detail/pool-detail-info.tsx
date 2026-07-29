@@ -10,7 +10,7 @@
  *   - Pool address  (full, copy-friendly)
  *   - Protocol      (display label)
  *   - Fee tier      (base trading fee, `—` until InitializePool indexed)
- *   - Fee split     (configured protocol/partner/referral percents)
+ *   - Fee split     (configured protocol/referral percents)
  *   - Network       (hardcoded "Solana" while we only index Solana)
  *   - Token A      (symbol + truncated mint + copy)
  *   - Token B      (symbol + truncated mint + copy)
@@ -123,11 +123,9 @@ export async function PoolDetailInfo({
               <span>
                 {formatFeeSplit(
                   pool.meteoraDammV2?.protocolFeePercent ?? null,
-                  pool.meteoraDammV2?.partnerFeePercent ?? null,
                   pool.meteoraDammV2?.referralFeePercent ?? null,
                   {
                     protocol: t("feeSplitProtocol"),
-                    partner: t("feeSplitPartner"),
                     referral: t("feeSplitReferral"),
                   },
                 )}

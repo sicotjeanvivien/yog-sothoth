@@ -37,10 +37,9 @@ pub struct MeteoraDammV2PoolProperties {
     /// from the on-chain `Pool` account. `None` until yog-context resolves it.
     pub protocol_fee_percent: Option<u8>,
 
-    /// A partner's cut of the trading fee, as a whole percent (0..=100), decoded
-    /// from the on-chain `Pool` account (often 0). `None` until resolved.
-    pub partner_fee_percent: Option<u8>,
-
+    // NOTE: there is no partner fee. A `partner_fee_percent` field lived here
+    // until migration 037; it decoded byte 49 of the account, which cp-amm
+    // declares as `padding_0`. See that migration for the evidence.
     /// A referrer's cut of the trading fee, as a whole percent (0..=100), decoded
     /// from the on-chain `Pool` account (only charged when a swap carries a
     /// referral account). `None` until resolved.
@@ -79,7 +78,7 @@ pub struct MeteoraDammV2PoolProperties {
 /// different times. Merging them would force one of the two to lie.
 ///
 /// The fields straddle two tables: `token_a_mint` / `token_b_mint` / `fee_bps`
-/// land on the neutral `pools` registry, the three percents on this protocol's
+/// land on the neutral `pools` registry, the two percents on this protocol's
 /// satellite. The resolver writes both from this one value, atomically.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeteoraDammV2PoolAccountProperties {
@@ -87,9 +86,10 @@ pub struct MeteoraDammV2PoolAccountProperties {
     pub token_b_mint: Pubkey,
     /// Base trading fee in basis points (genesis cliff for a scheduler pool).
     pub fee_bps: Decimal,
-    /// Fee-split percents (0..=100): Meteora's, a partner's, and a referrer's
-    /// cut of the trading fee.
+    /// Fee-split percents (0..=100): Meteora's cut and a referrer's cut of the
+    /// trading fee. They are **not adjacent** in the account — `padding_0` sits
+    /// between them, at the offset a `partner_fee_percent` field used to be read
+    /// from (migration 037).
     pub protocol_fee_percent: u8,
-    pub partner_fee_percent: u8,
     pub referral_fee_percent: u8,
 }

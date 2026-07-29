@@ -1,0 +1,46 @@
+-- ============================================================================
+-- 037 — supprime `partner_fee_percent` : la colonne n'a jamais eu de source
+-- ============================================================================
+-- The column decoded byte 49 of the cp-amm `Pool` account. That byte is not a
+-- partner fee — it is padding:
+--
+--   pub struct PoolFeesStruct {
+--       pub base_fee: BaseFeeStruct,      // 8..48
+--       pub protocol_fee_percent: u8,     // 48
+--       pub padding_0: u8,                // 49  ← what we were reading
+--       pub referral_fee_percent: u8,     // 50
+--       ...
+--   }
+--
+-- The word "partner" does not appear anywhere in cp-amm's `state/fee.rs`. The
+-- surrounding offsets (48 and 50) are correct, which is what made this hard to
+-- see: two of three percents decode fine.
+--
+-- The data agrees. Before this migration, on the local dataset:
+--
+--   partner_fee_percent = 0   for 971 pools out of 971
+--   protocol_fee_percent = 20, referral_fee_percent = 20  for the same 971
+--
+-- A column that is always zero and always plausible. Pools with a non-zero
+-- partner cut exist on Meteora; not one appeared here, because nothing was ever
+-- read.
+--
+-- ## Why DROP rather than keep it NULL
+--
+-- There is no source to restore it from. Keeping the column would mean carrying
+-- a permanently NULL field through the domain type, the repository, the wire DTO
+-- and the dashboard — for a concept the program does not expose. Migration 036
+-- removed five columns for being one protocol's vocabulary in a neutral table;
+-- this one goes for a stronger reason: it has no referent at all.
+--
+-- Forward-only, like every migration here: the values are all 0 (and 0 is what
+-- the padding byte reads), so nothing recoverable is lost.
+--
+-- ## Contract break
+--
+-- `partnerFeePercent` disappears from the `GET /api/pools/{address}` detail
+-- payload. It is the reason this change ships on its own rather than inside the
+-- pool-properties refactor.
+
+ALTER TABLE meteora_damm_v2_pool_properties
+    DROP COLUMN partner_fee_percent;

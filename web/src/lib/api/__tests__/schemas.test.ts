@@ -155,7 +155,6 @@ describe("PoolSchema", () => {
       ...validPool(),
       meteoraDammV2: {
         protocolFeePercent: 20,
-        partnerFeePercent: 0,
         referralFeePercent: 20,
         baseFeeKind: null,
         hasDynamicFee: null,
@@ -170,7 +169,6 @@ describe("PoolSchema", () => {
       ...validPool(),
       meteoraDammV2: {
         protocolFeePercent: null,
-        partnerFeePercent: null,
         referralFeePercent: null,
         baseFeeKind: "constant",
         hasDynamicFee: false,
@@ -186,7 +184,6 @@ describe("PoolSchema", () => {
         ...validPool(),
         meteoraDammV2: {
           protocolFeePercent: 101,
-          partnerFeePercent: 0,
           referralFeePercent: 0,
           baseFeeKind: "constant",
           hasDynamicFee: false,

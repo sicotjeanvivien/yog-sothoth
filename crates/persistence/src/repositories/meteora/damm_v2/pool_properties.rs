@@ -126,7 +126,7 @@ impl PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
         let row = sqlx::query_as!(
             MeteoraDammV2PoolPropertiesRow,
             r#"
-            SELECT pool_address, protocol_fee_percent, partner_fee_percent,
+            SELECT pool_address, protocol_fee_percent,
                    referral_fee_percent, base_fee_kind, has_dynamic_fee
             FROM meteora_damm_v2_pool_properties
             WHERE pool_address = $1
@@ -165,7 +165,6 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
               AND (p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
                 OR props.pool_address           IS NULL
                 OR props.protocol_fee_percent   IS NULL
-                OR props.partner_fee_percent    IS NULL
                 OR props.referral_fee_percent   IS NULL)
             ORDER BY p.first_seen_at
             LIMIT $1
@@ -205,9 +204,8 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
 
         let fee_bps = crate::repositories::pool::fee_bps_to_numeric(properties.fee_bps)?;
         // u8 → i16 (SMALLINT) is always lossless.
-        let (protocol_pct, partner_pct, referral_pct) = (
+        let (protocol_pct, referral_pct) = (
             i16::from(properties.protocol_fee_percent),
-            i16::from(properties.partner_fee_percent),
             i16::from(properties.referral_fee_percent),
         );
 
@@ -231,17 +229,14 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_pool_properties
-                (pool_address, protocol_fee_percent, partner_fee_percent,
-                 referral_fee_percent)
-            VALUES ($1, $2, $3, $4)
+                (pool_address, protocol_fee_percent, referral_fee_percent)
+            VALUES ($1, $2, $3)
             ON CONFLICT (pool_address) DO UPDATE
                 SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
-                    partner_fee_percent  = EXCLUDED.partner_fee_percent,
                     referral_fee_percent = EXCLUDED.referral_fee_percent
             "#,
             pool_address.to_string(),
             protocol_pct,
-            partner_pct,
             referral_pct,
         )
         .execute(&mut *tx)
