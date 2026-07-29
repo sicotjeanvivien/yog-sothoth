@@ -169,6 +169,27 @@ cargo test -p yog-core extraction           # extraction only
 
 Fixture transactions for the extraction pipeline live under `core/tests/fixtures/` — one real mainnet transaction per recognized event kind.
 
+### Real pool accounts, and why they earn their place
+
+`tests/fixtures/damm_v2/accounts/` holds eleven real cp-amm `Pool` accounts as
+raw base64, exercised by `tests/pool_account_fixtures.rs`. They cover every
+`BaseFeeMode` the program defines and both dynamic-fee values.
+
+They exist because **the decoder's synthetic tests cannot catch a wrong offset**:
+they build the buffer with the same constants the code reads it with, so both
+agree on a lie. Measured, by moving `BASE_FEE_MODE_OFFSET` one byte: the fourteen
+synthetic tests stayed green, the real accounts failed immediately. That is the
+gap `partner_fee_percent` lived in for months.
+
+The expectations are in the test file, not in the fixtures — the fixtures hold
+bytes and provenance only, so reviewing the test means reviewing what we claim
+the bytes mean. How each was established (a realized fee rate computed from swap
+events, mints resolving to USDC/SOL) is documented in the module.
+
+Recapturing is one `getMultipleAccounts` call, spelled out in that module doc. A
+fixture is a snapshot: a program upgrade that moves a field turns these red, and
+that is the intended channel for learning about it.
+
 ## Compilation targets
 
 - `cargo build` → native library, linked into every binary ✅
