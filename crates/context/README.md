@@ -41,19 +41,31 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s),
   lists the known mints and asks Jupiter Price V3 for current USD prices,
   inserting them with a single shared `fetched_at` per tick.
-- **`PoolAccountWorker`** — same cadence as the metadata worker. Backfills the
-  nullable pool properties that events alone leave NULL for pools created
-  before the indexer started: mints, base fee and fee split. The event-driven
-  paths in the indexer remain the live refreshers; this worker is the catch-up
-  for pre-existing pools.
+- **`PoolAccountWorker`** — same cadence as the metadata worker. Fills every
+  account-derived pool property: mints, base fee, fee split, fee shape.
+
+  **It is the only writer of those columns.** The indexer does not decode
+  property values from events — it raises `pools.needs_refresh` when an event
+  changes one, and this worker re-reads the account. So the queue has two
+  entries: pools never resolved (a NULL column) and pools flagged stale. That is
+  what lets a one-shot back-fill track values that move, without polling every
+  pool on a timer.
+
+  Reading the account rather than an update event is also what removes a class
+  of decoding hazard: an account carries resolved state at fixed offsets, an
+  update carries a delta with variable-offset borsh tags and `Option`s that
+  encode three states.
 
   ⚠️ Worth knowing, because the crate's name does not suggest it: **yog-context
   reads on-chain pool *accounts*, not just token metadata and prices.** That is
   what this worker is.
 
   It **names no protocol**. It holds one `PoolAccountResolver` per protocol —
-  each owning its own queue and its own tables — plus the shared
-  `SolanaAccountClient`, and iterates. Decoding happens in
+  each owning its own queue and its own satellite — plus the `PoolRepository`
+  for the shared registry and the shared `SolanaAccountClient`, and iterates.
+  Each decoded account is written in two halves, **satellite first, registry
+  last**: the registry write is what lowers the refresh flag, so a failure
+  before it leaves the pool queued rather than half-refreshed. Decoding happens in
   `yog_core::application::decode_pool_account`, routed on the account's owning
   program id (what the chain calls its `owner`), so one client serves every
   protocol. Adding one means pushing a resolver into the vec in `bootstrap`;

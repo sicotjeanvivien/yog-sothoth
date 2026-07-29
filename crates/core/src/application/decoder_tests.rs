@@ -60,9 +60,15 @@ fn with_fee_shape(mut bytes: Vec<u8>, mode: u8, number_of_period: u16, dynamic: 
 }
 
 fn decode_shape(bytes: &[u8]) -> (Option<BaseFeeKind>, bool) {
-    let decoded = decode_pool_account(&cp_amm_owner(), bytes).expect("should decode");
-    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
+    let PoolAccountProperties::MeteoraDammV2(props) = damm_v2_properties(bytes);
     (props.base_fee_kind, props.has_dynamic_fee)
+}
+
+/// The cp-amm half of a successful decode.
+fn damm_v2_properties(bytes: &[u8]) -> PoolAccountProperties {
+    decode_pool_account(&cp_amm_owner(), bytes)
+        .expect("should decode")
+        .properties
 }
 
 fn cp_amm_owner() -> Pubkey {
@@ -80,10 +86,12 @@ fn decodes_cp_amm_fields_at_their_offsets() {
     let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("should decode");
 
     assert_eq!(decoded.protocol(), Protocol::MeteoraDammV2);
-    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
-    assert_eq!(props.token_a_mint, pk(2));
-    assert_eq!(props.token_b_mint, pk(3));
-    assert_eq!(props.fee_bps, Decimal::new(25, 0));
+    // The neutral half — what the `pools` registry stores.
+    assert_eq!(decoded.registry.token_a_mint, pk(2));
+    assert_eq!(decoded.registry.token_b_mint, pk(3));
+    assert_eq!(decoded.registry.fee_bps, Decimal::new(25, 0));
+    // …and the cp-amm half, which goes to this protocol's satellite.
+    let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties;
     assert_eq!(props.protocol_fee_percent, 20);
     assert_eq!(props.referral_fee_percent, 20);
 }
@@ -101,9 +109,7 @@ fn padding_between_the_percents_is_not_decoded() {
     let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
     data[PADDING_0_OFFSET] = 0xFF;
 
-    let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("should decode");
-
-    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
+    let PoolAccountProperties::MeteoraDammV2(props) = damm_v2_properties(&data);
     assert_eq!(props.protocol_fee_percent, 20, "byte 48 must be untouched");
     assert_eq!(props.referral_fee_percent, 20, "byte 50 must be untouched");
 }
@@ -170,11 +176,19 @@ fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
 
     let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("must still decode");
 
-    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
+    assert_eq!(
+        decoded.registry.token_a_mint,
+        pk(2),
+        "the mints must survive"
+    );
+    assert_eq!(
+        decoded.registry.fee_bps,
+        Decimal::new(25, 0),
+        "the tier must survive"
+    );
+    let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties;
     assert_eq!(props.base_fee_kind, None, "the unmappable mode yields None");
     assert!(props.has_dynamic_fee, "the flag is independent of the mode");
-    assert_eq!(props.token_a_mint, pk(2), "the mints must survive");
-    assert_eq!(props.fee_bps, Decimal::new(25, 0), "the tier must survive");
 }
 
 /// `dynamic_fee.initialized` is a flag, not a borsh `Option` tag: any non-zero

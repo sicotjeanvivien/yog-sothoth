@@ -10,7 +10,10 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use yog_core::{
     Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
-    domain::{FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository},
+    domain::{
+        FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRegistryProperties,
+        PoolRepository,
+    },
 };
 
 pub struct PgPoolRepository {
@@ -75,15 +78,38 @@ impl PoolRepository for PgPoolRepository {
         Ok(())
     }
 
-    async fn set_fee_bps(
+    async fn mark_needs_refresh(&self, pool_address: &Pubkey) -> RepositoryResult<()> {
+        sqlx::query!(
+            r#"UPDATE pools SET needs_refresh = TRUE WHERE pool_address = $1"#,
+            pool_address.to_string(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+        Ok(())
+    }
+
+    /// One statement, so the properties and the flag can never disagree: either
+    /// the refreshed values and the lowered flag both commit, or neither does
+    /// and the pool is proposed again next cycle.
+    async fn set_registry_properties(
         &self,
         pool_address: &Pubkey,
-        fee_bps: rust_decimal::Decimal,
+        core: &PoolRegistryProperties,
     ) -> RepositoryResult<()> {
-        let fee_bps = fee_bps_to_numeric(fee_bps)?;
+        let fee_bps = fee_bps_to_numeric(core.fee_bps)?;
         sqlx::query!(
-            r#"UPDATE pools SET fee_bps = $2 WHERE pool_address = $1"#,
+            r#"
+            UPDATE pools
+            SET token_a_mint  = $2,
+                token_b_mint  = $3,
+                fee_bps       = $4,
+                needs_refresh = FALSE
+            WHERE pool_address = $1
+            "#,
             pool_address.to_string(),
+            core.token_a_mint.to_string(),
+            core.token_b_mint.to_string(),
             fee_bps,
         )
         .execute(&self.pool)

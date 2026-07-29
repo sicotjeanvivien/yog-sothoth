@@ -39,7 +39,7 @@ mod meteora;
 use solana_pubkey::Pubkey;
 use thiserror::Error;
 
-use crate::domain::{PoolAccountProperties, Protocol};
+use crate::domain::{DecodedPoolAccount, Protocol};
 
 /// Why an account was not decoded.
 ///
@@ -94,16 +94,14 @@ pub enum PoolAccountRejection {
 pub fn decode_pool_account(
     program_id: &Pubkey,
     data: &[u8],
-) -> Result<PoolAccountProperties, PoolAccountRejection> {
+) -> Result<DecodedPoolAccount, PoolAccountRejection> {
     let protocol =
         Protocol::from_program_id(program_id).ok_or(PoolAccountRejection::UnknownProgram {
             program_id: *program_id,
         })?;
 
     match protocol {
-        Protocol::MeteoraDammV2 => {
-            meteora::damm_v2::decode_pool_account(data).map(PoolAccountProperties::MeteoraDammV2)
-        }
+        Protocol::MeteoraDammV2 => meteora::damm_v2::decode_pool_account(data),
         // Recognized protocols with no pool-account decoder yet — reported as a
         // coverage gap, not as an unknown program.
         Protocol::MeteoraDammV1 | Protocol::MeteoraDlmm => {

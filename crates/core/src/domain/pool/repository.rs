@@ -4,7 +4,10 @@ use solana_pubkey::Pubkey;
 
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition, PoolSort, PoolSortColumn};
-use crate::{RepositoryResult, domain::Pool};
+use crate::{
+    RepositoryResult,
+    domain::{Pool, PoolRegistryProperties},
+};
 
 /// Cursor identifying a position in a pool ordering.
 ///
@@ -110,23 +113,59 @@ pub trait PoolRepository: Send + Sync {
     /// create the row properly.
     async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()>;
 
-    /// Set the pool's base trading fee (basis points), decoded from its
-    /// genesis fee config. A column-level `UPDATE`; a no-op if the pool row
-    /// does not exist yet (the caller registers it first). Idempotent.
-    async fn set_fee_bps(
+    /// Mark a pool's account-derived properties as stale, so yog-context
+    /// re-reads its on-chain account and rewrites them.
+    ///
+    /// The indexer's **only** way to affect a pool property. It sees an event
+    /// saying a fee changed; it does not decode the new value and store it —
+    /// that would make it a second writer of columns yog-context owns, and it
+    /// would have to interpret an update *delta*, which is far more fragile than
+    /// reading resolved state (a delta carries variable-offset borsh tags and
+    /// tri-state `Option`s; an account does not).
+    ///
+    /// A flag rather than NULLing the stale column: the old value stays readable
+    /// while the refresh is pending, and the flag lives on `pools`, which every
+    /// protocol shares — so no satellite needs to grant the indexer write access.
+    ///
+    /// Idempotent, and a no-op for an unknown pool.
+    async fn mark_needs_refresh(&self, pool_address: &Pubkey) -> RepositoryResult<()>;
+
+    /// Store the neutral half of a decoded pool account — the token pair and the
+    /// base fee — and clear [`mark_needs_refresh`]'s flag.
+    ///
+    /// Written by yog-context, which is the **sole writer** of these columns:
+    /// they cannot be inferred from the event stream (the mints were once
+    /// guessed per-event and mis-resolved on routed transactions; the base fee is
+    /// only emitted at a genesis the indexer never sees for a discovered pool).
+    ///
+    /// # Ordering is load-bearing
+    ///
+    /// The caller writes the protocol's satellite **first** and this **last**,
+    /// because this call is what lowers the flag. Any failure before it leaves
+    /// the flag raised and the pool queued for the next cycle; lowering it first
+    /// would let a satellite failure strand a half-refreshed pool until the next
+    /// event happened to touch it.
+    ///
+    /// A no-op if the pool row does not exist. Idempotent.
+    ///
+    /// [`mark_needs_refresh`]: Self::mark_needs_refresh
+    async fn set_registry_properties(
         &self,
         pool_address: &Pubkey,
-        fee_bps: rust_decimal::Decimal,
+        core: &PoolRegistryProperties,
     ) -> RepositoryResult<()>;
 
-    // NOTE: the fee *shape* (`base_fee_kind` / `has_dynamic_fee`) used to live
-    // here as `set_fee_config`. It moved to
-    // [`crate::domain::MeteoraDammV2PoolPropertiesRepository`] with migration
-    // 036: both columns are cp-amm concepts, and passing `base_fee_kind` as an
-    // opaque string was the tell that a protocol-specific notion was being
-    // squeezed through a cross-protocol trait. `set_fee_bps` stays — a base fee
-    // in bps is genuinely cross-protocol, and it is a read surface here
-    // (fee-tier filter, `PoolCatalog::list_fee_tiers`).
+    // NOTE: `set_fee_bps` used to live here, writing the base fee decoded from a
+    // genesis or fee-update event. It went with the indexer's property writes:
+    // `fee_bps` now reaches `pools` only through `set_registry_properties`, from the
+    // account. The column itself stays on `pools` — a base fee in bps is
+    // genuinely cross-protocol, and it is a read surface (fee-tier filter,
+    // `PoolCatalog::list_fee_tiers`).
+    //
+    // The fee *shape* (`base_fee_kind` / `has_dynamic_fee`) left earlier still,
+    // with migration 036: both are cp-amm concepts, and passing `base_fee_kind`
+    // as an opaque string was the tell that a protocol-specific notion was being
+    // squeezed through a cross-protocol trait.
 }
 
 /// The consultation surface of the pool registry — the api's read lens.

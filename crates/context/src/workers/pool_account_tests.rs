@@ -13,7 +13,8 @@ use yog_core::RepositoryResult;
 use yog_core::amm::damm_v2::BaseFeeKind;
 
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, PoolAccountProperties, PoolAccountResolver, Protocol,
+    MeteoraDammV2PoolAccountProperties, PoolAccountProperties, PoolAccountResolver,
+    PoolRegistryProperties, PoolRepository, Protocol,
 };
 
 use crate::error::SourceError;
@@ -41,11 +42,8 @@ fn cp_amm_account(token_a: Pubkey, token_b: Pubkey) -> Vec<u8> {
     bytes
 }
 
-fn expected_properties(token_a: Pubkey, token_b: Pubkey) -> PoolAccountProperties {
+fn expected_properties() -> PoolAccountProperties {
     PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
-        token_a_mint: token_a,
-        token_b_mint: token_b,
-        fee_bps: Decimal::new(25, 0),
         protocol_fee_percent: 20,
         referral_fee_percent: 20,
         base_fee_kind: Some(BaseFeeKind::Constant),
@@ -53,10 +51,31 @@ fn expected_properties(token_a: Pubkey, token_b: Pubkey) -> PoolAccountPropertie
     })
 }
 
+fn expected_core(token_a: Pubkey, token_b: Pubkey) -> PoolRegistryProperties {
+    PoolRegistryProperties {
+        token_a_mint: token_a,
+        token_b_mint: token_b,
+        fee_bps: Decimal::new(25, 0),
+    }
+}
+
+/// Every write both fakes receive, in order, so a test can assert on the
+/// *sequence* and not merely on the contents.
+type Journal = Arc<Mutex<Vec<Write>>>;
+
+#[derive(Debug, PartialEq, Eq)]
+enum Write {
+    Satellite(Pubkey, PoolAccountProperties),
+    Registry(Pubkey, PoolRegistryProperties),
+}
+
 #[derive(Default)]
 struct FakeRepo {
     unresolved: Vec<Pubkey>,
-    written: Mutex<Vec<(Pubkey, PoolAccountProperties)>>,
+    journal: Journal,
+    /// When true, the satellite write fails — the case that must stop the
+    /// registry write from lowering the refresh flag.
+    fail: bool,
 }
 
 #[async_trait]
@@ -72,10 +91,44 @@ impl PoolAccountResolver for FakeRepo {
         pool: &Pubkey,
         properties: &PoolAccountProperties,
     ) -> RepositoryResult<()> {
-        self.written
+        if self.fail {
+            return Err(yog_core::RepositoryError::Integrity("boom".into()));
+        }
+        self.journal
             .lock()
             .unwrap()
-            .push((*pool, properties.clone()));
+            .push(Write::Satellite(*pool, properties.clone()));
+        Ok(())
+    }
+}
+
+/// The neutral registry. Shares the journal with the resolver, so the ordering
+/// between the two writes is observable.
+#[derive(Default)]
+struct FakePoolRepo {
+    journal: Journal,
+}
+
+#[async_trait]
+impl PoolRepository for FakePoolRepo {
+    async fn upsert(&self, _: &yog_core::domain::Pool) -> RepositoryResult<()> {
+        unreachable!("the worker never discovers pools")
+    }
+    async fn touch_last_seen(&self, _: &Pubkey) -> RepositoryResult<()> {
+        unreachable!("the worker never touches last_seen")
+    }
+    async fn mark_needs_refresh(&self, _: &Pubkey) -> RepositoryResult<()> {
+        unreachable!("raising the flag is the indexer's job, never this worker's")
+    }
+    async fn set_registry_properties(
+        &self,
+        pool: &Pubkey,
+        registry: &PoolRegistryProperties,
+    ) -> RepositoryResult<()> {
+        self.journal
+            .lock()
+            .unwrap()
+            .push(Write::Registry(*pool, registry.clone()));
         Ok(())
     }
 }
@@ -94,16 +147,45 @@ impl PoolAccountSource for FakeSource {
     }
 }
 
-fn worker(repo: Arc<FakeRepo>, source: Arc<FakeSource>) -> PoolAccountWorker {
-    PoolAccountWorker::new(vec![repo], source, std::time::Duration::from_secs(10))
+fn worker(
+    repo: Arc<FakeRepo>,
+    pool_repo: Arc<FakePoolRepo>,
+    source: Arc<FakeSource>,
+) -> PoolAccountWorker {
+    PoolAccountWorker::new(
+        vec![repo],
+        pool_repo,
+        source,
+        std::time::Duration::from_secs(10),
+    )
 }
 
+/// A resolver and a registry repository sharing one journal.
+fn fakes(unresolved: Vec<Pubkey>, fail: bool) -> (Arc<FakeRepo>, Arc<FakePoolRepo>, Journal) {
+    let journal: Journal = Arc::new(Mutex::new(Vec::new()));
+    (
+        Arc::new(FakeRepo {
+            unresolved,
+            journal: journal.clone(),
+            fail,
+        }),
+        Arc::new(FakePoolRepo {
+            journal: journal.clone(),
+        }),
+        journal,
+    )
+}
+
+/// The two halves of one account read reach **two different repositories**, and
+/// in a fixed order: the protocol's satellite first, the neutral registry last.
+///
+/// The order is not cosmetic. The registry write is what lowers
+/// `pools.needs_refresh`, so it must be the last thing to succeed — otherwise a
+/// satellite failure would leave a pool marked fresh while half of its
+/// properties are stale.
 #[tokio::test]
-async fn decodes_and_writes_the_account_properties() {
-    let repo = Arc::new(FakeRepo {
-        unresolved: vec![pk(1)],
-        written: Mutex::new(Vec::new()),
-    });
+async fn writes_both_halves_satellite_first() {
+    let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
     let source = Arc::new(FakeSource {
         accounts: vec![RawAccount {
             pool_address: pk(1),
@@ -112,35 +194,58 @@ async fn decodes_and_writes_the_account_properties() {
         }],
     });
 
-    worker(repo.clone(), source).run_one_cycle().await;
+    worker(repo, pool_repo, source).run_one_cycle().await;
 
-    let written = repo.written.lock().unwrap();
     assert_eq!(
-        written.as_slice(),
-        &[(pk(1), expected_properties(pk(2), pk(3)))]
+        *journal.lock().unwrap(),
+        vec![
+            Write::Satellite(pk(1), expected_properties()),
+            Write::Registry(pk(1), expected_core(pk(2), pk(3))),
+        ]
+    );
+}
+
+/// A failed satellite write must **not** be followed by the registry write.
+///
+/// This is the guard for the invariant above: letting the registry write run
+/// anyway would clear the refresh flag, and the pool would leave the queue with
+/// stale satellite properties and nothing to bring it back.
+#[tokio::test]
+async fn a_failed_satellite_write_does_not_clear_the_flag() {
+    let (repo, pool_repo, journal) = fakes(vec![pk(1)], true);
+    let source = Arc::new(FakeSource {
+        accounts: vec![RawAccount {
+            pool_address: pk(1),
+            program_id: Protocol::MeteoraDammV2.program_id(),
+            data: cp_amm_account(pk(2), pk(3)),
+        }],
+    });
+
+    worker(repo, pool_repo, source).run_one_cycle().await;
+
+    assert!(
+        journal.lock().unwrap().is_empty(),
+        "the registry write must be skipped when the satellite write failed"
     );
 }
 
 #[tokio::test]
 async fn no_unresolved_pools_writes_nothing() {
-    let repo = Arc::new(FakeRepo::default());
+    let (repo, pool_repo, journal) = fakes(Vec::new(), false);
     let source = Arc::new(FakeSource {
         accounts: Vec::new(),
     });
 
-    worker(repo.clone(), source).run_one_cycle().await;
+    worker(repo, pool_repo, source).run_one_cycle().await;
 
-    assert!(repo.written.lock().unwrap().is_empty());
+    assert!(journal.lock().unwrap().is_empty());
 }
 
 /// An account the decoder does not recognize is skipped — not written, not
 /// fatal. The pool simply stays in the queue for the next cycle.
 #[tokio::test]
 async fn an_undecodable_account_is_skipped() {
-    let repo = Arc::new(FakeRepo {
-        unresolved: vec![pk(1)],
-        written: Mutex::new(Vec::new()),
-    });
+    let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
     let source = Arc::new(FakeSource {
         accounts: vec![RawAccount {
             pool_address: pk(1),
@@ -149,9 +254,9 @@ async fn an_undecodable_account_is_skipped() {
         }],
     });
 
-    worker(repo.clone(), source).run_one_cycle().await;
+    worker(repo, pool_repo, source).run_one_cycle().await;
 
-    assert!(repo.written.lock().unwrap().is_empty());
+    assert!(journal.lock().unwrap().is_empty());
 }
 
 /// The guard that makes the dispatch safe: an account belonging to another
@@ -159,10 +264,7 @@ async fn an_undecodable_account_is_skipped() {
 /// store a payload it does not own.
 #[tokio::test]
 async fn an_account_of_another_protocol_is_not_written() {
-    let repo = Arc::new(FakeRepo {
-        unresolved: vec![pk(1)],
-        written: Mutex::new(Vec::new()),
-    });
+    let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
     let source = Arc::new(FakeSource {
         accounts: vec![RawAccount {
             pool_address: pk(1),
@@ -171,7 +273,7 @@ async fn an_account_of_another_protocol_is_not_written() {
         }],
     });
 
-    worker(repo.clone(), source).run_one_cycle().await;
+    worker(repo, pool_repo, source).run_one_cycle().await;
 
-    assert!(repo.written.lock().unwrap().is_empty());
+    assert!(journal.lock().unwrap().is_empty());
 }

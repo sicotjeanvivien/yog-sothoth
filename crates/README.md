@@ -83,9 +83,9 @@ All coordination between the binaries happens through the schema, and the schema
 | Role | Permissions | Used by |
 |---|---|---|
 | `yog_migrate` | DDL — owns the schema, applies migrations | `yog-migrate` binary, `cargo sqlx migrate run` |
-| `yog_indexer` | `SELECT, INSERT, UPDATE` on event tables and pool registry; `SELECT` on `watched_pools` | indexer |
+| `yog_indexer` | `SELECT, INSERT, UPDATE` on event tables and the pool registry (identity + `needs_refresh`, never a property value); `SELECT` on `watched_pools` | indexer |
 | `yog_api` | `SELECT` across tables and VIEWs — nothing else | api |
-| `yog_context` | `SELECT, INSERT, UPDATE` on `token_metadata` / `token_prices`; `UPDATE` on pool-property columns; `SELECT` on `pools` | context |
+| `yog_context` | `SELECT, INSERT, UPDATE` on `token_metadata` / `token_prices` and every per-protocol pool-properties satellite; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties**; `SELECT` on `pools` | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `SELECT` on its read VIEWs | signals |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 

@@ -4,34 +4,36 @@
 //! cross-protocol `pools` registry so no protocol carries NULL columns for
 //! another protocol's concepts.
 //!
-//! One `Pg` type, three traits, one per consumer — the same pattern as
-//! `PgPoolRepository` (write side / read side):
+//! One `Pg` type, two **generic** traits, one per consumer:
 //!
-//! - [`MeteoraDammV2PoolPropertiesRepository`] — the indexer writes the fee shape
-//!   (`base_fee_kind`, `has_dynamic_fee`) decoded from the genesis
-//!   `InitializePool` blob.
-//! - [`PoolAccountResolver`] — yog-context's enrichment queue and its two-table
-//!   write. Generic trait, per-protocol implementation: the queue below filters
-//!   on this protocol, the write accepts only this protocol's variant.
-//! - [`PoolPropertiesLookup`] — the api's read for the pool detail sheet. Also a
-//!   generic trait with a per-protocol implementation, so the reading service
-//!   holds `Vec<Arc<dyn PoolPropertiesLookup>>` and names no protocol.
+//! - [`PoolAccountResolver`] — yog-context's enrichment queue and its write.
+//!   Generic trait, per-protocol implementation: the queue below filters on this
+//!   protocol, the write accepts only this protocol's variant.
+//! - [`PoolPropertiesLookup`] — the api's read for the pool detail sheet. Also
+//!   generic, so the reading service holds `Vec<Arc<dyn PoolPropertiesLookup>>`
+//!   and names no protocol.
 //!
-//! Each upsert touches only its own columns on conflict: neither writer may
-//! clobber the other's, and either may land first.
+//! # One table, one writer
 //!
-//! # Why the resolver lives here and not on `PgPoolRepository`
+//! This repository writes **this satellite and nothing else**. It used to also
+//! write `pools`' neutral columns, in a transaction, because one decoded account
+//! carried both — which made the cp-amm satellite a co-owner of the
+//! cross-protocol registry. The decode now yields the two halves separately and
+//! the caller writes each through its own repository.
 //!
-//! Both of its methods are irreducibly cp-amm-specific — the queue tests columns
-//! that only exist on this satellite, and the write takes a payload decoded at
-//! cp-amm's byte offsets. Putting them on the cross-protocol pool repository
-//! would have made the generic module depend on one protocol, which is the very
-//! coupling migration 036 set out to remove (just one layer up).
+//! The transaction went with it. It was the only one in this crate, and it
+//! protected nothing observable: the pool-detail read issues two separate
+//! queries (so it can already see a torn state, which its `Option`-everywhere
+//! DTO expects), and `list_unresolved` reads one snapshot and simply re-proposes
+//! a half-written pool, which converges on the next tick.
 //!
-//! It writes `pools`' neutral columns as well as this satellite, in one
-//! transaction. That is legitimate: `pools` is the shared registry every
-//! protocol writes to (the indexer's `discover_pool` does the same). What is not
-//! legitimate is the reverse — the generic module knowing about cp-amm.
+//! # No write trait of its own
+//!
+//! The indexer used to write the fee shape here from the genesis blob, through a
+//! `MeteoraDammV2PoolPropertiesRepository` trait. That is gone: the indexer no
+//! longer writes property values at all, it raises `pools.needs_refresh` and
+//! yog-context re-reads the account. Both traits left are protocol-agnostic —
+//! nothing in this crate's public surface names cp-amm any more.
 
 mod rows;
 
@@ -41,8 +43,8 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository, PoolAccountProperties,
-        PoolAccountResolver, PoolProperties, PoolPropertiesLookup, Protocol,
+        MeteoraDammV2PoolProperties, PoolAccountProperties, PoolAccountResolver, PoolProperties,
+        PoolPropertiesLookup, Protocol,
     },
 };
 
@@ -56,57 +58,6 @@ pub struct PgMeteoraDammV2PoolPropertiesRepository {
 impl PgMeteoraDammV2PoolPropertiesRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
-    }
-}
-
-#[async_trait]
-impl MeteoraDammV2PoolPropertiesRepository for PgMeteoraDammV2PoolPropertiesRepository {
-    async fn set_fee_config(
-        &self,
-        pool_address: &Pubkey,
-        base_fee_kind: &str,
-        has_dynamic_fee: bool,
-    ) -> RepositoryResult<()> {
-        sqlx::query!(
-            r#"
-            INSERT INTO meteora_damm_v2_pool_properties
-                (pool_address, base_fee_kind, has_dynamic_fee)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (pool_address) DO UPDATE
-                SET base_fee_kind   = EXCLUDED.base_fee_kind,
-                    has_dynamic_fee = EXCLUDED.has_dynamic_fee
-            "#,
-            pool_address.to_string(),
-            base_fee_kind,
-            has_dynamic_fee,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(())
-    }
-
-    async fn set_has_dynamic_fee(
-        &self,
-        pool_address: &Pubkey,
-        has_dynamic_fee: bool,
-    ) -> RepositoryResult<()> {
-        sqlx::query!(
-            r#"
-            INSERT INTO meteora_damm_v2_pool_properties (pool_address, has_dynamic_fee)
-            VALUES ($1, $2)
-            ON CONFLICT (pool_address) DO UPDATE
-                SET has_dynamic_fee = EXCLUDED.has_dynamic_fee
-            "#,
-            pool_address.to_string(),
-            has_dynamic_fee,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(map_sqlx_error)?;
-
-        Ok(())
     }
 }
 
@@ -155,6 +106,16 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     /// candidate, and that is true of every pool of every other protocol,
     /// forever. Only `p.protocol` excludes them.
     ///
+    /// # Two reasons a pool is proposed
+    ///
+    /// **Never resolved** — a NULL column, the original case. And **stale**:
+    /// `p.needs_refresh`, raised by the indexer when an event changed a property
+    /// it no longer writes itself. The second is what lets a one-shot back-fill
+    /// track values that move, without polling every pool on a timer.
+    ///
+    /// The flag is cleared by the *registry* write, which the caller issues
+    /// last — so a pool re-enters the queue until the whole refresh has landed.
+    ///
     /// # Why `base_fee_kind` is not in the predicate
     ///
     /// It is the one account-derived property that can legitimately stay NULL
@@ -180,7 +141,8 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             LEFT JOIN meteora_damm_v2_pool_properties props
                    ON props.pool_address = p.pool_address
             WHERE p.protocol = $2
-              AND (p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
+              AND (p.needs_refresh
+                OR p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
                 OR props.pool_address           IS NULL
                 OR props.protocol_fee_percent   IS NULL
                 OR props.referral_fee_percent   IS NULL
@@ -200,17 +162,18 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             .collect()
     }
 
-    /// Two writes from one account read, in a single transaction.
+    /// One write, to this satellite only.
     ///
-    /// The atomicity is load-bearing, not defensive: committing the mints
-    /// without the percents (or the reverse) leaves a pool that
-    /// [`PoolAccountResolver::list_unresolved`] keeps re-proposing every cycle,
-    /// which is exactly the re-fetch loop migration 036 set out to remove.
+    /// The neutral columns of the same account read go through
+    /// [`yog_core::domain::PoolRepository::set_registry_properties`] — one table, one
+    /// writer. The caller sequences the two: **this first, the registry last**,
+    /// because the registry write is what lowers `pools.needs_refresh`. A failure
+    /// here therefore leaves the flag raised and the pool queued, rather than
+    /// stranding a half-refreshed pool.
     ///
-    /// The satellite side is an upsert — unlike the columns it replaces, its row
-    /// is not created with the pool, so an `UPDATE` would silently do nothing on
-    /// first resolution. `ON CONFLICT` touches only the percents, leaving the
-    /// indexer-owned fee-shape columns alone.
+    /// An upsert, not an `UPDATE`: the satellite row is not created with the
+    /// pool, so an `UPDATE` would silently do nothing on first resolution.
+    ///
     /// Rejects a payload of another protocol rather than silently doing nothing:
     /// the worker routes by [`PoolAccountProperties::protocol`], so a mismatch
     /// here is a wiring bug, not a runtime condition.
@@ -221,30 +184,12 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     ) -> RepositoryResult<()> {
         let PoolAccountProperties::MeteoraDammV2(properties) = properties;
 
-        let fee_bps = crate::repositories::pool::fee_bps_to_numeric(properties.fee_bps)?;
         // u8 → i16 (SMALLINT) is always lossless.
         let (protocol_pct, referral_pct) = (
             i16::from(properties.protocol_fee_percent),
             i16::from(properties.referral_fee_percent),
         );
         let base_fee_kind = properties.base_fee_kind.map(|kind| kind.as_str());
-
-        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
-
-        sqlx::query!(
-            r#"
-            UPDATE pools
-            SET token_a_mint = $2, token_b_mint = $3, fee_bps = $4
-            WHERE pool_address = $1
-            "#,
-            pool_address.to_string(),
-            properties.token_a_mint.to_string(),
-            properties.token_b_mint.to_string(),
-            fee_bps,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(map_sqlx_error)?;
 
         sqlx::query!(
             r#"
@@ -258,7 +203,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                     has_dynamic_fee      = EXCLUDED.has_dynamic_fee,
                     -- COALESCE, not EXCLUDED: an account whose BaseFeeMode we
                     -- cannot map sends NULL, and that must not erase a kind an
-                    -- earlier decode (or the genesis event) already established.
+                    -- earlier decode already established.
                     base_fee_kind        = COALESCE(EXCLUDED.base_fee_kind,
                                                     meteora_damm_v2_pool_properties.base_fee_kind)
             "#,
@@ -268,11 +213,10 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             base_fee_kind,
             properties.has_dynamic_fee,
         )
-        .execute(&mut *tx)
+        .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 }

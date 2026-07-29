@@ -52,7 +52,10 @@ use solana_pubkey::Pubkey;
 
 use crate::amm::damm_v2::fee_numerator_to_bps;
 use crate::application::decoder::PoolAccountRejection;
-use crate::domain::{MeteoraDammV2PoolAccountProperties, Protocol};
+use crate::domain::{
+    DecodedPoolAccount, MeteoraDammV2PoolAccountProperties, PoolAccountProperties,
+    PoolRegistryProperties, Protocol,
+};
 
 /// Anchor account discriminator for the cp-amm `Pool` account
 /// (`sha256("account:Pool")[..8]`).
@@ -109,9 +112,12 @@ const MIN_LEN: usize = TOKEN_B_MINT_OFFSET + 32;
 /// distinguishes it from a truncated account, because the two mean very
 /// different things: a wrong discriminator is the wrong account, a short one is
 /// most likely an ABI change.
+/// Returns the read split by **who stores it**: the neutral token pair and base
+/// fee, which the `pools` registry owns, and the cp-amm-only properties, which
+/// this protocol's satellite owns. One read of one buffer, two writers.
 pub(in crate::application::decoder) fn decode_pool_account(
     data: &[u8],
-) -> Result<MeteoraDammV2PoolAccountProperties, PoolAccountRejection> {
+) -> Result<DecodedPoolAccount, PoolAccountRejection> {
     const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
 
     if data.len() < MIN_LEN {
@@ -144,15 +150,19 @@ pub(in crate::application::decoder) fn decode_pool_account(
             .expect("8 bytes, length checked above"),
     );
 
-    Ok(MeteoraDammV2PoolAccountProperties {
-        token_a_mint: Pubkey::try_from(&data[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32])
-            .expect("32 bytes, length checked above"),
-        token_b_mint: Pubkey::try_from(&data[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32])
-            .expect("32 bytes, length checked above"),
-        fee_bps: fee_numerator_to_bps(cliff_fee_numerator),
-        protocol_fee_percent: data[PROTOCOL_FEE_PERCENT_OFFSET],
-        referral_fee_percent: data[REFERRAL_FEE_PERCENT_OFFSET],
-        base_fee_kind,
-        has_dynamic_fee: data[DYNAMIC_FEE_INITIALIZED_OFFSET] != 0,
+    Ok(DecodedPoolAccount {
+        registry: PoolRegistryProperties {
+            token_a_mint: Pubkey::try_from(&data[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32])
+                .expect("32 bytes, length checked above"),
+            token_b_mint: Pubkey::try_from(&data[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32])
+                .expect("32 bytes, length checked above"),
+            fee_bps: fee_numerator_to_bps(cliff_fee_numerator),
+        },
+        properties: PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
+            protocol_fee_percent: data[PROTOCOL_FEE_PERCENT_OFFSET],
+            referral_fee_percent: data[REFERRAL_FEE_PERCENT_OFFSET],
+            base_fee_kind,
+            has_dynamic_fee: data[DYNAMIC_FEE_INITIALIZED_OFFSET] != 0,
+        }),
     })
 }

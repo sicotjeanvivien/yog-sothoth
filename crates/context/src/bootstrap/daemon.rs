@@ -11,9 +11,11 @@ use anyhow::Context;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::domain::{PoolAccountResolver, TokenMetadataRepository, TokenPriceRepository};
+use yog_core::domain::{
+    PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
+};
 use yog_persistence::{
-    Database, PgMeteoraDammV2PoolPropertiesRepository, PgTokenMetadataRepository,
+    Database, PgMeteoraDammV2PoolPropertiesRepository, PgPoolRepository, PgTokenMetadataRepository,
     PgTokenPriceRepository,
 };
 
@@ -37,8 +39,10 @@ pub(crate) struct Daemon {
     metadata_source: Arc<dyn MetadataSource>,
     /// Jupiter price source client.
     price_source: Arc<dyn PriceSource>,
-    /// Pool-mint resolution persistence.
+    /// Per-protocol satellite persistence for account-derived properties.
     pool_account_resolvers: Vec<Arc<dyn PoolAccountResolver>>,
+    /// The neutral `pools` registry — the other half of each decoded account.
+    pool_repository: Arc<dyn PoolRepository>,
     /// cp-amm pool account source.
     pool_account_source: Arc<dyn PoolAccountSource>,
     /// Context METADATA poll secs
@@ -71,8 +75,12 @@ impl Daemon {
         // own tables; the worker iterates and names none of them. Adding DLMM
         // means pushing its resolver here — nothing else moves.
         let pool_account_resolvers: Vec<Arc<dyn PoolAccountResolver>> = vec![Arc::new(
-            PgMeteoraDammV2PoolPropertiesRepository::new(db_pool),
+            PgMeteoraDammV2PoolPropertiesRepository::new(db_pool.clone()),
         )];
+        // Written by the same worker, from the same account read — but through
+        // the repository that owns `pools`, so no satellite is a co-writer of
+        // the cross-protocol registry.
+        let pool_repository: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool));
 
         // Two independent HTTP clients — one per external source.
         let metadata_source =
@@ -96,6 +104,7 @@ impl Daemon {
             metadata_source,
             price_source,
             pool_account_resolvers,
+            pool_repository,
             pool_account_source,
             poll_interval,
             price_interval,
@@ -122,6 +131,7 @@ impl Daemon {
         // metadata/price enrichment has anything to key off.
         let pool_account_task = spawn_pool_account_worker(
             self.pool_account_resolvers.clone(),
+            self.pool_repository.clone(),
             self.pool_account_source.clone(),
             self.poll_interval,
             shutdown.clone(),
@@ -194,11 +204,12 @@ fn spawn_price_worker(
 /// Spawn the pool-account resolver worker task.
 fn spawn_pool_account_worker(
     resolvers: Vec<Arc<dyn PoolAccountResolver>>,
+    pool_repository: Arc<dyn PoolRepository>,
     source: Arc<dyn PoolAccountSource>,
     poll_interval: std::time::Duration,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), WorkerError>> {
-    let worker = PoolAccountWorker::new(resolvers, source, poll_interval);
+    let worker = PoolAccountWorker::new(resolvers, pool_repository, source, poll_interval);
     tokio::spawn(async move { worker.run(shutdown).await })
 }
 

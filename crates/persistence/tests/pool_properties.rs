@@ -21,11 +21,11 @@ use sqlx::PgPool;
 
 use yog_core::amm::damm_v2::BaseFeeKind;
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
-    MeteoraDammV2PoolPropertiesRepository, PoolAccountProperties, PoolAccountResolver,
-    PoolProperties, PoolPropertiesLookup, Protocol,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties, PoolAccountProperties,
+    PoolAccountResolver, PoolProperties, PoolPropertiesLookup, PoolRegistryProperties,
+    PoolRepository, Protocol,
 };
-use yog_persistence::PgMeteoraDammV2PoolPropertiesRepository;
+use yog_persistence::{PgMeteoraDammV2PoolPropertiesRepository, PgPoolRepository};
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
@@ -64,17 +64,9 @@ async fn seed_pool(pool: &PgPool, addr: Pubkey, protocol: Protocol, seq: i64) {
     .expect("seed pool failed");
 }
 
-fn account_properties() -> PoolAccountProperties {
-    account_properties_with_kind(Some(BaseFeeKind::Constant))
-}
-
-/// The same payload with a chosen fee shape — `None` standing for an account
-/// whose `BaseFeeMode` this build cannot map.
-fn account_properties_with_kind(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties {
+/// The cp-amm half alone — what the satellite repository now receives.
+fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties {
     PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
-        token_a_mint: pk(10),
-        token_b_mint: pk(11),
-        fee_bps: Decimal::new(25, 0),
         protocol_fee_percent: 20,
         referral_fee_percent: 20,
         base_fee_kind,
@@ -82,21 +74,47 @@ fn account_properties_with_kind(base_fee_kind: Option<BaseFeeKind>) -> PoolAccou
     })
 }
 
-// ── set_pool_account: one account read, two tables ──────────────────
+/// The neutral half — what the registry repository receives.
+fn account_core() -> PoolRegistryProperties {
+    PoolRegistryProperties {
+        token_a_mint: pk(10),
+        token_b_mint: pk(11),
+        fee_bps: Decimal::new(25, 0),
+    }
+}
 
-#[sqlx::test]
-async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPool) {
-    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    // One Pg type, both traits: the enrichment queue + two-table write
-    // (PoolAccountResolver, generic trait / per-protocol impl) and the
-    // satellite's own read/write (MeteoraDammV2PoolPropertiesRepository).
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
-
-    repo.set_pool_account(&pk(1), &account_properties())
+/// One full resolution, in the order the worker uses: satellite first, registry
+/// last. The ordering is the invariant, so the tests below go through this
+/// helper rather than restating it.
+async fn resolve(
+    satellite: &PgMeteoraDammV2PoolPropertiesRepository,
+    registry: &PgPoolRepository,
+    addr: &Pubkey,
+    base_fee_kind: Option<BaseFeeKind>,
+) {
+    satellite
+        .set_pool_account(addr, &properties_only(base_fee_kind))
         .await
         .expect("set_pool_account failed");
+    registry
+        .set_registry_properties(addr, &account_core())
+        .await
+        .expect("set_registry_properties failed");
+}
 
-    // Neutral columns land on `pools`…
+// ── One account read, two owners ────────────────────────────────────
+
+/// One decoded account reaches both tables — through two repositories, each
+/// writing only what it owns.
+#[sqlx::test]
+async fn a_resolution_fills_the_registry_and_the_satellite(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
+
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+
+    // The neutral columns, written by the registry's own repository.
     let row = sqlx::query_as::<_, (Option<String>, Option<Decimal>)>(
         "SELECT token_a_mint, fee_bps FROM pools WHERE pool_address = $1",
     )
@@ -107,25 +125,27 @@ async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPoo
     assert_eq!(row.0.as_deref(), Some(pk(10).to_string().as_str()));
     assert_eq!(row.1, Some(Decimal::new(25, 0)));
 
-    // …and the cp-amm percents on the satellite, created by the same call.
-    let props = read_properties(&repo, &pk(1))
+    // The cp-amm ones, written by the satellite's.
+    let props = read_properties(&satellite, &pk(1))
         .await
         .expect("satellite row should have been created");
     assert_eq!(props.protocol_fee_percent, Some(20));
     assert_eq!(props.referral_fee_percent, Some(20));
-    // …including the fee shape, now read from the same account rather than
-    // waiting on a genesis event that, for a discovered pool, never comes.
+    // …including the fee shape, read from the same account rather than from a
+    // genesis event that, for a discovered pool, never comes.
     assert_eq!(props.base_fee_kind.as_deref(), Some("constant"));
     assert_eq!(props.has_dynamic_fee, Some(true));
 }
 
 /// The satellite is `REFERENCES pools`, so an unknown pool is an error rather
-/// than a silent no-op — and the transaction must leave nothing behind.
+/// than a silent no-op — and nothing must be left behind.
 #[sqlx::test]
 async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
-    let result = repo.set_pool_account(&pk(99), &account_properties()).await;
+    let result = repo
+        .set_pool_account(&pk(99), &properties_only(Some(BaseFeeKind::Constant)))
+        .await;
 
     assert!(result.is_err(), "expected a foreign-key error");
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM meteora_damm_v2_pool_properties")
@@ -133,86 +153,6 @@ async fn set_pool_account_for_an_unknown_pool_writes_nothing(pool: PgPool) {
         .await
         .expect("count failed");
     assert_eq!(count.0, 0, "the transaction must have rolled back");
-}
-
-// ── The two writers must not clobber each other ─────────────────────
-
-/// The percents belong to the account read alone, so no ordering of the two
-/// writers may lose them.
-///
-/// Note what this no longer claims: the two writers **do** now overlap on the
-/// fee shape, since the account carries it too. Ownership of that column is
-/// pinned by the test below instead.
-#[sqlx::test]
-async fn the_percents_survive_either_write_order(pool: PgPool) {
-    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
-
-    // Pool 1: indexer first (fee shape), then context (account).
-    repo.set_fee_config(&pk(1), "scheduler_linear", true)
-        .await
-        .expect("set_fee_config failed");
-    repo.set_pool_account(&pk(1), &account_properties())
-        .await
-        .expect("set_pool_account failed");
-
-    // Pool 2: the reverse order.
-    repo.set_pool_account(&pk(2), &account_properties())
-        .await
-        .expect("set_pool_account failed");
-    repo.set_fee_config(&pk(2), "scheduler_linear", true)
-        .await
-        .expect("set_fee_config failed");
-
-    for addr in [pk(1), pk(2)] {
-        let props = read_properties(&repo, &addr)
-            .await
-            .expect("row should exist");
-        assert_eq!(
-            props.protocol_fee_percent,
-            Some(20),
-            "percents lost for {addr}"
-        );
-        assert_eq!(
-            props.referral_fee_percent,
-            Some(20),
-            "percents lost for {addr}"
-        );
-        assert!(
-            props.base_fee_kind.is_some(),
-            "a fee shape must be set for {addr}, whichever writer won"
-        );
-    }
-}
-
-/// On the fee shape, the two writers overlap and **the account wins**: it is the
-/// live on-chain state, the genesis blob is only what was true at creation.
-///
-/// In practice they cannot disagree — `base_fee_kind` is immutable, as PR #84
-/// established from the cp-amm source — so this pins an ordering rule rather
-/// than arbitrating a real conflict. It is transitional: the genesis writer
-/// disappears with the indexer's property writes, leaving one writer.
-#[sqlx::test]
-async fn the_account_is_authoritative_on_the_fee_shape(pool: PgPool) {
-    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
-
-    repo.set_fee_config(&pk(1), "scheduler_linear", false)
-        .await
-        .expect("set_fee_config failed");
-    repo.set_pool_account(
-        &pk(1),
-        &account_properties_with_kind(Some(BaseFeeKind::Constant)),
-    )
-    .await
-    .expect("set_pool_account failed");
-
-    let props = read_properties(&repo, &pk(1))
-        .await
-        .expect("row should exist");
-    assert_eq!(props.base_fee_kind.as_deref(), Some("constant"));
-    assert_eq!(props.has_dynamic_fee, Some(true));
 }
 
 // ── list_unresolved: the queue ──────────────────────────────────────
@@ -230,12 +170,14 @@ async fn list_unresolved_returns_a_freshly_discovered_damm_v2_pool(pool: PgPool)
 #[sqlx::test]
 async fn list_unresolved_drops_a_pool_once_its_account_is_resolved(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
 
-    repo.set_pool_account(&pk(1), &account_properties())
-        .await
-        .expect("set_pool_account failed");
-    let unresolved = repo.list_unresolved(100).await.expect("query failed");
+    // **Both** halves are required to leave the queue — the satellite write
+    // alone leaves the registry's mints and fee NULL. Covered on its own by
+    // `only_the_registry_write_lowers_the_flag`.
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+    let unresolved = satellite.list_unresolved(100).await.expect("query failed");
 
     assert!(
         unresolved.is_empty(),
@@ -301,13 +243,10 @@ async fn an_unmappable_fee_mode_does_not_erase_a_known_kind(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
-    repo.set_pool_account(
-        &pk(1),
-        &account_properties_with_kind(Some(BaseFeeKind::RateLimiter)),
-    )
-    .await
-    .expect("first resolution failed");
-    repo.set_pool_account(&pk(1), &account_properties_with_kind(None))
+    repo.set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::RateLimiter)))
+        .await
+        .expect("first resolution failed");
+    repo.set_pool_account(&pk(1), &properties_only(None))
         .await
         .expect("second resolution failed");
 
@@ -364,54 +303,103 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
     );
 }
 
-/// `set_has_dynamic_fee` must touch **only** its column. An `UpdatePoolFees`
-/// event can toggle the dynamic fee but carries no base-fee mode, so writing
-/// through `set_fee_config` would have meant inventing a `base_fee_kind` — or
-/// re-reading it just to write it back.
+// ── needs_refresh: the invalidation loop ────────────────────────────
+
+/// The whole indexer→context handshake, end to end.
+///
+/// A resolved pool is out of the queue. The indexer sees a fee-change event and
+/// raises the flag — without writing any property value — and the pool comes
+/// back. The refresh then lowers it, and the pool leaves again.
 #[sqlx::test]
-async fn set_has_dynamic_fee_leaves_base_fee_kind_alone(pool: PgPool) {
+async fn the_refresh_flag_puts_a_resolved_pool_back_in_the_queue(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
 
-    // Genesis wrote the shape…
-    repo.set_fee_config(&pk(1), "scheduler_linear", false)
-        .await
-        .expect("set_fee_config failed");
-    // …then an operator turns the dynamic fee on.
-    repo.set_has_dynamic_fee(&pk(1), true)
-        .await
-        .expect("set_has_dynamic_fee failed");
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+    assert!(
+        satellite.list_unresolved(100).await.unwrap().is_empty(),
+        "a resolved pool must be out of the queue to begin with"
+    );
 
-    let props = read_properties(&repo, &pk(1))
+    // What the indexer does on UpdatePoolFees — and all it does.
+    registry
+        .mark_needs_refresh(&pk(1))
+        .await
+        .expect("mark_needs_refresh failed");
+
+    assert_eq!(
+        satellite.list_unresolved(100).await.unwrap(),
+        vec![pk(1)],
+        "a flagged pool must be proposed again even though no column is NULL"
+    );
+
+    resolve(
+        &satellite,
+        &registry,
+        &pk(1),
+        Some(BaseFeeKind::RateLimiter),
+    )
+    .await;
+
+    assert!(
+        satellite.list_unresolved(100).await.unwrap().is_empty(),
+        "the refresh must lower the flag"
+    );
+    let props = read_properties(&satellite, &pk(1))
         .await
         .expect("row should exist");
+    assert_eq!(props.base_fee_kind.as_deref(), Some("rate_limiter"));
+}
+
+/// The satellite write **must not** clear the flag: only the registry write
+/// does, and the worker issues it last. Were it otherwise, a satellite success
+/// followed by a registry failure would drop the pool from the queue with half
+/// its properties refreshed.
+#[sqlx::test]
+async fn only_the_registry_write_lowers_the_flag(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
+
+    resolve(&satellite, &registry, &pk(1), Some(BaseFeeKind::Constant)).await;
+    registry.mark_needs_refresh(&pk(1)).await.unwrap();
+
+    // Only the satellite half lands — as if the registry write then failed.
+    satellite
+        .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect("set_pool_account failed");
+
     assert_eq!(
-        props.has_dynamic_fee,
-        Some(true),
-        "the flag must be updated"
-    );
-    assert_eq!(
-        props.base_fee_kind.as_deref(),
-        Some("scheduler_linear"),
-        "base_fee_kind must survive — it cannot change through this event"
+        satellite.list_unresolved(100).await.unwrap(),
+        vec![pk(1)],
+        "the pool must stay queued until the registry write lands"
     );
 }
 
-/// …and it creates the row when the genesis event was never seen, which is the
-/// common case: a pool's creation is only observable if we were already
-/// watching.
+/// `set_pool_account` writes the satellite and **nothing else** — the `pools`
+/// registry is another repository's table now.
 #[sqlx::test]
-async fn set_has_dynamic_fee_creates_the_row_when_genesis_was_missed(pool: PgPool) {
+async fn set_pool_account_does_not_touch_the_registry(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
-    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
 
-    repo.set_has_dynamic_fee(&pk(1), true)
+    satellite
+        .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
         .await
-        .expect("set_has_dynamic_fee failed");
+        .expect("set_pool_account failed");
 
-    let props = read_properties(&repo, &pk(1))
-        .await
-        .expect("row should have been created");
-    assert_eq!(props.has_dynamic_fee, Some(true));
-    assert_eq!(props.base_fee_kind, None);
+    let row = sqlx::query_as::<_, (Option<String>, Option<Decimal>)>(
+        "SELECT token_a_mint, fee_bps FROM pools WHERE pool_address = $1",
+    )
+    .bind(pk(1).to_string())
+    .fetch_one(&pool)
+    .await
+    .expect("pool read failed");
+    assert_eq!(
+        row.0, None,
+        "the registry's mints are not this repo's to write"
+    );
+    assert_eq!(row.1, None, "nor its fee_bps");
 }

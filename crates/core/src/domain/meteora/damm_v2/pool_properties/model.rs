@@ -1,4 +1,3 @@
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
@@ -20,16 +19,14 @@ use crate::amm::damm_v2::BaseFeeKind;
 ///
 /// # Why every field is optional
 ///
-/// The two groups are filled by different mechanisms, at different times, and
-/// fail independently:
+/// Every field comes from the same source — yog-context reading the on-chain
+/// cp-amm `Pool` account — so they are `None` **together**, for a pool that has
+/// been discovered but not yet resolved. This is not a per-field failure mode:
+/// it is the row of a pool the enrichment queue has not reached.
 ///
-/// - the **fee-split percents** are resolved as a unit by yog-context reading the
-///   on-chain cp-amm `Pool` account, so all three are `None` together until that
-///   resolution happens;
-/// - the **fee shape** (`base_fee_kind`, `has_dynamic_fee`) is decoded from the
-///   genesis `InitializePool` event's raw fee blob, so both stay `None` for any
-///   pool whose genesis the indexer never saw — the common case, since a pool's
-///   creation is only observable when we were already watching the protocol.
+/// The one exception is `base_fee_kind`, which can be `None` on a row where
+/// everything else is filled: a `BaseFeeMode` this build cannot map costs that
+/// field alone (see [`MeteoraDammV2PoolAccountProperties::base_fee_kind`]).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MeteoraDammV2PoolProperties {
     /// The pool these properties describe.
@@ -47,47 +44,44 @@ pub struct MeteoraDammV2PoolProperties {
     /// referral account). `None` until resolved.
     pub referral_fee_percent: Option<u8>,
 
-    /// How the base fee behaves over time, decoded from the genesis fee config
-    /// (`InitializePool`): `constant`, `scheduler_linear`,
-    /// `scheduler_exponential` or `rate_limiter` (see
-    /// `amm::damm_v2::BaseFeeKind::as_str`). `None` until that event is seen, or
-    /// if the fee blob failed to decode.
+    /// How the base fee behaves over time, read from the account's `BaseFeeMode`
+    /// and period count: `constant`, `scheduler_linear`, `scheduler_exponential`,
+    /// `rate_limiter`, `market_cap_scheduler_linear` or
+    /// `market_cap_scheduler_exponential` (see `amm::damm_v2::BaseFeeKind`).
+    /// `None` until resolved, or if the mode is one this build cannot map.
     pub base_fee_kind: Option<String>,
 
-    /// Whether a volatility-based dynamic fee sits on top of the base fee,
-    /// decoded from the same genesis config. Orthogonal to `base_fee_kind` — a
-    /// pool can run a scheduler and a dynamic fee at once. `None` until decoded.
+    /// Whether a volatility-based dynamic fee sits on top of the base fee, from
+    /// the same account read. Orthogonal to `base_fee_kind` — a pool can run a
+    /// scheduler and a dynamic fee at once. `None` until resolved.
     pub has_dynamic_fee: Option<bool>,
 }
 
-/// Everything one read of a cp-amm `Pool` account yields — the properties that
-/// are not inferable from the event stream. Written as a unit by yog-context via
-/// [`crate::domain::PoolAccountResolver::set_pool_account`], wrapped in the
-/// [`crate::domain::PoolAccountProperties`] enum.
+/// The cp-amm-only properties one read of a `Pool` account yields. Written by
+/// yog-context via [`crate::domain::PoolAccountResolver::set_pool_account`],
+/// wrapped in the [`crate::domain::PoolAccountProperties`] enum.
 ///
 /// Lives here, next to [`MeteoraDammV2PoolProperties`], and **not** in the
-/// cross-protocol `pool` module: the fee-split percents are cp-amm concepts and
-/// the mints are read at cp-amm's byte offsets. A DLMM `LbPair` account has a
+/// cross-protocol `pool` module: the fee-split percents and the fee shape are
+/// cp-amm concepts, read at cp-amm's byte offsets. A DLMM `LbPair` account has a
 /// different layout and a different property set, so it gets its own type rather
 /// than widening this one — which is what keeps [`crate::domain::Pool`] free of
 /// one protocol's vocabulary.
 ///
 /// # Not the same type as [`MeteoraDammV2PoolProperties`]
 ///
-/// This one is **total**: it is what a successful account read produces, so
-/// every field is present. The other is **partial** (`Option` everywhere)
-/// because it is what the database holds, filled by two independent writers at
-/// different times. Merging them would force one of the two to lie.
+/// This one is (near-)**total**: it is what a successful account read produces.
+/// The other is **partial** (`Option` everywhere) because it is what the
+/// database holds, which includes rows nobody has resolved yet. Merging them
+/// would force one of the two to lie.
 ///
-/// The fields straddle two tables: `token_a_mint` / `token_b_mint` / `fee_bps`
-/// land on the neutral `pools` registry, the two percents on this protocol's
-/// satellite. The resolver writes both from this one value, atomically.
+/// Every field here lands on **this protocol's satellite and nowhere else**. The
+/// neutral half of the same account read — the mints and the base fee, which
+/// every protocol has — travels as [`crate::domain::PoolRegistryProperties`] and is
+/// written by the `pools` registry's own repository. That separation is what
+/// gives each table a single writer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeteoraDammV2PoolAccountProperties {
-    pub token_a_mint: Pubkey,
-    pub token_b_mint: Pubkey,
-    /// Base trading fee in basis points (genesis cliff for a scheduler pool).
-    pub fee_bps: Decimal,
     /// Fee-split percents (0..=100): Meteora's cut and a referrer's cut of the
     /// trading fee. They are **not adjacent** in the account — `padding_0` sits
     /// between them, at the offset a `partner_fee_percent` field used to be read
