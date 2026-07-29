@@ -18,9 +18,11 @@ api/src/
 │   ├── app_state.rs       ← AppState — dependency container (Arc<dyn Trait>)
 │   └── config.rs          ← Config::load() — env-driven
 ├── application/
-│   ├── services/          ← one service per resource: PoolService,
-│   │                        SignalService, StatsService, TokenService,
-│   │                        NetworkStatusService, MeteoraDammV2Swap/Liquidity
+│   ├── services/          ← cross-protocol services at the root (PoolService,
+│   │   │                    SignalService, StatsService, TokenService,
+│   │   │                    NetworkStatusService, AnnouncementService)…
+│   │   └── meteora/damm_v2/ …per-protocol ones under their protocol
+│   │                        (swap.rs, liquidity.rs) — mirrors core/domain
 │   ├── signal_stream.rs   ← SignalStreamPoller (feeds the SSE broadcast)
 │   ├── enriched_pool.rs   ← pool + embedded token/price composition
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
@@ -40,6 +42,25 @@ mapping; handlers are pure async functions taking axum extractors and
 returning `Result<Json<T>, ApiError>`. `AppState` holds every dependency as
 `Arc<dyn Trait>` — `Clone` is cheap, and swapping a `Pg*` repository for a
 mock in tests is free.
+
+### Where a service goes
+
+A service sits under `services/<protocol>/<product>/` when its repository,
+params and result are irreducibly that product's — the swap and liquidity feeds
+read columns that exist only in `meteora_damm_v2_*` tables. Everything else stays
+at the root, **including services whose only data source today is DAMM v2**.
+
+The test is reach, not current content. `PoolService` serves every protocol's
+pools; it reaches per-protocol data through the generic `PoolPropertiesLookup`
+and never learns which protocol answered. A cross-protocol service must not name
+a protocol in its constructor: that is how a neutral type accretes one
+protocol's vocabulary, which is what migration 036 removed from the `pools`
+table and what the layout above keeps out of the service layer.
+
+The one place the read path matches on a protocol is
+`http/dto/response/pool.rs` — the wire shape genuinely differs per protocol, and
+its `PoolProperties` destructuring is irrefutable-by-construction, so adding a
+variant breaks the build there instead of silently dropping a field.
 
 ## Endpoints
 

@@ -189,12 +189,6 @@ impl MeteoraDammV2PoolPropertiesRepository for MockPoolProperties {
         rec(&self.0, "pool:set_has_dynamic_fee");
         Ok(())
     }
-    async fn find_by_pool(
-        &self,
-        _: &Pubkey,
-    ) -> RepositoryResult<Option<yog_core::domain::MeteoraDammV2PoolProperties>> {
-        unreachable!("read side is the api's, never exercised by the persistor")
-    }
 }
 
 struct MockPcsRepo(Calls);

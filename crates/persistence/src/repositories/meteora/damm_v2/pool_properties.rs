@@ -4,15 +4,18 @@
 //! cross-protocol `pools` registry so no protocol carries NULL columns for
 //! another protocol's concepts.
 //!
-//! One `Pg` type, two traits, one per consumer — the same pattern as
+//! One `Pg` type, three traits, one per consumer — the same pattern as
 //! `PgPoolRepository` (write side / read side):
 //!
 //! - [`MeteoraDammV2PoolPropertiesRepository`] — the indexer writes the fee shape
 //!   (`base_fee_kind`, `has_dynamic_fee`) decoded from the genesis
-//!   `InitializePool` blob; the api reads the whole row for the detail sheet.
+//!   `InitializePool` blob.
 //! - [`PoolAccountResolver`] — yog-context's enrichment queue and its two-table
 //!   write. Generic trait, per-protocol implementation: the queue below filters
 //!   on this protocol, the write accepts only this protocol's variant.
+//! - [`PoolPropertiesLookup`] — the api's read for the pool detail sheet. Also a
+//!   generic trait with a per-protocol implementation, so the reading service
+//!   holds `Vec<Arc<dyn PoolPropertiesLookup>>` and names no protocol.
 //!
 //! Each upsert touches only its own columns on conflict: neither writer may
 //! clobber the other's, and either may land first.
@@ -39,7 +42,7 @@ use yog_core::{
     RepositoryResult,
     domain::{
         MeteoraDammV2PoolProperties, MeteoraDammV2PoolPropertiesRepository, PoolAccountProperties,
-        PoolAccountResolver, Protocol,
+        PoolAccountResolver, PoolProperties, PoolPropertiesLookup, Protocol,
     },
 };
 
@@ -105,11 +108,21 @@ impl MeteoraDammV2PoolPropertiesRepository for PgMeteoraDammV2PoolPropertiesRepo
 
         Ok(())
     }
+}
 
+#[async_trait]
+impl PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
+    fn protocol(&self) -> Protocol {
+        Protocol::MeteoraDammV2
+    }
+
+    /// No protocol predicate needed here, unlike
+    /// [`PoolAccountResolver::list_unresolved`]: this reads the satellite by
+    /// primary key, and a pool of another protocol simply has no row in it.
     async fn find_by_pool(
         &self,
         pool_address: &Pubkey,
-    ) -> RepositoryResult<Option<MeteoraDammV2PoolProperties>> {
+    ) -> RepositoryResult<Option<PoolProperties>> {
         let row = sqlx::query_as!(
             MeteoraDammV2PoolPropertiesRow,
             r#"
@@ -124,7 +137,9 @@ impl MeteoraDammV2PoolPropertiesRepository for PgMeteoraDammV2PoolPropertiesRepo
         .await
         .map_err(map_sqlx_error)?;
 
-        row.map(MeteoraDammV2PoolProperties::try_from).transpose()
+        row.map(MeteoraDammV2PoolProperties::try_from)
+            .transpose()
+            .map(|p| p.map(PoolProperties::MeteoraDammV2))
     }
 }
 

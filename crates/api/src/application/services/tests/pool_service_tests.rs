@@ -8,9 +8,13 @@ use crate::testing::{
     PoolRepoOnce, make_metadata, make_page, make_pool, make_price, make_signal_record, pk,
 };
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use std::collections::HashMap;
-use yog_core::domain::{PoolAnalytics, PoolListQuery, PoolRankMetric};
+use yog_core::domain::{
+    MeteoraDammV2PoolProperties, Pool, PoolAnalytics, PoolListQuery, PoolProperties,
+    PoolPropertiesLookup, PoolRankMetric, Protocol,
+};
 use yog_core::{PageDirection, PoolSort};
 
 fn service(
@@ -47,39 +51,71 @@ fn service_with_signals(
         Arc::new(metadata),
         Arc::new(price),
         Arc::new(signals),
-        Arc::new(MockPoolPropertiesRepo),
+        vec![Arc::new(MockPropertiesLookup::empty(
+            Protocol::MeteoraDammV2,
+        ))],
     )
 }
 
-/// The DAMM v2 satellite is not what these tests exercise: they cover the
-/// enrichment pipeline (tokens, analytics, signals). An empty satellite is the
-/// realistic default anyway — most pools have no row until yog-context or a
-/// genesis event fills one.
-struct MockPoolPropertiesRepo;
+/// A `PoolPropertiesLookup` for one protocol, recording whether it was consulted.
+///
+/// The satellite is not what most of these tests exercise — they cover the
+/// enrichment pipeline (tokens, analytics, signals) — so the default answers
+/// `None`, which is the realistic case anyway: most pools have no row until
+/// yog-context or a genesis event fills one. The call counter exists for the
+/// routing tests, which assert on *who was asked*, not just on what came back.
+struct MockPropertiesLookup {
+    protocol: Protocol,
+    answer: Option<PoolProperties>,
+    calls: AtomicUsize,
+}
+
+impl MockPropertiesLookup {
+    fn empty(protocol: Protocol) -> Self {
+        Self {
+            protocol,
+            answer: None,
+            calls: AtomicUsize::new(0),
+        }
+    }
+
+    fn with(protocol: Protocol, answer: PoolProperties) -> Self {
+        Self {
+            protocol,
+            answer: Some(answer),
+            calls: AtomicUsize::new(0),
+        }
+    }
+
+    fn calls(&self) -> usize {
+        self.calls.load(Ordering::SeqCst)
+    }
+}
 
 #[async_trait::async_trait]
-impl yog_core::domain::MeteoraDammV2PoolPropertiesRepository for MockPoolPropertiesRepo {
-    async fn set_fee_config(
-        &self,
-        _: &solana_pubkey::Pubkey,
-        _: &str,
-        _: bool,
-    ) -> yog_core::RepositoryResult<()> {
-        unreachable!("write side belongs to the indexer, never called by the api")
+impl PoolPropertiesLookup for MockPropertiesLookup {
+    fn protocol(&self) -> Protocol {
+        self.protocol
     }
-    async fn set_has_dynamic_fee(
-        &self,
-        _: &solana_pubkey::Pubkey,
-        _: bool,
-    ) -> yog_core::RepositoryResult<()> {
-        unreachable!("write side belongs to the indexer, never called by the api")
-    }
+
     async fn find_by_pool(
         &self,
         _: &solana_pubkey::Pubkey,
-    ) -> yog_core::RepositoryResult<Option<yog_core::domain::MeteoraDammV2PoolProperties>> {
-        Ok(None)
+    ) -> yog_core::RepositoryResult<Option<PoolProperties>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self.answer.clone())
     }
+}
+
+fn damm_v2_properties(addr: solana_pubkey::Pubkey) -> PoolProperties {
+    PoolProperties::MeteoraDammV2(MeteoraDammV2PoolProperties {
+        pool_address: addr,
+        protocol_fee_percent: Some(20),
+        partner_fee_percent: None,
+        referral_fee_percent: None,
+        base_fee_kind: Some("constant".to_string()),
+        has_dynamic_fee: Some(false),
+    })
 }
 
 fn default_params() -> PoolListQuery {
@@ -261,6 +297,72 @@ async fn get_pool_enriches_found_pool() {
         enriched.token_a.metadata.as_ref().unwrap().symbol,
         Some("AAA".to_string())
     );
+}
+
+/// The pool's own protocol picks the lookup, and its answer reaches the detail
+/// sheet as-is. Registering the lookup is the whole wiring — the service names
+/// no protocol.
+#[tokio::test]
+async fn get_pool_detail_routes_to_the_matching_protocol_lookup() {
+    let addr = pk(1);
+    let lookup = Arc::new(MockPropertiesLookup::with(
+        Protocol::MeteoraDammV2,
+        damm_v2_properties(addr),
+    ));
+
+    let svc = PoolService::new(
+        Arc::new(PoolRepoOnce::with_pool(Some(make_pool(
+            addr,
+            pk(10),
+            pk(11),
+        )))),
+        Arc::new(MockPoolCurrentStateRepo::not_found()),
+        Arc::new(MockAnalyticsRepo::empty()),
+        Arc::new(MockMetadataRepo::empty()),
+        Arc::new(MockPriceRepo::empty()),
+        Arc::new(MockSignalRepo::recent_empty()),
+        vec![lookup.clone()],
+    );
+
+    let detail = svc.get_pool_detail(&addr).await.unwrap().unwrap();
+
+    assert_eq!(lookup.calls(), 1);
+    assert_eq!(detail.properties, Some(damm_v2_properties(addr)));
+}
+
+/// A pool of a protocol with no registered lookup yields no properties **and no
+/// round-trip**: the registered lookup is never consulted.
+///
+/// This is the regression guard for the coupling this module used to have. With
+/// a hard-wired DAMM v2 repository, a DLMM pool either queried the cp-amm
+/// satellite for nothing or relied on a `match` arm someone had to remember to
+/// write; neither is possible now.
+#[tokio::test]
+async fn get_pool_detail_skips_a_protocol_with_no_lookup() {
+    let addr = pk(2);
+    let pool = Pool {
+        protocol: Protocol::MeteoraDlmm,
+        ..make_pool(addr, pk(10), pk(11))
+    };
+    let damm_v2_lookup = Arc::new(MockPropertiesLookup::with(
+        Protocol::MeteoraDammV2,
+        damm_v2_properties(addr),
+    ));
+
+    let svc = PoolService::new(
+        Arc::new(PoolRepoOnce::with_pool(Some(pool))),
+        Arc::new(MockPoolCurrentStateRepo::not_found()),
+        Arc::new(MockAnalyticsRepo::empty()),
+        Arc::new(MockMetadataRepo::empty()),
+        Arc::new(MockPriceRepo::empty()),
+        Arc::new(MockSignalRepo::recent_empty()),
+        vec![damm_v2_lookup.clone()],
+    );
+
+    let detail = svc.get_pool_detail(&addr).await.unwrap().unwrap();
+
+    assert_eq!(damm_v2_lookup.calls(), 0);
+    assert_eq!(detail.properties, None);
 }
 
 #[tokio::test]

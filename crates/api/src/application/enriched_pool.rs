@@ -9,8 +9,8 @@
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2PoolProperties, Pool, PoolAnalytics, SignalRecord, TokenMetadata,
-        TokenMetadataLookup, TokenPrice, TokenPriceLookup,
+        Pool, PoolAnalytics, PoolProperties, SignalRecord, TokenMetadata, TokenMetadataLookup,
+        TokenPrice, TokenPriceLookup,
     },
 };
 
@@ -85,7 +85,13 @@ pub(crate) struct EnrichedPool {
 /// for it.
 pub(crate) struct EnrichedPoolDetail {
     pub(crate) pool: EnrichedPool,
-    /// `None` for a pool of another protocol, or for a DAMM v2 pool with no
-    /// satellite row yet (discovered, but neither enriched nor seen at genesis).
-    pub(crate) meteora_damm_v2_properties: Option<MeteoraDammV2PoolProperties>,
+    /// The pool's protocol-specific properties, still in domain form — the
+    /// variant is the protocol's. `None` for a protocol that stores none, or for
+    /// a pool with no satellite row yet (discovered, but neither enriched nor
+    /// seen at genesis).
+    ///
+    /// Kept as the [`PoolProperties`] enum rather than one protocol's type so
+    /// that nothing between the repository and the wire DTO has to know which
+    /// protocol this is.
+    pub(crate) properties: Option<PoolProperties>,
 }

@@ -58,5 +58,5 @@ impl MeteoraDammV2SwapService {
 }
 
 #[cfg(test)]
-#[path = "tests/swap_service_tests.rs"]
+#[path = "tests/swap_tests.rs"]
 mod tests;

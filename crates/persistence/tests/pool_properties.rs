@@ -20,13 +20,29 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolPropertiesRepository,
-    PoolAccountProperties, PoolAccountResolver, Protocol,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
+    MeteoraDammV2PoolPropertiesRepository, PoolAccountProperties, PoolAccountResolver,
+    PoolProperties, PoolPropertiesLookup, Protocol,
 };
 use yog_persistence::PgMeteoraDammV2PoolPropertiesRepository;
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
+}
+
+/// Read one pool's satellite row, unwrapping the cross-protocol
+/// [`PoolProperties`] enum the lookup returns. The reads below assert on cp-amm
+/// columns, so they want the concrete type; the enum is the api's concern.
+async fn read_properties(
+    repo: &PgMeteoraDammV2PoolPropertiesRepository,
+    addr: &Pubkey,
+) -> Option<MeteoraDammV2PoolProperties> {
+    repo.find_by_pool(addr)
+        .await
+        .expect("find_by_pool failed")
+        .map(|properties| match properties {
+            PoolProperties::MeteoraDammV2(properties) => properties,
+        })
 }
 
 /// Insert a bare pool row, as `discover_pool` would: address + protocol only,
@@ -84,10 +100,8 @@ async fn set_pool_account_writes_both_the_registry_and_the_satellite(pool: PgPoo
     assert_eq!(row.1, Some(Decimal::new(25, 0)));
 
     // …and the cp-amm percents on the satellite, created by the same call.
-    let props = repo
-        .find_by_pool(&pk(1))
+    let props = read_properties(&repo, &pk(1))
         .await
-        .expect("find_by_pool failed")
         .expect("satellite row should have been created");
     assert_eq!(props.protocol_fee_percent, Some(20));
     assert_eq!(props.referral_fee_percent, Some(20));
@@ -139,10 +153,8 @@ async fn fee_config_and_percents_coexist_whichever_lands_first(pool: PgPool) {
         .expect("set_fee_config failed");
 
     for addr in [pk(1), pk(2)] {
-        let props = repo
-            .find_by_pool(&addr)
+        let props = read_properties(&repo, &addr)
             .await
-            .expect("find_by_pool failed")
             .expect("row should exist");
         assert_eq!(
             props.base_fee_kind.as_deref(),
@@ -246,10 +258,8 @@ async fn set_has_dynamic_fee_leaves_base_fee_kind_alone(pool: PgPool) {
         .await
         .expect("set_has_dynamic_fee failed");
 
-    let props = repo
-        .find_by_pool(&pk(1))
+    let props = read_properties(&repo, &pk(1))
         .await
-        .expect("find_by_pool failed")
         .expect("row should exist");
     assert_eq!(
         props.has_dynamic_fee,
@@ -275,10 +285,8 @@ async fn set_has_dynamic_fee_creates_the_row_when_genesis_was_missed(pool: PgPoo
         .await
         .expect("set_has_dynamic_fee failed");
 
-    let props = repo
-        .find_by_pool(&pk(1))
+    let props = read_properties(&repo, &pk(1))
         .await
-        .expect("find_by_pool failed")
         .expect("row should have been created");
     assert_eq!(props.has_dynamic_fee, Some(true));
     assert_eq!(props.base_fee_kind, None);
