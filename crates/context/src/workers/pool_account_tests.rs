@@ -10,6 +10,7 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
+use yog_core::amm::damm_v2::BaseFeeKind;
 
 use yog_core::domain::{
     MeteoraDammV2PoolAccountProperties, PoolAccountProperties, PoolAccountResolver, Protocol,
@@ -29,9 +30,12 @@ fn cp_amm_account(token_a: Pubkey, token_b: Pubkey) -> Vec<u8> {
     let mut bytes = vec![0u8; 1112];
     bytes[..8].copy_from_slice(&[0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc]);
     bytes[8..16].copy_from_slice(&2_500_000u64.to_le_bytes()); // 25 bps
+    bytes[16] = 0; // BaseFeeMode::FeeTimeSchedulerLinear
+    bytes[22..24].copy_from_slice(&0u16.to_le_bytes()); // no periods → constant
     bytes[48] = 20; // protocol
     bytes[49] = 0; // padding_0 — decoded by nothing
     bytes[50] = 20; // referral
+    bytes[56] = 1; // dynamic_fee.initialized
     bytes[168..200].copy_from_slice(token_a.as_ref());
     bytes[200..232].copy_from_slice(token_b.as_ref());
     bytes
@@ -44,6 +48,8 @@ fn expected_properties(token_a: Pubkey, token_b: Pubkey) -> PoolAccountPropertie
         fee_bps: Decimal::new(25, 0),
         protocol_fee_percent: 20,
         referral_fee_percent: 20,
+        base_fee_kind: Some(BaseFeeKind::Constant),
+        has_dynamic_fee: true,
     })
 }
 

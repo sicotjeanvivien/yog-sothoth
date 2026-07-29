@@ -66,10 +66,36 @@ pub(in crate::application::decoder) const POOL_DISCRIMINATOR: [u8; 8] =
 /// `cliff_fee_numerator`: the leading `u64` of `pool_fees`, right after the
 /// 8-byte discriminator. The same quantity decoded from the genesis event.
 pub(in crate::application::decoder) const CLIFF_FEE_NUMERATOR_OFFSET: usize = 8;
+/// `BaseFeeMode` discriminant, at byte 8 of `BaseFeeInfo`.
+///
+/// `BaseFeeInfo` is a `[u8; 32]` reinterpreted as one of three pod structs
+/// (time scheduler, rate limiter, market-cap scheduler). All three share the
+/// same first 9 bytes — `cliff_fee_numerator` then `base_fee_mode` — which is
+/// what makes reading the mode safe without knowing which variant it is.
+pub(in crate::application::decoder) const BASE_FEE_MODE_OFFSET: usize = 16;
+
+/// Scheduler period count (`u16`, little-endian), at byte 14 of `BaseFeeInfo`.
+///
+/// **Only meaningful for the scheduler modes (0, 1, 3, 4)**, whose three pod
+/// variants all place `number_of_period` here. Mode 2 (rate limiter) puts
+/// `fee_increment_bps` at the same spot — [`yog_core`'s mapping] never consults
+/// this value for that mode.
+///
+/// [`yog_core`'s mapping]: crate::amm::damm_v2::base_fee_kind_from
+pub(in crate::application::decoder) const NUMBER_OF_PERIOD_OFFSET: usize = 22;
+
 /// Fee-split percents (`u8` each), after the 40-byte `BaseFeeStruct` inside
 /// `PoolFeesStruct`. **Not adjacent**: `padding_0` sits at 49 between them.
 pub(in crate::application::decoder) const PROTOCOL_FEE_PERCENT_OFFSET: usize = 48;
 pub(in crate::application::decoder) const REFERRAL_FEE_PERCENT_OFFSET: usize = 50;
+
+/// `DynamicFeeStruct::initialized`, the first byte of the dynamic-fee block.
+///
+/// A plain flag, not a borsh `Option` tag: **non-zero means enabled**. Unlike
+/// the genesis event's blob — where the same fact is an `Option` tag whose
+/// position shifts with what precedes it — this byte is at a fixed offset and
+/// carries no tri-state.
+pub(in crate::application::decoder) const DYNAMIC_FEE_INITIALIZED_OFFSET: usize = 56;
 pub(in crate::application::decoder) const TOKEN_A_MINT_OFFSET: usize = 168;
 pub(in crate::application::decoder) const TOKEN_B_MINT_OFFSET: usize = 200;
 
@@ -99,6 +125,17 @@ pub(in crate::application::decoder) fn decode_pool_account(
         return Err(PoolAccountRejection::NotAPoolAccount { protocol: PROTOCOL });
     }
 
+    // The fee *shape*. Unknown mode → `None` rather than a rejection: see the
+    // note on `base_fee_kind` below for why this one property must not be able
+    // to fail the whole decode.
+    let number_of_period = u16::from_le_bytes(
+        data[NUMBER_OF_PERIOD_OFFSET..NUMBER_OF_PERIOD_OFFSET + 2]
+            .try_into()
+            .expect("2 bytes, length checked above"),
+    );
+    let base_fee_kind =
+        crate::amm::damm_v2::base_fee_kind_from(data[BASE_FEE_MODE_OFFSET], number_of_period).ok();
+
     // Every slice below is in bounds: the length check above covers the whole
     // layout, so these conversions cannot fail.
     let cliff_fee_numerator = u64::from_le_bytes(
@@ -115,5 +152,7 @@ pub(in crate::application::decoder) fn decode_pool_account(
         fee_bps: fee_numerator_to_bps(cliff_fee_numerator),
         protocol_fee_percent: data[PROTOCOL_FEE_PERCENT_OFFSET],
         referral_fee_percent: data[REFERRAL_FEE_PERCENT_OFFSET],
+        base_fee_kind,
+        has_dynamic_fee: data[DYNAMIC_FEE_INITIALIZED_OFFSET] != 0,
     })
 }

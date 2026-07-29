@@ -154,6 +154,24 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     /// satellite row yet" is one of the conditions that makes a pool a
     /// candidate, and that is true of every pool of every other protocol,
     /// forever. Only `p.protocol` excludes them.
+    ///
+    /// # Why `base_fee_kind` is not in the predicate
+    ///
+    /// It is the one account-derived property that can legitimately stay NULL
+    /// after a *successful* resolution: cp-amm may gain a `BaseFeeMode` this
+    /// build cannot map. Testing it here would put every such pool back in the
+    /// queue on every cycle, forever — and with `ORDER BY first_seen_at` and a
+    /// capped batch, those pools would pile up at the head and starve the ones
+    /// behind, which is precisely the failure this query's protocol filter
+    /// exists to prevent.
+    ///
+    /// `has_dynamic_fee` stands in for the pair instead. It is written by the
+    /// same call and is **always** decodable (a flag byte at a fixed offset), so
+    /// it is NULL exactly when the fee shape has never been resolved, and never
+    /// merely because a value was undecodable. A pool whose mode we cannot map
+    /// therefore leaves the queue with the shape it could get — and is not
+    /// re-proposed by a later build that learns the mode, which is the accepted
+    /// cost of not starving the queue.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         let rows = sqlx::query!(
             r#"
@@ -165,7 +183,8 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
               AND (p.token_a_mint IS NULL OR p.token_b_mint IS NULL OR p.fee_bps IS NULL
                 OR props.pool_address           IS NULL
                 OR props.protocol_fee_percent   IS NULL
-                OR props.referral_fee_percent   IS NULL)
+                OR props.referral_fee_percent   IS NULL
+                OR props.has_dynamic_fee        IS NULL)
             ORDER BY p.first_seen_at
             LIMIT $1
             "#,
@@ -208,6 +227,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             i16::from(properties.protocol_fee_percent),
             i16::from(properties.referral_fee_percent),
         );
+        let base_fee_kind = properties.base_fee_kind.map(|kind| kind.as_str());
 
         let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
 
@@ -229,15 +249,24 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_pool_properties
-                (pool_address, protocol_fee_percent, referral_fee_percent)
-            VALUES ($1, $2, $3)
+                (pool_address, protocol_fee_percent, referral_fee_percent,
+                 base_fee_kind, has_dynamic_fee)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (pool_address) DO UPDATE
                 SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
-                    referral_fee_percent = EXCLUDED.referral_fee_percent
+                    referral_fee_percent = EXCLUDED.referral_fee_percent,
+                    has_dynamic_fee      = EXCLUDED.has_dynamic_fee,
+                    -- COALESCE, not EXCLUDED: an account whose BaseFeeMode we
+                    -- cannot map sends NULL, and that must not erase a kind an
+                    -- earlier decode (or the genesis event) already established.
+                    base_fee_kind        = COALESCE(EXCLUDED.base_fee_kind,
+                                                    meteora_damm_v2_pool_properties.base_fee_kind)
             "#,
             pool_address.to_string(),
             protocol_pct,
             referral_pct,
+            base_fee_kind,
+            properties.has_dynamic_fee,
         )
         .execute(&mut *tx)
         .await
