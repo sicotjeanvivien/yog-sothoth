@@ -143,6 +143,26 @@ future migrations inherit the right `SELECT` grants automatically. It contains
 no table-specific GRANTs — those live in the migrations. The role → rights →
 process mapping is documented in [`crates/README.md`](../README.md#database-roles).
 
+### The privilege matrix is tested
+
+`tests/privileges.rs` declares the intended privilege surface by hand and asserts
+it against what the migrations actually produce — in **both** directions, so a
+forgotten GRANT and an unintended one both fail. **Adding a table means adding
+its line**; the failure prints the exact `GRANT`/`REVOKE` for whatever disagrees.
+
+Read that failure as a question — *is the migration wrong, or the matrix?* —
+before editing either. Pasting the missing line to go green is how migration
+036's gap survived a month: `yog_indexer` lost the rights it needed when the
+fee-shape columns moved to a satellite, and every write it attempted failed with
+`permission denied` under its real role, silently, because the writes are
+skip-and-log and the tests run as the owner.
+
+Scope: **explicit grants only**. The default privileges above do not reproduce in
+a `sqlx::test` database — that file is not a migration, and `ALTER DEFAULT
+PRIVILEGES FOR ROLE yog_migrate` only covers objects *created by* `yog_migrate`,
+while tests apply migrations as the connecting user. The module doc spells out
+what that leaves uncovered.
+
 ## SQLx offline cache
 
 The crate uses `sqlx::query!` macros verified against the live schema at
