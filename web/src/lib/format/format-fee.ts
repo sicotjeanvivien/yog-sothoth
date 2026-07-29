@@ -26,23 +26,21 @@ export function formatFeeBps(feeBps: string | null): string {
 }
 
 /**
- * Format the *configured* fee split (protocol / partner / referral percents)
- * for display, e.g. `"Protocol 20% · Partner 0% · Referral 20%"`.
+ * Format the *configured* fee split (protocol / referral percents) for display,
+ * e.g. `"Protocol 20% · Referral 20%"`.
  *
  * The percents are resolved as a unit from the pool account, so this returns
- * the em-dash placeholder unless all three are known — "factual or absent,
- * never fake". Role labels are passed in already translated.
+ * the em-dash placeholder unless both are known — "factual or absent, never
+ * fake". Role labels are passed in already translated.
+ *
+ * A partner cut used to be shown here. It never existed: the API decoded a
+ * padding byte of the pool account and always reported 0 (migration 037).
  */
 export function formatFeeSplit(
   protocol: number | null,
-  partner: number | null,
   referral: number | null,
-  labels: { protocol: string; partner: string; referral: string },
+  labels: { protocol: string; referral: string },
 ): string {
-  if (protocol === null || partner === null || referral === null) return DASH;
-  return [
-    `${labels.protocol} ${protocol}%`,
-    `${labels.partner} ${partner}%`,
-    `${labels.referral} ${referral}%`,
-  ].join(" · ");
+  if (protocol === null || referral === null) return DASH;
+  return [`${labels.protocol} ${protocol}%`, `${labels.referral} ${referral}%`].join(" · ");
 }

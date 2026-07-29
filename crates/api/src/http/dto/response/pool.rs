@@ -176,10 +176,12 @@ pub(crate) struct PoolDetailResponse {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MeteoraDammV2PropertiesResponse {
-    /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's,
-    /// a partner's, and a referrer's cut of the trading fee.
+    /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's
+    /// cut and a referrer's cut of the trading fee.
+    ///
+    /// There is no partner cut. `partnerFeePercent` was served here until
+    /// migration 037; it decoded a padding byte and was always 0.
     pub(crate) protocol_fee_percent: Option<u8>,
-    pub(crate) partner_fee_percent: Option<u8>,
     pub(crate) referral_fee_percent: Option<u8>,
     /// How the base fee behaves over time: `constant`, `scheduler_linear`,
     /// `scheduler_exponential` or `rate_limiter`. `None` if the genesis event
@@ -193,7 +195,6 @@ impl From<MeteoraDammV2PoolProperties> for MeteoraDammV2PropertiesResponse {
     fn from(p: MeteoraDammV2PoolProperties) -> Self {
         Self {
             protocol_fee_percent: p.protocol_fee_percent,
-            partner_fee_percent: p.partner_fee_percent,
             referral_fee_percent: p.referral_fee_percent,
             base_fee_kind: p.base_fee_kind,
             has_dynamic_fee: p.has_dynamic_fee,

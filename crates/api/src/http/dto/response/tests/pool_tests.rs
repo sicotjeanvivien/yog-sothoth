@@ -90,7 +90,6 @@ fn pool_detail_omits_protocol_block_when_absent() {
 fn pool_detail_nests_damm_v2_properties_under_their_protocol() {
     let json = detail_response(Some(MeteoraDammV2PropertiesResponse {
         protocol_fee_percent: Some(20),
-        partner_fee_percent: Some(0),
         referral_fee_percent: Some(20),
         base_fee_kind: Some("constant".to_string()),
         has_dynamic_fee: Some(false),

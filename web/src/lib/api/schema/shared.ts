@@ -29,6 +29,6 @@ export const SignedBigDecimal = z.string().regex(/^-?\d+(\.\d+)?$/, {
 
 /**
  * A fee-split percent as emitted by yog-api: a `u8` in `0..=100`, sent as a
- * JSON number (not a string). Used for the protocol/partner/referral cuts.
+ * JSON number (not a string). Used for the protocol and referral cuts.
  */
 export const FeePercent = z.number().int().min(0).max(100);

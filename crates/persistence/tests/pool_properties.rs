@@ -69,7 +69,6 @@ fn account_properties() -> PoolAccountProperties {
         token_b_mint: pk(11),
         fee_bps: Decimal::new(25, 0),
         protocol_fee_percent: 20,
-        partner_fee_percent: 0,
         referral_fee_percent: 20,
     })
 }

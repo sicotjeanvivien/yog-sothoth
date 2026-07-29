@@ -15,7 +15,6 @@ fn valid_row() -> MeteoraDammV2PoolPropertiesRow {
     MeteoraDammV2PoolPropertiesRow {
         pool_address: VALID_POOL.into(),
         protocol_fee_percent: Some(20),
-        partner_fee_percent: Some(0),
         referral_fee_percent: Some(20),
         base_fee_kind: Some("constant".to_string()),
         has_dynamic_fee: Some(false),
@@ -29,7 +28,6 @@ fn try_from_valid_row_maps_every_field() {
 
     assert_eq!(props.pool_address.to_string(), VALID_POOL);
     assert_eq!(props.protocol_fee_percent, Some(20));
-    assert_eq!(props.partner_fee_percent, Some(0));
     assert_eq!(props.referral_fee_percent, Some(20));
     assert_eq!(props.base_fee_kind.as_deref(), Some("constant"));
     assert_eq!(props.has_dynamic_fee, Some(false));
@@ -39,14 +37,12 @@ fn try_from_valid_row_maps_every_field() {
 fn try_from_null_fee_percents_maps_to_none() {
     let row = MeteoraDammV2PoolPropertiesRow {
         protocol_fee_percent: None,
-        partner_fee_percent: None,
         referral_fee_percent: None,
         ..valid_row()
     };
     let props = MeteoraDammV2PoolProperties::try_from(row).expect("null percents should convert");
 
     assert!(props.protocol_fee_percent.is_none());
-    assert!(props.partner_fee_percent.is_none());
     assert!(props.referral_fee_percent.is_none());
 }
 
@@ -56,7 +52,6 @@ fn try_from_null_fee_percents_maps_to_none() {
 fn try_from_fee_shape_without_percents_converts() {
     let row = MeteoraDammV2PoolPropertiesRow {
         protocol_fee_percent: None,
-        partner_fee_percent: None,
         referral_fee_percent: None,
         base_fee_kind: Some("scheduler_linear".to_string()),
         has_dynamic_fee: Some(true),

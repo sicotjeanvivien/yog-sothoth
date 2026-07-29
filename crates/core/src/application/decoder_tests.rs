@@ -11,9 +11,8 @@
 use super::*;
 use crate::application::decoder::PoolAccountRejection;
 use crate::application::decoder::meteora::damm_v2::{
-    CLIFF_FEE_NUMERATOR_OFFSET, PARTNER_FEE_PERCENT_OFFSET, POOL_DISCRIMINATOR,
-    PROTOCOL_FEE_PERCENT_OFFSET, REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET,
-    TOKEN_B_MINT_OFFSET,
+    CLIFF_FEE_NUMERATOR_OFFSET, POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET,
+    REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET, TOKEN_B_MINT_OFFSET,
 };
 use crate::domain::PoolAccountProperties;
 use rust_decimal::Decimal;
@@ -24,11 +23,16 @@ fn pk(seed: u8) -> Pubkey {
 
 const CP_AMM_ACCOUNT_LEN: usize = 1112;
 
+/// Byte 49 of the account: cp-amm's `padding_0`, between `protocol_fee_percent`
+/// and `referral_fee_percent`. Named here only so the regression test below can
+/// poison it — the decoder must have no constant for it.
+const PADDING_0_OFFSET: usize = 49;
+
 /// A cp-amm `Pool` account with the discriminator, the cliff fee numerator, the
-/// three fee-split percents and the two mints at their real offsets.
+/// two fee-split percents and the two mints at their real offsets.
 fn cp_amm_account(
     cliff_fee_numerator: u64,
-    percents: (u8, u8, u8),
+    percents: (u8, u8),
     token_a: Pubkey,
     token_b: Pubkey,
 ) -> Vec<u8> {
@@ -37,8 +41,7 @@ fn cp_amm_account(
     bytes[CLIFF_FEE_NUMERATOR_OFFSET..CLIFF_FEE_NUMERATOR_OFFSET + 8]
         .copy_from_slice(&cliff_fee_numerator.to_le_bytes());
     bytes[PROTOCOL_FEE_PERCENT_OFFSET] = percents.0;
-    bytes[PARTNER_FEE_PERCENT_OFFSET] = percents.1;
-    bytes[REFERRAL_FEE_PERCENT_OFFSET] = percents.2;
+    bytes[REFERRAL_FEE_PERCENT_OFFSET] = percents.1;
     bytes[TOKEN_A_MINT_OFFSET..TOKEN_A_MINT_OFFSET + 32].copy_from_slice(token_a.as_ref());
     bytes[TOKEN_B_MINT_OFFSET..TOKEN_B_MINT_OFFSET + 32].copy_from_slice(token_b.as_ref());
     bytes
@@ -52,9 +55,9 @@ fn cp_amm_owner() -> Pubkey {
 
 #[test]
 fn decodes_cp_amm_fields_at_their_offsets() {
-    // 2_500_000 / 1e9 = 0.25% = 25 bps; (protocol, partner, referral) =
-    // (20, 0, 20) — a real mainnet constant-fee value and split.
-    let data = cp_amm_account(2_500_000, (20, 0, 20), pk(2), pk(3));
+    // 2_500_000 / 1e9 = 0.25% = 25 bps; (protocol, referral) = (20, 20) —
+    // a real mainnet constant-fee value and split.
+    let data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
 
     let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("should decode");
 
@@ -64,8 +67,27 @@ fn decodes_cp_amm_fields_at_their_offsets() {
     assert_eq!(props.token_b_mint, pk(3));
     assert_eq!(props.fee_bps, Decimal::new(25, 0));
     assert_eq!(props.protocol_fee_percent, 20);
-    assert_eq!(props.partner_fee_percent, 0);
     assert_eq!(props.referral_fee_percent, 20);
+}
+
+/// Byte 49 is cp-amm's `padding_0`, not a partner fee (migration 037). Poison it
+/// and assert **nothing** changes: the two real percents keep their values and
+/// the padding leaks into no field.
+///
+/// The regression this pins is not "wrong value" but "field with no referent".
+/// It went unnoticed for a month because the decoded value was always 0, which
+/// is exactly what a plausible partner cut looks like — so the guard has to be
+/// on the decoder reading the byte at all, not on what it produced.
+#[test]
+fn padding_between_the_percents_is_not_decoded() {
+    let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+    data[PADDING_0_OFFSET] = 0xFF;
+
+    let decoded = decode_pool_account(&cp_amm_owner(), &data).expect("should decode");
+
+    let PoolAccountProperties::MeteoraDammV2(props) = decoded;
+    assert_eq!(props.protocol_fee_percent, 20, "byte 48 must be untouched");
+    assert_eq!(props.referral_fee_percent, 20, "byte 50 must be untouched");
 }
 
 // ── The two guards ──────────────────────────────────────────────────
@@ -76,7 +98,7 @@ fn decodes_cp_amm_fields_at_their_offsets() {
 
 #[test]
 fn an_unindexed_program_is_rejected_as_such() {
-    let data = cp_amm_account(2_500_000, (20, 0, 20), pk(2), pk(3));
+    let data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
 
     assert_eq!(
         decode_pool_account(&pk(99), &data),
@@ -86,7 +108,7 @@ fn an_unindexed_program_is_rejected_as_such() {
 
 #[test]
 fn wrong_discriminator_is_rejected_as_not_a_pool_account() {
-    let mut data = cp_amm_account(2_500_000, (20, 0, 20), pk(2), pk(3));
+    let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
     data[..8].fill(0);
 
     assert_eq!(
