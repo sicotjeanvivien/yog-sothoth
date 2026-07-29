@@ -61,41 +61,43 @@ impl PoolMaintenance {
         Ok(())
     }
 
-    /// Record a pool's base trading fee (basis points), decoded from its
-    /// genesis fee config. Best-effort: a failure here is logged but never
-    /// aborts the caller — the pool simply keeps a NULL `fee_bps`.
-    pub(crate) async fn set_fee_bps(
+    /// Flag a pool whose account-derived properties an event just invalidated,
+    /// so yog-context re-reads its on-chain account.
+    ///
+    /// **The indexer's only way to affect a pool property.** It does not decode
+    /// the new value and store it: those columns have a single writer, and an
+    /// update event carries a *delta* — variable-offset borsh tags, `Option`s
+    /// encoding three states — where the account carries resolved state at fixed
+    /// offsets.
+    ///
+    /// Unlike the writes it replaces this returns its error rather than
+    /// swallowing it: a lost flag is a property that stays stale until the next
+    /// event happens to touch the pool, so the caller decides how loudly to say
+    /// so.
+    pub(crate) async fn mark_needs_refresh(
         &self,
         protocol: Protocol,
         pool_address: &solana_pubkey::Pubkey,
-        fee_bps: rust_decimal::Decimal,
-    ) {
+    ) -> anyhow::Result<()> {
         let start = Instant::now();
-        match self.pool_repo.set_fee_bps(pool_address, fee_bps).await {
-            Ok(()) => {
-                EventPersistorMetrics::record_persist_duration(
-                    &protocol,
-                    "pool_set_fee_bps",
-                    start.elapsed().as_secs_f64(),
-                );
-            }
-            Err(err) => {
-                warn!(
-                    protocol = %protocol.as_str(),
-                    error = %err,
-                    "pool set_fee_bps failed"
-                );
-            }
-        }
+        self.pool_repo.mark_needs_refresh(pool_address).await?;
+        EventPersistorMetrics::record_persist_duration(
+            &protocol,
+            "pool_mark_needs_refresh",
+            start.elapsed().as_secs_f64(),
+        );
+        Ok(())
     }
 
-    // NOTE: `set_fee_config` used to live here. It writes `base_fee_kind` /
-    // `has_dynamic_fee`, which are cp-amm concepts that moved to the DAMM v2
-    // satellite table in migration 036 — so it moved to the DAMM v2
-    // sub-persistor, which owns that repository. It never belonged in this
-    // cross-protocol helper: it took a `protocol` argument while writing columns
-    // only one protocol could ever fill. `set_fee_bps` stays, because a base fee
-    // in bps is genuinely shared.
+    // NOTE: this crate no longer writes any pool *property*.
+    //
+    // `set_fee_bps` lived here and wrote the base fee decoded from a genesis or
+    // fee-update event; `set_fee_config` lived here before migration 036 moved
+    // it to the DAMM v2 sub-persistor. Both are gone: `pools` and the satellites
+    // have a single writer, yog-context, and this crate flags a pool for refresh
+    // instead. What remains here is identity and observation — `discover_pool`
+    // and `touch_pool` — which are facts about *seeing* a pool, not about the
+    // state of its on-chain account.
 
     /// Refresh `last_seen_at` for a pool. No-op if the pool is unknown
     /// (will be created when a Swap or Liquidity event arrives later).

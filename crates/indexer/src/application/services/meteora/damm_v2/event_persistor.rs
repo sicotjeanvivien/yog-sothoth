@@ -8,7 +8,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, warn};
-use yog_core::amm::damm_v2::DynamicFeeUpdate;
 use yog_core::domain::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
     MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
@@ -21,10 +20,9 @@ use yog_core::domain::{
     MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
     MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
     MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
-    MeteoraDammV2PoolPropertiesRepository, MeteoraDammV2SetPoolStatusEvent,
-    MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SplitPositionEvent,
-    MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SwapEvent,
-    MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
+    MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
+    MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionEventRepository,
+    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
     MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2UpdateRewardDurationEvent,
     MeteoraDammV2UpdateRewardDurationEventRepository, MeteoraDammV2UpdateRewardFunderEvent,
     MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
@@ -59,10 +57,10 @@ pub(crate) struct DammV2Repos {
     pub set_pool_status: Arc<dyn MeteoraDammV2SetPoolStatusEventRepository>,
     pub split_position: Arc<dyn MeteoraDammV2SplitPositionEventRepository>,
     pub update_pool_fees: Arc<dyn MeteoraDammV2UpdatePoolFeesEventRepository>,
-    /// Not an event table: the DAMM v2 pool-properties satellite (migration
-    /// 036). Written here rather than through `PoolMaintenance` because its
-    /// columns are cp-amm concepts, not cross-protocol ones.
-    pub pool_properties: Arc<dyn MeteoraDammV2PoolPropertiesRepository>,
+    // NOTE: no pool-properties repository here any more. The satellite is
+    // written only by yog-context, from the on-chain account; this crate raises
+    // `pools.needs_refresh` instead of storing values it would have to decode
+    // from an update delta.
 }
 
 pub(crate) struct MeteoraDammV2EventPersistor {
@@ -382,67 +380,6 @@ impl MeteoraDammV2EventPersistor {
             .map_err(anyhow::Error::new)
     }
 
-    /// Record the pool's decoded fee *shape* on the DAMM v2 satellite.
-    /// Best-effort: a failure is logged but never aborts the caller — the pool
-    /// simply keeps NULL fee-shape columns, never wrong ones.
-    ///
-    /// Lives here rather than on `PoolMaintenance` since migration 036:
-    /// `base_fee_kind` / `has_dynamic_fee` are cp-amm notions, so they belong to
-    /// the protocol's own persistor and its own table.
-    async fn set_fee_config(
-        &self,
-        pool_address: &solana_pubkey::Pubkey,
-        base_fee_kind: &str,
-        has_dynamic_fee: bool,
-    ) {
-        let start = Instant::now();
-        match self
-            .repos
-            .pool_properties
-            .set_fee_config(pool_address, base_fee_kind, has_dynamic_fee)
-            .await
-        {
-            Ok(()) => {
-                EventPersistorMetrics::record_persist_duration(
-                    &Self::PROTOCOL,
-                    "pool_set_fee_config",
-                    start.elapsed().as_secs_f64(),
-                );
-            }
-            Err(err) => {
-                warn!(error = %err, kind = "initialize_pool", "pool set_fee_config failed");
-            }
-        }
-    }
-
-    /// Record whether the dynamic fee is enabled, on the DAMM v2 satellite.
-    /// Best-effort, like [`Self::set_fee_config`]: a failure is logged but never
-    /// aborts the caller.
-    async fn set_has_dynamic_fee(
-        &self,
-        pool_address: &solana_pubkey::Pubkey,
-        has_dynamic_fee: bool,
-    ) {
-        let start = Instant::now();
-        match self
-            .repos
-            .pool_properties
-            .set_has_dynamic_fee(pool_address, has_dynamic_fee)
-            .await
-        {
-            Ok(()) => {
-                EventPersistorMetrics::record_persist_duration(
-                    &Self::PROTOCOL,
-                    "pool_set_has_dynamic_fee",
-                    start.elapsed().as_secs_f64(),
-                );
-            }
-            Err(err) => {
-                warn!(error = %err, kind = "update_pool_fees", "pool set_has_dynamic_fee failed");
-            }
-        }
-    }
-
     /// Pool genesis carries both mints, so it registers the pool authoritatively
     /// (full upsert) rather than just touching last-seen. It does not feed the
     /// current-state projection — there is no price/reserve trajectory yet.
@@ -462,36 +399,14 @@ impl MeteoraDammV2EventPersistor {
         {
             warn!(error = %err, kind = "initialize_pool", "pool upsert failed");
         }
-        // Decode the headline base fee from the genesis "voie C" blob and record
-        // it as a pool property. Skip-and-log on an undecodable blob (unknown
-        // fee mode): the pool keeps a NULL fee_bps rather than a wrong value.
-        match yog_core::amm::damm_v2::decode_base_fee_bps(&event.pool_fees_raw) {
-            Ok(fee_bps) => {
-                self.pool_maintenance
-                    .set_fee_bps(Self::PROTOCOL, &event.pool_address, fee_bps)
-                    .await;
-            }
-            Err(err) => {
-                warn!(error = %err, kind = "initialize_pool", "fee_bps decode failed");
-            }
-        }
-        // Decode the fee *shape* (base-fee kind + dynamic-fee flag) from the
-        // same genesis blob and record it. Independent of the fee tier above:
-        // one may decode while the other fails. Skip-and-log keeps the columns
-        // NULL rather than wrong.
-        match yog_core::amm::damm_v2::decode_fee_config(&event.pool_fees_raw) {
-            Ok(cfg) => {
-                self.set_fee_config(
-                    &event.pool_address,
-                    cfg.base_kind.as_str(),
-                    cfg.has_dynamic_fee,
-                )
-                .await;
-            }
-            Err(err) => {
-                warn!(error = %err, kind = "initialize_pool", "fee_config decode failed");
-            }
-        }
+        // The genesis blob carries the base fee and the fee shape, and this used
+        // to decode both and store them. It no longer does: those columns belong
+        // to yog-context, which reads them from the account. `discover_pool`
+        // above leaves them NULL, which already puts the pool in the enrichment
+        // queue — so there is nothing to invalidate here.
+        //
+        // The blob itself is not lost: it is stored verbatim on this event's own
+        // table by the insert below.
         self.repos
             .initialize_pool
             .insert(event)
@@ -537,37 +452,24 @@ impl MeteoraDammV2EventPersistor {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
-        // An operator fee change refreshes the pool's headline fee tier — but
-        // only when it actually touched the base fee (Some). Skip-and-log on an
-        // undecodable blob: keep the previous fee_bps rather than a wrong value.
-        match yog_core::amm::damm_v2::decode_updated_base_fee_bps(&event.params_raw) {
-            Ok(Some(fee_bps)) => {
-                self.pool_maintenance
-                    .set_fee_bps(Self::PROTOCOL, &event.pool_address, fee_bps)
-                    .await;
-            }
-            Ok(None) => {}
-            Err(err) => {
-                warn!(error = %err, kind = "update_pool_fees", "fee_bps decode failed");
-            }
-        }
-        // The same event can toggle the dynamic fee, which `has_dynamic_fee`
-        // would otherwise keep at its genesis value forever — a stale flag shown
-        // in the pool detail sheet. `base_fee_kind` is deliberately left alone:
-        // the program only lets an operator change the cliff numerator, and only
-        // while the base fee is static, so the mode cannot drift.
-        match yog_core::amm::damm_v2::decode_updated_dynamic_fee(&event.params_raw) {
-            Ok(DynamicFeeUpdate::Skip) => {}
-            Ok(update) => {
-                self.set_has_dynamic_fee(
-                    &event.pool_address,
-                    matches!(update, DynamicFeeUpdate::Enable),
-                )
-                .await;
-            }
-            Err(err) => {
-                warn!(error = %err, kind = "update_pool_fees", "dynamic_fee decode failed");
-            }
+        // An operator fee change moves properties this crate no longer owns:
+        // the base fee tier on `pools`, the dynamic-fee flag on the satellite.
+        // Rather than decode the update and write the new values, flag the pool
+        // — yog-context re-reads the account and rewrites every property, so
+        // each column keeps exactly one writer.
+        //
+        // Reading state instead of a delta also drops a real hazard. This blob
+        // is a borsh `PoolFeeParameters` whose dynamic-fee tag moves between
+        // byte 1 and byte 9 depending on whether the base fee was touched, and
+        // whose `Option` encodes *three* states — `Some(default)` means
+        // "disable". The account carries the resolved value at a fixed offset,
+        // with nothing to disambiguate.
+        if let Err(err) = self
+            .pool_maintenance
+            .mark_needs_refresh(Self::PROTOCOL, &event.pool_address)
+            .await
+        {
+            warn!(error = %err, kind = "update_pool_fees", "mark_needs_refresh failed");
         }
         self.repos
             .update_pool_fees

@@ -6,9 +6,9 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2PoolPropertiesRepository,
-    MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
-    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, TradeDirection,
+    MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
+    MeteoraDammV2SplitPositionState, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
+    PoolRepository, TradeDirection,
 };
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
@@ -169,25 +169,18 @@ impl PoolRepository for MockPoolRepo {
         rec(&self.0, "pool:touch");
         Ok(())
     }
-    async fn set_fee_bps(&self, _: &Pubkey, _: rust_decimal::Decimal) -> RepositoryResult<()> {
-        rec(&self.0, "pool:set_fee_bps");
+    async fn mark_needs_refresh(&self, _: &Pubkey) -> RepositoryResult<()> {
+        rec(&self.0, "pool:mark_needs_refresh");
         Ok(())
     }
-}
-
-// The DAMM v2 pool-properties satellite (migration 036). `pool:set_fee_config`
-// keeps its historical call label so the existing assertions still read the same
-// sequence — only the repository it lands on changed.
-struct MockPoolProperties(Calls);
-#[async_trait]
-impl MeteoraDammV2PoolPropertiesRepository for MockPoolProperties {
-    async fn set_fee_config(&self, _: &Pubkey, _: &str, _: bool) -> RepositoryResult<()> {
-        rec(&self.0, "pool:set_fee_config");
-        Ok(())
-    }
-    async fn set_has_dynamic_fee(&self, _: &Pubkey, _: bool) -> RepositoryResult<()> {
-        rec(&self.0, "pool:set_has_dynamic_fee");
-        Ok(())
+    /// Never called from this crate: the registry's account-derived columns are
+    /// written by yog-context alone. Present only to satisfy the trait.
+    async fn set_account_core(
+        &self,
+        _: &Pubkey,
+        _: &yog_core::domain::PoolAccountCore,
+    ) -> RepositoryResult<()> {
+        unreachable!("set_account_core belongs to yog-context, never the indexer")
     }
 }
 
@@ -231,7 +224,6 @@ fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
         set_pool_status: Arc::new(MockSetStatus(calls.clone())),
         split_position: Arc::new(MockSplitPosition(calls.clone())),
         update_pool_fees: Arc::new(MockUpdateFees(calls.clone())),
-        pool_properties: Arc::new(MockPoolProperties(calls.clone())),
     };
     let pm = Arc::new(PoolMaintenance::new(
         Arc::new(MockPoolRepo(calls.clone())),
@@ -586,11 +578,11 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         ["pool:touch", "insert:permanent_lock_position"]
     );
 
-    // initialize_pool: full upsert + decode/record fee + insert, NO
-    // projection. The 27-byte fee blob (numerator 2_500_000, mode 0)
-    // decodes cleanly, so the fee_bps step fires between upsert and insert.
-    // 31 bytes: enough for both decodes — set_fee_bps (cliff numerator @ 0..8,
-    // 2_500_000 → 25 bps) and set_fee_config (mode @26, dynamic-fee tag @30).
+    // initialize_pool: upsert + insert, NO projection and — since this crate
+    // stopped writing pool properties — no fee decoding either. `discover_pool`
+    // leaves the property columns NULL, which already queues the pool for
+    // yog-context, so there is nothing to flag. The blob is still captured
+    // verbatim on the event's own row.
     // All-zero tail → mode 0, no periods, no dynamic fee → constant fee shape.
     let mut fee_blob = vec![0u8; 31];
     fee_blob[0..8].copy_from_slice(&2_500_000u64.to_le_bytes());
@@ -625,12 +617,7 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
             })
         )
         .await,
-        [
-            "pool:upsert",
-            "pool:set_fee_bps",
-            "pool:set_fee_config",
-            "insert:initialize_pool"
-        ]
+        ["pool:upsert", "insert:initialize_pool"]
     );
 
     // set_pool_status / update_pool_fees: touch + insert.
@@ -657,98 +644,16 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 signature: sg(),
                 timestamp: ts(),
                 operator: pk(12),
-                // cliff_fee_numerator = Some(2_500_000) → 25 bps: refreshes
-                // the fee tier, so set_fee_bps fires between touch and insert.
-                // The blob ends there — an older build with no dynamic field —
-                // so the dynamic fee is left alone.
+                // The blob is no longer decoded at all: a fee change flags the
+                // pool and yog-context re-reads the account.
                 params_raw: vec![1, 160, 37, 38, 0, 0, 0, 0, 0],
             })
         )
         .await,
-        ["pool:touch", "pool:set_fee_bps", "insert:update_pool_fees"]
-    );
-}
-
-/// An operator can toggle the dynamic fee in the same event, and
-/// `has_dynamic_fee` must follow — it is written at genesis only otherwise, and
-/// the pool detail sheet shows it.
-#[tokio::test]
-async fn update_pool_fees_enabling_the_dynamic_fee_writes_the_flag() {
-    let calls: Calls = Arc::new(Mutex::new(Vec::new()));
-    let p = build(calls.clone());
-
-    assert_eq!(
-        route(
-            &p,
-            &calls,
-            MeteoraDammV2Event::UpdatePoolFees(MeteoraDammV2UpdatePoolFeesEvent {
-                pool_address: pk(1),
-                signature: sg(),
-                timestamp: ts(),
-                operator: pk(12),
-                params_raw: update_pool_fees_blob(Some(true)),
-            })
-        )
-        .await,
         [
             "pool:touch",
-            "pool:set_fee_bps",
-            "pool:set_has_dynamic_fee",
+            "pool:mark_needs_refresh",
             "insert:update_pool_fees"
         ]
     );
-}
-
-/// The disable case, which no fixture shows: cp-amm signals it with
-/// `Some(DynamicFeeParameters::default())` — an all-zero payload. It must reach
-/// the repository just like enabling does, not be mistaken for "no change".
-#[tokio::test]
-async fn update_pool_fees_disabling_the_dynamic_fee_also_writes_the_flag() {
-    let calls: Calls = Arc::new(Mutex::new(Vec::new()));
-    let p = build(calls.clone());
-
-    assert_eq!(
-        route(
-            &p,
-            &calls,
-            MeteoraDammV2Event::UpdatePoolFees(MeteoraDammV2UpdatePoolFeesEvent {
-                pool_address: pk(1),
-                signature: sg(),
-                timestamp: ts(),
-                operator: pk(12),
-                params_raw: update_pool_fees_blob(Some(false)),
-            })
-        )
-        .await,
-        [
-            "pool:touch",
-            "pool:set_fee_bps",
-            "pool:set_has_dynamic_fee",
-            "insert:update_pool_fees"
-        ]
-    );
-}
-
-/// `cliff_fee_numerator = Some(25 bps)` followed by the dynamic field:
-/// `None` → absent, `Some(true)` → real values, `Some(false)` → all zeros.
-fn update_pool_fees_blob(dynamic: Option<bool>) -> Vec<u8> {
-    let mut blob = vec![1u8, 160, 37, 38, 0, 0, 0, 0, 0];
-    match dynamic {
-        None => blob.push(0),
-        Some(enabled) => {
-            blob.push(1);
-            if enabled {
-                blob.extend_from_slice(&1u16.to_le_bytes());
-                blob.extend_from_slice(&1_844_674_407_370_955u128.to_le_bytes());
-                blob.extend_from_slice(&10u16.to_le_bytes());
-                blob.extend_from_slice(&120u16.to_le_bytes());
-                blob.extend_from_slice(&5000u16.to_le_bytes());
-                blob.extend_from_slice(&14_460_000u32.to_le_bytes());
-                blob.extend_from_slice(&1224u32.to_le_bytes());
-            } else {
-                blob.extend_from_slice(&[0u8; 32]);
-            }
-        }
-    }
-    blob
 }

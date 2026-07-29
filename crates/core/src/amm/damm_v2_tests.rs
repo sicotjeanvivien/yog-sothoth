@@ -67,262 +67,54 @@ fn test_net_price_impact_higher_than_without_fee() {
     );
 }
 
-// ── decode_base_fee_bps ─────────────────────────────────────────────────
+// ── base_fee_kind_from ──────────────────────────────────────────────────
 
-/// Real `base_fee` bytes captured from `damm_v2/initialize_pool_2.json`:
-/// a constant-fee pool, cliff_fee_numerator = 2_500_000 → 0.25 % = 25 bps,
-/// mode 0 (linear scheduler, no periods).
+/// The mapping is shared by every reader of a `BaseFeeMode`, so it is tested
+/// here on its own terms — the account decoder's tests cover reading the two
+/// inputs out of a real layout.
+///
+/// A scheduler mode with zero periods is a **constant** fee: the mode byte
+/// alone is never the answer.
 #[test]
-fn decode_base_fee_bps_constant_25bps() {
-    let data: [u8; 27] = [
-        160, 37, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
-    assert_eq!(
-        decode_base_fee_bps(&data).unwrap(),
-        Decimal::new(25, 0),
-        "2_500_000 / 1e9 = 0.25% = 25 bps"
-    );
+fn scheduler_modes_with_no_periods_are_constant() {
+    for mode in [0u8, 1, 3, 4] {
+        assert_eq!(
+            base_fee_kind_from(mode, 0).unwrap(),
+            BaseFeeKind::Constant,
+            "mode {mode} with no periods"
+        );
+    }
 }
 
-/// Real `base_fee` bytes from `damm_v2/initialize_pool.json`: an anti-sniper
-/// fee-scheduler pool starting at 50% — cliff_fee_numerator = 500_000_000 →
-/// 5000 bps. We surface the genesis cliff, not the decayed value.
 #[test]
-fn decode_base_fee_bps_scheduler_cliff_5000bps() {
-    let data: [u8; 27] = [
-        0, 101, 205, 29, 0, 0, 0, 0, 144, 0, 88, 2, 0, 0, 0, 0, 0, 0, 196, 159, 46, 0, 0, 0, 0, 0,
-        0,
-    ];
-    assert_eq!(decode_base_fee_bps(&data).unwrap(), Decimal::new(5000, 0));
+fn scheduler_modes_with_periods_keep_their_own_kind() {
+    for (mode, expected) in [
+        (0u8, BaseFeeKind::SchedulerLinear),
+        (1, BaseFeeKind::SchedulerExponential),
+        (3, BaseFeeKind::MarketCapSchedulerLinear),
+        (4, BaseFeeKind::MarketCapSchedulerExponential),
+    ] {
+        assert_eq!(base_fee_kind_from(mode, 144).unwrap(), expected);
+    }
 }
 
-/// A fractional sub-bps fee must not round: 250_000 / 1e9 = 0.000_25 = 2.5 bps.
+/// Mode 2 reinterprets the bytes the schedulers use for the period count, so
+/// the value passed in is meaningless and must not change the answer.
 #[test]
-fn decode_base_fee_bps_fractional_is_lossless() {
-    let mut data = [0u8; 27];
-    data[0..8].copy_from_slice(&250_000u64.to_le_bytes());
-    assert_eq!(decode_base_fee_bps(&data).unwrap(), Decimal::new(25, 1));
+fn the_rate_limiter_ignores_the_period_count() {
+    for periods in [0u16, 144] {
+        assert_eq!(
+            base_fee_kind_from(2, periods).unwrap(),
+            BaseFeeKind::RateLimiter
+        );
+    }
 }
 
-/// Rate-limiter mode (2) is accepted: the base-fee numerator is still the
-/// leading u64.
+/// A mode cp-amm gains after this build is refused, never guessed.
 #[test]
-fn decode_base_fee_bps_rate_limiter_mode_ok() {
-    let mut data = [0u8; 27];
-    data[0..8].copy_from_slice(&1_000_000u64.to_le_bytes());
-    data[BASE_FEE_MODE_OFFSET] = 2;
-    assert_eq!(decode_base_fee_bps(&data).unwrap(), Decimal::new(10, 0));
-}
-
-/// An unknown mode discriminant is rejected fail-loud — never guessed.
-#[test]
-fn decode_base_fee_bps_unknown_mode_errors() {
-    let mut data = [0u8; 27];
-    data[BASE_FEE_MODE_OFFSET] = 7;
-    assert!(matches!(
-        decode_base_fee_bps(&data),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-/// A truncated blob is rejected fail-loud rather than indexing past the end.
-#[test]
-fn decode_base_fee_bps_too_short_errors() {
-    assert!(matches!(
-        decode_base_fee_bps(&[0u8; 10]),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-// ── decode_fee_config ───────────────────────────────────────────────────
-
-/// Full 63-byte `pool_fees_raw` from `damm_v2/initialize_pool_2.json`: a
-/// constant-fee pool (mode 0, number_of_period 0) carrying a dynamic fee.
-const REAL_CONSTANT_BLOB: [u8; 63] = [
-    160, 37, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 39, 0,
-    1, 1, 0, 203, 16, 199, 186, 184, 141, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 120, 0, 136, 19, 96,
-    164, 220, 0, 239, 0, 0, 0,
-];
-
-/// Full 63-byte `pool_fees_raw` from `damm_v2/initialize_pool.json`: an
-/// anti-sniper linear fee scheduler (mode 0, number_of_period 144) with a
-/// dynamic fee.
-const REAL_SCHEDULER_BLOB: [u8; 63] = [
-    0, 101, 205, 29, 0, 0, 0, 0, 144, 0, 88, 2, 0, 0, 0, 0, 0, 0, 196, 159, 46, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 1, 1, 0, 203, 16, 199, 186, 184, 141, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 120, 0,
-    136, 19, 96, 164, 220, 0, 107, 22, 0, 0,
-];
-
-/// Build a minimal synthetic `PoolFeeParameters` blob for the branches with no
-/// captured fixture (rate limiter, exponential scheduler, dynamic-fee off).
-/// Only the bytes `decode_fee_config` reads are set; length is exactly enough
-/// to reach the dynamic-fee tag.
-fn synth_fee_blob(
-    mode: u8,
-    number_of_period: u16,
-    dynamic_tag: u8,
-) -> [u8; DYNAMIC_FEE_TAG_OFFSET + 1] {
-    let mut b = [0u8; DYNAMIC_FEE_TAG_OFFSET + 1];
-    b[NUMBER_OF_PERIOD_OFFSET..NUMBER_OF_PERIOD_OFFSET + 2]
-        .copy_from_slice(&number_of_period.to_le_bytes());
-    b[BASE_FEE_MODE_OFFSET] = mode;
-    b[DYNAMIC_FEE_TAG_OFFSET] = dynamic_tag;
-    b
-}
-
-/// Real constant-fee pool: mode 0 + zero periods → `Constant`, dynamic on.
-#[test]
-fn decode_fee_config_real_constant_pool() {
-    assert_eq!(
-        decode_fee_config(&REAL_CONSTANT_BLOB).unwrap(),
-        FeeConfig {
-            base_kind: BaseFeeKind::Constant,
-            has_dynamic_fee: true,
-        }
-    );
-}
-
-/// Real scheduler pool: mode 0 + 144 periods → `SchedulerLinear`, dynamic on.
-/// The crux — same mode byte as the constant pool, told apart only by the
-/// period count.
-#[test]
-fn decode_fee_config_real_scheduler_pool() {
-    assert_eq!(
-        decode_fee_config(&REAL_SCHEDULER_BLOB).unwrap(),
-        FeeConfig {
-            base_kind: BaseFeeKind::SchedulerLinear,
-            has_dynamic_fee: true,
-        }
-    );
-}
-
-/// A scheduler *mode* with zero periods is a constant fee, not a scheduler.
-#[test]
-fn decode_fee_config_scheduler_mode_zero_periods_is_constant() {
-    let blob = synth_fee_blob(0, 0, 0);
-    assert_eq!(
-        decode_fee_config(&blob).unwrap().base_kind,
-        BaseFeeKind::Constant
-    );
-}
-
-/// Mode 1 with periods → exponential scheduler.
-#[test]
-fn decode_fee_config_exponential_scheduler() {
-    let blob = synth_fee_blob(1, 10, 0);
-    assert_eq!(
-        decode_fee_config(&blob).unwrap().base_kind,
-        BaseFeeKind::SchedulerExponential
-    );
-}
-
-/// Mode 2 → rate limiter, regardless of the bytes that mean "periods" for a
-/// scheduler (they are reinterpreted and must not be consulted here).
-#[test]
-fn decode_fee_config_rate_limiter() {
-    let blob = synth_fee_blob(2, 999, 0);
-    assert_eq!(
-        decode_fee_config(&blob).unwrap().base_kind,
-        BaseFeeKind::RateLimiter
-    );
-}
-
-/// The dynamic-fee flag reads the `Option` tag: 0 → absent.
-#[test]
-fn decode_fee_config_dynamic_fee_absent() {
-    let blob = synth_fee_blob(0, 0, 0);
-    assert!(!decode_fee_config(&blob).unwrap().has_dynamic_fee);
-}
-
-/// … 1 → present.
-#[test]
-fn decode_fee_config_dynamic_fee_present() {
-    let blob = synth_fee_blob(0, 0, 1);
-    assert!(decode_fee_config(&blob).unwrap().has_dynamic_fee);
-}
-
-/// A blob too short to hold the dynamic-fee tag is rejected fail-loud.
-#[test]
-fn decode_fee_config_too_short_errors() {
-    let short = [0u8; DYNAMIC_FEE_TAG_OFFSET]; // one byte shy of the tag
-    assert!(matches!(
-        decode_fee_config(&short),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-/// An unknown base-fee mode is rejected, never guessed.
-#[test]
-fn decode_fee_config_unknown_mode_errors() {
-    let blob = synth_fee_blob(7, 0, 0);
-    assert!(matches!(
-        decode_fee_config(&blob),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-/// A malformed borsh `Option` tag (neither 0 nor 1) is rejected.
-#[test]
-fn decode_fee_config_bad_dynamic_tag_errors() {
-    let blob = synth_fee_blob(0, 0, 2);
-    assert!(matches!(
-        decode_fee_config(&blob),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-// ── decode_updated_base_fee_bps ─────────────────────────────────────────
-
-/// Real `params_raw` bytes from `damm_v2/update_pool_fees.json`:
-/// cliff_fee_numerator = Some(12_800_000) → 128 bps, followed by a
-/// dynamic_fee (Some) and NO compounding_fee_bps field (the tx predates it)
-/// — which the leading-field decode ignores.
-#[test]
-fn decode_updated_base_fee_bps_real_fixture_128bps() {
-    let params: [u8; 42] = [
-        1, 0, 80, 195, 0, 0, 0, 0, 0, 1, 1, 0, 203, 16, 199, 186, 184, 141, 6, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 10, 0, 120, 0, 136, 19, 96, 164, 220, 0, 200, 4, 0, 0,
-    ];
-    assert_eq!(
-        decode_updated_base_fee_bps(&params).unwrap(),
-        Some(Decimal::new(128, 0)),
-        "12_800_000 / 1e9 = 1.28% = 128 bps"
-    );
-}
-
-/// tag 0 → the update left the base fee untouched.
-#[test]
-fn decode_updated_base_fee_bps_none_when_unchanged() {
-    // cliff None, then whatever trailing bytes — ignored.
-    let params = [0u8, 1, 2, 3, 4];
-    assert_eq!(decode_updated_base_fee_bps(&params).unwrap(), None);
-}
-
-/// tag 1 but fewer than 8 trailing bytes → fail-loud.
-#[test]
-fn decode_updated_base_fee_bps_truncated_value_errors() {
-    assert!(matches!(
-        decode_updated_base_fee_bps(&[1, 0, 0, 0]),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-/// A non-0/1 Option discriminant is rejected.
-#[test]
-fn decode_updated_base_fee_bps_bad_tag_errors() {
-    assert!(matches!(
-        decode_updated_base_fee_bps(&[9, 0, 0, 0, 0, 0, 0, 0, 0]),
-        Err(CoreError::FeeDecode { .. })
-    ));
-}
-
-/// An empty blob is rejected.
-#[test]
-fn decode_updated_base_fee_bps_empty_errors() {
-    assert!(matches!(
-        decode_updated_base_fee_bps(&[]),
-        Err(CoreError::FeeDecode { .. })
-    ));
+fn an_unknown_mode_is_refused() {
+    assert!(base_fee_kind_from(5, 0).is_err());
+    assert!(base_fee_kind_from(99, 12).is_err());
 }
 
 #[test]
@@ -383,118 +175,4 @@ fn sqrt_price_large_value_no_overflow() {
 #[test]
 fn sqrt_price_zero_is_none() {
     assert!(sqrt_price_to_price_a_in_b(0, 9, 6).is_none());
-}
-
-// ── decode_updated_dynamic_fee ──────────────────────────────────────────
-//
-// The three modes are cp-amm's own (`DynamicFeeUpdateMode`), and the disable
-// case is the one no fixture shows: the program signals it with
-// `Some(DynamicFeeParameters::default())`, i.e. an all-zero payload. Nothing in
-// the bytes announces the intent, so it has to be tested explicitly.
-
-/// `Option<DynamicFeeParameters>` payload: 32 bytes.
-fn dynamic_fee_payload(enabled: bool) -> Vec<u8> {
-    if enabled {
-        // The real mainnet values from the update_pool_fees fixture.
-        let mut p = Vec::new();
-        p.extend_from_slice(&1u16.to_le_bytes()); // bin_step
-        p.extend_from_slice(&1_844_674_407_370_955u128.to_le_bytes()); // bin_step_u128
-        p.extend_from_slice(&10u16.to_le_bytes()); // filter_period
-        p.extend_from_slice(&120u16.to_le_bytes()); // decay_period
-        p.extend_from_slice(&5000u16.to_le_bytes()); // reduction_factor
-        p.extend_from_slice(&14_460_000u32.to_le_bytes()); // max_volatility_accumulator
-        p.extend_from_slice(&1224u32.to_le_bytes()); // variable_fee_control
-        p
-    } else {
-        vec![0u8; 32]
-    }
-}
-
-/// `cliff_fee_numerator: Some(128 bps)` followed by the given dynamic field.
-fn update_params(dynamic: Option<bool>) -> Vec<u8> {
-    let mut blob = vec![1u8];
-    blob.extend_from_slice(&12_800_000u64.to_le_bytes());
-    match dynamic {
-        None => blob.push(0),
-        Some(enabled) => {
-            blob.push(1);
-            blob.extend_from_slice(&dynamic_fee_payload(enabled));
-        }
-    }
-    blob
-}
-
-#[test]
-fn updated_dynamic_fee_none_tag_is_skip() {
-    assert_eq!(
-        decode_updated_dynamic_fee(&update_params(None)).unwrap(),
-        DynamicFeeUpdate::Skip
-    );
-}
-
-#[test]
-fn updated_dynamic_fee_default_value_is_disable() {
-    // Some(all zeros) — the program's disable sentinel.
-    assert_eq!(
-        decode_updated_dynamic_fee(&update_params(Some(false))).unwrap(),
-        DynamicFeeUpdate::Disable
-    );
-}
-
-#[test]
-fn updated_dynamic_fee_real_values_are_enable() {
-    let blob = update_params(Some(true));
-    assert_eq!(blob.len(), 42, "must match the captured fixture's length");
-    assert_eq!(
-        decode_updated_dynamic_fee(&blob).unwrap(),
-        DynamicFeeUpdate::Enable
-    );
-}
-
-/// The dynamic tag sits at byte 1 when the base fee was **not** updated, and at
-/// byte 9 when it was. A fixed offset would misread every update that leaves the
-/// base fee alone — this is the regression guard for that.
-#[test]
-fn updated_dynamic_fee_is_found_when_the_base_fee_was_not_updated() {
-    let mut blob = vec![0u8]; // cliff_fee_numerator: None — no payload follows
-    blob.push(1);
-    blob.extend_from_slice(&dynamic_fee_payload(true));
-
-    assert_eq!(blob.len(), 34, "1 base tag + 1 dynamic tag + 32 payload");
-    assert_eq!(
-        decode_updated_dynamic_fee(&blob).unwrap(),
-        DynamicFeeUpdate::Enable
-    );
-}
-
-/// Tolerant on absence: a blob that ends before the dynamic field is an older
-/// program build, not a failure. Saying `Skip` leaves the column untouched;
-/// erroring would log noise on every legacy event.
-#[test]
-fn updated_dynamic_fee_absent_field_is_skip_not_an_error() {
-    // Exactly the shape of the 9-byte blob the indexer tests use.
-    let blob = update_params(None)[..9].to_vec();
-
-    assert_eq!(
-        decode_updated_dynamic_fee(&blob).unwrap(),
-        DynamicFeeUpdate::Skip
-    );
-}
-
-/// Strict on malformed, though: a `Some` whose payload is cut short is real
-/// drift and must surface.
-#[test]
-fn updated_dynamic_fee_truncated_payload_fails() {
-    let mut blob = update_params(Some(true));
-    blob.truncate(blob.len() - 1);
-
-    assert!(decode_updated_dynamic_fee(&blob).is_err());
-}
-
-#[test]
-fn updated_dynamic_fee_invalid_tag_fails() {
-    let mut blob = update_params(None);
-    *blob.last_mut().unwrap() = 7;
-
-    assert!(decode_updated_dynamic_fee(&blob).is_err());
 }

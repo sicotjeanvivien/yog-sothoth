@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pools SET needs_refresh = TRUE WHERE pool_address = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa024e3f162dae91d6f05e708aa1fd3ce160d3f40afcccabfcb27c0ccee56997"
+}
