@@ -59,14 +59,17 @@ type TablePrivileges<'a> = (&'a str, &'a [RolePrivileges<'a>]);
 
 /// Table-level privileges, by table then role.
 ///
-/// ## A known excess, deliberately recorded as-is
+/// ## `yog_indexer` owns the event tables outright
 ///
-/// `yog_indexer` holds `UPDATE` on all 22 DAMM v2 event tables, and **uses it on
-/// none**: every event insert is `ON CONFLICT … DO NOTHING`. The grant comes from
-/// the `add-migration` recipe, which emits `SELECT, INSERT, UPDATE` uniformly.
-/// It is written here because this matrix's first job is to freeze the current
-/// contract so drift becomes visible; tightening it means a `REVOKE` migration,
-/// which is its own deliberate act rather than a side effect of adding a test.
+/// It holds `SELECT, INSERT, UPDATE` on all 22 DAMM v2 event tables even though
+/// it currently updates none of them — every insert is `ON CONFLICT … DO
+/// NOTHING`. **That is intended, and the uniform grant is the point**: the
+/// indexer owns its event tables, and the grant states ownership rather than
+/// today's statements. `crates/README.md` says the same — "RW on event tables".
+///
+/// Recorded here so nobody re-derives an intent from usage and "tightens" it: an
+/// event table that later needs a corrective UPDATE must not require a migration
+/// to get a right it was always meant to have.
 const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
