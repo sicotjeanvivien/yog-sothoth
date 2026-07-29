@@ -31,7 +31,9 @@ core/src/
 │   ├── watched_pool/      (allowlist)
 │   ├── protocol/          (Protocol enum), trade_direction.rs, freshness_status/
 │   ├── domain_event.rs    (two-level DomainEvent enum)
-│   └── pool_account/      (two-level PoolAccountProperties + PoolAccountResolver)
+│   ├── pool_account/      (two-level PoolAccountProperties + PoolAccountResolver)
+│   └── pool_properties/   (two-level PoolProperties + PoolPropertiesLookup —
+│                           the read counterpart of pool_account/)
 ├── application/
 │   ├── extraction/        ← transaction → domain events use case
 │   │   ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
@@ -136,7 +138,7 @@ Each domain aggregate that needs persistence declares a repository trait in its 
 At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer — one lens per process, same `Pg*` struct behind both. The write/owning side keeps the `*Repository` name; read lenses are named by intent, from a deliberately small vocabulary:
 
 - **`*Feed`** — a cursor-paginated, time-ordered listing (`SignalFeed`, `MeteoraDammV2SwapEventFeed`, `MeteoraDammV2LiquidityEventFeed`).
-- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `PoolCurrentStateLookup`).
+- **`*Lookup`** — point reads by key or of a projection (`TokenMetadataLookup`, `TokenPriceLookup`, `NetworkStatusLookup`, `PoolCurrentStateLookup`, `PoolPropertiesLookup`).
 - **`PoolCatalog`** — the consultation surface of the pool registry (lookup + listing + counts).
 - **`PoolAccountResolver`** — context's property-backfill lens, named by its capability.
 

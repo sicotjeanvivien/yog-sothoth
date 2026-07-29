@@ -20,10 +20,9 @@ use solana_pubkey::Pubkey;
 use yog_core::{
     Page, RepositoryResult,
     domain::{
-        FeeTier, MeteoraDammV2PoolPropertiesRepository, Pool, PoolAnalytics,
-        PoolAnalyticsRepository, PoolCatalog, PoolCurrentState, PoolCurrentStateLookup,
-        PoolHistoryBucket, PoolListQuery, PoolRankMetric, Protocol, SignalFeed, SignalRecord,
-        TokenMetadataLookup, TokenPriceLookup,
+        FeeTier, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
+        PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolPropertiesLookup,
+        PoolRankMetric, SignalFeed, SignalRecord, TokenMetadataLookup, TokenPriceLookup,
     },
 };
 
@@ -70,7 +69,11 @@ pub(crate) struct PoolService {
     token_metadata_repository: Arc<dyn TokenMetadataLookup>,
     token_price_repository: Arc<dyn TokenPriceLookup>,
     signal_feed: Arc<dyn SignalFeed>,
-    pool_properties_repository: Arc<dyn MeteoraDammV2PoolPropertiesRepository>,
+    /// One per protocol that stores pool properties. The service names none of
+    /// them: it pairs a pool with the lookup whose
+    /// [`PoolPropertiesLookup::protocol`] matches. A protocol with no satellite
+    /// contributes no entry and costs no round-trip.
+    pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
 }
 
 impl PoolService {
@@ -81,11 +84,11 @@ impl PoolService {
         token_metadata_repository: Arc<dyn TokenMetadataLookup>,
         token_price_repository: Arc<dyn TokenPriceLookup>,
         signal_feed: Arc<dyn SignalFeed>,
-        pool_properties_repository: Arc<dyn MeteoraDammV2PoolPropertiesRepository>,
+        pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
     ) -> Self {
         Self {
             pool_repository,
-            pool_properties_repository,
+            pool_properties_lookups,
             pool_current_state_repository,
             pool_analytics_repository,
             token_metadata_repository,
@@ -212,9 +215,13 @@ impl PoolService {
     /// The pool detail sheet: the enriched pool plus its protocol-specific
     /// properties.
     ///
-    /// The satellite is only queried when the pool's protocol has one — a DLMM
-    /// or DAMM v1 pool costs no extra round-trip. The list endpoints do not call
-    /// this at all; they neither need the block nor pay for it.
+    /// The satellite is only queried when the pool's protocol has a lookup — a
+    /// DLMM or DAMM v1 pool costs no extra round-trip. The list endpoints do not
+    /// call this at all; they neither need the block nor pay for it.
+    ///
+    /// No protocol is named here: the pool's own `protocol` selects the lookup.
+    /// Adding one means registering a lookup at wiring time, not editing this
+    /// method.
     pub(crate) async fn get_pool_detail(
         &self,
         address: &solana_pubkey::Pubkey,
@@ -237,18 +244,18 @@ impl PoolService {
             .remove(address)
             .unwrap_or_default();
 
-        let meteora_damm_v2_properties = match protocol {
-            Protocol::MeteoraDammV2 => {
-                self.pool_properties_repository
-                    .find_by_pool(address)
-                    .await?
-            }
-            _ => None,
+        let properties = match self
+            .pool_properties_lookups
+            .iter()
+            .find(|lookup| lookup.protocol() == protocol)
+        {
+            Some(lookup) => lookup.find_by_pool(address).await?,
+            None => None,
         };
 
         Ok(Some(EnrichedPoolDetail {
             pool: self.enrich(pool, analytics, signals).await?,
-            meteora_damm_v2_properties,
+            properties,
         }))
     }
 

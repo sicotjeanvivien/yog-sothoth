@@ -10,6 +10,7 @@ mod pool_account;
 mod pool_analytics;
 mod pool_current_state;
 mod pool_price_snapshot;
+mod pool_properties;
 mod protocol;
 mod signals;
 mod swap_flow;
@@ -62,6 +63,7 @@ pub use pool_current_state::{
     PoolCurrentStateUpsert,
 };
 pub use pool_price_snapshot::{PoolPriceSnapshot, PoolPriceSnapshotRepository};
+pub use pool_properties::{PoolProperties, PoolPropertiesLookup};
 pub use protocol::Protocol;
 pub use signals::{
     DetectorError, EvalContext, Severity, Signal, SignalCursor, SignalDetector, SignalFeed,

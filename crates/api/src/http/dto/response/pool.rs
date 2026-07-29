@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::{MeteoraDammV2PoolProperties, Pool, PoolAnalytics, SignalRecord};
+use yog_core::domain::{
+    MeteoraDammV2PoolProperties, Pool, PoolAnalytics, PoolProperties, SignalRecord,
+};
 
 use crate::{
     application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken},
@@ -199,13 +201,24 @@ impl From<MeteoraDammV2PoolProperties> for MeteoraDammV2PropertiesResponse {
     }
 }
 
+/// The one place a pool's protocol is matched on the read path.
+///
+/// It belongs here and nowhere upstream: each protocol's properties have their
+/// own wire shape under their own key, so the response type is *irreducibly*
+/// per-protocol, while everything before it (`PoolService`, `EnrichedPoolDetail`)
+/// only ever needs "this pool's properties, whatever they are".
+///
+/// Destructuring [`PoolProperties`] in the closure pattern is deliberate and
+/// load-bearing: it is irrefutable only while the enum has one variant, so adding
+/// a protocol stops compilation right here — the reminder to give it its own
+/// response field. A wildcard arm would instead drop it from the wire in silence.
 impl From<EnrichedPoolDetail> for PoolDetailResponse {
     fn from(d: EnrichedPoolDetail) -> Self {
         Self {
             pool: PoolResponse::from(d.pool),
             meteora_damm_v2: d
-                .meteora_damm_v2_properties
-                .map(MeteoraDammV2PropertiesResponse::from),
+                .properties
+                .map(|PoolProperties::MeteoraDammV2(p)| MeteoraDammV2PropertiesResponse::from(p)),
         }
     }
 }

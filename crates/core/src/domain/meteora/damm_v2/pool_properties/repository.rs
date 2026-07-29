@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 
-use crate::{RepositoryResult, domain::MeteoraDammV2PoolProperties};
+use crate::RepositoryResult;
 
-/// Contract for the DAMM v2 pool-properties satellite (migration 036).
+/// Write contract for the DAMM v2 pool-properties satellite (migration 036).
 ///
 /// Split by writer, because the two column groups have different origins:
 ///
@@ -13,6 +13,12 @@ use crate::{RepositoryResult, domain::MeteoraDammV2PoolProperties};
 ///   [`crate::domain::PoolAccountResolver::set_pool_account`], which resolves the
 ///   on-chain account and fills the neutral `pools` columns and this satellite
 ///   from the same read. They are therefore absent from this trait.
+///
+/// **Writers only.** Reading the satellite goes through the cross-protocol
+/// [`crate::domain::PoolPropertiesLookup`] instead, so that a reader assembling a
+/// pool-detail sheet never depends on one protocol's contract. Both are
+/// implemented by the same `Pg` type in `persistence`; the split is by consumer,
+/// not by storage.
 ///
 /// [`set_fee_config`]: Self::set_fee_config
 #[async_trait]
@@ -51,15 +57,4 @@ pub trait MeteoraDammV2PoolPropertiesRepository: Send + Sync {
         pool_address: &Pubkey,
         has_dynamic_fee: bool,
     ) -> RepositoryResult<()>;
-
-    /// The properties of one pool, or `None` when no satellite row exists yet
-    /// (pool discovered but neither enriched nor seen at genesis).
-    ///
-    /// Read side of the pool detail sheet. Deliberately no list/paginated
-    /// variant: the cross-protocol pool listing does not surface these fields,
-    /// so a bulk read would be dead code.
-    async fn find_by_pool(
-        &self,
-        pool_address: &Pubkey,
-    ) -> RepositoryResult<Option<MeteoraDammV2PoolProperties>>;
 }

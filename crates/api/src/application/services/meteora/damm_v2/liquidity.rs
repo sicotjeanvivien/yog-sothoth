@@ -60,5 +60,5 @@ impl MeteoraDammV2LiquidityService {
 }
 
 #[cfg(test)]
-#[path = "tests/liquidity_service_tests.rs"]
+#[path = "tests/liquidity_tests.rs"]
 mod tests;
