@@ -86,6 +86,25 @@ GRANT SELECT                 ON meteora_<product>_<event_kind>_events TO yog_api
 
 Never grant INSERT/UPDATE to `yog_api` — read-only is a deliberate safety net.
 
+⚠️ **A column-level grant does not extend to a column you add later.** If a migration adds
+a column to a table where a role holds `GRANT UPDATE (cols)` rather than table-level
+UPDATE, that migration owes the column its own grant. `yog_context` on `pools` is the live
+case — migration 038 had to restate it, and migration 036 is the one that forgot.
+
+## Step 3b — declare the grants in the privilege matrix
+
+`crates/persistence/tests/privileges.rs` holds the intended privilege surface, and an
+integration test compares it to what the migrations actually produce — in **both**
+directions, so a forgotten GRANT *and* an unintended one fail the build.
+
+Add your table to `TABLE_PRIVILEGES` (and to `COLUMN_PRIVILEGES` if you granted per
+column). The test prints the exact `GRANT`/`REVOKE` for whatever disagrees.
+
+**Read the failure before editing the matrix.** It is asking whether the migration or the
+matrix is wrong; pasting the missing line to make it green is how migration 036's gap
+survived a month — the indexer's writes failed under its real role, silently, because
+nothing compared intent to reality.
+
 ## Step 4 — Cross-protocol VIEWs (only if the table feeds one)
 
 VIEWs are first defined in `001_initial_schema.sql` with `CREATE VIEW`. To add a branch you
