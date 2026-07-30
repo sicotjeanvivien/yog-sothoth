@@ -446,10 +446,14 @@ fn the_dynamic_fee_parameters_keep_their_full_range() {
         u16::MAX,
     ));
 
+    // Every field, not a sample: a narrowing bug in any one of them is what
+    // this pins, and the SQL widths downstream are justified column by column.
+    assert_eq!(props.bin_step, u16::MAX);
+    assert_eq!(props.base_factor, u16::MAX);
+    assert_eq!(props.base_fee_power_factor, 0, "not set by this fixture");
     assert_eq!(props.variable_fee_control, u32::MAX);
     assert_eq!(props.max_volatility_accumulator, u32::MAX);
     assert_eq!(props.protocol_share, u16::MAX);
-    assert_eq!(props.bin_step, u16::MAX);
 }
 
 /// The mirror of the cp-amm guard: a cp-amm `Pool` handed to the DLMM decoder

@@ -74,9 +74,13 @@ fn try_from_accepts_the_top_of_each_unsigned_range() {
     };
     let props = MeteoraDlmmPoolProperties::try_from(row).expect("full range should convert");
 
+    // Every column, not a sample: each one is what justifies its own width.
     assert_eq!(props.bin_step, Some(u16::MAX));
+    assert_eq!(props.base_factor, Some(u16::MAX));
     assert_eq!(props.base_fee_power_factor, Some(u8::MAX));
     assert_eq!(props.variable_fee_control, Some(u32::MAX));
+    assert_eq!(props.max_volatility_accumulator, Some(u32::MAX));
+    assert_eq!(props.protocol_share, Some(u16::MAX));
 }
 
 /// A zero base factor is a real mainnet value (a zero-fee pool), not a missing

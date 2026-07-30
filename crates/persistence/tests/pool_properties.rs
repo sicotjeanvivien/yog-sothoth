@@ -382,9 +382,14 @@ async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgP
     let props = read_dlmm_properties(&repo, &pk(1))
         .await
         .expect("row should exist");
+    // All six, not a sample: each column is what justifies its own width, so
+    // leaving one unread would leave that width unproven.
     assert_eq!(props.bin_step, Some(u16::MAX));
+    assert_eq!(props.base_factor, Some(u16::MAX));
     assert_eq!(props.base_fee_power_factor, Some(u8::MAX));
     assert_eq!(props.variable_fee_control, Some(u32::MAX));
+    assert_eq!(props.max_volatility_accumulator, Some(u32::MAX));
+    assert_eq!(props.protocol_share, Some(u16::MAX));
 }
 
 /// A second resolution overwrites every column — no `COALESCE` anywhere, unlike

@@ -33,22 +33,62 @@ const MAX_FEE_BPS: Decimal = Decimal::ONE_THOUSAND;
 /// larger price move — which is why the two multiply rather than being read
 /// independently.
 ///
-/// # The floor, not the whole fee
+/// # The floor, not the whole fee — and the gap is wider than cp-amm's
 ///
 /// A swapper pays `min(base_fee_rate + variable_fee_rate, 10 %)`, the variable
-/// part rising with volatility. This function returns the floor only — the same
-/// quantity [`super::damm_v2::fee_numerator_to_bps`] returns for cp-amm, which
-/// is what lets one `pools.fee_bps` column mean the same thing for both.
+/// part rising with volatility. This returns the floor only: the **same
+/// definition** as [`super::damm_v2::fee_numerator_to_bps`], which is what lets
+/// one `pools.fee_bps` column mean one thing across protocols.
+///
+/// Same definition, **different upper bound** — and the difference is not
+/// academic. A pool's variable fee is capped by its own parameters:
+///
+/// ```text
+/// max_variable_fee_bps = ⌈variable_fee_control × (max_volatility_accumulator × bin_step)²
+///                         / 1e11⌉ / 1e5
+/// ```
+///
+/// On the accounts captured in `core/tests/fixtures/dlmm/accounts/`:
+///
+/// ```text
+/// pool      base   max variable   worst case
+/// DZ2vZJ…    1 bps      0 bps        1 bps   (×1 — no dynamic fee)
+/// HTvjzs…    1 bps      2 bps        3 bps   (×3 — the anchor pool)
+/// 8KvuP8…  100 bps     70 bps      170 bps   (×1.7)
+/// 7t1sXt…  200 bps    675 bps      875 bps   (×4.4)
+/// JCYMX9…   25 bps    156 bps      181 bps   (×7.2)
+/// ```
+///
+/// So `fee_bps` ranks and filters pools by a quantity every protocol has, but a
+/// DLMM pool at a given tier can charge several times it under volatility, and
+/// by a wider factor than a cp-amm pool at the same tier. Callers that need the
+/// worst case have what they need: `variable_fee_control`,
+/// `max_volatility_accumulator` and `bin_step` are stored raw in the satellite
+/// and served raw on the wire, precisely so the bound is recomputable rather
+/// than merely asserted here.
 ///
 /// # Total, deliberately
 ///
 /// `base_fee_power_factor` is a `u8`, so `10^255` is representable on-chain in
-/// principle and would overflow any fixed-point type. The result saturates at
-/// [`MAX_FEE_BPS`] instead of returning an error, because the caller has nowhere
-/// to put one: `PoolRegistryProperties::fee_bps` is not an `Option`, and a pool
-/// that cannot resolve never leaves `PoolAccountResolver::list_unresolved` — it
-/// would sit at the head of the queue and starve every pool behind it. The
-/// saturation is not a fallback, it is what the chain does.
+/// principle and would overflow any fixed-point type — and even without it the
+/// raw product tops out at `65_535 × 65_535 / 10_000` ≈ 429 496 bps, far past
+/// the cap. The result saturates at [`MAX_FEE_BPS`] instead of returning an
+/// error, because the caller has nowhere to put one:
+/// `PoolRegistryProperties::fee_bps` is not an `Option`, and a pool that cannot
+/// resolve never leaves `PoolAccountResolver::list_unresolved` — it would sit at
+/// the head of the queue and starve every pool behind it.
+///
+/// **The saturation is a clamp on an input the chain should never produce, not a
+/// mirror of chain behaviour.** The program caps `base + variable` *at swap
+/// time*; it does not normalise stored parameters. An `LbPair` whose raw
+/// parameters exceeded this bound would be an abnormal account, and flattening
+/// it to 1000 gives it the appearance of a legitimate 10 % tier.
+///
+/// That is tolerable only because nothing is lost: `base_factor`, `bin_step` and
+/// `base_fee_power_factor` are persisted raw next to the derived `fee_bps`, so a
+/// clamped value stays reconstructible and detectable after the fact. Unreachable
+/// in practice — lb_clmm validates these parameters at init — but the guarantee
+/// is "the inputs survive", not "this cannot happen".
 ///
 /// Exact for every realistic input: the arithmetic is integer-valued in
 /// `Decimal` until the final division, and 10_000 divides cleanly into it.

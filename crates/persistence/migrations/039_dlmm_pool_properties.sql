@@ -16,6 +16,23 @@
 -- No backfill: no DLMM pool has ever been enriched, so every row here will be
 -- written by yog-context's PoolAccountWorker from a fresh account read.
 --
+-- ## This table is dormant by construction, and that is not a bug
+--
+-- It will stay **empty** until DLMM event extraction lands.
+-- `MeteoraDlmm::extract_events` is still a stub returning an empty outcome, and
+-- pool discovery runs off extracted events (`pool_maintenance`), so no row with
+-- `protocol = 'meteora_dlmm'` reaches `pools` — and this satellite's queue has
+-- nothing to resolve.
+--
+-- The table is deliberately laid down ahead of that: the decoder, the resolver
+-- and the read path are testable today (see
+-- `crates/core/tests/fixtures/dlmm/accounts/`, and seeding one `pools` row by
+-- hand resolves it end to end), and landing them separately keeps the DLMM event
+-- work from carrying a schema change as well.
+--
+-- If you are reading this because the table is empty: that is why. Look at the
+-- extractor, not here.
+--
 -- ## Configuration, not state
 --
 -- Every column is a *parameter*, changed only by an `update_fee_parameters`.

@@ -130,12 +130,23 @@ Three consequences worth knowing:
   exhaustively on `PoolProperties`, so a new variant stops the build there rather
   than dropping the block from the wire in silence.
 
-`feeBps` is normalized across protocols and comparable: it is the pool's **base**
-fee — the floor a swapper pays before any volatility-driven part — whether that
-comes from cp-amm's cliff numerator or DLMM's `baseFactor × binStep`. That is what
-lets `/api/pools/fee-tiers` and the `fee_bps` filter span both protocols. The
-DLMM inputs are served raw above so a client can recompute it rather than trust
-it.
+`feeBps` is normalized across protocols: it is the pool's **base** fee — the
+floor a swapper pays before any volatility-driven part — whether that comes from
+cp-amm's cliff numerator or DLMM's `baseFactor × binStep`. That is what lets
+`/api/pools/fee-tiers` and the `fee_bps` filter span both protocols.
+
+⚠️ **Same definition, different upper bound.** Two pools at the same `feeBps`
+are not interchangeable: a DLMM pool's variable fee is bounded by its own
+parameters, and on real mainnet accounts that bound runs from ×1 (no dynamic
+fee) to **×7 the floor**. A client that needs the worst case can compute it —
+which is why `variableFeeControl`, `maxVolatilityAccumulator` and `binStep` are
+served raw above rather than folded into `feeBps`:
+
+```text
+maxVariableFeeBps = ⌈variableFeeControl × (maxVolatilityAccumulator × binStep)² / 1e11⌉ / 1e5
+```
+
+Worked examples and the derivation are in `yog_core::amm::dlmm::base_fee_bps`.
 
 Every pool response — all three endpoints — embeds `signals24h`: the pool's
 signals over the last 24h (newest first, capped per pool,
