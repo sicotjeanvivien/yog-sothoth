@@ -36,6 +36,22 @@ pub(crate) fn convert_i16_to_u8(v: i16, field: &str) -> RepositoryResult<u8> {
     u8::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
+/// Narrow an `INTEGER` read from Postgres into a `u16`.
+///
+/// The width is deliberate: a `u16` does not fit SMALLINT (32 767 < 65 535), so
+/// columns holding one are INTEGER and half their range is unreachable by
+/// design. This guard catches a value written outside that convention rather
+/// than truncating it.
+pub(crate) fn convert_i32_to_u16(v: i32, field: &str) -> RepositoryResult<u16> {
+    u16::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
+}
+
+/// Narrow a `BIGINT` read from Postgres into a `u32`. Same reasoning as
+/// [`convert_i32_to_u16`]: a `u32` does not fit INTEGER.
+pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
+    u32::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
+}
+
 /// Convert a Postgres `NUMERIC` (mapped to `BigDecimal`) into a `u128`.
 /// Used for fields like `price_q64` that exceed `i64` range.
 pub(crate) fn convert_bigdecimal_to_u128(

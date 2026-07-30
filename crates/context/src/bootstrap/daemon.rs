@@ -15,8 +15,8 @@ use yog_core::domain::{
     PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
 use yog_persistence::{
-    Database, PgMeteoraDammV2PoolPropertiesRepository, PgPoolRepository, PgTokenMetadataRepository,
-    PgTokenPriceRepository,
+    Database, PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
+    PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
 use crate::bootstrap::Config;
@@ -74,9 +74,12 @@ impl Daemon {
         // One resolver per protocol. Each owns its own enrichment queue and its
         // own tables; the worker iterates and names none of them. Adding DLMM
         // means pushing its resolver here — nothing else moves.
-        let pool_account_resolvers: Vec<Arc<dyn PoolAccountResolver>> = vec![Arc::new(
-            PgMeteoraDammV2PoolPropertiesRepository::new(db_pool.clone()),
-        )];
+        let pool_account_resolvers: Vec<Arc<dyn PoolAccountResolver>> = vec![
+            Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
+                db_pool.clone(),
+            )),
+            Arc::new(PgMeteoraDlmmPoolPropertiesRepository::new(db_pool.clone())),
+        ];
         // Written by the same worker, from the same account read — but through
         // the repository that owns `pools`, so no satellite is a co-writer of
         // the cross-protocol registry.

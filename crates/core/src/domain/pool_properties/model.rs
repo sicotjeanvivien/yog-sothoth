@@ -1,4 +1,4 @@
-use crate::domain::{MeteoraDammV2PoolProperties, Protocol};
+use crate::domain::{MeteoraDammV2PoolProperties, MeteoraDlmmPoolProperties, Protocol};
 
 /// A pool's stored per-protocol properties, grouped by protocol.
 ///
@@ -26,6 +26,7 @@ use crate::domain::{MeteoraDammV2PoolProperties, Protocol};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PoolProperties {
     MeteoraDammV2(MeteoraDammV2PoolProperties),
+    MeteoraDlmm(MeteoraDlmmPoolProperties),
 }
 
 impl PoolProperties {
@@ -33,6 +34,7 @@ impl PoolProperties {
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
+            Self::MeteoraDlmm(_) => Protocol::MeteoraDlmm,
         }
     }
 }

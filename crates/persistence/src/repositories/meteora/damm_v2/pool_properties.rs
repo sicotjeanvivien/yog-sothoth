@@ -182,7 +182,12 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         pool_address: &Pubkey,
         properties: &PoolAccountProperties,
     ) -> RepositoryResult<()> {
-        let PoolAccountProperties::MeteoraDammV2(properties) = properties;
+        let PoolAccountProperties::MeteoraDammV2(properties) = properties else {
+            return Err(yog_core::RepositoryError::Integrity(format!(
+                "expected cp-amm pool properties, got {:?}",
+                properties.protocol()
+            )));
+        };
 
         // u8 → i16 (SMALLINT) is always lossless.
         let (protocol_pct, referral_pct) = (

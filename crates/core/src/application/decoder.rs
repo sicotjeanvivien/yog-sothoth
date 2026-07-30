@@ -102,11 +102,10 @@ pub fn decode_pool_account(
 
     match protocol {
         Protocol::MeteoraDammV2 => meteora::damm_v2::decode_pool_account(data),
+        Protocol::MeteoraDlmm => meteora::dlmm::decode_pool_account(data),
         // Recognized protocols with no pool-account decoder yet — reported as a
         // coverage gap, not as an unknown program.
-        Protocol::MeteoraDammV1 | Protocol::MeteoraDlmm => {
-            Err(PoolAccountRejection::NoDecoder { protocol })
-        }
+        Protocol::MeteoraDammV1 => Err(PoolAccountRejection::NoDecoder { protocol }),
     }
 }
 

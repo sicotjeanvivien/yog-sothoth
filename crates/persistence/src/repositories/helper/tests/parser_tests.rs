@@ -50,6 +50,64 @@ fn convert_i16_to_u8_should_fail_on_overflow() {
 }
 
 #[test]
+fn convert_i32_to_u16_should_convert_valid_value() {
+    let result = convert_i32_to_u16(400, "bin_step");
+
+    assert_eq!(result.unwrap(), 400);
+}
+
+/// The whole point of the INTEGER width: a `u16` that SMALLINT could not hold.
+#[test]
+fn convert_i32_to_u16_should_accept_the_top_of_the_range() {
+    let result = convert_i32_to_u16(65_535, "bin_step");
+
+    assert_eq!(result.unwrap(), u16::MAX);
+}
+
+#[test]
+fn convert_i32_to_u16_should_fail_for_negative_value() {
+    let result = convert_i32_to_u16(-1, "bin_step");
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
+fn convert_i32_to_u16_should_fail_on_overflow() {
+    let result = convert_i32_to_u16(65_536, "bin_step");
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
+fn convert_i64_to_u32_should_convert_valid_value() {
+    let result = convert_i64_to_u32(2_000_000, "variable_fee_control");
+
+    assert_eq!(result.unwrap(), 2_000_000);
+}
+
+/// Likewise for BIGINT: a `u32` past `i32::MAX` must survive the round trip.
+#[test]
+fn convert_i64_to_u32_should_accept_the_top_of_the_range() {
+    let result = convert_i64_to_u32(4_294_967_295, "variable_fee_control");
+
+    assert_eq!(result.unwrap(), u32::MAX);
+}
+
+#[test]
+fn convert_i64_to_u32_should_fail_for_negative_value() {
+    let result = convert_i64_to_u32(-1, "variable_fee_control");
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
+fn convert_i64_to_u32_should_fail_on_overflow() {
+    let result = convert_i64_to_u32(4_294_967_296, "variable_fee_control");
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
 fn convert_u128_to_bigdecimal_should_convert() {
     let value = 12345678901234567890u128;
 

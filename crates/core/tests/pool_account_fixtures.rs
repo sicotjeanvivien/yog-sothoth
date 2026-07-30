@@ -14,15 +14,21 @@
 //!
 //! # What these fixtures are
 //!
-//! One JSON file per pool under `fixtures/damm_v2/accounts/`, holding the raw
+//! One JSON file per pool under `fixtures/<protocol>/accounts/`, holding the raw
 //! account as base64 plus its owner and capture date — **nothing decoded**. The
-//! expectations live in `EXPECTED` below, in this file, so that reviewing the
-//! test means reviewing what we claim the bytes mean.
+//! expectations live in `EXPECTED` / `EXPECTED_DLMM` below, in this file, so that
+//! reviewing the test means reviewing what we claim the bytes mean.
 //!
-//! The eleven pools cover every `BaseFeeMode` cp-amm defines and both values of
-//! `has_dynamic_fee`. The rare ones were picked first because they are rare:
+//! The eleven cp-amm pools cover every `BaseFeeMode` it defines and both values
+//! of `has_dynamic_fee`. The rare ones were picked first because they are rare:
 //! when this set was captured, mainnet held exactly **one** `rate_limiter` pool
 //! and two market-cap linear ones among the 971 we had seen.
+//!
+//! The nine DLMM pools span `bin_step` 1..=400 and `base_factor` 0..=40 000,
+//! including a zero-fee pool and pools with and without a dynamic fee. They were
+//! found by resolving every account key in `fixtures/dlmm/*.json` and keeping
+//! those owned by lb_clmm at 904 bytes — pools we have actually seen, not a
+//! hand-picked list.
 //!
 //! # How the expectations were established
 //!
@@ -94,6 +100,38 @@ const EXPECTED: &[Expected] = &[
     Expected { pool: "sZchbRCFoUcr3xzUhqtngzXCr2DUnvurd5hTx9NtXZB", kind: BaseFeeKind::SchedulerLinear, fee_bps: "1000", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "5je5ondjVJcHjWz2v4mLZn7PsQGr47XQFjFTfrtCu1ox", mint_b: "So11111111111111111111111111111111111111112" },
 ];
 
+const CP_AMM_DIR: &str = "damm_v2";
+const DLMM_DIR: &str = "dlmm";
+
+/// What we claim one real `LbPair` account decodes to.
+struct ExpectedDlmm {
+    pool: &'static str,
+    bin_step: u16,
+    base_factor: u16,
+    base_fee_power_factor: u8,
+    /// `base_factor × bin_step × 10^power / 10_000`, as a string for the same
+    /// reason as [`Expected::fee_bps`].
+    fee_bps: &'static str,
+    variable_fee_control: u32,
+    max_volatility_accumulator: u32,
+    protocol_share: u16,
+    mint_x: &'static str,
+    mint_y: &'static str,
+}
+
+#[rustfmt::skip]
+const EXPECTED_DLMM: &[ExpectedDlmm] = &[
+    ExpectedDlmm { pool: "HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR", bin_step: 1, base_factor: 10_000, base_fee_power_factor: 0, fee_bps: "1", variable_fee_control: 2_000_000, max_volatility_accumulator: 100_000, protocol_share: 1000, mint_x: "So11111111111111111111111111111111111111112", mint_y: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    ExpectedDlmm { pool: "DZ2vZJMLKt1cExzyFeyoGV3panTJufRFMiLXJKSa2mPP", bin_step: 1, base_factor: 10_000, base_fee_power_factor: 0, fee_bps: "1", variable_fee_control: 0, max_volatility_accumulator: 0, protocol_share: 1000, mint_x: "JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD", mint_y: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    ExpectedDlmm { pool: "K8yYaCkTPBoTNkmejTtX2A8HinSqzfsf3gZJKWHs9yH",  bin_step: 1, base_factor: 0, base_fee_power_factor: 0, fee_bps: "0", variable_fee_control: 0, max_volatility_accumulator: 0, protocol_share: 500, mint_x: "2U3HtjyWFyJ47WX8MiWbiZYrgL1Qi1rwEwkQyuLEMUTa", mint_y: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    ExpectedDlmm { pool: "Go3Fuj12qq2FCAbG2P9o72L38JENfcxhw8VFhbfHtP1o", bin_step: 2, base_factor: 5_000, base_fee_power_factor: 0, fee_bps: "1", variable_fee_control: 50_000, max_volatility_accumulator: 150_000, protocol_share: 2000, mint_x: "EBvpdu9qTNaVRfve6uadzXKjNPyhN33Kj4GF6a6WQNvd", mint_y: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    ExpectedDlmm { pool: "8pZhpZrGtaLksLq1m1yZ333TChxmRAW7K4DxnfyetsUj", bin_step: 100, base_factor: 500, base_fee_power_factor: 0, fee_bps: "5", variable_fee_control: 7_500, max_volatility_accumulator: 150_000, protocol_share: 1000, mint_x: "Gihwz9Dj89Lt9bByouPEdD3bT37y2hamwDdxMuPWAVz", mint_y: "So11111111111111111111111111111111111111112" },
+    ExpectedDlmm { pool: "JCYMX9Nx7DTUdguptRR5LLSc62MEbNmFYsbT5R9yCDGy", bin_step: 50, base_factor: 5_000, base_fee_power_factor: 0, fee_bps: "25", variable_fee_control: 10_000, max_volatility_accumulator: 250_000, protocol_share: 1000, mint_x: "AuQaustGiaqxRvj2gtCdrd22PBzTn8kM3kEPEkZCtuDw", mint_y: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    ExpectedDlmm { pool: "8nXD5VHhcKpehJKLgbMAxQ2myCqbYZiCk77K7J4K1fFz", bin_step: 400, base_factor: 1_250, base_fee_power_factor: 0, fee_bps: "50", variable_fee_control: 50_000, max_volatility_accumulator: 150_000, protocol_share: 2000, mint_x: "GEy7ycaeocLsQWJftjTL6xF1UqmruMBBBh5PqBkXvrSv", mint_y: "Xsa62P5mvPszXL1krVUnU5ar38bBSVcWAB6fmPCo5Zu" },
+    ExpectedDlmm { pool: "8KvuP878qiUxsc5P8X6mmjcNU5hzj7LBXbRhDSca5ej9", bin_step: 25, base_factor: 40_000, base_fee_power_factor: 0, fee_bps: "100", variable_fee_control: 50_000, max_volatility_accumulator: 150_000, protocol_share: 2000, mint_x: "EBnaKqUAk6ut1nse3R19CHCfY4jHD5SWdxB1UxyuYsRu", mint_y: "So11111111111111111111111111111111111111112" },
+    ExpectedDlmm { pool: "7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3", bin_step: 200, base_factor: 10_000, base_fee_power_factor: 0, fee_bps: "200", variable_fee_control: 7_500, max_volatility_accumulator: 150_000, protocol_share: 1000, mint_x: "6zgbwgsiQkNP6EXHx7gEXqgKGK4RPpFWvW2HFwi7pump", mint_y: "So11111111111111111111111111111111111111112" },
+];
+
 /// A captured account: raw bytes and provenance, nothing interpreted.
 ///
 /// `captured_at` lives in the JSON but not here — it is provenance for whoever
@@ -108,9 +146,9 @@ struct AccountFixture {
     data_base64: String,
 }
 
-fn load(pool: &str) -> AccountFixture {
+fn load(protocol_dir: &str, pool: &str) -> AccountFixture {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests/fixtures/damm_v2/accounts");
+    path.push(format!("tests/fixtures/{protocol_dir}/accounts"));
     path.push(format!("{pool}.json"));
 
     let raw = std::fs::read_to_string(&path)
@@ -144,7 +182,7 @@ fn base64_decode(s: &str) -> Vec<u8> {
 #[test]
 fn decodes_real_mainnet_accounts() {
     for e in EXPECTED {
-        let fixture = load(e.pool);
+        let fixture = load(CP_AMM_DIR, e.pool);
         let data = base64_decode(&fixture.data_base64);
 
         assert_eq!(
@@ -186,7 +224,9 @@ fn decodes_real_mainnet_accounts() {
         );
 
         // The cp-amm half.
-        let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties;
+        let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties else {
+            panic!("{}: decoded as another protocol", e.pool)
+        };
         assert_eq!(
             props.base_fee_kind,
             Some(e.kind),
@@ -207,6 +247,148 @@ fn decodes_real_mainnet_accounts() {
     }
 }
 
+// ── DLMM `LbPair` ───────────────────────────────────────────────────
+
+/// Every field, on every captured `LbPair`.
+///
+/// The synthetic unit tests in `decoder_tests.rs` cannot settle the DLMM offsets
+/// either — same circularity, same remedy. Two of the three anchors described at
+/// the top of this file carry over directly:
+///
+/// - **The mints decode to nameable tokens.** USDC, wrapped SOL, JupUSD and
+///   pump.fun mints across nine accounts. A wrong offset yields arbitrary bytes.
+/// - **The fees land on real tiers.** 0, 1, 5, 25, 50, 100 and 200 bps — the
+///   values Meteora publishes. A wrong `base_factor` or `bin_step` offset would
+///   have to produce a plausible fee tier nine times running.
+#[test]
+fn decodes_real_mainnet_lb_pairs() {
+    for e in EXPECTED_DLMM {
+        let fixture = load(DLMM_DIR, e.pool);
+        let data = base64_decode(&fixture.data_base64);
+
+        assert_eq!(
+            fixture.pool_address, e.pool,
+            "fixture file {}.json holds another pool's bytes",
+            e.pool
+        );
+        assert_eq!(
+            fixture.owner, "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+            "{}: fixture is not a DLMM account",
+            e.pool
+        );
+        assert_eq!(data.len(), 904, "{}: unexpected account length", e.pool);
+
+        let owner = Pubkey::from_str(&fixture.owner).expect("owner");
+        let decoded = decode_pool_account(&owner, &data)
+            .unwrap_or_else(|err| panic!("{}: real account rejected: {err}", e.pool));
+
+        assert_eq!(decoded.protocol(), Protocol::MeteoraDlmm, "{}", e.pool);
+
+        // The registry half — the values every protocol has.
+        assert_eq!(
+            decoded.registry.fee_bps,
+            Decimal::from_str(e.fee_bps).unwrap(),
+            "{}: base fee",
+            e.pool
+        );
+        assert_eq!(
+            decoded.registry.token_a_mint,
+            Pubkey::from_str(e.mint_x).unwrap(),
+            "{}: token X",
+            e.pool
+        );
+        assert_eq!(
+            decoded.registry.token_b_mint,
+            Pubkey::from_str(e.mint_y).unwrap(),
+            "{}: token Y",
+            e.pool
+        );
+
+        // The DLMM half.
+        let PoolAccountProperties::MeteoraDlmm(props) = decoded.properties else {
+            panic!("{}: decoded as another protocol", e.pool)
+        };
+        assert_eq!(props.bin_step, e.bin_step, "{}: bin step", e.pool);
+        assert_eq!(props.base_factor, e.base_factor, "{}: base factor", e.pool);
+        assert_eq!(
+            props.base_fee_power_factor, e.base_fee_power_factor,
+            "{}: base fee power factor",
+            e.pool
+        );
+        assert_eq!(
+            props.variable_fee_control, e.variable_fee_control,
+            "{}: variable fee control",
+            e.pool
+        );
+        assert_eq!(
+            props.max_volatility_accumulator, e.max_volatility_accumulator,
+            "{}: max volatility accumulator",
+            e.pool
+        );
+        assert_eq!(
+            props.protocol_share, e.protocol_share,
+            "{}: protocol share",
+            e.pool
+        );
+    }
+}
+
+/// The captured set spans the fee inputs widely enough that an offset landing on
+/// a neighbouring field could not survive it.
+///
+/// `bin_step` runs 1..=400 and `base_factor` 0..=40 000, so neither can be a
+/// constant the decoder happens to read from the wrong place — and both extremes
+/// of the dynamic-fee magnitude are present (`variable_fee_control = 0`, which is
+/// how DLMM expresses "no dynamic fee", and a live 2 000 000).
+#[test]
+fn the_lb_pair_fixtures_span_the_fee_inputs() {
+    let bin_steps: Vec<u16> = EXPECTED_DLMM.iter().map(|e| e.bin_step).collect();
+    assert!(bin_steps.contains(&1), "no minimum-bin-step pool");
+    assert!(bin_steps.iter().any(|s| *s >= 200), "no wide-bin-step pool");
+
+    assert!(
+        EXPECTED_DLMM.iter().any(|e| e.base_factor == 0),
+        "no zero-base-fee pool"
+    );
+    assert!(
+        EXPECTED_DLMM.iter().any(|e| e.base_factor >= 40_000),
+        "no high-base-factor pool"
+    );
+    assert!(
+        EXPECTED_DLMM.iter().any(|e| e.variable_fee_control == 0),
+        "no pool without a dynamic fee"
+    );
+    assert!(
+        EXPECTED_DLMM.iter().any(|e| e.variable_fee_control > 0),
+        "no pool with a dynamic fee"
+    );
+}
+
+/// **A gap this suite cannot close, stated rather than hidden.**
+///
+/// `base_fee_power_factor` is 0 on all nine captured pools — and on all 42
+/// `LbPair` accounts reachable from the DLMM transaction fixtures. So the byte
+/// at offset 34 is *consistent with* being the power factor, but no real account
+/// exercises it: every fixture would decode identically if the field were
+/// ignored entirely.
+///
+/// That is exactly the shape of the `partner_fee_percent` bug — a field always 0
+/// in the wild. The difference is that lb_clmm names this one and Meteora's
+/// formula documents it, so it is a real field with no live user, not a padding
+/// byte read by mistake. [`yog_core::amm::dlmm::base_fee_bps`] is unit-tested on
+/// non-zero values; only the *offset* is unwitnessed.
+///
+/// Capture a pool with a non-zero power factor if one ever appears, and this
+/// test becomes redundant.
+#[test]
+fn the_power_factor_offset_is_not_witnessed_by_any_fixture() {
+    assert!(
+        EXPECTED_DLMM.iter().all(|e| e.base_fee_power_factor == 0),
+        "a fixture now exercises base_fee_power_factor — assert its offset \
+         directly and delete this test"
+    );
+}
+
 /// Byte 49 is `padding_0`, and every real account confirms it: zero on all
 /// eleven, which is what padding looks like and what a partner cut would only
 /// coincidentally look like.
@@ -216,7 +398,7 @@ fn decodes_real_mainnet_accounts() {
 #[test]
 fn byte_49_is_padding_on_every_real_account() {
     for e in EXPECTED {
-        let data = base64_decode(&load(e.pool).data_base64);
+        let data = base64_decode(&load(CP_AMM_DIR, e.pool).data_base64);
         assert_eq!(
             data[49], 0,
             "{}: byte 49 is cp-amm's padding_0, not a fee",

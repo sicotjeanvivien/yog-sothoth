@@ -21,11 +21,15 @@ use sqlx::PgPool;
 
 use yog_core::amm::damm_v2::BaseFeeKind;
 use yog_core::domain::{
-    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties, PoolAccountProperties,
+    MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
+    MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties, PoolAccountProperties,
     PoolAccountResolver, PoolProperties, PoolPropertiesLookup, PoolRegistryProperties,
     PoolRepository, Protocol,
 };
-use yog_persistence::{PgMeteoraDammV2PoolPropertiesRepository, PgPoolRepository};
+use yog_persistence::{
+    PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDlmmPoolPropertiesRepository,
+    PgPoolRepository,
+};
 
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
@@ -43,6 +47,21 @@ async fn read_properties(
         .expect("find_by_pool failed")
         .map(|properties| match properties {
             PoolProperties::MeteoraDammV2(properties) => properties,
+            other => panic!("expected cp-amm properties, got {other:?}"),
+        })
+}
+
+/// The DLMM equivalent of [`read_properties`].
+async fn read_dlmm_properties(
+    repo: &PgMeteoraDlmmPoolPropertiesRepository,
+    addr: &Pubkey,
+) -> Option<MeteoraDlmmPoolProperties> {
+    repo.find_by_pool(addr)
+        .await
+        .expect("find_by_pool failed")
+        .map(|properties| match properties {
+            PoolProperties::MeteoraDlmm(properties) => properties,
+            other => panic!("expected DLMM properties, got {other:?}"),
         })
 }
 
@@ -71,6 +90,19 @@ fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties 
         referral_fee_percent: 20,
         base_fee_kind,
         has_dynamic_fee: true,
+    })
+}
+
+/// The DLMM half alone, with the values read from
+/// `HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR` on mainnet.
+fn dlmm_properties_only() -> PoolAccountProperties {
+    PoolAccountProperties::MeteoraDlmm(MeteoraDlmmPoolAccountProperties {
+        bin_step: 1,
+        base_factor: 10_000,
+        base_fee_power_factor: 0,
+        variable_fee_control: 2_000_000,
+        max_volatility_accumulator: 100_000,
+        protocol_share: 1_000,
     })
 }
 
@@ -301,6 +333,211 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
         "the DAMM v2 pool must be reached despite five older foreign pools \
          and a batch of 2"
     );
+}
+
+// ── DLMM satellite (migration 039) ──────────────────────────────────
+
+/// The DLMM resolver stores its six columns and reads them back unchanged,
+/// including the values a signed column of the on-chain width could not hold.
+#[sqlx::test]
+async fn the_dlmm_satellite_round_trips_every_column(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+
+    repo.set_pool_account(&pk(1), &dlmm_properties_only())
+        .await
+        .expect("set_pool_account failed");
+
+    let props = read_dlmm_properties(&repo, &pk(1))
+        .await
+        .expect("row should exist");
+    assert_eq!(props.bin_step, Some(1));
+    assert_eq!(props.base_factor, Some(10_000));
+    assert_eq!(props.base_fee_power_factor, Some(0));
+    assert_eq!(props.variable_fee_control, Some(2_000_000));
+    assert_eq!(props.max_volatility_accumulator, Some(100_000));
+    assert_eq!(props.protocol_share, Some(1_000));
+}
+
+/// The reason the columns are INTEGER and BIGINT rather than SMALLINT and
+/// INTEGER: an on-chain `u16` / `u32` at the top of its range must survive the
+/// round trip through Postgres, which has no unsigned integers.
+#[sqlx::test]
+async fn the_dlmm_satellite_round_trips_the_top_of_each_unsigned_range(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+
+    let extreme = PoolAccountProperties::MeteoraDlmm(MeteoraDlmmPoolAccountProperties {
+        bin_step: u16::MAX,
+        base_factor: u16::MAX,
+        base_fee_power_factor: u8::MAX,
+        variable_fee_control: u32::MAX,
+        max_volatility_accumulator: u32::MAX,
+        protocol_share: u16::MAX,
+    });
+    repo.set_pool_account(&pk(1), &extreme)
+        .await
+        .expect("set_pool_account failed");
+
+    let props = read_dlmm_properties(&repo, &pk(1))
+        .await
+        .expect("row should exist");
+    assert_eq!(props.bin_step, Some(u16::MAX));
+    assert_eq!(props.base_fee_power_factor, Some(u8::MAX));
+    assert_eq!(props.variable_fee_control, Some(u32::MAX));
+}
+
+/// A second resolution overwrites every column — no `COALESCE` anywhere, unlike
+/// cp-amm's `base_fee_kind`. A successful `LbPair` decode always carries all six
+/// fields, so there is never a NULL to protect an earlier value from, and an
+/// `update_fee_parameters` must actually take effect.
+#[sqlx::test]
+async fn a_second_dlmm_resolution_overwrites_every_column(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+
+    repo.set_pool_account(&pk(1), &dlmm_properties_only())
+        .await
+        .expect("first resolution failed");
+    let updated = PoolAccountProperties::MeteoraDlmm(MeteoraDlmmPoolAccountProperties {
+        bin_step: 1,
+        base_factor: 20_000,
+        base_fee_power_factor: 0,
+        variable_fee_control: 0,
+        max_volatility_accumulator: 0,
+        protocol_share: 2_000,
+    });
+    repo.set_pool_account(&pk(1), &updated)
+        .await
+        .expect("second resolution failed");
+
+    let props = read_dlmm_properties(&repo, &pk(1))
+        .await
+        .expect("row should exist");
+    assert_eq!(props.base_factor, Some(20_000), "the new fee must land");
+    assert_eq!(
+        props.variable_fee_control,
+        Some(0),
+        "a dynamic fee turned off must actually turn off — 0 is a value, not a \
+         missing one"
+    );
+}
+
+/// A resolver must refuse another protocol's payload rather than write it or
+/// silently do nothing. The worker routes by protocol, so reaching this is a
+/// wiring bug, and it must surface as one.
+#[sqlx::test]
+async fn each_resolver_rejects_the_other_protocols_payload(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+    let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+    let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+
+    dlmm.set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect_err("the DLMM resolver must refuse a cp-amm payload");
+    damm.set_pool_account(&pk(2), &dlmm_properties_only())
+        .await
+        .expect_err("the cp-amm resolver must refuse a DLMM payload");
+
+    assert!(
+        read_dlmm_properties(&dlmm, &pk(1)).await.is_none(),
+        "a rejected payload must leave no row behind"
+    );
+    assert!(read_properties(&damm, &pk(2)).await.is_none());
+}
+
+// ── The two queues, side by side ────────────────────────────────────
+
+/// **The test that needs two protocols to exist.** Each queue proposes only its
+/// own pools — in both directions.
+///
+/// The cp-amm side of this was already covered, but it could only ever assert
+/// half the invariant: before this migration there was no second resolver to
+/// starve. A DLMM `list_unresolved` missing its `p.protocol` predicate would
+/// propose the whole cp-amm catalogue, whose accounts it cannot decode, so those
+/// pools would never resolve, never leave the queue, and — ordered oldest-first
+/// with a capped batch — crowd out every DLMM pool behind them.
+#[sqlx::test]
+async fn each_queue_proposes_only_its_own_protocol(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDlmm, 2).await;
+    seed_pool(&pool, pk(3), Protocol::MeteoraDammV1, 3).await;
+
+    let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+
+    assert_eq!(
+        damm.list_unresolved(100).await.expect("query failed"),
+        vec![pk(1)],
+        "the cp-amm queue must not see the DLMM pool"
+    );
+    assert_eq!(
+        dlmm.list_unresolved(100).await.expect("query failed"),
+        vec![pk(2)],
+        "the DLMM queue must not see the cp-amm pool"
+    );
+}
+
+/// The starvation guard, stated from the DLMM side: five older cp-amm pools and
+/// a batch of two must not keep the DLMM pool out of its own queue.
+#[sqlx::test]
+async fn the_dlmm_queue_is_not_starved_by_older_cp_amm_pools(pool: PgPool) {
+    for seq in 1..=5 {
+        seed_pool(&pool, pk(seq as u8), Protocol::MeteoraDammV2, seq).await;
+    }
+    seed_pool(&pool, pk(50), Protocol::MeteoraDlmm, 99).await;
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+
+    let unresolved = repo.list_unresolved(2).await.expect("query failed");
+
+    assert_eq!(
+        unresolved,
+        vec![pk(50)],
+        "the DLMM pool must be reached despite five older cp-amm pools and a \
+         batch of 2"
+    );
+}
+
+/// A DLMM pool leaves its queue only once **both** halves are written — the
+/// satellite and the neutral registry columns. Same contract as cp-amm's, and
+/// the reason the worker writes the registry last.
+#[sqlx::test]
+async fn a_resolved_dlmm_pool_leaves_its_queue(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    let satellite = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+    let registry = PgPoolRepository::new(pool.clone());
+
+    satellite
+        .set_pool_account(&pk(1), &dlmm_properties_only())
+        .await
+        .expect("set_pool_account failed");
+    assert_eq!(
+        satellite.list_unresolved(100).await.unwrap(),
+        vec![pk(1)],
+        "the satellite write alone leaves the mints and fee NULL"
+    );
+
+    registry
+        .set_registry_properties(&pk(1), &account_core())
+        .await
+        .expect("set_registry_properties failed");
+
+    assert!(
+        satellite.list_unresolved(100).await.unwrap().is_empty(),
+        "a fully resolved pool must leave the queue"
+    );
+}
+
+/// The satellite is `REFERENCES pools`, so a DLMM write for an unknown pool is
+/// an error rather than a silent no-op.
+#[sqlx::test]
+async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
+    let repo = PgMeteoraDlmmPoolPropertiesRepository::new(pool);
+
+    repo.set_pool_account(&pk(99), &dlmm_properties_only())
+        .await
+        .expect_err("an unknown pool must violate the foreign key");
 }
 
 // ── needs_refresh: the invalidation loop ────────────────────────────

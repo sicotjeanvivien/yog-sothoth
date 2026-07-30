@@ -249,6 +249,16 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
     ),
+    // Migration 039. Same shape as the cp-amm satellite: yog-context owns it,
+    // yog_api reads it, and the indexer has no business here — it raises
+    // `pools.needs_refresh` rather than writing property values.
+    (
+        "meteora_dlmm_pool_properties",
+        &[
+            ("yog_api", &["SELECT"]),
+            ("yog_context", &["INSERT", "SELECT", "UPDATE"]),
+        ],
+    ),
     (
         "network_status",
         &[
