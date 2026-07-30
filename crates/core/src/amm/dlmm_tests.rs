@@ -147,3 +147,28 @@ fn the_variable_cap_is_reached_but_not_exceeded() {
         Decimal::new(999, 0)
     );
 }
+
+/// The margin the doc claims, asserted rather than trusted.
+///
+/// The `checked_mul`s in `max_variable_fee_bps` are provably dead at the current
+/// input widths — this pins *why*, so that widening any of the three inputs
+/// turns the claim red instead of quietly making the guards load-bearing.
+#[test]
+fn the_numerator_cannot_overflow_at_these_input_widths() {
+    let accumulated = u128::from(u32::MAX) * u128::from(u16::MAX);
+    let numerator = accumulated
+        .checked_mul(accumulated)
+        .and_then(|squared| squared.checked_mul(u128::from(u32::MAX)))
+        .expect("the worst case must fit u128 — see the doc's margin");
+
+    assert_eq!(
+        numerator,
+        340_271_982_168_772_322_334_504_870_185_799_909_375
+    );
+    assert!(
+        numerator < u128::MAX,
+        "the guards would stop being decorative"
+    );
+    // …and it is genuinely tight: within 0.01 % of the ceiling.
+    assert!(numerator > u128::MAX / 10_000 * 9_999);
+}

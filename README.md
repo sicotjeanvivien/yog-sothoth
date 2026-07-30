@@ -85,10 +85,18 @@ For administering the allowlist (schema, seed scripts, SQL helpers), see **[`cra
 | Protocol | Status | Model |
 |---|---|---|
 | Meteora DAMM v2 | **Active** — 11 event kinds end-to-end (circles 1–3) | x·y=k + dynamic fees + NFT positions |
-| Meteora DLMM | Stub — scheduled v0.2.0 | Bin-based liquidity, volatility fees |
+| Meteora DLMM | **Partial** — pool account decoded, properties + `fee_bps` live; events stubbed, scheduled v0.2.0 | Bin-based liquidity, volatility fees |
 | Raydium CLMM/CPMM | Scheduled v0.2.1 | Concentrated liquidity |
 | Orca Whirlpools | Scheduled v0.2.2 | Concentrated liquidity |
 | Meteora DAMM v1, Farm, Stake2Earn, LST, Multi-Token | Not started | — |
+
+DLMM is *partial* in a specific sense worth stating, since the two halves land
+separately: its `LbPair` account is decoded, its per-protocol properties table
+and its normalized `fee_bps` are in place, and the pool-detail endpoint serves
+them. What is missing is **event extraction** — `MeteoraDlmm::extract_events` is
+still a stub. Since pool discovery runs off extracted events, no DLMM pool
+reaches `pools` on its own yet, so that satellite stays empty until v0.2.0
+despite being fully wired and tested against real mainnet accounts.
 
 For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circle 2 (position lifecycle — `EvtCreatePosition`, `EvtClosePosition`, `EvtLockPosition`, `EvtPermanentLockPosition`) and circle 3 (pool config / admin — `EvtInitializePool`, `EvtSetPoolStatus`, `EvtUpdatePoolFees`) are wired end-to-end as well: extracted, persisted to their own per-kind tables, and covered by fixture tests. Each lands in `meteora_damm_v2_<kind>_events`; cross-protocol VIEWs expose only the four circle-1 concepts.
 

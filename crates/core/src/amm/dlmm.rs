@@ -62,31 +62,13 @@ const VARIABLE_FEE_SATURATION_NUMERATOR: u128 = 100_000_000 * VARIABLE_FEE_SCALE
 /// one `pools.fee_bps` column mean one thing across protocols.
 ///
 /// Same definition, **different upper bound** — and the difference is not
-/// academic. A pool's variable fee is capped by its own parameters:
+/// academic: on real captured accounts a DLMM pool's ceiling runs from ×1 to
+/// ×7.25 this floor. So `fee_bps` ranks and filters pools by a quantity every
+/// protocol has, but two pools at the same tier are not interchangeable.
 ///
-/// ```text
-/// max_variable_fee_bps = ⌈variable_fee_control × (max_volatility_accumulator × bin_step)²
-///                         / 1e11⌉ / 1e5
-/// ```
-///
-/// On the accounts captured in `core/tests/fixtures/dlmm/accounts/`:
-///
-/// ```text
-/// pool      base   max variable   worst case
-/// DZ2vZJ…    1 bps      0 bps        1 bps   (×1 — no dynamic fee)
-/// HTvjzs…    1 bps      2 bps        3 bps   (×3 — the anchor pool)
-/// 8KvuP8…  100 bps     70 bps      170 bps   (×1.7)
-/// 7t1sXt…  200 bps    675 bps      875 bps   (×4.4)
-/// JCYMX9…   25 bps    156 bps      181 bps   (×7.2)
-/// ```
-///
-/// So `fee_bps` ranks and filters pools by a quantity every protocol has, but a
-/// DLMM pool at a given tier can charge several times it under volatility, and
-/// by a wider factor than a cp-amm pool at the same tier. Callers that need the
-/// worst case have what they need: `variable_fee_control`,
-/// `max_volatility_accumulator` and `bin_step` are stored raw in the satellite
-/// and served raw on the wire, precisely so the bound is recomputable rather
-/// than merely asserted here.
+/// [`max_variable_fee_bps`] computes that ceiling and carries the per-pool
+/// figures; they are not restated here, so recapturing a fixture updates one
+/// table rather than leaving copies to drift.
 ///
 /// # Total, deliberately
 ///
@@ -155,18 +137,19 @@ pub fn base_fee_bps(base_factor: u16, bin_step: u16, base_fee_power_factor: u8) 
 /// `core/tests/fixtures/dlmm/accounts/`:
 ///
 /// ```text
-/// pool      base   max variable   worst case
-/// DZ2vZJ…    1 bps      0 bps        1 bps   (×1 — no dynamic fee)
-/// HTvjzs…    1 bps      2 bps        3 bps   (×3 — the anchor pool)
-/// 8KvuP8…  100 bps     70 bps      170 bps   (×1.7)
-/// 7t1sXt…  200 bps    675 bps      875 bps   (×4.4)
-/// JCYMX9…   25 bps    156 bps      181 bps   (×7.2)
+/// pool      base   max variable    worst case
+/// DZ2vZJ…    1 bps        0 bps         1 bps   (×1 — no dynamic fee)
+/// HTvjzs…    1 bps        2 bps         3 bps   (×3 — the anchor pool)
+/// 8KvuP8…  100 bps  70.3125 bps  170.3125 bps   (×1.703)
+/// 7t1sXt…  200 bps      675 bps       875 bps   (×4.375)
+/// JCYMX9…   25 bps   156.25 bps    181.25 bps   (×7.25)
 /// ```
 ///
 /// Two pools at the same tier are therefore not interchangeable. This function
-/// is what makes that statement checkable instead of documentation: the table
+/// is what makes that statement checkable instead of documentation: every figure
 /// above is asserted against real decoded accounts in
-/// `tests/pool_account_fixtures.rs`.
+/// `tests/pool_account_fixtures.rs`, which is the authority — the ratios here
+/// are rounded to three decimals, the bps values are exact.
 ///
 /// The worst case a swapper can pay is
 /// `min(base_fee_bps(..) + max_variable_fee_bps(..), 1000)` — the chain caps the
@@ -180,19 +163,30 @@ pub fn base_fee_bps(base_factor: u16, bin_step: u16, base_fee_power_factor: u8) 
 ///
 /// # Total, like [`base_fee_bps`]
 ///
-/// Saturates at [`MAX_FEE_BPS`] rather than failing. The squared term reaches
-/// ~7.9e28 at the top of the input ranges and the full numerator lands within a
-/// hair of `u128::MAX`, so every multiplication is checked and any overflow —
-/// like any result past the cap — yields the cap.
+/// Saturates at [`MAX_FEE_BPS`] rather than failing, for any result past the cap.
+///
+/// **The arithmetic itself cannot overflow, and by a computable margin.** At the
+/// top of the input ranges:
+///
+/// ```text
+/// acc       = (2³²−1) × (2¹⁶−1) =                             281_470_681_677_825
+/// acc²                          =         79_225_744_644_179_490_157_096_730_625
+/// acc² × (2³²−1)                = 340_271_982_168_772_322_334_504_870_185_799_909_375
+/// u128::MAX                     = 340_282_366_920_938_463_463_374_607_431_768_211_455
+/// ```
+///
+/// The worst case is `0.999969` of `u128::MAX` — 0.003 % of headroom, but
+/// headroom the types guarantee. The `checked_mul`s below are therefore *not*
+/// guarding a live possibility; they cost nothing and turn a future widening of
+/// any input type into the cap instead of a silent wrap in release builds.
 pub fn max_variable_fee_bps(
     variable_fee_control: u32,
     max_volatility_accumulator: u32,
     bin_step: u16,
 ) -> Decimal {
     // (max_volatility_accumulator × bin_step)² × variable_fee_control, in u128
-    // because the middle term alone exceeds u64. Checked throughout: at
-    // u32::MAX / u16::MAX the numerator is ~3.403e38 against a u128 ceiling of
-    // ~3.403e38 — close enough that only the compiler should be sure.
+    // because the middle term alone exceeds u64. Cannot overflow at these input
+    // widths (see the margin above); checked against the day one of them grows.
     let accumulated = u128::from(max_volatility_accumulator) * u128::from(bin_step);
     let Some(squared) = accumulated.checked_mul(accumulated) else {
         return MAX_FEE_BPS;
