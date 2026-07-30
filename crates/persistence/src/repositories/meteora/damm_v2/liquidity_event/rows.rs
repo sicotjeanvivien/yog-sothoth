@@ -1,6 +1,7 @@
 use crate::repositories::helper::{
     convert_bigdecimal_to_decimal, convert_bigdecimal_to_u128, convert_i64_to_u64,
-    convert_string_to_pubkey, convert_string_to_signature, parse_string_to_liquidity_event_kind,
+    convert_optional, convert_string_to_pubkey, convert_string_to_signature,
+    parse_string_to_liquidity_event_kind,
 };
 use chrono::{DateTime, Utc};
 use sqlx::types::BigDecimal;
@@ -35,10 +36,8 @@ impl TryFrom<MeteoraDammV2LiquidityEventRow> for MeteoraDammV2LiquidityEventValu
     type Error = RepositoryError;
 
     fn try_from(row: MeteoraDammV2LiquidityEventRow) -> Result<Self, Self::Error> {
-        let value_usd = row
-            .value_usd
-            .map(|v| convert_bigdecimal_to_decimal(v, "value_usd"))
-            .transpose()?;
+        let value_usd =
+            convert_optional(row.value_usd, "value_usd", convert_bigdecimal_to_decimal)?;
 
         Ok(MeteoraDammV2LiquidityEventValued {
             event: MeteoraDammV2LiquidityEvent {

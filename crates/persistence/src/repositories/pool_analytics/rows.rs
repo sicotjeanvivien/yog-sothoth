@@ -1,4 +1,6 @@
-use crate::repositories::helper::{convert_bigdecimal_to_decimal, convert_string_to_pubkey};
+use crate::repositories::helper::{
+    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey,
+};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
@@ -25,23 +27,12 @@ impl TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics) {
 
     fn try_from(row: PoolAnalyticsRow) -> Result<Self, Self::Error> {
         let pool_address = convert_string_to_pubkey(row.pool_address, "pool_address")?;
+        let usd = |v, field| convert_optional(v, field, convert_bigdecimal_to_decimal);
         let analytics = PoolAnalytics {
-            tvl_usd: row
-                .tvl_usd
-                .map(|v| convert_bigdecimal_to_decimal(v, "tvl_usd"))
-                .transpose()?,
-            volume_24h_usd: row
-                .volume_24h_usd
-                .map(|v| convert_bigdecimal_to_decimal(v, "volume_24h_usd"))
-                .transpose()?,
-            fees_24h_usd: row
-                .fees_24h_usd
-                .map(|v| convert_bigdecimal_to_decimal(v, "fees_24h_usd"))
-                .transpose()?,
-            protocol_fees_24h_usd: row
-                .protocol_fees_24h_usd
-                .map(|v| convert_bigdecimal_to_decimal(v, "protocol_fees_24h_usd"))
-                .transpose()?,
+            tvl_usd: usd(row.tvl_usd, "tvl_usd")?,
+            volume_24h_usd: usd(row.volume_24h_usd, "volume_24h_usd")?,
+            fees_24h_usd: usd(row.fees_24h_usd, "fees_24h_usd")?,
+            protocol_fees_24h_usd: usd(row.protocol_fees_24h_usd, "protocol_fees_24h_usd")?,
         };
         Ok((pool_address, analytics))
     }
@@ -67,10 +58,7 @@ impl TryFrom<PoolHistoryRow> for PoolHistoryBucket {
     type Error = RepositoryError;
 
     fn try_from(row: PoolHistoryRow) -> Result<Self, Self::Error> {
-        let usd = |v: Option<BigDecimal>, field| {
-            v.map(|v| convert_bigdecimal_to_decimal(v, field))
-                .transpose()
-        };
+        let usd = |v, field| convert_optional(v, field, convert_bigdecimal_to_decimal);
         Ok(PoolHistoryBucket {
             bucket: row.bucket,
             volume_usd: usd(row.volume_usd, "volume_usd")?,

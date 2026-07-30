@@ -69,9 +69,9 @@ fn try_from_valid_row_returns_state_with_all_fields_mapped() {
 
 #[test]
 fn try_from_with_none_optionals_returns_state_with_none() {
-    // The four Option fields go through `.map(...).transpose()?`;
-    // pin that None inputs produce None outputs (and not, say,
-    // `Some(0)` from a misplaced `unwrap_or_default`).
+    // The four Option fields go through `convert_optional`; pin that None
+    // inputs produce None outputs (and not, say, `Some(0)` from a misplaced
+    // `unwrap_or_default`).
     let row = PoolCurrentStateRow {
         last_sqrt_price: None,
         last_swap_at: None,

@@ -59,9 +59,13 @@ pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
 /// wrapper (`percent`, `u16_column`, …). The conversion rules stay in the
 /// converters; this only carries the absence through.
 ///
-/// ```ignore
+/// ```text
 /// bin_step: convert_optional(row.bin_step, "bin_step", convert_i32_to_u16)?,
 /// ```
+///
+/// Fenced as `text`, not `ignore`: the crate's integration run passes
+/// `-- --include-ignored`, which un-ignores doctests too and would try to
+/// compile this fragment out of context.
 pub(crate) fn convert_optional<T, U>(
     value: Option<T>,
     field: &str,

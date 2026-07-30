@@ -1,4 +1,6 @@
-use crate::repositories::helper::{convert_bigdecimal_to_decimal, convert_string_to_pubkey};
+use crate::repositories::helper::{
+    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey,
+};
 use bigdecimal::BigDecimal;
 use yog_core::{RepositoryError, domain::PoolLiquidityFlow};
 
@@ -22,10 +24,7 @@ impl TryFrom<PoolLiquidityFlowRow> for PoolLiquidityFlow {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             added_usd: convert_bigdecimal_to_decimal(row.added_usd, "added_usd")?,
             removed_usd: convert_bigdecimal_to_decimal(row.removed_usd, "removed_usd")?,
-            tvl_usd: row
-                .tvl_usd
-                .map(|v| convert_bigdecimal_to_decimal(v, "tvl_usd"))
-                .transpose()?,
+            tvl_usd: convert_optional(row.tvl_usd, "tvl_usd", convert_bigdecimal_to_decimal)?,
         })
     }
 }

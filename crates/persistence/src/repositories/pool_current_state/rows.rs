@@ -1,5 +1,5 @@
 use crate::repositories::helper::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
+    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_optional, convert_string_to_pubkey,
     convert_string_to_signature,
 };
 use chrono::{DateTime, Utc};
@@ -47,15 +47,13 @@ impl TryFrom<PoolCurrentStateRow> for PoolCurrentState {
             last_signature: convert_string_to_signature(row.last_signature, "last_signature")?,
             reserve_a: convert_i64_to_u64(row.reserve_a, "reserve_a")?,
             reserve_b: convert_i64_to_u64(row.reserve_b, "reserve_b")?,
-            last_sqrt_price: row
-                .last_sqrt_price
-                .map(|v| convert_bigdecimal_to_u128(v, "last_sqrt_price"))
-                .transpose()?,
+            last_sqrt_price: convert_optional(
+                row.last_sqrt_price,
+                "last_sqrt_price",
+                convert_bigdecimal_to_u128,
+            )?,
             last_swap_at: row.last_swap_at,
-            liquidity: row
-                .liquidity
-                .map(|v| convert_bigdecimal_to_u128(v, "liquidity"))
-                .transpose()?,
+            liquidity: convert_optional(row.liquidity, "liquidity", convert_bigdecimal_to_u128)?,
             last_liquidity_at: row.last_liquidity_at,
             updated_at: row.updated_at,
         })

@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
-use crate::repositories::helper::{convert_bigdecimal_to_decimal, convert_string_to_pubkey};
+use crate::repositories::helper::{
+    convert_bigdecimal_to_decimal, convert_optional, convert_string_to_pubkey,
+};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use yog_core::{
@@ -41,10 +43,11 @@ impl TryFrom<SignalRow> for SignalRecord {
                     RepositoryError::Integrity(format!("invalid severity: {}", row.severity))
                 })?,
                 value: convert_bigdecimal_to_decimal(row.value, "value")?,
-                threshold: row
-                    .threshold
-                    .map(|v| convert_bigdecimal_to_decimal(v, "threshold"))
-                    .transpose()?,
+                threshold: convert_optional(
+                    row.threshold,
+                    "threshold",
+                    convert_bigdecimal_to_decimal,
+                )?,
                 message: row.message,
                 triggered_at: row.triggered_at,
             },
