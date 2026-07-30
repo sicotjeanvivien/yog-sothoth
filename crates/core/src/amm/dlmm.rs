@@ -1,8 +1,18 @@
 //! DLMM (Meteora Liquidity Book) fee arithmetic.
 //!
-//! The counterpart of [`super::damm_v2`] for the bin-based product. Only the
-//! **base** fee lives here for now — the volatility-driven variable fee needs
-//! per-swap state (`volatility_accumulator`) that Yog does not yet track.
+//! The counterpart of [`super::damm_v2`] for the bin-based product.
+//!
+//! Two quantities, both derived from stored pool parameters and neither
+//! requiring per-swap state:
+//!
+//! - [`base_fee_bps`] — the **floor** a swapper pays, what `pools.fee_bps` holds;
+//! - [`max_variable_fee_bps`] — the **ceiling** on the volatility-driven part
+//!   this pool can add on top.
+//!
+//! Together they bound what a pool can charge. The *actual* variable fee at any
+//! moment needs the live `volatility_accumulator`, which Yog does not track —
+//! but its maximum is a property of the pool, and that is enough to say how far
+//! two pools at the same fee tier can diverge.
 //!
 //! Source: <https://docs.meteora.ag/core-products/dlmm/formulas>.
 
@@ -11,10 +21,21 @@ use rust_decimal::Decimal;
 /// The chain's own ceiling on the total fee rate: `100_000_000` in 1e9
 /// precision, i.e. 10 %. Expressed here in the unit this module returns.
 ///
-/// It caps `base_fee_rate + variable_fee_rate`, so it is an upper bound on the
-/// base fee alone too — which is what makes the saturation in [`base_fee_bps`]
-/// a statement about the protocol rather than a defensive guess.
+/// It caps `base_fee_rate + variable_fee_rate` **at swap time**, so it bounds
+/// each part individually too — which is why both functions here saturate at it
+/// rather than returning an error.
 const MAX_FEE_BPS: Decimal = Decimal::ONE_THOUSAND;
+
+/// Divisor of the variable-fee formula, applied to a value already in 1e9
+/// precision.
+const VARIABLE_FEE_SCALE: u128 = 100_000_000_000; // 1e11
+
+/// Above this numerator the result exceeds [`MAX_FEE_BPS`], so the arithmetic
+/// can stop early rather than risk `u128` overflow on the way there.
+///
+/// `1000 bps` is `1e8` in 1e9 precision, and the formula divides by 1e11 —
+/// so the numerator that lands exactly on the cap is `1e8 × 1e11`.
+const VARIABLE_FEE_SATURATION_NUMERATOR: u128 = 100_000_000 * VARIABLE_FEE_SCALE; // 1e19
 
 /// A DLMM pool's **base** trading fee, in basis points.
 ///
@@ -111,6 +132,90 @@ pub fn base_fee_bps(base_factor: u16, bin_step: u16, base_fee_power_factor: u8) 
     }
 
     (fee / Decimal::from(10_000)).min(MAX_FEE_BPS)
+}
+
+/// The **most** a pool's volatility-driven fee can add on top of its base fee,
+/// in basis points.
+///
+/// ```text
+/// variable_fee_rate = ⌈variable_fee_control × (volatility_accumulator × bin_step)² / 1e11⌉
+/// ```
+///
+/// The live `volatility_accumulator` is per-swap state Yog does not track, but
+/// the pool caps it at `max_volatility_accumulator` — so substituting the cap
+/// turns a moving quantity into a **property of the pool**, computable from the
+/// three parameters the satellite already stores.
+///
+/// # Why this exists
+///
+/// [`base_fee_bps`] and cp-amm's [`super::damm_v2::fee_numerator_to_bps`] share
+/// a definition — the floor — which is what lets one `pools.fee_bps` column rank
+/// pools across protocols. They do **not** share an upper bound, and for DLMM
+/// the gap is wide enough to matter. On the accounts captured in
+/// `core/tests/fixtures/dlmm/accounts/`:
+///
+/// ```text
+/// pool      base   max variable   worst case
+/// DZ2vZJ…    1 bps      0 bps        1 bps   (×1 — no dynamic fee)
+/// HTvjzs…    1 bps      2 bps        3 bps   (×3 — the anchor pool)
+/// 8KvuP8…  100 bps     70 bps      170 bps   (×1.7)
+/// 7t1sXt…  200 bps    675 bps      875 bps   (×4.4)
+/// JCYMX9…   25 bps    156 bps      181 bps   (×7.2)
+/// ```
+///
+/// Two pools at the same tier are therefore not interchangeable. This function
+/// is what makes that statement checkable instead of documentation: the table
+/// above is asserted against real decoded accounts in
+/// `tests/pool_account_fixtures.rs`.
+///
+/// The worst case a swapper can pay is
+/// `min(base_fee_bps(..) + max_variable_fee_bps(..), 1000)` — the chain caps the
+/// **sum** at 10 %, so the two bounds do not simply add without that clamp.
+///
+/// # Zero means no dynamic fee
+///
+/// DLMM has no boolean for it, unlike cp-amm's `has_dynamic_fee`: a pool with
+/// `variable_fee_control == 0` charges no variable fee at all, and this returns
+/// zero for it. The magnitude carries both facts.
+///
+/// # Total, like [`base_fee_bps`]
+///
+/// Saturates at [`MAX_FEE_BPS`] rather than failing. The squared term reaches
+/// ~7.9e28 at the top of the input ranges and the full numerator lands within a
+/// hair of `u128::MAX`, so every multiplication is checked and any overflow —
+/// like any result past the cap — yields the cap.
+pub fn max_variable_fee_bps(
+    variable_fee_control: u32,
+    max_volatility_accumulator: u32,
+    bin_step: u16,
+) -> Decimal {
+    // (max_volatility_accumulator × bin_step)² × variable_fee_control, in u128
+    // because the middle term alone exceeds u64. Checked throughout: at
+    // u32::MAX / u16::MAX the numerator is ~3.403e38 against a u128 ceiling of
+    // ~3.403e38 — close enough that only the compiler should be sure.
+    let accumulated = u128::from(max_volatility_accumulator) * u128::from(bin_step);
+    let Some(squared) = accumulated.checked_mul(accumulated) else {
+        return MAX_FEE_BPS;
+    };
+    let Some(numerator) = squared.checked_mul(u128::from(variable_fee_control)) else {
+        return MAX_FEE_BPS;
+    };
+
+    // Past the cap the exact value carries no information — and stopping here
+    // is also what keeps the `div_ceil` below away from the u128 boundary.
+    if numerator > VARIABLE_FEE_SATURATION_NUMERATOR {
+        return MAX_FEE_BPS;
+    }
+
+    // The formula rounds **up** — a swapper never pays less than the rate.
+    let rate_1e9 = numerator.div_ceil(VARIABLE_FEE_SCALE);
+
+    // Guarded above, so this is at most 1e8 and fits comfortably.
+    let rate = u64::try_from(rate_1e9).expect("bounded by the saturation check above");
+
+    // 1e9 precision to bps: divide by 1e5. Sub-bps values are real (the anchor
+    // pool's floor is 1 bps), so the fraction is kept.
+    Decimal::from(rate) / Decimal::from(100_000)
 }
 
 // ============================================================

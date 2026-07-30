@@ -67,6 +67,7 @@ use solana_pubkey::Pubkey;
 use std::str::FromStr;
 use yog_core::{
     amm::damm_v2::BaseFeeKind,
+    amm::dlmm::max_variable_fee_bps,
     application::decode_pool_account,
     domain::{PoolAccountProperties, Protocol},
 };
@@ -331,6 +332,91 @@ fn decodes_real_mainnet_lb_pairs() {
             e.pool
         );
     }
+}
+
+/// **What `fee_bps` does not say.** The base fee is the floor; each pool caps
+/// its own volatility-driven part, and on these very accounts that ceiling runs
+/// from ×1 to ×7 the floor.
+///
+/// Asserted here rather than only documented, because the claim is quantitative
+/// and made in three places (`amm::dlmm`, the api README, the PR). The inputs
+/// come from the decoder, so a layout drift breaks this too.
+///
+/// The worst case is `min(base + variable, 1000)` — the chain caps the sum, so
+/// the two bounds do not simply add.
+#[test]
+fn the_fee_floor_understates_what_a_dlmm_pool_can_charge() {
+    // pool → (max variable bps, worst case bps). Both derived, never hand-typed.
+    let expected: &[(&str, &str, &str)] = &[
+        ("DZ2vZJMLKt1cExzyFeyoGV3panTJufRFMiLXJKSa2mPP", "0", "1"),
+        ("HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR", "2", "3"),
+        (
+            "8KvuP878qiUxsc5P8X6mmjcNU5hzj7LBXbRhDSca5ej9",
+            "70.3125",
+            "170.3125",
+        ),
+        ("7t1sXtcsSJ8Yg8UKgZp7mjv3HQQ9KW5v8FJ9cfU34GT3", "675", "875"),
+        (
+            "JCYMX9Nx7DTUdguptRR5LLSc62MEbNmFYsbT5R9yCDGy",
+            "156.25",
+            "181.25",
+        ),
+    ];
+
+    for (pool, max_variable, worst_case) in expected {
+        let e = EXPECTED_DLMM
+            .iter()
+            .find(|e| e.pool == *pool)
+            .unwrap_or_else(|| panic!("{pool} is no longer a captured fixture"));
+
+        let variable = max_variable_fee_bps(
+            e.variable_fee_control,
+            e.max_volatility_accumulator,
+            e.bin_step,
+        );
+        assert_eq!(
+            variable,
+            Decimal::from_str(max_variable).unwrap(),
+            "{pool}: variable-fee ceiling",
+        );
+
+        let base = Decimal::from_str(e.fee_bps).unwrap();
+        assert_eq!(
+            (base + variable).min(Decimal::from(1_000)),
+            Decimal::from_str(worst_case).unwrap(),
+            "{pool}: worst case a swapper can pay",
+        );
+    }
+}
+
+/// The point of the test above, stated as an invariant rather than a table: at
+/// least one captured pool charges several times its advertised tier, and at
+/// least one charges exactly it. A capture that lost either end would leave the
+/// "not interchangeable" claim untested in one direction.
+#[test]
+fn the_fixtures_span_both_ends_of_the_fee_gap() {
+    let ratios: Vec<Decimal> = EXPECTED_DLMM
+        .iter()
+        .filter(|e| e.base_factor != 0)
+        .map(|e| {
+            let base = Decimal::from_str(e.fee_bps).unwrap();
+            let variable = max_variable_fee_bps(
+                e.variable_fee_control,
+                e.max_volatility_accumulator,
+                e.bin_step,
+            );
+            (base + variable) / base
+        })
+        .collect();
+
+    assert!(
+        ratios.contains(&Decimal::ONE),
+        "no pool whose fee_bps is the whole story (none without a dynamic fee)"
+    );
+    assert!(
+        ratios.iter().any(|r| *r >= Decimal::from(5)),
+        "no pool charging several times its tier — the gap claim is untested"
+    );
 }
 
 /// The captured set spans the fee inputs widely enough that an offset landing on
