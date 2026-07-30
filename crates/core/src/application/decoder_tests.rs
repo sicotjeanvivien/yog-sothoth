@@ -16,7 +16,14 @@ use crate::application::decoder::meteora::damm_v2::{
     NUMBER_OF_PERIOD_OFFSET, POOL_DISCRIMINATOR, PROTOCOL_FEE_PERCENT_OFFSET,
     REFERRAL_FEE_PERCENT_OFFSET, TOKEN_A_MINT_OFFSET, TOKEN_B_MINT_OFFSET,
 };
-use crate::domain::PoolAccountProperties;
+use crate::application::decoder::meteora::dlmm::{
+    BASE_FACTOR_OFFSET, BASE_FEE_POWER_FACTOR_OFFSET, BIN_STEP_OFFSET, LB_PAIR_DISCRIMINATOR,
+    MAX_VOLATILITY_ACCUMULATOR_OFFSET, PROTOCOL_SHARE_OFFSET, TOKEN_X_MINT_OFFSET,
+    TOKEN_Y_MINT_OFFSET, VARIABLE_FEE_CONTROL_OFFSET,
+};
+use crate::domain::{
+    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, PoolAccountProperties,
+};
 use rust_decimal::Decimal;
 
 fn pk(seed: u8) -> Pubkey {
@@ -60,19 +67,79 @@ fn with_fee_shape(mut bytes: Vec<u8>, mode: u8, number_of_period: u16, dynamic: 
 }
 
 fn decode_shape(bytes: &[u8]) -> (Option<BaseFeeKind>, bool) {
-    let PoolAccountProperties::MeteoraDammV2(props) = damm_v2_properties(bytes);
+    let props = damm_v2_properties(bytes);
     (props.base_fee_kind, props.has_dynamic_fee)
 }
 
-/// The cp-amm half of a successful decode.
-fn damm_v2_properties(bytes: &[u8]) -> PoolAccountProperties {
-    decode_pool_account(&cp_amm_owner(), bytes)
+/// The cp-amm half of a successful decode, unwrapped to its concrete type.
+///
+/// Unwrapping through a `match` rather than an irrefutable `let`: the enum has
+/// more than one variant now, and a decode landing on another one is a routing
+/// bug the assertions below would otherwise report as a confusing field
+/// mismatch.
+fn damm_v2_properties(bytes: &[u8]) -> MeteoraDammV2PoolAccountProperties {
+    let properties = decode_pool_account(&cp_amm_owner(), bytes)
         .expect("should decode")
-        .properties
+        .properties;
+
+    match properties {
+        PoolAccountProperties::MeteoraDammV2(props) => props,
+        other => panic!("expected cp-amm properties, got {other:?}"),
+    }
 }
 
 fn cp_amm_owner() -> Pubkey {
     Protocol::MeteoraDammV2.program_id()
+}
+
+// ── DLMM `LbPair` fixtures ──────────────────────────────────────────
+
+const LB_PAIR_ACCOUNT_LEN: usize = 904;
+
+/// A DLMM `LbPair` account with the discriminator, the fee parameters and the
+/// two mints at their real offsets. Mints are `pk(4)` / `pk(5)`, chosen distinct
+/// from the cp-amm fixtures' so a cross-decode cannot pass by coincidence.
+fn lb_pair_account(bin_step: u16, base_factor: u16, base_fee_power_factor: u8) -> Vec<u8> {
+    let mut bytes = vec![0u8; LB_PAIR_ACCOUNT_LEN];
+    bytes[..8].copy_from_slice(&LB_PAIR_DISCRIMINATOR);
+    bytes[BASE_FACTOR_OFFSET..BASE_FACTOR_OFFSET + 2].copy_from_slice(&base_factor.to_le_bytes());
+    bytes[BASE_FEE_POWER_FACTOR_OFFSET] = base_fee_power_factor;
+    bytes[BIN_STEP_OFFSET..BIN_STEP_OFFSET + 2].copy_from_slice(&bin_step.to_le_bytes());
+    bytes[TOKEN_X_MINT_OFFSET..TOKEN_X_MINT_OFFSET + 32].copy_from_slice(pk(4).as_ref());
+    bytes[TOKEN_Y_MINT_OFFSET..TOKEN_Y_MINT_OFFSET + 32].copy_from_slice(pk(5).as_ref());
+    bytes
+}
+
+/// Overwrite the dynamic-fee parameters and Meteora's cut.
+fn with_dlmm_fee_params(
+    mut bytes: Vec<u8>,
+    variable_fee_control: u32,
+    max_volatility_accumulator: u32,
+    protocol_share: u16,
+) -> Vec<u8> {
+    bytes[VARIABLE_FEE_CONTROL_OFFSET..VARIABLE_FEE_CONTROL_OFFSET + 4]
+        .copy_from_slice(&variable_fee_control.to_le_bytes());
+    bytes[MAX_VOLATILITY_ACCUMULATOR_OFFSET..MAX_VOLATILITY_ACCUMULATOR_OFFSET + 4]
+        .copy_from_slice(&max_volatility_accumulator.to_le_bytes());
+    bytes[PROTOCOL_SHARE_OFFSET..PROTOCOL_SHARE_OFFSET + 2]
+        .copy_from_slice(&protocol_share.to_le_bytes());
+    bytes
+}
+
+/// The DLMM half of a successful decode, unwrapped to its concrete type.
+fn dlmm_properties(bytes: &[u8]) -> MeteoraDlmmPoolAccountProperties {
+    let properties = decode_pool_account(&dlmm_owner(), bytes)
+        .expect("should decode")
+        .properties;
+
+    match properties {
+        PoolAccountProperties::MeteoraDlmm(props) => props,
+        other => panic!("expected DLMM properties, got {other:?}"),
+    }
+}
+
+fn dlmm_owner() -> Pubkey {
+    Protocol::MeteoraDlmm.program_id()
 }
 
 // ── Happy path ──────────────────────────────────────────────────────
@@ -91,7 +158,7 @@ fn decodes_cp_amm_fields_at_their_offsets() {
     assert_eq!(decoded.registry.token_b_mint, pk(3));
     assert_eq!(decoded.registry.fee_bps, Decimal::new(25, 0));
     // …and the cp-amm half, which goes to this protocol's satellite.
-    let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties;
+    let props = damm_v2_properties(&data);
     assert_eq!(props.protocol_fee_percent, 20);
     assert_eq!(props.referral_fee_percent, 20);
 }
@@ -109,7 +176,7 @@ fn padding_between_the_percents_is_not_decoded() {
     let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
     data[PADDING_0_OFFSET] = 0xFF;
 
-    let PoolAccountProperties::MeteoraDammV2(props) = damm_v2_properties(&data);
+    let props = damm_v2_properties(&data);
     assert_eq!(props.protocol_fee_percent, 20, "byte 48 must be untouched");
     assert_eq!(props.referral_fee_percent, 20, "byte 50 must be untouched");
 }
@@ -186,7 +253,7 @@ fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
         Decimal::new(25, 0),
         "the tier must survive"
     );
-    let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties;
+    let props = damm_v2_properties(&data);
     assert_eq!(props.base_fee_kind, None, "the unmappable mode yields None");
     assert!(props.has_dynamic_fee, "the flag is independent of the mode");
 }
@@ -262,22 +329,22 @@ fn a_short_account_is_rejected_as_truncated_with_its_sizes() {
 /// second line. Both must stay.
 #[test]
 fn foreign_account_is_not_decoded_at_our_offsets() {
-    let mut lb_pair = vec![0u8; 904];
-    // LbPair's own discriminator, and the two reserve accounts where cp-amm
-    // would look for mints.
-    lb_pair[..8].copy_from_slice(&[33, 11, 49, 98, 181, 101, 177, 13]);
+    let mut lb_pair = lb_pair_account(1, 10_000, 0);
+    // The two reserve accounts, where cp-amm would look for mints.
     lb_pair[152..184].copy_from_slice(pk(77).as_ref()); // reserve_x
     lb_pair[184..216].copy_from_slice(pk(88).as_ref()); // reserve_y
 
-    // Rejected on the program id…
+    // Routed to its own decoder, the account yields DLMM properties…
     assert_eq!(
-        decode_pool_account(&Protocol::MeteoraDlmm.program_id(), &lb_pair),
-        Err(PoolAccountRejection::NoDecoder {
-            protocol: Protocol::MeteoraDlmm
-        })
+        decode_pool_account(&dlmm_owner(), &lb_pair)
+            .expect("should decode")
+            .protocol(),
+        Protocol::MeteoraDlmm
     );
 
-    // …and, were it ever routed here, on the discriminator too.
+    // …and the cp-amm decoder still rejects it on the discriminator, which is
+    // the guard that matters: the reserves above sit exactly where cp-amm reads
+    // its mints, so without it they would be written as the token pair.
     assert_eq!(
         super::meteora::damm_v2::decode_pool_account(&lb_pair),
         Err(PoolAccountRejection::NotAPoolAccount {
@@ -287,19 +354,152 @@ fn foreign_account_is_not_decoded_at_our_offsets() {
     );
 }
 
+// ── DLMM `LbPair` ───────────────────────────────────────────────────
+
+/// The offsets, against the values read from a live account before the decoder
+/// existed: pool `HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR` (SOL/USDC) has
+/// `base_factor = 10000`, `bin_step = 1`, `base_fee_power_factor = 0`,
+/// `variable_fee_control = 2000000`, `max_volatility_accumulator = 100000`,
+/// `protocol_share = 1000` — and Meteora shows 0.01 % for it, which is the
+/// 1 bps asserted below.
+///
+/// This is what ties the layout to the chain rather than to a self-consistent
+/// fixture: every constant here was observed, not chosen.
+#[test]
+fn decodes_lb_pair_fields_at_their_offsets() {
+    let data = with_dlmm_fee_params(lb_pair_account(1, 10_000, 0), 2_000_000, 100_000, 1_000);
+
+    let decoded = decode_pool_account(&dlmm_owner(), &data).expect("should decode");
+
+    assert_eq!(decoded.protocol(), Protocol::MeteoraDlmm);
+    // The neutral half — what the `pools` registry stores.
+    assert_eq!(decoded.registry.token_a_mint, pk(4));
+    assert_eq!(decoded.registry.token_b_mint, pk(5));
+    assert_eq!(
+        decoded.registry.fee_bps,
+        Decimal::ONE,
+        "10000 x 1 x 10^0 / 10000 = 1 bps, what Meteora displays for this pool"
+    );
+    // …and the DLMM half, which goes to this protocol's satellite.
+    let props = dlmm_properties(&data);
+    assert_eq!(props.bin_step, 1);
+    assert_eq!(props.base_factor, 10_000);
+    assert_eq!(props.base_fee_power_factor, 0);
+    assert_eq!(props.variable_fee_control, 2_000_000);
+    assert_eq!(props.max_volatility_accumulator, 100_000);
+    assert_eq!(props.protocol_share, 1_000);
+}
+
+/// `bin_step` and `base_factor` are adjacent to fields this decoder ignores
+/// (`active_id` at 76, `filter_period` at 10). Distinct non-zero values in each
+/// catch an off-by-one that a fixture of equal values would hide.
+#[test]
+fn the_fee_inputs_do_not_bleed_into_each_other() {
+    let props = dlmm_properties(&lb_pair_account(25, 5_000, 2));
+
+    assert_eq!(props.bin_step, 25);
+    assert_eq!(props.base_factor, 5_000);
+    assert_eq!(props.base_fee_power_factor, 2);
+}
+
+/// `active_id` is state, not configuration — it moves on every swap. Poison its
+/// bytes and assert nothing this decoder produces changes: it belongs to
+/// `pool_current_state`, and reading it here would make the satellite churn.
+#[test]
+fn state_bytes_are_not_decoded_into_the_satellite() {
+    let baseline = dlmm_properties(&lb_pair_account(1, 10_000, 0));
+
+    let mut poisoned = lb_pair_account(1, 10_000, 0);
+    poisoned[76..80].copy_from_slice(&(-26_085i32).to_le_bytes()); // active_id
+    poisoned[40..72].fill(0xFF); // the whole VariableParameters block
+
+    assert_eq!(
+        dlmm_properties(&poisoned),
+        baseline,
+        "only StaticParameters and bin_step may reach the satellite"
+    );
+}
+
+/// A DLMM pool with no variable fee is expressed by a zero magnitude, not by a
+/// flag — there is no `has_dynamic_fee` byte in this layout.
+#[test]
+fn a_zero_variable_fee_control_means_no_dynamic_fee() {
+    let props = dlmm_properties(&with_dlmm_fee_params(
+        lb_pair_account(1, 10_000, 0),
+        0,
+        100_000,
+        1_000,
+    ));
+
+    assert_eq!(props.variable_fee_control, 0);
+}
+
+/// The full `u32` range must survive — `variable_fee_control` and
+/// `max_volatility_accumulator` are stored in signed SQL columns, so a lossy
+/// conversion would surface here first.
+#[test]
+fn the_dynamic_fee_parameters_keep_their_full_range() {
+    let props = dlmm_properties(&with_dlmm_fee_params(
+        lb_pair_account(u16::MAX, u16::MAX, 0),
+        u32::MAX,
+        u32::MAX,
+        u16::MAX,
+    ));
+
+    // Every field, not a sample: a narrowing bug in any one of them is what
+    // this pins, and the SQL widths downstream are justified column by column.
+    assert_eq!(props.bin_step, u16::MAX);
+    assert_eq!(props.base_factor, u16::MAX);
+    assert_eq!(props.base_fee_power_factor, 0, "not set by this fixture");
+    assert_eq!(props.variable_fee_control, u32::MAX);
+    assert_eq!(props.max_volatility_accumulator, u32::MAX);
+    assert_eq!(props.protocol_share, u16::MAX);
+}
+
+/// The mirror of the cp-amm guard: a cp-amm `Pool` handed to the DLMM decoder
+/// must be rejected on the discriminator. At DLMM's mint offsets (88, 120) a
+/// cp-amm account holds parts of its `pool_fees` block — bytes that would decode
+/// as perfectly valid `Pubkey`s.
+#[test]
+fn cp_amm_account_is_rejected_by_the_dlmm_decoder() {
+    let cp_amm = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
+
+    assert_eq!(
+        decode_pool_account(&dlmm_owner(), &cp_amm),
+        Err(PoolAccountRejection::NotAPoolAccount {
+            protocol: Protocol::MeteoraDlmm
+        })
+    );
+}
+
+#[test]
+fn a_short_lb_pair_is_rejected_as_truncated_with_its_sizes() {
+    let short = lb_pair_account(1, 10_000, 0)[..151].to_vec();
+
+    assert_eq!(
+        decode_pool_account(&dlmm_owner(), &short),
+        Err(PoolAccountRejection::Truncated {
+            protocol: Protocol::MeteoraDlmm,
+            len: 151,
+            min: 152,
+        })
+    );
+}
+
 // ── Protocols recognized but not decoded yet ────────────────────────
 
 /// A known protocol without a decoder is a **coverage gap**, and must not be
 /// reported as an unindexed program — the two call for different reactions.
+///
+/// DAMM v1 is the only one left: DLMM gained its decoder with migration 039.
 #[test]
 fn known_protocol_without_a_decoder_is_rejected_as_a_coverage_gap() {
-    for protocol in [Protocol::MeteoraDammV1, Protocol::MeteoraDlmm] {
-        assert_eq!(
-            decode_pool_account(&protocol.program_id(), &[0u8; 1112]),
-            Err(PoolAccountRejection::NoDecoder { protocol }),
-            "{protocol} should be a coverage gap, not an unknown program"
-        );
-    }
+    let protocol = Protocol::MeteoraDammV1;
+    assert_eq!(
+        decode_pool_account(&protocol.program_id(), &[0u8; 1112]),
+        Err(PoolAccountRejection::NoDecoder { protocol }),
+        "{protocol} should be a coverage gap, not an unknown program"
+    );
 }
 
 // ── Protocol::from_program_id ───────────────────────────────────────

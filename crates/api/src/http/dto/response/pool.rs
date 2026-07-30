@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use yog_core::domain::{
-    MeteoraDammV2PoolProperties, Pool, PoolAnalytics, PoolProperties, SignalRecord,
+    MeteoraDammV2PoolProperties, MeteoraDlmmPoolProperties, Pool, PoolAnalytics, PoolProperties,
+    SignalRecord,
 };
 
 use crate::{
@@ -165,6 +166,8 @@ pub(crate) struct PoolDetailResponse {
     pub(crate) pool: PoolResponse,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) meteora_damm_v2: Option<MeteoraDammV2PropertiesResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) meteora_dlmm: Option<MeteoraDlmmPropertiesResponse>,
 }
 
 /// DAMM v2-only pool properties (migration 036's satellite table).
@@ -202,6 +205,51 @@ impl From<MeteoraDammV2PoolProperties> for MeteoraDammV2PropertiesResponse {
     }
 }
 
+/// DLMM-only pool properties (migration 039's satellite table).
+///
+/// Every field is optional together, not independently: all six come from one
+/// read of one `LbPair` account, so they are present for a resolved pool and
+/// absent for one yog-context has not reached.
+///
+/// The pool's *state* — the active bin, the volatility accumulator — is not
+/// here. It moves on every swap and belongs to the current-state surface.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MeteoraDlmmPropertiesResponse {
+    /// Price increment between adjacent bins, in basis points: bin `i` sits at
+    /// `(1 + binStep / 10_000)^i`. The defining property of a DLMM pool.
+    pub(crate) bin_step: Option<u16>,
+    /// The two other inputs to the pool's base fee, served raw so a client can
+    /// recompute `feeBps` rather than trust it: `baseFactor × binStep ×
+    /// 10^baseFeePowerFactor / 10_000`.
+    pub(crate) base_factor: Option<u16>,
+    pub(crate) base_fee_power_factor: Option<u8>,
+    /// Magnitude of the volatility-driven fee charged on top of the base fee.
+    /// **Zero means no dynamic fee** — DLMM has no boolean flag, unlike DAMM
+    /// v2's `hasDynamicFee`.
+    pub(crate) variable_fee_control: Option<u32>,
+    /// Per-pool ceiling on the volatility accumulator, and so on how far the
+    /// variable fee can climb.
+    pub(crate) max_volatility_accumulator: Option<u32>,
+    /// Meteora's cut of the trading fee, in **basis points** — not the whole
+    /// percent DAMM v2's `protocolFeePercent` uses. The two are not comparable
+    /// without scaling.
+    pub(crate) protocol_share: Option<u16>,
+}
+
+impl From<MeteoraDlmmPoolProperties> for MeteoraDlmmPropertiesResponse {
+    fn from(p: MeteoraDlmmPoolProperties) -> Self {
+        Self {
+            bin_step: p.bin_step,
+            base_factor: p.base_factor,
+            base_fee_power_factor: p.base_fee_power_factor,
+            variable_fee_control: p.variable_fee_control,
+            max_volatility_accumulator: p.max_volatility_accumulator,
+            protocol_share: p.protocol_share,
+        }
+    }
+}
+
 /// The one place a pool's protocol is matched on the read path.
 ///
 /// It belongs here and nowhere upstream: each protocol's properties have their
@@ -209,17 +257,28 @@ impl From<MeteoraDammV2PoolProperties> for MeteoraDammV2PropertiesResponse {
 /// per-protocol, while everything before it (`PoolService`, `EnrichedPoolDetail`)
 /// only ever needs "this pool's properties, whatever they are".
 ///
-/// Destructuring [`PoolProperties`] in the closure pattern is deliberate and
-/// load-bearing: it is irrefutable only while the enum has one variant, so adding
-/// a protocol stops compilation right here — the reminder to give it its own
-/// response field. A wildcard arm would instead drop it from the wire in silence.
+/// The exhaustive `match` is deliberate and load-bearing: adding a protocol
+/// stops compilation right here — the reminder to give it its own response
+/// field. A wildcard arm would instead drop it from the wire in silence. This is
+/// what happened when DLMM landed: the previously irrefutable
+/// `|PoolProperties::MeteoraDammV2(p)|` closure stopped compiling, which is
+/// exactly the intended behaviour.
 impl From<EnrichedPoolDetail> for PoolDetailResponse {
     fn from(d: EnrichedPoolDetail) -> Self {
+        let (meteora_damm_v2, meteora_dlmm) = match d.properties {
+            Some(PoolProperties::MeteoraDammV2(p)) => {
+                (Some(MeteoraDammV2PropertiesResponse::from(p)), None)
+            }
+            Some(PoolProperties::MeteoraDlmm(p)) => {
+                (None, Some(MeteoraDlmmPropertiesResponse::from(p)))
+            }
+            None => (None, None),
+        };
+
         Self {
             pool: PoolResponse::from(d.pool),
-            meteora_damm_v2: d
-                .properties
-                .map(|PoolProperties::MeteoraDammV2(p)| MeteoraDammV2PropertiesResponse::from(p)),
+            meteora_damm_v2,
+            meteora_dlmm,
         }
     }
 }

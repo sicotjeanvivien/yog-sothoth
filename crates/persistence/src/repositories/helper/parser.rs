@@ -36,6 +36,44 @@ pub(crate) fn convert_i16_to_u8(v: i16, field: &str) -> RepositoryResult<u8> {
     u8::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
+/// Narrow an `INTEGER` read from Postgres into a `u16`.
+///
+/// The width is deliberate: a `u16` does not fit SMALLINT (32 767 < 65 535), so
+/// columns holding one are INTEGER and half their range is unreachable by
+/// design. This guard catches a value written outside that convention rather
+/// than truncating it.
+pub(crate) fn convert_i32_to_u16(v: i32, field: &str) -> RepositoryResult<u16> {
+    u16::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
+}
+
+/// Narrow a `BIGINT` read from Postgres into a `u32`. Same reasoning as
+/// [`convert_i32_to_u16`]: a `u32` does not fit INTEGER.
+pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
+    u32::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
+}
+
+/// Lift any of the guards above over `Option`, for a nullable column.
+///
+/// Every `TryFrom<Row>` in this crate hits the same shape — a nullable column,
+/// one scalar converter, one field name — and each was writing its own two-line
+/// wrapper (`percent`, `u16_column`, …). The conversion rules stay in the
+/// converters; this only carries the absence through.
+///
+/// ```text
+/// bin_step: convert_optional(row.bin_step, "bin_step", convert_i32_to_u16)?,
+/// ```
+///
+/// Fenced as `text`, not `ignore`: the crate's integration run passes
+/// `-- --include-ignored`, which un-ignores doctests too and would try to
+/// compile this fragment out of context.
+pub(crate) fn convert_optional<T, U>(
+    value: Option<T>,
+    field: &str,
+    convert: impl Fn(T, &str) -> RepositoryResult<U>,
+) -> RepositoryResult<Option<U>> {
+    value.map(|v| convert(v, field)).transpose()
+}
+
 /// Convert a Postgres `NUMERIC` (mapped to `BigDecimal`) into a `u128`.
 /// Used for fields like `price_q64` that exceed `i64` range.
 pub(crate) fn convert_bigdecimal_to_u128(

@@ -32,7 +32,7 @@ pub use meteora::{
     PgMeteoraDammV2UpdateRewardDurationEventRepository,
     PgMeteoraDammV2UpdateRewardFunderEventRepository,
     PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
-    PgMeteoraDammV2WithdrawIneligibleRewardEventRepository,
+    PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgMeteoraDlmmPoolPropertiesRepository,
 };
 pub use network_status::PgNetworkStatusRepository;
 pub use pool::PgPoolRepository;

@@ -1,4 +1,7 @@
 pub mod damm_v2;
+pub mod dlmm;
+
+pub use dlmm::{MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties};
 
 pub use damm_v2::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,

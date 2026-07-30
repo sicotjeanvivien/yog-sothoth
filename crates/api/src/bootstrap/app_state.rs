@@ -11,8 +11,9 @@ use yog_persistence::{
     Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
     PgHealthChecker, PgMeteoraDammV2LiquidityEventRepository,
     PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDammV2SwapEventRepository,
-    PgNetworkStatusRepository, PgPoolAnalyticsRepository, PgPoolCurrentStateRepository,
-    PgPoolRepository, PgSignalRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
+    PgMeteoraDlmmPoolPropertiesRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgSignalRepository, PgTokenMetadataRepository,
+    PgTokenPriceRepository,
 };
 
 use crate::application::{
@@ -67,9 +68,12 @@ impl AppState {
         // satellite. This list is the single place a protocol is named on the
         // read path — `PoolService` matches a pool to its lookup by protocol and
         // never learns which one it got.
-        let pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>> = vec![Arc::new(
-            PgMeteoraDammV2PoolPropertiesRepository::new(db_pool.clone()),
-        )];
+        let pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>> = vec![
+            Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
+                db_pool.clone(),
+            )),
+            Arc::new(PgMeteoraDlmmPoolPropertiesRepository::new(db_pool.clone())),
+        ];
         let global_analytics_repo: Arc<dyn GlobalAnalyticsRepository> =
             Arc::new(PgGlobalAnalyticsRepository::new(db_pool.clone()));
         let pool_current_state_repo: Arc<dyn PoolCurrentStateLookup> =

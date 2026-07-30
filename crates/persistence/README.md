@@ -25,7 +25,10 @@ persistence/
     ├── repositories/        ← one impl per domain repository trait
     │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
     │   │                     sqlx error mapping)
-    │   ├── meteora/damm_v2/ (per-event-kind event repositories — 11 today)
+    │   ├── meteora/damm_v2/ (per-event-kind event repositories — 11 today —
+    │   │                     plus the cp-amm pool-properties satellite)
+    │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
+    │   │                     repositories yet)
     │   ├── pool/, pool_current_state/, pool_analytics/, global_analytics/
     │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
     │   ├── token_metadata/, token_price/, network_status/, watched_pool/

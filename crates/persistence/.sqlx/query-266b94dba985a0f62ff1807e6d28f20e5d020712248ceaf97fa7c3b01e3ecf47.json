@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, bin_step, base_factor, base_fee_power_factor,\n                   variable_fee_control, max_volatility_accumulator, protocol_share\n            FROM meteora_dlmm_pool_properties\n            WHERE pool_address = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "bin_step",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "base_factor",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "base_fee_power_factor",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "variable_fee_control",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "max_volatility_accumulator",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "protocol_share",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "266b94dba985a0f62ff1807e6d28f20e5d020712248ceaf97fa7c3b01e3ecf47"
+}

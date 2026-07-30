@@ -1,7 +1,9 @@
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 
-use crate::domain::{MeteoraDammV2PoolAccountProperties, Protocol};
+use crate::domain::{
+    MeteoraDammV2PoolAccountProperties, MeteoraDlmmPoolAccountProperties, Protocol,
+};
 
 /// The half of a pool account that belongs to the cross-protocol `pools`
 /// registry.
@@ -43,6 +45,7 @@ pub struct PoolRegistryProperties {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PoolAccountProperties {
     MeteoraDammV2(MeteoraDammV2PoolAccountProperties),
+    MeteoraDlmm(MeteoraDlmmPoolAccountProperties),
 }
 
 impl PoolAccountProperties {
@@ -50,6 +53,7 @@ impl PoolAccountProperties {
     pub fn protocol(&self) -> Protocol {
         match self {
             Self::MeteoraDammV2(_) => Protocol::MeteoraDammV2,
+            Self::MeteoraDlmm(_) => Protocol::MeteoraDlmm,
         }
     }
 }

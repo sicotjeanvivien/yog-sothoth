@@ -69,7 +69,18 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   `yog_core::application::decode_pool_account`, routed on the account's owning
   program id (what the chain calls its `owner`), so one client serves every
   protocol. Adding one means pushing a resolver into the vec in `bootstrap`;
-  not a line of the worker changes.
+  not a line of the worker changes — **verified**, not asserted: DLMM was added
+  in exactly one line here (migration 039) and this worker was untouched.
+
+  ⚠️ The cost of that genericity falls on the resolver: each one's
+  `list_unresolved` **must** filter on its own protocol. A per-protocol satellite
+  table does not scope the query by itself, because "has no satellite row yet" is
+  one of the conditions that makes a pool a candidate — and that is permanently
+  true of every pool of every *other* protocol. Get it wrong and the queue
+  proposes pools this resolver can never store, so they never leave it, and with
+  `ORDER BY first_seen_at` and a capped batch they pile up at the head and starve
+  enrichment for everything behind them. Covered in both directions by
+  `persistence/tests/pool_properties.rs`.
 
 ## Resilience contract
 

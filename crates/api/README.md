@@ -106,17 +106,47 @@ top level**, plus one optional block named after the pool's protocol:
   "meteoraDammV2": {
     "protocolFeePercent": 20, "referralFeePercent": 20,
     "baseFeeKind": "constant", "hasDynamicFee": false
+  },
+
+  // …and its DLMM sibling, for a `meteora_dlmm` pool. Mutually exclusive with
+  // the block above — a pool has one protocol.
+  "meteoraDlmm": {
+    "binStep": 1, "baseFactor": 10000, "baseFeePowerFactor": 0,
+    "variableFeeControl": 2000000, "maxVolatilityAccumulator": 100000,
+    "protocolShare": 1000
   }
 }
 ```
 
-Two consequences worth knowing:
+Three consequences worth knowing:
 
 - the shared fields are flattened, so **a client holding the list schema parses a
   detail payload** and simply ignores the extra block;
-- the block is **absent, not `null`**, when the pool belongs to another protocol
-  or has no resolved properties yet. Adding DLMM means adding a sibling field
-  (`meteoraDlmm`), not changing this one.
+- the block is **absent, not `null`**, when the pool belongs to another protocol.
+  A block *present* with `null` fields means the opposite: this protocol's
+  satellite exists for the pool but yog-context has not resolved it yet;
+- adding a protocol meant adding a sibling field, not changing the existing one —
+  and the compiler forced it. The `From<EnrichedPoolDetail>` impl matches
+  exhaustively on `PoolProperties`, so a new variant stops the build there rather
+  than dropping the block from the wire in silence.
+
+`feeBps` is normalized across protocols: it is the pool's **base** fee — the
+floor a swapper pays before any volatility-driven part — whether that comes from
+cp-amm's cliff numerator or DLMM's `baseFactor × binStep`. That is what lets
+`/api/pools/fee-tiers` and the `fee_bps` filter span both protocols.
+
+⚠️ **Same definition, different upper bound.** Two pools at the same `feeBps`
+are not interchangeable: a DLMM pool's variable fee is bounded by its own
+parameters, and on real mainnet accounts that bound runs from ×1 (no dynamic
+fee) to **×7 the floor**. A client that needs the worst case can compute it —
+which is why `variableFeeControl`, `maxVolatilityAccumulator` and `binStep` are
+served raw above rather than folded into `feeBps`:
+
+```text
+maxVariableFeeBps = ⌈variableFeeControl × (maxVolatilityAccumulator × binStep)² / 1e11⌉ / 1e5
+```
+
+Worked examples and the derivation are in `yog_core::amm::dlmm::base_fee_bps`.
 
 Every pool response — all three endpoints — embeds `signals24h`: the pool's
 signals over the last 24h (newest first, capped per pool,

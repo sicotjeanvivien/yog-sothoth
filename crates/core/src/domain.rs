@@ -49,7 +49,8 @@ pub use meteora::{
     MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
     MeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     MeteoraDammV2WithdrawIneligibleRewardEvent,
-    MeteoraDammV2WithdrawIneligibleRewardEventRepository,
+    MeteoraDammV2WithdrawIneligibleRewardEventRepository, MeteoraDlmmPoolAccountProperties,
+    MeteoraDlmmPoolProperties,
 };
 pub use network_status::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository};
 pub use pool::{FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRepository};

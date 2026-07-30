@@ -43,7 +43,7 @@ core/src/
 │   │   ├── event_extractor.rs / extraction_dispatcher.rs
 │   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
 │   └── decoder/           ← account bytes → pool properties use case
-├── amm/                   ← pure AMM math (common.rs + damm_v2.rs)
+├── amm/                   ← pure AMM math (common.rs + damm_v2.rs + dlmm.rs)
 ├── tools/pagination.rs    ← Page<T>, Cursor enum
 ├── error/                 ← CoreError, RepositoryError, CoreResult<T>
 └── solana_types.rs        ← re-export hub for Solana SDK types
@@ -58,7 +58,9 @@ File trees here are kept coarse on purpose — the module structure is the contr
 - **Event extraction** (`application/extraction/`) — turns raw Solana transactions into protocol-agnostic `DomainEvent`s. Lives in `application/` rather than `domain/` because it orchestrates an external concern (the Solana transaction shape) into the domain language.
 - **Account decoding** (`application/decoder/`) — the counterpart of the above: turns an on-chain account's raw bytes into a `DecodedPoolAccount`, the properties events never carry (mints, base fee, fee split, fee shape). The result is split by *who stores it* — `PoolRegistryProperties` for the cross-protocol `pools` registry, `PoolAccountProperties` for that protocol's satellite — each named by the table that owns it — so one read feeds two tables without either repository writing the other's. Dispatches on the account's owning program id — which is what the chain calls its `owner` — via `Protocol::from_program_id`, so callers need not know which protocol they asked for and one client can serve them all. Named for what it does, not for where the bytes came from: they may arrive over JSON-RPC today and over gRPC tomorrow, and nothing here changes. Two guards on every decode, neither redundant: the program id (by dispatch) and the account's Anchor discriminator. They are not defensive — at cp-amm's mint offsets a DLMM `LbPair` holds `reserve_x`/`reserve_y`, valid aligned `Pubkey`s, so an unguarded decode succeeds and writes vault addresses into mint columns. Failure is a typed `PoolAccountRejection`, not a bare `None`: in the only call path the caller asks for accounts of pools it queued itself, so *every* rejection signals a problem — an unindexed program, a missing decoder, the wrong account, or (the one to watch) a truncated account, the signature of an ABI change. `core` does no I/O, so it returns the reason and the caller logs and counts it — the same discipline as `ExtractionOutcome`.
 - **Signals domain** (`domain/signals/`) — the write model (`Signal`, `Severity`) and the contracts of the signal engine: the `SignalDetector` trait (see below), the thin `EvalContext` (carries the tick clock, nothing else), `SignalRepository` (write + cooldown lookup) and `SignalFeed` (the API's read side: paginated feed, SSE delta reads, and the batched per-pool recent-signals lookup behind the pools-list indicator). The read model `SignalRecord { id, signal }` exists because the id only exists after insert — it never sits on the write-side `Signal`.
-- **AMM math** (`amm/`) — price, reserves, slippage, imbalance formulas, plus `sqrt_price_to_price_a_in_b` (Q64.64 spot price). Kept here because these formulas will eventually run in the browser via WASM. The borsh fee-blob decoders that used to sit here (`decode_base_fee_bps`, `decode_fee_config`, `decode_updated_base_fee_bps`, `decode_updated_dynamic_fee`) are **gone**: nothing reads a fee blob any more. Pool properties come from the on-chain account, decoded in `application/decoder/`, which is where layout decoding belongs.
+- **AMM math** (`amm/`) — price, reserves, slippage, imbalance formulas, plus `sqrt_price_to_price_a_in_b` (Q64.64 spot price). Per protocol: `damm_v2::fee_numerator_to_bps` and `dlmm::base_fee_bps` both answer "what is this pool's base fee in bps", from different on-chain encodings — which is what lets `pools.fee_bps` mean one thing across protocols. Both saturate at the chain's 10 % cap rather than returning an error, deliberately: the caller stores a non-optional `Decimal`, and a pool that cannot resolve never leaves the enrichment queue. Nothing is lost by the clamp — the raw inputs are persisted alongside the derived value, so a clamped result stays reconstructible.
+
+⚠️ Same definition, **different upper bound**. `dlmm::max_variable_fee_bps` computes how far a DLMM pool's volatility fee can climb above its floor, from parameters the satellite already stores. On real captured accounts that ceiling runs from ×1 to **×7 the floor**, so two pools at the same `fee_bps` are not interchangeable. The function exists so that claim is asserted against decoded accounts (`tests/pool_account_fixtures.rs`) rather than left as prose. Kept here because these formulas will eventually run in the browser via WASM. The borsh fee-blob decoders that used to sit here (`decode_base_fee_bps`, `decode_fee_config`, `decode_updated_base_fee_bps`, `decode_updated_dynamic_fee`) are **gone**: nothing reads a fee blob any more. Pool properties come from the on-chain account, decoded in `application/decoder/`, which is where layout decoding belongs.
 
   What stayed is `base_fee_kind_from`, which is *meant* to be here: it maps a `BaseFeeMode` discriminant and a period count to a `BaseFeeKind` — a rule, not a layout. A scheduler mode with zero periods is a constant fee, and mode 2 (rate limiter) must not consult the period count at all, because its variant reuses those bytes.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method.
@@ -171,9 +173,15 @@ Fixture transactions for the extraction pipeline live under `core/tests/fixtures
 
 ### Real pool accounts, and why they earn their place
 
-`tests/fixtures/damm_v2/accounts/` holds eleven real cp-amm `Pool` accounts as
-raw base64, exercised by `tests/pool_account_fixtures.rs`. They cover every
-`BaseFeeMode` the program defines and both dynamic-fee values.
+`tests/fixtures/<protocol>/accounts/` holds real pool accounts as raw base64,
+exercised by `tests/pool_account_fixtures.rs`: eleven cp-amm `Pool` accounts
+covering every `BaseFeeMode` the program defines and both dynamic-fee values,
+and nine DLMM `LbPair` accounts spanning `bin_step` 1..=400 and `base_factor`
+0..=40 000 — including a zero-fee pool and pools with and without a dynamic fee.
+
+The DLMM set was not hand-picked: it comes from resolving every account key in
+the DLMM transaction fixtures and keeping those owned by lb_clmm at 904 bytes,
+so it is drawn from pools we have actually seen.
 
 They exist because **the decoder's synthetic tests cannot catch a wrong offset**:
 they build the buffer with the same constants the code reads it with, so both
@@ -189,6 +197,16 @@ events, mints resolving to USDC/SOL) is documented in the module.
 Recapturing is one `getMultipleAccounts` call, spelled out in that module doc. A
 fixture is a snapshot: a program upgrade that moves a field turns these red, and
 that is the intended channel for learning about it.
+
+**One gap is stated rather than hidden.** DLMM's `base_fee_power_factor` is 0 on
+every account reachable from our fixtures, so its offset is *consistent with* the
+layout but unwitnessed — every fixture would decode identically if the field were
+ignored. That is the shape `partner_fee_percent` had. The difference is that
+lb_clmm names this one and Meteora's formula documents it, so it is a real field
+with no live user rather than a padding byte read by mistake; the arithmetic is
+unit-tested on non-zero values, only the *offset* is unproven. A test asserts the
+gap still exists, so capturing a pool with a non-zero power factor turns it red
+and prompts a direct assertion instead.
 
 ## Compilation targets
 

@@ -1,4 +1,7 @@
 mod damm_v2;
+mod dlmm;
+
+pub use dlmm::PgMeteoraDlmmPoolPropertiesRepository;
 
 pub use damm_v2::{
     PgMeteoraDammV2ClaimPositionFeeEventRepository, PgMeteoraDammV2ClaimProtocolFeeEventRepository,

@@ -102,11 +102,16 @@ pub fn decode_pool_account(
 
     match protocol {
         Protocol::MeteoraDammV2 => meteora::damm_v2::decode_pool_account(data),
-        // Recognized protocols with no pool-account decoder yet — reported as a
-        // coverage gap, not as an unknown program.
-        Protocol::MeteoraDammV1 | Protocol::MeteoraDlmm => {
-            Err(PoolAccountRejection::NoDecoder { protocol })
-        }
+        Protocol::MeteoraDlmm => meteora::dlmm::decode_pool_account(data),
+        // A protocol we recognize but cannot decode yet — a coverage gap, not an
+        // unknown program, because the two call for different reactions.
+        //
+        // Every undecoded protocol lands here, and today that is DAMM v1 alone.
+        // Listing it rather than writing `_` is deliberate: the arm is
+        // **exhaustive by enumeration**, so adding a variant to `Protocol` stops
+        // compilation right here and forces the question "does it get a decoder
+        // now?". A wildcard would answer it silently with "no".
+        Protocol::MeteoraDammV1 => Err(PoolAccountRejection::NoDecoder { protocol }),
     }
 }
 
