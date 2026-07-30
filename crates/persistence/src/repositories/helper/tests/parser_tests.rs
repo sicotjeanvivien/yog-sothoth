@@ -108,6 +108,29 @@ fn convert_i64_to_u32_should_fail_on_overflow() {
 }
 
 #[test]
+fn convert_optional_should_carry_absence_through() {
+    let result = convert_optional(None::<i32>, "bin_step", convert_i32_to_u16);
+
+    assert_eq!(result.unwrap(), None);
+}
+
+#[test]
+fn convert_optional_should_apply_the_guard_to_a_present_value() {
+    let result = convert_optional(Some(400), "bin_step", convert_i32_to_u16);
+
+    assert_eq!(result.unwrap(), Some(400));
+}
+
+/// The point of the combinator: it must not swallow the converter's failure into
+/// a `None`, which would turn a corrupt row into a silently missing value.
+#[test]
+fn convert_optional_should_propagate_the_guards_error() {
+    let result = convert_optional(Some(-1), "bin_step", convert_i32_to_u16);
+
+    assert!(matches!(result, Err(RepositoryError::Integrity(_))));
+}
+
+#[test]
 fn convert_u128_to_bigdecimal_should_convert() {
     let value = 12345678901234567890u128;
 

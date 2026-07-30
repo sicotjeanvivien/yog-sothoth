@@ -1,6 +1,6 @@
 use yog_core::{RepositoryError, domain::MeteoraDammV2PoolProperties};
 
-use crate::repositories::helper::{convert_i16_to_u8, convert_string_to_pubkey};
+use crate::repositories::helper::{convert_i16_to_u8, convert_optional, convert_string_to_pubkey};
 
 /// Row shape returned by SELECTs on `meteora_damm_v2_pool_properties`
 /// (migration 036). Mirrors every column of the table.
@@ -17,21 +17,25 @@ pub(super) struct MeteoraDammV2PoolPropertiesRow {
     pub(super) has_dynamic_fee: Option<bool>,
 }
 
-/// Lift the shared `SMALLINT -> u8` guard over `Option`. The columns only ever
-/// hold values written from a `u8` (0..=100), but a corrupt row surfaces as
-/// `Integrity` rather than being silently truncated.
-fn percent(value: Option<i16>, field: &str) -> Result<Option<u8>, RepositoryError> {
-    value.map(|v| convert_i16_to_u8(v, field)).transpose()
-}
-
+/// The percent columns only ever hold values written from a `u8` (0..=100), but
+/// a corrupt row surfaces as `Integrity` rather than being silently truncated —
+/// the guard is `convert_i16_to_u8`, lifted over `Option` by `convert_optional`.
 impl TryFrom<MeteoraDammV2PoolPropertiesRow> for MeteoraDammV2PoolProperties {
     type Error = RepositoryError;
 
     fn try_from(row: MeteoraDammV2PoolPropertiesRow) -> Result<Self, Self::Error> {
         Ok(MeteoraDammV2PoolProperties {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
-            protocol_fee_percent: percent(row.protocol_fee_percent, "protocol_fee_percent")?,
-            referral_fee_percent: percent(row.referral_fee_percent, "referral_fee_percent")?,
+            protocol_fee_percent: convert_optional(
+                row.protocol_fee_percent,
+                "protocol_fee_percent",
+                convert_i16_to_u8,
+            )?,
+            referral_fee_percent: convert_optional(
+                row.referral_fee_percent,
+                "referral_fee_percent",
+                convert_i16_to_u8,
+            )?,
             base_fee_kind: row.base_fee_kind,
             has_dynamic_fee: row.has_dynamic_fee,
         })

@@ -52,6 +52,24 @@ pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
     u32::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
+/// Lift any of the guards above over `Option`, for a nullable column.
+///
+/// Every `TryFrom<Row>` in this crate hits the same shape — a nullable column,
+/// one scalar converter, one field name — and each was writing its own two-line
+/// wrapper (`percent`, `u16_column`, …). The conversion rules stay in the
+/// converters; this only carries the absence through.
+///
+/// ```ignore
+/// bin_step: convert_optional(row.bin_step, "bin_step", convert_i32_to_u16)?,
+/// ```
+pub(crate) fn convert_optional<T, U>(
+    value: Option<T>,
+    field: &str,
+    convert: impl Fn(T, &str) -> RepositoryResult<U>,
+) -> RepositoryResult<Option<U>> {
+    value.map(|v| convert(v, field)).transpose()
+}
+
 /// Convert a Postgres `NUMERIC` (mapped to `BigDecimal`) into a `u128`.
 /// Used for fields like `price_q64` that exceed `i64` range.
 pub(crate) fn convert_bigdecimal_to_u128(
