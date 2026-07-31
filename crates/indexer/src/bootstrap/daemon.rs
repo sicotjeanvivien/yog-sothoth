@@ -21,7 +21,7 @@ use std::sync::Arc;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_core::application::extraction::ExtrationDispacher;
+use yog_core::application::extraction::ExtractionDispatcher;
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
     PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
@@ -243,14 +243,14 @@ async fn init_processor(
 ) -> anyhow::Result<Arc<TransactionProcessor>> {
     let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone()));
     info!("transaction fetcher initialized");
-    let extration_dispacher = Arc::new(ExtrationDispacher::new());
+    let extraction_dispatcher = Arc::new(ExtractionDispatcher::new());
     info!("event extractor initialized");
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
 
     let processor = Arc::new(TransactionProcessor::new(
         Arc::clone(&transaction_fetcher),
-        Arc::clone(&extration_dispacher),
+        Arc::clone(&extraction_dispatcher),
         Arc::clone(&event_persistor),
     ));
     info!("indexer service initialized");

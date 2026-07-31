@@ -12,7 +12,8 @@ browser calls the Rust API directly.
 - **Next.js 16** — App Router, Server Components, standalone output, Turbopack by default
 - **React 19.2** — bundled with Next 16
 - **TypeScript** — strict mode enabled, including `noUncheckedIndexedAccess`
-- **Tailwind CSS** — palette extracted from the Yog-Sothoth mockups
+- **Tailwind CSS v4** — CSS-first: no `tailwind.config.ts`, the theme is declared
+  in `src/app/globals.css` and the plugin is wired through PostCSS
 - **next-intl 4** — i18n with always-visible locale prefix (`/en/...`, `/fr/...`)
 - **zod** — runtime validation of every payload returned by `yog-api`
 - **visx** — low-level chart primitives for the pool time-series charts
@@ -111,6 +112,18 @@ The `/signals` dashboard page combines both consumers:
   `(triggeredAt, id)` descending, cap at 200 rows. On reconnection the
   hook refetches page 1 from the browser and reconciles by id, so a
   connection gap never leaves holes in the feed.
+
+Above the feed, **severity × detector filter chips** (`signal-filters.tsx`)
+narrow it locally: within a dimension the active values are OR'd, across
+dimensions they are AND'd, and an empty selection means "no filter" — the
+default state of an alert feed must never hide anything. The filtering
+(`filterSignals`, pure and tested) happens at render time over the merged list:
+the SSE stream and the 200-item merge are untouched, so a hidden signal stays in
+memory and reappears the moment the filter releases it. One ⓘ on the detector
+group explains what each detector means.
+
+The **Overview** page shows the same cards for the latest signals, in a compact
+density, and keeps them live over the same SSE hook.
 
 Signals render as cards: token pair (embedded `tokenA`/`tokenB` from the
 API, reusing `PoolPairCell`; short pool address while unresolved), a
@@ -299,7 +312,8 @@ web/
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider
 │   │       ├── (dashboard)/         # app shell: sidebar + network status
-│   │       │   ├── overview/        # global KPIs + top pools (volume | TVL)
+│   │       │   ├── overview/        # global KPIs, top pools (volume | TVL),
+│   │       │   │                    # latest signals (live over SSE)
 │   │       │   ├── pools/           # pools listing (search, fee filter,
 │   │       │   │                    # sort, cursor pagination)
 │   │       │   ├── pools/[address]/ # pool detail: state, fees, charts, tabs
@@ -324,7 +338,8 @@ web/
 │   │   ├── announcements/           # pickAnnouncement + dismiss cookie
 │   │   ├── config/                  # zod-validated env (server + client)
 │   │   ├── format/                  # pubkey, date, number, fee formatters
-│   │   ├── signals/                 # mergeSignals (pure, tested)
+│   │   ├── signals/                 # mergeSignals, filterSignals,
+│   │   │                            # worstSeverity (pure, tested)
 │   │   └── watchlist/               # LocalStorage store + useWatchlist
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
@@ -333,8 +348,8 @@ web/
 ├── eslint.config.mjs
 ├── next.config.ts
 ├── package.json
-├── postcss.config.mjs
-├── tailwind.config.ts
+├── postcss.config.mjs               # @tailwindcss/postcss — v4 has no JS config,
+│                                    # the theme lives in src/app/globals.css
 ├── tsconfig.json
 └── vitest.config.ts
 ```

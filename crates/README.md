@@ -83,13 +83,15 @@ All coordination between the binaries happens through the schema, and the schema
 | Role | Permissions | Used by |
 |---|---|---|
 | `yog_migrate` | DDL — owns the schema, applies migrations | `yog-migrate` binary, `cargo sqlx migrate run` |
-| `yog_indexer` | `SELECT, INSERT, UPDATE` on event tables and the pool registry (identity + `needs_refresh`, never a property value); `SELECT` on `watched_pools` | indexer |
+| `yog_indexer` | `SELECT, INSERT, UPDATE` on event tables and on `pools` (table-level); `SELECT` on `watched_pools` | indexer |
 | `yog_api` | `SELECT` across tables and VIEWs — nothing else | api |
 | `yog_context` | `SELECT, INSERT, UPDATE` on `token_metadata` / `token_prices` and every per-protocol pool-properties satellite; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties**; `SELECT` on `pools` | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `SELECT` on its read VIEWs | signals |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 
 The role split is the safety net, not a bug: calling a write method from the api process fails with `permission denied` from Postgres itself, by design. Provisioning mechanics (`setup_roles.sql`, default privileges) are documented in [`persistence/README.md`](./persistence/README.md#setup_rolessql).
+
+**Where the grant stops and discipline starts.** `yog_context` is the sole writer of the account-derived properties *by grant*: on `pools` it holds `UPDATE` on four named columns only (`token_a_mint`, `token_b_mint`, `fee_bps`, `needs_refresh`), which is what keeps `protocol` and the `*_seen_at` timestamps the indexer's. The reverse is not enforced: `yog_indexer` holds table-level `UPDATE` on `pools`, so nothing in Postgres stops it writing a property value — that it only ever writes identity and raises `needs_refresh` is a property of the code, not of the schema. The satellites are the enforced half: the indexer has no grant on them at all. Both directions are pinned by `tests/privileges.rs`.
 
 ---
 
@@ -129,9 +131,12 @@ psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
 # 3. Apply migrations (as yog_migrate)
 cargo run -p yog-persistence --bin yog-migrate
 
-# 4. Seed the watched-pools allowlist (one-time)
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
-    -f scripts/seed_watched_pools.sql
+# 4. Seed the watched-pools allowlist (one-time, by hand — there is no seed
+#    script; see persistence/README.md → "Seeding the allowlist"). Skipping it
+#    leaves a pool-centric indexer with nothing to subscribe to.
+psql "postgresql://yog:yog@localhost:5433/yog_sothoth" -c \
+    "INSERT INTO watched_pools (pool_address, protocol) VALUES ('<pubkey>', 'damm_v2') \
+     ON CONFLICT (pool_address) DO NOTHING;"
 
 # 5. Run the binary you're working on
 cargo run -p yog-indexer    # or yog-api, yog-context, yog-signals
@@ -188,7 +193,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 **Domain side**:
 
-- Create per-event modules under `domain/<platform>/<product>/{event_kind}/` with `model.rs` and `repository.rs`. Event structs are prefixed with the protocol (e.g. `MeteoraDlmmSwapEvent`), as are their cursor types (`MeteoraDlmmSwapCursor`).
+- Create per-event modules under `domain/<platform>/<product>/{event_kind}/` with `model.rs` and `repository.rs`. Event structs are prefixed with the protocol (e.g. `MeteoraDlmmSwapEvent`), as are their cursor types, which take the event's full name (`MeteoraDlmmSwapEventCursor`).
 - Add the sub-enum `<Platform><Product>Event` in `domain/<platform>/<product>.rs` with one variant per event kind.
 - Add an outer variant in `DomainEvent` (`domain/domain_event.rs`) and update the accessor methods (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) to match.
 
