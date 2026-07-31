@@ -135,7 +135,50 @@ retention/compression → `010`–`013` + `017` hourly continuous aggregates →
 fee split) → `019`–`021` analytic VIEWs (hourly activity, current TVL, valued
 liquidity) → `022`–`025` the signal engine (the `signals` hypertable +
 `yog_signals` role grants, the hourly swap-flow, price-snapshot and hourly
-liquidity-flow read VIEWs).
+liquidity-flow read VIEWs) → `026`–`027` announcements and the cp-amm fee-config
+columns → `028`–`035` the remaining DAMM v2 event tables (protocol fee, the five
+reward instructions, split-position) → `036`–`040` the pool-properties
+satellites: cp-amm out of `pools` (`036`–`037`), the `needs_refresh`
+invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
+(`040`).
+
+### Pool-properties satellites, and the invariant that ties them to `pools`
+
+A satellite table holds the properties that exist for **one** protocol only, so
+`pools` stays the cross-protocol registry it was in `001`. Two exist today —
+`meteora_damm_v2_pool_properties` (036) and `meteora_dlmm_pool_properties`
+(039) — one row per pool, primary-keyed on `pool_address`, owned by
+`yog-context`.
+
+Migration `040` writes into the schema a rule that had lived only in application
+discipline: **a row hanging off `pools` cannot carry a protocol the registry
+disagrees with**. It covers both satellites and `pool_current_state`, which has
+duplicated `pools.protocol` in its own column since `001`.
+
+For a satellite the protocol is a constant of the table, so two lines go in its
+`CREATE TABLE`:
+
+```sql
+protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED,
+FOREIGN KEY (pool_address, protocol)
+    REFERENCES pools (pool_address, protocol) ON DELETE CASCADE
+```
+
+— the composite FK **instead of** the single-column one. The generated column
+needs no `CHECK` (the constant is the check), no `UPDATE` back-fill, and no
+change to any `INSERT`: Postgres refuses to let a writer name it at all. On an
+existing table, note that `ADD COLUMN … GENERATED … STORED` rewrites it under
+`ACCESS EXCLUSIVE` — free at these row counts, worth sizing at scale. Where the
+protocol is real per-row data rather than a constant (`pool_current_state`),
+there is no column to add: the FK swap alone.
+
+**This is defence in depth, not a hole being plugged.** The live write paths
+already agree with the registry — the resolvers reject a foreign payload, the
+`yog-context` worker skips a pool whose decoded account disagrees with the
+queue's protocol, and the indexer hands `discover_pool` and the state upsert the
+same `Self::PROTOCOL`. What the constraint adds is survival: those guards sit in
+loops and call sequences no compiler protects, and hold only for today's
+callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*.
 
 ## `setup_roles.sql`
 

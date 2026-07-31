@@ -12,6 +12,9 @@
 //! it cannot resolve is never removed from the result set while the ordering is
 //! `first_seen_at` ascending, foreign-protocol pools accumulated at the head and
 //! eventually starved DAMM v2 enrichment entirely.
+//!
+//! The DLMM satellite (039) and the satellite↔protocol invariant migration 040
+//! writes into the schema are covered in their own sections below.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -19,6 +22,7 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
+use yog_core::RepositoryError;
 use yog_core::amm::damm_v2::BaseFeeKind;
 use yog_core::domain::{
     MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
@@ -543,6 +547,204 @@ async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
     repo.set_pool_account(&pk(99), &dlmm_properties_only())
         .await
         .expect_err("an unknown pool must violate the foreign key");
+}
+
+// ── The pool↔protocol invariant, in the schema (migration 040) ──────
+
+/// SQLSTATE of a failed statement, or the test dies with the error it did get.
+///
+/// The reason these tests do not settle for a bare `expect_err`: every one of
+/// them asserts that a *specific* constraint fired, and an unqualified "some
+/// error happened" is satisfied by the constraint not existing at all. Drop the
+/// generated column and `INSERT … (protocol)` still fails — with `42703`,
+/// undefined_column. Same green, nothing proven.
+fn sqlstate(err: &sqlx::Error) -> String {
+    err.as_database_error()
+        .and_then(|e| e.code())
+        .unwrap_or_else(|| panic!("expected a database error, got {err:?}"))
+        .into_owned()
+}
+
+/// `23503` — foreign_key_violation.
+const FOREIGN_KEY_VIOLATION: &str = "23503";
+/// `428C9` — cannot insert into a `GENERATED ALWAYS` column.
+const GENERATED_ALWAYS: &str = "428C9";
+
+/// A dependent row cannot carry a protocol the registry disagrees with.
+///
+/// Deliberately **raw SQL**, not the repositories: the resolvers reject a
+/// foreign *payload* in Rust and the worker screens the pool before that, so
+/// going through them would exercise those guards and prove nothing about the
+/// constraint. Raw SQL is also the realistic threat model — a repair script, a
+/// psql session, a future writer that skipped the discipline.
+#[sqlx::test]
+async fn a_dependent_row_cannot_disagree_with_the_registry(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+
+    let err = sqlx::query(
+        "INSERT INTO meteora_damm_v2_pool_properties (pool_address, protocol_fee_percent) \
+         VALUES ($1, 20)",
+    )
+    .bind(pk(1).to_string())
+    .execute(&pool)
+    .await
+    .expect_err("a cp-amm property row for a DLMM pool must violate the composite key");
+    assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
+
+    let err = sqlx::query(
+        "INSERT INTO meteora_dlmm_pool_properties (pool_address, bin_step) VALUES ($1, 1)",
+    )
+    .bind(pk(2).to_string())
+    .execute(&pool)
+    .await
+    .expect_err("a DLMM property row for a cp-amm pool must violate the composite key");
+    assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
+
+    // `pool_current_state` carries its own `protocol` column — real per-row data
+    // written by the indexer, not a constant — so it is the one place the two
+    // labels could genuinely be written apart.
+    let err = sqlx::query(
+        "INSERT INTO pool_current_state \
+             (pool_address, protocol, last_event_at, last_event_kind, last_signature, \
+              reserve_a, reserve_b) \
+         VALUES ($1, $2, NOW(), 'swap', 'sig', 0, 0)",
+    )
+    .bind(pk(1).to_string())
+    .bind(Protocol::MeteoraDammV2.as_str())
+    .execute(&pool)
+    .await
+    .expect_err("a state row labelled cp-amm for a DLMM pool must violate the composite key");
+    assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
+}
+
+/// The satellite's `protocol` column is `GENERATED ALWAYS`, so a writer cannot
+/// name it — which is what stops the composite key from being talked around by
+/// simply supplying the protocol the row wants to be.
+///
+/// The SQLSTATE is the whole test: `428C9` is "you wrote to a generated column",
+/// and it is the only outcome that distinguishes the column being *there and
+/// generated* from it being absent.
+#[sqlx::test]
+async fn the_satellite_protocol_column_cannot_be_written(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+
+    let err = sqlx::query(
+        "INSERT INTO meteora_damm_v2_pool_properties (pool_address, protocol) VALUES ($1, $2)",
+    )
+    .bind(pk(1).to_string())
+    .bind(Protocol::MeteoraDammV2.as_str())
+    .execute(&pool)
+    .await
+    .expect_err("a generated column must reject even the value it would compute");
+    assert_eq!(sqlstate(&err), GENERATED_ALWAYS, "{err:?}");
+}
+
+/// The constraint seen from the repository, which is what yog-context actually
+/// holds.
+///
+/// This scenario is **not reachable through the worker today**:
+/// `context/src/workers/pool_account.rs` skips any pool whose decoded account
+/// disagrees with the queue's protocol, before the resolver is called. What the
+/// test pins is the contract the repository now offers regardless of who calls
+/// it — a refused write, mapped to [`RepositoryError::Conflict`] like any other
+/// foreign-key violation, so a future caller inherits skip-and-log rather than a
+/// silent success.
+///
+/// Its mirror image, a *foreign payload* caught in Rust, is
+/// `each_resolver_rejects_the_other_protocols_payload`.
+#[sqlx::test]
+async fn a_resolver_write_onto_a_foreign_pool_is_refused_by_the_schema(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+    let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+
+    let err = damm
+        .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect_err("a cp-amm payload on a DLMM pool must be refused by the database");
+    assert!(
+        matches!(err, RepositoryError::Conflict(_)),
+        "a foreign-key violation must map to Conflict, got {err:?}"
+    );
+
+    let err = dlmm
+        .set_pool_account(&pk(2), &dlmm_properties_only())
+        .await
+        .expect_err("a DLMM payload on a cp-amm pool must be refused by the database");
+    assert!(matches!(err, RepositoryError::Conflict(_)), "got {err:?}");
+
+    assert!(read_properties(&damm, &pk(1)).await.is_none());
+    assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
+}
+
+/// The invariant read from the other end: once a dependent row exists, the
+/// registry can no longer relabel the pool underneath it.
+///
+/// Nothing updates `pools.protocol` today — `PgPoolRepository::upsert` writes it
+/// on INSERT and its `ON CONFLICT` touches only `last_seen_at` — so this blocks
+/// a bug rather than a workflow.
+#[sqlx::test]
+async fn a_pools_protocol_cannot_change_under_a_satellite_row(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    satellite
+        .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect("set_pool_account failed");
+
+    let err = sqlx::query("UPDATE pools SET protocol = $2 WHERE pool_address = $1")
+        .bind(pk(1).to_string())
+        .bind(Protocol::MeteoraDlmm.as_str())
+        .execute(&pool)
+        .await
+        .expect_err("relabelling a pool must be refused while a satellite row references it");
+    assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
+}
+
+/// Migration 040 drops and rebuilds three foreign keys. `ON DELETE CASCADE` came
+/// with the original single-column ones, and losing it in the rebuild would
+/// leave orphan rows no code path ever cleans up — so it is asserted rather than
+/// assumed.
+#[sqlx::test]
+async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDlmm, 2).await;
+    let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+    damm.set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect("set_pool_account failed");
+    dlmm.set_pool_account(&pk(2), &dlmm_properties_only())
+        .await
+        .expect("set_pool_account failed");
+    // A matching state row, written the way the indexer writes it: same protocol
+    // as the registry, which is what the composite key now requires.
+    sqlx::query(
+        "INSERT INTO pool_current_state \
+             (pool_address, protocol, last_event_at, last_event_kind, last_signature, \
+              reserve_a, reserve_b) \
+         VALUES ($1, $2, NOW(), 'swap', 'sig', 0, 0)",
+    )
+    .bind(pk(1).to_string())
+    .bind(Protocol::MeteoraDammV2.as_str())
+    .execute(&pool)
+    .await
+    .expect("a state row agreeing with the registry must be accepted");
+
+    sqlx::query("DELETE FROM pools")
+        .execute(&pool)
+        .await
+        .expect("delete failed");
+
+    assert!(read_properties(&damm, &pk(1)).await.is_none());
+    assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
+    let orphans: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pool_current_state")
+        .fetch_one(&pool)
+        .await
+        .expect("count failed");
+    assert_eq!(orphans.0, 0, "the state projection must cascade too");
 }
 
 // ── needs_refresh: the invalidation loop ────────────────────────────
