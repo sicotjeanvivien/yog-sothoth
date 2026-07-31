@@ -178,13 +178,18 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     /// the worker routes by [`PoolAccountProperties::protocol`], so a mismatch
     /// here is a wiring bug, not a runtime condition.
     ///
-    /// That guard is no longer the only one, and it never covered the harder
-    /// half. It answers "is this payload mine?" — it says nothing about "is this
-    /// *pool* mine", so a cp-amm payload aimed at a DLMM pool used to be written
-    /// happily. Migration 040 closed that: the satellite carries a generated
-    /// `protocol` column and a composite foreign key onto
-    /// `pools (pool_address, protocol)`, so the write fails as a
-    /// [`yog_core::RepositoryError::Conflict`] and yog-context steps over it.
+    /// It is not the only guard, and it is not the last one. It answers "is this
+    /// payload mine?"; the worker screens "is this *pool* mine" upstream
+    /// (`context/src/workers/pool_account.rs` skips a pool whose decoded account
+    /// disagrees with the queue's protocol); and since migration 040 the schema
+    /// backs both — a generated `protocol` column and a composite foreign key
+    /// onto `pools (pool_address, protocol)`.
+    ///
+    /// So a cp-amm payload aimed at a DLMM pool is unreachable through the
+    /// worker *and* refused by the database. The constraint is there for what
+    /// the guards cannot cover: a refactor, a second writer, or a hand-run
+    /// repair. It surfaces as [`yog_core::RepositoryError::Conflict`], so any
+    /// such caller inherits skip-and-log rather than a silent success.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,

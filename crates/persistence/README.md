@@ -139,8 +139,8 @@ liquidity-flow read VIEWs) → `026`–`027` announcements and the cp-amm fee-co
 columns → `028`–`035` the remaining DAMM v2 event tables (protocol fee, the five
 reward instructions, split-position) → `036`–`040` the pool-properties
 satellites: cp-amm out of `pools` (`036`–`037`), the `needs_refresh`
-invalidation flag (`038`), DLMM (`039`), and the satellite↔protocol
-invariant (`040`).
+invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
+(`040`).
 
 ### Pool-properties satellites, and the invariant that ties them to `pools`
 
@@ -150,25 +150,35 @@ A satellite table holds the properties that exist for **one** protocol only, so
 (039) — one row per pool, primary-keyed on `pool_address`, owned by
 `yog-context`.
 
-Migration `040` writes the rule that had lived only in application discipline:
-**a satellite row cannot exist for a pool of another protocol**. Three lines of
-DDL, and the next satellite copies them:
+Migration `040` writes into the schema a rule that had lived only in application
+discipline: **a row hanging off `pools` cannot carry a protocol the registry
+disagrees with**. It covers both satellites and `pool_current_state`, which has
+duplicated `pools.protocol` in its own column since `001`.
+
+For a satellite the protocol is a constant of the table, so two lines go in its
+`CREATE TABLE`:
 
 ```sql
-protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED
+protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED,
+FOREIGN KEY (pool_address, protocol)
+    REFERENCES pools (pool_address, protocol) ON DELETE CASCADE
 ```
 
-plus a composite `FOREIGN KEY (pool_address, protocol) REFERENCES
-pools (pool_address, protocol) ON DELETE CASCADE` **instead of** the
-single-column one. The generated column needs no `CHECK` (the constant is the
-check), no back-fill (`ALTER TABLE` computes it), and no change to any `INSERT`
-— Postgres refuses to let a writer name it at all.
+— the composite FK **instead of** the single-column one. The generated column
+needs no `CHECK` (the constant is the check), no `UPDATE` back-fill, and no
+change to any `INSERT`: Postgres refuses to let a writer name it at all. On an
+existing table, note that `ADD COLUMN … GENERATED … STORED` rewrites it under
+`ACCESS EXCLUSIVE` — free at these row counts, worth sizing at scale. Where the
+protocol is real per-row data rather than a constant (`pool_current_state`),
+there is no column to add: the FK swap alone.
 
-Why the schema and not the resolver: the Rust guard in `set_pool_account`
-rejects a *payload* of the wrong protocol, which is a different question from a
-*right* payload written onto a wrong pool. Only the composite key answers the
-second. See `tests/pool_properties.rs`, section *The satellite↔protocol
-invariant*.
+**This is defence in depth, not a hole being plugged.** The live write paths
+already agree with the registry — the resolvers reject a foreign payload, the
+`yog-context` worker skips a pool whose decoded account disagrees with the
+queue's protocol, and the indexer hands `discover_pool` and the state upsert the
+same `Self::PROTOCOL`. What the constraint adds is survival: those guards sit in
+loops and call sequences no compiler protects, and hold only for today's
+callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*.
 
 ## `setup_roles.sql`
 
