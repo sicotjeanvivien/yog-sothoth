@@ -86,9 +86,17 @@ pub trait EventExtractor: Send + Sync {
 /// concrete extractors.
 pub struct ExtractionDispatcher {
     damm_v2: MeteoraDammV2,
-    // future: damm_v1, dlmm, raydium_clmm, ...
+    damm_v1: MeteoraDammV1,   // stub — returns an empty outcome
+    dlmm: MeteoraDlmm,        // stub — returns an empty outcome
 }
 ```
+
+The `Protocol` enum has three variants today, so the dispatcher has three
+fields: a protocol reaches this match the moment it exists as a variant, well
+before it extracts anything. `MeteoraDammV1` and `MeteoraDlmm` implement
+`EventExtractor` and return `ExtractionOutcome::default()` — an empty outcome,
+not an error, so a transaction of theirs is indexed as "nothing to record"
+rather than counted as a failure.
 
 The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 
@@ -141,7 +149,7 @@ Detectors are batch evaluators: they recompute from the database at each tick (t
 
 ## Repository traits
 
-Each domain aggregate that needs persistence declares a repository trait in its module (`domain/<aggregate>/repository.rs`). Per-protocol event repositories follow the same pattern with protocol-prefixed types — `MeteoraDammV2SwapEventRepository` operates on `MeteoraDammV2SwapEvent` and `MeteoraDammV2SwapCursor`.
+Each domain aggregate that needs persistence declares a repository trait in its module (`domain/<aggregate>/repository.rs`). Per-protocol event repositories follow the same pattern with protocol-prefixed types — `MeteoraDammV2SwapEventRepository` operates on `MeteoraDammV2SwapEvent` and `MeteoraDammV2SwapEventCursor`.
 
 At runtime, the connected Postgres role determines which methods actually succeed: calling `insert` from the api process fails with `permission denied` from Postgres itself, by design (see [Database roles](../README.md#database-roles)). Where a trait's write side and read side have disjoint consumers, the trait is split per consumer — one lens per process, same `Pg*` struct behind both. The write/owning side keeps the `*Repository` name; read lenses are named by intent, from a deliberately small vocabulary:
 

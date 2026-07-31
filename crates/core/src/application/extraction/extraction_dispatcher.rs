@@ -15,13 +15,13 @@ use crate::domain::Protocol;
 use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Routes extraction calls to the appropriate per-protocol handler.
-pub struct ExtrationDispacher {
+pub struct ExtractionDispatcher {
     damm_v2: MeteoraDammV2,
     damm_v1: MeteoraDammV1,
     dlmm: MeteoraDlmm,
 }
 
-impl ExtrationDispacher {
+impl ExtractionDispatcher {
     pub fn new() -> Self {
         Self {
             damm_v2: MeteoraDammV2::new(),
@@ -45,7 +45,7 @@ impl ExtrationDispacher {
     }
 }
 
-impl Default for ExtrationDispacher {
+impl Default for ExtractionDispatcher {
     fn default() -> Self {
         Self::new()
     }

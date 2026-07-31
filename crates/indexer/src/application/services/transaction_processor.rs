@@ -4,7 +4,7 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 use yog_core::{
     application::extraction::{
-        ExtractionFailure, ExtractionOutcome, ExtrationDispacher, discriminator_hex,
+        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex,
     },
     domain::Protocol,
 };
@@ -19,14 +19,14 @@ use crate::{
 /// hands each extracted domain event to the EventPersistor.
 pub(crate) struct TransactionProcessor {
     fetcher: Arc<TransactionFetcher>,
-    extractor: Arc<ExtrationDispacher>,
+    extractor: Arc<ExtractionDispatcher>,
     persistor: Arc<EventPersistor>,
 }
 
 impl TransactionProcessor {
     pub(crate) fn new(
         fetcher: Arc<TransactionFetcher>,
-        extractor: Arc<ExtrationDispacher>,
+        extractor: Arc<ExtractionDispatcher>,
         persistor: Arc<EventPersistor>,
     ) -> Self {
         Self {

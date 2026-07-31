@@ -298,7 +298,8 @@ with empty rows, both worse than the current decoupling.
 ### Current selection
 
 The allowlist was seeded from the 7-day activity distribution of `swap_events`
-observed during a calibration window. Pools were chosen to balance
+observed during a calibration window in **April 2026** — the timestamps below
+are that window's, not a live picture. Pools were chosen to balance
 high-signal density (top of the distribution) with edge-case diversity
 (lower-activity pools for testing short-lived or thin-liquidity behaviour).
 
@@ -322,20 +323,30 @@ high-signal density (top of the distribution) with edge-case diversity
 
 ### Seeding the allowlist
 
-A SQL script populates the dev selection:
+⚠️ **There is no seed script in the repo.** This README and
+[`crates/README.md`](../README.md) both used to point at
+`scripts/seed_watched_pools.sql`; that file was never written, so the step was
+undocumentable as stated. The table above is the selection to reproduce, and
+the seed is an `INSERT` you run by hand:
 
 ```bash
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
-    -f scripts/seed_watched_pools.sql
+psql "postgresql://yog:yog@localhost:5433/yog_sothoth" <<'SQL'
+INSERT INTO watched_pools (pool_address, protocol, note) VALUES
+    ('<pubkey>', 'damm_v2', 'high activity, short burst')
+ON CONFLICT (pool_address) DO NOTHING;
+SQL
 ```
 
-The script is idempotent — `INSERT ... ON CONFLICT (pool_address) DO NOTHING`
-— so re-running it after a partial seed or against an existing database is
-safe.
+`ON CONFLICT DO NOTHING` keeps it idempotent — safe to re-run after a partial
+seed or against an existing database.
 
 Run it as the admin role rather than as `yog_indexer`: the seed adjusts the
-allowlist which is configuration, not runtime data, and the convention is to
+allowlist, which is configuration, not runtime data, and the convention is to
 keep all configuration writes under the admin role.
+
+Without at least one active row, an indexer started in pool-centric mode has
+nothing to subscribe to and exits on `NoSubscriptionTargets` — this step is not
+optional.
 
 ### Administration helpers
 
