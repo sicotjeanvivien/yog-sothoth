@@ -177,6 +177,14 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
     /// Rejects a payload of another protocol rather than silently doing nothing:
     /// the worker routes by [`PoolAccountProperties::protocol`], so a mismatch
     /// here is a wiring bug, not a runtime condition.
+    ///
+    /// That guard is no longer the only one, and it never covered the harder
+    /// half. It answers "is this payload mine?" — it says nothing about "is this
+    /// *pool* mine", so a cp-amm payload aimed at a DLMM pool used to be written
+    /// happily. Migration 040 closed that: the satellite carries a generated
+    /// `protocol` column and a composite foreign key onto
+    /// `pools (pool_address, protocol)`, so the write fails as a
+    /// [`yog_core::RepositoryError::Conflict`] and yog-context steps over it.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,

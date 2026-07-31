@@ -135,7 +135,40 @@ retention/compression → `010`–`013` + `017` hourly continuous aggregates →
 fee split) → `019`–`021` analytic VIEWs (hourly activity, current TVL, valued
 liquidity) → `022`–`025` the signal engine (the `signals` hypertable +
 `yog_signals` role grants, the hourly swap-flow, price-snapshot and hourly
-liquidity-flow read VIEWs).
+liquidity-flow read VIEWs) → `026`–`027` announcements and the cp-amm fee-config
+columns → `028`–`035` the remaining DAMM v2 event tables (protocol fee, the five
+reward instructions, split-position) → `036`–`040` the pool-properties
+satellites: cp-amm out of `pools` (`036`–`037`), the `needs_refresh`
+invalidation flag (`038`), DLMM (`039`), and the satellite↔protocol
+invariant (`040`).
+
+### Pool-properties satellites, and the invariant that ties them to `pools`
+
+A satellite table holds the properties that exist for **one** protocol only, so
+`pools` stays the cross-protocol registry it was in `001`. Two exist today —
+`meteora_damm_v2_pool_properties` (036) and `meteora_dlmm_pool_properties`
+(039) — one row per pool, primary-keyed on `pool_address`, owned by
+`yog-context`.
+
+Migration `040` writes the rule that had lived only in application discipline:
+**a satellite row cannot exist for a pool of another protocol**. Three lines of
+DDL, and the next satellite copies them:
+
+```sql
+protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED
+```
+
+plus a composite `FOREIGN KEY (pool_address, protocol) REFERENCES
+pools (pool_address, protocol) ON DELETE CASCADE` **instead of** the
+single-column one. The generated column needs no `CHECK` (the constant is the
+check), no back-fill (`ALTER TABLE` computes it), and no change to any `INSERT`
+— Postgres refuses to let a writer name it at all.
+
+Why the schema and not the resolver: the Rust guard in `set_pool_account`
+rejects a *payload* of the wrong protocol, which is a different question from a
+*right* payload written onto a wrong pool. Only the composite key answers the
+second. See `tests/pool_properties.rs`, section *The satellite↔protocol
+invariant*.
 
 ## `setup_roles.sql`
 

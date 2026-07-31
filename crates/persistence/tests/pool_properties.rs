@@ -12,6 +12,9 @@
 //! it cannot resolve is never removed from the result set while the ordering is
 //! `first_seen_at` ascending, foreign-protocol pools accumulated at the head and
 //! eventually starved DAMM v2 enrichment entirely.
+//!
+//! The DLMM satellite (039) and the satellite↔protocol invariant migration 040
+//! writes into the schema are covered in their own sections below.
 
 use super::helpers::pk;
 use chrono::{DateTime, TimeZone, Utc};
@@ -19,6 +22,7 @@ use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
+use yog_core::RepositoryError;
 use yog_core::amm::damm_v2::BaseFeeKind;
 use yog_core::domain::{
     MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
@@ -543,6 +547,137 @@ async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
     repo.set_pool_account(&pk(99), &dlmm_properties_only())
         .await
         .expect_err("an unknown pool must violate the foreign key");
+}
+
+// ── The satellite↔protocol invariant, in the schema (migration 040) ─
+
+/// The hole migration 040 closed, stated directly.
+///
+/// Deliberately **raw SQL**, not the resolver: the resolver's `let … else` guard
+/// would reject a foreign *payload* long before Postgres saw it, which is
+/// precisely what used to make this look covered. What was never covered is the
+/// row itself — a satellite row whose pool the registry labels with another
+/// protocol. Going through the repository here would test the guard again and
+/// prove nothing about the constraint.
+#[sqlx::test]
+async fn a_satellite_row_for_a_foreign_protocol_pool_is_rejected(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_pool_properties (pool_address, protocol_fee_percent) \
+         VALUES ($1, 20)",
+    )
+    .bind(pk(1).to_string())
+    .execute(&pool)
+    .await
+    .expect_err("a cp-amm property row for a DLMM pool must violate the composite key");
+
+    sqlx::query("INSERT INTO meteora_dlmm_pool_properties (pool_address, bin_step) VALUES ($1, 1)")
+        .bind(pk(2).to_string())
+        .execute(&pool)
+        .await
+        .expect_err("a DLMM property row for a cp-amm pool must violate the composite key");
+}
+
+/// The satellite's `protocol` column is `GENERATED ALWAYS`, so a writer cannot
+/// name it — which is what stops the composite key from being talked around by
+/// simply supplying the protocol the row wants to be.
+#[sqlx::test]
+async fn the_satellite_protocol_column_cannot_be_written(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_pool_properties (pool_address, protocol) VALUES ($1, $2)",
+    )
+    .bind(pk(1).to_string())
+    .bind(Protocol::MeteoraDammV2.as_str())
+    .execute(&pool)
+    .await
+    .expect_err("a generated column must reject even the value it would compute");
+}
+
+/// The case the three layers of application discipline never covered: the
+/// **right** payload on the **wrong** pool.
+///
+/// `each_resolver_rejects_the_other_protocols_payload` guards the mirror image —
+/// a foreign payload, caught in Rust. Here the payload matches the resolver, so
+/// that guard waves it through, and only the schema is left to say no. It
+/// surfaces as [`RepositoryError::Conflict`] like any other foreign-key
+/// violation, so yog-context logs and steps over it rather than dying.
+#[sqlx::test]
+async fn a_resolver_cannot_write_its_own_payload_onto_a_foreign_pool(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDammV2, 2).await;
+    let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+
+    let err = damm
+        .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect_err("a cp-amm payload on a DLMM pool must be refused by the database");
+    assert!(
+        matches!(err, RepositoryError::Conflict(_)),
+        "a foreign-key violation must map to Conflict, got {err:?}"
+    );
+
+    let err = dlmm
+        .set_pool_account(&pk(2), &dlmm_properties_only())
+        .await
+        .expect_err("a DLMM payload on a cp-amm pool must be refused by the database");
+    assert!(matches!(err, RepositoryError::Conflict(_)), "got {err:?}");
+
+    assert!(read_properties(&damm, &pk(1)).await.is_none());
+    assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
+}
+
+/// The invariant read from the other end: once a satellite row exists, the
+/// registry can no longer relabel the pool underneath it.
+///
+/// Nothing updates `pools.protocol` today — `PgPoolRepository::upsert` writes it
+/// on INSERT and its `ON CONFLICT` touches only `last_seen_at` — so this blocks
+/// a bug rather than a workflow.
+#[sqlx::test]
+async fn a_pools_protocol_cannot_change_under_a_satellite_row(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    let satellite = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    satellite
+        .set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect("set_pool_account failed");
+
+    sqlx::query("UPDATE pools SET protocol = $2 WHERE pool_address = $1")
+        .bind(pk(1).to_string())
+        .bind(Protocol::MeteoraDlmm.as_str())
+        .execute(&pool)
+        .await
+        .expect_err("relabelling a pool must be refused while a satellite row references it");
+}
+
+/// Migration 040 drops and rebuilds both satellite foreign keys. `ON DELETE
+/// CASCADE` came with the original single-column ones, and losing it in the
+/// rebuild would leave orphan rows no code path ever cleans up — so it is
+/// asserted rather than assumed.
+#[sqlx::test]
+async fn deleting_a_pool_still_cascades_to_its_satellite(pool: PgPool) {
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+    seed_pool(&pool, pk(2), Protocol::MeteoraDlmm, 2).await;
+    let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());
+    damm.set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .expect("set_pool_account failed");
+    dlmm.set_pool_account(&pk(2), &dlmm_properties_only())
+        .await
+        .expect("set_pool_account failed");
+
+    sqlx::query("DELETE FROM pools")
+        .execute(&pool)
+        .await
+        .expect("delete failed");
+
+    assert!(read_properties(&damm, &pk(1)).await.is_none());
+    assert!(read_dlmm_properties(&dlmm, &pk(2)).await.is_none());
 }
 
 // ── needs_refresh: the invalidation loop ────────────────────────────
