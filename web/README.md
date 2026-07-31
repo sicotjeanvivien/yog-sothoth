@@ -135,6 +135,49 @@ through to the Alerts tab. Hover-only is acceptable there because on
 touch the tap lands on the Alerts tab — the full version of what the
 popover previews.
 
+## Pools list, watchlist, pool detail
+
+The `/pools` page is a Server Component that reads its whole state from the
+URL — `q`, `fee_bps`, `sort`, plus the pagination params — and forwards it to
+`GET /api/pools`. The controls only rewrite those params:
+
+- **Search** (`PoolsSearch`) — client island, 300 ms debounce. Free text, or a
+  pair with a slash (`SOL/USDC`), which the API reads as "one token on each
+  side, either way round".
+- **Fee filter** (`PoolsFeeFilter`) — client island, a custom popover rather
+  than a `<select>` (an `<option>` cannot lay out fee-left / count-right). Its
+  options come from `GET /api/pools/fee-tiers`, so it can never offer a tier
+  matching nothing.
+- **Sort** (`SortableHeader`) — no client state at all: a `<Link>` with a
+  precomputed href, rendered on the server. First-seen / last-seen, asc or
+  desc, defaulting to **last seen descending** — most recently active first.
+
+Every control drops the `cursor` / `dir` / `position` params, since a cursor
+into the previous result set is meaningless once the ordering or filter
+changes, and preserves the unrelated ones. The two islands use `replace` rather
+than `push`: search-as-you-type would otherwise stack one history entry per
+debounced keystroke.
+
+**Watchlist** (`/watchlist`) — pools the visitor stars, stored in LocalStorage:
+no account, no backend. `lib/watchlist/` splits the store (plain module, no
+React) from the `useWatchlist` hook, which sits on `useSyncExternalStore` so it
+is SSR-safe and stays in sync across tabs. The page renders the same
+`PoolsTableRow` as `/pools` (shared vocabulary in `pools-table-shared.ts`), the
+star living in the row's actions column. The v0.3 server-side watchlist can
+replace the store behind the hook without touching a component.
+
+**Overview** — the top-N strip ranks by `?rank=volume_24h` (default, param
+dropped) or `?rank=tvl`. The header is a Server Component link, not client
+state; the active metric is deliberately *not* a link, since ranking is always
+descending and re-picking it would be a no-op click that reads as broken.
+
+**Pool detail** — tabs for swaps, liquidity and alerts, plus the fee block. The
+zod schema (`schema/pool.ts`) models the detail payload's optional
+`meteoraDammV2` block (protocol/referral fee percents, `baseFeeKind`,
+`hasDynamicFee`), surfaced as the `FeeTypeBadge`. The API also serves a
+`meteoraDlmm` sibling block; the dashboard does not model it yet — no DLMM pool
+reaches `pools` until event extraction lands in v0.2.0.
+
 ## Operator announcements
 
 The dashboard layout (Server Component) fetches `GET
@@ -256,26 +299,33 @@ web/
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider
 │   │       ├── (dashboard)/         # app shell: sidebar + network status
-│   │       │   ├── overview/        # global KPIs + top pools
-│   │       │   ├── pools/           # pools listing (cursor pagination)
-│   │       │   ├── pools/[address]/ # pool detail: state, fees, charts
+│   │       │   ├── overview/        # global KPIs + top pools (volume | TVL)
+│   │       │   ├── pools/           # pools listing (search, fee filter,
+│   │       │   │                    # sort, cursor pagination)
+│   │       │   ├── pools/[address]/ # pool detail: state, fees, charts, tabs
+│   │       │   ├── watchlist/       # LocalStorage favourites
 │   │       │   └── signals/         # live signal feed (SSR + SSE)
 │   │       └── (marketing)/         # public pages: home, about, terms,
-│   │                                # privacy, legal-notice, support-us
+│   │                                # privacy, legal-notice, support-us,
+│   │                                # changelog
 │   ├── components/
 │   │   ├── feature-gate.tsx         # <FeatureGate flag="..."> wrapper
 │   │   ├── dashboard/               # per-page sections + shell, sidebar,
 │   │   │                            # signals (SignalFeed, useSignalStream),
+│   │   │                            # pools (table, filters, shared row),
+│   │   │                            # watchlist, announcements,
 │   │   │                            # pool-detail/charts (visx)
 │   │   ├── marketing/               # navbar, footer, per-page sections
-│   │   └── shared/                  # pagination, buttons, icons, …
+│   │   └── shared/                  # pagination, buttons, icons, popovers, …
 │   ├── config/
 │   │   └── features.ts              # feature flag registry + helpers
 │   ├── lib/
 │   │   ├── api/                     # API layer (see above)
+│   │   ├── announcements/           # pickAnnouncement + dismiss cookie
 │   │   ├── config/                  # zod-validated env (server + client)
-│   │   ├── format/                  # pubkey, date, number formatters
-│   │   └── signals/                 # mergeSignals (pure, tested)
+│   │   ├── format/                  # pubkey, date, number, fee formatters
+│   │   ├── signals/                 # mergeSignals (pure, tested)
+│   │   └── watchlist/               # LocalStorage store + useWatchlist
 │   ├── types/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   └── proxy.ts                     # locale negotiation (Next 16)

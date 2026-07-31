@@ -39,6 +39,7 @@
 //!   `change_type`)
 //! - [`EvtClaimPositionFee`] — LP claims accumulated trading fees
 //! - [`EvtClaimReward`] — LP claims farming rewards
+//! - [`EvtClaimProtocolFee`] — the protocol claims its own share of the fees
 //! - [`EvtInitializeReward`] — admin opens a farming reward slot on a pool
 //! - [`EvtFundReward`] — funder deposits rewards and (re)sets the emission rate
 //! - [`EvtWithdrawIneligibleReward`] — funder reclaims rewards nobody could earn
@@ -54,8 +55,12 @@
 //! - [`EvtSetPoolStatus`] — pool status flag change
 //! - [`EvtUpdatePoolFees`] — pool fee parameters update (params captured raw)
 //!
-//! The remaining position-lifecycle, pool-initialization and admin events
-//! are added incrementally, one per change.
+//! Nineteen kinds — the list above is the whole set the extractor dispatches
+//! on, and it must stay in step with `extractor.rs`. Anything else cp-amm
+//! emits falls through as an unknown discriminator: reported in
+//! `ExtractionOutcome::unknown` and counted under
+//! `yog_indexer_unknown_event_total{discriminator}`, which is the channel
+//! through which a missing kind is meant to be discovered.
 //!
 //! ## Rewards family (farming / liquidity mining)
 //!

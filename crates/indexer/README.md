@@ -41,7 +41,7 @@ and its own metrics:
 │              │  RawLog   │                  │  Signature  │                │
 │ logsSubscribe│  Events   │ filter chain:    │  + protocol │ ↓ semaphore-   │
 │ + reconnect  │           │ failed / invoc.  │             │   bounded      │
-│              │           │ / watched_pool   │             │   spawn        │
+│              │           │                  │             │   spawn        │
 └──────────────┘           └──────────────────┘             └────────┬───────┘
                                                                      │
                                                                      ▼
@@ -55,13 +55,25 @@ and its own metrics:
 
 **`RpcListener`** owns the WebSocket connection, handles reconnection with
 exponential backoff, and forwards raw log events downstream. It is itself an
-orchestrator of a fleet of `SubscriptionWorker` instances (one per pool in the
-allowlist), each with its own retry budget (`RPC_WORKER_MAX_RETRIES`).
+orchestrator of a fleet of `SubscriptionWorker` instances — one per
+`SubscriptionTarget`, each with its own retry budget
+(`RPC_WORKER_MAX_RETRIES`). Solana's `logsSubscribe` accepts exactly one
+pubkey per `mentions` filter, so **what a target is depends on the mode**:
+
+- `MODE_PROTOCOL_CENTRIC=true` — one target per watched protocol, the
+  subscription pubkey being the program id. The target mode; it needs an RPC
+  that can sustain the full firehose.
+- `MODE_PROTOCOL_CENTRIC=false` — one target per row of `watched_pools`,
+  restored at startup by `WatchedPoolService::restore_subscriptions`. This is
+  where the allowlist is enforced: **at the subscription, not by a filter**
+  (see [pool observation model](../../README.md#pool-observation-model)).
 
 **`SignatureDispatcher`** applies a chain of filters that turn raw log events
-into qualified `(protocol, signature)` pairs — drops failed transactions,
-transactions that don't actually invoke the watched protocol, and
-(temporarily) transactions outside the watched-pool allowlist.
+into qualified `(protocol, signature)` pairs. Two filters today: it drops
+failed transactions (`FailedTransactionFilter`) and transactions that mention
+the program without invoking it — an address-lookup-table reference
+(`InvocationFilter`). Signatures that fail to parse are counted separately and
+dropped.
 
 **`IndexerWorker`** consumes qualified signatures and drives
 `TransactionProcessor` with bounded concurrency. The cap is
@@ -91,14 +103,16 @@ collaborators, each with one responsibility:
   same instance.
 
 The wiring happens in `bootstrap/daemon.rs::init_event_persistor` — one of the
-three dispatch points a new protocol touches (see the
+two dispatch points a new protocol touches in this crate, the other being
+`EventPersistor::persist` above (see the
 [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 
 ## Skip-and-log error semantics
 
 - **Per-event failures don't abort the others** — failures from
   `EventPersistor::persist` are logged and counted
-  (`persist_failures_total{event_kind}`), and the next event is attempted.
+  (`yog_indexer_persist_failure_total{event_kind}`), and the next event is
+  attempted.
 - **Per-signature failures don't stop the worker** — `IndexerWorker` catches
   errors from `process`, logs and counts them, and keeps draining the channel.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
@@ -112,24 +126,29 @@ covering every early return including `?`-propagated errors.
 
 ## Observability
 
-Prometheus metrics on `:9000/metrics` (host port `9000` in compose). Key
-families:
+Prometheus metrics on `:9000/metrics` (host port `9000` in compose). Every
+family carries a `protocol` label; the names below are the ones actually
+emitted. No gauges today — all counters and histograms.
 
-- **Pipeline counters** — `raw_log_events_total`,
-  `raw_log_events_rejected_total{filter, reason}`, `qualified_signatures_total`,
-  `downstream_saturated_total`
-- **Processor counters** — `index_transaction_entered/exited_total{outcome}`,
-  `transactions_no_match_total`, `unknown_event_total{discriminator}`,
-  `extraction_failure_total{kind}`, `fetch_failures_total{reason}`,
-  `fetch_not_found_total`
-- **Persistor counters** — `instructions_indexed_total{protocol, instruction}`,
-  `persist_failures_total{protocol, event_kind}`
-- **Allowlist filter** — `watched_pool_filter_passed_total{pool_address}`,
-  `watched_pool_filter_dropped_total`
-- **Histograms** — `fetch_duration_seconds`,
-  `persist_duration_seconds{protocol, kind}`,
-  `index_transaction_duration_seconds{outcome}`
-- **Gauges** — `watched_pools_active`
+- **Pipeline counters** — `yog_indexer_raw_log_events_total`,
+  `yog_indexer_raw_log_events_rejected_total{filter, reason}`,
+  `yog_indexer_raw_log_events_malformed_total` (unparsable signature),
+  `yog_indexer_qualified_signatures_total`,
+  `yog_indexer_downstream_saturated_total`
+- **Processor counters** —
+  `yog_indexer_index_transaction_entered_total`,
+  `yog_indexer_index_transaction_exited_total{outcome}`,
+  `yog_indexer_transactions_no_match_total`,
+  `yog_indexer_fetch_failures_total{reason}`,
+  `yog_indexer_fetch_not_found_total`,
+  `yog_indexer_unknown_event_total{discriminator}`,
+  `yog_indexer_extraction_failure_total{kind}`
+- **Persistor counters** —
+  `yog_indexer_instructions_indexed_total{instruction}`,
+  `yog_indexer_persist_failure_total{event_kind}`
+- **Histograms** — `yog_indexer_fetch_duration_seconds`,
+  `yog_indexer_persist_duration_seconds{kind}`,
+  `yog_indexer_index_transaction_duration_seconds{outcome}`
 
 ## Configuration
 
@@ -138,8 +157,19 @@ DATABASE_URL_INDEXER=postgresql://yog_indexer:...@localhost:5433/yog_sothoth
 SOLANA_RPC_WS=wss://...
 SOLANA_RPC_HTTP=https://...
 RPC_WORKER_MAX_RETRIES=10
-MODE_PROTOCOL_CENTRIC=true
+MODE_PROTOCOL_CENTRIC=false
 ```
+
+All five are required — none has an implicit default, and a missing one fails
+at startup with a `ConfigError`.
+
+`MODE_PROTOCOL_CENTRIC` picks what the listener subscribes to (see above).
+`false` — one subscription per watched pool — is what runs today, because the
+free RPC tier cannot sustain the firehose; `true` is the target mode and the
+value shipped in `.env.example`. Note that protocol-centric targets are built
+from `RpcListener::_watch`, which nothing calls yet: it gets wired with the gRPC
+migration, so switching the flag today yields `NoSubscriptionTargets` at
+startup.
 
 Connects to Postgres as `yog_indexer` — RW on event/pool tables, RO on
 `watched_pools`.

@@ -69,9 +69,9 @@ The dependency graph is strict and one-directional:
 - **[`persistence` (`yog-persistence`)](./persistence/README.md)** — the Postgres adapter. `Pg*` repository implementations, the forward-only migration suite, the `yog-migrate` binary, the SQLx offline cache, the query-shape policy (inline `query!` / VIEW / `QueryBuilder`), and the `watched_pools` operational reference.
 - **`bootstrap` (`yog-bootstrap`)** — shared startup utilities, deliberately tiny: env parsing primitives, the redacting `SecretUrl`, `ConfigError`, `init_rustls()`, `init_tracing()`. The decision rule for adding anything: *does this run identically in every binary's `main()`?* If it varies even slightly, it stays in the binary. (Small enough that this paragraph is its documentation.)
 - **[`indexer` (`yog-indexer`)](./indexer/README.md)** — the ingest daemon. Three-stage pipeline (WebSocket listener → signature dispatcher → bounded worker), `TransactionProcessor`, per-protocol sub-persistors, Prometheus metrics.
-- **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Fourteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
-- **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill (mints, fee config from cp-amm accounts).
-- **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; first two detectors: swap-flow imbalance and spot-vs-oracle price deviation.
+- **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Sixteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
+- **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill. The last one names no protocol — it iterates one `PoolAccountResolver` per protocol (cp-amm and DLMM today), each owning its queue and its satellite table.
+- **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain.
 - **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed at v0.3 (auth).
 
 ---
@@ -192,11 +192,21 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Add the sub-enum `<Platform><Product>Event` in `domain/<platform>/<product>.rs` with one variant per event kind.
 - Add an outer variant in `DomainEvent` (`domain/domain_event.rs`) and update the accessor methods (`pool_address`, `signature`, `timestamp`, `protocol`, `kind`) to match.
 
+**Account side** — the properties events never carry (mints, base fee, fee shape):
+
+- Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a `DecodedPoolAccount`. Guard on the Anchor discriminator as well as the program id — neither is redundant (see [`core/README.md`](./core/README.md#responsibilities)).
+- Add a branch to `decode_pool_account` (`application/decoder.rs`) routing the new `Protocol`.
+- Add the matching variants to the two-level `PoolAccountProperties` (write side, `domain/pool_account/`) and `PoolProperties` (read side, `domain/pool_properties/`). Both are matched exhaustively downstream, so the compiler points at every site that must follow.
+- Ground the decoder on **real mainnet accounts** before trusting it: a synthetic test builds the buffer with the same constants the decoder reads it with, so both agree on a wrong offset. Fixtures go under `core/tests/fixtures/<protocol>/accounts/`.
+
 ### 2. In `persistence`
 
 - Add a migration that creates the per-protocol tables (`<platform>_<product>_<event_kind>_events`). Each table holds only the columns relevant to the protocol. Include `GRANT INSERT, UPDATE ON <new_table> TO yog_indexer;`.
+- Add the **pool-properties satellite** `<platform>_<product>_pool_properties` in the same or a following migration: one row per pool, primary-keyed on `pool_address`, holding what exists for this protocol only — `pools` stays the cross-protocol registry. Copy the shape from migration `039`/`040`: a `protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED` column plus a composite `FOREIGN KEY (pool_address, protocol) REFERENCES pools (pool_address, protocol) ON DELETE CASCADE` **instead of** the single-column FK, so the row cannot claim a protocol the registry disagrees with. Grant it to `yog_context` (its sole writer), not to `yog_indexer`.
+- Add every new table's line to the privilege matrix in `tests/privileges.rs`. The suite asserts in both directions, so a missing GRANT and an extra one both fail — read the failure as a question before editing either side.
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
+- Implement the satellite's `PoolAccountResolver` (write + queue) and `PoolPropertiesLookup` (read) on the same `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
 - Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare`).
 - Re-export the new repositories from `lib.rs`.
 
@@ -206,24 +216,34 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Add a new branch in `EventPersistor::persist` that delegates `DomainEvent::<NewProtocol>(e)` to the new sub-persistor.
 - In `bootstrap/daemon.rs::init_event_persistor`, instantiate the new sub-persistor with its repos plus the shared `PoolMaintenance`, and wire it into the top-level `EventPersistor`.
 
-### 4. In `api` (when read access is needed)
+### 4. In `context`
 
-- If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`.
+- Push the new `Pg*` resolver into the `pool_account_resolvers` vec in `bootstrap/daemon.rs`. That is the whole wiring: `PoolAccountWorker` names no protocol and iterates the vec — DLMM was added in exactly one line here and the worker was untouched.
+
+### 5. In `api` (when read access is needed)
+
+- If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`. A service goes under `services/<platform>/<product>/` only when its repository, params and result are irreducibly that product's; cross-protocol services stay at the root and must not name a protocol in their constructor.
 - Add handlers and DTOs as needed. For a cross-protocol read surface, point the handler at the matching VIEW; for protocol-specific detail, point at the table directly.
+- Add the protocol's block to `http/dto/response/pool.rs` — an optional field named after the protocol, alongside its siblings. The `PoolProperties` destructuring there is irrefutable by construction, so this one is compiler-forced rather than optional.
 
-### 5. Tests
+### 6. Tests
 
-Add fixture transactions under `core/tests/fixtures/` (one per recognized signature for the new protocol) and extend the extraction integration tests in `core/tests/`.
+Add fixture transactions under `core/tests/fixtures/` (one per recognized signature for the new protocol) and extend the extraction integration tests in `core/tests/`. Add the account fixtures mentioned in step 1, and the privilege-matrix lines mentioned in step 2.
 
 ### What stays narrow
 
-Each crate has exactly one dispatch point per protocol:
+There is no central registry. A protocol is added by writing isolated per-protocol code plus a fixed, short list of dispatch points — one per concern, each a single branch or a single line:
 
-- `ExtractionDispatcher::extract` (`core`) — one branch
-- `EventPersistor::persist` (`indexer`) — one branch
-- `init_event_persistor` (`indexer`, `bootstrap/daemon.rs`) — one instantiation block
+| Dispatch point | Crate | Concern |
+|---|---|---|
+| `ExtractionDispatcher::extract` | `core` | transaction → events |
+| `decode_pool_account` | `core` | account bytes → properties |
+| `EventPersistor::persist` | `indexer` | event → sub-persistor |
+| `init_event_persistor` (`bootstrap/daemon.rs`) | `indexer` | sub-persistor instantiation |
+| `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
+| `PoolProperties` match in `http/dto/response/pool.rs` | `api` | detail wire shape |
 
-Everything else is per-protocol-isolated code. No central registry to update beyond these three points.
+The two-level enums (`DomainEvent`, `PoolAccountProperties`, `PoolProperties`) are matched exhaustively, so adding a variant breaks the build at each site that must follow instead of silently dropping the protocol.
 
 ---
 

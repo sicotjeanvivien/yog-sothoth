@@ -68,8 +68,9 @@ variant breaks the build there instead of silently dropping a field.
 |---|---|---|
 | `GET` | `/healthz` | Liveness — 200 OK, no DB roundtrip |
 | `GET` | `/readyz` | Readiness — pings the DB; 503 with per-check detail when it fails |
-| `GET` | `/api/pools` | Paginated list of discovered pools (cursor-based) |
-| `GET` | `/api/pools/top` | Top-N pools by `metric` (volume 24h; non-paginated, capped at 20) |
+| `GET` | `/api/pools` | Paginated list of discovered pools (cursor-based) — filters and sort below |
+| `GET` | `/api/pools/fee-tiers` | The fee tiers worth offering as a filter: the top-8 `fee_bps` values by pool count, each with its count, re-ordered ascending for display (non-paginated) |
+| `GET` | `/api/pools/top` | Top-N pools by `metric` — `volume_24h` (default) or `tvl`; non-paginated, default 10, capped at 20 |
 | `GET` | `/api/pools/{address}` | Single pool — everything the list returns, **plus** its protocol's own properties (see below) |
 | `GET` | `/api/pools/{address}/latest-state` | Latest observed AMM state for the pool |
 | `GET` | `/api/pools/{address}/history` | Hourly time-series buckets (`?days=N`) — volume, fees, liquidity, claims, USD-valued |
@@ -84,6 +85,22 @@ variant breaks the build there instead of silently dropping a field.
 
 Public URLs stay protocol-agnostic (`/swap-events`, not `/damm-v2-swaps`); the
 service resolves the pool's protocol and reads the matching table.
+
+### Filtering and sorting the pool list
+
+`GET /api/pools` is the one endpoint whose SQL shape varies with the request —
+hence the lone `QueryBuilder` in `persistence` (`repositories/pool/query.rs`),
+covered by integration tests since the macros cannot check it.
+
+| Param | Accepted values | Semantics |
+|---|---|---|
+| `q` | free text, or `X/Y` | With a `/` it is a **pair** filter: the pool must hold one token matching each side, on the two distinct mint columns (`SOL/USDC` finds the pool either way round). Without one, a single term matched against the pool address (exact) or either token's symbol/name (`ILIKE`). |
+| `fee_bps` | a decimal string, e.g. `25` | Exact match on the pool's base fee. Meant to be fed from `/api/pools/fee-tiers`, but bound like any user value. |
+| `sort` | `last_seen_desc` (default), `last_seen_asc`, `first_seen_desc`, `first_seen_asc` | Ordering, always tie-broken by `pool_address`. |
+| `cursor` / `dir` / `position` / `limit` | see below | Standard cursor pagination. |
+
+The cursor is stamped with the sort column it was built for; passing it back
+under a different `sort` is a 400 rather than a silently wrong page.
 
 ### Pool response shapes
 

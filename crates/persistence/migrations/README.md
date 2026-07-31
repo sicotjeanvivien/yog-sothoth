@@ -8,8 +8,8 @@ cargo run --bin yog-migrate -p yog-persistence
 ```
 
 The connection string passed to `yog-migrate` must use the `yog_migrate`
-role — the runtime roles (`yog_indexer`, `yog_api`, `yog_context`)
-intentionally cannot CREATE or ALTER tables.
+role — the four runtime roles (`yog_indexer`, `yog_api`, `yog_context`,
+`yog_signals`) intentionally cannot CREATE or ALTER tables.
 
 ## Forward-only
 
@@ -122,7 +122,7 @@ When you add a new migration:
 The first-time setup, against an empty database:
 
 ```sh
-# 1. As the superuser, declare the four roles + structural privileges.
+# 1. As the superuser, declare the five roles + structural privileges.
 psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
     -f crates/persistence/setup_roles.sql
 
@@ -130,5 +130,5 @@ psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
 cargo run --bin yog-migrate -p yog-persistence
 ```
 
-After step 2, the runtime services (indexer / api / context) can
-connect with their respective roles.
+After step 2, the runtime services (indexer / api / context / signals)
+can connect with their respective roles.
