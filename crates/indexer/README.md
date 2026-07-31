@@ -140,11 +140,9 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_index_transaction_exited_total{outcome}`,
   `yog_indexer_transactions_no_match_total`,
   `yog_indexer_fetch_failures_total{reason}`,
-  `yog_indexer_fetch_not_found_total`, plus
-  `indexer_unknown_event_total{discriminator}` and
-  `indexer_extraction_failure_total{kind}` — those two are emitted **without**
-  the `yog_` prefix the rest of the crate uses (their `describe_counter!` does
-  carry it, so the description registers under a name nothing emits).
+  `yog_indexer_fetch_not_found_total`,
+  `yog_indexer_unknown_event_total{discriminator}`,
+  `yog_indexer_extraction_failure_total{kind}`
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`

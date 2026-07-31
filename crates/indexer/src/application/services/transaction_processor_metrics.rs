@@ -8,6 +8,8 @@ const FETCH_FAILURES: &str = "yog_indexer_fetch_failures_total";
 const FETCH_NOT_FOUND: &str = "yog_indexer_fetch_not_found_total";
 const INDEX_TX_ENTERED: &str = "yog_indexer_index_transaction_entered_total";
 const INDEX_TX_EXITED: &str = "yog_indexer_index_transaction_exited_total";
+const UNKNOWN_EVENT: &str = "yog_indexer_unknown_event_total";
+const EXTRACTION_FAILURE: &str = "yog_indexer_extraction_failure_total";
 
 const FETCH_DURATION: &str = "yog_indexer_fetch_duration_seconds";
 const INDEX_TX_DURATION: &str = "yog_indexer_index_transaction_duration_seconds";
@@ -43,11 +45,11 @@ impl TransactionProcessorMetrics {
             "Total duration of index_transaction in seconds (label: outcome)"
         );
         describe_counter!(
-            "yog_indexer_unknown_event_total",
+            UNKNOWN_EVENT,
             "Anchor events extracted but not recognized — likely belong to rings not yet implemented"
         );
         describe_counter!(
-            "yog_indexer_extraction_failure_total",
+            EXTRACTION_FAILURE,
             "Failed extraction attempts (decode / borsh / translation) per protocol and kind"
         );
     }
@@ -96,7 +98,7 @@ impl TransactionProcessorMetrics {
 
     pub(crate) fn record_unknown_event(protocol: &Protocol, discriminator_hex: &str) {
         counter!(
-            "indexer_unknown_event_total",
+            UNKNOWN_EVENT,
             "protocol" => protocol.as_str().to_string(),
             "discriminator" => discriminator_hex.to_string(),
         )
@@ -105,7 +107,7 @@ impl TransactionProcessorMetrics {
 
     pub(crate) fn record_extraction_failure(protocol: &Protocol, kind: &'static str) {
         counter!(
-            "indexer_extraction_failure_total",
+            EXTRACTION_FAILURE,
             "protocol" => protocol.as_str().to_string(),
             "kind" => kind,
         )
