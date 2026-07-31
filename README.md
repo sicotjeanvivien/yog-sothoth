@@ -26,7 +26,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 - **Anchor `event_cpi` decoding** — events read from on-chain emissions, not reconstructed from transfer instructions
 - **AMM state reconstruction** — price, reserves, slippage, imbalance computed from the event stream
 - **Token enrichment** — symbol / name / decimals / logo via Helius DAS, USD prices via Jupiter Price V3
-- **Signal detection** — batch detectors evaluated over the indexed data (swap-flow imbalance, spot-vs-oracle price deviation), Warning/Critical severities, cooldown-based deduplication
+- **Signal detection** — batch detectors evaluated over the indexed data (swap-flow imbalance, spot-vs-oracle price deviation, TVL drain), Warning/Critical severities, cooldown-based deduplication
 - **Live signal feed** — `GET /api/signals` (paginated) plus an SSE stream, consumed by a dashboard feed page that updates as signals fire
 - **Time-series storage** — TimescaleDB hypertables with compression, retention policies, and continuous aggregates
 - **HTTP API** — JSON endpoints with cursor-based pagination and SSE streaming, served by an axum-based server
@@ -72,7 +72,7 @@ For the full ingestion pipeline, the Anchor decoding mechanism, the database rol
 
 The long-term design is **protocol-centric**: the indexer subscribes to Meteora program IDs and ingests every transaction that touches them, discovering pools as they appear in the stream.
 
-In the current phase, ingestion is bounded by a **temporary allowlist** stored in the `watched_pools` table — the public Solana RPC and the free Helius tier both cap transaction fetches at roughly 10 req/s, and peak DAMM v2 traffic saturates that by more than an order of magnitude. The allowlist is applied as a filter inside the dispatcher's filter chain, not as a return to static configuration: lifting the constraint is a matter of disabling the filter.
+In the current phase, ingestion is bounded by a **temporary allowlist** stored in the `watched_pools` table — the public Solana RPC and the free Helius tier both cap transaction fetches at roughly 10 req/s, and peak DAMM v2 traffic saturates that by more than an order of magnitude. The allowlist bounds what the indexer *subscribes to*, not what it accepts afterwards: `MODE_PROTOCOL_CENTRIC=false` makes the listener open one `logsSubscribe` per watched pool instead of one per program id. Nothing downstream knows about it — no filter, no code path conditioned on a pool list, so lifting the constraint is a config flip, not a refactor.
 
 The allowlist will be lifted once an upgraded RPC path is in place — a managed Yellowstone gRPC (Geyser) stream (Shyft, Triton, Helius LaserStream…), selected to avoid structural dependency on a single provider. This acquisition is a hard gate before v0.2 (multi-protocol expansion — see the roadmap). Only the subscription layer of the indexer changes; the extraction → persistence pipeline stays as is.
 
@@ -84,7 +84,7 @@ For administering the allowlist (schema, seed scripts, SQL helpers), see **[`cra
 
 | Protocol | Status | Model |
 |---|---|---|
-| Meteora DAMM v2 | **Active** — 11 event kinds end-to-end (circles 1–3) | x·y=k + dynamic fees + NFT positions |
+| Meteora DAMM v2 | **Active** — 19 event kinds end-to-end | x·y=k + dynamic fees + NFT positions |
 | Meteora DLMM | **Partial** — pool account decoded, properties + `fee_bps` live; events stubbed, scheduled v0.2.0 | Bin-based liquidity, volatility fees |
 | Raydium CLMM/CPMM | Scheduled v0.2.1 | Concentrated liquidity |
 | Orca Whirlpools | Scheduled v0.2.2 | Concentrated liquidity |
@@ -98,7 +98,9 @@ still a stub. Since pool discovery runs off extracted events, no DLMM pool
 reaches `pools` on its own yet, so that satellite stays empty until v0.2.0
 despite being fully wired and tested against real mainnet accounts.
 
-For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circle 2 (position lifecycle — `EvtCreatePosition`, `EvtClosePosition`, `EvtLockPosition`, `EvtPermanentLockPosition`) and circle 3 (pool config / admin — `EvtInitializePool`, `EvtSetPoolStatus`, `EvtUpdatePoolFees`) are wired end-to-end as well: extracted, persisted to their own per-kind tables, and covered by fixture tests. Each lands in `meteora_damm_v2_<kind>_events`; cross-protocol VIEWs expose only the four circle-1 concepts.
+For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circle 2 (position lifecycle — `EvtCreatePosition`, `EvtClosePosition`, `EvtLockPosition`, `EvtPermanentLockPosition`) and circle 3 (pool config / admin — `EvtInitializePool`, `EvtSetPoolStatus`, `EvtUpdatePoolFees`) are wired end-to-end as well. The remaining eight cover the protocol-fee claim (`EvtClaimProtocolFee`), position splits (`EvtSplitPosition3`), and the farm's admin/funder side — `EvtInitializeReward`, `EvtFundReward`, `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawIneligibleReward`, `EvtWithdrawDeadLiquidityReward` — whose LP-facing counterpart, `EvtClaimReward`, was already in circle 1.
+
+All nineteen are extracted, persisted to their own per-kind table (`meteora_damm_v2_<kind>_events`), and covered by fixture tests. Cross-protocol VIEWs expose only the four circle-1 concepts.
 
 ---
 
@@ -159,7 +161,7 @@ Originally two releases, merged in June 2026: an on-chain analytics tool without
 
 - [x] Rust workspace — `core` / `persistence` / `bootstrap` / `indexer` / `api` / `context` / `wasm`
 - [x] Three-stage ingestion pipeline (`RpcListener` → `SignatureDispatcher` → `IndexerWorker`) with Prometheus instrumentation
-- [x] DAMM v2 decoding — Anchor `event_cpi`, 11 event kinds end-to-end (swap/liquidity/claims, position lifecycle, pool config & admin)
+- [x] DAMM v2 decoding — Anchor `event_cpi`, 19 event kinds end-to-end (swap/liquidity/claims, position lifecycle, pool config & admin, farm admin)
 - [x] Token enrichment daemon — metadata via Helius DAS, USD prices via Jupiter Price V3, pool account resolution (mints, fee config)
 - [x] HTTP API on axum — pools (list, detail, top-N, history), tokens, global stats
 - [x] Realised-fee analytics — continuous aggregates, USD valuation views, fee charts on the pool page
@@ -170,12 +172,12 @@ Originally two releases, merged in June 2026: an on-chain analytics tool without
 **v0.1.1 — Signal Engine + release prep** *(in progress, blocks the public deployment)*
 
 - [x] `signals` process — batch detector engine, per-detector cadence, cooldown deduplication, Prometheus metrics
-- [x] First two detectors — swap-flow imbalance, spot-vs-oracle price deviation (with freshness guards)
+- [x] Three detectors — swap-flow imbalance, spot-vs-oracle price deviation (with freshness guards), TVL drain
 - [x] `signals` hypertable + `yog_signals` role
 - [x] `GET /api/signals` (cursor pagination) + `GET /api/signals/stream` (SSE)
 - [x] Live signals feed page in the dashboard
 - [ ] Signals page UX pass (hierarchy, severity filter, pagination)
-- [ ] Next detectors — fee yield spike, TVL drain
+- [ ] Next detector — fee yield spike
 - [ ] Telegram operator channel
 - [ ] Pre-release audit (security, conventions) and legal pages (privacy, terms)
 - [ ] Scaleway deployment *(scheduled to start early August 2026)*

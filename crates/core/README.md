@@ -11,9 +11,11 @@ Every other crate depends on this one: it declares the domain entities, the repo
 ```
 core/src/
 ├── domain/                ← entities + repository contracts
-│   ├── meteora/damm_v2/   (one module per event kind — 11 today — each with
+│   ├── meteora/damm_v2/   (one module per event kind — 19 today — each with
 │   │                       model + repository trait; damm_v2.rs holds the
-│   │                       MeteoraDammV2Event sub-enum)
+│   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
+│   │                       this protocol's satellite payload)
+│   ├── meteora/dlmm/      (pool_properties/ only — events land in v0.2.0)
 │   ├── pool/              (Pool, PoolRepository — cross-protocol registry)
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
 │   ├── pool_analytics/    (hourly aggregates read models)
@@ -88,7 +90,7 @@ pub struct ExtractionDispatcher {
 }
 ```
 
-The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the three dispatch points a new protocol touches (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
+The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 
 ## Anchor `event_cpi` extraction pipeline
 

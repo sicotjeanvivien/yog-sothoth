@@ -82,7 +82,7 @@ Everything is typed per `(platform, protocol, event_kind)`, all the way down: do
 
 - Each table holds only columns relevant to its protocol — no NULL columns for incompatible fields, no JSONB blob.
 - Cross-protocol reads ("all swaps for a pool") go through SQL **VIEW**s (`swap_events`, `liquidity_events`, …) defined at the bottom of the baseline migration, each a `UNION ALL` with a synthesised `protocol` column. Protocol-specific columns are *not* in the VIEWs — read the underlying table when you need them.
-- Adding a protocol touches exactly **three dispatch points** (`ExtractionDispatcher::extract`, `EventPersistor::persist`, the persistor wiring in `init_event_persistor`, `indexer/src/bootstrap/daemon.rs`); everything else is isolated per-protocol code. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table.
+- Adding a protocol touches a short, fixed list of **dispatch points** — one branch or one line each: `ExtractionDispatcher::extract` and `decode_pool_account` (`core`), `EventPersistor::persist` and the persistor wiring in `init_event_persistor` (`indexer/src/bootstrap/daemon.rs`), the `pool_account_resolvers` vec (`context/src/bootstrap/daemon.rs`), and the `PoolProperties` match in `api/src/http/dto/response/pool.rs`. Everything else is isolated per-protocol code; the full recipe is in `crates/README.md`. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table — but per-protocol *pool properties* live in a satellite table keyed on `pool_address`, never in `pools`.
 
 ## Database privilege model
 

@@ -15,7 +15,7 @@ migration conventions, see [`migrations/README.md`](./migrations/README.md).
 
 ```
 persistence/
-├── migrations/              ← sqlx migrations, forward-only (001 … 026 today)
+├── migrations/              ← sqlx migrations, forward-only (001 … 040 today)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── setup_roles.sql          ← one-time role provisioning (admin)
 ├── .sqlx/                   ← committed offline query cache (see below)
@@ -25,13 +25,14 @@ persistence/
     ├── repositories/        ← one impl per domain repository trait
     │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
     │   │                     sqlx error mapping)
-    │   ├── meteora/damm_v2/ (per-event-kind event repositories — 11 today —
+    │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
     │   │                     plus the cp-amm pool-properties satellite)
     │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
     │   │                     repositories yet)
     │   ├── pool/, pool_current_state/, pool_analytics/, global_analytics/
     │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
     │   ├── token_metadata/, token_price/, network_status/, watched_pool/
+    │   ├── announcement/
     │   └── event_freshness.rs
     ├── bin/migrate.rs       ← yog-migrate binary (~30 lines)
     └── tests/               ← DB-backed integration tests (#[ignore]d by default)
@@ -67,7 +68,7 @@ variants into the right `RepositoryError` semantic (`NotFound`, `Conflict`,
 ## Per-protocol table strategy ("voie 3")
 
 Each `(protocol, event_kind)` combination has its own SQL table, named
-`<platform>_<product>_<event_kind>_events` — eleven `meteora_damm_v2_*_events`
+`<platform>_<product>_<event_kind>_events` — nineteen `meteora_damm_v2_*_events`
 tables today. Each table holds only the columns relevant to its protocol: no
 NULL columns for incompatible fields, no generic JSONB blob. When DLMM or
 another protocol lands, it gets sibling tables with their own schemas.
@@ -253,10 +254,13 @@ nothing and runs silently.
 
 Until the indexer runs on an upgraded RPC path (Helius `transactionSubscribe`
 or a managed Yellowstone gRPC stream), ingestion is bounded by an allowlist of
-pools stored in the `watched_pools` table. The protocol-centric architecture
-is preserved — the allowlist is applied as a filter inside the dispatcher's
-filter chain, not as a return to static configuration. Lifting the constraint
-is a matter of disabling the filter.
+pools stored in the `watched_pools` table. The protocol-centric architecture is
+preserved — the allowlist bounds **what the indexer subscribes to**, not what it
+accepts once received: under `MODE_PROTOCOL_CENTRIC=false` the listener opens
+one `logsSubscribe` per active row instead of one per program id
+(`WatchedPoolService::restore_subscriptions`). Nothing downstream is aware of
+it — no filter, no code path conditioned on a pool list — so lifting the
+constraint is a config flip, not a return from static configuration.
 
 The rationale is summarised in the
 [root README's *Pool observation model*](../../README.md#pool-observation-model).
@@ -268,7 +272,7 @@ The content below is the operational reference.
 |---|---|---|
 | `pool_address` | `TEXT PRIMARY KEY` | Solana pubkey of the pool |
 | `protocol` | `TEXT NOT NULL` | Protocol identifier (`damm_v2`, etc.) |
-| `active` | `BOOLEAN NOT NULL DEFAULT TRUE` | Whether the filter accepts events for this pool |
+| `active` | `BOOLEAN NOT NULL DEFAULT TRUE` | Whether the pool gets a subscription at startup |
 | `added_at` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` | When the pool was added to the allowlist |
 | `note` | `TEXT` | Free-form annotation (selection rationale, edge-case marker, etc.) |
 
@@ -360,10 +364,11 @@ WHERE active = TRUE
 ORDER BY added_at DESC;
 ```
 
-The filter is loaded once at indexer startup. Modifying `watched_pools` while
-the indexer is running has no effect on the running process — restart the
-indexer to pick up the change. Hot reload becomes relevant in **v0.3** when
-user-managed watchlists arrive as a first-class feature.
+The allowlist is read once at indexer startup, when the subscriptions are
+opened. Modifying `watched_pools` while the indexer is running has no effect on
+the running process — restart the indexer to pick up the change. Hot reload
+becomes relevant in **v0.3** when user-managed watchlists arrive as a
+first-class feature.
 
 ### Removing the constraint
 
@@ -377,10 +382,10 @@ place:
 - **A managed Yellowstone gRPC (Geyser) provider** (Shyft, Triton, …) with
   matching throughput.
 
-At that point the filter is disabled (`active = TRUE` for all rows, or filter
-bypassed entirely in the dispatcher), and ingestion returns to full
-protocol-centric coverage. The `watched_pools` table stays in the schema — it
-becomes purely informational rather than enforced.
+At that point the indexer switches to `MODE_PROTOCOL_CENTRIC=true` — one
+subscription per program id — and ingestion returns to full protocol-centric
+coverage. The `watched_pools` table stays in the schema; it simply stops being
+read, becoming purely informational rather than enforced.
 
 ---
 
