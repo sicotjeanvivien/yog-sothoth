@@ -353,6 +353,15 @@ with empty rows, both worse than the current decoupling.
 
 ### Current selection
 
+> ⚠️ **Do not reseed from the table below.** It is a *record* of an April 2026
+> calibration window, not a shopping list. Every pool in it is described as a
+> burst that went quiet — reseeding them subscribes the indexer to dead
+> addresses, and it will sit there receiving nothing while looking perfectly
+> healthy. Learned the hard way on 4 August 2026, after a database recreate.
+>
+> To seed a working allowlist, pick pools that are trading **now** — see
+> *Choosing pools to watch* below.
+
 The allowlist was seeded from the 7-day activity distribution of `swap_events`
 observed during a calibration window in **April 2026** — the timestamps below
 are that window's, not a live picture. Pools were chosen to balance
@@ -377,6 +386,37 @@ high-signal density (top of the distribution) with edge-case diversity
 > is consistent with DAMM v2 being used heavily for memecoin launches.
 > Longer-lived pools will be added as the dataset grows.
 
+### Choosing pools to watch
+
+The allowlist decides what the indexer subscribes to, so a seed made of quiet
+pools produces a daemon that runs, logs nothing alarming, and collects nothing.
+Pick on **recent** activity, not on a historical table.
+
+Meteora's public API ranks them, and its `volume` object is nested — the
+30-minute bucket is the one that says "trading right now", where `24h` can be
+a burst that ended this morning:
+
+```bash
+curl -s "https://damm-v2.datapi.meteora.ag/pools?limit=60&order_by=volume24h&order=desc" \
+  | python3 -c "
+import json, sys
+rows = [(p['address'], p.get('name','?'), p['volume'].get('30m',0), p.get('tvl',0))
+        for p in json.load(sys.stdin)['data']]
+for a, n, v30, tvl in sorted(rows, key=lambda r: -r[2])[:10]:
+    print(f'{a:<45}{n:<18}{v30:>12,.0f}{tvl:>12,.0f}')
+"
+```
+
+Worth including deliberately, rather than just taking the top of the list:
+
+- **a pool that is central to routing** (SOL-USDC is the universal
+  intermediary). Routed transactions are what exercise `event_index`, the
+  multi-hop path, and the same-slot ambiguity counter — none of which a set of
+  isolated pools will ever trigger;
+- **one deep-TVL pool with a USDC quote** and **one thin-TVL, high-turnover
+  pool** — the valuation paths behave differently, and a seed made only of
+  memecoin pairs leaves half the read paths untested.
+
 ### Seeding the allowlist
 
 ⚠️ **There is no seed script in the repo.** This README and
@@ -388,7 +428,7 @@ the seed is an `INSERT` you run by hand:
 ```bash
 psql "postgresql://yog:yog@localhost:5433/yog_sothoth" <<'SQL'
 INSERT INTO watched_pools (pool_address, protocol, note) VALUES
-    ('<pubkey>', 'damm_v2', 'high activity, short burst')
+    ('<pubkey>', 'meteora_damm_v2', 'high activity, short burst')
 ON CONFLICT (pool_address) DO NOTHING;
 SQL
 ```
@@ -412,7 +452,7 @@ ad-hoc. They are intended for the admin role:
 ```sql
 -- Add a pool
 INSERT INTO watched_pools (pool_address, protocol, note)
-VALUES ('<pubkey>', 'damm_v2', 'manual selection: high TVL');
+VALUES ('<pubkey>', 'meteora_damm_v2', 'manual selection: high TVL');
 
 -- Deactivate without losing history
 UPDATE watched_pools
