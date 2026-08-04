@@ -123,6 +123,16 @@ two dispatch points a new protocol touches in this crate, the other being
   events — the failure that went unseen until the August 2026 audit, when the
   key was `(signature, timestamp)` and discarded the `rows_affected` that would
   have shown it.
+- **An order the key cannot decide is counted, not assumed away** — the
+  `pool_current_state` projection orders on `(slot, transaction_index,
+  event_index)`, but `transaction_index` is empty on the `getTransaction`
+  path, so two transactions of one block touching one pool cannot be ranked.
+  The repository reports that case and it is counted
+  (`yog_indexer_pool_current_state_same_slot_total`), on the applied path as
+  well as the rejected one — an ambiguity that wrongly accepts costs as much as
+  one that wrongly rejects. The label on the duration histogram is
+  `pool_current_state_rejected`, not `stale`: the old name asserted healthy
+  concurrency for what was mostly the guard's own second-granularity.
 - **Per-signature failures don't stop the worker** — `IndexerWorker` catches
   errors from `process`, logs and counts them, and keeps draining the channel.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
@@ -156,7 +166,8 @@ emitted. No gauges today — all counters and histograms.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,
-  `yog_indexer_event_insert_skipped_total{event_kind}`
+  `yog_indexer_event_insert_skipped_total{event_kind}`,
+  `yog_indexer_pool_current_state_same_slot_total`
 - **Histograms** — `yog_indexer_fetch_duration_seconds`,
   `yog_indexer_persist_duration_seconds{kind}`,
   `yog_indexer_index_transaction_duration_seconds{outcome}`

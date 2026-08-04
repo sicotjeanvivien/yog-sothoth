@@ -29,7 +29,7 @@ use yog_persistence::PgMeteoraDammV2SwapEventRepository;
 /// Read from `yog-core`'s fixture directory instead of copied here: its whole
 /// value is being the verbatim RPC response, and a second copy would drift
 /// from the one the extractor's own tests assert against.
-fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
+pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../core/tests/fixtures/damm_v2/swap_double.json");
 

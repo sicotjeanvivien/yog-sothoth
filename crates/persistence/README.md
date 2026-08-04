@@ -110,6 +110,39 @@ Two consequences when you add an event table:
 - Have its `insert` return `InsertOutcome::from_rows_affected(…)`. Returning
   `Ok(())` re-creates precisely the blindness above.
 
+### The ordering key of the `pool_current_state` projection
+
+The same three columns land on the projection as `last_slot`,
+`last_event_index`, `last_transaction_index` (migration 042), and its upsert
+guard compares them **as a tuple**:
+
+```sql
+WHERE (last_slot, COALESCE(last_transaction_index, 0), last_event_index)
+    < (EXCLUDED…)
+```
+
+`last_event_at` is still written — it is what `/latest-state` displays — but it
+stopped ordering anything. It came from `blockTime`, so a second, and 56 % of
+swaps share theirs with another swap of the same pool: ordering on it rejected
+**a third of all state updates**, and labelled them `stale` as though they were
+healthy concurrency.
+
+Two things to know before touching this query:
+
+- **It is a CTE, not a bare `INSERT`, on purpose.** A guarded `ON CONFLICT`
+  returns no row when the guard fails, so the statement could never say *why*.
+  The `previous` CTE reads the pre-statement snapshot in the same round-trip,
+  which is what lets the upsert report a `same_slot_ambiguity` — and that
+  report is a **lower bound** under concurrency, because the guard is
+  re-evaluated against the latest committed row while the CTE is not. The
+  method's doc-comment carries the detail.
+- **Within one slot the order is partial and biased**, not a coin flip:
+  `event_index` numbers the emissions of one transaction, so comparing it
+  across two ranks unlike things, and the largest index wins. It is kept
+  because it is order-independent — a replay reproduces the same final state —
+  where last-writer-wins would be unbiased and non-deterministic. gRPC closes
+  the gap by filling `transaction_index`, with no further migration.
+
 ## Choosing how to write a query
 
 A query-builder/ORM migration (SeaQuery et al.) was evaluated in June 2026 and

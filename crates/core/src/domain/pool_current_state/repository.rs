@@ -8,7 +8,7 @@ use async_trait::async_trait;
 
 use crate::{
     RepositoryResult,
-    domain::{PoolCurrentState, PoolCurrentStateUpsert},
+    domain::{PoolCurrentState, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome},
 };
 
 /// Write access to the pool-current-state projection — the indexer's lens.
@@ -17,10 +17,20 @@ use crate::{
 ///
 /// # Contract
 ///
-/// * [`upsert`](Self::upsert) is **stale-write safe**: the implementation MUST
-///   ignore an upsert whose `event_at` is strictly older than the value
-///   already stored. This makes replay and out-of-order processing safe
-///   without requiring the caller to coordinate ordering.
+/// * [`upsert`](Self::upsert) is **out-of-order safe**: the implementation
+///   MUST ignore an upsert whose position is not strictly after the one
+///   already stored, comparing `(slot, transaction_index, event_index)` as a
+///   tuple. This makes replay and out-of-order processing safe without
+///   requiring the caller to coordinate ordering.
+///
+///   It MUST NOT order on `event_at`: that timestamp comes from `blockTime`
+///   and has second granularity, which 56 % of swaps share with another swap
+///   of the same pool. Ordering on it rejected a third of all updates.
+///
+/// * [`upsert`](Self::upsert) MUST report a `same_slot_ambiguity` when the
+///   state it met came from the same slot under a different signature — the
+///   residual case the reachable key cannot rank (see
+///   [`PoolCurrentStateUpsertOutcome`]).
 ///
 /// * [`upsert`](Self::upsert) MUST preserve `last_sqrt_price` / `last_swap_at`
 ///   when the incoming payload is a liquidity event (i.e. `sqrt_price`
@@ -32,10 +42,10 @@ use crate::{
 #[async_trait]
 pub trait PoolCurrentStateRepository: Send + Sync {
     /// Apply an event-derived state update to the projection.
-    ///
-    /// Returns `Ok(true)` when the row was updated (or inserted),
-    /// `Ok(false)` when the stale-write guard suppressed the update.
-    async fn upsert(&self, upsert: &PoolCurrentStateUpsert) -> RepositoryResult<bool>;
+    async fn upsert(
+        &self,
+        upsert: &PoolCurrentStateUpsert,
+    ) -> RepositoryResult<PoolCurrentStateUpsertOutcome>;
 }
 
 /// Consultation of the pool-current-state projection — the api's lens.

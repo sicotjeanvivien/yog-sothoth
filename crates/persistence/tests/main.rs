@@ -28,6 +28,7 @@ mod liquidity_value;
 mod lock_position;
 mod permanent_lock_position;
 mod pool_analytics_ranking;
+mod pool_current_state_order;
 mod pool_pagination;
 mod pool_price_snapshot;
 mod pool_properties;

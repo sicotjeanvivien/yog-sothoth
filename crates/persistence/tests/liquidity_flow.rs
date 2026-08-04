@@ -104,8 +104,8 @@ async fn flows_split_directions_window_and_join_tvl(pool: PgPool) {
     sqlx::query(
         "INSERT INTO pool_current_state
            (pool_address, protocol, last_event_at, last_event_kind, last_signature,
-            reserve_a, reserve_b)
-         VALUES ($1,'meteora_damm_v2',$2,'liquidity_add','sig',10000000,1000000000)",
+            reserve_a, reserve_b, last_slot, last_event_index)
+         VALUES ($1,'meteora_damm_v2',$2,'liquidity_add','sig',10000000,1000000000,1,0)",
     )
     .bind(&pool_addr)
     .bind(now)

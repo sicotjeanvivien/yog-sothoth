@@ -8,7 +8,8 @@ use yog_core::RepositoryResult;
 use yog_core::domain::{
     InsertOutcome, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts,
     MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
-    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, TradeDirection,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome,
+    PoolRepository, TradeDirection,
 };
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
@@ -189,12 +190,18 @@ impl PoolRepository for MockPoolRepo {
     }
 }
 
-struct MockPcsRepo(Calls);
+/// Carries the outcome it should report, so a test can drive the
+/// `same_slot_ambiguity` branch — the residual case the ordering key
+/// cannot rank.
+struct MockPcsRepo(Calls, PoolCurrentStateUpsertOutcome);
 #[async_trait]
 impl PoolCurrentStateRepository for MockPcsRepo {
-    async fn upsert(&self, _: &PoolCurrentStateUpsert) -> RepositoryResult<bool> {
+    async fn upsert(
+        &self,
+        _: &PoolCurrentStateUpsert,
+    ) -> RepositoryResult<PoolCurrentStateUpsertOutcome> {
         rec(&self.0, "pcs:upsert");
-        Ok(true)
+        Ok(self.1)
     }
 }
 
@@ -209,12 +216,27 @@ fn sg() -> Signature {
 }
 
 fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
-    build_with_swap_outcome(calls, InsertOutcome::Inserted)
+    build_with(calls, InsertOutcome::Inserted, applied_without_ambiguity())
 }
 
 fn build_with_swap_outcome(
     calls: Calls,
     swap_outcome: InsertOutcome,
+) -> MeteoraDammV2EventPersistor {
+    build_with(calls, swap_outcome, applied_without_ambiguity())
+}
+
+fn applied_without_ambiguity() -> PoolCurrentStateUpsertOutcome {
+    PoolCurrentStateUpsertOutcome {
+        applied: true,
+        same_slot_ambiguity: false,
+    }
+}
+
+fn build_with(
+    calls: Calls,
+    swap_outcome: InsertOutcome,
+    pcs_outcome: PoolCurrentStateUpsertOutcome,
 ) -> MeteoraDammV2EventPersistor {
     let repos = DammV2Repos {
         swap_event: Arc::new(MockSwap(calls.clone(), swap_outcome)),
@@ -239,7 +261,7 @@ fn build_with_swap_outcome(
     };
     let pm = Arc::new(PoolMaintenance::new(
         Arc::new(MockPoolRepo(calls.clone())),
-        Arc::new(MockPcsRepo(calls.clone())),
+        Arc::new(MockPcsRepo(calls.clone(), pcs_outcome)),
     ));
     MeteoraDammV2EventPersistor::new(repos, pm)
 }
@@ -790,5 +812,62 @@ fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
         Some(&DebugValue::Counter(1)),
         "the event was still processed: rows written are indexed − skipped, and \
          that arithmetic breaks if a skip stops counting as indexed"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The ambiguity the ordering key cannot resolve must be counted
+// ---------------------------------------------------------------------------
+
+/// `(slot, transaction_index, event_index)` ranks two transactions of one
+/// block only if `transaction_index` is filled — and `getTransaction` does not
+/// return it. The repository reports that case; this asserts the indexer
+/// actually counts it instead of letting it pass for healthy concurrency, the
+/// mistake the `pool_current_state_stale` label made for months.
+///
+/// The counter is the measurement that decides whether the residual case is as
+/// rare as it was estimated to be. If nothing increments it, the estimate can
+/// never be falsified — which is the failure mode this project keeps hitting.
+#[test]
+fn a_same_slot_ambiguity_is_counted_on_the_applied_path() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+                let p = build_with(
+                    calls.clone(),
+                    InsertOutcome::Inserted,
+                    PoolCurrentStateUpsertOutcome {
+                        applied: true,
+                        same_slot_ambiguity: true,
+                    },
+                );
+                p.persist(&MeteoraDammV2Event::Swap(swap())).await;
+            });
+    });
+
+    // One snapshot: `Snapshotter::snapshot` reads counters with `swap(0)`, so a
+    // second call would return zeros.
+    let snapshot = snapshotter.snapshot().into_vec();
+    let counter = |name: &str| {
+        snapshot
+            .iter()
+            .find(|(key, _, _, _)| key.key().name() == name)
+            .map(|(_, _, _, value)| value)
+    };
+
+    assert_eq!(
+        counter("yog_indexer_pool_current_state_same_slot_total"),
+        Some(&DebugValue::Counter(1)),
+        "an upsert the key could not rank must be counted even when it applied \
+         — an ambiguity that wrongly accepts costs as much as one that wrongly \
+         rejects"
     );
 }

@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-use crate::domain::{MeteoraDammV2LiquidityEventKind, Protocol};
+use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, Protocol};
 
 /// Kind of the most recent event that touched a pool.
 ///
@@ -116,9 +116,13 @@ pub struct PoolCurrentStateUpsert {
     pub pool_address: Pubkey,
     pub protocol: Protocol,
 
-    pub event_at: DateTime<Utc>,
+    /// Where the source event sits in the chain. It carries the signature and
+    /// the timestamp the projection displays, **and** the `(slot,
+    /// transaction_index, event_index)` the repository orders on — the two
+    /// used to be separate fields, and ordering on the timestamp alone
+    /// rejected a third of all updates (they share a second).
+    pub event_position: EventPosition,
     pub event_kind: LastEventKind,
-    pub signature: Signature,
 
     pub reserve_a: u64,
     pub reserve_b: u64,
@@ -135,8 +139,7 @@ impl PoolCurrentStateUpsert {
     pub fn from_swap(
         pool_address: Pubkey,
         protocol: Protocol,
-        event_at: DateTime<Utc>,
-        signature: Signature,
+        event_position: EventPosition,
         reserve_a: u64,
         reserve_b: u64,
         sqrt_price: u128,
@@ -144,9 +147,8 @@ impl PoolCurrentStateUpsert {
         Self {
             pool_address,
             protocol,
-            event_at,
+            event_position,
             event_kind: LastEventKind::Swap,
-            signature,
             reserve_a,
             reserve_b,
             sqrt_price: Some(sqrt_price),
@@ -159,14 +161,10 @@ impl PoolCurrentStateUpsert {
     /// `kind` is the domain enum; its mapping to the projection event kind
     /// goes through the [`From<MeteoraDammV2LiquidityEventKind> for LastEventKind`] impl
     /// defined above so add/remove sourcing stays in one place.
-    // 8 fields, each is a meaningful constructor argument — collapsing
-    // them into a struct would just push the same arity one level up.
-    #[allow(clippy::too_many_arguments)]
     pub fn from_liquidity(
         pool_address: Pubkey,
         protocol: Protocol,
-        event_at: DateTime<Utc>,
-        signature: Signature,
+        event_position: EventPosition,
         kind: MeteoraDammV2LiquidityEventKind,
         reserve_a: u64,
         reserve_b: u64,
@@ -175,15 +173,49 @@ impl PoolCurrentStateUpsert {
         Self {
             pool_address,
             protocol,
-            event_at,
+            event_position,
             event_kind: kind.into(),
-            signature,
             reserve_a,
             reserve_b,
             sqrt_price: None,
             liquidity: Some(liquidity),
         }
     }
+}
+
+/// What an upsert did, and what it could not know.
+///
+/// Richer than a boolean because the ordering key is **partial**:
+/// `transaction_index` is empty on the `getTransaction` ingestion path, so two
+/// transactions landing in the same slot and touching the same pool are ranked
+/// on `event_index` alone — an ordinal that numbers the emissions of *one*
+/// transaction, so comparing it across two ranks unlike things. The state
+/// converges to the largest index, which favours a leg deep inside a routed
+/// transaction over a single-leg swap of the same block.
+///
+/// Rather than let that pass for healthy concurrency (the mistake the label
+/// `pool_current_state_stale` made for months), the repository reports when it
+/// happened and the caller counts it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoolCurrentStateUpsertOutcome {
+    /// `true` when the row was written (inserted or updated), `false` when the
+    /// ordering guard suppressed it.
+    pub applied: bool,
+
+    /// The state this upsert met came from the **same slot** under a
+    /// **different signature** — the one case the reachable key cannot order.
+    ///
+    /// Reported whether the upsert applied or not, on purpose: an ambiguity
+    /// that wrongly *accepts* (overwriting newer state with older) does as
+    /// much damage as one that wrongly rejects, and a counter that only saw
+    /// rejections would be a lower bound dressed up as a measurement.
+    ///
+    /// It is a lower bound anyway, for a second reason the implementation
+    /// documents: under concurrent writers the report and the guard do not
+    /// read the same row version, and the miss goes in the direction that
+    /// flatters the assumption. Expect it to be large on hot pools — the
+    /// signal is its ratio to applied upserts, not its absolute value.
+    pub same_slot_ambiguity: bool,
 }
 
 #[cfg(test)]
