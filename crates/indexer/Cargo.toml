@@ -44,8 +44,10 @@ rust_decimal = { workspace = true }
 [dev-dependencies]
 # `DebuggingRecorder` + `with_local_recorder`: lets a test assert on the
 # counters the persistor emits. Thread-local, so it stays safe under the
-# parallel test harness. Already in the tree via metrics-exporter-prometheus —
-# only the `debugging` feature is new.
-metrics-util = { version = "0.20", features = ["debugging"] }
+# parallel test harness. The crate was already in the tree via
+# metrics-exporter-prometheus, but its `debugging` feature is not free — it
+# pulls `endian-type`, `nibble_vec`, `ordered-float` and `radix_trie` into
+# Cargo.lock. Dev-only, so none of it reaches a binary.
+metrics-util = { workspace = true, features = ["debugging"] }
 # Construct dummy Signatures in the event-persistor dispatch tests.
 solana-signature = { workspace = true }

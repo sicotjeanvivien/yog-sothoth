@@ -50,6 +50,10 @@ anyhow = "1"
 
 metrics = "0.24"
 metrics-exporter-prometheus = "0.18"
+# Test-only (dev-dependency of yog-indexer): `DebuggingRecorder` lets a test
+# assert on emitted counters. Pinned here so it cannot drift from the version
+# `metrics-exporter-prometheus` resolves.
+metrics-util = "0.20"
 
 # Misc
 chrono = { version = "0.4", features = ["serde"] }
