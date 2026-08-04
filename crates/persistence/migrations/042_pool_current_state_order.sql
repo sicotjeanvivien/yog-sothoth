@@ -22,8 +22,20 @@
 --
 -- `getTransaction` ne renvoie pas `transaction_index` (cf. migration 041), donc
 -- deux transactions d'un même slot touchant le même pool sont départagées par
--- le seul `event_index` — ce qui peut se tromper dans les deux sens : rejeter
--- un event réellement postérieur, ou en accepter un réellement antérieur.
+-- le seul `event_index`.
+--
+-- ⚠️ Ce départage n'est pas un tirage au sort, et le dire ainsi serait le
+-- raccourci de trop : `event_index` numérote les émissions d'**une**
+-- transaction, donc le comparer entre deux, c'est comparer des choses
+-- différentes. Dans un slot, l'état converge vers le plus grand index — ce qui
+-- favorise **systématiquement** une jambe profonde de transaction routée
+-- contre un swap simple du même bloc. Et si le pool se tait ensuite, l'état
+-- faux reste affiché jusqu'au prochain slot actif, pas 400 ms.
+--
+-- Ce que ce choix achète en échange : l'**indépendance à l'ordre d'arrivée**.
+-- L'état final est une fonction de l'ensemble des events, pas de leur ordre de
+-- livraison, donc un rejeu le reproduit. Le dernier-arrivé-gagne serait non
+-- biaisé et non déterministe.
 --
 -- La garde s'écrit avec `COALESCE(last_transaction_index, 0)` pour que la
 -- migration gRPC/Geyser — où la mise à jour de transaction porte son `index`

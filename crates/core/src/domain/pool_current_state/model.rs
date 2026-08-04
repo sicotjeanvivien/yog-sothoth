@@ -188,7 +188,10 @@ impl PoolCurrentStateUpsert {
 /// Richer than a boolean because the ordering key is **partial**:
 /// `transaction_index` is empty on the `getTransaction` ingestion path, so two
 /// transactions landing in the same slot and touching the same pool are ranked
-/// on `event_index` alone — which can be wrong in either direction.
+/// on `event_index` alone — an ordinal that numbers the emissions of *one*
+/// transaction, so comparing it across two ranks unlike things. The state
+/// converges to the largest index, which favours a leg deep inside a routed
+/// transaction over a single-leg swap of the same block.
 ///
 /// Rather than let that pass for healthy concurrency (the mistake the label
 /// `pool_current_state_stale` made for months), the repository reports when it
@@ -206,6 +209,12 @@ pub struct PoolCurrentStateUpsertOutcome {
     /// that wrongly *accepts* (overwriting newer state with older) does as
     /// much damage as one that wrongly rejects, and a counter that only saw
     /// rejections would be a lower bound dressed up as a measurement.
+    ///
+    /// It is a lower bound anyway, for a second reason the implementation
+    /// documents: under concurrent writers the report and the guard do not
+    /// read the same row version, and the miss goes in the direction that
+    /// flatters the assumption. Expect it to be large on hot pools — the
+    /// signal is its ratio to applied upserts, not its absolute value.
     pub same_slot_ambiguity: bool,
 }
 

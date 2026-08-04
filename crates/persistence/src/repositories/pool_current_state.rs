@@ -63,9 +63,25 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
     ///
     /// `previous` supplies it in the same statement: a non-modifying CTE reads
     /// the snapshot taken before the statement ran, so it sees the pre-update
-    /// row even though `upserted` overwrites it. One round-trip, and no
-    /// read-then-write race to reason about — the guard itself stays atomic
-    /// inside the `ON CONFLICT`.
+    /// row even though `upserted` overwrites it. One round-trip, and the guard
+    /// itself stays atomic inside the `ON CONFLICT`.
+    ///
+    /// ## ⚠️ The ambiguity report is a lower bound under concurrency
+    ///
+    /// The guard and the report do **not** read the same row version. The
+    /// `ON CONFLICT DO UPDATE … WHERE` clause is re-evaluated by Postgres
+    /// against the latest committed version (EvalPlanQual); `previous` reads
+    /// the statement snapshot. Under concurrent writers on one pool — the
+    /// indexer runs up to `MAX_CONCURRENT_INDEX_TASKS` signatures at once — a
+    /// task can be rejected by a row another task has just committed while its
+    /// own snapshot never saw that slot, and it then reports
+    /// `same_slot_ambiguity: false`.
+    ///
+    /// So the counter **undercounts, in the direction that flatters the
+    /// assumption it exists to test**. Taking the previous row under
+    /// `SELECT … FOR UPDATE` would close it, at the price of serialising every
+    /// projection write per pool; for a metric, that trade is not worth it —
+    /// but the bound must be stated rather than discovered later.
     async fn upsert(
         &self,
         upsert: &PoolCurrentStateUpsert,
@@ -143,6 +159,18 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
                 -- it has second granularity and 56 % of swaps share theirs.
                 -- The COALESCE lets gRPC make this a total order later by
                 -- filling `transaction_index`, with no further migration.
+                --
+                -- Within one slot the comparison is NOT a fair tie-break, and
+                -- the shortcut worth avoiding is calling it "wrong in either
+                -- direction": `event_index` numbers the emissions of ONE
+                -- transaction, so comparing it across two is comparing unlike
+                -- things, and the state converges to whichever has the largest
+                -- index. That systematically favours a leg deep inside a
+                -- routed transaction over a single-leg swap of the same block.
+                -- It is kept because it is **order-independent** — the final
+                -- state is a function of the event set, not of delivery order,
+                -- so a replay reproduces it. Last-writer-wins would be
+                -- unbiased and non-deterministic instead.
                 WHERE (
                         pool_current_state.last_slot,
                         COALESCE(pool_current_state.last_transaction_index, 0),

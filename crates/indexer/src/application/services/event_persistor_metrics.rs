@@ -87,9 +87,21 @@ impl EventPersistorMetrics {
     /// ambiguity that wrongly accepts costs as much as one that wrongly
     /// rejects, and counting only rejections would understate it.
     ///
-    /// Expected to stay near zero. If it does not, the estimate that this case
-    /// is rare was wrong, and reading `transaction_index` from `getBlock`
-    /// stops being optional.
+    /// **Do not read it as an alarm threshold.** On a hot pool it will be
+    /// large by construction: the audit measured up to 46 swaps of one pool
+    /// within a second, so ~18 per 400 ms slot — same-slot collisions there are
+    /// structural, not residual. An earlier version of this comment said
+    /// "expected to stay near zero", which would have made a normal reading
+    /// look like an incident.
+    ///
+    /// The signal is its **ratio to `pool_current_state_applied`**, per pool.
+    /// Stated in advance so the conclusion is not fitted to the number: above
+    /// roughly 10 % of applied upserts on a pool that matters, the ordering is
+    /// deciding too much by a rule that cannot decide, and reading
+    /// `transaction_index` from `getBlock` stops being optional.
+    ///
+    /// It is also a **lower bound**: under concurrent writers the repository
+    /// can miss an ambiguity — see `PgPoolCurrentStateRepository::upsert`.
     pub(crate) fn record_pool_current_state_same_slot(protocol: &Protocol) {
         counter!(PCS_SAME_SLOT, "protocol" => protocol.as_str().to_string()).increment(1);
     }
