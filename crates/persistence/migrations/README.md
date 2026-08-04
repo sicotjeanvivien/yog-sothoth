@@ -31,20 +31,40 @@ least visible:
   regression.
 
 So an edit owes the team two things in the same commit: a statement of what
-changed *in executable SQL* (ideally nothing), and the exact repair. Recompute
-the file's SHA-384 and write it over the recorded one:
+changed *in executable SQL* (ideally nothing), and the exact repair.
+
+The repair re-syncs every recorded checksum with the file on disk. Prefer this
+over a per-version `UPDATE`: it is idempotent, and it does not need to know
+which migrations moved — which matters when two branches each touched a
+different set.
 
 ```sh
-NEW=$(python3 -c "import hashlib,pathlib;print(hashlib.sha384(pathlib.Path('crates/persistence/migrations/0NN_x.sql').read_bytes()).hexdigest())")
-psql "$DATABASE_URL_MIGRATE" -c "UPDATE _sqlx_migrations SET checksum = decode('$NEW','hex') WHERE version = NN;"
+python3 - "$DATABASE_URL_MIGRATE" <<'PY'
+import hashlib, pathlib, re, subprocess, sys
+stmts = []
+for f in sorted(pathlib.Path("crates/persistence/migrations").glob("*.sql")):
+    v = int(re.match(r"(\d+)_", f.name).group(1))
+    c = hashlib.sha384(f.read_bytes()).hexdigest()
+    stmts.append(f"UPDATE _sqlx_migrations SET checksum = decode('{c}','hex') WHERE version = {v};")
+subprocess.run(["psql", sys.argv[1], "-q", "-c", "\n".join(stmts)], check=True)
+PY
 ```
 
-Only do that when the executable SQL is unchanged, or changed in a way an
+Only run it when the executable SQL is unchanged, or changed in a way an
 already-migrated database provably never evaluated. Otherwise the row would
-claim a statement ran that never did — recreate the database instead.
+claim a statement ran that never did — recreate the database instead. Prove it
+rather than assert it; comparing the files with comment lines stripped is
+enough:
 
-Done once, in August 2026, to put migration 041's header into English (the
-repository's convention for migration bodies) after it had merged.
+```sh
+diff <(git show <before>:path/to/0NN_x.sql | grep -vE '^\s*--') \
+     <(grep -vE '^\s*--' path/to/0NN_x.sql)
+```
+
+Done twice, in August 2026, to put the headers of migrations 009 and 036–041
+into English (the repository's convention for migration bodies) after they had
+merged. Both times the diff above came back empty or limited to `RAISE
+EXCEPTION` strings that a successful run never evaluates.
 
 This is the right discipline for production safety:
 
