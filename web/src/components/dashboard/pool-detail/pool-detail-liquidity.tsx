@@ -126,7 +126,7 @@ export async function PoolDetailLiquidity({
               <div role="rowgroup">
                 {events.map((event) => (
                   <LiquidityRow
-                    key={event.signature}
+                    key={`${event.signature}:${event.eventIndex}`}
                     event={event}
                     tokenA={pool.tokenA}
                     tokenB={pool.tokenB}

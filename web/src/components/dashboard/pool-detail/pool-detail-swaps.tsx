@@ -115,7 +115,7 @@ export async function PoolDetailSwaps({
               <div role="rowgroup">
                 {swaps.map((swap) => (
                   <SwapRow
-                    key={swap.signature}
+                    key={`${swap.signature}:${swap.eventIndex}`}
                     swap={swap}
                     tokenA={pool.tokenA}
                     tokenB={pool.tokenB}

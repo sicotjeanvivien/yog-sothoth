@@ -146,3 +146,59 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
     // which is good news, and makes the ordering guard total.
     assert_eq!(transaction_index, None);
 }
+
+/// Storing both hops is only half the fix: the feed must be able to *page*
+/// through them. The cursor is `(timestamp, signature, event_index)` — with
+/// only the first two it is not a total order over these rows, and a page
+/// boundary falling between two hops silently drops the second.
+///
+/// Mutation-checked: remove the `event_index` clause from the forward
+/// predicate in `swap_event.rs` and the second page comes back empty, so the
+/// recovered leg is lost again — this time on the read side.
+#[sqlx::test]
+async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
+    use yog_core::domain::MeteoraDammV2SwapEventFeed;
+    use yog_core::tools::{Cursor, PageDirection};
+
+    let swaps = swap_double_swaps();
+    let pool_address = swaps[0].pool_address;
+    let repo = PgMeteoraDammV2SwapEventRepository::new(pool.clone());
+    for swap in &swaps {
+        assert_eq!(repo.insert(swap).await.unwrap(), InsertOutcome::Inserted);
+    }
+
+    // One row per page, so the boundary lands exactly between the two hops.
+    let first = repo
+        .find_by_pool_paginated(&pool_address, None, PageDirection::Next, None, 1)
+        .await
+        .unwrap();
+    assert_eq!(first.items.len(), 1);
+
+    let Some(Cursor::MeteoraDammV2SwapEvent(cursor)) = first.next_cursor.clone() else {
+        panic!(
+            "expected a swap cursor to continue from, got {:?}",
+            first.next_cursor
+        );
+    };
+
+    let second = repo
+        .find_by_pool_paginated(&pool_address, Some(cursor), PageDirection::Next, None, 1)
+        .await
+        .unwrap();
+    assert_eq!(
+        second.items.len(),
+        1,
+        "the second hop must be reachable — a two-key cursor loses it"
+    );
+
+    let mut seen = [first.items[0].event_index, second.items[0].event_index];
+    seen.sort_unstable();
+    assert_eq!(
+        seen,
+        [
+            swaps[0].event_index.min(swaps[1].event_index),
+            swaps[0].event_index.max(swaps[1].event_index)
+        ],
+        "the two pages must together cover both hops, each exactly once"
+    );
+}

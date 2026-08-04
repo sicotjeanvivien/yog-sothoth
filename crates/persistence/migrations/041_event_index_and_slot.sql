@@ -29,13 +29,28 @@
 -- décodé, et un rejeu insérerait des doublons au lieu d'être idempotent.
 -- Corollaire : le filtre de `try_extract_self_cpi_data` est figé par contrat.
 --
--- ## Pourquoi `0` sur les lignes existantes, et pas NULL
+-- ## Les lignes existantes : `0`, puis un rang là où `0` ne suffit pas
 --
 -- `slot` et `event_index` sont `NOT NULL DEFAULT 0` le temps du remplissage,
--- puis le DEFAULT est retiré. Les lignes d'avant cette migration sont
--- précisément celles dont une seule jambe a survécu : `0` les ordonne avant
--- tout ce qui suit, ce qui est exact. NULL, lui, casserait la comparaison de
--- tuples de la garde d'ordre (migration suivante, ticket 04).
+-- puis le DEFAULT est retiré. `0` est honnête sur les quatorze tables dont la
+-- clé était `(signature, timestamp)` : leur ancien index unique interdisait
+-- déjà deux lignes par transaction, donc la survivante *était* seule.
+--
+-- Les cinq autres — celles qui avaient `reward_index` ou `second_position`
+-- dans leur clé — hébergent légitimement plusieurs lignes par
+-- `(signature, timestamp)`. Un `0` uniforme les rendrait identiques et la
+-- création de l'index unique **échouerait**. Elles sont donc renumérotées par
+-- `row_number()` avant. Ce rang n'est pas l'index réel sur la chaîne (il n'est
+-- pas récupérable sans rejeu) : il préserve la distinction, rien de plus.
+--
+-- Conséquence à connaître : un rejeu d'une transaction antérieure à cette
+-- migration recalculerait le vrai index et n'entrerait donc pas en conflit
+-- avec la ligne rétro-numérotée — il insérerait un doublon. Aucun chemin de
+-- rejeu n'existe aujourd'hui (l'ingestion est en souscription, le StreamPoller
+-- dort) ; le jour où l'un est câblé, il devra partir d'après 041.
+--
+-- NULL n'était pas une option : il casserait la comparaison de tuples de la
+-- garde d'ordre (migration suivante, ticket 04).
 --
 -- Le DEFAULT retiré ensuite est délibéré : un chemin d'insertion qui
 -- oublierait la colonne doit échouer bruyamment, pas hériter d'un `0`
@@ -154,6 +169,31 @@ BEGIN
         END IF;
 
         EXECUTE format('DROP INDEX %I', old_index);
+
+        -- Renumérotation des lignes déjà en base, sans quoi l'index unique
+        -- ci-dessous ne peut pas être créé sur les cinq tables qui avaient
+        -- leur propre discriminant : deux slots financés par une même
+        -- transaction y cohabitent légitimement en `(signature, timestamp)`,
+        -- et le `DEFAULT 0` les rendrait identiques.
+        --
+        -- Le rang n'est PAS l'index réel de l'event sur la chaîne — celui-là
+        -- n'est pas récupérable sans rejeu. Il préserve exactement ce que
+        -- l'ancienne clé garantissait : la distinction. Sur les quatorze
+        -- autres tables l'ancien index unique interdisait déjà tout doublon,
+        -- donc chaque groupe tient en une ligne et l'UPDATE ne touche rien.
+        EXECUTE format(
+            'UPDATE %I e
+                SET event_index = r.ordinal
+               FROM (
+                   SELECT id,
+                          timestamp AS ts,
+                          row_number() OVER (
+                              PARTITION BY signature, timestamp ORDER BY id
+                          ) - 1 AS ordinal
+                     FROM %I
+               ) r
+              WHERE e.id = r.id AND e.timestamp = r.ts AND r.ordinal > 0',
+            tbl, tbl);
 
         EXECUTE format(
             'CREATE UNIQUE INDEX ON %I (signature, event_index, timestamp)',

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT pool_address, signature,\n                       trade_direction, amount_a, amount_b,\n                       reserve_a_after, reserve_b_after, next_sqrt_price,\n                       claiming_fee, protocol_fee, compounding_fee, referral_fee,\n                       fee_token_is_a,\n                       timestamp,\n                       slot, event_index, transaction_index\n                FROM meteora_damm_v2_swap_events\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp < $2\n                      OR (timestamp = $2 AND signature > $3)\n                  )\n                ORDER BY timestamp DESC, signature ASC\n                LIMIT $4\n                ",
+  "query": "\n                SELECT pool_address, signature,\n                       trade_direction, amount_a, amount_b,\n                       reserve_a_after, reserve_b_after, next_sqrt_price,\n                       claiming_fee, protocol_fee, compounding_fee, referral_fee,\n                       fee_token_is_a,\n                       timestamp,\n                       slot, event_index, transaction_index\n                FROM meteora_damm_v2_swap_events\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp < $2\n                      OR (timestamp = $2 AND signature > $3)\n                      OR (timestamp = $2 AND signature = $3 AND event_index > $5)\n                  )\n                ORDER BY timestamp DESC, signature ASC, event_index ASC\n                LIMIT $4\n                ",
   "describe": {
     "columns": [
       {
@@ -94,7 +94,8 @@
         "Text",
         "Timestamptz",
         "Text",
-        "Int8"
+        "Int8",
+        "Int4"
       ]
     },
     "nullable": [
@@ -117,5 +118,5 @@
       true
     ]
   },
-  "hash": "3aa6c73fe3f20a13b975bb17df36a541876a30b11ecd35202a765f438c132aaf"
+  "hash": "5b110f28bc16a83082614715a091448b7d020f1e630f6291fef15f394dc3a5d5"
 }

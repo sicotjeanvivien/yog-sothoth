@@ -131,9 +131,18 @@ pub(crate) fn extract_anchor_event_cpis(
         return Vec::new();
     };
 
+    // Sorted by the outer instruction they belong to, never left in whatever
+    // order the RPC serialized them. The position of a payload in this vector
+    // becomes its persisted `event_index` (part of the unique key), so a
+    // provider — or the future gRPC path — returning groups in another order
+    // would renumber events already stored and turn a replay into a source of
+    // duplicates. Same reasoning as the frozen filter below.
+    let mut groups: Vec<_> = inner_groups.iter().collect();
+    groups.sort_by_key(|g| g.index);
+
     let mut out = Vec::new();
 
-    for group in inner_groups {
+    for group in groups {
         for ix in &group.instructions {
             if let Some(bytes) = try_extract_self_cpi_data(ix, target_program_id) {
                 out.push(bytes);

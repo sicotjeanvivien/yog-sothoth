@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                -- See the Forward path: VIEW columns need `!` to undo sqlx's\n                -- nullable inference; value_usd stays nullable.\n                SELECT pool_address AS \"pool_address!\", signature AS \"signature!\",\n                       liquidity_event_kind AS \"liquidity_event_kind!\",\n                       amount_a AS \"amount_a!\", amount_b AS \"amount_b!\",\n                       liquidity_delta AS \"liquidity_delta!\",\n                       reserve_a_after AS \"reserve_a_after!\",\n                       reserve_b_after AS \"reserve_b_after!\",\n                       position AS \"position!\", owner AS \"owner!\",\n                       timestamp AS \"timestamp!\",\n                       value_usd,\n                       slot AS \"slot!\", event_index AS \"event_index!\",\n                       transaction_index\n                FROM meteora_damm_v2_liquidity_events_valued\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp > $2\n                      OR (timestamp = $2 AND signature < $3)\n                  )\n                ORDER BY timestamp ASC, signature DESC\n                LIMIT $4\n                ",
+  "query": "\n                -- See the Forward path: VIEW columns need `!` to undo sqlx's\n                -- nullable inference; value_usd stays nullable.\n                SELECT pool_address AS \"pool_address!\", signature AS \"signature!\",\n                       liquidity_event_kind AS \"liquidity_event_kind!\",\n                       amount_a AS \"amount_a!\", amount_b AS \"amount_b!\",\n                       liquidity_delta AS \"liquidity_delta!\",\n                       reserve_a_after AS \"reserve_a_after!\",\n                       reserve_b_after AS \"reserve_b_after!\",\n                       position AS \"position!\", owner AS \"owner!\",\n                       timestamp AS \"timestamp!\",\n                       value_usd,\n                       slot AS \"slot!\", event_index AS \"event_index!\",\n                       transaction_index\n                FROM meteora_damm_v2_liquidity_events_valued\n                WHERE pool_address = $1\n                  AND (\n                      $2::TIMESTAMPTZ IS NULL\n                      OR timestamp > $2\n                      OR (timestamp = $2 AND signature < $3)\n                      OR (timestamp = $2 AND signature = $3 AND event_index < $5)\n                  )\n                ORDER BY timestamp ASC, signature DESC, event_index DESC\n                LIMIT $4\n                ",
   "describe": {
     "columns": [
       {
@@ -84,7 +84,8 @@
         "Text",
         "Timestamptz",
         "Text",
-        "Int8"
+        "Int8",
+        "Int4"
       ]
     },
     "nullable": [
@@ -105,5 +106,5 @@
       true
     ]
   },
-  "hash": "c38b998a023b7d34801fd16a42202c7a780360363dcd5354ba91dbcfa6efd8c0"
+  "hash": "ec39fe09ac21ed7ba258ddeaecc2d9ead350f15b42419740658e107b62ba2e9d"
 }

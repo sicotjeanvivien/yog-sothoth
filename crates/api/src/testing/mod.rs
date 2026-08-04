@@ -703,6 +703,7 @@ pub(crate) fn make_swap_page(
             Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
+                event_index: e.event_index,
             })
         })
     };
@@ -713,6 +714,7 @@ pub(crate) fn make_swap_page(
             Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
+                event_index: e.event_index,
             })
         })
     };
@@ -739,6 +741,7 @@ pub(crate) fn make_liquidity_page(
             Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
+                event_index: e.event_index,
             })
         })
     };
@@ -749,6 +752,7 @@ pub(crate) fn make_liquidity_page(
             Cursor::MeteoraDammV2LiquidityEvent(MeteoraDammV2LiquidityEventCursor {
                 timestamp: e.timestamp,
                 signature: e.signature,
+                event_index: e.event_index,
             })
         })
     };

@@ -14,6 +14,10 @@ export const LiquidityEventSchema = z.object({
   protocol: z.string().min(1),
   signature: z.string().min(1),
   timestamp: Rfc3339,
+  // Position of the event among its transaction's emissions. A routed
+  // transaction yields several rows sharing `signature` and `timestamp`, so
+  // this is the only field that makes a list row uniquely identifiable.
+  eventIndex: z.number().int().nonnegative(),
 
   liquidityEventKind: z.enum(["add", "remove"]),
   // u64 quantities emitted as digit-only strings (can exceed 2^53); see

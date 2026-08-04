@@ -41,6 +41,7 @@ fn swap_cursor() -> MeteoraDammV2SwapEventCursor {
     MeteoraDammV2SwapEventCursor {
         timestamp: ts(1_700_000_500),
         signature: sig(1),
+        event_index: 3,
     }
 }
 
@@ -48,6 +49,7 @@ fn liquidity_cursor() -> MeteoraDammV2LiquidityEventCursor {
     MeteoraDammV2LiquidityEventCursor {
         timestamp: ts(1_700_000_900),
         signature: sig(1),
+        event_index: 2,
     }
 }
 
@@ -76,6 +78,9 @@ fn swap_cursor_round_trip() {
     let decoded = decode_swap_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
     assert_eq!(decoded.signature, original.signature);
+    // Dropping this on the wire would resume a page at the wrong hop of a
+    // routed transaction — the third key is what makes the order total.
+    assert_eq!(decoded.event_index, original.event_index);
 }
 
 #[test]
@@ -85,6 +90,7 @@ fn liquidity_cursor_round_trip() {
     let decoded = decode_liquidity_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
     assert_eq!(decoded.signature, original.signature);
+    assert_eq!(decoded.event_index, original.event_index);
 }
 
 #[test]
@@ -94,6 +100,7 @@ fn timestamp_survives_round_trip_to_the_second() {
     let original = MeteoraDammV2SwapEventCursor {
         timestamp: Utc.timestamp_opt(1_700_000_123, 0).unwrap(),
         signature: sig(1),
+        event_index: 7,
     };
     let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(original.clone())).unwrap();
     let decoded = decode_swap_cursor(&encoded).unwrap();

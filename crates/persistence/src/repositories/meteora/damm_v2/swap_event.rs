@@ -123,9 +123,13 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
 
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
-        let (cursor_timestamp, cursor_signature) = match active_cursor {
-            Some(c) => (Some(c.timestamp), Some(c.signature.to_string())),
-            None => (None, None),
+        let (cursor_timestamp, cursor_signature, cursor_event_index) = match active_cursor {
+            Some(c) => (
+                Some(c.timestamp),
+                Some(c.signature.to_string()),
+                Some(i32::from(c.event_index)),
+            ),
+            None => (None, None, None),
         };
 
         let rows: Vec<MeteoraDammV2SwapEventRow> = match mode {
@@ -145,14 +149,16 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
                       $2::TIMESTAMPTZ IS NULL
                       OR timestamp < $2
                       OR (timestamp = $2 AND signature > $3)
+                      OR (timestamp = $2 AND signature = $3 AND event_index > $5)
                   )
-                ORDER BY timestamp DESC, signature ASC
+                ORDER BY timestamp DESC, signature ASC, event_index ASC
                 LIMIT $4
                 "#,
                 pool_address.to_string(),
                 cursor_timestamp,
                 cursor_signature,
                 fetch_limit,
+                cursor_event_index,
             )
             .fetch_all(&self.pool)
             .await
@@ -174,14 +180,16 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
                       $2::TIMESTAMPTZ IS NULL
                       OR timestamp > $2
                       OR (timestamp = $2 AND signature < $3)
+                      OR (timestamp = $2 AND signature = $3 AND event_index < $5)
                   )
-                ORDER BY timestamp ASC, signature DESC
+                ORDER BY timestamp ASC, signature DESC, event_index DESC
                 LIMIT $4
                 "#,
                 pool_address.to_string(),
                 cursor_timestamp,
                 cursor_signature,
                 fetch_limit,
+                cursor_event_index,
             )
             .fetch_all(&self.pool)
             .await
@@ -198,6 +206,7 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
                 Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
                     timestamp: e.timestamp,
                     signature: e.signature,
+                    event_index: e.event_index,
                 })
             }),
         )

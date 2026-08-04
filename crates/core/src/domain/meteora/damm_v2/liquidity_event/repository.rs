@@ -16,6 +16,12 @@ use crate::{
 pub struct MeteoraDammV2LiquidityEventCursor {
     pub timestamp: DateTime<Utc>,
     pub signature: Signature,
+    /// Third key of the ordering, and the reason it is a total one: since
+    /// migration 041 a routed transaction stores one row per hop, all sharing
+    /// `timestamp` **and** `signature`. Without it a page boundary landing
+    /// between two hops drops the other one — silently, which is how the row
+    /// it recovers went missing in the first place.
+    pub event_index: u16,
 }
 
 /// Persistence contract for liquidity events — the write side, owned by
