@@ -1,10 +1,7 @@
 //! Translation of `cp-amm::EvtSwap2` into its domain event.
 
-use chrono::{DateTime, Utc};
-use solana_signature::Signature;
-
 use crate::application::extraction::meteora::damm_v2::events::EvtSwap2;
-use crate::domain::{MeteoraDammV2SwapEvent, TradeDirection};
+use crate::domain::{EventPosition, MeteoraDammV2SwapEvent, TradeDirection};
 use crate::error::TranslationError;
 
 /// Translate an [`EvtSwap2`] into a [`MeteoraDammV2SwapEvent`].
@@ -12,8 +9,7 @@ use crate::error::TranslationError;
 /// Returns `Err` only if `trade_direction` is invalid (out of range).
 pub(super) fn translate_swap(
     wire: &EvtSwap2,
-    signature: Signature,
-    timestamp: DateTime<Utc>,
+    event_position: EventPosition,
 ) -> Result<MeteoraDammV2SwapEvent, TranslationError> {
     let trade_direction = TradeDirection::from_u8(wire.trade_direction).map_err(|raw| {
         TranslationError::InvalidEnum {
@@ -47,8 +43,11 @@ pub(super) fn translate_swap(
     };
     Ok(MeteoraDammV2SwapEvent {
         pool_address: wire.pool,
-        signature,
-        timestamp,
+        signature: event_position.signature,
+        timestamp: event_position.timestamp,
+        slot: event_position.slot,
+        transaction_index: event_position.transaction_index,
+        event_index: event_position.event_index,
 
         trade_direction,
         amount_a,

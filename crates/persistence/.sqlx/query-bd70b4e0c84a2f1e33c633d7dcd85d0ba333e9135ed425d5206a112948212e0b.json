@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_liquidity_events (\n                pool_address, signature,\n                liquidity_event_kind, amount_a, amount_b, liquidity_delta,\n                reserve_a_after, reserve_b_after,\n                position, owner,\n                timestamp,\n                slot, event_index, transaction_index\n            )\n            VALUES (\n                $1, $2,\n                $3, $4, $5, $6,\n                $7, $8,\n                $9, $10,\n                $11,\n                $12, $13, $14\n            )\n            ON CONFLICT (signature, event_index, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Numeric",
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd70b4e0c84a2f1e33c633d7dcd85d0ba333e9135ed425d5206a112948212e0b"
+}

@@ -143,6 +143,7 @@ fn failure_kind(f: &ExtractionFailure) -> &'static str {
         ExtractionFailure::AnchorDecode(_) => "anchor_decode",
         ExtractionFailure::Borsh { .. } => "borsh",
         ExtractionFailure::Translation { .. } => "translation",
+        ExtractionFailure::EventIndexOverflow { .. } => "event_index_overflow",
     }
 }
 

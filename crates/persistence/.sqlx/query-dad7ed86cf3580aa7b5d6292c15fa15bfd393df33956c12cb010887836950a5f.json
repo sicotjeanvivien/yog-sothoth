@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_permanent_lock_position_events (\n                pool_address, signature,\n                position, lock_liquidity_amount, total_permanent_locked_liquidity,\n                timestamp,\n                slot, event_index, transaction_index\n            )\n            VALUES ($1, $2, $3, $4, $5, $6,\n                $7, $8, $9\n            )\n            ON CONFLICT (signature, event_index, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Numeric",
+        "Numeric",
+        "Timestamptz",
+        "Int8",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dad7ed86cf3580aa7b5d6292c15fa15bfd393df33956c12cb010887836950a5f"
+}

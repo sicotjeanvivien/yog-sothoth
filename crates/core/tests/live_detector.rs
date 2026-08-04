@@ -69,10 +69,10 @@ fn extracts_both_swaps_from_double_swap_tx() {
         extracted.events.len()
     );
 
-    for (i, event) in extracted.events.iter().enumerate() {
+    for (i, indexed) in extracted.events.iter().enumerate() {
         assert!(
-            matches!(event, DammV2WireEvent::Swap2(_)),
-            "event {i} is not a Swap2: {event:?}"
+            matches!(indexed.event, DammV2WireEvent::Swap2(_)),
+            "event {i} is not a Swap2: {indexed:?}"
         );
     }
 }
@@ -97,10 +97,10 @@ fn decoded_swap_values_match_onchain_reality() {
 
     let pool_expected = "EgSJAzgCd8oYjMFGqoqtpYFkN3LsBTrbZ5AhACLiFz8G";
 
-    let DammV2WireEvent::Swap2(first) = &extracted.events[0] else {
+    let DammV2WireEvent::Swap2(first) = &extracted.events[0].event else {
         panic!("first event is not Swap2");
     };
-    let DammV2WireEvent::Swap2(second) = &extracted.events[1] else {
+    let DammV2WireEvent::Swap2(second) = &extracted.events[1].event else {
         panic!("second event is not Swap2");
     };
 
@@ -289,7 +289,7 @@ fn decodes_initialize_pool_fixtures() {
         let init = extracted
             .events
             .iter()
-            .find_map(|e| match e {
+            .find_map(|e| match &e.event {
                 DammV2WireEvent::InitializePool(e) => Some(e),
                 _ => None,
             })
@@ -357,7 +357,7 @@ fn decodes_claim_protocol_fee_fixture() {
     let cpf = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::ClaimProtocolFee(e) => Some(e),
             _ => None,
         })
@@ -398,7 +398,7 @@ fn decodes_initialize_reward_fixture() {
     let ir = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::InitializeReward(e) => Some(e),
             _ => None,
         })
@@ -448,7 +448,7 @@ fn decodes_fund_reward_fixtures() {
     let fr = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::FundReward(e) => Some(e),
             _ => None,
         })
@@ -498,7 +498,7 @@ fn decodes_fund_reward_fixtures() {
     let fr = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::FundReward(e) => Some(e),
             _ => None,
         })
@@ -558,7 +558,7 @@ fn decodes_withdraw_ineligible_reward_fixture() {
     let wir = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::WithdrawIneligibleReward(e) => Some(e),
             _ => None,
         })
@@ -630,7 +630,7 @@ fn zap_protocol_fee_emits_no_event_of_its_own() {
         extracted.events.len()
     );
 
-    let DammV2WireEvent::Swap2(swap) = &extracted.events[0] else {
+    let DammV2WireEvent::Swap2(swap) = &extracted.events[0].event else {
         panic!("the only event must be a Swap2: {:?}", extracted.events[0]);
     };
     // The pool Jupiter routed through while selling the harvested token — NOT a
@@ -684,7 +684,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
         let splits: Vec<_> = extracted
             .events
             .iter()
-            .filter_map(|e| match e {
+            .filter_map(|e| match &e.event {
                 DammV2WireEvent::SplitPosition3(e) => Some(e),
                 _ => None,
             })
@@ -750,7 +750,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
         extracted
             .events
             .iter()
-            .any(|e| matches!(e, DammV2WireEvent::CreatePosition(_))),
+            .any(|e| matches!(e.event, DammV2WireEvent::CreatePosition(_))),
         "expected the second position's creation in the same transaction"
     );
 }
@@ -776,7 +776,7 @@ fn decodes_create_position_from_genesis_fixtures() {
         let create = extracted
             .events
             .iter()
-            .find_map(|e| match e {
+            .find_map(|e| match &e.event {
                 DammV2WireEvent::CreatePosition(e) => Some(e),
                 _ => None,
             })
@@ -833,7 +833,7 @@ fn decodes_close_position_fixture() {
     let close = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::ClosePosition(e) => Some(e),
             _ => None,
         })
@@ -878,7 +878,7 @@ fn decodes_lock_position_fixture() {
     let lock = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::LockPosition(e) => Some(e),
             _ => None,
         })
@@ -959,7 +959,7 @@ fn decodes_permanent_lock_position_fixture() {
     let plock = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::PermanentLockPosition(e) => Some(e),
             _ => None,
         })
@@ -1019,7 +1019,7 @@ fn decodes_claim_position_fee_fixture() {
     let claim = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::ClaimPositionFee(e) => Some(e),
             _ => None,
         })
@@ -1062,7 +1062,7 @@ fn decodes_claim_reward_fixture() {
     let claim = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::ClaimReward(e) => Some(e),
             _ => None,
         })
@@ -1108,7 +1108,7 @@ fn decodes_update_pool_fees_fixture() {
     let update = extracted
         .events
         .iter()
-        .find_map(|e| match e {
+        .find_map(|e| match &e.event {
             DammV2WireEvent::UpdatePoolFees(e) => Some(e),
             _ => None,
         })
@@ -1153,4 +1153,43 @@ fn decodes_update_pool_fees_fixture() {
     assert_eq!(domain.pool_address, wire_pool);
     assert_eq!(domain.operator, wire_operator);
     assert_eq!(domain.params_raw, wire_params);
+}
+
+/// `event_index` numbers the transaction's self-CPI payloads, **not** the
+/// events we recognise — the property the unique key
+/// `(signature, event_index, timestamp)` rests on.
+///
+/// The split fixtures prove it on real data rather than by construction:
+/// cp-amm emits the deprecated `EvtSplitPosition2` alongside
+/// `EvtSplitPosition3` on every split, and the extractor drops the v2
+/// (`Dispatch::Ignored`). If indices were assigned over the *kept* events,
+/// the surviving v3 would land at 0 and the dropped payload would leave no
+/// trace. Numbering the payloads instead, it keeps the index it actually
+/// occupied on chain.
+///
+/// Why this matters beyond tidiness: implement one more discriminator
+/// tomorrow and a "kept events" numbering would renumber every event already
+/// stored, so re-ingesting a transaction would insert duplicates instead of
+/// conflicting. Stored indices must depend only on what the chain emitted.
+#[test]
+fn event_index_counts_dropped_payloads_too() {
+    // `split_position.json`: one payload dropped, then the split — the kept
+    // event sits at 1, not 0.
+    // `split_position2.json`: two splits with a dropped payload *between*
+    // them — the indices are 0 and 2, and the hole is the proof.
+    for (fixture, expected) in [
+        ("damm_v2/split_position.json", vec![1u16]),
+        ("damm_v2/split_position2.json", vec![0u16, 2u16]),
+    ] {
+        let tx = load_fixture(fixture);
+        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+
+        let indices: Vec<u16> = extracted.events.iter().map(|e| e.event_index).collect();
+        assert_eq!(
+            indices, expected,
+            "{fixture}: event_index must number the payloads cp-amm emitted, \
+             including the deprecated EvtSplitPosition2 the extractor drops — \
+             got {indices:?}, expected {expected:?}"
+        );
+    }
 }

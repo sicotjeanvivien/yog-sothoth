@@ -18,8 +18,8 @@ async fn insert_position_fee(
 ) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_claim_position_fee_events
-           (pool_address, signature, position, owner, fee_a_claimed, fee_b_claimed, timestamp)
-         VALUES ($1,$2,'pos','own',$3,$4,$5)",
+           (pool_address, signature, position, owner, fee_a_claimed, fee_b_claimed, timestamp, slot, event_index)
+         VALUES ($1,$2,'pos','own',$3,$4,$5,0,0)",
     )
     .bind(pool_addr)
     .bind(signature)
@@ -43,8 +43,8 @@ async fn insert_reward(
 ) {
     sqlx::query(
         "INSERT INTO meteora_damm_v2_claim_reward_events
-           (pool_address, signature, position, owner, mint_reward, reward_index, total_reward, timestamp)
-         VALUES ($1,$2,'pos','own',$3,$4,$5,$6)",
+           (pool_address, signature, position, owner, mint_reward, reward_index, total_reward, timestamp, slot, event_index)
+         VALUES ($1,$2,'pos','own',$3,$4,$5,$6,0,0)",
     )
     .bind(pool_addr)
     .bind(signature)

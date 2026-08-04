@@ -6,9 +6,9 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
-    MeteoraDammV2SplitPositionState, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-    PoolRepository, TradeDirection,
+    InsertOutcome, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts,
+    MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, TradeDirection,
 };
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
@@ -23,9 +23,9 @@ macro_rules! insert_only_mock {
         struct $mock(Calls);
         #[async_trait]
         impl $repo for $mock {
-            async fn insert(&self, _e: &$event) -> RepositoryResult<()> {
+            async fn insert(&self, _e: &$event) -> RepositoryResult<InsertOutcome> {
                 rec(&self.0, $label);
-                Ok(())
+                Ok(InsertOutcome::Inserted)
             }
         }
     };
@@ -126,33 +126,36 @@ insert_only_mock!(
 struct MockSwap(Calls);
 #[async_trait]
 impl MeteoraDammV2SwapEventRepository for MockSwap {
-    async fn insert(&self, _e: &MeteoraDammV2SwapEvent) -> RepositoryResult<()> {
+    async fn insert(&self, _e: &MeteoraDammV2SwapEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:swap");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 struct MockLiquidity(Calls);
 #[async_trait]
 impl MeteoraDammV2LiquidityEventRepository for MockLiquidity {
-    async fn insert(&self, _e: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()> {
+    async fn insert(&self, _e: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:liquidity");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 struct MockClaimFee(Calls);
 #[async_trait]
 impl MeteoraDammV2ClaimPositionFeeEventRepository for MockClaimFee {
-    async fn insert(&self, _e: &MeteoraDammV2ClaimPositionFeeEvent) -> RepositoryResult<()> {
+    async fn insert(
+        &self,
+        _e: &MeteoraDammV2ClaimPositionFeeEvent,
+    ) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:claim_position_fee");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 struct MockClaimReward(Calls);
 #[async_trait]
 impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
-    async fn insert(&self, _e: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<()> {
+    async fn insert(&self, _e: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:claim_reward");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 
@@ -281,6 +284,9 @@ fn swap() -> MeteoraDammV2SwapEvent {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         trade_direction: TradeDirection::AtoB,
         amount_a: 1,
         amount_b: 2,
@@ -299,6 +305,9 @@ fn liquidity() -> MeteoraDammV2LiquidityEvent {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
         amount_a: 1,
         amount_b: 2,
@@ -334,6 +343,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 owner: pk(5),
                 fee_a_claimed: 1,
@@ -351,6 +363,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 owner: pk(5),
                 mint_reward: pk(6),
@@ -369,6 +384,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 token_a_amount: 0,
                 token_b_amount: 1_421_627_556,
             })
@@ -384,6 +402,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 reward_mint: pk(6),
                 funder: pk(7),
                 creator: pk(7),
@@ -402,6 +423,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 funder: pk(7),
                 mint_reward: pk(6),
                 reward_index: 0,
@@ -424,6 +448,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                     pool_address: pk(1),
                     signature: sg(),
                     timestamp: ts(),
+                    slot: 1,
+                    transaction_index: None,
+                    event_index: 0,
                     reward_mint: pk(6),
                     amount: 0,
                 }
@@ -440,6 +467,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 reward_index: 1,
                 old_reward_duration: 604_800,
                 new_reward_duration: 1_209_600,
@@ -456,6 +486,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 reward_index: 0,
                 old_funder: pk(7),
                 new_funder: pk(8),
@@ -473,6 +506,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                     pool_address: pk(1),
                     signature: sg(),
                     timestamp: ts(),
+                    slot: 1,
+                    transaction_index: None,
+                    event_index: 0,
                     reward_mint: pk(6),
                     // cp-amm only emits this event when the amount is > 0.
                     amount: 42_000,
@@ -490,6 +526,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 first_owner: pk(2),
                 second_owner: pk(3),
                 first_position: pk(4),
@@ -514,6 +553,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 owner: pk(5),
                 position: pk(4),
                 position_nft_mint: pk(7),
@@ -530,6 +572,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 owner: pk(5),
                 position: pk(4),
                 position_nft_mint: pk(7),
@@ -548,6 +593,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 owner: pk(5),
                 vesting: pk(8),
@@ -569,6 +617,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 lock_liquidity_amount: 1,
                 total_permanent_locked_liquidity: 1,
@@ -594,6 +645,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 token_a_mint: pk(2),
                 token_b_mint: pk(3),
                 creator: pk(9),
@@ -629,6 +683,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 status: 1,
             })
         )
@@ -643,6 +700,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 operator: pk(12),
                 // The blob is no longer decoded at all: a fee change flags the
                 // pool and yog-context re-reads the account.

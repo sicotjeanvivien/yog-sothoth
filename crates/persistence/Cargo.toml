@@ -60,3 +60,6 @@ chrono = { workspace = true }
 [dev-dependencies]
 # Integration tests will spin up a real Postgres via docker-compose
 tokio = { workspace = true, features = ["test-util", "macros"] }
+# Parses the mainnet transaction fixture that `event_index_uniqueness` replays
+# through the real extractor before persisting it.
+serde_json = { workspace = true }

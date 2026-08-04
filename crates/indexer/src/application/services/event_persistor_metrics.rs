@@ -6,6 +6,7 @@ use yog_core::domain::Protocol;
 const INSTRUCTIONS_INDEXED: &str = "yog_indexer_instructions_indexed_total";
 const PERSIST_DURATION: &str = "yog_indexer_persist_duration_seconds";
 const PERSIST_FAILURE: &str = "yog_indexer_persist_failure_total";
+const INSERT_SKIPPED: &str = "yog_indexer_event_insert_skipped_total";
 
 pub(crate) struct EventPersistorMetrics;
 
@@ -23,6 +24,10 @@ impl EventPersistorMetrics {
         describe_counter!(
             PERSIST_FAILURE,
             "Failed persistence attempts per protocol and event kind"
+        );
+        describe_counter!(
+            INSERT_SKIPPED,
+            "Event inserts that hit ON CONFLICT DO NOTHING and wrote no row"
         );
     }
 
@@ -46,6 +51,25 @@ impl EventPersistorMetrics {
             "kind" => kind,
         )
         .record(seconds);
+    }
+
+    /// An insert that conflicted and wrote nothing.
+    ///
+    /// Counted **in addition to** `record_indexed`, never instead of it: that
+    /// counter keeps meaning "events processed", and rows actually written are
+    /// `indexed − skipped`. Redefining an existing counter in place would make
+    /// every historical comparison silently wrong.
+    ///
+    /// A non-zero rate on a live stream means the unique key is collapsing
+    /// distinct events — the failure mode that made this counter necessary.
+    /// On a replay it is the expected outcome.
+    pub(crate) fn record_insert_skipped(protocol: &Protocol, event_kind: &'static str) {
+        counter!(
+            INSERT_SKIPPED,
+            "protocol" => protocol.as_str().to_string(),
+            "event_kind" => event_kind,
+        )
+        .increment(1);
     }
 
     pub(crate) fn record_persist_failure(protocol: &Protocol, event_kind: &'static str) {

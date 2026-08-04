@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository},
+    domain::{
+        InsertOutcome, MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
+    },
 };
 
 pub struct PgMeteoraDammV2ClaimRewardEventRepository {
@@ -19,17 +21,23 @@ impl PgMeteoraDammV2ClaimRewardEventRepository {
 
 #[async_trait]
 impl MeteoraDammV2ClaimRewardEventRepository for PgMeteoraDammV2ClaimRewardEventRepository {
-    async fn insert(&self, event: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<()> {
-        sqlx::query!(
+    async fn insert(
+        &self,
+        event: &MeteoraDammV2ClaimRewardEvent,
+    ) -> RepositoryResult<InsertOutcome> {
+        let result = sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_claim_reward_events (
                 pool_address, signature,
                 position, owner,
                 mint_reward, reward_index, total_reward,
-                timestamp
+                timestamp,
+                slot, event_index, transaction_index
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (signature, timestamp) DO NOTHING
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+                $9, $10, $11
+            )
+            ON CONFLICT (signature, event_index, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
             event.signature.to_string(),
@@ -39,11 +47,14 @@ impl MeteoraDammV2ClaimRewardEventRepository for PgMeteoraDammV2ClaimRewardEvent
             event.reward_index as i16,
             convert_u64_to_i64(event.total_reward, "total_reward")?,
             event.timestamp,
+            convert_u64_to_i64(event.slot, "slot")?,
+            i32::from(event.event_index),
+            event.transaction_index.map(i64::from),
         )
         .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(())
+        Ok(InsertOutcome::from_rows_affected(result.rows_affected()))
     }
 }

@@ -113,6 +113,16 @@ two dispatch points a new protocol touches in this crate, the other being
   `EventPersistor::persist` are logged and counted
   (`yog_indexer_persist_failure_total{event_kind}`), and the next event is
   attempted.
+- **A successful insert that wrote nothing is not a success** — every event
+  repository returns `InsertOutcome::{Inserted, Skipped}` rather than `()`, so
+  an `ON CONFLICT … DO NOTHING` that matched is warned about and counted
+  (`yog_indexer_event_insert_skipped_total{event_kind}`) instead of passing for
+  a write. Rows actually written are `instructions_indexed − insert_skipped`;
+  `instructions_indexed` keeps its meaning, "events processed". On a live
+  stream a non-zero skip rate means the unique key is collapsing distinct
+  events — the failure that went unseen until the August 2026 audit, when the
+  key was `(signature, timestamp)` and discarded the `rows_affected` that would
+  have shown it.
 - **Per-signature failures don't stop the worker** — `IndexerWorker` catches
   errors from `process`, logs and counts them, and keeps draining the channel.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
@@ -145,7 +155,8 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_extraction_failure_total{kind}`
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
-  `yog_indexer_persist_failure_total{event_kind}`
+  `yog_indexer_persist_failure_total{event_kind}`,
+  `yog_indexer_event_insert_skipped_total{event_kind}`
 - **Histograms** — `yog_indexer_fetch_duration_seconds`,
   `yog_indexer_persist_duration_seconds{kind}`,
   `yog_indexer_index_transaction_duration_seconds{outcome}`

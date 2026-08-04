@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2WithdrawIneligibleRewardEvent,
+        InsertOutcome, MeteoraDammV2WithdrawIneligibleRewardEvent,
         MeteoraDammV2WithdrawIneligibleRewardEventRepository,
     },
 };
@@ -32,27 +32,33 @@ impl MeteoraDammV2WithdrawIneligibleRewardEventRepository
     async fn insert(
         &self,
         event: &MeteoraDammV2WithdrawIneligibleRewardEvent,
-    ) -> RepositoryResult<()> {
-        sqlx::query!(
+    ) -> RepositoryResult<InsertOutcome> {
+        let result = sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_withdraw_ineligible_reward_events (
                 pool_address, signature,
                 reward_mint, amount,
-                timestamp
+                timestamp,
+                slot, event_index, transaction_index
             )
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (signature, timestamp) DO NOTHING
+            VALUES ($1, $2, $3, $4, $5,
+                $6, $7, $8
+            )
+            ON CONFLICT (signature, event_index, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
             event.signature.to_string(),
             event.reward_mint.to_string(),
             convert_u64_to_i64(event.amount, "amount")?,
             event.timestamp,
+            convert_u64_to_i64(event.slot, "slot")?,
+            i32::from(event.event_index),
+            event.transaction_index.map(i64::from),
         )
         .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(())
+        Ok(InsertOutcome::from_rows_affected(result.rows_affected()))
     }
 }

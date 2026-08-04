@@ -9,20 +9,21 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{error, warn};
 use yog_core::domain::{
-    MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
-    MeteoraDammV2ClaimProtocolFeeEvent, MeteoraDammV2ClaimProtocolFeeEventRepository,
-    MeteoraDammV2ClaimRewardEvent, MeteoraDammV2ClaimRewardEventRepository,
-    MeteoraDammV2ClosePositionEvent, MeteoraDammV2ClosePositionEventRepository,
-    MeteoraDammV2CreatePositionEvent, MeteoraDammV2CreatePositionEventRepository,
-    MeteoraDammV2Event, MeteoraDammV2FundRewardEvent, MeteoraDammV2FundRewardEventRepository,
-    MeteoraDammV2InitializePoolEvent, MeteoraDammV2InitializePoolEventRepository,
-    MeteoraDammV2InitializeRewardEvent, MeteoraDammV2InitializeRewardEventRepository,
-    MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventRepository,
-    MeteoraDammV2LockPositionEvent, MeteoraDammV2LockPositionEventRepository,
-    MeteoraDammV2PermanentLockPositionEvent, MeteoraDammV2PermanentLockPositionEventRepository,
-    MeteoraDammV2SetPoolStatusEvent, MeteoraDammV2SetPoolStatusEventRepository,
-    MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionEventRepository,
-    MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
+    InsertOutcome, MeteoraDammV2ClaimPositionFeeEvent,
+    MeteoraDammV2ClaimPositionFeeEventRepository, MeteoraDammV2ClaimProtocolFeeEvent,
+    MeteoraDammV2ClaimProtocolFeeEventRepository, MeteoraDammV2ClaimRewardEvent,
+    MeteoraDammV2ClaimRewardEventRepository, MeteoraDammV2ClosePositionEvent,
+    MeteoraDammV2ClosePositionEventRepository, MeteoraDammV2CreatePositionEvent,
+    MeteoraDammV2CreatePositionEventRepository, MeteoraDammV2Event, MeteoraDammV2FundRewardEvent,
+    MeteoraDammV2FundRewardEventRepository, MeteoraDammV2InitializePoolEvent,
+    MeteoraDammV2InitializePoolEventRepository, MeteoraDammV2InitializeRewardEvent,
+    MeteoraDammV2InitializeRewardEventRepository, MeteoraDammV2LiquidityEvent,
+    MeteoraDammV2LiquidityEventRepository, MeteoraDammV2LockPositionEvent,
+    MeteoraDammV2LockPositionEventRepository, MeteoraDammV2PermanentLockPositionEvent,
+    MeteoraDammV2PermanentLockPositionEventRepository, MeteoraDammV2SetPoolStatusEvent,
+    MeteoraDammV2SetPoolStatusEventRepository, MeteoraDammV2SplitPositionEvent,
+    MeteoraDammV2SplitPositionEventRepository, MeteoraDammV2SwapEvent,
+    MeteoraDammV2SwapEventRepository, MeteoraDammV2UpdatePoolFeesEvent,
     MeteoraDammV2UpdatePoolFeesEventRepository, MeteoraDammV2UpdateRewardDurationEvent,
     MeteoraDammV2UpdateRewardDurationEventRepository, MeteoraDammV2UpdateRewardFunderEvent,
     MeteoraDammV2UpdateRewardFunderEventRepository, MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
@@ -120,8 +121,20 @@ impl MeteoraDammV2EventPersistor {
         EventPersistorMetrics::record_persist_duration(&Self::PROTOCOL, kind, elapsed);
 
         match result {
-            Ok(()) => {
+            Ok(outcome) => {
                 EventPersistorMetrics::record_indexed(&Self::PROTOCOL, kind);
+                if outcome.is_skipped() {
+                    // The row was already there. Expected on a replay; on a
+                    // live stream it means two events shared a unique key —
+                    // which is exactly the defect `event_index` was added to
+                    // close, so it is loud rather than silent.
+                    warn!(
+                        protocol = %Self::PROTOCOL.as_str(),
+                        kind,
+                        "event insert skipped: a row with the same key already existed"
+                    );
+                    EventPersistorMetrics::record_insert_skipped(&Self::PROTOCOL, kind);
+                }
             }
             Err(err) => {
                 error!(
@@ -135,7 +148,7 @@ impl MeteoraDammV2EventPersistor {
         }
     }
 
-    async fn persist_swap(&self, event: &MeteoraDammV2SwapEvent) -> anyhow::Result<()> {
+    async fn persist_swap(&self, event: &MeteoraDammV2SwapEvent) -> anyhow::Result<InsertOutcome> {
         if let Err(err) = self
             .pool_maintenance
             .discover_pool(Self::PROTOCOL, event.pool_address)
@@ -157,7 +170,10 @@ impl MeteoraDammV2EventPersistor {
         insert_result
     }
 
-    async fn persist_liquidity(&self, event: &MeteoraDammV2LiquidityEvent) -> anyhow::Result<()> {
+    async fn persist_liquidity(
+        &self,
+        event: &MeteoraDammV2LiquidityEvent,
+    ) -> anyhow::Result<InsertOutcome> {
         if let Err(err) = self
             .pool_maintenance
             .discover_pool(Self::PROTOCOL, event.pool_address)
@@ -182,7 +198,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_claim_position_fee(
         &self,
         event: &MeteoraDammV2ClaimPositionFeeEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -196,7 +212,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_claim_protocol_fee(
         &self,
         event: &MeteoraDammV2ClaimProtocolFeeEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -210,7 +226,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_claim_reward(
         &self,
         event: &MeteoraDammV2ClaimRewardEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -227,7 +243,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_initialize_reward(
         &self,
         event: &MeteoraDammV2InitializeRewardEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -244,7 +260,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_fund_reward(
         &self,
         event: &MeteoraDammV2FundRewardEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -260,7 +276,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_withdraw_ineligible_reward(
         &self,
         event: &MeteoraDammV2WithdrawIneligibleRewardEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -275,7 +291,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_update_reward_duration(
         &self,
         event: &MeteoraDammV2UpdateRewardDurationEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -290,7 +306,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_update_reward_funder(
         &self,
         event: &MeteoraDammV2UpdateRewardFunderEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -306,7 +322,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_withdraw_dead_liquidity_reward(
         &self,
         event: &MeteoraDammV2WithdrawDeadLiquidityRewardEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -323,7 +339,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_create_position(
         &self,
         event: &MeteoraDammV2CreatePositionEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -339,7 +355,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_close_position(
         &self,
         event: &MeteoraDammV2ClosePositionEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -355,7 +371,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_lock_position(
         &self,
         event: &MeteoraDammV2LockPositionEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -369,7 +385,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_permanent_lock_position(
         &self,
         event: &MeteoraDammV2PermanentLockPositionEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -391,7 +407,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_initialize_pool(
         &self,
         event: &MeteoraDammV2InitializePoolEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         if let Err(err) = self
             .pool_maintenance
             .discover_pool(Self::PROTOCOL, event.pool_address)
@@ -420,7 +436,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_split_position(
         &self,
         event: &MeteoraDammV2SplitPositionEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -434,7 +450,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_set_pool_status(
         &self,
         event: &MeteoraDammV2SetPoolStatusEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;
@@ -448,7 +464,7 @@ impl MeteoraDammV2EventPersistor {
     async fn persist_update_pool_fees(
         &self,
         event: &MeteoraDammV2UpdatePoolFeesEvent,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<InsertOutcome> {
         self.pool_maintenance
             .touch_pool(Self::PROTOCOL, &event.pool_address)
             .await;

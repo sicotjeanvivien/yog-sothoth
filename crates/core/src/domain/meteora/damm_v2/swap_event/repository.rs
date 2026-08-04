@@ -4,7 +4,7 @@ use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
 use crate::RepositoryResult;
-use crate::domain::MeteoraDammV2SwapEvent;
+use crate::domain::{InsertOutcome, MeteoraDammV2SwapEvent};
 use crate::tools::Page;
 use crate::{PageDirection, PagePosition};
 
@@ -24,7 +24,7 @@ pub struct MeteoraDammV2SwapEventCursor {
 /// [`MeteoraDammV2SwapEventFeed`].
 #[async_trait]
 pub trait MeteoraDammV2SwapEventRepository: Send + Sync {
-    async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<()>;
+    async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<InsertOutcome>;
 }
 
 /// The per-pool swap-event feed — the api's lens: a cursor-paginated,

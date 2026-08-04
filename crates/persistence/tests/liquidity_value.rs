@@ -62,8 +62,8 @@ async fn insert_liquidity(
         "INSERT INTO meteora_damm_v2_liquidity_events
            (pool_address, signature, liquidity_event_kind,
             amount_a, amount_b, liquidity_delta, reserve_a_after, reserve_b_after,
-            position, owner, timestamp)
-         VALUES ($1,$2,'add',$3,$4,0::NUMERIC,0,0,'pos','own',$5)",
+            position, owner, timestamp, slot, event_index)
+         VALUES ($1,$2,'add',$3,$4,0::NUMERIC,0,0,'pos','own',$5,0,0)",
     )
     .bind(pool_addr)
     .bind(signature)

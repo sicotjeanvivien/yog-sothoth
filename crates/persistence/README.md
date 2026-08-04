@@ -87,6 +87,29 @@ Cross-protocol concepts stay generic, single-table: `pools`,
 (`detector`, `protocol`), not per-anything tables: a signal is a uniform
 conclusion, not a heterogeneous event.
 
+### The unique key of an event table
+
+Every event table carries `slot`, `event_index` and `transaction_index`, and
+its idempotency guard is **`(signature, event_index, timestamp)`** — one rule
+for all nineteen (migration 041). `timestamp` is in the key because TimescaleDB
+requires the partitioning column in a unique index, not to discriminate.
+
+Before that migration the key was `(signature, timestamp)`, which cannot tell
+apart the events of a transaction routed across several pools: with
+`ON CONFLICT DO NOTHING` and a discarded `rows_affected`, every hop but one was
+dropped without an error, a log or a metric — 3,4 % to 8,0 % of a pool's swaps,
+the rate rising with how central the pool is to routing. Five tables had grown
+their own discriminant (`reward_index`, `second_position`); those columns
+remain as data but left the key, because `event_index` is strictly more general
+and covers the fourteen kinds that never had one.
+
+Two consequences when you add an event table:
+
+- Give it the three columns and that key — the gabarit in
+  `migrations/README.md` has the exact DDL.
+- Have its `insert` return `InsertOutcome::from_rows_affected(…)`. Returning
+  `Ok(())` re-creates precisely the blindness above.
+
 ## Choosing how to write a query
 
 A query-builder/ORM migration (SeaQuery et al.) was evaluated in June 2026 and

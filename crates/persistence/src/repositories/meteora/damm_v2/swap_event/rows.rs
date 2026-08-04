@@ -7,8 +7,8 @@ use yog_core::{
 };
 
 use crate::repositories::helper::{
-    convert_bigdecimal_to_u128, convert_i64_to_u64, convert_string_to_pubkey,
-    convert_string_to_signature,
+    convert_bigdecimal_to_u128, convert_i32_to_u16, convert_i64_to_u32, convert_i64_to_u64,
+    convert_optional, convert_string_to_pubkey, convert_string_to_signature,
 };
 
 /// Row shape returned by SELECTs on `swap_events`. Mirrors every
@@ -30,6 +30,9 @@ pub(super) struct MeteoraDammV2SwapEventRow {
     pub(super) compounding_fee: i64,
     pub(super) referral_fee: i64,
     pub(super) fee_token_is_a: bool,
+    pub(super) slot: i64,
+    pub(super) event_index: i32,
+    pub(super) transaction_index: Option<i64>,
 }
 
 impl TryFrom<MeteoraDammV2SwapEventRow> for MeteoraDammV2SwapEvent {
@@ -40,6 +43,13 @@ impl TryFrom<MeteoraDammV2SwapEventRow> for MeteoraDammV2SwapEvent {
             pool_address: convert_string_to_pubkey(row.pool_address, "pool_address")?,
             signature: convert_string_to_signature(row.signature, "signature")?,
             timestamp: row.timestamp,
+            slot: convert_i64_to_u64(row.slot, "slot")?,
+            transaction_index: convert_optional(
+                row.transaction_index,
+                "transaction_index",
+                convert_i64_to_u32,
+            )?,
+            event_index: convert_i32_to_u16(row.event_index, "event_index")?,
             trade_direction: TradeDirection::from_str(&row.trade_direction).map_err(|_| {
                 RepositoryError::Integrity(format!(
                     "invalid trade_direction: {}",

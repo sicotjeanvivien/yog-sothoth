@@ -1,10 +1,7 @@
 //! Translation of `cp-amm::EvtInitializePool` into its domain event.
 
-use chrono::{DateTime, Utc};
-use solana_signature::Signature;
-
 use crate::application::extraction::meteora::damm_v2::events::EvtInitializePool;
-use crate::domain::MeteoraDammV2InitializePoolEvent;
+use crate::domain::{EventPosition, MeteoraDammV2InitializePoolEvent};
 
 /// Translate an [`EvtInitializePool`] into a [`MeteoraDammV2InitializePoolEvent`].
 ///
@@ -14,16 +11,18 @@ use crate::domain::MeteoraDammV2InitializePoolEvent;
 /// practice (no I/O), so the `expect` is unreachable.
 pub(super) fn translate_initialize_pool(
     wire: &EvtInitializePool,
-    signature: Signature,
-    timestamp: DateTime<Utc>,
+    event_position: EventPosition,
 ) -> MeteoraDammV2InitializePoolEvent {
     let pool_fees_raw =
         borsh::to_vec(&wire.pool_fees).expect("borsh serialize to Vec is infallible");
 
     MeteoraDammV2InitializePoolEvent {
         pool_address: wire.pool,
-        signature,
-        timestamp,
+        signature: event_position.signature,
+        timestamp: event_position.timestamp,
+        slot: event_position.slot,
+        transaction_index: event_position.transaction_index,
+        event_index: event_position.event_index,
         token_a_mint: wire.token_a_mint,
         token_b_mint: wire.token_b_mint,
         creator: wire.creator,

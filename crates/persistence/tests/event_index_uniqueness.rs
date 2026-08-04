@@ -1,0 +1,148 @@
+//! The unique key must tell apart two events emitted by one transaction.
+//!
+//! This is the regression guard for the defect measured on 4 August 2026: the
+//! key was `(signature, timestamp)`, a routed transaction emits one event per
+//! hop under a single signature and a single `blockTime`, and
+//! `ON CONFLICT DO NOTHING` dropped every hop but one — 29 losses out of 482
+//! emissions across three pools, silently.
+//!
+//! It runs the **real extractor over a real transaction** rather than
+//! hand-built events, because the point being proved is a property of on-chain
+//! data: that the two legs are indistinguishable on every field the old key
+//! looked at. A synthetic pair would only prove that two rows I made different
+//! stay different.
+
+use std::path::PathBuf;
+
+use sqlx::PgPool;
+use yog_core::application::extraction::{EventExtractor, MeteoraDammV2};
+use yog_core::domain::{
+    DomainEvent, InsertOutcome, MeteoraDammV2Event, MeteoraDammV2SwapEvent,
+    MeteoraDammV2SwapEventRepository,
+};
+use yog_core::solana_types::EncodedConfirmedTransactionWithStatusMeta;
+use yog_persistence::PgMeteoraDammV2SwapEventRepository;
+
+/// The mainnet transaction `2qJrr…`: two swaps on the **same pool**, in
+/// opposite directions, one signature, one `blockTime`.
+///
+/// Read from `yog-core`'s fixture directory instead of copied here: its whole
+/// value is being the verbatim RPC response, and a second copy would drift
+/// from the one the extractor's own tests assert against.
+fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../core/tests/fixtures/damm_v2/swap_double.json");
+
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+    let tx: EncodedConfirmedTransactionWithStatusMeta =
+        serde_json::from_str(&raw).expect("fixture is not a valid RPC transaction");
+
+    let outcome = MeteoraDammV2::new()
+        .extract_events(&tx)
+        .expect("extraction failed on the fixture");
+
+    outcome
+        .events
+        .into_iter()
+        .filter_map(|e| match e {
+            DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(s)) => Some(s),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Both hops of a routed transaction reach the table.
+///
+/// Mutation-checked: put migration 041's unique index and this repository's
+/// `ON CONFLICT` target back to `(signature, timestamp)`, and it fails with
+/// `leg 1 was not written / left: Skipped, right: Inserted` — the defect,
+/// reproduced. Without running that mutation the test would be green against
+/// the very bug it exists to catch.
+#[sqlx::test]
+async fn both_legs_of_a_routed_transaction_persist(pool: PgPool) {
+    let swaps = swap_double_swaps();
+    assert_eq!(swaps.len(), 2, "fixture must carry exactly two swaps");
+
+    // What made the old key collapse them: everything it looked at is equal,
+    // and so is the pool — which is why adding `pool_address` to the key would
+    // not have helped either.
+    assert_eq!(swaps[0].signature, swaps[1].signature);
+    assert_eq!(swaps[0].timestamp, swaps[1].timestamp);
+    assert_eq!(swaps[0].pool_address, swaps[1].pool_address);
+    assert_ne!(
+        swaps[0].event_index, swaps[1].event_index,
+        "the two legs must differ by event_index — nothing else separates them"
+    );
+
+    let repo = PgMeteoraDammV2SwapEventRepository::new(pool.clone());
+    for swap in &swaps {
+        assert_eq!(
+            repo.insert(swap).await.unwrap(),
+            InsertOutcome::Inserted,
+            "leg {} was not written",
+            swap.event_index
+        );
+    }
+
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_swap_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        rows, 2,
+        "both legs of the routed transaction must be stored"
+    );
+}
+
+/// Idempotency is preserved: the same event twice still writes one row, and
+/// the second attempt now *says so* instead of returning a bare `Ok(())`.
+///
+/// This is the other half of the contract. A key wide enough to separate two
+/// events is only correct if it still collapses a genuine replay.
+#[sqlx::test]
+async fn re_ingesting_the_same_event_is_reported_as_skipped(pool: PgPool) {
+    let swap = swap_double_swaps().remove(0);
+    let repo = PgMeteoraDammV2SwapEventRepository::new(pool.clone());
+
+    assert_eq!(repo.insert(&swap).await.unwrap(), InsertOutcome::Inserted);
+    assert_eq!(
+        repo.insert(&swap).await.unwrap(),
+        InsertOutcome::Skipped,
+        "a replayed event must report the conflict, not a silent success"
+    );
+
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_swap_events")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 1, "the replay must not have duplicated the row");
+}
+
+/// The position columns survive the round-trip — a `DEFAULT 0` left in place,
+/// or a bind in the wrong slot, would otherwise store zeros that read back as
+/// a plausible "first event of its transaction".
+#[sqlx::test]
+async fn position_columns_are_stored_as_extracted(pool: PgPool) {
+    let swap = swap_double_swaps().remove(1);
+    let repo = PgMeteoraDammV2SwapEventRepository::new(pool.clone());
+    assert_eq!(repo.insert(&swap).await.unwrap(), InsertOutcome::Inserted);
+
+    let (slot, event_index, transaction_index): (i64, i32, Option<i64>) = sqlx::query_as(
+        "SELECT slot, event_index, transaction_index FROM meteora_damm_v2_swap_events",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(slot as u64, swap.slot);
+    assert_eq!(event_index as u16, swap.event_index);
+    assert_ne!(
+        slot, 0,
+        "slot must come from the transaction, not the default"
+    );
+    // `getTransaction` does not return it; the column exists for the gRPC
+    // migration. If this ever fails, the ingestion path started supplying it —
+    // which is good news, and makes the ordering guard total.
+    assert_eq!(transaction_index, None);
+}
