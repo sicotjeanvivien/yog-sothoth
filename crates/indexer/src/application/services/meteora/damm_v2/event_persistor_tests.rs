@@ -123,12 +123,14 @@ insert_only_mock!(
 
 // Ring-1 repos: record `insert`; their read methods are never hit by
 // `persist()`, so they stub out.
-struct MockSwap(Calls);
+/// Carries the outcome it should report, so a test can drive the
+/// `Skipped` branch of `persist()` — the one the correction added.
+struct MockSwap(Calls, InsertOutcome);
 #[async_trait]
 impl MeteoraDammV2SwapEventRepository for MockSwap {
     async fn insert(&self, _e: &MeteoraDammV2SwapEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:swap");
-        Ok(InsertOutcome::Inserted)
+        Ok(self.1)
     }
 }
 struct MockLiquidity(Calls);
@@ -207,8 +209,15 @@ fn sg() -> Signature {
 }
 
 fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
+    build_with_swap_outcome(calls, InsertOutcome::Inserted)
+}
+
+fn build_with_swap_outcome(
+    calls: Calls,
+    swap_outcome: InsertOutcome,
+) -> MeteoraDammV2EventPersistor {
     let repos = DammV2Repos {
-        swap_event: Arc::new(MockSwap(calls.clone())),
+        swap_event: Arc::new(MockSwap(calls.clone(), swap_outcome)),
         liquidity_event: Arc::new(MockLiquidity(calls.clone())),
         claim_position_fee: Arc::new(MockClaimFee(calls.clone())),
         claim_protocol_fee: Arc::new(MockClaimProtocolFee(calls.clone())),
@@ -715,5 +724,71 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
             "pool:mark_needs_refresh",
             "insert:update_pool_fees"
         ]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// A skipped insert must be counted, not merely tolerated
+// ---------------------------------------------------------------------------
+
+/// The whole point of `InsertOutcome` is that a write which wrote nothing stops
+/// passing for a success. That guarantee lives in one branch of `persist()`,
+/// and until this test it was the only part of the correction with no test:
+/// every mock reported `Inserted`, so deleting the branch left the suite green.
+///
+/// Asserts **both** counters, because their relationship is the contract:
+/// `instructions_indexed` keeps meaning "events processed" and rows actually
+/// written are `indexed − skipped`. A future change that stopped counting the
+/// event as indexed would break that arithmetic silently.
+///
+/// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
+/// *current thread* for the duration of a closure, so the future has to be
+/// driven inside it — hence the current-thread runtime.
+#[test]
+fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+                let p = build_with_swap_outcome(calls.clone(), InsertOutcome::Skipped);
+                p.persist(&MeteoraDammV2Event::Swap(swap())).await;
+
+                // The recipe still ran in full — a skip is not a failure.
+                assert_eq!(
+                    calls.lock().unwrap().clone(),
+                    ["pool:upsert", "insert:swap", "pcs:upsert"]
+                );
+            });
+    });
+
+    // ONE snapshot, queried twice. `Snapshotter::snapshot` is destructive —
+    // it reads counters with `swap(0)` — so a second call returns zeros and a
+    // test written that way "proves" a counter that never fired.
+    let snapshot = snapshotter.snapshot().into_vec();
+    let counter = |name: &str| {
+        snapshot
+            .iter()
+            .find(|(key, _, _, _)| key.key().name() == name)
+            .map(|(_, _, _, value)| value)
+    };
+
+    assert_eq!(
+        counter("yog_indexer_event_insert_skipped_total"),
+        Some(&DebugValue::Counter(1)),
+        "a skipped insert must increment its own counter — otherwise the drop \
+         is invisible again, which is the defect this PR corrects"
+    );
+    assert_eq!(
+        counter("yog_indexer_instructions_indexed_total"),
+        Some(&DebugValue::Counter(1)),
+        "the event was still processed: rows written are indexed − skipped, and \
+         that arithmetic breaks if a skip stops counting as indexed"
     );
 }

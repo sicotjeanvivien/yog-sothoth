@@ -49,6 +49,16 @@
 -- rejeu n'existe aujourd'hui (l'ingestion est en souscription, le StreamPoller
 -- dort) ; le jour où l'un est câblé, il devra partir d'après 041.
 --
+-- **`slot` reste à `0` partout**, et c'est plus sûr qu'il n'y paraît : `0` est
+-- le slot du genesis de Solana (juin 2020) alors que cp-amm est déployé en
+-- 2025 et que les slots réels tournent autour de 300 millions. Ce n'est donc
+-- pas un entier plausible parmi d'autres mais une valeur **impossible** — une
+-- vraie sentinelle. La garde d'ordre du ticket 04, qui comparera des tuples
+-- `(slot, event_index)`, en hérite une garantie et non une prémisse : toute
+-- ligne d'avant cette migration trie avant tout ce qui suit — ce qui est exact,
+-- elles *sont* les plus anciennes — et aucune ne peut être confondue avec une
+-- ligne récente.
+--
 -- NULL n'était pas une option : il casserait la comparaison de tuples de la
 -- garde d'ordre (migration suivante, ticket 04).
 --

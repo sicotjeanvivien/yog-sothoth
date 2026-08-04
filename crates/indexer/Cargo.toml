@@ -42,5 +42,10 @@ async-trait = { workspace = true }
 rust_decimal = { workspace = true }
 
 [dev-dependencies]
+# `DebuggingRecorder` + `with_local_recorder`: lets a test assert on the
+# counters the persistor emits. Thread-local, so it stays safe under the
+# parallel test harness. Already in the tree via metrics-exporter-prometheus —
+# only the `debugging` feature is new.
+metrics-util = { version = "0.20", features = ["debugging"] }
 # Construct dummy Signatures in the event-persistor dispatch tests.
 solana-signature = { workspace = true }

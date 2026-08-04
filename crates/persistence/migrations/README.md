@@ -134,6 +134,43 @@ delay — every insert would decompress to check uniqueness. Correct, but slow.
 Worth remembering the day historical replay becomes possible (see the gRPC
 migration in the project tracker).
 
+## ⚠️ What a local run cannot prove — compressed chunks
+
+**A migration that passes locally has never met a compressed chunk, and cannot.**
+The local Postgres runs with `timescaledb.max_background_workers = 0`
+(`docker-compose.yml`, for the reason in `CLAUDE.md`), so the compression
+policies never fire: **0 compressed chunk out of 45** on a typical dev
+database. Production compresses at 7 days.
+
+This is a structural blind spot, not an accident of timing — raising the worker
+count re-introduces the job-scheduler race that made the integration suite
+flaky. It matters because compressed chunks change what DDL and DML are allowed:
+`ADD COLUMN`, `UPDATE`, and `CREATE UNIQUE INDEX` all have their own rules, and
+a migration that touches rows (a backfill) is precisely the kind that could
+fail there and nowhere else.
+
+Verify by hand when a migration adds a column, backfills rows, or creates an
+index — restore a database at the previous migration, compress its chunks, then
+apply:
+
+```sh
+psql "$DATABASE_URL_MIGRATE" -c "
+    SELECT compress_chunk(c)
+    FROM show_chunks('meteora_damm_v2_swap_events') c;"
+# then apply the migration and re-check:
+psql "$DATABASE_URL_MIGRATE" -c "
+    SELECT count(*) FROM timescaledb_information.chunks WHERE is_compressed;"
+```
+
+Done for migration 041 (August 2026): `ADD COLUMN`, the `row_number()` backfill
+and `CREATE UNIQUE INDEX` all pass on a compressed chunk, the chunk stays
+compressed, and the new unique index rejects a duplicate inserted into it — so
+the constraint bites on compressed data too.
+
+Three false greens have already come out of this project by trusting a check
+that could not fail: an empty table, an unquantified loss, and this one. **A
+verification that cannot come out red is not a verification.**
+
 ## Local development workflow
 
 When you add a new migration:

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use yog_core::domain::{
     InsertOutcome, MeteoraDammV2ClaimPositionFeeEvent,
     MeteoraDammV2ClaimPositionFeeEventRepository, MeteoraDammV2ClaimProtocolFeeEvent,
@@ -124,11 +124,14 @@ impl MeteoraDammV2EventPersistor {
             Ok(outcome) => {
                 EventPersistorMetrics::record_indexed(&Self::PROTOCOL, kind);
                 if outcome.is_skipped() {
-                    // The row was already there. Expected on a replay; on a
-                    // live stream it means two events shared a unique key —
-                    // which is exactly the defect `event_index` was added to
-                    // close, so it is loud rather than silent.
-                    warn!(
+                    // The row was already there. The *counter* is the signal —
+                    // a non-zero rate on a live stream means two events shared
+                    // a unique key, the defect `event_index` was added to
+                    // close. The log line stays at `debug`: it carries the
+                    // detail the counter has no label for, and a replay (the
+                    // case where a skip is expected) would otherwise emit one
+                    // warning per event backfilled.
+                    debug!(
                         protocol = %Self::PROTOCOL.as_str(),
                         kind,
                         "event insert skipped: a row with the same key already existed"
