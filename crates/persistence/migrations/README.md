@@ -18,6 +18,34 @@ changes.** No `.down.sql` files; no edits to past migrations. If a
 released migration introduced a problem, fix it forward by writing a
 new migration that corrects the state.
 
+**The one window where editing is admissible, and its price.** The rule
+protects databases that have applied a migration and hold data you cannot lose.
+Before the first production deploy that set is *only* developer machines, whose
+data the project already treats as disposable. Editing is then a judgement
+call, not a violation — but it is never free, and the cost falls where it is
+least visible:
+
+- CI recreates a database per run, so **CI stays green and proves nothing**;
+- the failure surfaces only on machines that already applied it, later, as
+  `migration N was previously applied but has been modified`, looking like a
+  regression.
+
+So an edit owes the team two things in the same commit: a statement of what
+changed *in executable SQL* (ideally nothing), and the exact repair. Recompute
+the file's SHA-384 and write it over the recorded one:
+
+```sh
+NEW=$(python3 -c "import hashlib,pathlib;print(hashlib.sha384(pathlib.Path('crates/persistence/migrations/0NN_x.sql').read_bytes()).hexdigest())")
+psql "$DATABASE_URL_MIGRATE" -c "UPDATE _sqlx_migrations SET checksum = decode('$NEW','hex') WHERE version = NN;"
+```
+
+Only do that when the executable SQL is unchanged, or changed in a way an
+already-migrated database provably never evaluated. Otherwise the row would
+claim a statement ran that never did — recreate the database instead.
+
+Done once, in August 2026, to put migration 041's header into English (the
+repository's convention for migration bodies) after it had merged.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped
