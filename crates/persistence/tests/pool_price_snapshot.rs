@@ -62,8 +62,8 @@ async fn insert_current_state(
     sqlx::query(
         "INSERT INTO pool_current_state
            (pool_address, protocol, last_event_at, last_event_kind, last_signature,
-            reserve_a, reserve_b, last_sqrt_price, last_swap_at)
-         VALUES ($1,'meteora_damm_v2',NOW(),'swap','sig',0,0,$2::NUMERIC,$3)",
+            reserve_a, reserve_b, last_sqrt_price, last_swap_at, last_slot, last_event_index)
+         VALUES ($1,'meteora_damm_v2',NOW(),'swap','sig',0,0,$2::NUMERIC,$3,1,0)",
     )
     .bind(pool_addr)
     .bind(sqrt_price)

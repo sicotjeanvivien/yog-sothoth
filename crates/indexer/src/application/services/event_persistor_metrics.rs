@@ -7,6 +7,7 @@ const INSTRUCTIONS_INDEXED: &str = "yog_indexer_instructions_indexed_total";
 const PERSIST_DURATION: &str = "yog_indexer_persist_duration_seconds";
 const PERSIST_FAILURE: &str = "yog_indexer_persist_failure_total";
 const INSERT_SKIPPED: &str = "yog_indexer_event_insert_skipped_total";
+const PCS_SAME_SLOT: &str = "yog_indexer_pool_current_state_same_slot_total";
 
 pub(crate) struct EventPersistorMetrics;
 
@@ -29,6 +30,11 @@ impl EventPersistorMetrics {
             INSERT_SKIPPED,
             "Event inserts that hit ON CONFLICT DO NOTHING and wrote no row"
         );
+        describe_counter!(
+            PCS_SAME_SLOT,
+            "Projection upserts that met state from the same slot under another \
+             signature — the case the ordering key cannot rank"
+        );
     }
 
     pub(crate) fn record_indexed(protocol: &Protocol, instruction: &str) {
@@ -43,7 +49,7 @@ impl EventPersistorMetrics {
     /// `kind` labels the persist target: event kind ("swap", "liquidity",
     /// "claim_position_fee", "claim_reward") or pool-side operation
     /// ("pool_upsert", "pool_touch", "pool_current_state_applied",
-    /// "pool_current_state_stale").
+    /// "pool_current_state_rejected").
     pub(crate) fn record_persist_duration(protocol: &Protocol, kind: &'static str, seconds: f64) {
         histogram!(
             PERSIST_DURATION,
@@ -70,6 +76,22 @@ impl EventPersistorMetrics {
             "event_kind" => event_kind,
         )
         .increment(1);
+    }
+
+    /// A projection upsert whose incoming event shared its slot with the
+    /// state already stored, under a different signature.
+    ///
+    /// `transaction_index` is empty on the `getTransaction` ingestion path, so
+    /// `(slot, _, event_index)` cannot rank two transactions of one block. The
+    /// counter fires on both outcomes — applied and rejected — because an
+    /// ambiguity that wrongly accepts costs as much as one that wrongly
+    /// rejects, and counting only rejections would understate it.
+    ///
+    /// Expected to stay near zero. If it does not, the estimate that this case
+    /// is rare was wrong, and reading `transaction_index` from `getBlock`
+    /// stops being optional.
+    pub(crate) fn record_pool_current_state_same_slot(protocol: &Protocol) {
+        counter!(PCS_SAME_SLOT, "protocol" => protocol.as_str().to_string()).increment(1);
     }
 
     pub(crate) fn record_persist_failure(protocol: &Protocol, event_kind: &'static str) {

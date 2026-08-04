@@ -58,8 +58,8 @@ async fn seed_pool(pool: &PgPool, addr: Pubkey, mint_a: &str, mint_b: &str, rese
     sqlx::query(
         "INSERT INTO pool_current_state
            (pool_address, protocol, last_event_at, last_event_kind, last_signature,
-            reserve_a, reserve_b)
-         VALUES ($1, 'meteora_damm_v2', NOW(), 'liquidity_add', 'sig', $2, 0)",
+            reserve_a, reserve_b, last_slot, last_event_index)
+         VALUES ($1, 'meteora_damm_v2', NOW(), 'liquidity_add', 'sig', $2, 0,1,0)",
     )
     .bind(&addr)
     .bind(reserve_a)

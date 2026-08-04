@@ -607,8 +607,8 @@ async fn a_dependent_row_cannot_disagree_with_the_registry(pool: PgPool) {
     let err = sqlx::query(
         "INSERT INTO pool_current_state \
              (pool_address, protocol, last_event_at, last_event_kind, last_signature, \
-              reserve_a, reserve_b) \
-         VALUES ($1, $2, NOW(), 'swap', 'sig', 0, 0)",
+              reserve_a, reserve_b, last_slot, last_event_index) \
+         VALUES ($1, $2, NOW(), 'swap', 'sig', 0, 0,1,0)",
     )
     .bind(pk(1).to_string())
     .bind(Protocol::MeteoraDammV2.as_str())
@@ -724,8 +724,8 @@ async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
     sqlx::query(
         "INSERT INTO pool_current_state \
              (pool_address, protocol, last_event_at, last_event_kind, last_signature, \
-              reserve_a, reserve_b) \
-         VALUES ($1, $2, NOW(), 'swap', 'sig', 0, 0)",
+              reserve_a, reserve_b, last_slot, last_event_index) \
+         VALUES ($1, $2, NOW(), 'swap', 'sig', 0, 0,1,0)",
     )
     .bind(pk(1).to_string())
     .bind(Protocol::MeteoraDammV2.as_str())

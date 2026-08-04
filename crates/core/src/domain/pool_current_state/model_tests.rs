@@ -8,6 +8,16 @@ fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
+fn position(now: DateTime<Utc>) -> EventPosition {
+    EventPosition {
+        signature: sig(1),
+        timestamp: now,
+        slot: 300_000_001,
+        transaction_index: None,
+        event_index: 2,
+    }
+}
+
 #[test]
 fn last_event_kind_roundtrip() {
     for kind in [
@@ -43,8 +53,7 @@ fn from_swap_marks_kind_as_swap_and_sets_only_sqrt_price() {
     let upsert = PoolCurrentStateUpsert::from_swap(
         pk(1),
         Protocol::MeteoraDammV2,
-        now,
-        sig(1),
+        position(now),
         100,
         200,
         9_999,
@@ -52,6 +61,9 @@ fn from_swap_marks_kind_as_swap_and_sets_only_sqrt_price() {
     assert_eq!(upsert.event_kind, LastEventKind::Swap);
     assert_eq!(upsert.sqrt_price, Some(9_999));
     assert_eq!(upsert.liquidity, None);
+    // The position is carried through whole — the repository orders on its
+    // slot/event_index, and displays its signature/timestamp.
+    assert_eq!(upsert.position, position(now));
 }
 
 #[test]
@@ -60,8 +72,7 @@ fn from_liquidity_maps_kind_through_domain_enum() {
     let add = PoolCurrentStateUpsert::from_liquidity(
         pk(1),
         Protocol::MeteoraDammV2,
-        now,
-        sig(1),
+        position(now),
         MeteoraDammV2LiquidityEventKind::Add,
         100,
         200,
@@ -70,8 +81,7 @@ fn from_liquidity_maps_kind_through_domain_enum() {
     let remove = PoolCurrentStateUpsert::from_liquidity(
         pk(1),
         Protocol::MeteoraDammV2,
-        now,
-        sig(1),
+        position(now),
         MeteoraDammV2LiquidityEventKind::Remove,
         100,
         200,

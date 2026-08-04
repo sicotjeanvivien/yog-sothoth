@@ -10,8 +10,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::warn;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEvent, MeteoraDammV2SwapEvent, Pool, PoolCurrentStateRepository,
-    PoolCurrentStateUpsert, PoolRepository, Protocol,
+    EventPosition, MeteoraDammV2LiquidityEvent, MeteoraDammV2SwapEvent, Pool,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, Protocol,
 };
 
 use crate::application::services::EventPersistorMetrics;
@@ -137,8 +137,13 @@ impl PoolMaintenance {
         let upsert = PoolCurrentStateUpsert::from_swap(
             event.pool_address,
             protocol,
-            event.timestamp,
-            event.signature,
+            EventPosition {
+                signature: event.signature,
+                timestamp: event.timestamp,
+                slot: event.slot,
+                transaction_index: event.transaction_index,
+                event_index: event.event_index,
+            },
             event.reserve_a_after,
             event.reserve_b_after,
             event.next_sqrt_price,
@@ -157,8 +162,13 @@ impl PoolMaintenance {
         let upsert = PoolCurrentStateUpsert::from_liquidity(
             event.pool_address,
             protocol,
-            event.timestamp,
-            event.signature,
+            EventPosition {
+                signature: event.signature,
+                timestamp: event.timestamp,
+                slot: event.slot,
+                transaction_index: event.transaction_index,
+                event_index: event.event_index,
+            },
             event.liquidity_event_kind,
             event.reserve_a_after,
             event.reserve_b_after,
@@ -168,9 +178,9 @@ impl PoolMaintenance {
             .await;
     }
 
-    /// Shared call site for the projection upsert. Records timing and
-    /// classifies the outcome (`applied` vs `stale`) as a metric label
-    /// so stale-write rates can be observed in Prometheus.
+    /// Shared call site for the projection upsert. Records timing, classifies
+    /// the outcome (`applied` vs `rejected`) as a metric label, and counts the
+    /// case the ordering key cannot rank.
     async fn apply_pool_current_state_upsert(
         &self,
         protocol: Protocol,
@@ -178,17 +188,28 @@ impl PoolMaintenance {
     ) {
         let start = Instant::now();
         match self.pool_current_state_repo.upsert(upsert).await {
-            Ok(applied) => {
-                let label = if applied {
+            Ok(outcome) => {
+                // `rejected`, not `stale`: the old label asserted a cause —
+                // healthy concurrency — for what was mostly the guard's own
+                // second-granularity. It states the fact and stops there.
+                let label = if outcome.applied {
                     "pool_current_state_applied"
                 } else {
-                    "pool_current_state_stale"
+                    "pool_current_state_rejected"
                 };
                 EventPersistorMetrics::record_persist_duration(
                     &protocol,
                     label,
                     start.elapsed().as_secs_f64(),
                 );
+
+                if outcome.same_slot_ambiguity {
+                    // Counted on BOTH paths — see the outcome's doc-comment.
+                    // This is the measurement that will say whether the
+                    // residual case is as rare as it was estimated to be; if
+                    // it is not, `getBlock` comes back on the table.
+                    EventPersistorMetrics::record_pool_current_state_same_slot(&protocol);
+                }
             }
             Err(err) => {
                 warn!(
