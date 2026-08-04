@@ -1,8 +1,8 @@
 -- ============================================================================
 -- 009 — differentiated retention: keep low-frequency events forever
 -- ============================================================================
--- Retention decision (15 Jun 2026, see BACKLOG → "Stratégie de rétention &
--- historisation"): option A — only the high-volume ring-1 streams
+-- Retention decision (15 Jun 2026, recorded in the private project tracker
+-- under "retention strategy"): option A — only the high-volume ring-1 streams
 -- (swap, liquidity) are dropped past 30d; their long-term analytics history
 -- will live in the volume continuous aggregate (still to come). The punctual /
 -- config events and the position-lifecycle events are low in volume but high

@@ -1,5 +1,5 @@
 -- ============================================================================
--- 039 — meteora_dlmm_pool_properties (satellite de propriétés DLMM)
+-- 039 — meteora_dlmm_pool_properties (the DLMM properties satellite)
 -- ============================================================================
 -- The DLMM counterpart of migration 036: the pool properties that only exist
 -- for the Liquidity Book product, kept out of the cross-protocol `pools`

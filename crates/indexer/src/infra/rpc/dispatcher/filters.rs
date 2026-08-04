@@ -6,7 +6,7 @@ pub(crate) mod invocation;
 pub(crate) use failed_transaction::FailedTransactionFilter;
 pub(crate) use invocation::InvocationFilter;
 
-/// Décision d'un filtre sur un événement.
+/// A filter's verdict on an event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FilterDecision {
     Accept,

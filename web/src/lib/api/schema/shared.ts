@@ -14,7 +14,7 @@ export const U128String = z.string().regex(/^\d+$/, "expected a non-negative dec
 export const Rfc3339 = z.iso.datetime({ offset: true });
 
 export const BigDecimal = z.string().regex(/^\d+(\.\d+)?$/, {
-  message: "Doit être un nombre valide sous forme de string (ex: '86.6384' ou '0.00098')",
+  message: "expected a decimal number as a string (e.g. '86.6384' or '0.00098')",
 });
 
 /**
