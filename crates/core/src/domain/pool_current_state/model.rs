@@ -121,7 +121,7 @@ pub struct PoolCurrentStateUpsert {
     /// transaction_index, event_index)` the repository orders on — the two
     /// used to be separate fields, and ordering on the timestamp alone
     /// rejected a third of all updates (they share a second).
-    pub position: EventPosition,
+    pub event_position: EventPosition,
     pub event_kind: LastEventKind,
 
     pub reserve_a: u64,
@@ -139,7 +139,7 @@ impl PoolCurrentStateUpsert {
     pub fn from_swap(
         pool_address: Pubkey,
         protocol: Protocol,
-        position: EventPosition,
+        event_position: EventPosition,
         reserve_a: u64,
         reserve_b: u64,
         sqrt_price: u128,
@@ -147,7 +147,7 @@ impl PoolCurrentStateUpsert {
         Self {
             pool_address,
             protocol,
-            position,
+            event_position,
             event_kind: LastEventKind::Swap,
             reserve_a,
             reserve_b,
@@ -164,7 +164,7 @@ impl PoolCurrentStateUpsert {
     pub fn from_liquidity(
         pool_address: Pubkey,
         protocol: Protocol,
-        position: EventPosition,
+        event_position: EventPosition,
         kind: MeteoraDammV2LiquidityEventKind,
         reserve_a: u64,
         reserve_b: u64,
@@ -173,7 +173,7 @@ impl PoolCurrentStateUpsert {
         Self {
             pool_address,
             protocol,
-            position,
+            event_position,
             event_kind: kind.into(),
             reserve_a,
             reserve_b,

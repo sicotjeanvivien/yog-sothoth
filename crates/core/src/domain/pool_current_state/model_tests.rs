@@ -63,7 +63,7 @@ fn from_swap_marks_kind_as_swap_and_sets_only_sqrt_price() {
     assert_eq!(upsert.liquidity, None);
     // The position is carried through whole — the repository orders on its
     // slot/event_index, and displays its signature/timestamp.
-    assert_eq!(upsert.position, position(now));
+    assert_eq!(upsert.event_position, position(now));
 }
 
 #[test]

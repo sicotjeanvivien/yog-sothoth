@@ -98,7 +98,7 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
         // `last_swap_at` is set only for swap events; `last_liquidity_at` only
         // for liquidity events. The COALESCE in the UPDATE branch keeps the
         // previous value for the field the current event doesn't touch.
-        let event_at = upsert.position.timestamp;
+        let event_at = upsert.event_position.timestamp;
         let last_swap_at = match upsert.event_kind {
             LastEventKind::Swap => Some(event_at),
             _ => None,
@@ -108,10 +108,10 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
             _ => None,
         };
 
-        let slot = convert_u64_to_i64(upsert.position.slot, "slot")?;
-        let event_index = i32::from(upsert.position.event_index);
-        let transaction_index = upsert.position.transaction_index.map(i64::from);
-        let signature = upsert.position.signature.to_string();
+        let slot = convert_u64_to_i64(upsert.event_position.slot, "slot")?;
+        let event_index = i32::from(upsert.event_position.event_index);
+        let transaction_index = upsert.event_position.transaction_index.map(i64::from);
+        let signature = upsert.event_position.signature.to_string();
 
         let row = sqlx::query!(
             r#"

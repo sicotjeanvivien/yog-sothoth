@@ -40,11 +40,11 @@ fn position(slot: u64, event_index: u16, signature_seed: u8) -> EventPosition {
     }
 }
 
-fn swap(position: EventPosition, sqrt_price: u128) -> PoolCurrentStateUpsert {
+fn swap(event_position: EventPosition, sqrt_price: u128) -> PoolCurrentStateUpsert {
     PoolCurrentStateUpsert::from_swap(
         pk(1),
         Protocol::MeteoraDammV2,
-        position,
+        event_position,
         100,
         200,
         sqrt_price,
@@ -241,11 +241,11 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
     seed_pool(&pool).await;
     let repo = PgPoolCurrentStateRepository::new(pool.clone());
 
-    let liquidity = |position: EventPosition, delta: u128| {
+    let liquidity = |event_position: EventPosition, delta: u128| {
         PoolCurrentStateUpsert::from_liquidity(
             pk(1),
             Protocol::MeteoraDammV2,
-            position,
+            event_position,
             MeteoraDammV2LiquidityEventKind::Add,
             100,
             200,
@@ -277,4 +277,74 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
         .expect("row")
         .liquidity;
     assert_eq!(stored, Some(20));
+}
+
+/// The headline case, end to end: a real routed transaction must leave the
+/// projection showing **its result**, not its first hop.
+///
+/// The tests above prove the guard's mechanics on synthetic positions; this
+/// one takes the mainnet transaction `2qJrr…` through the real extractor and
+/// asserts the outcome the finding was written about. Before migration 042 the
+/// second leg was rejected — same signature, same second — and the pool kept
+/// intermediate reserves and an intermediate `sqrt_price` for good.
+///
+/// Mutation-checked: put the guard back to `last_event_at` and this fails on
+/// the `sqrt_price`, showing the first leg's value.
+#[sqlx::test]
+async fn a_routed_transaction_leaves_its_result_not_its_first_hop(pool: PgPool) {
+    let swaps = super::event_index_uniqueness::swap_double_swaps();
+    assert_eq!(swaps.len(), 2, "the fixture must carry exactly two swaps");
+    assert_eq!(swaps[0].signature, swaps[1].signature);
+    assert_eq!(swaps[0].timestamp, swaps[1].timestamp);
+    assert!(
+        swaps[0].event_index < swaps[1].event_index,
+        "the fixture's legs must be ordered by event_index for this to mean anything"
+    );
+
+    let pool_address = swaps[0].pool_address;
+    sqlx::query("INSERT INTO pools (pool_address, protocol) VALUES ($1, 'meteora_damm_v2')")
+        .bind(pool_address.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let repo = PgPoolCurrentStateRepository::new(pool.clone());
+    for swap in &swaps {
+        let outcome = repo
+            .upsert(&PoolCurrentStateUpsert::from_swap(
+                swap.pool_address,
+                Protocol::MeteoraDammV2,
+                EventPosition {
+                    signature: swap.signature,
+                    timestamp: swap.timestamp,
+                    slot: swap.slot,
+                    transaction_index: swap.transaction_index,
+                    event_index: swap.event_index,
+                },
+                swap.reserve_a_after,
+                swap.reserve_b_after,
+                swap.next_sqrt_price,
+            ))
+            .await
+            .unwrap();
+        assert!(
+            outcome.applied,
+            "leg {} was rejected — the projection is dropping part of the transaction",
+            swap.event_index
+        );
+        assert!(
+            !outcome.same_slot_ambiguity,
+            "one signature, one order: two legs of the same transaction are not ambiguous"
+        );
+    }
+
+    let state = repo
+        .get_by_address(&pool_address.to_string())
+        .await
+        .unwrap()
+        .expect("the projection row must exist");
+    let last = &swaps[1];
+    assert_eq!(state.last_sqrt_price, Some(last.next_sqrt_price));
+    assert_eq!(state.reserve_a, last.reserve_a_after);
+    assert_eq!(state.reserve_b, last.reserve_b_after);
 }

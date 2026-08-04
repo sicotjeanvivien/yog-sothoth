@@ -1,79 +1,96 @@
 -- ============================================================================
--- 042 — pool_current_state cesse d'ordonner à la seconde
+-- 042 — pool_current_state stops ordering by the second
 -- ============================================================================
--- La garde de l'upsert de projection comparait `last_event_at`, un TIMESTAMPTZ
--- issu du `blockTime` — donc une **seconde**, en strict. Or 56,1 % des swaps
--- partagent leur `(pool, timestamp)`, jusqu'à 46 dans la même seconde :
--- l'audit du 3 août 2026 a mesuré **33,5 % des mises à jour d'état rejetées**,
--- et étiquetées « stale » comme s'il s'agissait de concurrence saine. Ce n'en
--- était pas : c'était la granularité de la garde.
+-- The projection's upsert guard compared `last_event_at`, a TIMESTAMPTZ taken
+-- from `blockTime` — so a **second**, strictly. But 56,1 % of swaps share
+-- their `(pool, timestamp)` with another swap, up to 46 within one second: the
+-- audit of 3 August 2026 measured **33,5 % of state updates rejected**, and
+-- labelled them "stale" as though they were healthy concurrency. They were
+-- not: that was the guard's own granularity.
 --
--- Conséquence la plus visible, confirmée en revue de la PR #96 : les deux
--- jambes d'une transaction routée sont toutes deux persistées, mais c'est la
--- **première** qui gagne la projection — l'état final de la transaction est
--- jeté, et le pool affiche des réserves et un `sqrt_price` intermédiaires.
+-- Most visible consequence, confirmed independently while reviewing PR #96:
+-- both legs of a routed transaction are persisted, but the **first** wins the
+-- projection — the pool ends up showing intermediate reserves and an
+-- intermediate `sqrt_price`, never the transaction's result.
 --
--- Ces trois colonnes reçoivent la position de l'event qui a produit l'état.
--- La garde les compare en tuple (voir `repositories/pool_current_state.rs`) :
--- `last_event_at` reste, comme donnée d'affichage, mais cesse d'être la clé
--- d'ordre.
+-- These three columns carry the position of the event that produced the state.
+-- The guard compares them as a tuple (see
+-- `repositories/pool_current_state.rs`): `last_event_at` stays, as display
+-- data, but stops being the ordering key.
 --
--- ## L'ordre obtenu est partiel, et c'est mesuré plutôt que masqué
+-- ## The resulting order is partial, and measured rather than hidden
 --
--- `getTransaction` ne renvoie pas `transaction_index` (cf. migration 041), donc
--- deux transactions d'un même slot touchant le même pool sont départagées par
--- le seul `event_index`.
+-- `getTransaction` does not return `transaction_index` (see migration 041), so
+-- two transactions of one slot touching the same pool are ranked on
+-- `event_index` alone.
 --
--- ⚠️ Ce départage n'est pas un tirage au sort, et le dire ainsi serait le
--- raccourci de trop : `event_index` numérote les émissions d'**une**
--- transaction, donc le comparer entre deux, c'est comparer des choses
--- différentes. Dans un slot, l'état converge vers le plus grand index — ce qui
--- favorise **systématiquement** une jambe profonde de transaction routée
--- contre un swap simple du même bloc. Et si le pool se tait ensuite, l'état
--- faux reste affiché jusqu'au prochain slot actif, pas 400 ms.
+-- ⚠️ That tie-break is not a coin flip, and calling it one would be the
+-- shortcut too far: `event_index` numbers the emissions of **one** transaction,
+-- so comparing it across two compares unlike things. Within a slot the state
+-- converges to the largest index, which **systematically** favours a leg deep
+-- inside a routed transaction over a single-leg swap of the same block. And if
+-- the pool then goes quiet, the wrong state stays on display until its next
+-- active slot — not for 400 ms.
 --
--- Ce que ce choix achète en échange : l'**indépendance à l'ordre d'arrivée**.
--- L'état final est une fonction de l'ensemble des events, pas de leur ordre de
--- livraison, donc un rejeu le reproduit. Le dernier-arrivé-gagne serait non
--- biaisé et non déterministe.
+-- What the choice buys in exchange: **independence from arrival order**. The
+-- final state is a function of the set of events, not of their delivery order,
+-- so a replay reproduces it. Last-writer-wins would be unbiased and
+-- non-deterministic.
 --
--- La garde s'écrit avec `COALESCE(last_transaction_index, 0)` pour que la
--- migration gRPC/Geyser — où la mise à jour de transaction porte son `index`
--- nativement — rende l'ordre total **sans migration ni changement de code**.
--- En attendant, le cas est compté :
+-- The guard is written with `COALESCE(last_transaction_index, 0)` so that the
+-- gRPC/Geyser migration — where the transaction update carries its `index`
+-- natively — makes the order total **with no migration and no code change**.
+-- Until then the case is counted:
 -- `yog_indexer_pool_current_state_same_slot_total`.
 --
--- ## Les largeurs suivent le type de domaine, pas la magnitude
+-- ## Widths follow the domain type, not the magnitude
 --
--- Même règle qu'en 041 : `last_event_index` est un `u16` donc INTEGER (un `u16`
--- ne tient pas dans un SMALLINT), `last_transaction_index` un `u32` donc
--- BIGINT. Les conversions à l'écriture restent totales.
+-- Same rule as migration 041: `last_event_index` holds a `u16` so it is
+-- INTEGER (a `u16` does not fit in a SMALLINT), `last_transaction_index` a
+-- `u32` so it is BIGINT. Write conversions stay total.
 --
--- ## `0` sur les lignes existantes
+-- ## `0` on existing rows
 --
--- `DEFAULT 0` le temps du remplissage, puis retiré — un chemin d'écriture qui
--- oublierait la colonne doit échouer bruyamment plutôt qu'hériter d'un `0`
--- plausible. Et `0` n'est pas plausible : c'est le slot du genesis de Solana
--- (juin 2020) quand cp-amm est déployé en 2025 et que les slots réels tournent
--- autour de 300 millions. Une valeur impossible, donc une sentinelle : toute
--- ligne d'avant cette migration sera dépassée par le premier event qui arrive,
--- ce qui est exact — son état vient d'une garde qu'on est en train de corriger.
+-- `DEFAULT 0` for the duration of the backfill, then dropped — a write path
+-- that forgot the column must fail loudly rather than inherit a plausible `0`.
+-- And `0` is not plausible: it is Solana's genesis slot (June 2020) when
+-- cp-amm was deployed in 2025 and real slots sit around 300 million. An
+-- impossible value, hence a sentinel: any row predating this migration is
+-- superseded by the first event that arrives, which is correct — its state
+-- came from the very guard being fixed here.
 --
--- Pas de renumérotation ici, contrairement à 041 : `pool_current_state` a une
--- ligne par pool, rien ne peut collider.
+-- No renumbering, unlike migration 041: `pool_current_state` holds one row per
+-- pool, nothing can collide.
 --
--- ## Pas de GRANT
+-- ## No GRANT
 --
--- `yog_indexer` détient déjà `INSERT, SELECT, UPDATE` au niveau **table** sur
--- `pool_current_state` (cf. `tests/privileges.rs`), ce qui couvre les colonnes
--- ajoutées plus tard. La matrice de privilèges est inchangée.
+-- `yog_indexer` already holds `INSERT, SELECT, UPDATE` at **table** level on
+-- `pool_current_state` (see `tests/privileges.rs`), which covers columns added
+-- later. The privilege matrix is unchanged.
 
 ALTER TABLE pool_current_state
     ADD COLUMN last_slot              BIGINT  NOT NULL DEFAULT 0,
     ADD COLUMN last_event_index       INTEGER NOT NULL DEFAULT 0,
     ADD COLUMN last_transaction_index BIGINT  NULL;
 
--- Le DEFAULT n'existait que pour remplir les lignes déjà en base.
+-- The DEFAULT only ever existed to fill the rows already in the table.
 ALTER TABLE pool_current_state
     ALTER COLUMN last_slot        DROP DEFAULT,
     ALTER COLUMN last_event_index DROP DEFAULT;
+
+-- ============================================================================
+-- Dropping an index that supports nothing
+-- ============================================================================
+-- `idx_pool_current_state_last_event_at` has existed since migration 001 and
+-- is dead weight: no query in the repository orders or range-filters on
+-- `last_event_at`. The column is written, then read as a scalar of a single
+-- row fetched by primary key (`PoolCurrentStateLookup::get_by_address`) — a
+-- btree on it serves neither access path. Nor did it serve the old guard,
+-- which compared the column on one row already located by `ON CONFLICT`.
+--
+-- So it was already dead before this migration; making `last_event_at` a
+-- purely displayed value is simply what made us look. It cost a write on every
+-- projection upsert, on the hottest write path there is, and this migration
+-- makes that path fire more often — a third of the upserts it used to reject
+-- now apply.
+DROP INDEX idx_pool_current_state_last_event_at;
