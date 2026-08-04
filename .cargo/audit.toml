@@ -48,4 +48,40 @@ ignore = [
   # vulnerability. Solana itself will migrate the day the ecosystem
   # picks a successor; we follow.
   "RUSTSEC-2025-0141",
+
+  # ─────────────────────────────────────────────────────────────────
+  # RUSTSEC-2026-0235 — `rkyv 0.7.46` out-of-bounds reads on archives
+  # containing Rc/Arc, via insufficient archive validation
+  #
+  # Status: NOT COMPILED. Same shape as RUSTSEC-2023-0071 above, but
+  # one step stronger — this crate is not merely unreachable, it is
+  # never built.
+  #
+  # `rkyv` is an OPTIONAL dependency of `rust_decimal`, gated behind
+  # its `rkyv` feature (`rkyv = ["dep:rkyv"]`, `optional = true`).
+  # That feature is not in `rust_decimal`'s default set
+  # (`default = ["serde", "std"]`) and no crate of this workspace
+  # enables it — `grep -rn rkyv Cargo.toml crates/*/Cargo.toml`
+  # returns nothing. Verified 2026-08-04, three ways:
+  #   - `cargo tree -i rkyv --target all` → "nothing to print"
+  #   - no `rkyv` artefact in `target/debug/deps/` after a full
+  #     `cargo build --workspace`
+  #   - the feature graph (`cargo tree -e features -i rust_decimal`)
+  #     shows only `default`
+  #
+  # It sits in Cargo.lock because the lockfile records a package's
+  # optional dependencies whether or not the feature is on. Reading
+  # archives we never produce, with code we never link, is not an
+  # attack surface.
+  #
+  # No upgrade path today: the advisory wants rkyv >= 0.8.17, and
+  # `rust_decimal 1.42.1` — the latest release — pins `rkyv 0.7.46`.
+  # Upstream is moving: 1.42.1 already carries `rkyv-0_8` as a
+  # dev-dependency.
+  #
+  # Revisit when:
+  #   - `rust_decimal` ships a release whose optional rkyv is 0.8.x, OR
+  #   - anything in this workspace enables the `rkyv` feature — at
+  #     which point this entry becomes wrong and must go.
+  "RUSTSEC-2026-0235",
 ]
