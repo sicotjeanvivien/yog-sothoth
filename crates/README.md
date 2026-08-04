@@ -132,10 +132,12 @@ psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
 cargo run -p yog-persistence --bin yog-migrate
 
 # 4. Seed the watched-pools allowlist (one-time, by hand — there is no seed
-#    script; see persistence/README.md → "Seeding the allowlist"). Skipping it
-#    leaves a pool-centric indexer with nothing to subscribe to.
+#    script). Skipping it leaves a pool-centric indexer with nothing to
+#    subscribe to; seeding it with pools that have gone quiet leaves one that
+#    subscribes to nothing while looking healthy. Pick pools trading NOW:
+#    see persistence/README.md → "Choosing pools to watch".
 psql "postgresql://yog:yog@localhost:5433/yog_sothoth" -c \
-    "INSERT INTO watched_pools (pool_address, protocol) VALUES ('<pubkey>', 'damm_v2') \
+    "INSERT INTO watched_pools (pool_address, protocol) VALUES ('<pubkey>', 'meteora_damm_v2') \
      ON CONFLICT (pool_address) DO NOTHING;"
 
 # 5. Run the binary you're working on
