@@ -62,6 +62,13 @@ pub enum ExtractionFailure {
         event_name: &'static str,
         reason: String,
     },
+
+    /// The transaction emitted more event payloads than an `event_index` can
+    /// number, so the event was dropped rather than stored under a truncated
+    /// index. Unreachable in practice; counted separately because, unlike the
+    /// other three, it means a *valid* event was lost.
+    #[error("event index {index} exceeds the u16 an event_index can hold")]
+    EventIndexOverflow { index: usize },
 }
 
 /// Companion to [`UnknownEventInfo::discriminator`], for callers that want

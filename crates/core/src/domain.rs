@@ -1,7 +1,9 @@
 mod announcements;
 mod domain_event;
+mod event_position;
 mod freshness_status;
 mod global_analytics;
+mod insert_outcome;
 mod liquidity_flow;
 mod meteora;
 mod network_status;
@@ -21,8 +23,10 @@ mod watched_pool;
 
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use domain_event::DomainEvent;
+pub use event_position::{EventPosition, TransactionPosition};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};
+pub use insert_outcome::InsertOutcome;
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,

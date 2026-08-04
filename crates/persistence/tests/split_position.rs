@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use yog_core::domain::InsertOutcome;
 
 use yog_core::domain::{
     MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
@@ -22,6 +23,9 @@ async fn split_position_preserves_every_bucket(pool: PgPool) {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         first_owner: pk(2),
         second_owner: pk(3),
         first_position: pk(4),
@@ -65,8 +69,8 @@ async fn split_position_preserves_every_bucket(pool: PgPool) {
         },
     };
 
-    repo.insert(&event).await.unwrap();
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_split_position_events")
@@ -75,17 +79,22 @@ async fn split_position_preserves_every_bucket(pool: PgPool) {
             .unwrap();
     assert_eq!(
         count, 1,
-        "duplicate (signature, second_position, timestamp) must not insert twice"
+        "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // One transaction can split the same source toward several targets: a
-    // different second_position is a distinct split, not a duplicate.
-    repo.insert(&MeteoraDammV2SplitPositionEvent {
-        second_position: pk(6),
-        ..event.clone()
-    })
-    .await
-    .unwrap();
+    // One transaction can split the same source toward several targets. Each
+    // split is its own emission, so `event_index` tells them apart —
+    // `second_position` stays as data, but left the key in migration 041.
+    assert_eq!(
+        repo.insert(&MeteoraDammV2SplitPositionEvent {
+            second_position: pk(6),
+            event_index: 1,
+            ..event.clone()
+        })
+        .await
+        .unwrap(),
+        InsertOutcome::Inserted
+    );
     let count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_split_position_events")
             .fetch_one(&pool)

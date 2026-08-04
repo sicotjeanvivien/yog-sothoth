@@ -1,10 +1,7 @@
 //! Translation of `cp-amm::EvtFundReward` into its domain event.
 
-use chrono::{DateTime, Utc};
-use solana_signature::Signature;
-
 use crate::application::extraction::meteora::damm_v2::events::EvtFundReward;
-use crate::domain::MeteoraDammV2FundRewardEvent;
+use crate::domain::{EventPosition, MeteoraDammV2FundRewardEvent};
 
 /// Translate an [`EvtFundReward`] into a [`MeteoraDammV2FundRewardEvent`].
 ///
@@ -12,13 +9,15 @@ use crate::domain::MeteoraDammV2FundRewardEvent;
 /// pair is carried through unscaled; interpreting it is the reader's job.
 pub(super) fn translate_fund_reward(
     wire: &EvtFundReward,
-    signature: Signature,
-    timestamp: DateTime<Utc>,
+    event_position: EventPosition,
 ) -> MeteoraDammV2FundRewardEvent {
     MeteoraDammV2FundRewardEvent {
         pool_address: wire.pool,
-        signature,
-        timestamp,
+        signature: event_position.signature,
+        timestamp: event_position.timestamp,
+        slot: event_position.slot,
+        transaction_index: event_position.transaction_index,
+        event_index: event_position.event_index,
         funder: wire.funder,
         mint_reward: wire.mint_reward,
         reward_index: wire.reward_index,

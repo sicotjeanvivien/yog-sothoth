@@ -28,8 +28,8 @@ async fn insert_liquidity_event(
     sqlx::query(
         "INSERT INTO meteora_damm_v2_liquidity_events
            (pool_address, signature, liquidity_event_kind, amount_a, amount_b,
-            liquidity_delta, reserve_a_after, reserve_b_after, position, owner, timestamp)
-         VALUES ($1,$2,$3,$4,$5,0,0,0,'','',$6)",
+            liquidity_delta, reserve_a_after, reserve_b_after, position, owner, timestamp, slot, event_index)
+         VALUES ($1,$2,$3,$4,$5,0,0,0,'','',$6,0,0)",
     )
     .bind(pool_addr)
     .bind(signature)

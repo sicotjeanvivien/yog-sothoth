@@ -77,6 +77,21 @@ Every response body is validated with zod before it reaches a
 component; a payload that violates the schema is a `validation` error,
 not a rendering surprise.
 
+### The schemas are strict, so the API deploys first
+
+Required fields are required. `eventIndex` on `swap-event.ts` and
+`liquidity-event.ts` is the live example: it identifies which hop of a routed
+transaction a row is (several rows share a signature and a timestamp), so
+making it optional would silently default it to `0` and bring back the
+duplicate React keys it exists to remove. A schema that tolerates a missing
+field is how a field ends up missing for good.
+
+The price is an ordering constraint: **ship the API before the web**. A web
+container newer than the API fails validation on every swap/liquidity list
+rather than degrading. Today `docker compose --profile full` starts both from
+the same commit, so the deployment unit enforces it; the constraint only
+becomes real the day the two ship separately.
+
 `ApiClientError` has four kinds, and Server Components branch on them
 through `safeFetch` instead of try/catch:
 

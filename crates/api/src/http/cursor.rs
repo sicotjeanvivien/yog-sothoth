@@ -33,6 +33,10 @@ struct PoolCursorWire {
 struct EventCursorWire {
     timestamp: String,
     signature: String,
+    /// Added with migration 041. Cursors minted before it decode with 0,
+    /// which is the right default: the first hop of its transaction.
+    #[serde(default)]
+    event_index: u16,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -55,10 +59,12 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
         Cursor::MeteoraDammV2SwapEvent(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
             signature: c.signature.to_string(),
+            event_index: c.event_index,
         }),
         Cursor::MeteoraDammV2LiquidityEvent(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
             signature: c.signature.to_string(),
+            event_index: c.event_index,
         }),
         Cursor::Signal(c) => encode_b64_json(&SignalCursorWire {
             triggered_at: c.triggered_at.to_rfc3339(),
@@ -107,6 +113,7 @@ pub(crate) fn decode_swap_cursor(raw: &str) -> Result<MeteoraDammV2SwapEventCurs
     Ok(MeteoraDammV2SwapEventCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature,
+        event_index: wire.event_index,
     })
 }
 
@@ -119,6 +126,7 @@ pub(crate) fn decode_liquidity_cursor(
     Ok(MeteoraDammV2LiquidityEventCursor {
         timestamp: parse_rfc3339(&wire.timestamp)?,
         signature,
+        event_index: wire.event_index,
     })
 }
 

@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use yog_core::domain::InsertOutcome;
 use yog_core::domain::MeteoraDammV2FundRewardEventRepository;
 
 use yog_core::domain::MeteoraDammV2FundRewardEvent;
@@ -18,6 +19,9 @@ async fn fund_reward_preserves_q64_rates(pool: PgPool) {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         funder: pk(2),
         mint_reward: pk(3),
         reward_index: 0,
@@ -28,9 +32,9 @@ async fn fund_reward_preserves_q64_rates(pool: PgPool) {
         post_reward_rate: POST_RATE,
     };
 
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
     // Same (signature, reward_index, timestamp) again — ON CONFLICT DO NOTHING.
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_fund_reward_events")
         .fetch_one(&pool)
@@ -38,16 +42,22 @@ async fn fund_reward_preserves_q64_rates(pool: PgPool) {
         .unwrap();
     assert_eq!(
         count, 1,
-        "duplicate (signature, reward_index, timestamp) must not insert twice"
+        "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // A second slot funded by the same transaction is a distinct event.
-    repo.insert(&MeteoraDammV2FundRewardEvent {
-        reward_index: 1,
-        ..event.clone()
-    })
-    .await
-    .unwrap();
+    // A second slot funded by the same transaction is a distinct event — a
+    // second `emit_cpi!`, hence a second `event_index`. Since migration 041 that
+    // is what the key looks at, not `reward_index`.
+    assert_eq!(
+        repo.insert(&MeteoraDammV2FundRewardEvent {
+            reward_index: 1,
+            event_index: 1,
+            ..event.clone()
+        })
+        .await
+        .unwrap(),
+        InsertOutcome::Inserted
+    );
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_fund_reward_events")
         .fetch_one(&pool)
         .await

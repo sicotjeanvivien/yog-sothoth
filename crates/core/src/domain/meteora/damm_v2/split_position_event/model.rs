@@ -73,6 +73,10 @@ pub struct MeteoraDammV2SplitPositionEvent {
     pub pool_address: Pubkey,
     pub signature: Signature,
     pub timestamp: DateTime<Utc>,
+    /// Position in the chain — see [`crate::domain::EventPosition`].
+    pub slot: u64,
+    pub transaction_index: Option<u32>,
+    pub event_index: u16,
     pub first_owner: Pubkey,
     pub second_owner: Pubkey,
     pub first_position: Pubkey,

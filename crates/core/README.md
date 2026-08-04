@@ -171,6 +171,8 @@ Documented on the affected types and enforced at construction time:
 - **Four fee components separated** — `claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee` — so detectors can distinguish LP yield from protocol revenue.
 - **Lossless `u128` in DB** — `next_sqrt_price` (Q64.64) and `liquidity_delta` are stored as `NUMERIC(39, 0)`; conversion happens in `persistence`, never here.
 - **Off-chain decimal prices** — `TokenPrice::price_usd` is a `rust_decimal::Decimal` (infra-neutral, no `sqlx` leak).
+- **Every event carries its position in the chain** — `slot`, `event_index` and `transaction_index` sit on all 19 DAMM v2 event types, assembled once per transaction as an `EventPosition` (see `domain/event_position.rs`) and threaded through the translators. `event_index` numbers the transaction's Anchor self-CPI payloads *including the ones we don't decode*, which is what lets `(signature, event_index, timestamp)` be a stable unique key: numbering only recognised events would renumber stored rows the day a new discriminator is implemented. The contract that guarantees it is the filter in `extract_anchor_event_cpis` — widen it freely, never narrow it (its doc-comment says why). `transaction_index` is `None` on the `getTransaction` path and exists for the gRPC migration.
+- **An insert reports what it did** — event repositories return `InsertOutcome::{Inserted, Skipped}`, not `()`. `ON CONFLICT DO NOTHING` makes "no error" ambiguous, and discarding the difference is how a too-narrow unique key silently dropped 3–8 % of a pool's swaps until the August 2026 audit.
 
 ## Tests
 

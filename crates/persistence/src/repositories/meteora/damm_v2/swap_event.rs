@@ -19,8 +19,8 @@ use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
     domain::{
-        MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed,
-        MeteoraDammV2SwapEventRepository,
+        InsertOutcome, MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor,
+        MeteoraDammV2SwapEventFeed, MeteoraDammV2SwapEventRepository,
     },
     tools::{Cursor, Page, PageDirection, PagePosition},
 };
@@ -42,8 +42,8 @@ impl PgMeteoraDammV2SwapEventRepository {
 
 #[async_trait]
 impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
-    async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<()> {
-        sqlx::query!(
+    async fn insert(&self, event: &MeteoraDammV2SwapEvent) -> RepositoryResult<InsertOutcome> {
+        let result = sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_swap_events (
                 pool_address, signature,
@@ -51,7 +51,8 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
                 reserve_a_after, reserve_b_after, next_sqrt_price,
                 claiming_fee, protocol_fee, compounding_fee, referral_fee,
                 fee_token_is_a,
-                timestamp
+                timestamp,
+                slot, event_index, transaction_index
             )
             VALUES (
                 $1, $2,
@@ -59,9 +60,10 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
                 $6, $7, $8,
                 $9, $10, $11, $12,
                 $13,
-                $14
+                $14,
+                $15, $16, $17
             )
-            ON CONFLICT (signature, timestamp) DO NOTHING
+            ON CONFLICT (signature, event_index, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
             event.signature.to_string(),
@@ -77,12 +79,15 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
             convert_u64_to_i64(event.referral_fee, "referral_fee")?,
             event.fee_token_is_a,
             event.timestamp,
+            convert_u64_to_i64(event.slot, "slot")?,
+            i32::from(event.event_index),
+            event.transaction_index.map(i64::from),
         )
         .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(())
+        Ok(InsertOutcome::from_rows_affected(result.rows_affected()))
     }
 }
 
@@ -118,9 +123,13 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
 
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
-        let (cursor_timestamp, cursor_signature) = match active_cursor {
-            Some(c) => (Some(c.timestamp), Some(c.signature.to_string())),
-            None => (None, None),
+        let (cursor_timestamp, cursor_signature, cursor_event_index) = match active_cursor {
+            Some(c) => (
+                Some(c.timestamp),
+                Some(c.signature.to_string()),
+                Some(i32::from(c.event_index)),
+            ),
+            None => (None, None, None),
         };
 
         let rows: Vec<MeteoraDammV2SwapEventRow> = match mode {
@@ -132,21 +141,24 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
                        reserve_a_after, reserve_b_after, next_sqrt_price,
                        claiming_fee, protocol_fee, compounding_fee, referral_fee,
                        fee_token_is_a,
-                       timestamp
+                       timestamp,
+                       slot, event_index, transaction_index
                 FROM meteora_damm_v2_swap_events
                 WHERE pool_address = $1
                   AND (
                       $2::TIMESTAMPTZ IS NULL
                       OR timestamp < $2
                       OR (timestamp = $2 AND signature > $3)
+                      OR (timestamp = $2 AND signature = $3 AND event_index > $5)
                   )
-                ORDER BY timestamp DESC, signature ASC
+                ORDER BY timestamp DESC, signature ASC, event_index ASC
                 LIMIT $4
                 "#,
                 pool_address.to_string(),
                 cursor_timestamp,
                 cursor_signature,
                 fetch_limit,
+                cursor_event_index,
             )
             .fetch_all(&self.pool)
             .await
@@ -160,21 +172,24 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
                        reserve_a_after, reserve_b_after, next_sqrt_price,
                        claiming_fee, protocol_fee, compounding_fee, referral_fee,
                        fee_token_is_a,
-                       timestamp
+                       timestamp,
+                       slot, event_index, transaction_index
                 FROM meteora_damm_v2_swap_events
                 WHERE pool_address = $1
                   AND (
                       $2::TIMESTAMPTZ IS NULL
                       OR timestamp > $2
                       OR (timestamp = $2 AND signature < $3)
+                      OR (timestamp = $2 AND signature = $3 AND event_index < $5)
                   )
-                ORDER BY timestamp ASC, signature DESC
+                ORDER BY timestamp ASC, signature DESC, event_index DESC
                 LIMIT $4
                 "#,
                 pool_address.to_string(),
                 cursor_timestamp,
                 cursor_signature,
                 fetch_limit,
+                cursor_event_index,
             )
             .fetch_all(&self.pool)
             .await
@@ -191,6 +206,7 @@ impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
                 Cursor::MeteoraDammV2SwapEvent(MeteoraDammV2SwapEventCursor {
                     timestamp: e.timestamp,
                     signature: e.signature,
+                    event_index: e.event_index,
                 })
             }),
         )

@@ -18,6 +18,7 @@ mod claim_caggs;
 mod claim_protocol_fee;
 mod close_position;
 mod create_position;
+mod event_index_uniqueness;
 mod fund_reward;
 mod initialize_pool;
 mod initialize_reward;

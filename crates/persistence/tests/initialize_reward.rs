@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use yog_core::domain::InsertOutcome;
 use yog_core::domain::MeteoraDammV2InitializeRewardEventRepository;
 
 use yog_core::domain::MeteoraDammV2InitializeRewardEvent;
@@ -16,6 +17,9 @@ async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         reward_mint: pk(2),
         funder: pk(3),
         creator: pk(3),
@@ -23,9 +27,9 @@ async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
         reward_duration: 604_800,
     };
 
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
     // Same (signature, reward_index, timestamp) again — ON CONFLICT DO NOTHING.
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_initialize_reward_events")
@@ -34,18 +38,23 @@ async fn initialize_reward_inserts_and_is_idempotent(pool: PgPool) {
             .unwrap();
     assert_eq!(
         count, 1,
-        "duplicate (signature, reward_index, timestamp) must not insert twice"
+        "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // A single transaction may open more than one slot: the same signature with
-    // a different reward_index is a distinct event, not a duplicate. This is why
-    // reward_index is part of the idempotency key.
-    repo.insert(&MeteoraDammV2InitializeRewardEvent {
-        reward_index: 1,
-        ..event.clone()
-    })
-    .await
-    .unwrap();
+    // A single transaction may open more than one slot. Each opening is its own
+    // emission, so what separates them is `event_index` — since migration 041
+    // that is the key's discriminant, in place of `reward_index`, and it works
+    // the same way for the fifteen event kinds that never had one.
+    assert_eq!(
+        repo.insert(&MeteoraDammV2InitializeRewardEvent {
+            reward_index: 1,
+            event_index: 1,
+            ..event.clone()
+        })
+        .await
+        .unwrap(),
+        InsertOutcome::Inserted
+    );
 
     let count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_initialize_reward_events")

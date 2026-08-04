@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use yog_core::domain::InsertOutcome;
 use yog_core::domain::MeteoraDammV2WithdrawIneligibleRewardEventRepository;
 
 use yog_core::domain::MeteoraDammV2WithdrawIneligibleRewardEvent;
@@ -17,13 +18,16 @@ async fn withdraw_ineligible_reward_inserts_and_is_idempotent(pool: PgPool) {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         reward_mint: pk(2),
         amount: 0,
     };
 
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
     // Same (signature, timestamp) again — ON CONFLICT DO NOTHING.
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM meteora_damm_v2_withdraw_ineligible_reward_events",
@@ -33,7 +37,7 @@ async fn withdraw_ineligible_reward_inserts_and_is_idempotent(pool: PgPool) {
     .unwrap();
     assert_eq!(
         count, 1,
-        "duplicate (signature, timestamp) must not insert twice"
+        "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
     let (mint, amount): (String, i64) = sqlx::query_as(

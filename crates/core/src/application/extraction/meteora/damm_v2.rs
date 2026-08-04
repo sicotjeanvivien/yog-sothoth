@@ -2,14 +2,11 @@ pub mod events;
 pub mod extractor;
 pub(super) mod translator;
 
-use chrono::{DateTime, Utc};
-use solana_signature::Signature;
-
 use crate::CoreResult;
 use crate::application::extraction::meteora::{extract_signature, extract_timestamp};
 use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
 use crate::application::extraction::{EventExtractor, ExtractionOutcome};
-use crate::domain::Protocol;
+use crate::domain::{Protocol, TransactionPosition};
 use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 use self::extractor::extract_wire_events;
@@ -47,14 +44,22 @@ impl EventExtractor for MeteoraDammV2 {
         &self,
         tx: &EncodedConfirmedTransactionWithStatusMeta,
     ) -> CoreResult<ExtractionOutcome> {
-        let signature = extract_signature(tx)?;
-        let timestamp = extract_timestamp(tx)?;
+        // `slot` and `transaction_index` are read straight off the transaction:
+        // unlike the signature and the block time they need no parsing, and
+        // `transaction_index` is `None` on the `getTransaction` path (Helius
+        // omits it — see `TransactionPosition`).
+        let transaction_position = TransactionPosition {
+            signature: extract_signature(tx)?,
+            timestamp: extract_timestamp(tx)?,
+            slot: tx.slot,
+            transaction_index: tx.transaction_index,
+        };
 
         // Step 1: extract wire events from inner instructions.
         let wire_outcome = extract_wire_events(tx, &self.program_id_str);
 
         // Step 2: translate each wire event into a domain event.
-        translate_extracted_events(wire_outcome, self.protocol, signature, timestamp)
+        translate_extracted_events(wire_outcome, self.protocol, transaction_position)
     }
 }
 
@@ -66,8 +71,7 @@ impl EventExtractor for MeteoraDammV2 {
 fn translate_extracted_events(
     wire_outcome: extractor::ExtractedEvents,
     protocol: Protocol,
-    signature: Signature,
-    timestamp: DateTime<Utc>,
+    transaction_position: TransactionPosition,
 ) -> CoreResult<ExtractionOutcome> {
     let mut outcome = ExtractionOutcome::default();
 
@@ -84,12 +88,14 @@ fn translate_extracted_events(
         outcome.failures.push(map_extractor_failure(failure));
     }
 
-    for wire in wire_outcome.events.iter() {
-        match translate_wire_event(wire, signature, timestamp) {
+    for indexed in wire_outcome.events.iter() {
+        let event_position = transaction_position.at(indexed.event_index);
+
+        match translate_wire_event(&indexed.event, event_position) {
             Ok(domain) => outcome.events.push(domain),
             Err(e) => {
                 outcome.failures.push(ExtractionFailure::Translation {
-                    event_name: wire_event_name(wire),
+                    event_name: wire_event_name(&indexed.event),
                     reason: e.to_string(),
                 });
             }
@@ -131,5 +137,8 @@ fn map_extractor_failure(failure: extractor::ExtractFailure) -> ExtractionFailur
         extractor::ExtractFailure::Borsh {
             event_name, reason, ..
         } => ExtractionFailure::Borsh { event_name, reason },
+        extractor::ExtractFailure::EventIndexOverflow { index } => {
+            ExtractionFailure::EventIndexOverflow { index }
+        }
     }
 }

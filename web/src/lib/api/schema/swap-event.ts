@@ -13,6 +13,10 @@ export const SwapEventSchema = z.object({
   protocol: z.string().min(1),
   signature: z.string().min(1),
   timestamp: Rfc3339,
+  // Position of the event among its transaction's emissions. A routed
+  // transaction yields several rows sharing `signature` and `timestamp`, so
+  // this is the only field that makes a list row uniquely identifiable.
+  eventIndex: z.number().int().nonnegative(),
 
   tradeDirection: z.enum(["a_to_b", "b_to_a"]),
   // All u64 token quantities (amounts, reserves, fees) are emitted as

@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use yog_core::domain::InsertOutcome;
 use yog_core::domain::MeteoraDammV2UpdateRewardDurationEventRepository;
 
 use yog_core::domain::MeteoraDammV2UpdateRewardDurationEvent;
@@ -17,13 +18,16 @@ async fn update_reward_duration_inserts_and_is_idempotent(pool: PgPool) {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         reward_index: 0,
         old_reward_duration: 604_800,
         new_reward_duration: 1_209_600,
     };
 
-    repo.insert(&event).await.unwrap();
-    repo.insert(&event).await.unwrap();
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
+    assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_update_reward_duration_events")
@@ -32,16 +36,23 @@ async fn update_reward_duration_inserts_and_is_idempotent(pool: PgPool) {
             .unwrap();
     assert_eq!(
         count, 1,
-        "duplicate (signature, reward_index, timestamp) must not insert twice"
+        "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // Second slot in the same transaction: distinct event, not a duplicate.
-    repo.insert(&MeteoraDammV2UpdateRewardDurationEvent {
-        reward_index: 1,
-        ..event.clone()
-    })
-    .await
-    .unwrap();
+    // Second slot re-paced by the same transaction: a distinct emission, so a
+    // distinct `event_index`. `reward_index` still says *which* slot, but it no
+    // longer carries the key — `event_index` separates any two events of one
+    // transaction, whatever their kind (migration 041).
+    assert_eq!(
+        repo.insert(&MeteoraDammV2UpdateRewardDurationEvent {
+            reward_index: 1,
+            event_index: 1,
+            ..event.clone()
+        })
+        .await
+        .unwrap(),
+        InsertOutcome::Inserted
+    );
     let count: i64 =
         sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_update_reward_duration_events")
             .fetch_one(&pool)

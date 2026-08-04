@@ -6,9 +6,9 @@ use solana_signature::Signature;
 use std::sync::Mutex;
 use yog_core::RepositoryResult;
 use yog_core::domain::{
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
-    MeteoraDammV2SplitPositionState, Pool, PoolCurrentStateRepository, PoolCurrentStateUpsert,
-    PoolRepository, TradeDirection,
+    InsertOutcome, MeteoraDammV2LiquidityEventKind, MeteoraDammV2SplitAmounts,
+    MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionState, Pool,
+    PoolCurrentStateRepository, PoolCurrentStateUpsert, PoolRepository, TradeDirection,
 };
 
 type Calls = Arc<Mutex<Vec<&'static str>>>;
@@ -23,9 +23,9 @@ macro_rules! insert_only_mock {
         struct $mock(Calls);
         #[async_trait]
         impl $repo for $mock {
-            async fn insert(&self, _e: &$event) -> RepositoryResult<()> {
+            async fn insert(&self, _e: &$event) -> RepositoryResult<InsertOutcome> {
                 rec(&self.0, $label);
-                Ok(())
+                Ok(InsertOutcome::Inserted)
             }
         }
     };
@@ -123,36 +123,41 @@ insert_only_mock!(
 
 // Ring-1 repos: record `insert`; their read methods are never hit by
 // `persist()`, so they stub out.
-struct MockSwap(Calls);
+/// Carries the outcome it should report, so a test can drive the
+/// `Skipped` branch of `persist()` — the one the correction added.
+struct MockSwap(Calls, InsertOutcome);
 #[async_trait]
 impl MeteoraDammV2SwapEventRepository for MockSwap {
-    async fn insert(&self, _e: &MeteoraDammV2SwapEvent) -> RepositoryResult<()> {
+    async fn insert(&self, _e: &MeteoraDammV2SwapEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:swap");
-        Ok(())
+        Ok(self.1)
     }
 }
 struct MockLiquidity(Calls);
 #[async_trait]
 impl MeteoraDammV2LiquidityEventRepository for MockLiquidity {
-    async fn insert(&self, _e: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<()> {
+    async fn insert(&self, _e: &MeteoraDammV2LiquidityEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:liquidity");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 struct MockClaimFee(Calls);
 #[async_trait]
 impl MeteoraDammV2ClaimPositionFeeEventRepository for MockClaimFee {
-    async fn insert(&self, _e: &MeteoraDammV2ClaimPositionFeeEvent) -> RepositoryResult<()> {
+    async fn insert(
+        &self,
+        _e: &MeteoraDammV2ClaimPositionFeeEvent,
+    ) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:claim_position_fee");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 struct MockClaimReward(Calls);
 #[async_trait]
 impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
-    async fn insert(&self, _e: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<()> {
+    async fn insert(&self, _e: &MeteoraDammV2ClaimRewardEvent) -> RepositoryResult<InsertOutcome> {
         rec(&self.0, "insert:claim_reward");
-        Ok(())
+        Ok(InsertOutcome::Inserted)
     }
 }
 
@@ -204,8 +209,15 @@ fn sg() -> Signature {
 }
 
 fn build(calls: Calls) -> MeteoraDammV2EventPersistor {
+    build_with_swap_outcome(calls, InsertOutcome::Inserted)
+}
+
+fn build_with_swap_outcome(
+    calls: Calls,
+    swap_outcome: InsertOutcome,
+) -> MeteoraDammV2EventPersistor {
     let repos = DammV2Repos {
-        swap_event: Arc::new(MockSwap(calls.clone())),
+        swap_event: Arc::new(MockSwap(calls.clone(), swap_outcome)),
         liquidity_event: Arc::new(MockLiquidity(calls.clone())),
         claim_position_fee: Arc::new(MockClaimFee(calls.clone())),
         claim_protocol_fee: Arc::new(MockClaimProtocolFee(calls.clone())),
@@ -281,6 +293,9 @@ fn swap() -> MeteoraDammV2SwapEvent {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         trade_direction: TradeDirection::AtoB,
         amount_a: 1,
         amount_b: 2,
@@ -299,6 +314,9 @@ fn liquidity() -> MeteoraDammV2LiquidityEvent {
         pool_address: pk(1),
         signature: sg(),
         timestamp: ts(),
+        slot: 1,
+        transaction_index: None,
+        event_index: 0,
         liquidity_event_kind: MeteoraDammV2LiquidityEventKind::Add,
         amount_a: 1,
         amount_b: 2,
@@ -334,6 +352,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 owner: pk(5),
                 fee_a_claimed: 1,
@@ -351,6 +372,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 owner: pk(5),
                 mint_reward: pk(6),
@@ -369,6 +393,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 token_a_amount: 0,
                 token_b_amount: 1_421_627_556,
             })
@@ -384,6 +411,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 reward_mint: pk(6),
                 funder: pk(7),
                 creator: pk(7),
@@ -402,6 +432,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 funder: pk(7),
                 mint_reward: pk(6),
                 reward_index: 0,
@@ -424,6 +457,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                     pool_address: pk(1),
                     signature: sg(),
                     timestamp: ts(),
+                    slot: 1,
+                    transaction_index: None,
+                    event_index: 0,
                     reward_mint: pk(6),
                     amount: 0,
                 }
@@ -440,6 +476,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 reward_index: 1,
                 old_reward_duration: 604_800,
                 new_reward_duration: 1_209_600,
@@ -456,6 +495,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 reward_index: 0,
                 old_funder: pk(7),
                 new_funder: pk(8),
@@ -473,6 +515,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                     pool_address: pk(1),
                     signature: sg(),
                     timestamp: ts(),
+                    slot: 1,
+                    transaction_index: None,
+                    event_index: 0,
                     reward_mint: pk(6),
                     // cp-amm only emits this event when the amount is > 0.
                     amount: 42_000,
@@ -490,6 +535,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 first_owner: pk(2),
                 second_owner: pk(3),
                 first_position: pk(4),
@@ -514,6 +562,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 owner: pk(5),
                 position: pk(4),
                 position_nft_mint: pk(7),
@@ -530,6 +581,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 owner: pk(5),
                 position: pk(4),
                 position_nft_mint: pk(7),
@@ -548,6 +602,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 owner: pk(5),
                 vesting: pk(8),
@@ -569,6 +626,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 position: pk(4),
                 lock_liquidity_amount: 1,
                 total_permanent_locked_liquidity: 1,
@@ -594,6 +654,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 token_a_mint: pk(2),
                 token_b_mint: pk(3),
                 creator: pk(9),
@@ -629,6 +692,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 status: 1,
             })
         )
@@ -643,6 +709,9 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 pool_address: pk(1),
                 signature: sg(),
                 timestamp: ts(),
+                slot: 1,
+                transaction_index: None,
+                event_index: 0,
                 operator: pk(12),
                 // The blob is no longer decoded at all: a fee change flags the
                 // pool and yog-context re-reads the account.
@@ -655,5 +724,71 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
             "pool:mark_needs_refresh",
             "insert:update_pool_fees"
         ]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// A skipped insert must be counted, not merely tolerated
+// ---------------------------------------------------------------------------
+
+/// The whole point of `InsertOutcome` is that a write which wrote nothing stops
+/// passing for a success. That guarantee lives in one branch of `persist()`,
+/// and until this test it was the only part of the correction with no test:
+/// every mock reported `Inserted`, so deleting the branch left the suite green.
+///
+/// Asserts **both** counters, because their relationship is the contract:
+/// `instructions_indexed` keeps meaning "events processed" and rows actually
+/// written are `indexed − skipped`. A future change that stopped counting the
+/// event as indexed would break that arithmetic silently.
+///
+/// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
+/// *current thread* for the duration of a closure, so the future has to be
+/// driven inside it — hence the current-thread runtime.
+#[test]
+fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let calls: Calls = Arc::new(Mutex::new(Vec::new()));
+                let p = build_with_swap_outcome(calls.clone(), InsertOutcome::Skipped);
+                p.persist(&MeteoraDammV2Event::Swap(swap())).await;
+
+                // The recipe still ran in full — a skip is not a failure.
+                assert_eq!(
+                    calls.lock().unwrap().clone(),
+                    ["pool:upsert", "insert:swap", "pcs:upsert"]
+                );
+            });
+    });
+
+    // ONE snapshot, queried twice. `Snapshotter::snapshot` is destructive —
+    // it reads counters with `swap(0)` — so a second call returns zeros and a
+    // test written that way "proves" a counter that never fired.
+    let snapshot = snapshotter.snapshot().into_vec();
+    let counter = |name: &str| {
+        snapshot
+            .iter()
+            .find(|(key, _, _, _)| key.key().name() == name)
+            .map(|(_, _, _, value)| value)
+    };
+
+    assert_eq!(
+        counter("yog_indexer_event_insert_skipped_total"),
+        Some(&DebugValue::Counter(1)),
+        "a skipped insert must increment its own counter — otherwise the drop \
+         is invisible again, which is the defect this PR corrects"
+    );
+    assert_eq!(
+        counter("yog_indexer_instructions_indexed_total"),
+        Some(&DebugValue::Counter(1)),
+        "the event was still processed: rows written are indexed − skipped, and \
+         that arithmetic breaks if a skip stops counting as indexed"
     );
 }

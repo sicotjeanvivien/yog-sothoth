@@ -31,6 +31,10 @@ pub(crate) struct SwapEventResponse {
     pub(crate) pool_address: String,
     pub(crate) protocol: String,
     pub(crate) signature: String,
+    /// Position of this event among its transaction's emissions. A routed
+    /// transaction produces several rows sharing `signature` and `timestamp`;
+    /// this is what tells them apart — and the only stable key for a list row.
+    pub(crate) event_index: u16,
     pub(crate) timestamp: DateTime<Utc>,
 
     pub(crate) trade_direction: String,
@@ -57,6 +61,7 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
             pool_address: event.pool_address.to_string(),
             protocol: Protocol::MeteoraDammV2.to_string(),
             signature: event.signature.to_string(),
+            event_index: event.event_index,
             timestamp: event.timestamp,
             trade_direction: trade_direction_str(event.trade_direction),
             amount_a: event.amount_a.to_string(),

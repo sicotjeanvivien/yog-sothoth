@@ -21,6 +21,10 @@ pub struct MeteoraDammV2UpdateRewardDurationEvent {
     pub pool_address: Pubkey,
     pub signature: Signature,
     pub timestamp: DateTime<Utc>,
+    /// Position in the chain — see [`crate::domain::EventPosition`].
+    pub slot: u64,
+    pub transaction_index: Option<u32>,
+    pub event_index: u16,
     pub reward_index: u8,
     /// Window length before the change, in seconds.
     pub old_reward_duration: u64,

@@ -29,8 +29,8 @@ async fn insert_swap(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
             amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
-            claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a, timestamp)
-         VALUES ($1,$2,$3,$4,$5,0,0,0,0,0,0,0,false,$6)",
+            claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a, timestamp, slot, event_index)
+         VALUES ($1,$2,$3,$4,$5,0,0,0,0,0,0,0,false,$6,0,0)",
     )
     .bind(pool_addr)
     .bind(signature)

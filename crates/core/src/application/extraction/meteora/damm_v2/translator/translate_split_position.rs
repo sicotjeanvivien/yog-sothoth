@@ -1,14 +1,11 @@
 //! Translation of `cp-amm::EvtSplitPosition3` into its domain event.
 
-use chrono::{DateTime, Utc};
-use solana_signature::Signature;
-
 use crate::application::extraction::meteora::damm_v2::events::{
     EvtSplitPosition3, SplitPositionInfo2,
 };
 use crate::domain::{
-    MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators, MeteoraDammV2SplitPositionEvent,
-    MeteoraDammV2SplitPositionState,
+    EventPosition, MeteoraDammV2SplitAmounts, MeteoraDammV2SplitNumerators,
+    MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionState,
 };
 
 /// Translate an [`EvtSplitPosition3`] into a [`MeteoraDammV2SplitPositionEvent`].
@@ -19,8 +16,7 @@ use crate::domain::{
 /// they stay separate types on both sides.
 pub(super) fn translate_split_position(
     wire: &EvtSplitPosition3,
-    signature: Signature,
-    timestamp: DateTime<Utc>,
+    event_position: EventPosition,
 ) -> MeteoraDammV2SplitPositionEvent {
     let state = |i: &SplitPositionInfo2| MeteoraDammV2SplitPositionState {
         unlocked_liquidity: i.unlocked_liquidity,
@@ -35,8 +31,11 @@ pub(super) fn translate_split_position(
     let p = &wire.split_position_parameters;
     MeteoraDammV2SplitPositionEvent {
         pool_address: wire.pool,
-        signature,
-        timestamp,
+        signature: event_position.signature,
+        timestamp: event_position.timestamp,
+        slot: event_position.slot,
+        transaction_index: event_position.transaction_index,
+        event_index: event_position.event_index,
         first_owner: wire.first_owner,
         second_owner: wire.second_owner,
         first_position: wire.first_position,

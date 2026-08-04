@@ -3,8 +3,10 @@ use crate::application::extraction::meteora::damm_v2::events::{
     EvtClosePosition, EvtLockPosition, EvtPermanentLockPosition, EvtSetPoolStatus,
     EvtUpdateRewardDuration, EvtUpdateRewardFunder, EvtWithdrawDeadLiquidityReward,
 };
-use crate::domain::{MeteoraDammV2LiquidityEventKind, TradeDirection};
+use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, TradeDirection};
+use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
+use solana_signature::Signature;
 
 fn pk(b: u8) -> Pubkey {
     Pubkey::new_from_array([b; 32])
@@ -15,6 +17,17 @@ fn sig() -> Signature {
 fn ts() -> DateTime<Utc> {
     DateTime::from_timestamp(1_700_000_000, 0).unwrap()
 }
+/// Distinct sentinel per field, like the wire events below: a translator that
+/// crossed two of them would still pass if they shared a value.
+fn pos() -> EventPosition {
+    EventPosition {
+        signature: sig(),
+        timestamp: ts(),
+        slot: 300_000_001,
+        transaction_index: Some(2),
+        event_index: 3,
+    }
+}
 
 #[test]
 fn close_position_maps_every_field() {
@@ -24,13 +37,16 @@ fn close_position_maps_every_field() {
         position: pk(3),
         position_nft_mint: pk(4),
     };
-    let d = translate_close_position(&wire, sig(), ts());
+    let d = translate_close_position(&wire, pos());
     assert_eq!(d.pool_address, pk(1));
     assert_eq!(d.owner, pk(2));
     assert_eq!(d.position, pk(3));
     assert_eq!(d.position_nft_mint, pk(4));
     assert_eq!(d.signature, sig());
     assert_eq!(d.timestamp, ts());
+    assert_eq!(d.slot, 300_000_001);
+    assert_eq!(d.transaction_index, Some(2));
+    assert_eq!(d.event_index, 3);
 }
 
 #[test]
@@ -46,7 +62,7 @@ fn lock_position_maps_every_field() {
         liquidity_per_period: 400,
         number_of_period: 5,
     };
-    let d = translate_lock_position(&wire, sig(), ts());
+    let d = translate_lock_position(&wire, pos());
     assert_eq!(d.pool_address, pk(1));
     assert_eq!(d.position, pk(2));
     assert_eq!(d.owner, pk(3));
@@ -66,7 +82,7 @@ fn permanent_lock_position_maps_every_field() {
         lock_liquidity_amount: 111,
         total_permanent_locked_liquidity: 222,
     };
-    let d = translate_permanent_lock_position(&wire, sig(), ts());
+    let d = translate_permanent_lock_position(&wire, pos());
     assert_eq!(d.pool_address, pk(1));
     assert_eq!(d.position, pk(2));
     assert_eq!(d.lock_liquidity_amount, 111);
@@ -79,11 +95,14 @@ fn set_pool_status_maps_every_field() {
         pool: pk(9),
         status: 1,
     };
-    let d = translate_set_pool_status(&wire, sig(), ts());
+    let d = translate_set_pool_status(&wire, pos());
     assert_eq!(d.pool_address, pk(9));
     assert_eq!(d.status, 1);
     assert_eq!(d.signature, sig());
     assert_eq!(d.timestamp, ts());
+    assert_eq!(d.slot, 300_000_001);
+    assert_eq!(d.transaction_index, Some(2));
+    assert_eq!(d.event_index, 3);
 }
 
 // ── ring-1 fee-side logic ───────────────────────────────────────────
@@ -138,13 +157,16 @@ fn update_reward_duration_maps_every_field() {
         old_reward_duration: 604_800,
         new_reward_duration: 1_209_600,
     };
-    let d = translate_update_reward_duration(&wire, sig(), ts());
+    let d = translate_update_reward_duration(&wire, pos());
     assert_eq!(d.pool_address, pk(1));
     assert_eq!(d.reward_index, 1);
     assert_eq!(d.old_reward_duration, 604_800);
     assert_eq!(d.new_reward_duration, 1_209_600);
     assert_eq!(d.signature, sig());
     assert_eq!(d.timestamp, ts());
+    assert_eq!(d.slot, 300_000_001);
+    assert_eq!(d.transaction_index, Some(2));
+    assert_eq!(d.event_index, 3);
 }
 
 #[test]
@@ -156,13 +178,16 @@ fn update_reward_funder_maps_every_field() {
         old_funder: pk(2),
         new_funder: pk(3),
     };
-    let d = translate_update_reward_funder(&wire, sig(), ts());
+    let d = translate_update_reward_funder(&wire, pos());
     assert_eq!(d.pool_address, pk(1));
     assert_eq!(d.reward_index, 0);
     assert_eq!(d.old_funder, pk(2));
     assert_eq!(d.new_funder, pk(3));
     assert_eq!(d.signature, sig());
     assert_eq!(d.timestamp, ts());
+    assert_eq!(d.slot, 300_000_001);
+    assert_eq!(d.transaction_index, Some(2));
+    assert_eq!(d.event_index, 3);
 }
 
 #[test]
@@ -172,10 +197,13 @@ fn withdraw_dead_liquidity_reward_maps_every_field() {
         reward_mint: pk(2),
         amount: 42_000,
     };
-    let d = translate_withdraw_dead_liquidity_reward(&wire, sig(), ts());
+    let d = translate_withdraw_dead_liquidity_reward(&wire, pos());
     assert_eq!(d.pool_address, pk(1));
     assert_eq!(d.reward_mint, pk(2));
     assert_eq!(d.amount, 42_000);
     assert_eq!(d.signature, sig());
     assert_eq!(d.timestamp, ts());
+    assert_eq!(d.slot, 300_000_001);
+    assert_eq!(d.transaction_index, Some(2));
+    assert_eq!(d.event_index, 3);
 }

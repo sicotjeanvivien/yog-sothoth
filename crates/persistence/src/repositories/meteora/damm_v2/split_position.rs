@@ -6,7 +6,9 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use yog_core::{
     RepositoryResult,
-    domain::{MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionEventRepository},
+    domain::{
+        InsertOutcome, MeteoraDammV2SplitPositionEvent, MeteoraDammV2SplitPositionEventRepository,
+    },
 };
 
 use crate::repositories::helper::{convert_u64_to_i64, convert_u128_to_bigdecimal, map_sqlx_error};
@@ -23,13 +25,16 @@ impl PgMeteoraDammV2SplitPositionEventRepository {
 
 #[async_trait]
 impl MeteoraDammV2SplitPositionEventRepository for PgMeteoraDammV2SplitPositionEventRepository {
-    async fn insert(&self, event: &MeteoraDammV2SplitPositionEvent) -> RepositoryResult<()> {
+    async fn insert(
+        &self,
+        event: &MeteoraDammV2SplitPositionEvent,
+    ) -> RepositoryResult<InsertOutcome> {
         let a = &event.amounts;
         let f = &event.first_position_after;
         let s = &event.second_position_after;
         let n = &event.numerators;
 
-        sqlx::query!(
+        let result = sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_split_position_events (
                 pool_address, signature,
@@ -47,7 +52,8 @@ impl MeteoraDammV2SplitPositionEventRepository for PgMeteoraDammV2SplitPositionE
                 num_unlocked_liquidity, num_permanent_locked_liquidity,
                 num_fee_a, num_fee_b, num_reward_0, num_reward_1,
                 num_inner_vesting_liquidity,
-                timestamp
+                timestamp,
+                slot, event_index, transaction_index
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7,
@@ -55,9 +61,10 @@ impl MeteoraDammV2SplitPositionEventRepository for PgMeteoraDammV2SplitPositionE
                 $15, $16, $17, $18, $19, $20, $21,
                 $22, $23, $24, $25, $26, $27, $28,
                 $29, $30, $31, $32, $33, $34, $35,
-                $36
+                $36,
+                $37, $38, $39
             )
-            ON CONFLICT (signature, second_position, timestamp) DO NOTHING
+            ON CONFLICT (signature, event_index, timestamp) DO NOTHING
             "#,
             event.pool_address.to_string(),
             event.signature.to_string(),
@@ -99,11 +106,14 @@ impl MeteoraDammV2SplitPositionEventRepository for PgMeteoraDammV2SplitPositionE
             i64::from(n.reward_1),
             i64::from(n.inner_vesting_liquidity),
             event.timestamp,
+            convert_u64_to_i64(event.slot, "slot")?,
+            i32::from(event.event_index),
+            event.transaction_index.map(i64::from),
         )
         .execute(&self.pool)
         .await
         .map_err(map_sqlx_error)?;
 
-        Ok(())
+        Ok(InsertOutcome::from_rows_affected(result.rows_affected()))
     }
 }

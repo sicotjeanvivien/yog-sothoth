@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_split_position_events (\n                pool_address, signature,\n                first_owner, second_owner, first_position, second_position,\n                current_sqrt_price,\n                split_permanent_locked_liquidity, split_unlocked_liquidity,\n                split_vested_liquidity, split_fee_a, split_fee_b,\n                split_reward_0, split_reward_1,\n                first_unlocked_liquidity, first_permanent_locked_liquidity,\n                first_vested_liquidity, first_fee_a, first_fee_b,\n                first_reward_0, first_reward_1,\n                second_unlocked_liquidity, second_permanent_locked_liquidity,\n                second_vested_liquidity, second_fee_a, second_fee_b,\n                second_reward_0, second_reward_1,\n                num_unlocked_liquidity, num_permanent_locked_liquidity,\n                num_fee_a, num_fee_b, num_reward_0, num_reward_1,\n                num_inner_vesting_liquidity,\n                timestamp,\n                slot, event_index, transaction_index\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6, $7,\n                $8, $9, $10, $11, $12, $13, $14,\n                $15, $16, $17, $18, $19, $20, $21,\n                $22, $23, $24, $25, $26, $27, $28,\n                $29, $30, $31, $32, $33, $34, $35,\n                $36,\n                $37, $38, $39\n            )\n            ON CONFLICT (signature, event_index, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Numeric",
+        "Numeric",
+        "Numeric",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Timestamptz",
+        "Int8",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f436c6df6302087e8d156ca166f2a47338dade1e03e24ef702323cbc10aaa789"
+}

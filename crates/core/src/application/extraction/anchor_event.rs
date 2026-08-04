@@ -131,9 +131,18 @@ pub(crate) fn extract_anchor_event_cpis(
         return Vec::new();
     };
 
+    // Sorted by the outer instruction they belong to, never left in whatever
+    // order the RPC serialized them. The position of a payload in this vector
+    // becomes its persisted `event_index` (part of the unique key), so a
+    // provider — or the future gRPC path — returning groups in another order
+    // would renumber events already stored and turn a replay into a source of
+    // duplicates. Same reasoning as the frozen filter below.
+    let mut groups: Vec<_> = inner_groups.iter().collect();
+    groups.sort_by_key(|g| g.index);
+
     let mut out = Vec::new();
 
-    for group in inner_groups {
+    for group in groups {
         for ix in &group.instructions {
             if let Some(bytes) = try_extract_self_cpi_data(ix, target_program_id) {
                 out.push(bytes);
@@ -147,6 +156,23 @@ pub(crate) fn extract_anchor_event_cpis(
 /// Try to extract the raw bytes of an inner instruction whose `programId`
 /// matches `target_program_id`. Returns `None` if the instruction targets
 /// a different program, has no `data` field, or fails base58 decoding.
+///
+/// # ⚠️ This filter is frozen by contract — narrowing it corrupts stored data
+///
+/// The position of a payload in [`extract_anchor_event_cpis`]'s output is
+/// persisted as `event_index`, and is part of the unique key of every event
+/// table (`(signature, event_index, timestamp)`). Rows already in the database
+/// were numbered by *this* filter.
+///
+/// Make it stricter — reject a payload it accepts today — and every event
+/// after the rejected one in its transaction shifts down by one. Nothing
+/// fails: re-ingesting those transactions inserts duplicates under the new
+/// numbering, and the old rows stay, unreachable and wrong. It is the same
+/// class of silent corruption as the `(signature, timestamp)` key this
+/// numbering was introduced to fix.
+///
+/// So: only ever *widen* it. If it must genuinely narrow, that is a migration
+/// (renumber, or version the column), not an edit.
 fn try_extract_self_cpi_data(ix: &UiInstruction, target_program_id: &str) -> Option<Vec<u8>> {
     let UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p)) = ix else {
         return None;

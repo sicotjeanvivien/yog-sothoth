@@ -60,8 +60,9 @@ use super::events::{
 /// problems are reported through `unknown` and `failures`.
 #[derive(Debug, Default)]
 pub struct ExtractedEvents {
-    /// All recognized events, in the order they appeared in the transaction.
-    pub events: Vec<DammV2WireEvent>,
+    /// All recognized events, in the order they appeared in the transaction,
+    /// each carrying its index among the transaction's self-CPI payloads.
+    pub events: Vec<IndexedWireEvent>,
 
     /// Inner instructions whose discriminator did not match any known
     /// event. Most often correspond to events from rings we haven't
@@ -73,6 +74,18 @@ pub struct ExtractedEvents {
     /// be decoded into a wire event. Each entry carries enough context
     /// for the caller to log + emit a metric.
     pub failures: Vec<ExtractFailure>,
+}
+
+/// A recognized wire event, paired with where it sat in the transaction.
+///
+/// `event_index` counts **every** self-CPI payload the transaction emitted to
+/// the program, not just the ones we decode: a payload we skip still consumes
+/// its index. That is what keeps the index stable across releases — see
+/// [`crate::domain::EventPosition`], which it ends up on.
+#[derive(Debug)]
+pub struct IndexedWireEvent {
+    pub event_index: u16,
+    pub event: DammV2WireEvent,
 }
 
 /// A self-CPI inner instruction whose discriminator does not match any
@@ -111,6 +124,14 @@ pub enum ExtractFailure {
         discriminator: [u8; DISCRIMINATOR_LEN],
         reason: String,
     },
+
+    /// The transaction emitted more self-CPI payloads than an `event_index`
+    /// can number. Unreachable in practice — the runtime caps inner
+    /// instructions two orders of magnitude below `u16::MAX` — but the event
+    /// is dropped rather than given a truncated index, because a wrong index
+    /// is a duplicate or a lost row later on.
+    #[error("event index {index} exceeds u16")]
+    EventIndexOverflow { index: usize },
 }
 
 // ---------------------------------------------------------------------------
@@ -158,10 +179,20 @@ pub fn extract_wire_events(
     };
     let mut out = ExtractedEvents::default();
 
-    for raw in raw_payloads {
-        match decode_anchor_event_cpi(&raw) {
+    for (index, raw) in raw_payloads.iter().enumerate() {
+        // Numbered before decoding, so a payload we don't recognize still
+        // consumes its index (see `IndexedWireEvent`).
+        let Ok(event_index) = u16::try_from(index) else {
+            out.failures
+                .push(ExtractFailure::EventIndexOverflow { index });
+            continue;
+        };
+
+        match decode_anchor_event_cpi(raw) {
             Ok((disc, body)) => match dispatch(&disc, &body, &known) {
-                Dispatch::Recognized(event) => out.events.push(event),
+                Dispatch::Recognized(event) => {
+                    out.events.push(IndexedWireEvent { event_index, event })
+                }
                 // Deliberately dropped: recorded nowhere, by design.
                 Dispatch::Ignored => {}
                 Dispatch::Unknown => out.unknown.push(UnknownEvent {

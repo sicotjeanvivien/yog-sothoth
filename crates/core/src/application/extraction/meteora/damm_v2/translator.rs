@@ -9,9 +9,7 @@
 //! resolved authoritatively from the cp-amm Pool account by yog-context. Swap
 //! and liquidity events therefore carry no mints — they reference the pool.
 
-use chrono::{DateTime, Utc};
-use solana_signature::Signature;
-
+use crate::domain::EventPosition;
 use crate::error::TranslationError;
 
 use super::events::DammV2WireEvent;
@@ -67,73 +65,71 @@ use translate_withdraw_ineligible_reward::translate_withdraw_ineligible_reward;
 /// Translate a single wire event into a domain event.
 pub(super) fn translate_wire_event(
     wire: &DammV2WireEvent,
-    signature: Signature,
-    timestamp: DateTime<Utc>,
+    event_position: EventPosition,
 ) -> Result<crate::domain::DomainEvent, TranslationError> {
     use crate::domain::DomainEvent;
     use crate::domain::MeteoraDammV2Event;
 
     let damm_v2_event = match wire {
-        DammV2WireEvent::Swap2(e) => {
-            MeteoraDammV2Event::Swap(translate_swap(e, signature, timestamp)?)
-        }
+        DammV2WireEvent::Swap2(e) => MeteoraDammV2Event::Swap(translate_swap(e, event_position)?),
         DammV2WireEvent::LiquidityChange(e) => {
-            MeteoraDammV2Event::Liquidity(translate_liquidity(e, signature, timestamp)?)
+            MeteoraDammV2Event::Liquidity(translate_liquidity(e, event_position)?)
         }
-        DammV2WireEvent::ClaimPositionFee(e) => MeteoraDammV2Event::ClaimPositionFee(
-            translate_claim_position_fee(e, signature, timestamp),
-        ),
+        DammV2WireEvent::ClaimPositionFee(e) => {
+            MeteoraDammV2Event::ClaimPositionFee(translate_claim_position_fee(e, event_position))
+        }
         DammV2WireEvent::ClaimReward(e) => {
-            MeteoraDammV2Event::ClaimReward(translate_claim_reward(e, signature, timestamp))
+            MeteoraDammV2Event::ClaimReward(translate_claim_reward(e, event_position))
         }
-        DammV2WireEvent::ClaimProtocolFee(e) => MeteoraDammV2Event::ClaimProtocolFee(
-            translate_claim_protocol_fee(e, signature, timestamp),
-        ),
-        DammV2WireEvent::InitializeReward(e) => MeteoraDammV2Event::InitializeReward(
-            translate_initialize_reward(e, signature, timestamp),
-        ),
+        DammV2WireEvent::ClaimProtocolFee(e) => {
+            MeteoraDammV2Event::ClaimProtocolFee(translate_claim_protocol_fee(e, event_position))
+        }
+        DammV2WireEvent::InitializeReward(e) => {
+            MeteoraDammV2Event::InitializeReward(translate_initialize_reward(e, event_position))
+        }
         DammV2WireEvent::FundReward(e) => {
-            MeteoraDammV2Event::FundReward(translate_fund_reward(e, signature, timestamp))
+            MeteoraDammV2Event::FundReward(translate_fund_reward(e, event_position))
         }
         DammV2WireEvent::WithdrawIneligibleReward(e) => {
             MeteoraDammV2Event::WithdrawIneligibleReward(translate_withdraw_ineligible_reward(
-                e, signature, timestamp,
+                e,
+                event_position,
             ))
         }
         DammV2WireEvent::UpdateRewardDuration(e) => MeteoraDammV2Event::UpdateRewardDuration(
-            translate_update_reward_duration(e, signature, timestamp),
+            translate_update_reward_duration(e, event_position),
         ),
         DammV2WireEvent::UpdateRewardFunder(e) => MeteoraDammV2Event::UpdateRewardFunder(
-            translate_update_reward_funder(e, signature, timestamp),
+            translate_update_reward_funder(e, event_position),
         ),
         DammV2WireEvent::WithdrawDeadLiquidityReward(e) => {
             MeteoraDammV2Event::WithdrawDeadLiquidityReward(
-                translate_withdraw_dead_liquidity_reward(e, signature, timestamp),
+                translate_withdraw_dead_liquidity_reward(e, event_position),
             )
         }
         DammV2WireEvent::SplitPosition3(e) => {
-            MeteoraDammV2Event::SplitPosition(translate_split_position(e, signature, timestamp))
+            MeteoraDammV2Event::SplitPosition(translate_split_position(e, event_position))
         }
         DammV2WireEvent::CreatePosition(e) => {
-            MeteoraDammV2Event::CreatePosition(translate_create_position(e, signature, timestamp))
+            MeteoraDammV2Event::CreatePosition(translate_create_position(e, event_position))
         }
         DammV2WireEvent::ClosePosition(e) => {
-            MeteoraDammV2Event::ClosePosition(translate_close_position(e, signature, timestamp))
+            MeteoraDammV2Event::ClosePosition(translate_close_position(e, event_position))
         }
         DammV2WireEvent::LockPosition(e) => {
-            MeteoraDammV2Event::LockPosition(translate_lock_position(e, signature, timestamp))
+            MeteoraDammV2Event::LockPosition(translate_lock_position(e, event_position))
         }
         DammV2WireEvent::PermanentLockPosition(e) => MeteoraDammV2Event::PermanentLockPosition(
-            translate_permanent_lock_position(e, signature, timestamp),
+            translate_permanent_lock_position(e, event_position),
         ),
         DammV2WireEvent::InitializePool(e) => {
-            MeteoraDammV2Event::InitializePool(translate_initialize_pool(e, signature, timestamp))
+            MeteoraDammV2Event::InitializePool(translate_initialize_pool(e, event_position))
         }
         DammV2WireEvent::SetPoolStatus(e) => {
-            MeteoraDammV2Event::SetPoolStatus(translate_set_pool_status(e, signature, timestamp))
+            MeteoraDammV2Event::SetPoolStatus(translate_set_pool_status(e, event_position))
         }
         DammV2WireEvent::UpdatePoolFees(e) => {
-            MeteoraDammV2Event::UpdatePoolFees(translate_update_pool_fees(e, signature, timestamp))
+            MeteoraDammV2Event::UpdatePoolFees(translate_update_pool_fees(e, event_position))
         }
     };
 

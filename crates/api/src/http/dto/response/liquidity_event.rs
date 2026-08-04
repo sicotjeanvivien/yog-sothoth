@@ -16,6 +16,10 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) pool_address: String,
     pub(super) protocol: String,
     pub(super) signature: String,
+    /// Position of this event among its transaction's emissions. A routed
+    /// transaction produces several rows sharing `signature` and `timestamp`;
+    /// this is what tells them apart — and the only stable key for a list row.
+    pub(super) event_index: u16,
     pub(super) timestamp: DateTime<Utc>,
 
     pub(super) liquidity_event_kind: String,
@@ -43,6 +47,7 @@ impl From<MeteoraDammV2LiquidityEventValued> for LiquidityEventResponse {
             pool_address: event.pool_address.to_string(),
             protocol: Protocol::MeteoraDammV2.to_string(),
             signature: event.signature.to_string(),
+            event_index: event.event_index,
             timestamp: event.timestamp,
             liquidity_event_kind: liquidity_event_kind_str(event.liquidity_event_kind),
             amount_a: event.amount_a.to_string(),

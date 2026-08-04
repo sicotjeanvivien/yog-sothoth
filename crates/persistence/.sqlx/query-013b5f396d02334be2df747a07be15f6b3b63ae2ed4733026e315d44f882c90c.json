@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_withdraw_ineligible_reward_events (\n                pool_address, signature,\n                reward_mint, amount,\n                timestamp,\n                slot, event_index, transaction_index\n            )\n            VALUES ($1, $2, $3, $4, $5,\n                $6, $7, $8\n            )\n            ON CONFLICT (signature, event_index, timestamp) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Int8",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "013b5f396d02334be2df747a07be15f6b3b63ae2ed4733026e315d44f882c90c"
+}

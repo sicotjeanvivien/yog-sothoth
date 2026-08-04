@@ -44,12 +44,19 @@ from a recent migration (`008_update_pool_fees_events.sql` is a clean template):
 
 ```sql
 CREATE TABLE meteora_<product>_<event_kind>_events (
-    id            BIGSERIAL,
-    pool_address  TEXT        NOT NULL,
-    signature     TEXT        NOT NULL,
+    id                BIGSERIAL,
+    pool_address      TEXT        NOT NULL,
+    signature         TEXT        NOT NULL,
     -- … protocol-relevant columns only — NO NULL columns for incompatible
     --    fields, NO JSONB catch-all. Lossless u128 → NUMERIC(39,0).
-    timestamp     TIMESTAMPTZ NOT NULL,
+    timestamp         TIMESTAMPTZ NOT NULL,
+    -- Position in the chain (migration 041). No DEFAULT: an insert that
+    -- forgets one must fail, not inherit a plausible 0. Widths follow the
+    -- domain type — u16 → INTEGER, u32 → BIGINT — so the write conversion
+    -- is total (cf. `convert_i32_to_u16`).
+    slot              BIGINT      NOT NULL,
+    event_index       INTEGER     NOT NULL,
+    transaction_index BIGINT      NULL,
     PRIMARY KEY (id, timestamp)            -- timestamp must be in the PK (hypertable)
 );
 
@@ -57,8 +64,15 @@ SELECT create_hypertable('meteora_<product>_<event_kind>_events',
     'timestamp', chunk_time_interval => INTERVAL '7 days');
 
 CREATE INDEX ON meteora_<product>_<event_kind>_events (pool_address, timestamp DESC);
--- Idempotency guard against re-ingesting the same signature:
-CREATE UNIQUE INDEX ON meteora_<product>_<event_kind>_events (signature, timestamp);
+-- Idempotency guard. `event_index` is what separates two events emitted by ONE
+-- transaction: a route across several pools emits one per hop, under a single
+-- signature and a single blockTime. Keyed on `(signature, timestamp)` alone,
+-- ON CONFLICT DO NOTHING keeps the first hop and silently drops the rest —
+-- measured at 3–8 % of a pool's swaps before migration 041 fixed it.
+-- Do NOT substitute a per-kind discriminant (`reward_index`, …): those predate
+-- `event_index` and were taken out of the keys to leave exactly one rule.
+CREATE UNIQUE INDEX ON meteora_<product>_<event_kind>_events
+    (signature, event_index, timestamp);
 
 ALTER TABLE meteora_<product>_<event_kind>_events SET (
     timescaledb.compress,
@@ -142,7 +156,9 @@ Commit **the new migration AND the updated `crates/persistence/.sqlx/`** togethe
 - [ ] `NNN_*.sql` created with the next number; no committed migration edited
 - [ ] Table only has protocol-relevant columns; `PRIMARY KEY (id, timestamp)`; hypertable +
       indexes + compression/retention set
-- [ ] UNIQUE INDEX on `(signature, timestamp)` for idempotency
+- [ ] `slot` / `event_index` / `transaction_index` present, no DEFAULT on the first two
+- [ ] UNIQUE INDEX on `(signature, event_index, timestamp)` for idempotency
+- [ ] The repository's `insert` returns `InsertOutcome::from_rows_affected(…)`, not `Ok(())`
 - [ ] GRANTs in the same file; `yog_api` stays read-only
 - [ ] VIEWs redefined via `CREATE OR REPLACE VIEW` with the new `UNION ALL` branch (if applicable)
 - [ ] Migration applied locally via `yog-migrate`; `.sqlx/` regenerated and committed
