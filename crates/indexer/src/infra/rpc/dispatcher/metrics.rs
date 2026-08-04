@@ -1,26 +1,26 @@
 use metrics::{counter, describe_counter};
 use yog_core::domain::Protocol;
 
-/// Total de [`RawLogEvent`](super::types::RawLogEvent) reçus du Listener.
+/// Total [`RawLogEvent`](super::types::RawLogEvent) received from the listener.
 const EVENTS_RECEIVED: &str = "yog_indexer_raw_log_events_total";
 
-/// Événements rejetés par un filtre.
+/// Events rejected by a filter.
 const EVENTS_REJECTED: &str = "yog_indexer_raw_log_events_rejected_total";
 
-/// Événements dont la signature brute n'a pas pu être parsée en `Signature`.
+/// Events whose raw signature failed to parse into a `Signature`.
 const EVENTS_MALFORMED: &str = "yog_indexer_raw_log_events_malformed_total";
 
-/// Signatures qualifiées émises vers l'Indexer.
+/// Qualified signatures emitted towards the indexer.
 const SIGNATURES_EMITTED: &str = "yog_indexer_qualified_signatures_total";
 
-/// Signatures droppées parce que le channel aval (Indexer) est saturé.
+/// Signatures dropped because the downstream channel (indexer) is saturated.
 const DOWNSTREAM_SATURATED: &str = "yog_indexer_downstream_saturated_total";
 
 pub struct DispatcherMetrics;
 
 impl DispatcherMetrics {
-    /// À appeler une fois au démarrage pour enregistrer les descriptions
-    /// auprès de l'exporter Prometheus.
+    /// Call once at startup to register the descriptions with the
+    /// Prometheus exporter.
     pub(crate) fn register_descriptions() {
         describe_counter!(EVENTS_RECEIVED, "Raw log events received from the listener");
         describe_counter!(EVENTS_REJECTED, "Raw log events rejected by a filter");

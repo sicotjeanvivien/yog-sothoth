@@ -9,7 +9,7 @@ use yog_persistence::PgMeteoraDammV2SplitPositionEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── split_position: 33 colonnes, u128 exacts, clé multi-cible ───────
+// ── split_position: 33 columns, exact u128, multi-target key ────────
 
 #[sqlx::test]
 async fn split_position_preserves_every_bucket(pool: PgPool) {

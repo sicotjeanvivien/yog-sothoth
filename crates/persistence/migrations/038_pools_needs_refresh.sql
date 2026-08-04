@@ -1,5 +1,5 @@
 -- ============================================================================
--- 038 — `pools.needs_refresh` : l'invalidation remplace l'écriture indexer
+-- 038 — `pools.needs_refresh`: invalidation replaces the indexer's write
 -- ============================================================================
 -- Splits the two roles that were tangled on the pool-property columns.
 --

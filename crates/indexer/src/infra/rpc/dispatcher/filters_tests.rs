@@ -31,7 +31,7 @@ fn invocation_filter_accepts_cpi_invoke() {
 
 #[test]
 fn invocation_filter_rejects_alt_only() {
-    // Program ID absent des logs — référencé uniquement via ALT.
+    // Program ID absent from the logs — referenced only through an ALT.
     let event = event_with_logs(vec![
         "Program ComputeBudget111111111111111111111111111111 invoke [1]".to_string(),
     ]);

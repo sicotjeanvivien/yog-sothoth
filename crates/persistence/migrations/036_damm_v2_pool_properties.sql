@@ -1,5 +1,5 @@
 -- ============================================================================
--- 036 — meteora_damm_v2_pool_properties (sortie des propriétés cp-amm de pools)
+-- 036 — meteora_damm_v2_pool_properties (cp-amm properties move out of pools)
 -- ============================================================================
 -- Moves the five cp-amm-shaped property columns out of the cross-protocol
 -- `pools` registry into a per-protocol satellite table.

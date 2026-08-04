@@ -1,5 +1,5 @@
 -- ============================================================================
--- 040 — l'accord pool↔protocole, écrit dans le schéma
+-- 040 — the pool↔protocol agreement, written into the schema
 -- ============================================================================
 -- Three tables hang off `pools` and carry, or imply, a protocol of their own:
 -- the two pool-properties satellites (`meteora_damm_v2_pool_properties` 036,
