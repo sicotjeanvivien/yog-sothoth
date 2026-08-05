@@ -85,7 +85,8 @@ struct Swap<'a> {
     direction: &'a str,
     amount_a: i64,
     amount_b: i64,
-    fee_a: i64,
+    /// Fee amount, in whichever token `fee_token_is_a` designates.
+    fee: i64,
     fee_token_is_a: bool,
     timestamp: DateTime<Utc>,
 }
@@ -104,7 +105,7 @@ async fn insert_swap(pool: &PgPool, s: Swap<'_>) {
     .bind(s.direction)
     .bind(s.amount_a)
     .bind(s.amount_b)
-    .bind(s.fee_a)
+    .bind(s.fee)
     .bind(s.fee_token_is_a)
     .bind(s.timestamp)
     .execute(pool)
@@ -121,6 +122,17 @@ async fn insert_swap(pool: &PgPool, s: Swap<'_>) {
 ///
 /// → **$270**, which is also exactly the token B that changed hands. The
 /// valuation is anchored on the hard asset, as intended.
+///
+/// ⚠️ The fee side of each leg follows `collect_fee_mode = 0` (BothToken): the
+/// fee is charged on the OUT token, so `a_to_b` pays in B and `b_to_a` pays in
+/// A. `a_to_b` with the fee on A does not exist in ANY mode — measured, 0 of
+/// 662 real swaps — and it stopped being harmless the day `valuation_complete`
+/// began reading `fee_in_a` / `fee_in_b`. Fees are non-zero for the same
+/// reason: no real swap carries a zero fee (0 of 662).
+///
+/// Fees do not move the implied rate — `traded_*` sums `amount_*`, which is the
+/// gross amount either way — so every volume expectation below is unaffected.
+/// The fees themselves come to `100 A × $0.09 + 0.005 B × $180 = $9.90`.
 async fn insert_balanced_pair(pool: &PgPool, pool_addr: &str, tag: &str, at: DateTime<Utc>) {
     insert_swap(
         pool,
@@ -130,8 +142,8 @@ async fn insert_balanced_pair(pool: &PgPool, pool_addr: &str, tag: &str, at: Dat
             direction: "a_to_b",
             amount_a: 1_000_000_000, // 1 000 A
             amount_b: 500_000_000,   // 0.5 B
-            fee_a: 0,
-            fee_token_is_a: true,
+            fee: 5_000_000,          // 0.005 B — out token
+            fee_token_is_a: false,
             timestamp: at,
         },
     )
@@ -144,8 +156,8 @@ async fn insert_balanced_pair(pool: &PgPool, pool_addr: &str, tag: &str, at: Dat
             direction: "b_to_a",
             amount_a: 2_000_000_000, // 2 000 A
             amount_b: 1_000_000_000, // 1.0 B
-            fee_a: 0,
-            fee_token_is_a: false,
+            fee: 100_000_000,        // 100 A — out token
+            fee_token_is_a: true,
             timestamp: at,
         },
     )
@@ -403,32 +415,23 @@ async fn fees_are_valued_by_the_same_effective_price(pool: PgPool) {
     price_mint(&pool, &mint_b, PRICE_B).await;
 
     let at = Utc::now() - Duration::hours(2);
+    // The pair itself charges on both sides (mode 0 — fee on the OUT token), so
+    // the fee lands partly on the UNPRICED token A and can only be valued
+    // through the implied rate. No extra swap needed, and none invented: an
+    // earlier version of this test added a swap moving no tokens at all, which
+    // no chain produces.
     insert_balanced_pair(&pool, &pool_addr, "fee", at).await;
-    // A third swap charging a 100-unit fee in token A — the unpriced side.
-    insert_swap(
-        &pool,
-        Swap {
-            pool_addr: &pool_addr,
-            signature: "fee_charged",
-            direction: "a_to_b",
-            amount_a: 0,
-            amount_b: 0,
-            fee_a: 100_000_000, // 100 A
-            fee_token_is_a: true,
-            timestamp: at,
-        },
-    )
-    .await;
 
     let repo = PgPoolAnalyticsRepository::new(pool.clone());
     let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
     let a = analytics.get(&pk(1)).expect("pool must be present");
 
-    // 100 A × $0.09 = $9, through the same implied rate as the volume.
+    // 100 A × $0.09 (implied) + 0.005 B × $180 (observed) = $9.90 — the fee on
+    // the unpriced side is valued through the very same rate as the volume.
     let fees = a
         .fees_24h_usd
         .expect("a fee charged in the unpriced token must still be valued");
-    assert!(close_to(fees, "9"), "expected $9 of fees, got {fees}");
+    assert!(close_to(fees, "9.9"), "expected $9.90 of fees, got {fees}");
 }
 
 // ── 7. An unresolved pool stays in the denominator ───────────────────────────
@@ -531,8 +534,8 @@ async fn a_bucket_that_moved_no_token_b_is_not_counted_as_covered(pool: PgPool) 
             direction: "a_to_b",
             amount_a: 1_000_000_000,
             amount_b: 0,
-            fee_a: 0,
-            fee_token_is_a: true,
+            fee: 2_500_000,
+            fee_token_is_a: false, // a_to_b pays on the OUT token, always B
             timestamp: Utc::now() - Duration::hours(2),
         },
     )
@@ -610,10 +613,10 @@ async fn a_price_rounded_to_zero_does_not_fabricate_coverage(pool: PgPool) {
 async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
     // Found in review. `0 * NULL` is NULL, and so is `0 / POWER(10, NULL)`, so
     // a leg carrying NO tokens was killing buckets fully computable from the
-    // other side. Here token B has no `token_metadata` row (the metadata worker
+    // other side. Here token A has no `token_metadata` row (the metadata worker
     // upserts mint by mint and absorbs per-row failures) and the pool traded
-    // a→b only: nothing about the B side needs converting, because there is
-    // no B.
+    // b→a only with the fee on B: no figure touches the A side, so nothing
+    // about it needs converting.
     let pool_addr = pk(1).to_string();
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
     sqlx::query(
@@ -626,30 +629,40 @@ async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    // Only token A gets metadata + a price. Token B has neither.
+    // Only token B gets metadata + a price. Token A has neither.
     sqlx::query(
         "INSERT INTO token_metadata (mint, decimals, fetched_at, last_refresh_at)
          VALUES ($1,$2,$3,$3)",
     )
-    .bind(&mint_a)
-    .bind(DEC_A)
+    .bind(&mint_b)
+    .bind(DEC_B)
     .bind(Utc::now() - Duration::hours(48))
     .execute(&pool)
     .await
     .unwrap();
-    price_mint(&pool, &mint_a, "2.0").await;
+    price_mint(&pool, &mint_b, PRICE_B).await;
 
-    // a_to_b only: 1 000 A in, and the b_to_a direction never fires.
+    // b→a only, fee on B (collect_fee_mode 1/2, "OnlyB"). This is the ONE
+    // one-directional shape where the relaxation actually fires:
+    //
+    //   direction | fee side | volume side | sides required
+    //   a→b       | B        | A           | both
+    //   b→a mode0 | A        | B           | both
+    //   b→a OnlyB | B        | B           | B alone  ← here
+    //
+    // The earlier version used `a_to_b` with the fee on A, which exists in no
+    // mode at all (measured: 0 of 662 real swaps). It passed for that reason
+    // rather than on merit.
     insert_swap(
         &pool,
         Swap {
             pool_addr: &pool_addr,
             signature: "one_way",
-            direction: "a_to_b",
-            amount_a: 1_000_000_000,
-            amount_b: 500_000_000,
-            fee_a: 0,
-            fee_token_is_a: true,
+            direction: "b_to_a",
+            amount_a: 500_000_000,   // 500 A out — A never enters a figure
+            amount_b: 1_000_000_000, // 1.0 B in
+            fee: 2_500_000,          // 0.0025 B
+            fee_token_is_a: false,
             timestamp: Utc::now() - Duration::hours(2),
         },
     )
@@ -659,14 +672,14 @@ async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
     let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
     let a = analytics.get(&pk(1)).expect("pool must be present");
 
-    // 1 000 A × $2 = $2 000. The b_to_a leg is empty, so it contributes 0 —
-    // not NULL.
+    // Volume and fee both sit on B: 1.0 B × $180 = $180. Token A carries no
+    // figure, so its missing metadata must not erase the bucket.
     let volume = a
         .volume_24h_usd
-        .expect("the A side is fully priced; an absent B leg must not erase it");
+        .expect("the B side carries everything; an unused A side must not erase it");
     assert!(
-        close_to(volume, "2000"),
-        "expected $2000 from the A side alone, got {volume}"
+        close_to(volume, "180"),
+        "expected $180 from the B side alone, got {volume}"
     );
     assert_eq!(a.swap_buckets_priced_24h, 1);
     // The three figures move together — see the invariant test below.
@@ -723,7 +736,7 @@ async fn volume_fees_and_protocol_fees_are_null_together(pool: PgPool) {
             direction: "a_to_b",
             amount_a: 1_000_000_000,
             amount_b: 500_000_000,
-            fee_a: 1_000_000,
+            fee: 1_000_000,
             fee_token_is_a: false, // the fee lands on the PRICED side
             timestamp: Utc::now() - Duration::hours(2),
         },
@@ -741,4 +754,63 @@ async fn volume_fees_and_protocol_fees_are_null_together(pool: PgPool) {
     );
     assert_eq!(a.swap_buckets_24h, 1);
     assert_eq!(a.swap_buckets_priced_24h, 0);
+}
+
+// ── 13. A zero observed price must not beat the implied rate ─────────────────
+
+#[sqlx::test]
+async fn a_zero_price_yields_to_the_implied_rate_instead_of_winning(pool: PgPool) {
+    // Found in review #6. `NULLIF(…, 0)` had been placed inside the implied-rate
+    // CTE but NOT in the `COALESCE` that CHOOSES between observed and implied —
+    // and `COALESCE(0, x)` is 0. So a price rounded to zero by NUMERIC(38,18)
+    // beat the very fallback it should have triggered.
+    //
+    // Distinct from test 10, which has no price at all on the other side: there
+    // the bucket collapses for an unrelated reason. Here token B is perfectly
+    // priced, so the bucket IS valuable — just not at the value it produced.
+    // Measured before the fix: $180 instead of $270, flagged covered 1/1.
+    let pool_addr = pk(1).to_string();
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    price_mint(&pool, &mint_a, "0.00000000000000000000123").await; // stored as 0
+    price_mint(&pool, &mint_b, PRICE_B).await;
+
+    insert_balanced_pair(
+        &pool,
+        &pool_addr,
+        "zerowin",
+        Utc::now() - Duration::hours(2),
+    )
+    .await;
+
+    let row = sqlx::query_as::<_, (Option<Decimal>, bool)>(
+        "SELECT eff_price_a, price_a_implied
+         FROM meteora_damm_v2_swap_events_hourly_priced WHERE pool_address = $1",
+    )
+    .bind(&pool_addr)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        close_to(
+            row.0.expect("token A must fall back to the implied rate"),
+            "0.09"
+        ),
+        "expected the implied $0.09, got {:?} — a zero price is not a price",
+        row.0
+    );
+    assert!(row.1, "the fallback was used, so the flag must say so");
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
+    let volume = analytics
+        .get(&pk(1))
+        .expect("pool must be present")
+        .volume_24h_usd
+        .expect("both sides are valuable once the zero yields");
+    assert!(
+        close_to(volume, "270"),
+        "expected the full $270; $180 would mean the A leg was valued at zero"
+    );
 }

@@ -262,12 +262,12 @@ SELECT
     h.protocol_fee_in_b,
     tma.decimals AS dec_a,
     tmb.decimals AS dec_b,
-    COALESCE(pa.price_usd, i.implied_a) AS eff_price_a,
-    COALESCE(pb.price_usd, i.implied_b) AS eff_price_b,
-    -- "implied" means the implied rate was actually USED — false both when the
-    -- observed price was there and when nothing could be derived at all.
-    (pa.price_usd IS NULL AND i.implied_a IS NOT NULL) AS price_a_implied,
-    (pb.price_usd IS NULL AND i.implied_b IS NOT NULL) AS price_b_implied,
+    e.eff_price_a,
+    e.eff_price_b,
+    -- "implied" means the implied rate was actually USED — false both when an
+    -- observed price was available and when nothing could be derived at all.
+    (o.obs_a IS NULL AND i.implied_a IS NOT NULL) AS price_a_implied,
+    (o.obs_b IS NULL AND i.implied_b IS NOT NULL) AS price_b_implied,
     -- ⚠️ Valuability is a property of the BUCKET, not of each figure.
     --
     -- Volume, fees and protocol fees draw on different amounts (`volume_in_*`,
@@ -289,10 +289,10 @@ SELECT
     -- be valued from the side that actually traded.
     NOT (
         (COALESCE(h.volume_in_a, 0) + COALESCE(h.fee_in_a, 0) > 0
-            AND (COALESCE(pa.price_usd, i.implied_a) IS NULL OR tma.decimals IS NULL))
+            AND (e.eff_price_a IS NULL OR tma.decimals IS NULL))
         OR
         (COALESCE(h.volume_in_b, 0) + COALESCE(h.fee_in_b, 0) > 0
-            AND (COALESCE(pb.price_usd, i.implied_b) IS NULL OR tmb.decimals IS NULL))
+            AND (e.eff_price_b IS NULL OR tmb.decimals IS NULL))
     ) AS valuation_complete
 FROM meteora_damm_v2_swap_events_hourly h
 LEFT JOIN pools p ON p.pool_address = h.pool_address
@@ -308,17 +308,31 @@ LEFT JOIN LATERAL (
     WHERE mint = p.token_b_mint::TEXT AND fetched_at <= h.bucket
     ORDER BY fetched_at DESC LIMIT 1
 ) pb ON true
+-- "A zero price is not a price" is stated once, here, and every later mention of
+-- an observed price reads `o` rather than `pa`/`pb`. Spelling `NULLIF(…, 0)` at
+-- each use site is how the rule came to hold inside the implied rate and NOT in
+-- the COALESCE that picks between observed and implied — where `COALESCE(0, x)`
+-- returns 0, so a rounded-to-zero price beat the very fallback it should have
+-- triggered. Measured: `volume_usd = 180` instead of 270, flagged as covered.
+CROSS JOIN LATERAL (
+    SELECT NULLIF(pa.price_usd, 0) AS obs_a,
+           NULLIF(pb.price_usd, 0) AS obs_b
+) o
 CROSS JOIN LATERAL (
     SELECT
-        ((NULLIF(h.traded_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals))
-            * NULLIF(pb.price_usd, 0))
+        ((NULLIF(h.traded_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * o.obs_b)
             / NULLIF(h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals), 0)
             AS implied_a,
-        ((NULLIF(h.traded_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals))
-            * NULLIF(pa.price_usd, 0))
+        ((NULLIF(h.traded_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * o.obs_a)
             / NULLIF(h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals), 0)
             AS implied_b
-) i;
+) i
+-- The effective price, also defined once: observed if we have one, else the rate
+-- this bucket's own swaps traded at.
+CROSS JOIN LATERAL (
+    SELECT COALESCE(o.obs_a, i.implied_a) AS eff_price_a,
+           COALESCE(o.obs_b, i.implied_b) AS eff_price_b
+) e;
 
 
 -- ── meteora_damm_v2_pool_hourly_activity (019, rebuilt) ─────────────────────

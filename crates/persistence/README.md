@@ -270,6 +270,17 @@ The rule and its boundary:
   counter-leg anchoring it, so a trade rate there would be an extrapolation. A
   rate is only used on the flow that produced it.
 
+**Valuability is decided per bucket, not per figure** — `valuation_complete` on
+the same view. Volume, fees and protocol fees draw on different amounts, so
+deciding figure by figure let them stop being NULL together, and three
+consumers assume they are: `lpFees = fees − protocol` (which then goes
+negative), `effectiveFeeBps` (which then divides two disjoint sets of hours),
+and the coverage counters (keyed on `volume_usd` alone). A side is *required*
+when it carries any amount at all, and a required side needs **both** a price
+and a scale — an observed price without a `token_metadata` row still yields
+`POWER(10, NULL)`. A side carrying nothing is not required, which is what lets a
+one-way hour be valued from the side that actually traded.
+
 ## The `yog-migrate` binary
 
 ```bash
