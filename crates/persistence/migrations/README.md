@@ -162,9 +162,10 @@ GRANT INSERT, UPDATE ON new_event_table TO yog_indexer;
 ```
 
 The static structural grants (schema ownership, default privileges,
-sequences default) live in `setup_roles.sql` at the parent directory —
-that file is the provisioning one-shot, applied by hand with the
-admin role when a new database is created.
+sequences default) live in
+[`../src/bin/scripts/setup_roles.sql`](../src/bin/scripts/setup_roles.sql) —
+next to the binary that embeds it, applied under the admin role by
+`yog-migrate -- setup-roles`.
 
 ### An event table carries its position in the chain
 
@@ -305,16 +306,27 @@ When you add a new migration:
 
 ## Bootstrapping a fresh database
 
-The first-time setup, against an empty database:
+The database must already exist (`createdb`, or the compose volume); the binary
+never creates one. Everything after that is one command:
 
 ```sh
-# 1. As the superuser, declare the five roles + structural privileges.
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
-    -f crates/persistence/setup_roles.sql
-
-# 2. Apply all migrations as yog_migrate.
-cargo run --bin yog-migrate -p yog-persistence
+cargo run --bin yog-migrate -p yog-persistence -- bootstrap
 ```
 
-After step 2, the runtime services (indexer / api / context / signals)
-can connect with their respective roles.
+which is these three, in order:
+
+| step | script | role |
+|---|---|---|
+| `setup-roles` | [`../src/bin/scripts/setup_roles.sql`](../src/bin/scripts/setup_roles.sql) — the five roles and the structural privileges | `DATABASE_URL_ADMIN` |
+| `migrate` | this directory | `DATABASE_URL_MIGRATE` |
+| `seed-watched-pools` | [`../src/bin/scripts/setup_watched_pools.sql`](../src/bin/scripts/setup_watched_pools.sql) — the startup allowlist | `DATABASE_URL_ADMIN` |
+
+All three are idempotent, so `bootstrap` is safe to re-run — and safe against a
+second database of the same cluster, where the roles already exist and only the
+per-database privileges need applying. `bootstrap` checks both environment
+variables before touching anything: failing on a missing `DATABASE_URL_MIGRATE`
+*after* creating five cluster-wide roles leaves a half-provisioned cluster.
+
+Then the runtime services (indexer / api / context / signals) can connect with
+their respective roles — but check the allowlist first. It ships one pool, and
+a pool-centric indexer collects only what it is subscribed to.

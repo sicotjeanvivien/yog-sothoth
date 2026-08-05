@@ -110,8 +110,7 @@ docker compose --profile full up -d --build            # + web dashboard
 
 # B. Native cargo (faster inner loop), with Postgres in Docker:
 docker compose up -d
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" -f crates/persistence/setup_roles.sql
-cargo run -p yog-persistence --bin yog-migrate
+cargo run -p yog-persistence --bin yog-migrate -- bootstrap   # roles + migrations + allowlist
 cargo run -p yog-indexer
 ```
 

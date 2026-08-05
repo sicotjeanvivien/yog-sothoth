@@ -15,12 +15,11 @@ migration conventions, see [`migrations/README.md`](./migrations/README.md).
 
 ```
 persistence/
-├── migrations/              ← sqlx migrations, forward-only (001 … 040 today)
+├── migrations/              ← sqlx migrations, forward-only (001_baseline.sql today)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
-├── setup_roles.sql          ← one-time role provisioning (admin)
 ├── .sqlx/                   ← committed offline query cache (see below)
 └── src/
-    ├── database.rs          ← Database::connect, run_migrations
+    ├── database.rs          ← Database::connect, run_migrations, run_script
     ├── health.rs            ← PgHealthChecker
     ├── repositories/        ← one impl per domain repository trait
     │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
@@ -34,7 +33,12 @@ persistence/
     │   ├── token_metadata/, token_price/, network_status/, watched_pool/
     │   ├── announcement/
     │   └── event_freshness.rs
-    ├── bin/migrate.rs       ← yog-migrate binary (~30 lines)
+    ├── bin/
+    │   ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
+    │   │                      seed-watched-pools / bootstrap)
+    │   └── scripts/         ← the provisioning SQL, `include_str!`d into it
+    │       ├── setup_roles.sql         (roles + structural privileges, admin)
+    │       └── setup_watched_pools.sql (startup allowlist seed, admin)
     └── tests/               ← DB-backed integration tests (#[ignore]d by default)
         ├── main.rs          ← the ONLY test target; declares every file below
         ├── helpers.rs       ← shared sentinels (pk, sg, ts)
@@ -239,12 +243,28 @@ callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*
 
 ## `setup_roles.sql`
 
-Slim provisioning script applied once per database as superuser. Creates the
-five runtime roles, transfers `public` schema ownership to `yog_migrate`, and
-sets `ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate` so tables created by
-future migrations inherit the right `SELECT` grants automatically. It contains
-no table-specific GRANTs — those live in the migrations. The role → rights →
-process mapping is documented in [`crates/README.md`](../README.md#database-roles).
+Provisioning script applied as the admin role, by
+`yog-migrate -- setup-roles`. Creates the five runtime roles, transfers `public`
+schema ownership to `yog_migrate`, and sets `ALTER DEFAULT PRIVILEGES FOR ROLE
+yog_migrate` so tables created by future migrations inherit the right `SELECT`
+grants automatically. It contains no table-specific GRANTs — those live in the
+migrations. The role → rights → process mapping is documented in
+[`crates/README.md`](../README.md#database-roles).
+
+**Two scopes, one file, and it is idempotent.** Roles are cluster-wide;
+everything else is per-database. That asymmetry used to make the script
+un-rerunnable — bootstrapping a second database of the same cluster aborted on
+`role "yog_migrate" already exists` *before* reaching the per-database half that
+was the point of running it. The `CREATE ROLE`s now sit behind a guarded `DO`
+block, so re-running is a no-op and a new database of an existing cluster gets
+its privileges without touching the roles.
+
+The guard also means a rerun **never resets an existing role's password** — it
+must not silently push a production credential back to `CHANGE_ME_…`. Verified
+by comparing `pg_authid.rolpassword` before and after a rerun, with a mutation
+control proving the comparison distinguishes two hashes. (Not by logging in:
+the local compose Postgres accepts any password — `trust` auth — so a
+login-based check would pass whatever the script did.)
 
 ### The privilege matrix is tested
 
@@ -419,30 +439,32 @@ Worth including deliberately, rather than just taking the top of the list:
 
 ### Seeding the allowlist
 
-⚠️ **There is no seed script in the repo.** This README and
-[`crates/README.md`](../README.md) both used to point at
-`scripts/seed_watched_pools.sql`; that file was never written, so the step was
-undocumentable as stated. The table above is the selection to reproduce, and
-the seed is an `INSERT` you run by hand:
+The seed lives in [`setup_watched_pools.sql`](src/bin/scripts/setup_watched_pools.sql) and is
+applied by the migrate binary:
 
 ```bash
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" <<'SQL'
-INSERT INTO watched_pools (pool_address, protocol, note) VALUES
-    ('<pubkey>', 'meteora_damm_v2', 'high activity, short burst')
-ON CONFLICT (pool_address) DO NOTHING;
-SQL
+cargo run -p yog-persistence --bin yog-migrate -- seed-watched-pools
 ```
 
-`ON CONFLICT DO NOTHING` keeps it idempotent — safe to re-run after a partial
-seed or against an existing database.
-
-Run it as the admin role rather than as `yog_indexer`: the seed adjusts the
-allowlist, which is configuration, not runtime data, and the convention is to
-keep all configuration writes under the admin role.
+It runs under `DATABASE_URL_ADMIN`: the allowlist is *configuration*, not
+runtime data, and the convention keeps configuration writes under the admin
+role. `ON CONFLICT DO NOTHING` makes it idempotent, and it never deactivates or
+removes a row — curating the allowlist stays manual (see *Administration
+helpers* below).
 
 Without at least one active row, an indexer started in pool-centric mode has
 nothing to subscribe to and exits on `NoSubscriptionTargets` — this step is not
 optional.
+
+**The file seeds exactly one pool, and that is deliberate.** SOL-USDC, the
+universal routing intermediary: the only pick whose justification does not
+decay, and the single most valuable pool to observe, because routed
+transactions are what exercise `event_index`, the multi-hop path and the
+same-slot ambiguity counter. A committed top-ten would recreate the 4 August
+failure described above — hot today, dead next week, and silent about it.
+
+Everything else is picked fresh at seeding time, into the commented block the
+file ends with. *Choosing pools to watch* above is the method.
 
 ### Administration helpers
 

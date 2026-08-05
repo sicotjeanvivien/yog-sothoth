@@ -124,23 +124,25 @@ docker compose --profile full down -v
 # 1. Start Postgres only
 docker compose up -d
 
-# 2. Provision the roles (one-time, as superuser)
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
-    -f crates/persistence/setup_roles.sql
+# 2. Provision everything: roles + structural privileges, then the migrations,
+#    then the watched-pools allowlist. Idempotent — safe to re-run, and safe
+#    to run against a second database of the same cluster.
+#    (Reads DATABASE_URL_ADMIN and DATABASE_URL_MIGRATE from .env.)
+cargo run -p yog-persistence --bin yog-migrate -- bootstrap
 
-# 3. Apply migrations (as yog_migrate)
-cargo run -p yog-persistence --bin yog-migrate
+#    …or one step at a time:
+#      … -- setup-roles          (DATABASE_URL_ADMIN)
+#      … -- migrate              (DATABASE_URL_MIGRATE, the default with no arg)
+#      … -- seed-watched-pools   (DATABASE_URL_ADMIN)
 
-# 4. Seed the watched-pools allowlist (one-time, by hand — there is no seed
-#    script). Skipping it leaves a pool-centric indexer with nothing to
-#    subscribe to; seeding it with pools that have gone quiet leaves one that
-#    subscribes to nothing while looking healthy. Pick pools trading NOW:
-#    see persistence/README.md → "Choosing pools to watch".
+# 3. Review the allowlist before starting the indexer. The seed ships ONE pool
+#    — SOL-USDC, the routing hub, the only pick whose rationale does not decay.
+#    A pool that has gone quiet subscribes fine and collects nothing, so add
+#    pools trading NOW: see persistence/README.md → "Choosing pools to watch".
 psql "postgresql://yog:yog@localhost:5433/yog_sothoth" -c \
-    "INSERT INTO watched_pools (pool_address, protocol) VALUES ('<pubkey>', 'meteora_damm_v2') \
-     ON CONFLICT (pool_address) DO NOTHING;"
+    "SELECT pool_address, note FROM watched_pools WHERE active;"
 
-# 5. Run the binary you're working on
+# 4. Run the binary you're working on
 cargo run -p yog-indexer    # or yog-api, yog-context, yog-signals
 
 # Hit the api

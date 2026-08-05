@@ -66,4 +66,24 @@ impl Database {
             .await
             .map_err(MigrationError::from)
     }
+
+    /// Run a multi-statement provisioning script (`setup_roles.sql`,
+    /// `setup_watched_pools.sql`).
+    ///
+    /// Uses the simple query protocol, so the whole file is sent as one
+    /// statement batch — which is what lets a `DO $$ … $$` block and several
+    /// `ALTER DEFAULT PRIVILEGES` travel together. It is **not** wrapped in an
+    /// explicit transaction: Postgres already runs a simple-query batch as one
+    /// implicit transaction, and some provisioning statements would refuse an
+    /// explicit one.
+    ///
+    /// Unlike `run_migrations`, nothing here is versioned or recorded: these
+    /// scripts are idempotent by construction and are expected to be re-run.
+    pub async fn run_script(&self, sql: &str) -> Result<(), MigrationError> {
+        sqlx::raw_sql(sql)
+            .execute(&self.pool)
+            .await
+            .map(|_| ())
+            .map_err(MigrationError::from)
+    }
 }

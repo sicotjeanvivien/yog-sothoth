@@ -134,9 +134,8 @@ cp .env.example .env
 # Start Postgres only (smallest footprint, useful when running native cargo run alongside)
 docker compose up -d
 
-# Provision the database roles (one-time, as superuser)
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" \
-    -f crates/persistence/setup_roles.sql
+# Provision roles + schema + watched-pools allowlist (idempotent, safe to re-run)
+cargo run -p yog-persistence --bin yog-migrate -- bootstrap
 
 # Bring up the full backend stack (postgres + migrate + indexer + api + context + signals)
 docker compose --profile backend up -d --build
