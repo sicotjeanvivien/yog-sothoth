@@ -267,7 +267,33 @@ SELECT
     -- "implied" means the implied rate was actually USED — false both when the
     -- observed price was there and when nothing could be derived at all.
     (pa.price_usd IS NULL AND i.implied_a IS NOT NULL) AS price_a_implied,
-    (pb.price_usd IS NULL AND i.implied_b IS NOT NULL) AS price_b_implied
+    (pb.price_usd IS NULL AND i.implied_b IS NOT NULL) AS price_b_implied,
+    -- ⚠️ Valuability is a property of the BUCKET, not of each figure.
+    --
+    -- Volume, fees and protocol fees draw on different amounts (`volume_in_*`,
+    -- `fee_in_*`, `protocol_fee_in_*`), so deciding per figure lets them differ:
+    -- a bucket whose volume sits on an unpriceable token while its fee sits on a
+    -- priced one yielded `volume_usd = NULL` **and** `fees_usd = 0.18`. Three
+    -- consumers then lie in three ways — `lpFees = fees - protocol` can go
+    -- negative, `effectiveFeeBps` divides two disjoint sets of hours, and the
+    -- coverage counters (keyed on `volume_usd`) report 0/1 while a fee figure is
+    -- on screen. Measured on a fresh database before this column existed.
+    --
+    -- So the predicate is computed once, over the union of what the three
+    -- figures need: a side is REQUIRED when it carries any amount at all
+    -- (`protocol_fee_in_x <= fee_in_x` by construction, so it adds nothing), and
+    -- a required side must have BOTH a price and a scale — `pa.price_usd` alone
+    -- is not enough, since `POWER(10, NULL)` would still annihilate the leg.
+    --
+    -- A side carrying nothing is not required: that is what lets a one-way hour
+    -- be valued from the side that actually traded.
+    NOT (
+        (COALESCE(h.volume_in_a, 0) + COALESCE(h.fee_in_a, 0) > 0
+            AND (COALESCE(pa.price_usd, i.implied_a) IS NULL OR tma.decimals IS NULL))
+        OR
+        (COALESCE(h.volume_in_b, 0) + COALESCE(h.fee_in_b, 0) > 0
+            AND (COALESCE(pb.price_usd, i.implied_b) IS NULL OR tmb.decimals IS NULL))
+    ) AS valuation_complete
 FROM meteora_damm_v2_swap_events_hourly h
 LEFT JOIN pools p ON p.pool_address = h.pool_address
 LEFT JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
@@ -338,23 +364,33 @@ WITH pool_tokens AS (
 --                             it; the bucket must not pass for complete.
 -- A blanket `COALESCE(…, 0)` would collapse the second case into the first,
 -- which is the "unknown becomes zero" sin catalogued in the persistence README.
+--
+-- The outer `valuation_complete` guard is the other half, and the two are not
+-- redundant: the inner CASE decides what an EMPTY leg contributes, the outer one
+-- decides whether the bucket may be valued AT ALL. Without it the three figures
+-- stop being NULL together — measured — and every consumer that assumes they are
+-- (`lpFees = fees - protocol`, `effectiveFeeBps`, the coverage counters) starts
+-- publishing nonsense.
 swap_v AS (
     SELECT h.pool_address, h.bucket,
-        CASE WHEN COALESCE(h.volume_in_a, 0) = 0 THEN 0
-             ELSE (h.volume_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
-      + CASE WHEN COALESCE(h.volume_in_b, 0) = 0 THEN 0
-             ELSE (h.volume_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
-        AS volume_usd,
-        CASE WHEN COALESCE(h.fee_in_a, 0) = 0 THEN 0
-             ELSE (h.fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
-      + CASE WHEN COALESCE(h.fee_in_b, 0) = 0 THEN 0
-             ELSE (h.fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
-        AS fees_usd,
-        CASE WHEN COALESCE(h.protocol_fee_in_a, 0) = 0 THEN 0
-             ELSE (h.protocol_fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
-      + CASE WHEN COALESCE(h.protocol_fee_in_b, 0) = 0 THEN 0
-             ELSE (h.protocol_fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
-        AS protocol_fees_usd,
+        CASE WHEN NOT h.valuation_complete THEN NULL ELSE
+            CASE WHEN COALESCE(h.volume_in_a, 0) = 0 THEN 0
+                 ELSE (h.volume_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
+          + CASE WHEN COALESCE(h.volume_in_b, 0) = 0 THEN 0
+                 ELSE (h.volume_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+        END AS volume_usd,
+        CASE WHEN NOT h.valuation_complete THEN NULL ELSE
+            CASE WHEN COALESCE(h.fee_in_a, 0) = 0 THEN 0
+                 ELSE (h.fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
+          + CASE WHEN COALESCE(h.fee_in_b, 0) = 0 THEN 0
+                 ELSE (h.fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+        END AS fees_usd,
+        CASE WHEN NOT h.valuation_complete THEN NULL ELSE
+            CASE WHEN COALESCE(h.protocol_fee_in_a, 0) = 0 THEN 0
+                 ELSE (h.protocol_fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
+          + CASE WHEN COALESCE(h.protocol_fee_in_b, 0) = 0 THEN 0
+                 ELSE (h.protocol_fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+        END AS protocol_fees_usd,
         h.swap_count
     FROM meteora_damm_v2_swap_events_hourly_priced h
 ),

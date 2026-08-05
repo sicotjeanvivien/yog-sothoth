@@ -669,4 +669,76 @@ async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
         "expected $2000 from the A side alone, got {volume}"
     );
     assert_eq!(a.swap_buckets_priced_24h, 1);
+    // The three figures move together — see the invariant test below.
+    assert!(a.fees_24h_usd.is_some());
+    assert!(a.protocol_fees_24h_usd.is_some());
+}
+
+// ── 12. The three USD figures are valued, or not, as one ─────────────────────
+
+#[sqlx::test]
+async fn volume_fees_and_protocol_fees_are_null_together(pool: PgPool) {
+    // Found in review #5, and it was a regression introduced by the previous
+    // round's own fix: applying the zero-leg CASE per FIGURE let the three
+    // diverge, because they draw on different amounts. Measured before the
+    // bucket-level guard existed: `volume_usd = NULL` next to `fees_usd = 0.18`.
+    //
+    // Three consumers assume the coupling and break without it — `lpFees =
+    // fees - protocol` can go negative, `effectiveFeeBps` divides two disjoint
+    // sets of hours, and the coverage counters key on `volume_usd` alone while
+    // a fee figure sits on screen. That last one is this ticket's own defect,
+    // re-created by its fix.
+    //
+    // The fixture: token A has no metadata (volume sits on the unpriceable
+    // side), token B is priced and carries the fee.
+    let pool_addr = pk(1).to_string();
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1,'meteora_damm_v2',$2,$3)",
+    )
+    .bind(&pool_addr)
+    .bind(&mint_a)
+    .bind(&mint_b)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO token_metadata (mint, decimals, fetched_at, last_refresh_at)
+         VALUES ($1,$2,$3,$3)",
+    )
+    .bind(&mint_b)
+    .bind(DEC_B)
+    .bind(Utc::now() - Duration::hours(48))
+    .execute(&pool)
+    .await
+    .unwrap();
+    price_mint(&pool, &mint_b, PRICE_B).await;
+
+    insert_swap(
+        &pool,
+        Swap {
+            pool_addr: &pool_addr,
+            signature: "split",
+            direction: "a_to_b",
+            amount_a: 1_000_000_000,
+            amount_b: 500_000_000,
+            fee_a: 1_000_000,
+            fee_token_is_a: false, // the fee lands on the PRICED side
+            timestamp: Utc::now() - Duration::hours(2),
+        },
+    )
+    .await;
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
+    let a = analytics.get(&pk(1)).expect("pool must be present");
+
+    assert_eq!(
+        (a.volume_24h_usd, a.fees_24h_usd, a.protocol_fees_24h_usd),
+        (None, None, None),
+        "the volume sits on a token that cannot be valued, so the whole bucket          is unvaluable — a fee figure surviving alone would make lpFees,          effectiveFeeBps and the coverage counters lie at once"
+    );
+    assert_eq!(a.swap_buckets_24h, 1);
+    assert_eq!(a.swap_buckets_priced_24h, 0);
 }

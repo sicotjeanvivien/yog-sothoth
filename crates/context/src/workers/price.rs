@@ -107,6 +107,12 @@ impl PriceWorker {
             Ok(fetched) => fetched,
             Err(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
+                // Third early return, same rule as the other two: the numerator
+                // must never outlive the denominator it was measured against.
+                // Unreachable with the current Jupiter client (it absorbs
+                // per-chunk failures and returns Ok(partial)), which is exactly
+                // why it would rot silently in the next PriceSource.
+                PriceWorkerMetrics::set_priced_mints(0);
                 PriceWorkerMetrics::record_tick("source_hard_error", start.elapsed().as_secs_f64());
                 return;
             }

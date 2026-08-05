@@ -485,3 +485,33 @@ fn a_tick_with_no_known_mints_zeroes_both_gauges() {
          numerator makes the coverage alert fire on nothing"
     );
 }
+
+#[test]
+fn a_hard_source_error_also_zeroes_the_priced_gauge() {
+    // The third early return. `set_known_mints` has already run by then, so
+    // leaving the numerator untouched reports yesterday's coverage against
+    // today's denominator — for as long as the source keeps failing.
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Err(
+        SourceError::Http("boom".into()),
+    )]));
+
+    let snapshot = snapshot_one_cycle(PriceWorker::new(
+        metadata_repo,
+        price_repo,
+        source,
+        std::time::Duration::from_secs(30),
+    ));
+
+    assert_eq!(
+        value(&snapshot, "yog_context_price_known_mints"),
+        Some(&DebugValue::Gauge(2.0.into()))
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_priced_mints"),
+        Some(&DebugValue::Gauge(0.0.into())),
+        "a source that answered nothing priced nothing — the coverage ratio \
+         must say 0, not hold its last value"
+    );
+}
