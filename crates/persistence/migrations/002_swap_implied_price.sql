@@ -37,11 +37,18 @@
 --
 -- One of the two legs is net of the trading fee and the other is not — which
 -- leg depends on the pool's `collect_fee_mode`: mode 0 (BothToken) charges it on
--- the OUT token, modes 1 and 2 always on token B, in or out (see
--- `compute_fee_token_is_a` in core's swap translator). Either way the fee side
--- is short by `f` relative to the other, so the relation below holds in every
--- mode. Writing X for the hour's a→b input value and Y for its b→a input value,
--- the implied rate relates to the true one by
+-- the OUT token, modes 1 and 2 always on token B, whether B is going in or out
+-- (see `compute_fee_token_is_a` in core's swap translator). The fee is therefore
+-- NOT always on the short leg — in mode 1/2 on a b→a swap it sits on the input.
+--
+-- The relation below holds in every mode all the same, and it is worth deriving
+-- rather than asserting. Writing X for the hour's a→b input value and Y for its
+-- b→a input value, both families give the same pair of totals:
+--
+--     traded_a × P_A = X + Y(1-f)        traded_b × P_B = X(1-f) + Y
+--
+-- because each direction loses `f` on exactly one of its two legs, whichever it
+-- is. Hence
 --
 --     implied / true = (X(1-f) + Y) / (X + Y(1-f))
 --

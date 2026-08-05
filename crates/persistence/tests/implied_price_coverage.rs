@@ -16,12 +16,19 @@
 //!
 //! # A note on the fixture amounts
 //!
-//! Unlike `volume_cagg.rs`, the swaps that carry volume here carry BOTH legs. A
-//! swap with a zero counter-leg cannot happen on chain, and it is precisely the
-//! counter-leg that anchors the valuation — a fixture that omits it would test
-//! nothing. The one exception is the fee test, which adds a leg-less swap on
-//! purpose: it contributes only a fee, so the implied rate under test stays the
-//! one the other two swaps established.
+//! Unlike `volume_cagg.rs`, every swap here is one the chain could actually
+//! produce, and that is load-bearing rather than tidy:
+//!
+//!   * **both legs carry an amount** — the counter-leg is what anchors the
+//!     valuation, so a fixture that omits it tests nothing;
+//!   * **the fee side follows `collect_fee_mode`** — `a_to_b` pays on B, never
+//!     on A (0 of 662 real swaps have the latter);
+//!   * **no fee is zero** — also 0 of 662.
+//!
+//! The last two used to be violated here, harmlessly, right up until
+//! `valuation_complete` began reading `fee_in_a` / `fee_in_b`. The realistic
+//! version of one of those fixtures then gave the OPPOSITE result. A fixture
+//! that cannot occur is a test that cannot fail for the right reason.
 
 use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
