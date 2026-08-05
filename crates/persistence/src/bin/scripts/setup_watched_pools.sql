@@ -83,6 +83,11 @@ ON CONFLICT (pool_address) DO NOTHING;
 
 
 -- What the indexer will actually subscribe to on its next start.
+--
+-- ⚠️ Visible under `psql -f` only. `yog-migrate -- seed-watched-pools` runs this
+-- file through `execute()`, which discards result rows — so this SELECT prints
+-- nothing there. The binary reads the allowlist back through the repository and
+-- logs it itself; this statement is for the by-hand path.
 SELECT pool_address, protocol, added_at, note
 FROM watched_pools
 WHERE active = TRUE

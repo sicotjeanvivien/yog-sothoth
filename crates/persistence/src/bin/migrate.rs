@@ -57,7 +57,8 @@
 
 use anyhow::{Context, Result, bail};
 
-use yog_persistence::Database;
+use yog_core::domain::WatchedPoolRepository;
+use yog_persistence::{Database, PgWatchedPoolRepository};
 
 const SETUP_ROLES_SQL: &str = include_str!("scripts/setup_roles.sql");
 const SETUP_WATCHED_POOLS_SQL: &str = include_str!("scripts/setup_watched_pools.sql");
@@ -150,9 +151,32 @@ async fn seed_watched_pools() -> Result<()> {
         .await
         .context("failed to seed watched_pools")?;
 
-    tracing::info!(
-        "watched_pools seeded — review the selection before starting the indexer, \
-         a pool that has gone quiet subscribes fine and collects nothing"
+    // The script ends with a SELECT of the active allowlist, but `run_script`
+    // goes through `execute()`, which discards rows — so under the binary that
+    // SELECT shows nothing, and telling the operator to "review the selection"
+    // without showing it is an instruction they cannot follow. Read it back
+    // through the repository rather than re-writing the SQL here.
+    let repository = PgWatchedPoolRepository::new(database.pool_owned());
+    let active: Vec<_> = repository
+        .find_all()
+        .await
+        .context("failed to read back the allowlist")?
+        .into_iter()
+        .filter(|w| w.active)
+        .collect();
+
+    tracing::info!(count = active.len(), "watched_pools seeded");
+    for watched in &active {
+        tracing::info!(
+            pool = %watched.pool_address,
+            protocol = watched.protocol.as_str(),
+            note = watched.note.as_deref().unwrap_or("—"),
+            "  will be subscribed at indexer start"
+        );
+    }
+    tracing::warn!(
+        "review the selection before starting the indexer: a pool that has gone \
+         quiet subscribes fine, logs nothing abnormal, and collects nothing"
     );
     Ok(())
 }
@@ -189,7 +213,7 @@ async fn connect(var: &str, role: &str) -> Result<Database> {
 
     // The URL carries a password. Log the variable it came from, not its value.
     tracing::info!("connecting with {var}");
-    Database::connect(&url)
+    Database::connect_for_provisioning(&url)
         .await
         .with_context(|| format!("failed to connect using {var}"))
 }

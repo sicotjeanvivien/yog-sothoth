@@ -72,6 +72,26 @@ go forward in a new migration.
 
 Run the integration suite, not just a schema diff.
 
+### ⛔ A database created before 5 August 2026: recreate it, do not resync
+
+If your database was migrated by the 42-file chain, it holds a `_sqlx_migrations`
+row for version 1 whose checksum is `001_initial_schema.sql`'s, plus versions 2
+to 42 that no longer exist on disk. `yog-migrate` will refuse it —
+`migration 1 was previously applied but has been modified` — and it is right to.
+
+**The only correct action is to recreate the database.** Locally that is
+`DROP DATABASE` then `yog-migrate -- bootstrap`; the data is disposable, which
+is the whole reason the squash was allowed to happen at all.
+
+⚠️ **Do not reach for the checksum-resync recipe below.** It is the first thing
+this file offers a reader hitting a checksum error, and here it is actively
+harmful: it would stamp the baseline's checksum onto a row recording a
+*different* file, and leave versions 2-42 claiming migrations that the resolved
+set no longer contains. The database would report itself up to date while its
+recorded history describes a schema nobody can reproduce. That recipe exists for
+one narrow case — a committed file edited in ways an applied database provably
+never evaluated — and this is not it.
+
 ## Forward-only
 
 Migrations are forward-only. **A migration committed to git never
@@ -113,9 +133,10 @@ PY
 
 Only run it when the executable SQL is unchanged, or changed in a way an
 already-migrated database provably never evaluated. Otherwise the row would
-claim a statement ran that never did — recreate the database instead. Prove it
-rather than assert it; comparing the files with comment lines stripped is
-enough:
+claim a statement ran that never did — recreate the database instead. **In
+particular, never run it on a database predating the squash** — see the section
+above. Prove it rather than assert it; comparing the files with comment lines
+stripped is enough:
 
 ```sh
 diff <(git show <before>:path/to/0NN_x.sql | grep -vE '^\s*--') \

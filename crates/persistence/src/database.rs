@@ -1,4 +1,6 @@
-use sqlx::postgres::{PgPool, PgPoolOptions};
+use sqlx::ConnectOptions;
+use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
+use std::str::FromStr;
 use std::time::Duration;
 
 use crate::error::MigrationError;
@@ -48,6 +50,30 @@ impl Database {
         Ok(Self { pool })
     }
 
+    /// Connect for a one-shot provisioning run (`yog-migrate`), with statement
+    /// logging off.
+    ///
+    /// sqlx warns above 1s with the **whole statement** inlined. Every
+    /// statement this binary runs is a file — the baseline migration alone is
+    /// ~2 300 lines — so the first run against an empty database emits it
+    /// verbatim as a `WARN`, roughly 100 kB of log for an event that is both
+    /// expected and unactionable. Runtime services keep the warning, where a
+    /// slow statement means something.
+    ///
+    /// One connection, not ten: it is a sequence of scripts, and the pool is
+    /// dropped when the process exits.
+    pub async fn connect_for_provisioning(url: &str) -> Result<Self, sqlx::Error> {
+        let options = PgConnectOptions::from_str(url)?.disable_statement_logging();
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect_with(options)
+            .await?;
+
+        Ok(Self { pool })
+    }
+
     /// Borrow the underlying pool. Repositories that need to own a pool
     /// (the common case) should call `db.pool().clone()` — `PgPool` is an
     /// `Arc` internally, so cloning is cheap.
@@ -69,6 +95,13 @@ impl Database {
 
     /// Run a multi-statement provisioning script (`setup_roles.sql`,
     /// `setup_watched_pools.sql`).
+    ///
+    /// ⚠️ **Compiled SQL only — never a string composed at runtime.** The
+    /// simple query protocol has no parameter binding, so anything
+    /// interpolated into `sql` is executed as SQL. Both callers pass an
+    /// `include_str!` constant, which is the only shape this method is meant
+    /// to take; a value that needs interpolating belongs in a `query!` with
+    /// bind parameters, not here.
     ///
     /// Uses the simple query protocol, so the whole file is sent as one
     /// statement batch — which is what lets a `DO $$ … $$` block and several

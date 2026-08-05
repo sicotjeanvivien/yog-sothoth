@@ -262,9 +262,15 @@ its privileges without touching the roles.
 The guard also means a rerun **never resets an existing role's password** — it
 must not silently push a production credential back to `CHANGE_ME_…`. Verified
 by comparing `pg_authid.rolpassword` before and after a rerun, with a mutation
-control proving the comparison distinguishes two hashes. (Not by logging in:
-the local compose Postgres accepts any password — `trust` auth — so a
-login-based check would pass whatever the script did.)
+control proving the comparison distinguishes two hashes.
+
+⚠️ *Not* by logging in, and the reason is a trap worth knowing: the compose
+`pg_hba.conf` is `trust` for `local` and `127.0.0.1/32`, `scram-sha-256` for
+everything else. A check run through `docker exec … psql` therefore matches the
+trust lines and succeeds **with any password, including a deliberately wrong
+one** — while the same check from the host over `:5433` authenticates normally.
+The first version of this verification connected from inside the container and
+was green in both directions; only the negative control exposed it.
 
 ### The privilege matrix is tested
 
