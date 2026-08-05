@@ -33,14 +33,50 @@
 -- effective prices stay NULL and the bucket stays NULL — "we don't know" is
 -- preserved, no fallback onto a later price is introduced.
 --
--- ## Two known limits, deliberately accepted
+-- ## The limit that matters: the implied rate is net of the fee
 --
---   1. `amount_in` includes the fee and `amount_out` does not, so the implied
---      rate is biased by at most the pool's fee rate (~0,25 %), and the bias
---      partially cancels when the hour's flow is balanced. Sub-percent, against
---      a 100 % loss today.
---   2. The rate is the hour's volume-weighted average, applied to that same
---      hour's volume and fees — which is what it is the right average for.
+-- `amount_in` includes the trading fee and `amount_out` does not. Writing X for
+-- the hour's a→b input value and Y for its b→a input value, the implied rate
+-- relates to the true one by
+--
+--     implied / true = (X(1-f) + Y) / (X + Y(1-f))
+--
+-- which is exactly 1 when X = Y — and departs from it by the full fee rate `f`
+-- when the hour traded in ONE direction only.
+--
+-- ⚠️ **That symmetric case is not the one we are in.** Measured on 5 August
+-- 2026: of the 36 buckets that actually used an implied rate, **35 were
+-- one-directional**. Which stands to reason — a bucket needing an implied rate
+-- is a bucket on a thin, unlisted token, and thin tokens trade one way at a
+-- time. The cancellation is real algebra and a rare event; do not read it as a
+-- mitigation.
+--
+-- So, concretely, for a one-directional bucket:
+--
+--   * `implied_price = true_price × (1 - f)`, hence `volume_usd` is the value
+--     of the **output** leg — the volume NET of fee;
+--   * a bucket whose two prices were observed values the **input** leg — the
+--     volume GROSS of fee.
+--
+-- **Two conventions therefore coexist in one column**, selected by whether a
+-- price happened to be observed. At 25 bps the difference is invisible. It is
+-- not invisible on a launch pool with a fee scheduler — and those are precisely
+-- the pools whose token is not listed yet, so the adverse correlation is the
+-- same one this whole ticket is about.
+--
+-- The magnitude cannot be stated honestly today: it is bounded by the pool's
+-- REAL fee rate, and `pools.fee_bps` is frozen on the scheduler cliff (ticket
+-- 07 measured it wrong by ×5 and ×49). Values from 4 to 9900 bps are recorded,
+-- and no one can currently tell which are real.
+--
+-- This is still a large net gain — 68 valuable buckets against 32 without it,
+-- and a NULL carries no information at all. But it is an approximation with an
+-- unknown bound, not a sub-percent one, and it should be labelled as such
+-- wherever it reaches a user.
+--
+-- Second, smaller limit: the rate is the hour's volume-weighted average,
+-- applied to that same hour's volume and fees — which is what it is the right
+-- average for.
 --
 -- ## Scope: swaps only
 --
@@ -147,9 +183,16 @@ GRANT SELECT ON meteora_damm_v2_swap_events_hourly TO yog_api;
 -- migration exists to remove, moved one join up.
 --
 -- LEFT-joining keeps the bucket with NULL decimals, hence a NULL valuation, so
--- it lands in the denominator and not in the numerator. `pools` stays an INNER
--- join: the event persistor upserts the pool before inserting the swap, so the
--- row is always there.
+-- it lands in the denominator and not in the numerator.
+--
+-- `pools` is LEFT-joined for the same reason, and it is NOT redundant. The
+-- persistor does call `discover_pool` before inserting a swap — but that call
+-- is skip-and-log (`event_persistor.rs`: the error is warned and the insert
+-- proceeds anyway), so a failed upsert leaves a swap whose pool has no row. An
+-- INNER join would make that bucket vanish from both sides of the coverage
+-- ratio: the exact defect this migration removes, one join further up. Zero
+-- occurrences measured today; the guarantee is probabilistic, not structural,
+-- and a coverage denominator must not rest on one.
 --
 -- ## The rule itself
 --
@@ -193,7 +236,7 @@ SELECT
     (pa.price_usd IS NULL AND i.implied_a IS NOT NULL) AS price_a_implied,
     (pb.price_usd IS NULL AND i.implied_b IS NOT NULL) AS price_b_implied
 FROM meteora_damm_v2_swap_events_hourly h
-JOIN pools p ON p.pool_address = h.pool_address
+LEFT JOIN pools p ON p.pool_address = h.pool_address
 LEFT JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
 LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
 LEFT JOIN LATERAL (

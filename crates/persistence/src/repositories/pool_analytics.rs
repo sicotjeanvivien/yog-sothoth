@@ -118,6 +118,13 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         // `meteora_damm_v2_pool_hourly_activity` VIEW (baseline §15) — this
         // query just slices it to one pool and window. The macro still verifies
         // these columns against the view.
+        //
+        // Behaviour change in migration 002: a pool whose mints are not
+        // resolved yet used to yield an EMPTY series (the view INNER-joined
+        // `token_metadata`, so its buckets did not exist). It now yields its
+        // swap buckets with a non-null `swap_count` and null USD columns —
+        // "it traded, we could not price it" instead of "nothing happened".
+        // Every USD field was already nullable, so the wire shape is unchanged.
         let rows = sqlx::query_as!(
             PoolHistoryRow,
             r#"

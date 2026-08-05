@@ -43,9 +43,11 @@ impl From<SignalRecord> for PoolSignalResponse {
 /// Analytics (TVL, 24h volume) are denominated in USD. They are
 /// `Option` because their computation requires data that may not be
 /// available yet (no current state, no priced token, no swap in the
-/// window). Serialised as JSON numbers via `rust_decimal`'s exact
-/// decimal representation — consistent with the price block in
-/// `EmbeddedPriceResponse`.
+/// window). Serialised as JSON **strings** via `rust_decimal`'s default
+/// representation — consistent with the price block in `EmbeddedPriceResponse`,
+/// and with the web's `BigDecimal` zod type, which keeps the trailing digits a
+/// JS `number` would drop. (This said "JSON numbers" until a serialisation test
+/// pinned the real shape.)
 ///
 /// A non-null 24h figure is not necessarily a *complete* one: the sum skips
 /// the hours it cannot value. `swapBuckets24h` / `swapBucketsPriced24h` carry

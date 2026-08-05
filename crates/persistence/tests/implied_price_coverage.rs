@@ -16,9 +16,12 @@
 //!
 //! # A note on the fixture amounts
 //!
-//! Unlike `volume_cagg.rs`, every swap here carries BOTH legs. A swap with a
-//! zero counter-leg cannot happen on chain, and it is precisely the counter-leg
-//! that anchors the valuation — a fixture that omits it would test nothing.
+//! Unlike `volume_cagg.rs`, the swaps that carry volume here carry BOTH legs. A
+//! swap with a zero counter-leg cannot happen on chain, and it is precisely the
+//! counter-leg that anchors the valuation — a fixture that omits it would test
+//! nothing. The one exception is the fee test, which adds a leg-less swap on
+//! purpose: it contributes only a fee, so the implied rate under test stays the
+//! one the other two swaps established.
 
 use super::helpers::pk;
 use chrono::{DateTime, Duration, Utc};
@@ -475,4 +478,32 @@ async fn a_pool_with_unresolved_mints_counts_as_uncovered_not_as_absent(pool: Pg
         a.swap_buckets_priced_24h, 0,
         "…and none of it was valued, so coverage is 0/1 and not 0/0"
     );
+}
+
+// ── 8. A swap whose pool row is missing still counts ─────────────────────────
+
+#[sqlx::test]
+async fn a_swap_without_its_pool_row_still_counts_as_uncovered(pool: PgPool) {
+    // Found in self-review. `discover_pool` runs before the swap insert, but it
+    // is skip-and-log: the error is warned and the insert proceeds anyway. So a
+    // swap CAN exist with no `pools` row, and an INNER join there would make the
+    // bucket vanish from both sides of the coverage ratio — the same silent
+    // drop the LEFT join on `token_metadata` exists to prevent.
+    //
+    // No `pools` insert at all here: that is the point.
+    let pool_addr = pk(9).to_string();
+    insert_balanced_pair(&pool, &pool_addr, "orphan", Utc::now() - Duration::hours(2)).await;
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(9)]).await.unwrap();
+    let a = analytics
+        .get(&pk(9))
+        .expect("pool must be present in the result");
+
+    assert_eq!(a.volume_24h_usd, None, "nothing identifies the tokens");
+    assert_eq!(
+        a.swap_buckets_24h, 1,
+        "the hour traded: it belongs in the denominator even with no pool row"
+    );
+    assert_eq!(a.swap_buckets_priced_24h, 0);
 }

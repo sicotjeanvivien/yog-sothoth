@@ -88,6 +88,11 @@ impl PoolAnalytics {
 /// but not another, and because USD valuation needs a known price for the
 /// tokens involved at that time — `None` means "no priced activity of this kind
 /// in this bucket", surfaced rather than coerced to zero.
+///
+/// A bucket with a non-null `swap_count` and a null `volume_usd` is therefore
+/// meaningful and expected: the hour traded and could not be valued. It is the
+/// per-bucket form of the coverage counters on [`PoolAnalytics`], which is why
+/// this type needs none of its own — a caller derives coverage by counting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolHistoryBucket {
     /// Start of the hourly bucket (UTC).

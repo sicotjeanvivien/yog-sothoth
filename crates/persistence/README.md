@@ -230,8 +230,18 @@ The rule and its boundary:
 - it is a **measurement**, not an extrapolation — the rate comes from trades
   inside that hour, and anchoring on the hard asset (SOL, USDC) is also the
   more robust choice;
-- it is biased by at most the pool's fee rate (`amount_in` includes the fee,
-  `amount_out` does not);
+- ⚠️ **it is net of the trading fee, and the bound is unknown.** `amount_in`
+  includes the fee and `amount_out` does not, so a one-directional hour yields
+  `implied = true × (1 − f)` — i.e. `volume_usd` measures the **output** leg,
+  where a both-priced bucket measures the **input** leg. Two conventions in one
+  column, selected by whether a price was observed. The algebra cancels when
+  the hour's flow is balanced, but that case is rare in practice (**35 of 36
+  implied buckets were one-directional** on 5 August 2026 — a token thin enough
+  to need the fallback trades one way at a time). And `f` cannot be read
+  reliably today: `pools.fee_bps` is frozen on the scheduler cliff, off by ×5
+  and ×49 where it was checked (ticket 07). Still a large net gain over a NULL,
+  which carries no information at all — but label it as approximate wherever it
+  reaches a user;
 - **neither side priced → still NULL.** No fallback onto a later price exists,
   by decision: if we don't know, we don't know;
 - it is **not** applied to liquidity or claim amounts. A liquidity add has no

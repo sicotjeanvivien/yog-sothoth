@@ -20,6 +20,7 @@ mod close_position;
 mod create_position;
 mod event_index_uniqueness;
 mod fund_reward;
+mod global_analytics_coverage;
 mod implied_price_coverage;
 mod initialize_pool;
 mod initialize_reward;
