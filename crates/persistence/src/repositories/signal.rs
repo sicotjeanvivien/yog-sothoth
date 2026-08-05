@@ -1,7 +1,7 @@
 //! Postgres implementation of [`SignalRepository`] and
 //! [`SignalFeed`] — one struct, two consumer lenses.
 //!
-//! Backed by the `signals` hypertable (migration 022). The engine's
+//! Backed by the `signals` hypertable (baseline §11). The engine's
 //! contract is append-only: a plain multi-row INSERT (signals are
 //! immutable conclusions, no `ON CONFLICT` / UPSERT path) plus the dedup
 //! read. The api's feed contract paginates with the same bidirectional
@@ -300,7 +300,7 @@ impl SignalFeed for PgSignalRepository {
 
         // ROW_NUMBER caps the rows *per pool* in SQL, so one noisy pool
         // cannot bloat the whole page's payload. The (pool_address,
-        // triggered_at DESC) index (migration 022) drives the window scan.
+        // triggered_at DESC) index (baseline §11) drives the window scan.
         // Columns come through a subquery, so sqlx sees them as nullable —
         // the `!` markers restore the base table's constraints.
         let rows: Vec<SignalRow> = sqlx::query_as!(

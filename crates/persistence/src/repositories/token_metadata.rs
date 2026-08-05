@@ -1,6 +1,6 @@
 //! Postgres implementation of `TokenMetadataRepository`.
 //!
-//! Backed by the `token_metadata` table (migration 004).
+//! Backed by the `token_metadata` table (baseline §6).
 //!
 //! The domain types mints as `Pubkey`; the column is `TEXT`. The
 //! conversion happens here, at the persistence boundary:

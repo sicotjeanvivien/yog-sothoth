@@ -48,7 +48,7 @@ services:
     # max_background_workers = 0 disables the TimescaleDB job scheduler. It is
     # required by the DB-backed integration tests: sqlx::test creates a fresh
     # database per test, each adding continuous-aggregate refresh policies
-    # (migrations 010–013); the scheduler then mutates the cluster-wide
+    # (baseline §13); the scheduler then mutates the cluster-wide
     # _timescaledb_catalog asynchronously and races the next test's
     # cagg-creating migration DDL, failing it with "tuple concurrently deleted".
     # Safe for the local app stack too: the caggs are materialized_only = false,

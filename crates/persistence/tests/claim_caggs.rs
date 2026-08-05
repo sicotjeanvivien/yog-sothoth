@@ -1,4 +1,4 @@
-//! Integration tests for the claim continuous aggregates (migrations 012, 013).
+//! Integration tests for the claim continuous aggregates (baseline §13).
 //!
 //! Gated behind `integration-tests`. History-only rollups with no Rust read
 //! path yet, so the tests assert the CA aggregates directly. Real-time

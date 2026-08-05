@@ -11,6 +11,67 @@ The connection string passed to `yog-migrate` must use the `yog_migrate`
 role — the four runtime roles (`yog_indexer`, `yog_api`, `yog_context`,
 `yog_signals`) intentionally cannot CREATE or ALTER tables.
 
+## The baseline, and where the old numbers went
+
+`001_baseline.sql` is the whole schema. It replaces the 42 files that built it
+incrementally between June and August 2026, squashed on **5 August 2026** —
+before the first production deployment, the only window in which a squash is
+free. The next migration is `002_`.
+
+The point was not to have fewer files. It was that the current shape of a table
+had stopped being readable anywhere: `pools` had to be reconstructed by reading
+001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs
+mentally.
+
+**A comment that says "see migration 036" still resolves.** The baseline is cut
+into numbered sections, each naming the migrations it absorbs, and its header
+carries the full old-number → section table. Grep the old number in
+`001_baseline.sql`. The original files stay in git history
+(`git log -- crates/persistence/migrations/`).
+
+### How the squash was proved equivalent
+
+Two fresh databases were built — one from the 42 migrations, one from the
+baseline — and compared on **two** axes, because neither alone is sufficient:
+
+1. `pg_dump --schema-only --schema=public`, with the order-dependent
+   TimescaleDB internal ids normalised and the blocks sorted (pg_dump emits in
+   dependency order, so the same schema built by two statement sequences yields
+   permuted dumps);
+2. the TimescaleDB catalog — `timescaledb_information.{hypertables, dimensions,
+   compression_settings, continuous_aggregates, jobs}`. Retention, compression
+   and refresh policies are catalog **rows**, not DDL, and pg_dump does not emit
+   them.
+
+Both empty. Mutation-tested in both directions: removing one retention policy
+from the baseline produces **0** lines of pg_dump diff and 2 lines of catalog
+diff; removing one column produces 2 and **0**. A dump-only comparison would
+have been green while silently dropping every policy.
+
+One deliberate difference was folded in — see below.
+
+### ⚠️ What that comparison still cannot see: default privileges
+
+Both oracle databases had `setup_roles.sql` applied, so `ALTER DEFAULT
+PRIVILEGES` granted SELECT to the runtime roles on every new table and view —
+and **an ACL cannot tell a default-privilege grant from an explicit one**. A
+lost explicit `GRANT SELECT` is therefore invisible to the schema diff.
+
+This is not hypothetical: migration 014 dropped and recreated `swap_events` and
+`liquidity_events` without restating the grant 001 had given them, and nothing
+noticed for two months. What caught it during the squash was
+`tests/privileges.rs`, whose `sqlx::test` databases have no default privileges
+— it pins the real matrix and it went red.
+
+The grant is restored in the baseline (§14), which makes that section the one
+place this file is not a pure squash. Folding it in rather than adding a `002_`
+is defensible only because it happened **before the first deploy**, and only
+because the privilege surface has its own assertion: the schema diff is blind
+here, the matrix is not. After the first deploy the same finding would have to
+go forward in a new migration.
+
+Run the integration suite, not just a schema diff.
+
 ## Forward-only
 
 Migrations are forward-only. **A migration committed to git never
@@ -61,10 +122,13 @@ diff <(git show <before>:path/to/0NN_x.sql | grep -vE '^\s*--') \
      <(grep -vE '^\s*--' path/to/0NN_x.sql)
 ```
 
-Done twice, in August 2026, to put the headers of migrations 009 and 036–041
-into English (the repository's convention for migration bodies) after they had
-merged. Both times the diff above came back empty or limited to `RAISE
-EXCEPTION` strings that a successful run never evaluates.
+Done twice in August 2026, on files the baseline has since absorbed, to put
+their headers into English (the repository's convention for migration bodies)
+after they had merged. Both times the diff above came back empty or limited to
+`RAISE EXCEPTION` strings that a successful run never evaluates.
+
+The squash itself is the largest instance of this window ever taken, and it
+closes it: from `002_` onwards there is production data behind the rule.
 
 This is the right discipline for production safety:
 
@@ -104,8 +168,9 @@ admin role when a new database is created.
 
 ### An event table carries its position in the chain
 
-Since migration 041 every `*_events` table has three more columns and one
-uniform idempotency key. A new event table is born with them:
+Every `*_events` table carries three columns locating it in the chain, and one
+uniform idempotency key — the shape migration 041 imposed, now `001_baseline.sql`
+§12. A new event table is born with them:
 
 ```sql
 CREATE TABLE meteora_<product>_<event_kind>_events (

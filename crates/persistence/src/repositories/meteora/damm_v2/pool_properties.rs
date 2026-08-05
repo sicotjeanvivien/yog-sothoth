@@ -1,4 +1,4 @@
-//! DAMM v2 pool-properties satellite repository (migration 036).
+//! DAMM v2 pool-properties satellite repository (baseline §8).
 //!
 //! Holds the pool properties that only exist for cp-amm, kept out of the
 //! cross-protocol `pools` registry so no protocol carries NULL columns for

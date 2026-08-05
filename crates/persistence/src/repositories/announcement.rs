@@ -1,6 +1,6 @@
 //! Postgres implementation of `AnnouncementLookup`.
 //!
-//! Backed by the `announcements` operator table (migration 026). Read
+//! Backed by the `announcements` operator table (baseline §10). Read
 //! path only — publication is an operator INSERT via psql (the api
 //! connects as the read-only `yog_api` role).
 

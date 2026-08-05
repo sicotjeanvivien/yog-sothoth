@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
 /// Pool properties that only exist for DLMM — the per-protocol satellite of the
-/// cross-protocol [`crate::domain::Pool`] registry (migration 039).
+/// cross-protocol [`crate::domain::Pool`] registry (baseline §9).
 ///
 /// # Why this is not on `Pool`
 ///

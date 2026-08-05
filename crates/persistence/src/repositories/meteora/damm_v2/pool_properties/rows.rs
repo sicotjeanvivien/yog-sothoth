@@ -3,7 +3,7 @@ use yog_core::{RepositoryError, domain::MeteoraDammV2PoolProperties};
 use crate::repositories::helper::{convert_i16_to_u8, convert_optional, convert_string_to_pubkey};
 
 /// Row shape returned by SELECTs on `meteora_damm_v2_pool_properties`
-/// (migration 036). Mirrors every column of the table.
+/// (baseline §8). Mirrors every column of the table.
 ///
 /// Every column is nullable because the two groups have different writers and
 /// either can land first: the fee-split percents come from yog-context reading

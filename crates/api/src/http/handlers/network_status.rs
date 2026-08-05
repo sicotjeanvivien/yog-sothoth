@@ -17,8 +17,8 @@ use axum::{Json, extract::State};
 /// `GET /api/network/status`
 ///
 /// Returns the current chain-link health and ingestion freshness.
-/// The `network_status` row is seeded by migration 003, so a healthy
-/// system always has one — its absence is treated as an internal
+/// The `network_status` row is seeded by the baseline migration (§5), so a
+/// healthy system always has one — its absence is treated as an internal
 /// error rather than a 404, since it means the seed row is missing.
 pub(crate) async fn get_network_status(
     State(state): State<AppState>,

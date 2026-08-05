@@ -1,4 +1,4 @@
-//! Integration tests for the DAMM v2 pool-properties satellite (migration 036)
+//! Integration tests for the DAMM v2 pool-properties satellite (baseline §8)
 //! and the account-resolution queue that reads it.
 //!
 //! Gated behind `integration-tests`: they need a live Postgres (sqlx::test
@@ -339,7 +339,7 @@ async fn list_unresolved_is_not_starved_by_older_foreign_pools(pool: PgPool) {
     );
 }
 
-// ── DLMM satellite (migration 039) ──────────────────────────────────
+// ── DLMM satellite (baseline §9) ──────────────────────────────────
 
 /// The DLMM resolver stores its six columns and reads them back unchanged,
 /// including the values a signed column of the on-chain width could not hold.
@@ -549,7 +549,7 @@ async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
         .expect_err("an unknown pool must violate the foreign key");
 }
 
-// ── The pool↔protocol invariant, in the schema (migration 040) ──────
+// ── The pool↔protocol invariant, in the schema (baseline §8-§9) ──────
 
 /// SQLSTATE of a failed statement, or the test dies with the error it did get.
 ///
@@ -703,10 +703,10 @@ async fn a_pools_protocol_cannot_change_under_a_satellite_row(pool: PgPool) {
     assert_eq!(sqlstate(&err), FOREIGN_KEY_VIOLATION, "{err:?}");
 }
 
-/// Migration 040 drops and rebuilds three foreign keys. `ON DELETE CASCADE` came
-/// with the original single-column ones, and losing it in the rebuild would
-/// leave orphan rows no code path ever cleans up — so it is asserted rather than
-/// assumed.
+/// The three satellite foreign keys are composite (baseline §8-§9), rebuilt
+/// from single-column ones in migration 040. `ON DELETE CASCADE` came with the
+/// originals, and losing it in that rebuild would leave orphan rows no code
+/// path ever cleans up — so it is asserted rather than assumed.
 #[sqlx::test]
 async fn deleting_a_pool_still_cascades_to_its_dependents(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;

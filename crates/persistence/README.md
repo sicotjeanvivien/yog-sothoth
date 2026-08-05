@@ -91,7 +91,7 @@ conclusion, not a heterogeneous event.
 
 Every event table carries `slot`, `event_index` and `transaction_index`, and
 its idempotency guard is **`(signature, event_index, timestamp)`** — one rule
-for all nineteen (migration 041). `timestamp` is in the key because TimescaleDB
+for all nineteen (baseline §12). `timestamp` is in the key because TimescaleDB
 requires the partitioning column in a unique index, not to discriminate.
 
 Before that migration the key was `(signature, timestamp)`, which cannot tell
@@ -113,7 +113,7 @@ Two consequences when you add an event table:
 ### The ordering key of the `pool_current_state` projection
 
 The same three columns land on the projection as `last_slot`,
-`last_event_index`, `last_transaction_index` (migration 042), and its upsert
+`last_event_index`, `last_transaction_index` (baseline §4), and its upsert
 guard compares them **as a tuple**:
 
 ```sql
@@ -153,7 +153,7 @@ query shape:
 - **Simple / static** → `sqlx::query!` / `query_as!` inline. The default.
 - **Big but static** → prefer a **SQL VIEW** in a migration when the query is
   reusable or decomposable (e.g. `meteora_damm_v2_pool_hourly_activity`,
-  migration 019, shared by `history` and `pool_analytics`); the slim
+  baseline §15, shared by `history` and `pool_analytics`); the slim
   `SELECT … FROM <view>` stays a checked `query!`. Otherwise
   `query_file!("….sql")`.
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by
@@ -291,7 +291,7 @@ cargo test -p yog-persistence --features integration-tests -- --include-ignored
 
 They need a live Postgres running with `timescaledb.max_background_workers = 0`
 (as configured in `docker-compose.yml`): `sqlx::test` creates a fresh database
-per test, and the cagg refresh policies from migrations 010–013 otherwise have
+per test, and the cagg refresh policies of the baseline (§13) otherwise have
 the TimescaleDB job scheduler race the next test's migration DDL on the shared
 catalog ("tuple concurrently deleted").
 
@@ -327,7 +327,7 @@ The content below is the operational reference.
 | Column | Type | Purpose |
 |---|---|---|
 | `pool_address` | `TEXT PRIMARY KEY` | Solana pubkey of the pool |
-| `protocol` | `TEXT NOT NULL` | Protocol identifier (`damm_v2`, etc.) |
+| `protocol` | `TEXT NOT NULL` | Protocol identifier (`meteora_damm_v2`, etc.) |
 | `active` | `BOOLEAN NOT NULL DEFAULT TRUE` | Whether the pool gets a subscription at startup |
 | `added_at` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` | When the pool was added to the allowlist |
 | `note` | `TEXT` | Free-form annotation (selection rationale, edge-case marker, etc.) |

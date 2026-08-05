@@ -44,7 +44,7 @@ fn pool_signal_response_carries_severity_detector_and_time() {
 }
 
 // ---------------------------------------------------------------------------
-// PoolDetailResponse wire shape (migration 036)
+// PoolDetailResponse wire shape (baseline §8)
 // ---------------------------------------------------------------------------
 //
 // The detail payload is the only place the cp-amm fee properties still cross

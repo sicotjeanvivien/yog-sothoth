@@ -1,5 +1,5 @@
 //! Integration test for the `meteora_damm_v2_liquidity_events_valued` VIEW
-//! (migration 021) — the per-event trade-time USD valuation behind the
+//! (baseline §15) — the per-event trade-time USD valuation behind the
 //! pool-detail liquidity table's "Value (USD)" column.
 //!
 //! Gated behind `integration-tests`. Asserts two things on real SQL: the value

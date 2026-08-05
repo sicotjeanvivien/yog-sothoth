@@ -1,4 +1,4 @@
-//! Integration test for the liquidity continuous aggregate (migration 011).
+//! Integration test for the liquidity continuous aggregate (baseline §13).
 //!
 //! Gated behind `integration-tests`. There is no Rust read path consuming this
 //! rollup yet (history-only), so the test asserts the CA's per-kind splits

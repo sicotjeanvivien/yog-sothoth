@@ -77,6 +77,11 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ("claim_reward_events", &[("yog_api", &["SELECT"])]),
     ("fund_reward_events", &[("yog_api", &["SELECT"])]),
     ("initialize_reward_events", &[("yog_api", &["SELECT"])]),
+    // `liquidity_events` and `swap_events` below: granted by 001, silently lost
+    // when 014 recreated them, restored by the baseline (§14). The loss was
+    // invisible to every check but this one — default privileges cover the read
+    // in production, so nothing failed and no schema diff could see it.
+    ("liquidity_events", &[("yog_api", &["SELECT"])]),
     (
         "meteora_damm_v2_claim_position_fee_events",
         &[
@@ -249,7 +254,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),
         ],
     ),
-    // Migration 039. Same shape as the cp-amm satellite: yog-context owns it,
+    // Baseline §9. Same shape as the cp-amm satellite: yog-context owns it,
     // yog_api reads it, and the indexer has no business here — it raises
     // `pools.needs_refresh` rather than writing property values.
     (
@@ -294,6 +299,7 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
         ],
     ),
     ("split_position_events", &[("yog_api", &["SELECT"])]),
+    ("swap_events", &[("yog_api", &["SELECT"])]),
     (
         "token_metadata",
         &[

@@ -1,4 +1,4 @@
-//! Integration test for the liquidity flow view (migration 025) and the
+//! Integration test for the liquidity flow view (baseline §15) and the
 //! `PgLiquidityFlowRepository` read path.
 //!
 //! Gated behind `integration-tests`. Validates the vertical slice: liquidity

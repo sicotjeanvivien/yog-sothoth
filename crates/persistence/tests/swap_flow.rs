@@ -1,4 +1,4 @@
-//! Integration test for the directional swap flow view (migration 023) and
+//! Integration test for the directional swap flow view (baseline §15) and
 //! the `PgSwapFlowRepository` read path.
 //!
 //! Gated behind `integration-tests`. Validates the vertical slice: swaps land

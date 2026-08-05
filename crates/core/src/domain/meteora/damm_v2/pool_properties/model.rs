@@ -12,7 +12,7 @@ use crate::amm::damm_v2::BaseFeeKind;
 /// token pair, a first and last sighting. The fields below are cp-amm concepts
 /// with no DLMM (or Raydium, or Orca) equivalent. Keeping them on `Pool` would
 /// mean NULL columns for entire protocols — the shape "voie 3" rejects for event
-/// tables, applied here to pool properties (migration 036).
+/// tables, applied here to pool properties (baseline §8).
 ///
 /// `fee_bps` deliberately stays on `Pool`: it is a normalized cross-protocol
 /// notion and a read surface (fee-tier filter, `list_fee_tiers`).

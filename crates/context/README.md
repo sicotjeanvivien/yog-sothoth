@@ -70,7 +70,8 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   program id (what the chain calls its `owner`), so one client serves every
   protocol. Adding one means pushing a resolver into the vec in `bootstrap`;
   not a line of the worker changes — **verified**, not asserted: DLMM was added
-  in exactly one line here (migration 039) and this worker was untouched.
+  in exactly one line here (its satellite is baseline §9) and this worker was
+  untouched.
 
   ⚠️ The cost of that genericity falls on the resolver: each one's
   `list_unresolved` **must** filter on its own protocol. A per-protocol satellite

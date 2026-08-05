@@ -1,6 +1,6 @@
 //! Postgres implementation of `TokenPriceRepository`.
 //!
-//! Backed by the `token_prices` hypertable (migration 004).
+//! Backed by the `token_prices` hypertable (baseline §7).
 mod rows;
 
 use crate::repositories::helper::map_sqlx_error;
