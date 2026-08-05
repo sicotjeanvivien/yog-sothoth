@@ -207,9 +207,24 @@ GRANT SELECT ON meteora_damm_v2_swap_events_hourly TO yog_api;
 --     SELECT count(*) FILTER (WHERE price_a_implied OR price_b_implied), count(*)
 --     FROM meteora_damm_v2_swap_events_hourly_priced;
 --
--- `NULLIF(…, 0)` guards the division: a bucket whose swaps moved no token A at
--- all (theoretically possible, e.g. a zero-amount swap) yields NULL rather than
--- a division-by-zero error.
+-- **`NULLIF(…, 0)` guards BOTH sides of each ratio, and the numerator is not
+-- decoration.** A zero divisor is the obvious case (no division by zero). A zero
+-- *numerator* is the treacherous one: with `traded_b = 0` and `pb` observed,
+-- `implied_a` would come out as a clean `0`, hence `eff_price_a = 0`,
+-- `price_a_implied = true`, and a bucket valued at `volume_usd = 0` — counted as
+-- COVERED while the figure is fabricated. Coverage would read 1/1 on a lie,
+-- which is the exact defect this migration exists to remove. A bucket whose
+-- swaps moved none of a token has nothing to anchor that token's rate on, so
+-- both ratios must be NULL, not zero.
+--
+-- **What this view can and cannot recover.** It fixes the missing *price*. It
+-- does not fix missing *metadata*: `dec_a` / `dec_b` come from `token_metadata`,
+-- and a NULL decimal makes `POWER(10, NULL)` NULL, which annihilates that leg
+-- and the bucket with it — even when the other side's price is observed. That
+-- is correct (an amount cannot be converted without its scale) but it means the
+-- real bound on valuation is the *metadata*, not the price. The reverse cannot
+-- happen: `PriceWorker` prices the known mints, so a price never exists without
+-- its metadata row.
 --
 -- No explicit GRANT, like §15's other derived views: `setup_roles.sql` sets
 -- `ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate … GRANT SELECT` for all four
@@ -251,10 +266,10 @@ LEFT JOIN LATERAL (
 ) pb ON true
 CROSS JOIN LATERAL (
     SELECT
-        ((h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * pb.price_usd)
+        ((NULLIF(h.traded_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * pb.price_usd)
             / NULLIF(h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals), 0)
             AS implied_a,
-        ((h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * pa.price_usd)
+        ((NULLIF(h.traded_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * pa.price_usd)
             / NULLIF(h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals), 0)
             AS implied_b
 ) i;

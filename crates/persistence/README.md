@@ -173,8 +173,28 @@ also reads gets scanned separately: the plan then holds two scans of the same
 hypertable. Migration 002 hit exactly that — the effective-price view was first
 joined *alongside* the swap cagg, and `/api/stats` scanned the swap hypertable
 twice. The fix is for the view to carry the base columns through so the caller
-selects from it alone. Check with `EXPLAIN` whenever a new view sits over a
-cagg: count the `_hyper_*_chunk` scans.
+selects from it alone.
+
+⚠️ **And a CTE referenced twice is materialized, which stops predicates from
+descending.** Since Postgres 12 a `WITH` is inlined only when referenced *once*;
+past that it is materialized, and the caller's `WHERE` is applied *after*.
+`meteora_damm_v2_pool_hourly_activity` is in that case today — its four CTEs are
+each read twice (once by the `buckets` UNION, once by the final `LEFT JOIN`), so
+a single-pool read aggregates the whole swap hypertable and filters afterwards.
+Known and ticketed, not yet fixed.
+
+So the check on a new view over a cagg is **two** things, and the second is the
+one that gets forgotten:
+
+```sql
+EXPLAIN (COSTS OFF) SELECT … FROM <view> WHERE pool_address = '…' AND bucket > …;
+```
+
+1. count the `_hyper_*_chunk` scans — more than one means the base table is read
+   twice;
+2. check **where the predicate lands**. `Filter:` on a `CTE Scan` means it did
+   not descend and the aggregate ran over everything; you want the condition on
+   the chunk scan itself.
 
 ## USD valuation: which price, and what "unknown" means
 

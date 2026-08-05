@@ -56,3 +56,7 @@ impl From<StatsAggregate> for StatsResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/stats_tests.rs"]
+mod tests;

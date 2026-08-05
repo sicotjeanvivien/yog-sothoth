@@ -507,3 +507,59 @@ async fn a_swap_without_its_pool_row_still_counts_as_uncovered(pool: PgPool) {
     );
     assert_eq!(a.swap_buckets_priced_24h, 0);
 }
+
+// ── 9. A zero numerator must not fabricate a priced bucket ───────────────────
+
+#[sqlx::test]
+async fn a_bucket_that_moved_no_token_b_is_not_counted_as_covered(pool: PgPool) {
+    // Found in review. `NULLIF` was on the divisor only, so with `traded_b = 0`
+    // and token B priced, `implied_a` came out a clean 0 → `eff_price_a = 0` →
+    // `volume_usd = 0`, non-NULL, hence counted in the coverage NUMERATOR.
+    // Coverage read 1/1 over a fabricated zero: this ticket's defect, produced
+    // by its own fix.
+    let pool_addr = pk(1).to_string();
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    price_mint(&pool, &mint_b, PRICE_B).await;
+
+    // One swap that moved token A only — nothing anchors token A's rate.
+    insert_swap(
+        &pool,
+        Swap {
+            pool_addr: &pool_addr,
+            signature: "no_b",
+            direction: "a_to_b",
+            amount_a: 1_000_000_000,
+            amount_b: 0,
+            fee_a: 0,
+            fee_token_is_a: true,
+            timestamp: Utc::now() - Duration::hours(2),
+        },
+    )
+    .await;
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
+    let a = analytics.get(&pk(1)).expect("pool must be present");
+
+    assert_eq!(
+        a.volume_24h_usd, None,
+        "no token B moved, so no rate can be implied for token A — a zero here \
+         is not a valuation, it is an invention"
+    );
+    assert_eq!(a.swap_buckets_24h, 1);
+    assert_eq!(
+        a.swap_buckets_priced_24h, 0,
+        "and above all it must not count as covered"
+    );
+
+    let implied: bool = sqlx::query_scalar(
+        "SELECT price_a_implied FROM meteora_damm_v2_swap_events_hourly_priced
+         WHERE pool_address = $1",
+    )
+    .bind(&pool_addr)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!implied, "nothing was implied — the flag must say so");
+}

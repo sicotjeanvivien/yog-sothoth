@@ -79,8 +79,14 @@ pub(crate) struct PoolResponse {
     ///
     /// NOT affected by the coverage below, and deliberately so: fees and volume
     /// are lost on exactly the same buckets (one valuation, one join), so an
-    /// unvalued hour cancels out of the ratio. Only the absolute values are
-    /// clipped. Do not "fix" this one.
+    /// unvalued hour leaves the ratio's numerator AND denominator together.
+    /// Only the absolute values are clipped. Do not "fix" this one.
+    ///
+    /// Read it precisely, though: the cancellation is exact per bucket, but this
+    /// is a ratio of 24h *sums*, so it is the realized rate **of the covered
+    /// hours**, not of the window. Unbiased as far as anyone knows — nothing
+    /// links an hour's fee tier to whether its tokens were priced — but it is
+    /// not the same statement as "the rate is unaffected".
     pub(crate) effective_fee_bps: Option<Decimal>,
     /// Coverage of the four USD figures above: hours of the window that had at
     /// least one swap, and how many of them could be valued. Shipped as raw
