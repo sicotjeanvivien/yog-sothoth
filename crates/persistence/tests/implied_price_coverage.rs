@@ -563,3 +563,110 @@ async fn a_bucket_that_moved_no_token_b_is_not_counted_as_covered(pool: PgPool) 
     .unwrap();
     assert!(!implied, "nothing was implied — the flag must say so");
 }
+
+// ── 10. A zero price is not a price ──────────────────────────────────────────
+
+#[sqlx::test]
+async fn a_price_rounded_to_zero_does_not_fabricate_coverage(pool: PgPool) {
+    // Found in review. `token_prices.price_usd` is NUMERIC(38,18) with no
+    // `CHECK (> 0)`, so any price below 5e-19 is stored as exactly 0 — the
+    // regime of very-high-supply memecoins, i.e. the population this migration
+    // exists to rescue. `NULLIF` guarded the amounts but not the price, so
+    // `implied_a = (traded_b × 0) / traded_a = 0` produced a bucket valued at 0
+    // and counted as COVERED.
+    let pool_addr = pk(1).to_string();
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    // Rounds to exactly 0 in the column's scale.
+    price_mint(&pool, &mint_b, "0.00000000000000000000123").await;
+
+    insert_balanced_pair(&pool, &pool_addr, "zero", Utc::now() - Duration::hours(2)).await;
+
+    let stored: Decimal = sqlx::query_scalar("SELECT price_usd FROM token_prices WHERE mint = $1")
+        .bind(&mint_b)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored, Decimal::ZERO, "precondition: the price stored as 0");
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
+    let a = analytics.get(&pk(1)).expect("pool must be present");
+
+    assert_eq!(
+        a.volume_24h_usd, None,
+        "a zero price anchors nothing — valuing at 0 would be an invention"
+    );
+    assert_eq!(a.swap_buckets_24h, 1);
+    assert_eq!(
+        a.swap_buckets_priced_24h, 0,
+        "and it must not count as covered"
+    );
+}
+
+// ── 11. A leg that carries nothing must not annihilate the bucket ────────────
+
+#[sqlx::test]
+async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
+    // Found in review. `0 * NULL` is NULL, and so is `0 / POWER(10, NULL)`, so
+    // a leg carrying NO tokens was killing buckets fully computable from the
+    // other side. Here token B has no `token_metadata` row (the metadata worker
+    // upserts mint by mint and absorbs per-row failures) and the pool traded
+    // a→b only: nothing about the B side needs converting, because there is
+    // no B.
+    let pool_addr = pk(1).to_string();
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1,'meteora_damm_v2',$2,$3)",
+    )
+    .bind(&pool_addr)
+    .bind(&mint_a)
+    .bind(&mint_b)
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Only token A gets metadata + a price. Token B has neither.
+    sqlx::query(
+        "INSERT INTO token_metadata (mint, decimals, fetched_at, last_refresh_at)
+         VALUES ($1,$2,$3,$3)",
+    )
+    .bind(&mint_a)
+    .bind(DEC_A)
+    .bind(Utc::now() - Duration::hours(48))
+    .execute(&pool)
+    .await
+    .unwrap();
+    price_mint(&pool, &mint_a, "2.0").await;
+
+    // a_to_b only: 1 000 A in, and the b_to_a direction never fires.
+    insert_swap(
+        &pool,
+        Swap {
+            pool_addr: &pool_addr,
+            signature: "one_way",
+            direction: "a_to_b",
+            amount_a: 1_000_000_000,
+            amount_b: 500_000_000,
+            fee_a: 0,
+            fee_token_is_a: true,
+            timestamp: Utc::now() - Duration::hours(2),
+        },
+    )
+    .await;
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
+    let a = analytics.get(&pk(1)).expect("pool must be present");
+
+    // 1 000 A × $2 = $2 000. The b_to_a leg is empty, so it contributes 0 —
+    // not NULL.
+    let volume = a
+        .volume_24h_usd
+        .expect("the A side is fully priced; an absent B leg must not erase it");
+    assert!(
+        close_to(volume, "2000"),
+        "expected $2000 from the A side alone, got {volume}"
+    );
+    assert_eq!(a.swap_buckets_priced_24h, 1);
+}

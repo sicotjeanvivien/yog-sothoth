@@ -11,8 +11,8 @@ use super::helpers::pk;
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 
-use yog_core::domain::GlobalAnalyticsRepository;
-use yog_persistence::PgGlobalAnalyticsRepository;
+use yog_core::domain::{GlobalAnalyticsRepository, PoolAnalyticsRepository};
+use yog_persistence::{PgGlobalAnalyticsRepository, PgPoolAnalyticsRepository};
 
 /// One pool, its two mints registered with decimals, optionally priced.
 async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
@@ -160,4 +160,47 @@ async fn global_coverage_is_zero_zero_on_an_empty_universe(pool: PgPool) {
     assert_eq!(analytics.swap_buckets_24h, 0);
     assert_eq!(analytics.swap_buckets_priced_24h, 0);
     assert_eq!(analytics.volume_24h_usd, None);
+}
+
+#[sqlx::test]
+async fn the_global_counters_agree_with_the_per_pool_ones(pool: PgPool) {
+    // The reason this file's header gives for existing — the two `COUNT(*)
+    // FILTER` clauses drifting apart — was not actually asserted anywhere.
+    // Here it is: same fixture, both read paths, one comparison.
+    //
+    // The relation is equality, not merely "close": every bucket the global
+    // sees belongs to some pool, and both queries share the same window and
+    // the same predicates.
+    let priced = setup_pool(&pool, 1, Some("180.0")).await;
+    let unpriced = setup_pool(&pool, 2, None).await;
+
+    insert_bucket(&pool, &priced, "p1", 1).await;
+    insert_bucket(&pool, &priced, "p2", 3).await;
+    insert_bucket(&pool, &unpriced, "u1", 2).await;
+
+    let global = PgGlobalAnalyticsRepository::new(pool.clone())
+        .global_analytics()
+        .await
+        .unwrap();
+
+    let per_pool = PgPoolAnalyticsRepository::new(pool.clone())
+        .batch_compute(&[pk(1), pk(2)])
+        .await
+        .unwrap();
+    let summed_total: i64 = per_pool.values().map(|a| a.swap_buckets_24h).sum();
+    let summed_priced: i64 = per_pool.values().map(|a| a.swap_buckets_priced_24h).sum();
+
+    assert_eq!(
+        global.swap_buckets_24h, summed_total,
+        "the protocol-wide denominator must be the sum of the per-pool ones"
+    );
+    assert_eq!(
+        global.swap_buckets_priced_24h, summed_priced,
+        "…and so must the numerator, or /api/stats and /api/pools tell two \
+         different stories about the same hours"
+    );
+    assert_eq!(
+        (global.swap_buckets_24h, global.swap_buckets_priced_24h),
+        (3, 2)
+    );
 }

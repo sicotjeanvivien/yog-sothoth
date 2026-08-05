@@ -35,9 +35,13 @@
 --
 -- ## The limit that matters: the implied rate is net of the fee
 --
--- `amount_in` includes the trading fee and `amount_out` does not. Writing X for
--- the hour's a→b input value and Y for its b→a input value, the implied rate
--- relates to the true one by
+-- One of the two legs is net of the trading fee and the other is not — which
+-- leg depends on the pool's `collect_fee_mode`: mode 0 (BothToken) charges it on
+-- the OUT token, modes 1 and 2 always on token B, in or out (see
+-- `compute_fee_token_is_a` in core's swap translator). Either way the fee side
+-- is short by `f` relative to the other, so the relation below holds in every
+-- mode. Writing X for the hour's a→b input value and Y for its b→a input value,
+-- the implied rate relates to the true one by
 --
 --     implied / true = (X(1-f) + Y) / (X + Y(1-f))
 --
@@ -69,10 +73,16 @@
 -- 07 measured it wrong by ×5 and ×49). Values from 4 to 9900 bps are recorded,
 -- and no one can currently tell which are real.
 --
--- This is still a large net gain — 68 valuable buckets against 32 without it,
--- and a NULL carries no information at all. But it is an approximation with an
--- unknown bound, not a sub-percent one, and it should be labelled as such
--- wherever it reaches a user.
+-- This is still a large net gain — a NULL carries no information at all, an
+-- approximation carries most of it. But it IS an approximation with an unknown
+-- bound rather than a sub-percent one, and that had better be written where the
+-- number is defined rather than assumed to be common knowledge.
+--
+-- `price_a_implied` / `price_b_implied` stop at this view on purpose: surfacing
+-- "this figure used a derived rate" in the API and the dashboard is a product
+-- decision, not a persistence one, and it is not made here. Until it is, the
+-- honest place for this caveat is the schema and the READMEs — which is where
+-- it is.
 --
 -- Second, smaller limit: the rate is the hour's volume-weighted average,
 -- applied to that same hour's volume and fees — which is what it is the right
@@ -207,15 +217,23 @@ GRANT SELECT ON meteora_damm_v2_swap_events_hourly TO yog_api;
 --     SELECT count(*) FILTER (WHERE price_a_implied OR price_b_implied), count(*)
 --     FROM meteora_damm_v2_swap_events_hourly_priced;
 --
--- **`NULLIF(…, 0)` guards BOTH sides of each ratio, and the numerator is not
--- decoration.** A zero divisor is the obvious case (no division by zero). A zero
--- *numerator* is the treacherous one: with `traded_b = 0` and `pb` observed,
--- `implied_a` would come out as a clean `0`, hence `eff_price_a = 0`,
--- `price_a_implied = true`, and a bucket valued at `volume_usd = 0` — counted as
+-- **Every zero in the ratio is `NULLIF`-ed — the amounts AND the price.** A zero
+-- divisor is the obvious case (no division by zero). The treacherous one is a
+-- zero *numerator*: it yields a clean `0`, hence `eff_price = 0`,
+-- `price_*_implied = true`, and a bucket valued at `volume_usd = 0` — counted as
 -- COVERED while the figure is fabricated. Coverage would read 1/1 on a lie,
--- which is the exact defect this migration exists to remove. A bucket whose
--- swaps moved none of a token has nothing to anchor that token's rate on, so
--- both ratios must be NULL, not zero.
+-- which is the exact defect this migration exists to remove.
+--
+-- Two ways in, and both are shut:
+--
+--   * `traded_x = 0` — a bucket whose swaps moved none of a token has nothing
+--     to anchor that token's rate on;
+--   * `price_usd = 0` — and this one is not hypothetical. `token_prices.price_usd`
+--     is `NUMERIC(38, 18)`, so any price below 5e-19 **rounds to exactly zero on
+--     insert** (measured: `0.00000000000000000000123::NUMERIC(38,18) = 0`), and
+--     the column carries no `CHECK (> 0)`. Very-high-supply memecoins live in
+--     precisely that range — which is to say, the population this migration
+--     exists to rescue. A zero price is not a price.
 --
 -- **What this view can and cannot recover.** It fixes the missing *price*. It
 -- does not fix missing *metadata*: `dec_a` / `dec_b` come from `token_metadata`,
@@ -266,10 +284,12 @@ LEFT JOIN LATERAL (
 ) pb ON true
 CROSS JOIN LATERAL (
     SELECT
-        ((NULLIF(h.traded_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * pb.price_usd)
+        ((NULLIF(h.traded_b, 0)::NUMERIC / POWER(10::NUMERIC, tmb.decimals))
+            * NULLIF(pb.price_usd, 0))
             / NULLIF(h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals), 0)
             AS implied_a,
-        ((NULLIF(h.traded_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * pa.price_usd)
+        ((NULLIF(h.traded_a, 0)::NUMERIC / POWER(10::NUMERIC, tma.decimals))
+            * NULLIF(pa.price_usd, 0))
             / NULLIF(h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals), 0)
             AS implied_b
 ) i;
@@ -302,14 +322,39 @@ WITH pool_tokens AS (
     JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
     JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
 ),
+-- ⚠️ Each leg is wrapped in `CASE WHEN <amount> = 0 THEN 0`, and that is not
+-- noise. `0 * NULL` is NULL in SQL, and so is `0 / POWER(10, NULL)` — so a leg
+-- carrying NO tokens was annihilating buckets that were fully computable from
+-- the other side. Concretely: a pool whose token B has no `token_metadata` row
+-- yet (the metadata worker upserts mint by mint and absorbs per-row failures),
+-- trading a→b only, produced NULL on a bucket worth exactly `volume_in_a ×
+-- price_a`. Nothing about the B side needed converting — there was no B.
+--
+-- The distinction the CASE draws is the whole point, and the two branches are
+-- NOT interchangeable:
+--   * amount = 0            → contribute 0. Nothing moved; its value is zero in
+--                             any currency, known without any price.
+--   * amount > 0, price NULL → stay NULL. Something moved and we cannot value
+--                             it; the bucket must not pass for complete.
+-- A blanket `COALESCE(…, 0)` would collapse the second case into the first,
+-- which is the "unknown becomes zero" sin catalogued in the persistence README.
 swap_v AS (
     SELECT h.pool_address, h.bucket,
-        (COALESCE(h.volume_in_a, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
-      + (COALESCE(h.volume_in_b, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b AS volume_usd,
-        (COALESCE(h.fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
-      + (COALESCE(h.fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b AS fees_usd,
-        (COALESCE(h.protocol_fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
-      + (COALESCE(h.protocol_fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b AS protocol_fees_usd,
+        CASE WHEN COALESCE(h.volume_in_a, 0) = 0 THEN 0
+             ELSE (h.volume_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
+      + CASE WHEN COALESCE(h.volume_in_b, 0) = 0 THEN 0
+             ELSE (h.volume_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+        AS volume_usd,
+        CASE WHEN COALESCE(h.fee_in_a, 0) = 0 THEN 0
+             ELSE (h.fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
+      + CASE WHEN COALESCE(h.fee_in_b, 0) = 0 THEN 0
+             ELSE (h.fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+        AS fees_usd,
+        CASE WHEN COALESCE(h.protocol_fee_in_a, 0) = 0 THEN 0
+             ELSE (h.protocol_fee_in_a::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a END
+      + CASE WHEN COALESCE(h.protocol_fee_in_b, 0) = 0 THEN 0
+             ELSE (h.protocol_fee_in_b::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b END
+        AS protocol_fees_usd,
         h.swap_count
     FROM meteora_damm_v2_swap_events_hourly_priced h
 ),

@@ -129,11 +129,29 @@ pub(crate) fn convert_string_to_signature(key: String, field: &str) -> Repositor
         .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
 }
 
+/// Convert a `NUMERIC` read from Postgres into a `Decimal`.
+///
+/// ⚠️ **`to_plain_string()`, never `to_string()`.** `BigDecimal`'s `Display`
+/// switches to scientific notation for small magnitudes, and
+/// `Decimal::from_str` mishandles that form once the mantissa reaches its
+/// 28-digit scale: it fills the scale with the mantissa, **drops the exponent,
+/// and returns `Ok`**. Measured — `6.283855409573290776726186454503737E-12`
+/// parses as `6.2838554095732907767261864545`, a factor of 10¹², silently.
+///
+/// Short mantissas survive (`1E-12` parses correctly), which is why this went
+/// unnoticed: valuation from *observed* prices is terminating arithmetic and
+/// rarely reaches 28 significant digits. The implied-price division of
+/// migration 002 produces 34-38 of them as a matter of course, turning a
+/// dormant defect into a reachable one.
+///
+/// `to_plain_string()` never uses an exponent, so the parse is exact — and a
+/// value genuinely too large for `Decimal` now fails loudly instead of being
+/// truncated into a plausible wrong number.
 pub(crate) fn convert_bigdecimal_to_decimal(
     value: BigDecimal,
     field: &str,
 ) -> RepositoryResult<Decimal> {
-    Decimal::from_str(&value.to_string()).map_err(|e| {
+    Decimal::from_str(&value.to_plain_string()).map_err(|e| {
         RepositoryError::Integrity(format!(
             "failed to convert {field} from BigDecimal to Decimal: {e}"
         ))

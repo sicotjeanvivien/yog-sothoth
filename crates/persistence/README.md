@@ -260,8 +260,10 @@ The rule and its boundary:
   to need the fallback trades one way at a time). And `f` cannot be read
   reliably today: `pools.fee_bps` is frozen on the scheduler cliff, off by ×5
   and ×49 where it was checked (ticket 07). Still a large net gain over a NULL,
-  which carries no information at all — but label it as approximate wherever it
-  reaches a user;
+  which carries no information at all. `price_a_implied` / `price_b_implied` say
+  which buckets used the fallback, but they stop at the view: propagating them
+  to the API and the dashboard is a product decision that has not been made, so
+  do not assume a consumer knows;
 - **neither side priced → still NULL.** No fallback onto a later price exists,
   by decision: if we don't know, we don't know;
 - it is **not** applied to liquidity or claim amounts. A liquidity add has no
