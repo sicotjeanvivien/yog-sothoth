@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH\n            requested AS (\n                SELECT pool_address\n                FROM UNNEST($1::TEXT[]) AS pool_address\n            ),\n            -- Per-pool current TVL is encapsulated in the `pool_current_tvl`\n            -- view (baseline §15) — same reserve × most-recent-price valuation\n            -- as before, no longer duplicated here (the `global_analytics`\n            -- roll-up reads the same view).\n            tvl_per_pool AS (\n                SELECT pool_address, tvl_usd\n                FROM pool_current_tvl\n                WHERE pool_address = ANY($1::TEXT[])\n            ),\n            -- 24h volume + realized fees, rolled up from the shared\n            -- per-(pool, hour) USD valuation view (baseline §15) — same\n            -- trade-time valuation as before, no longer duplicated here.\n            --\n            -- The two counters next to the sums are the coverage `SUM` hides:\n            -- it skips the buckets it cannot value, so a partially covered\n            -- window returned a sub-total that read exactly like a total.\n            -- The denominator is `swap_count IS NOT NULL`, NOT `COUNT(*)` —\n            -- the view unions the buckets of all four caggs, and a bucket\n            -- holding only a liquidity event is not a *volume* coverage\n            -- failure.\n            volume_per_pool AS (\n                SELECT\n                    a.pool_address,\n                    SUM(a.volume_usd)        AS volume_24h_usd,\n                    SUM(a.fees_usd)          AS fees_24h_usd,\n                    SUM(a.protocol_fees_usd) AS protocol_fees_24h_usd,\n                    COUNT(*) FILTER (WHERE a.swap_count IS NOT NULL)\n                        AS swap_buckets_24h,\n                    COUNT(*) FILTER (WHERE a.swap_count IS NOT NULL\n                                       AND a.volume_usd IS NOT NULL)\n                        AS swap_buckets_priced_24h\n                FROM meteora_damm_v2_pool_hourly_activity a\n                WHERE a.pool_address = ANY($1::TEXT[])\n                  AND a.bucket > NOW() - INTERVAL '24 hours'\n                GROUP BY a.pool_address\n            )\n            SELECT\n                r.pool_address AS \"pool_address!\",\n                t.tvl_usd      AS \"tvl_usd?\",\n                v.volume_24h_usd AS \"volume_24h_usd?\",\n                v.fees_24h_usd AS \"fees_24h_usd?\",\n                v.protocol_fees_24h_usd AS \"protocol_fees_24h_usd?\",\n                -- A pool with no activity at all misses the LEFT JOIN entirely:\n                -- zero buckets, zero priced — not \"unknown coverage\".\n                COALESCE(v.swap_buckets_24h, 0)        AS \"swap_buckets_24h!\",\n                COALESCE(v.swap_buckets_priced_24h, 0) AS \"swap_buckets_priced_24h!\"\n            FROM requested r\n            LEFT JOIN tvl_per_pool t    ON t.pool_address = r.pool_address\n            LEFT JOIN volume_per_pool v ON v.pool_address = r.pool_address\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "tvl_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "protocol_fees_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 5,
+        "name": "swap_buckets_24h!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "swap_buckets_priced_24h!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7accb50b08fb28bcb4f55995121b43aa9d1210e679f796ce845debe4caf85e30"
+}

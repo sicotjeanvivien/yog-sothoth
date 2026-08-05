@@ -19,6 +19,8 @@ fn valid_row() -> GlobalAnalyticsRow {
         pools_priced: 348,
         volume_24h_usd: Some(BigDecimal::from_str("508193.05").unwrap()),
         fees_24h_usd: Some(BigDecimal::from_str("391.03").unwrap()),
+        swap_buckets_24h: 1246,
+        swap_buckets_priced_24h: 1246,
     }
 }
 
@@ -41,6 +43,26 @@ fn try_from_valid_row_maps_all_fields() {
         analytics.fees_24h_usd,
         Some(Decimal::from_str("391.03").unwrap())
     );
+    assert_eq!(analytics.swap_buckets_24h, 1246);
+    assert_eq!(analytics.swap_buckets_priced_24h, 1246);
+}
+
+#[test]
+fn try_from_partial_coverage_carries_both_counters() {
+    // The measured shape of the defect this pair was added for: 1246 buckets
+    // with swaps, 767 of them valuable. The sum is a sub-total, and only these
+    // two counters say so.
+    let row = GlobalAnalyticsRow {
+        swap_buckets_24h: 1246,
+        swap_buckets_priced_24h: 767,
+        ..valid_row()
+    };
+
+    let analytics = GlobalAnalytics::try_from(row).expect("should convert");
+
+    assert!(analytics.volume_24h_usd.is_some());
+    assert_eq!(analytics.swap_buckets_24h, 1246);
+    assert_eq!(analytics.swap_buckets_priced_24h, 767);
 }
 
 // ── Empty universe / partial coverage ────────────────────────────────
@@ -54,6 +76,8 @@ fn try_from_all_usd_none_keeps_none_and_count() {
         pools_priced: 0,
         volume_24h_usd: None,
         fees_24h_usd: None,
+        swap_buckets_24h: 0,
+        swap_buckets_priced_24h: 0,
     };
 
     let analytics = GlobalAnalytics::try_from(row).expect("all-None metrics should convert");

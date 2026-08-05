@@ -157,15 +157,70 @@ query shape:
 - **Simple / static** → `sqlx::query!` / `query_as!` inline. The default.
 - **Big but static** → prefer a **SQL VIEW** in a migration when the query is
   reusable or decomposable (e.g. `meteora_damm_v2_pool_hourly_activity`,
-  baseline §15, shared by `history` and `pool_analytics`); the slim
-  `SELECT … FROM <view>` stays a checked `query!`. Otherwise
-  `query_file!("….sql")`.
+  baseline §15, shared by `history` and `pool_analytics`; or
+  `meteora_damm_v2_pool_hourly_price`, migration 002, which factors one rule
+  out of it); the slim `SELECT … FROM <view>` stays a checked `query!`.
+  Otherwise `query_file!("….sql")`.
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by
   integration tests. The lone case today is `repositories/pool/query.rs`.
 
 A plain VIEW gives **no** performance gain — Postgres inlines it. Choose a
 VIEW for readability; the perf tool is materialization (the hourly continuous
 aggregates), which precomputes at the cost of staleness.
+
+## USD valuation: which price, and what "unknown" means
+
+Two conventions coexist, and mixing them is a real risk that nothing in the
+schema prevents. The rule, written down here because the audit of 3 August 2026
+found it stated nowhere:
+
+| kind | what it measures | price used |
+|---|---|---|
+| **stock** — TVL, reserves, composition | a balance at an instant | the **latest known** price |
+| **flow** — volume, fees, liquidity moved | what happened over a window | the **trade-time** price, as of each hourly bucket |
+
+This is the standard practice and each is right for its own quantity, but the
+two are **not interchangeable**. ⚠️ A ratio that crosses them is wrong even
+though both halves are correct: a "turnover = volume / TVL" — a natural product
+ask — would divide a trade-time numerator by a current-price denominator. If
+such a metric is ever added, pick one convention for both halves.
+
+### Three ways to say "we don't know", and what each one does
+
+A missing price does not behave the same way everywhere in the chain:
+
+| mechanism | effect | where |
+|---|---|---|
+| `INNER JOIN token_metadata` | the row **disappears** | top of §15's views — unresolved mints |
+| `LEFT JOIN LATERAL` on the price | the value is **NULL**, and NULL propagates through the whole arithmetic expression | the valuation CTEs |
+| `COALESCE(…, 0)` downstream | NULL becomes a **hard zero**, indistinguishable from a real one | the signal-engine flow repositories |
+
+`SUM` then *skips* NULLs, so a partially valued window silently returns a
+sub-total. That is why the analytics repositories ship **coverage counters**
+next to the sums (`swap_buckets_priced_24h` / `swap_buckets_24h`, mirroring
+`pools_priced` / `pools_observed`): the value alone cannot say how complete it
+is. Adding a new aggregate over a valued view means adding its coverage too.
+
+### The implied price (migration 002)
+
+For **swaps only**, when one of the two tokens has no observed price, the
+bucket is valued through the exchange rate its own swaps traded at, anchored on
+the other token's observed price — exposed per (pool, hour) by
+`meteora_damm_v2_pool_hourly_price`, with `price_a_implied` /`price_b_implied`
+saying when it was used.
+
+The rule and its boundary:
+
+- it is a **measurement**, not an extrapolation — the rate comes from trades
+  inside that hour, and anchoring on the hard asset (SOL, USDC) is also the
+  more robust choice;
+- it is biased by at most the pool's fee rate (`amount_in` includes the fee,
+  `amount_out` does not);
+- **neither side priced → still NULL.** No fallback onto a later price exists,
+  by decision: if we don't know, we don't know;
+- it is **not** applied to liquidity or claim amounts. A liquidity add has no
+  counter-leg anchoring it, so a trade rate there would be an extrapolation. A
+  rate is only used on the flow that produced it.
 
 ## The `yog-migrate` binary
 
@@ -201,7 +256,9 @@ columns → `028`–`035` the remaining DAMM v2 event tables (protocol fee, the 
 reward instructions, split-position) → `036`–`040` the pool-properties
 satellites: cp-amm out of `pools` (`036`–`037`), the `needs_refresh`
 invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
-(`040`).
+(`040`). Post-baseline: `002` rebuilds the swap cagg with the two whole-bucket
+traded totals and adds `meteora_damm_v2_pool_hourly_price` — the implied-price
+rule above.
 
 ### Pool-properties satellites, and the invariant that ties them to `pools`
 

@@ -110,6 +110,22 @@ degrades into a tick-level `SourceError` absorbed like any other.
 Prometheus metrics on `:9000/metrics` (host port `9001` in compose): per-worker
 tick/upsert/failure counters and per-provider request counters and durations.
 
+**Price coverage** is the one gauge pair worth alerting on:
+
+```promql
+yog_context_price_priced_mints / yog_context_price_known_mints
+```
+
+Everything USD-denominated downstream — pool TVL, 24h volume, realized fees,
+half the signal detectors — is only as complete as this ratio, and it degrades
+silently: an unlisted mint or a run of Jupiter 429s simply produces unvaluable
+hours. The API reports the consequence per pool (`swapBucketsPriced24h` /
+`swapBuckets24h`); this is the cause, and the leading indicator.
+
+A tick that reached Jupiter but priced nothing sets the gauge to 0 and records
+`yog_context_price_tick_total{outcome="no_prices"}` — it must not look like a
+tick that never ran.
+
 ## Configuration
 
 ```env

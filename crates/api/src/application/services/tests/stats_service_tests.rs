@@ -17,6 +17,8 @@ fn analytics() -> GlobalAnalytics {
         pools_priced: 42,
         volume_24h_usd: Some(Decimal::new(500, 0)),
         fees_24h_usd: Some(Decimal::new(7, 0)),
+        swap_buckets_24h: 24,
+        swap_buckets_priced_24h: 14,
     }
 }
 

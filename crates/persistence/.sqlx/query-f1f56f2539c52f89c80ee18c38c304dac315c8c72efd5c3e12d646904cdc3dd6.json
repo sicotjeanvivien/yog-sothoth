@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH tvl AS (\n                SELECT\n                    SUM(tvl_usd)                                AS total_tvl_usd,\n                    COUNT(*) FILTER (WHERE tvl_usd IS NOT NULL) AS pools_priced\n                FROM pool_current_tvl\n            ),\n            vol AS (\n                SELECT\n                    SUM(volume_usd) AS volume_24h_usd,\n                    SUM(fees_usd)   AS fees_24h_usd,\n                    COUNT(*) FILTER (WHERE swap_count IS NOT NULL)\n                        AS swap_buckets_24h,\n                    COUNT(*) FILTER (WHERE swap_count IS NOT NULL\n                                       AND volume_usd IS NOT NULL)\n                        AS swap_buckets_priced_24h\n                FROM meteora_damm_v2_pool_hourly_activity\n                WHERE bucket > NOW() - INTERVAL '24 hours'\n            )\n            SELECT\n                tvl.total_tvl_usd  AS \"total_tvl_usd?\",\n                tvl.pools_priced   AS \"pools_priced!\",\n                vol.volume_24h_usd AS \"volume_24h_usd?\",\n                vol.fees_24h_usd   AS \"fees_24h_usd?\",\n                vol.swap_buckets_24h        AS \"swap_buckets_24h!\",\n                vol.swap_buckets_priced_24h AS \"swap_buckets_priced_24h!\"\n            FROM tvl, vol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_tvl_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "pools_priced!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_24h_usd?",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "swap_buckets_24h!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "swap_buckets_priced_24h!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f1f56f2539c52f89c80ee18c38c304dac315c8c72efd5c3e12d646904cdc3dd6"
+}

@@ -9,7 +9,11 @@
 //!     unpriceable pool, so the SUM skips it and the `FILTER` counts only the
 //!     priced ones — partial coverage surfaces what is priceable.
 //!   - `vol`: summed 24h volume and realized fees from the per-(pool, hour)
-//!     USD valuation view (baseline §15), windowed to the last 24h.
+//!     USD valuation view (baseline §15), windowed to the last 24h — plus the
+//!     coverage of those sums, since `SUM` skips the buckets it cannot value
+//!     and a partial total is otherwise indistinguishable from a complete one.
+//!     The denominator counts buckets *with swaps*; the view unions all four
+//!     caggs, and a liquidity-only bucket is not a volume coverage failure.
 
 mod rows;
 
@@ -47,7 +51,12 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
             vol AS (
                 SELECT
                     SUM(volume_usd) AS volume_24h_usd,
-                    SUM(fees_usd)   AS fees_24h_usd
+                    SUM(fees_usd)   AS fees_24h_usd,
+                    COUNT(*) FILTER (WHERE swap_count IS NOT NULL)
+                        AS swap_buckets_24h,
+                    COUNT(*) FILTER (WHERE swap_count IS NOT NULL
+                                       AND volume_usd IS NOT NULL)
+                        AS swap_buckets_priced_24h
                 FROM meteora_damm_v2_pool_hourly_activity
                 WHERE bucket > NOW() - INTERVAL '24 hours'
             )
@@ -55,7 +64,9 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
                 tvl.total_tvl_usd  AS "total_tvl_usd?",
                 tvl.pools_priced   AS "pools_priced!",
                 vol.volume_24h_usd AS "volume_24h_usd?",
-                vol.fees_24h_usd   AS "fees_24h_usd?"
+                vol.fees_24h_usd   AS "fees_24h_usd?",
+                vol.swap_buckets_24h        AS "swap_buckets_24h!",
+                vol.swap_buckets_priced_24h AS "swap_buckets_priced_24h!"
             FROM tvl, vol
             "#,
         )

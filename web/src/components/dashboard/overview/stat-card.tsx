@@ -33,7 +33,7 @@ export async function StatCard({
 }: {
   label: string;
   value: string;
-  hint?: string;
+  hint?: string | undefined;
   /** Definition of the metric, shown in an ⓘ popover next to the label. */
   info?: string;
 }) {

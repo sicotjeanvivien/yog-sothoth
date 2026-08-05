@@ -330,3 +330,129 @@ async fn insert_batch_error_does_not_panic() {
     // Sanity: the insert WAS attempted before failing.
     assert_eq!(price_repo.inserts().len(), 1);
 }
+
+// ── Coverage metrics ──────────────────────────────────────────────────
+//
+// The gauges are the whole point of the observability half of ticket 02: a
+// price coverage that degrades must be visible, and a tick that priced nothing
+// must not look like a tick that never happened.
+//
+// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
+// *current thread* for the duration of a closure, so the future has to be
+// driven inside it — hence the current-thread runtime. Same recipe as
+// yog-indexer's persistor metrics test.
+
+use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
+
+/// Drive one cycle under a thread-local recorder and return its snapshot.
+fn snapshot_one_cycle(
+    worker: PriceWorker,
+) -> Vec<(
+    metrics_util::CompositeKey,
+    Option<metrics::Unit>,
+    Option<metrics::SharedString>,
+    DebugValue,
+)> {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter: Snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async { worker.run_one_cycle().await });
+    });
+
+    // ONE snapshot, queried repeatedly: `Snapshotter::snapshot` is destructive
+    // for counters (`swap(0)`), so a second call returns zeros and would
+    // "prove" a metric that never fired.
+    snapshotter.snapshot().into_vec()
+}
+
+fn value<'a>(
+    snapshot: &'a [(
+        metrics_util::CompositeKey,
+        Option<metrics::Unit>,
+        Option<metrics::SharedString>,
+        DebugValue,
+    )],
+    name: &str,
+) -> Option<&'a DebugValue> {
+    snapshot
+        .iter()
+        .find(|(key, _, _, _)| key.key().name() == name)
+        .map(|(_, _, _, v)| v)
+}
+
+#[test]
+fn partial_price_coverage_is_reported_by_the_two_gauges() {
+    // Three known mints, only two of which the source can price. The pair of
+    // gauges is the only thing that says the coverage is 2/3 — the insert
+    // count alone cannot, since it has no denominator.
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+        pk(1),
+        pk(2),
+        pk(3),
+    ]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![
+        priced(pk(1), "1.0"),
+        priced(pk(2), "2.0"),
+    ])]));
+
+    let snapshot = snapshot_one_cycle(PriceWorker::new(
+        metadata_repo,
+        price_repo,
+        source,
+        std::time::Duration::from_secs(30),
+    ));
+
+    assert_eq!(
+        value(&snapshot, "yog_context_price_known_mints"),
+        Some(&DebugValue::Gauge(3.0.into())),
+        "the denominator: every mint we asked about"
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_priced_mints"),
+        Some(&DebugValue::Gauge(2.0.into())),
+        "the numerator: the mints that came back with a price — without it the \
+         coverage cannot be computed, and its degradation stays invisible"
+    );
+}
+
+#[test]
+fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
+    // The source answers, but prices nothing. Two things must happen, and
+    // neither did before: the gauge drops to 0 rather than holding the previous
+    // tick's value, and the `no_prices` outcome — declared in the label set
+    // from the start — is actually emitted.
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![])]));
+
+    let snapshot = snapshot_one_cycle(PriceWorker::new(
+        metadata_repo,
+        price_repo,
+        source,
+        std::time::Duration::from_secs(30),
+    ));
+
+    assert_eq!(
+        value(&snapshot, "yog_context_price_priced_mints"),
+        Some(&DebugValue::Gauge(0.0.into())),
+        "a gauge left at its last value would report yesterday's coverage as \
+         today's — total loss of coverage must read as 0, not as silence"
+    );
+    assert!(
+        snapshot.iter().any(|(key, _, _, _)| {
+            key.key().name() == "yog_context_price_tick_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "outcome" && l.value() == "no_prices")
+        }),
+        "the `no_prices` outcome must be emitted: a tick that priced nothing \
+         used to return without recording anything, so it was indistinguishable \
+         from a tick that never ran"
+    );
+}

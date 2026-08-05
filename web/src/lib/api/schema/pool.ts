@@ -45,6 +45,8 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  *     protocol_fees_24h_usd: Option<Decimal>,
  *     lp_fees_24h_usd: Option<Decimal>,
  *     effective_fee_bps: Option<Decimal>,
+ *     swap_buckets_24h: i64,
+ *     swap_buckets_priced_24h: i64,
  *     signals_24h: Vec<PoolSignalResponse>,
  *     first_seen_at: DateTime<Utc>,
  *     last_seen_at: DateTime<Utc>,
@@ -73,10 +75,14 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  * `tvlUsd` is null when TVL cannot be computed for the pool (no
  * current state yet, or one of the two token prices is unknown).
  *
- * `volume24hUsd` is null when no priced swap happened in the last
- * 24 hours. A partial volume (some swaps priced, some not) is
- * returned as a non-null sum of priced swaps — see the API's
- * `PoolAnalytics` doc comment for the full rationale.
+ * `volume24hUsd` is null only when NO hour of the window could be valued at
+ * all. A partially covered window is returned as a non-null sum of the hours
+ * that could be valued — a sub-total. `swapBucketsPriced24h` /
+ * `swapBuckets24h` is the coverage that tells the two apart; without it a
+ * 58 %-covered figure reads exactly like a complete one. It applies to
+ * `volume24hUsd`, `fees24hUsd` and the two fee splits at once (they share one
+ * valuation), but NOT to `effectiveFeeBps`, whose numerator and denominator
+ * are lost on the same hours and therefore cancel.
  */
 export const PoolSchema = z.object({
   poolAddress: z.string().min(1),
@@ -90,6 +96,10 @@ export const PoolSchema = z.object({
   protocolFees24hUsd: BigDecimal.nullable(),
   lpFees24hUsd: BigDecimal.nullable(),
   effectiveFeeBps: BigDecimal.nullable(),
+  // Coverage of the four USD figures above: hours of the window that traded,
+  // and how many of them could be valued.
+  swapBuckets24h: z.number().int().nonnegative(),
+  swapBucketsPriced24h: z.number().int().nonnegative(),
   // Signals emitted by the pool over the last 24h, newest first,
   // per-pool capped server-side. Empty when the pool was quiet.
   signals24h: z.array(PoolSignalSchema),

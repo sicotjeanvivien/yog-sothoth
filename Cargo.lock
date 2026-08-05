@@ -6096,6 +6096,7 @@ dependencies = [
  "dotenvy",
  "metrics",
  "metrics-exporter-prometheus",
+ "metrics-util",
  "reqwest 0.13.4",
  "rust_decimal",
  "serde",

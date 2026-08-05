@@ -36,13 +36,14 @@
         "tvl": "TVL totale",
         "coverage": "{priced} / {observed} valorisées",
         "volume24h": "Volume 24h",
+        "bucketCoverage": "{priced} / {total} heures valorisées",
         "fees24h": "Frais 24h",
         "pools": "Pools",
         "discovered": "{count, plural, =0 {Aucune nouvelle pool (24h)} other {+# découvertes (24h)}}",
         "info": {
           "tvl": "Somme de la valeur des réserves de toutes les pools observées dont les deux tokens ont un prix connu. La ligne dessous donne la couverture : pools valorisées / pools observées.",
-          "volume24h": "Volume d'échange réalisé sur les dernières 24 h, valorisé au prix du moment de chaque trade. Les swaps sans prix connu sont exclus de la somme.",
-          "fees24h": "Frais de trading réellement encaissés sur 24 h (part LP + part protocole), valorisés au prix du moment du trade.",
+          "volume24h": "Volume d'échange réalisé sur les dernières 24 h, valorisé au prix du moment de chaque trade. Une heure dont les tokens n'ont pas de prix connu ne peut pas être valorisée et sort de la somme — la ligne dessous donne la couverture : heures valorisées / heures ayant tradé.",
+          "fees24h": "Frais de trading réellement encaissés sur 24 h (part LP + part protocole), valorisés au prix du moment du trade. Même couverture que le volume — les deux sont valorisés ensemble, donc une heure absente de l'un est absente de l'autre.",
           "pools": "Pools découvertes dans le flux de transactions depuis le début de l'observation — ce qui a été vu, pas une liste de suivi."
         }
       },
@@ -197,12 +198,13 @@
       "kpis": {
         "tvl": "TVL",
         "volume24h": "Volume 24h",
+        "bucketCoverage": "{priced} / {total} heures valorisées",
         "fees24h": "Frais 24h",
         "composition": "Composition de la pool",
         "info": {
           "tvl": "Valeur des réserves de la pool au dernier état observé, au dernier prix connu des deux tokens.",
-          "volume24h": "Volume échangé sur cette pool dans les dernières 24 h, valorisé au prix du moment de chaque trade.",
-          "fees24h": "Frais de trading encaissés par cette pool sur 24 h (part LP + part protocole).",
+          "volume24h": "Volume échangé sur cette pool dans les dernières 24 h, valorisé au prix du moment de chaque trade. Une heure dont les tokens n'ont pas de prix connu sort de la somme — la ligne dessous donne la couverture : heures valorisées / heures ayant tradé.",
+          "fees24h": "Frais de trading encaissés par cette pool sur 24 h (part LP + part protocole). Même couverture que le volume ci-dessus.",
           "composition": "Répartition des réserves entre les deux tokens, en valeur USD."
         }
       },

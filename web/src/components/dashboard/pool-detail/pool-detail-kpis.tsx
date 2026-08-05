@@ -85,6 +85,19 @@ export async function PoolDetailKpis({
       ? Number(state.spotPriceAInB)
       : null;
 
+  // Coverage of the 24h volume: how many of the hours that actually traded
+  // could be valued in USD. The sum skips the rest, so a bare figure can be a
+  // sub-total passing for a total. Rendered whenever the pool traded at all —
+  // including at full coverage, since an absent line would be ambiguous with
+  // "no data". A pool that did not trade has nothing to qualify.
+  const volumeCoverage =
+    pool.swapBuckets24h > 0
+      ? t("bucketCoverage", {
+        priced: pool.swapBucketsPriced24h,
+        total: pool.swapBuckets24h,
+      })
+      : undefined;
+
   const kpiCount = 3 + (spotPrice !== null ? 1 : 0);
 
   const kpiCards = (
@@ -97,6 +110,7 @@ export async function PoolDetailKpis({
       <KpiCard
         label={t("volume24h")}
         valueCompact={formatUsdCompact(pool.volume24hUsd)}
+        hint={volumeCoverage}
         info={t("info.volume24h")}
       />
       <KpiCard

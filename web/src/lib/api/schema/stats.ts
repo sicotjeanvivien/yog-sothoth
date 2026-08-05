@@ -12,6 +12,11 @@
  *   - `poolsPriced` is the coverage numerator (pools that contributed to
  *     `totalTvlUsd`); `poolsObserved` is the denominator. Both are JSON
  *     numbers (BIGINT counts, well within the JS safe range here).
+ *   - `swapBucketsPriced24h` / `swapBuckets24h` are the same idea for the two
+ *     24h aggregates: (pool, hour) buckets that traded, and how many of them
+ *     could be valued in USD. The sum skips what it cannot value, so a
+ *     non-null `volume24hUsd` is not necessarily a *complete* one — this pair
+ *     is what says so.
  *   - `poolsDiscovered24h` counts pools first seen in the last 24h.
  */
 
@@ -28,6 +33,10 @@ export const StatsSchema = z.object({
   // Summed realized volume / trading fee over the last 24h (trade-time valued).
   volume24hUsd: BigDecimal.nullable(),
   fees24hUsd: BigDecimal.nullable(),
+  // Coverage of the two aggregates above: hours that traded, and hours that
+  // could be valued.
+  swapBuckets24h: z.number().int().nonnegative(),
+  swapBucketsPriced24h: z.number().int().nonnegative(),
   // Every pool ever observed (coverage denominator).
   poolsObserved: z.number().int().nonnegative(),
   // Pools first seen in the last 24h (the discovery pulse).

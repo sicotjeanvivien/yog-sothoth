@@ -108,8 +108,17 @@ impl PriceWorker {
             }
         };
 
+        // Coverage of this tick: how many of the mints we asked for came back
+        // with a price. Set before the empty check so a source that returns
+        // nothing reports 0 rather than leaving the gauge on its last value.
+        PriceWorkerMetrics::set_priced_mints(fetched.len());
+
         if fetched.is_empty() {
             debug!("price worker: no prices to insert");
+            // `no_prices` was declared in the outcome label set from the start
+            // but never emitted — a tick that priced nothing looked, in the
+            // metrics, exactly like a tick that never happened.
+            PriceWorkerMetrics::record_tick("no_prices", start.elapsed().as_secs_f64());
             return;
         }
 

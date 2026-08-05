@@ -46,6 +46,10 @@ impl From<SignalRecord> for PoolSignalResponse {
 /// window). Serialised as JSON numbers via `rust_decimal`'s exact
 /// decimal representation — consistent with the price block in
 /// `EmbeddedPriceResponse`.
+///
+/// A non-null 24h figure is not necessarily a *complete* one: the sum skips
+/// the hours it cannot value. `swapBuckets24h` / `swapBucketsPriced24h` carry
+/// that coverage so a partial total cannot pass for a full one.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolResponse {
@@ -70,7 +74,19 @@ pub(crate) struct PoolResponse {
     pub(crate) lp_fees_24h_usd: Option<Decimal>,
     /// Effective realized fee rate in basis points (`fees / volume * 10000`)
     /// over the 24h window. `None` when volume is absent or zero.
+    ///
+    /// NOT affected by the coverage below, and deliberately so: fees and volume
+    /// are lost on exactly the same buckets (one valuation, one join), so an
+    /// unvalued hour cancels out of the ratio. Only the absolute values are
+    /// clipped. Do not "fix" this one.
     pub(crate) effective_fee_bps: Option<Decimal>,
+    /// Coverage of the four USD figures above: hours of the window that had at
+    /// least one swap, and how many of them could be valued. Shipped as raw
+    /// counters like `poolsPriced`/`poolsObserved` on `/api/stats` — the
+    /// presentation layer turns them into a coverage label. Equal values mean
+    /// full coverage; a lower numerator means the sums are sub-totals.
+    pub(crate) swap_buckets_24h: i64,
+    pub(crate) swap_buckets_priced_24h: i64,
     /// Signals emitted by this pool over the last 24h, newest first,
     /// capped per pool (service-side). Empty when the pool was quiet —
     /// the indicator's window is fixed server-side, like the 24h
@@ -120,6 +136,8 @@ impl PoolResponse {
                 _ => None,
             },
             effective_fee_bps: effective_fee_bps(analytics.fees_24h_usd, analytics.volume_24h_usd),
+            swap_buckets_24h: analytics.swap_buckets_24h,
+            swap_buckets_priced_24h: analytics.swap_buckets_priced_24h,
             signals_24h: recent_signals
                 .into_iter()
                 .map(PoolSignalResponse::from)

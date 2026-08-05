@@ -18,6 +18,13 @@ incrementally between June and August 2026, squashed on **5 August 2026** —
 before the first production deployment, the only window in which a squash is
 free. The next migration is `002_`.
 
+`002_swap_implied_price.sql` — values a swap bucket by whichever of its two
+tokens is priced, and is the one place where a cagg has been dropped and
+rebuilt. That was free precisely because no cagg had ever materialized a bucket
+(the job scheduler has been off since 16 June); it will not be free again once
+the scheduler runs. A cagg cannot be `ALTER`ed, so any future column added to
+one costs the same drop — and by then, a backfill.
+
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs
