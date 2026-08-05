@@ -456,3 +456,32 @@ fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
          from a tick that never ran"
     );
 }
+
+#[test]
+fn a_tick_with_no_known_mints_zeroes_both_gauges() {
+    // Found in review. `set_known_mints` runs before the empty-mints early
+    // return but `set_priced_mints` did not, so on a cold start the denominator
+    // dropped to 0 while the numerator held its previous value — and the
+    // README's own alert expression `priced / known` reads +Inf.
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![]));
+
+    let snapshot = snapshot_one_cycle(PriceWorker::new(
+        metadata_repo,
+        price_repo,
+        source,
+        std::time::Duration::from_secs(30),
+    ));
+
+    assert_eq!(
+        value(&snapshot, "yog_context_price_known_mints"),
+        Some(&DebugValue::Gauge(0.0.into()))
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_priced_mints"),
+        Some(&DebugValue::Gauge(0.0.into())),
+        "both gauges must move together — a 0 denominator against a stale \
+         numerator makes the coverage alert fire on nothing"
+    );
+}

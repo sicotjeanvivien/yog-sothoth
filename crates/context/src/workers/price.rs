@@ -93,6 +93,10 @@ impl PriceWorker {
 
         if mints.is_empty() {
             debug!("price worker: no known mints yet — sleeping");
+            // Both gauges move together or the ratio the README tells you to
+            // alert on (`priced / known`) divides a stale numerator by 0 and
+            // reads +Inf on a cold start.
+            PriceWorkerMetrics::set_priced_mints(0);
             PriceWorkerMetrics::record_tick("no_work", start.elapsed().as_secs_f64());
             return;
         }

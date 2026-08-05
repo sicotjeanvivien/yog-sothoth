@@ -119,44 +119,73 @@ SELECT add_continuous_aggregate_policy('meteora_damm_v2_swap_events_hourly',
 GRANT SELECT ON meteora_damm_v2_swap_events_hourly TO yog_api;
 
 
--- ── meteora_damm_v2_pool_hourly_price (002) ─────────────────────────────────
--- The effective price of each token, per (pool, hour) that had swaps.
+-- ── meteora_damm_v2_swap_events_hourly_priced (002) ─────────────────────────
+-- The swap cagg, carrying everything needed to value it: the token decimals,
+-- the effective price of each side, and whether that price had to be implied.
 --
--- One row per swap bucket, carrying the price to value that bucket with and
--- whether it had to be implied. Split out of the activity view rather than
--- inlined so that the rule has one definition, and so that "which buckets did
--- we have to imply a price for?" is a query rather than an audit:
+-- ## Why it carries the cagg's own columns rather than just the prices
 --
---     SELECT count(*) FILTER (WHERE price_a_implied OR price_b_implied), count(*)
---     FROM meteora_damm_v2_pool_hourly_price;
+-- A first version exposed only `(pool_address, bucket, eff_price_*)`, and the
+-- activity view joined it *alongside* the cagg. Inlining does not dedupe that:
+-- the plan then scanned the swap hypertable TWICE (`_hyper_4_1_chunk` and
+-- `_hyper_4_1_chunk_1` in `EXPLAIN`), and recomputed the pools/token_metadata
+-- join twice with it — on the read path behind `/api/stats` and every pool
+-- list. Passing the cagg's columns through means the activity view selects
+-- from this view ALONE, and the hypertable is scanned once.
 --
--- A plain VIEW, so no performance effect of its own — Postgres inlines it.
+-- So: a plain VIEW is inlined and costs nothing *of its own*, but a view that
+-- re-reads a table its caller also reads is not free. That is the trap here.
+--
+-- ## Why token_metadata is LEFT-joined, unlike everywhere else in §15
+--
+-- §15's views INNER-join `token_metadata`, so a pool whose mints are not
+-- resolved yet produces NO ROW — the first of the three ways this codebase says
+-- "we don't know" (the row disappears). That is fine for a value, and wrong for
+-- a *coverage denominator*: the buckets that vanish are exactly the ones we
+-- failed to value, so counting only the surviving rows would report a pool as
+-- 100 % covered while its volume was silently missing — the very defect this
+-- migration exists to remove, moved one join up.
+--
+-- LEFT-joining keeps the bucket with NULL decimals, hence a NULL valuation, so
+-- it lands in the denominator and not in the numerator. `pools` stays an INNER
+-- join: the event persistor upserts the pool before inserting the swap, so the
+-- row is always there.
+--
+-- ## The rule itself
 --
 -- `implied_a` reads the OTHER side's observed price (`pb`): a rate cannot be
 -- derived from an unknown anchor, so when `pb` is NULL `implied_a` is NULL too,
 -- and a bucket with neither side priced yields two NULL effective prices — the
 -- "we don't know" case, unchanged.
 --
+-- `price_a_implied` / `price_b_implied` say when the fallback was actually used
+-- — which makes it auditable rather than invisible:
+--
+--     SELECT count(*) FILTER (WHERE price_a_implied OR price_b_implied), count(*)
+--     FROM meteora_damm_v2_swap_events_hourly_priced;
+--
 -- `NULLIF(…, 0)` guards the division: a bucket whose swaps moved no token A at
 -- all (theoretically possible, e.g. a zero-amount swap) yields NULL rather than
 -- a division-by-zero error.
 --
--- Definer's-rights view like every other one in §15, and deliberately WITHOUT a
--- GRANT: its only reader is the activity view below, which is owned by the same
--- role and therefore reads it on its own rights. Adding a grant would widen the
--- privilege surface for nobody. (Ticket 08 will want `yog_signals` on it — that
--- grant belongs to the migration that makes `flow_imbalance` read it.)
-CREATE VIEW meteora_damm_v2_pool_hourly_price AS
-WITH pool_tokens AS (
-    SELECT p.pool_address, p.token_a_mint, p.token_b_mint,
-           tma.decimals AS dec_a, tmb.decimals AS dec_b
-    FROM pools p
-    JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
-    JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
-)
+-- No explicit GRANT, like §15's other derived views: `setup_roles.sql` sets
+-- `ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate … GRANT SELECT` for all four
+-- runtime roles, so they can already read it. The explicit GRANTs in this file
+-- are the ones the privilege matrix asserts (`tests/privileges.rs` compares
+-- explicit grants only); nothing here needs to be in that matrix.
+CREATE VIEW meteora_damm_v2_swap_events_hourly_priced AS
 SELECT
     h.pool_address,
     h.bucket,
+    h.volume_in_a,
+    h.volume_in_b,
+    h.swap_count,
+    h.fee_in_a,
+    h.fee_in_b,
+    h.protocol_fee_in_a,
+    h.protocol_fee_in_b,
+    tma.decimals AS dec_a,
+    tmb.decimals AS dec_b,
     COALESCE(pa.price_usd, i.implied_a) AS eff_price_a,
     COALESCE(pb.price_usd, i.implied_b) AS eff_price_b,
     -- "implied" means the implied rate was actually USED — false both when the
@@ -164,42 +193,49 @@ SELECT
     (pa.price_usd IS NULL AND i.implied_a IS NOT NULL) AS price_a_implied,
     (pb.price_usd IS NULL AND i.implied_b IS NOT NULL) AS price_b_implied
 FROM meteora_damm_v2_swap_events_hourly h
-JOIN pool_tokens pt ON pt.pool_address = h.pool_address
+JOIN pools p ON p.pool_address = h.pool_address
+LEFT JOIN token_metadata tma ON tma.mint = p.token_a_mint::TEXT
+LEFT JOIN token_metadata tmb ON tmb.mint = p.token_b_mint::TEXT
 LEFT JOIN LATERAL (
     SELECT price_usd FROM token_prices
-    WHERE mint = pt.token_a_mint::TEXT AND fetched_at <= h.bucket
+    WHERE mint = p.token_a_mint::TEXT AND fetched_at <= h.bucket
     ORDER BY fetched_at DESC LIMIT 1
 ) pa ON true
 LEFT JOIN LATERAL (
     SELECT price_usd FROM token_prices
-    WHERE mint = pt.token_b_mint::TEXT AND fetched_at <= h.bucket
+    WHERE mint = p.token_b_mint::TEXT AND fetched_at <= h.bucket
     ORDER BY fetched_at DESC LIMIT 1
 ) pb ON true
 CROSS JOIN LATERAL (
     SELECT
-        ((h.traded_b::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * pb.price_usd)
-            / NULLIF(h.traded_a::NUMERIC / POWER(10::NUMERIC, pt.dec_a), 0)
+        ((h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals)) * pb.price_usd)
+            / NULLIF(h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals), 0)
             AS implied_a,
-        ((h.traded_a::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * pa.price_usd)
-            / NULLIF(h.traded_b::NUMERIC / POWER(10::NUMERIC, pt.dec_b), 0)
+        ((h.traded_a::NUMERIC / POWER(10::NUMERIC, tma.decimals)) * pa.price_usd)
+            / NULLIF(h.traded_b::NUMERIC / POWER(10::NUMERIC, tmb.decimals), 0)
             AS implied_b
 ) i;
 
 
 -- ── meteora_damm_v2_pool_hourly_activity (019, rebuilt) ─────────────────────
--- Same contract and same output columns as the baseline. The only change is in
--- `swap_v`: its two `token_prices` LATERAL joins are replaced by a join on the
--- price view above, and the three USD expressions multiply by the EFFECTIVE
--- price instead of the observed one. Volume, fees and protocol fees all move
--- together — they share the join, so a bucket that used to lose all three now
--- keeps all three.
+-- Same contract and same output columns as the baseline. The change is confined
+-- to `swap_v`: it now selects from the priced view above and from nothing else
+-- — no `pool_tokens`, no `token_prices` LATERALs — and the three USD
+-- expressions multiply by the EFFECTIVE price instead of the observed one.
+-- Volume, fees and protocol fees move together: they share one valuation, so a
+-- bucket that used to lose all three now keeps all three.
+--
+-- Reading a single source is also what keeps the swap hypertable scanned once;
+-- see the note on the priced view.
 --
 -- `liq_v`, `pos_fee_v` and `reward_v` are byte-for-byte the baseline's: see the
--- scope note in this file's header.
+-- scope note in this file's header. They keep the INNER `pool_tokens` join, so
+-- for THEM an unresolved pool still produces no row. The asymmetry is
+-- deliberate and narrow: only the swap side carries a coverage claim to the
+-- API, and only it needs its unvaluable buckets to remain visible.
 --
--- A pool whose mints are not resolved yet drops out (INNER JOIN on
--- token_metadata) → no row. Reward claims are valued by their own reward mint
--- and summed across mints per bucket.
+-- Reward claims are valued by their own reward mint and summed across mints per
+-- bucket.
 CREATE VIEW meteora_damm_v2_pool_hourly_activity AS
 WITH pool_tokens AS (
     SELECT p.pool_address, p.token_a_mint, p.token_b_mint,
@@ -210,17 +246,14 @@ WITH pool_tokens AS (
 ),
 swap_v AS (
     SELECT h.pool_address, h.bucket,
-        (COALESCE(h.volume_in_a, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * ep.eff_price_a
-      + (COALESCE(h.volume_in_b, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * ep.eff_price_b AS volume_usd,
-        (COALESCE(h.fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * ep.eff_price_a
-      + (COALESCE(h.fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * ep.eff_price_b AS fees_usd,
-        (COALESCE(h.protocol_fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * ep.eff_price_a
-      + (COALESCE(h.protocol_fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * ep.eff_price_b AS protocol_fees_usd,
+        (COALESCE(h.volume_in_a, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
+      + (COALESCE(h.volume_in_b, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b AS volume_usd,
+        (COALESCE(h.fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
+      + (COALESCE(h.fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b AS fees_usd,
+        (COALESCE(h.protocol_fee_in_a, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_a)) * h.eff_price_a
+      + (COALESCE(h.protocol_fee_in_b, 0)::NUMERIC / POWER(10::NUMERIC, h.dec_b)) * h.eff_price_b AS protocol_fees_usd,
         h.swap_count
-    FROM meteora_damm_v2_swap_events_hourly h
-    JOIN pool_tokens pt ON pt.pool_address = h.pool_address
-    JOIN meteora_damm_v2_pool_hourly_price ep
-        ON ep.pool_address = h.pool_address AND ep.bucket = h.bucket
+    FROM meteora_damm_v2_swap_events_hourly_priced h
 ),
 liq_v AS (
     SELECT h.pool_address, h.bucket,

@@ -195,7 +195,7 @@ async fn implied_price_is_flagged_as_implied(pool: PgPool) {
 
     let row = sqlx::query_as::<_, (Option<Decimal>, bool, bool)>(
         "SELECT eff_price_a, price_a_implied, price_b_implied
-         FROM meteora_damm_v2_pool_hourly_price WHERE pool_address = $1",
+         FROM meteora_damm_v2_swap_events_hourly_priced WHERE pool_address = $1",
     )
     .bind(&pool_addr)
     .fetch_one(&pool)
@@ -245,7 +245,7 @@ async fn bucket_with_no_priced_side_stays_null(pool: PgPool) {
 
     let implied: bool = sqlx::query_scalar(
         "SELECT price_a_implied OR price_b_implied
-         FROM meteora_damm_v2_pool_hourly_price WHERE pool_address = $1",
+         FROM meteora_damm_v2_swap_events_hourly_priced WHERE pool_address = $1",
     )
     .bind(&pool_addr)
     .fetch_one(&pool)
@@ -374,7 +374,7 @@ async fn observed_price_wins_over_the_implied_rate(pool: PgPool) {
 
     let flags: (bool, bool) = sqlx::query_as(
         "SELECT price_a_implied, price_b_implied
-         FROM meteora_damm_v2_pool_hourly_price WHERE pool_address = $1",
+         FROM meteora_damm_v2_swap_events_hourly_priced WHERE pool_address = $1",
     )
     .bind(&pool_addr)
     .fetch_one(&pool)
@@ -426,4 +426,53 @@ async fn fees_are_valued_by_the_same_effective_price(pool: PgPool) {
         .fees_24h_usd
         .expect("a fee charged in the unpriced token must still be valued");
     assert!(close_to(fees, "9"), "expected $9 of fees, got {fees}");
+}
+
+// ── 7. An unresolved pool stays in the denominator ───────────────────────────
+
+#[sqlx::test]
+async fn a_pool_with_unresolved_mints_counts_as_uncovered_not_as_absent(pool: PgPool) {
+    // Found in review. A pool discovered from the swap stream has NULL mints
+    // until yog-context's PoolAccountWorker resolves them, and §15's views
+    // INNER-join `token_metadata` — so its buckets used to vanish entirely.
+    //
+    // Vanishing is fine for a *value*, and wrong for a *coverage denominator*:
+    // the buckets that disappear are precisely the ones we failed to value, so
+    // counting only the survivors would report "100 % covered" over a window
+    // whose volume is silently missing — this ticket's defect, one join up.
+    let pool_addr = pk(1).to_string();
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1,'meteora_damm_v2',NULL,NULL)",
+    )
+    .bind(&pool_addr)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    insert_balanced_pair(
+        &pool,
+        &pool_addr,
+        "unresolved",
+        Utc::now() - Duration::hours(2),
+    )
+    .await;
+
+    let repo = PgPoolAnalyticsRepository::new(pool.clone());
+    let analytics = repo.batch_compute(&[pk(1)]).await.unwrap();
+    let a = analytics.get(&pk(1)).expect("pool must be present");
+
+    assert_eq!(
+        a.volume_24h_usd, None,
+        "no decimals and no mints — nothing can be valued"
+    );
+    assert_eq!(
+        a.swap_buckets_24h, 1,
+        "the hour traded and must stay countable: with the INNER join it \
+         reported 0 buckets, i.e. the same answer as a pool that never traded"
+    );
+    assert_eq!(
+        a.swap_buckets_priced_24h, 0,
+        "…and none of it was valued, so coverage is 0/1 and not 0/0"
+    );
 }

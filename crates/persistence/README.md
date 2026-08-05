@@ -158,15 +158,23 @@ query shape:
 - **Big but static** → prefer a **SQL VIEW** in a migration when the query is
   reusable or decomposable (e.g. `meteora_damm_v2_pool_hourly_activity`,
   baseline §15, shared by `history` and `pool_analytics`; or
-  `meteora_damm_v2_pool_hourly_price`, migration 002, which factors one rule
-  out of it); the slim `SELECT … FROM <view>` stays a checked `query!`.
-  Otherwise `query_file!("….sql")`.
+  `meteora_damm_v2_swap_events_hourly_priced`, migration 002, which factors the
+  valuation rule out of it); the slim `SELECT … FROM <view>` stays a checked
+  `query!`. Otherwise `query_file!("….sql")`.
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by
   integration tests. The lone case today is `repositories/pool/query.rs`.
 
 A plain VIEW gives **no** performance gain — Postgres inlines it. Choose a
 VIEW for readability; the perf tool is materialization (the hourly continuous
 aggregates), which precomputes at the cost of staleness.
+
+⚠️ **Inlining is not deduplication.** A view that reads a table its *caller*
+also reads gets scanned separately: the plan then holds two scans of the same
+hypertable. Migration 002 hit exactly that — the effective-price view was first
+joined *alongside* the swap cagg, and `/api/stats` scanned the swap hypertable
+twice. The fix is for the view to carry the base columns through so the caller
+selects from it alone. Check with `EXPLAIN` whenever a new view sits over a
+cagg: count the `_hyper_*_chunk` scans.
 
 ## USD valuation: which price, and what "unknown" means
 
@@ -201,13 +209,21 @@ next to the sums (`swap_buckets_priced_24h` / `swap_buckets_24h`, mirroring
 `pools_priced` / `pools_observed`): the value alone cannot say how complete it
 is. Adding a new aggregate over a valued view means adding its coverage too.
 
+⚠️ **A coverage denominator must be counted where the rows still exist.** The
+first mechanism above deletes rows, so counting over a view that INNER-joins
+`token_metadata` counts only the buckets that *survived* — and reports 100 %
+over a window whose unresolved-mint pools were dropped whole. That is why
+`meteora_damm_v2_swap_events_hourly_priced` LEFT-joins metadata: the bucket
+stays, unvaluable, and lands in the denominator instead of vanishing from both
+sides of the ratio.
+
 ### The implied price (migration 002)
 
 For **swaps only**, when one of the two tokens has no observed price, the
 bucket is valued through the exchange rate its own swaps traded at, anchored on
 the other token's observed price — exposed per (pool, hour) by
-`meteora_damm_v2_pool_hourly_price`, with `price_a_implied` /`price_b_implied`
-saying when it was used.
+`meteora_damm_v2_swap_events_hourly_priced`, with `price_a_implied` /
+`price_b_implied` saying when it was used.
 
 The rule and its boundary:
 
@@ -257,8 +273,8 @@ reward instructions, split-position) → `036`–`040` the pool-properties
 satellites: cp-amm out of `pools` (`036`–`037`), the `needs_refresh`
 invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
 (`040`). Post-baseline: `002` rebuilds the swap cagg with the two whole-bucket
-traded totals and adds `meteora_damm_v2_pool_hourly_price` — the implied-price
-rule above.
+traded totals and adds `meteora_damm_v2_swap_events_hourly_priced` — the
+implied-price rule above.
 
 ### Pool-properties satellites, and the invariant that ties them to `pools`
 

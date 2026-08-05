@@ -36,7 +36,7 @@
         "tvl": "Total TVL",
         "coverage": "{priced} / {observed} priced",
         "volume24h": "Volume 24h",
-        "bucketCoverage": "{priced} / {total} hours priced",
+        "bucketCoverage": "{priced} / {total} pool-hours priced",
         "fees24h": "Fees 24h",
         "pools": "Pools",
         "discovered": "{count, plural, =0 {No new pools (24h)} other {+# discovered (24h)}}",
