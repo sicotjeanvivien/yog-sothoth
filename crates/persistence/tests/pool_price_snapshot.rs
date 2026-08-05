@@ -1,4 +1,4 @@
-//! Integration test for the pool price snapshot view (migration 024) and
+//! Integration test for the pool price snapshot view (baseline §15) and
 //! the `PgPoolPriceSnapshotRepository` read path.
 //!
 //! Gated behind `integration-tests`. Validates the vertical slice: a pool

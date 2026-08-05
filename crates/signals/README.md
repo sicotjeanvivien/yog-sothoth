@@ -59,7 +59,7 @@ carries the dedup state too.
 
 **`flow_imbalance`** — directional swap-flow imbalance over a rolling window:
 `(a_to_b − b_to_a) / (a_to_b + b_to_a)` on USD-valued volumes read from the
-`meteora_damm_v2_pool_hourly_flow` VIEW (migration 023). A volume floor
+`meteora_damm_v2_pool_hourly_flow` VIEW (baseline §15). A volume floor
 filters thin pools. Warning at `|imbalance| ≥ threshold`, Critical at
 `≥ critical`.
 
@@ -76,8 +76,8 @@ config load (`threshold < critical`, otherwise Warning would be unreachable).
 behaviour): over a rolling window, `drain = net_removed / starting TVL`, where
 `net_removed = removed_usd − added_usd` (LP churn nets out) and the starting
 TVL is the current TVL plus what left. Reads the
-`meteora_damm_v2_pool_hourly_liquidity_flow` VIEW (migration 025) joined with
-`pool_current_tvl` (020). Guards: an unvaluable TVL (unknown price, unresolved
+`meteora_damm_v2_pool_hourly_liquidity_flow` VIEW (baseline §15) joined with
+`pool_current_tvl` (§15 too). Guards: an unvaluable TVL (unknown price, unresolved
 mints, no reconstructed state) skips the pool — no signal beats a fake one;
 the TVL floor applies to the *starting* TVL so a pool drained within the
 window can't dodge the floor by having drained itself below it.

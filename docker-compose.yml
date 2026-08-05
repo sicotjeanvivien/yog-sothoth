@@ -48,7 +48,7 @@ services:
     # max_background_workers = 0 disables the TimescaleDB job scheduler. It is
     # required by the DB-backed integration tests: sqlx::test creates a fresh
     # database per test, each adding continuous-aggregate refresh policies
-    # (migrations 010–013); the scheduler then mutates the cluster-wide
+    # (baseline §13); the scheduler then mutates the cluster-wide
     # _timescaledb_catalog asynchronously and races the next test's
     # cagg-creating migration DDL, failing it with "tuple concurrently deleted".
     # Safe for the local app stack too: the caggs are materialized_only = false,
@@ -69,7 +69,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Migration (one-shot) ───────────────────────────────────────
+  # ── Provisioning + migration (one-shot) ────────────────────────
   yog-migrate:
     profiles: ["backend", "full"]
     build:
@@ -77,18 +77,27 @@ services:
       dockerfile: docker/backend.Dockerfile
       target: yog-migrate
     environment:
-      # The binary reads DATABASE_URL_MIGRATE (same convention as
-      # cargo run). We rewrite the host on the fly so the same
-      # value in .env works from both contexts.
+      # `bootstrap` needs BOTH urls: the admin one creates the roles and seeds
+      # the allowlist, the migrate one applies the schema. Before it, this
+      # service ran the bare binary and only had DATABASE_URL_MIGRATE — so on a
+      # fresh volume the roles did not exist and the baseline's first
+      # `GRANT … TO yog_indexer` failed. The documented remedy was a psql
+      # one-liner; `bootstrap` makes it the same command everywhere.
+      #
+      # Both are rewritten on the fly so one value in .env works from the host
+      # (localhost:5433) and from inside the compose network (postgres:5432).
       DATABASE_URL_MIGRATE: ${DATABASE_URL_MIGRATE}
+      DATABASE_URL_ADMIN: ${DATABASE_URL_ADMIN}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     entrypoint:
       - /bin/sh
       - -c
       - |
-        export DATABASE_URL_MIGRATE="$$(echo "$$DATABASE_URL_MIGRATE" | sed 's|@localhost:5433/|@postgres:5432/|')"
-        exec /usr/local/bin/yog-migrate
+        rewrite() { echo "$$1" | sed 's|@localhost:5433/|@postgres:5432/|'; }
+        export DATABASE_URL_MIGRATE="$$(rewrite "$$DATABASE_URL_MIGRATE")"
+        export DATABASE_URL_ADMIN="$$(rewrite "$$DATABASE_URL_ADMIN")"
+        exec /usr/local/bin/yog-migrate bootstrap
     depends_on:
       postgres:
         condition: service_healthy

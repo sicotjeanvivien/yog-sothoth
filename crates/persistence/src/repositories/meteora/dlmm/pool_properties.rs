@@ -1,4 +1,4 @@
-//! DLMM pool-properties satellite repository (migration 039).
+//! DLMM pool-properties satellite repository (baseline §9).
 //!
 //! Holds the pool properties that only exist for the Liquidity Book product,
 //! kept out of the cross-protocol `pools` registry so no protocol carries NULL
@@ -180,7 +180,7 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
         };
 
         // Widening to the signed SQL types is always lossless: u16 -> INTEGER,
-        // u8 -> SMALLINT, u32 -> BIGINT. Migration 039 explains the widths.
+        // u8 -> SMALLINT, u32 -> BIGINT. Baseline §9 explains the widths.
         sqlx::query!(
             r#"
             INSERT INTO meteora_dlmm_pool_properties

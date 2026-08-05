@@ -1,4 +1,4 @@
-//! Integration test for the swap volume continuous aggregate (migration 010)
+//! Integration test for the swap volume continuous aggregate (baseline §13)
 //! and the CA-backed `volume_24h_usd` read path in `PgPoolAnalyticsRepository`.
 //!
 //! Gated behind `integration-tests`. Validates the full vertical slice:

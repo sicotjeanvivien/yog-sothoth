@@ -2,7 +2,7 @@
 //!
 //! Reads the `meteora_damm_v2_pool_hourly_liquidity_flow` view (migration
 //! 025), which encapsulates the per-(pool, hour) directional USD valuation
-//! of liquidity events, joined with `pool_current_tvl` (migration 020) for
+//! of liquidity events, joined with `pool_current_tvl` (baseline §15) for
 //! the current-TVL side of the drain ratio. This query just windows, sums
 //! and joins — a slim `SELECT` the sqlx macro still verifies against the
 //! views' columns.

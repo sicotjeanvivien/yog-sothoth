@@ -1,6 +1,6 @@
 //! Postgres implementation of [`PoolPriceSnapshotRepository`].
 //!
-//! Reads the `pool_price_snapshot` view (migration 024), which encapsulates
+//! Reads the `pool_price_snapshot` view (baseline §15), which encapsulates
 //! the join of a pool's current on-chain state with its tokens' decimals and
 //! latest oracle prices. The query is a slim `SELECT` the sqlx macro still
 //! verifies against the view's columns.

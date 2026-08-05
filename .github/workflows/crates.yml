@@ -139,14 +139,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      # Roles: migration 001 emits GRANTs against the runtime roles; create
-      # them as bare login roles so the migration applies. sqlx::test re-runs
-      # migrations per test database, so the roles must exist at the cluster
-      # level (they do — roles are cluster-wide, not per-database).
+      # Roles: the baseline migration emits GRANTs against the runtime roles;
+      # create them as bare login roles so the migration applies. sqlx::test
+      # re-runs migrations per test database, so the roles must exist at the
+      # cluster level (they do — roles are cluster-wide, not per-database).
       #
       # max_background_workers = 0: sqlx::test creates a fresh database per
-      # test, each replaying migrations 010–013 which add continuous-aggregate
-      # refresh policies. The TimescaleDB job scheduler (a background worker)
+      # test, each replaying the baseline's continuous-aggregate refresh
+      # policies (§13). The TimescaleDB job scheduler (a background worker)
       # then mutates the cluster-wide _timescaledb_catalog asynchronously,
       # racing the next test's cagg-creating migration DDL and failing it with
       # "tuple concurrently deleted" (XX000). Disabling the scheduler removes
@@ -204,7 +204,7 @@ jobs:
     name: SQLx check
     runs-on: ubuntu-latest
  
-    # TimescaleDB image because migration 001 creates the timescaledb
+    # TimescaleDB image because the baseline migration creates the timescaledb
     # extension and promotes tables to hypertables — a vanilla
     # postgres image would fail the migration.
     services:
@@ -248,16 +248,16 @@ jobs:
             --locked
  
       # The CI Postgres has no yog_migrate / yog_indexer / yog_api /
-      # yog_context roles — the migrations 001 emit GRANT statements
+      # yog_context roles — the baseline migration emits GRANT statements
       # against them, which would fail. Create them as bare login
       # roles (no passwords needed; CI is ephemeral).
       #
-      # max_background_workers = 0: migrations 010–013 add continuous-
-      # aggregate refresh policies, after which the TimescaleDB job
+      # max_background_workers = 0: the baseline adds continuous-aggregate
+      # refresh policies (§13), after which the TimescaleDB job
       # scheduler (a background worker) starts mutating the cluster-wide
       # _timescaledb_catalog asynchronously, racing the very next cagg
-      # migration's DDL and failing it with "tuple concurrently deleted"
-      # (migration 14, intermittently). The test-integration job already
+      # DDL and failing it with "tuple concurrently deleted"
+      # (intermittently). The test-integration job already
       # disables the scheduler for the same reason; this job needs it too
       # because it applies the same migrations. The GUC is postmaster-
       # context, so it needs a restart to take effect.

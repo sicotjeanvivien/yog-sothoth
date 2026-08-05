@@ -1,6 +1,6 @@
 //! Postgres implementation of [`SwapFlowRepository`].
 //!
-//! Reads the `meteora_damm_v2_pool_hourly_flow` view (migration 023), which
+//! Reads the `meteora_damm_v2_pool_hourly_flow` view (baseline §15), which
 //! encapsulates the per-(pool, hour) directional USD valuation. This query
 //! just windows and sums it per pool — a slim `SELECT` the sqlx macro still
 //! verifies against the view's columns.

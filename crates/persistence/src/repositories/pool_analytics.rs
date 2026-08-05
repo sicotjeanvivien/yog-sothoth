@@ -47,7 +47,7 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 FROM UNNEST($1::TEXT[]) AS pool_address
             ),
             -- Per-pool current TVL is encapsulated in the `pool_current_tvl`
-            -- view (migration 020) — same reserve × most-recent-price valuation
+            -- view (baseline §15) — same reserve × most-recent-price valuation
             -- as before, no longer duplicated here (the `global_analytics`
             -- roll-up reads the same view).
             tvl_per_pool AS (
@@ -56,7 +56,7 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 WHERE pool_address = ANY($1::TEXT[])
             ),
             -- 24h volume + realized fees, rolled up from the shared
-            -- per-(pool, hour) USD valuation view (migration 019) — same
+            -- per-(pool, hour) USD valuation view (baseline §15) — same
             -- trade-time valuation as before, no longer duplicated here.
             volume_per_pool AS (
                 SELECT
@@ -98,7 +98,7 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         let address = pool_address.to_string();
 
         // The per-(pool, hour) USD valuation of the four CAs lives in the
-        // `meteora_damm_v2_pool_hourly_activity` VIEW (migration 019) — this
+        // `meteora_damm_v2_pool_hourly_activity` VIEW (baseline §15) — this
         // query just slices it to one pool and window. The macro still verifies
         // these columns against the view.
         let rows = sqlx::query_as!(

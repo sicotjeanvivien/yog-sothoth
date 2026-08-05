@@ -1,6 +1,6 @@
 //! Postgres implementation of `TokenMetadataRepository`.
 //!
-//! Backed by the `token_metadata` table (migration 004).
+//! Backed by the `token_metadata` table (baseline §6).
 //!
 //! The domain types mints as `Pubkey`; the column is `TEXT`. The
 //! conversion happens here, at the persistence boundary:
@@ -80,9 +80,28 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
     }
 
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        // `AS "mint!: String"` forces sqlx to treat the column as
-        // non-null String: nullability inference through the UNION
-        // subquery is sometimes too conservative otherwise.
+        // `IS NOT NULL` is load-bearing, and its absence used to break every
+        // freshly bootstrapped database.
+        //
+        // `pools.token_a_mint` / `token_b_mint` are nullable — a pool is
+        // discovered from the event stream before yog-context resolves its
+        // mints from the on-chain account. One might expect
+        // `NOT IN (SELECT mint FROM token_metadata)` to discard those NULLs on
+        // its own, since `NULL NOT IN (…)` is NULL and a NULL predicate filters
+        // the row out. It does — **unless the subquery is empty**, where SQL
+        // defines `x NOT IN ()` as TRUE for any x, NULL included.
+        //
+        // So on a database whose `token_metadata` is still empty, an unresolved
+        // pool sent a NULL through, the `!` below asserted non-null, and the
+        // whole call failed with "unexpected null". The worker is skip-and-log,
+        // so it warned and did nothing — and since it is itself what fills
+        // `token_metadata`, nothing could break the cycle except the pool
+        // account worker happening to resolve every pool first. Observed on a
+        // fresh stack on 5 August 2026.
+        //
+        // `AS "mint!: String"` then keeps its meaning: with the NULLs excluded
+        // by the WHERE, the column really is non-null, and sqlx's inference
+        // through the UNION is too conservative to see it.
         let mints = sqlx::query_scalar!(
             r#"
             SELECT mint AS "mint!: String" FROM (
@@ -90,7 +109,8 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
                 UNION
                 SELECT token_b_mint AS mint FROM pools
             ) AS all_mints
-            WHERE mint NOT IN (SELECT mint FROM token_metadata)
+            WHERE mint IS NOT NULL
+              AND mint NOT IN (SELECT mint FROM token_metadata)
             "#
         )
         .fetch_all(&self.pool)

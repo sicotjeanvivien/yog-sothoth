@@ -6,7 +6,7 @@
 //!   UPDATE` branch, comparing `(slot, transaction_index, event_index)` as a
 //!   tuple — out-of-order events leave the existing row untouched without
 //!   raising an error. It used to compare `last_event_at`, whose second
-//!   granularity rejected a third of all updates (migration 042).
+//!   granularity rejected a third of all updates (baseline §4).
 //! * `last_sqrt_price` / `last_swap_at` are preserved on liquidity events by
 //!   `COALESCE(EXCLUDED.x, pool_current_state.x)`, and vice versa for
 //!   `liquidity` / `last_liquidity_at` on swap events.

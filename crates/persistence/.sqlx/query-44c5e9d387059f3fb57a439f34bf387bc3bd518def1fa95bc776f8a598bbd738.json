@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT mint AS \"mint!: String\" FROM (\n                SELECT token_a_mint AS mint FROM pools\n                UNION\n                SELECT token_b_mint AS mint FROM pools\n            ) AS all_mints\n            WHERE mint IS NOT NULL\n              AND mint NOT IN (SELECT mint FROM token_metadata)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mint!: String",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "44c5e9d387059f3fb57a439f34bf387bc3bd518def1fa95bc776f8a598bbd738"
+}

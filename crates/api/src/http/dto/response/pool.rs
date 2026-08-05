@@ -170,7 +170,7 @@ pub(crate) struct PoolDetailResponse {
     pub(crate) meteora_dlmm: Option<MeteoraDlmmPropertiesResponse>,
 }
 
-/// DAMM v2-only pool properties (migration 036's satellite table).
+/// DAMM v2-only pool properties (baseline §8's satellite table).
 ///
 /// Every field is independently optional: the fee-split percents are resolved
 /// by yog-context from the on-chain account, the fee shape is decoded from the
@@ -205,7 +205,7 @@ impl From<MeteoraDammV2PoolProperties> for MeteoraDammV2PropertiesResponse {
     }
 }
 
-/// DLMM-only pool properties (migration 039's satellite table).
+/// DLMM-only pool properties (baseline §9's satellite table).
 ///
 /// Every field is optional together, not independently: all six come from one
 /// read of one `LbPair` account, so they are present for a resolved pool and

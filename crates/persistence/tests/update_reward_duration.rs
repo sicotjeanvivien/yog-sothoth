@@ -42,7 +42,7 @@ async fn update_reward_duration_inserts_and_is_idempotent(pool: PgPool) {
     // Second slot re-paced by the same transaction: a distinct emission, so a
     // distinct `event_index`. `reward_index` still says *which* slot, but it no
     // longer carries the key — `event_index` separates any two events of one
-    // transaction, whatever their kind (migration 041).
+    // transaction, whatever their kind (baseline §12).
     assert_eq!(
         repo.insert(&MeteoraDammV2UpdateRewardDurationEvent {
             reward_index: 1,

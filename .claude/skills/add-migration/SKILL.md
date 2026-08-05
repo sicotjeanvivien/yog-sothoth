@@ -34,13 +34,15 @@ binary under the **`yog_migrate`** role, and are **forward-only**.
 
 Name it `NNN_descriptive_name.sql`, where `NNN` is the **next integer** after the highest
 existing file (check `crates/persistence/migrations/` — `ls`; do not reuse or renumber).
-Open with a header comment block matching the house style (ring/voie annotations explaining
-the *why*), as in `008_update_pool_fees_events.sql`.
+The directory starts at `001_baseline.sql`, the whole schema squashed on 5 August 2026
+before the first production deploy — so the next new migration is `002_`. Open with a
+header comment block matching the house style (ring/voie annotations explaining the *why*),
+as in the baseline's own sections.
 
 ## Step 2 — Table DDL (TimescaleDB pattern)
 
 Event tables are TimescaleDB hypertables partitioned on `timestamp`. Copy the full shape
-from a recent migration (`008_update_pool_fees_events.sql` is a clean template):
+from `001_baseline.sql` §12 — every event table there is the same clean template:
 
 ```sql
 CREATE TABLE meteora_<product>_<event_kind>_events (
@@ -50,7 +52,7 @@ CREATE TABLE meteora_<product>_<event_kind>_events (
     -- … protocol-relevant columns only — NO NULL columns for incompatible
     --    fields, NO JSONB catch-all. Lossless u128 → NUMERIC(39,0).
     timestamp         TIMESTAMPTZ NOT NULL,
-    -- Position in the chain (migration 041). No DEFAULT: an insert that
+    -- Position in the chain (baseline §12). No DEFAULT: an insert that
     -- forgets one must fail, not inherit a plausible 0. Widths follow the
     -- domain type — u16 → INTEGER, u32 → BIGINT — so the write conversion
     -- is total (cf. `convert_i32_to_u16`).
@@ -121,7 +123,7 @@ nothing compared intent to reality.
 
 ## Step 4 — Cross-protocol VIEWs (only if the table feeds one)
 
-VIEWs are first defined in `001_initial_schema.sql` with `CREATE VIEW`. To add a branch you
+VIEWs are first defined in `001_baseline.sql` §14 with `CREATE VIEW`. To add a branch you
 must **redefine the whole view** in your new migration with `CREATE OR REPLACE VIEW`,
 keeping the same column list and order, appending a `UNION ALL` branch that injects the
 `protocol` literal:

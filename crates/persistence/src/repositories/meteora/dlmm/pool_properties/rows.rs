@@ -6,7 +6,7 @@ use crate::repositories::helper::{
 };
 
 /// Row shape returned by SELECTs on `meteora_dlmm_pool_properties`
-/// (migration 039). Mirrors every column of the table.
+/// (baseline §9). Mirrors every column of the table.
 ///
 /// Every column is nullable, and they are NULL **together**: all six come from
 /// one read of one `LbPair` account, so a row is either fully resolved or a
@@ -15,7 +15,7 @@ use crate::repositories::helper::{
 ///
 /// The signed widths are one step up from the on-chain types — INTEGER for a
 /// `u16`, BIGINT for a `u32` — because Postgres has no unsigned integers. See
-/// migration 039.
+/// baseline §9.
 pub(super) struct MeteoraDlmmPoolPropertiesRow {
     pub(super) pool_address: String,
     pub(super) bin_step: Option<i32>,

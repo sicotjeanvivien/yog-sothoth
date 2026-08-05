@@ -5,11 +5,11 @@
 //! not here:
 //!   - `tvl`: summed current TVL over every priceable pool (and the count of
 //!     pools that contributed — the coverage numerator), from the
-//!     `pool_current_tvl` view (migration 020). `tvl_usd` is NULL for an
+//!     `pool_current_tvl` view (baseline §15). `tvl_usd` is NULL for an
 //!     unpriceable pool, so the SUM skips it and the `FILTER` counts only the
 //!     priced ones — partial coverage surfaces what is priceable.
 //!   - `vol`: summed 24h volume and realized fees from the per-(pool, hour)
-//!     USD valuation view (migration 019), windowed to the last 24h.
+//!     USD valuation view (baseline §15), windowed to the last 24h.
 
 mod rows;
 

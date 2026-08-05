@@ -37,7 +37,7 @@ cargo test -p yog-core -- --exact <test>   # one exact test
 # Integration tests are DB-backed and #[ignore]d by default — they need a live Postgres.
 # The Postgres must run with `timescaledb.max_background_workers = 0` (see
 # docker-compose.yml): sqlx::test creates a fresh DB per test whose cagg refresh
-# policies (migrations 010–013) otherwise have the TimescaleDB job scheduler race
+# policies (baseline §13) otherwise have the TimescaleDB job scheduler race
 # the next test's migration DDL on the shared catalog ("tuple concurrently deleted").
 cargo test -p yog-persistence --features integration-tests -- --include-ignored
 
@@ -61,7 +61,7 @@ cd crates/persistence && cargo sqlx prepare
 A query-builder/ORM migration of the persistence layer (SeaQuery et al.) was evaluated and **rejected**: it builds SQL at runtime, losing the `query!` compile-time schema check, and is *worse* on the CTE/LATERAL queries that actually hurt. Pick by query shape instead:
 
 - **Simple / static** → `sqlx::query!` / `query_as!` **inline**. The default. Compile-time checked.
-- **Big but static** → prefer a **SQL VIEW** when the query is reusable or decomposable (define it in a migration; the slim `SELECT … FROM <view>` over it stays a checked `query!`). This *reduces and de-duplicates* the SQL, it doesn't just relocate it — e.g. `meteora_damm_v2_pool_hourly_activity` (migration 019) factors the per-`(pool, hour)` USD valuation shared by `history` and `pool_analytics`. If it isn't view-able, use `query_file!("…​.sql")` to move the big SQL into a tooled `.sql` file (still compile-checked).
+- **Big but static** → prefer a **SQL VIEW** when the query is reusable or decomposable (define it in a migration; the slim `SELECT … FROM <view>` over it stays a checked `query!`). This *reduces and de-duplicates* the SQL, it doesn't just relocate it — e.g. `meteora_damm_v2_pool_hourly_activity` (baseline §15) factors the per-`(pool, hour)` USD valuation shared by `history` and `pool_analytics`. If it isn't view-able, use `query_file!("…​.sql")` to move the big SQL into a tooled `.sql` file (still compile-checked).
 - **Dynamic** (shape varies from user input — `WHERE`/`ORDER BY`/search) → `QueryBuilder` (runtime, *not* macro-checked → cover with integration tests). Neither `query!`/`query_file!` (need static SQL) nor a VIEW expresses a runtime-variable shape; a VIEW can still be the base table the dynamic query reads. The lone case today is `repositories/pool/query.rs`.
 
 **Perf note:** a plain VIEW gives **no** performance gain — Postgres inlines it, same plan. Choose a VIEW for readability, never for speed. The perf tool is **materialization** (a continuous aggregate or `MATERIALIZED VIEW`), which precomputes at the cost of staleness/refresh — that's what the hourly CAs already do.
@@ -110,8 +110,7 @@ docker compose --profile full up -d --build            # + web dashboard
 
 # B. Native cargo (faster inner loop), with Postgres in Docker:
 docker compose up -d
-psql "postgresql://yog:yog@localhost:5433/yog_sothoth" -f crates/persistence/setup_roles.sql
-cargo run -p yog-persistence --bin yog-migrate
+cargo run -p yog-persistence --bin yog-migrate -- bootstrap   # roles + migrations + allowlist
 cargo run -p yog-indexer
 ```
 
