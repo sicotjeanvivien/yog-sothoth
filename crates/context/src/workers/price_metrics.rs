@@ -5,6 +5,7 @@ use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gau
 const TICK_TOTAL: &str = "yog_context_price_tick_total";
 const TICK_DURATION: &str = "yog_context_price_tick_duration_seconds";
 const KNOWN_MINTS: &str = "yog_context_price_known_mints";
+const PRICED_MINTS: &str = "yog_context_price_priced_mints";
 const INSERTED_TOTAL: &str = "yog_context_price_inserted_total";
 
 pub(crate) struct PriceWorkerMetrics;
@@ -23,6 +24,12 @@ impl PriceWorkerMetrics {
             KNOWN_MINTS,
             "Number of known mints submitted to the price source at the last tick"
         );
+        describe_gauge!(
+            PRICED_MINTS,
+            "Number of those mints the source returned a price for at the last tick. \
+             priced/known is the price coverage — the input every USD valuation \
+             downstream depends on, and the thing that silently degrades"
+        );
         describe_counter!(
             INSERTED_TOTAL,
             "Token prices successfully inserted (cumulative count of rows)"
@@ -36,6 +43,13 @@ impl PriceWorkerMetrics {
 
     pub(crate) fn set_known_mints(count: usize) {
         gauge!(KNOWN_MINTS).set(count as f64);
+    }
+
+    /// Set alongside [`Self::set_known_mints`] on every tick that reached the
+    /// source, including the zero case — a gauge left at its previous value
+    /// would report yesterday's coverage as today's.
+    pub(crate) fn set_priced_mints(count: usize) {
+        gauge!(PRICED_MINTS).set(count as f64);
     }
 
     pub(crate) fn record_inserted(count: usize) {

@@ -229,3 +229,59 @@ fn the_from_impl_routes_each_protocol_to_its_own_block() {
     assert!(none.meteora_dlmm.is_none());
     assert!(none.meteora_damm_v2.is_none());
 }
+
+// ── The coverage counters must reach the wire ────────────────────────────────
+
+/// Found in self-review: nothing asserted that the two coverage counters
+/// survive serialisation. Every service test builds analytics with
+/// `..PoolAnalytics::empty()`, so the fields were always 0 and never inspected
+/// in a JSON body — a rename or a missed wiring in `PoolResponse::new` would
+/// have shipped silently, and the whole point of this pair is to be *visible*.
+#[test]
+fn pool_response_serialises_the_coverage_counters_in_camel_case() {
+    let analytics = PoolAnalytics {
+        tvl_usd: None,
+        volume_24h_usd: Some(Decimal::new(1_400_000, 0)),
+        fees_24h_usd: Some(Decimal::new(3_500, 0)),
+        protocol_fees_24h_usd: Some(Decimal::new(700, 0)),
+        swap_buckets_24h: 24,
+        swap_buckets_priced_24h: 14,
+    };
+
+    let resp = PoolResponse::new(
+        make_pool(pk(1), pk(2), pk(3)),
+        EmbeddedTokenResponse::from_sources(Some(pk(2)), None, None),
+        EmbeddedTokenResponse::from_sources(Some(pk(3)), None, None),
+        analytics,
+        Vec::new(),
+    );
+    let json = serde_json::to_value(&resp).expect("PoolResponse must serialise");
+
+    assert_eq!(json["swapBuckets24h"], 24);
+    assert_eq!(json["swapBucketsPriced24h"], 14);
+    // The value it qualifies is a sub-total, and stays present: the pair is what
+    // says so, not the absence of a number. Pinned as a STRING — rust_decimal
+    // serialises decimals that way by default, which is what the web's
+    // `BigDecimal` zod type expects and what preserves the trailing digits the
+    // SQL produces. (The struct doc claimed "JSON numbers"; it was wrong.)
+    assert_eq!(json["volume24hUsd"], serde_json::json!("1400000"));
+}
+
+/// A window covered end to end must be distinguishable from a quiet pool: the
+/// first reports `n / n`, the second `0 / 0`. Collapsing both to "no hint" is
+/// how a missing figure gets read as a complete one.
+#[test]
+fn a_quiet_pool_reports_zero_buckets_not_full_coverage() {
+    let resp = PoolResponse::new(
+        make_pool(pk(1), pk(2), pk(3)),
+        EmbeddedTokenResponse::from_sources(Some(pk(2)), None, None),
+        EmbeddedTokenResponse::from_sources(Some(pk(3)), None, None),
+        PoolAnalytics::empty(),
+        Vec::new(),
+    );
+    let json = serde_json::to_value(&resp).expect("PoolResponse must serialise");
+
+    assert_eq!(json["swapBuckets24h"], 0);
+    assert_eq!(json["swapBucketsPriced24h"], 0);
+    assert_eq!(json["volume24hUsd"], serde_json::Value::Null);
+}

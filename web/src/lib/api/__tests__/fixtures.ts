@@ -43,6 +43,8 @@ export function validPool() {
     protocolFees24hUsd: "23.982486757390302832260330",
     lpFees24hUsd: "95.929947029561211329041320",
     effectiveFeeBps: "25",
+    swapBuckets24h: 24,
+    swapBucketsPriced24h: 24,
     signals24h: [
       {
         severity: "warning",

@@ -3,8 +3,9 @@
  *
  * Visually aligned with the pool-detail `KpiCard`, but carries an optional
  * `hint` sub-line used for honest context: the TVL coverage ("348 / 359
- * priced") and the pool discovery pulse ("+52 discovered (24h)"). Cards
- * without a hint (Volume, Fees) simply omit it.
+ * priced"), the volume coverage ("767 / 1246 pool-hours priced") and the pool
+ * discovery pulse ("+52 discovered (24h)"). Cards without a hint (Fees, which
+ * shares the volume's coverage exactly) simply omit it.
  *
  * `info` adds an ⓘ popover next to the label — the metric's definition
  * on demand. Stays a Server Component; the popover is the client island.
@@ -33,7 +34,7 @@ export async function StatCard({
 }: {
   label: string;
   value: string;
-  hint?: string;
+  hint?: string | undefined;
   /** Definition of the metric, shown in an ⓘ popover next to the label. */
   info?: string;
 }) {

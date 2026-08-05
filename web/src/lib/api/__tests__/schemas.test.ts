@@ -54,6 +54,8 @@ function validPool() {
     "protocolFees24hUsd": "23.982486757390302832260330",
     "lpFees24hUsd": "95.929947029561211329041320",
     "effectiveFeeBps": "25",
+    "swapBuckets24h": 24,
+    "swapBucketsPriced24h": 24,
     "signals24h": [
       {
         "severity": "warning",
@@ -404,6 +406,8 @@ describe("StatsSchema", () => {
     poolsPriced: 348,
     volume24hUsd: "508193.05",
     fees24hUsd: "391.03",
+    swapBuckets24h: 1246,
+    swapBucketsPriced24h: 767,
     poolsObserved: 359,
     poolsDiscovered24h: 52,
   });
@@ -426,6 +430,16 @@ describe("StatsSchema", () => {
     expect(parsed.totalTvlUsd).toBeNull();
     expect(parsed.volume24hUsd).toBeNull();
     expect(parsed.poolsPriced).toBe(0);
+  });
+
+  it("keeps the volume coverage counters apart from the value", () => {
+    // The payload the counters exist for: a non-null volume that covers only
+    // 767 of the 1246 hours that traded. Nothing about the value itself says
+    // so — the pair does.
+    const parsed = StatsSchema.parse(validStats());
+    expect(parsed.volume24hUsd).toBe("508193.05");
+    expect(parsed.swapBuckets24h).toBe(1246);
+    expect(parsed.swapBucketsPriced24h).toBe(767);
   });
 
   it("rejects a USD aggregate sent as a JS number (precision contract)", () => {

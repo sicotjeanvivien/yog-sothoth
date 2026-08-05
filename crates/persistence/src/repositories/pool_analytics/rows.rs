@@ -20,6 +20,10 @@ pub(super) struct PoolAnalyticsRow {
     pub(super) volume_24h_usd: Option<BigDecimal>,
     pub(super) fees_24h_usd: Option<BigDecimal>,
     pub(super) protocol_fees_24h_usd: Option<BigDecimal>,
+    /// Coverage of the three sums above, COALESCEd to 0 by the query — a
+    /// missing pool means "no buckets", never "unknown".
+    pub(super) swap_buckets_24h: i64,
+    pub(super) swap_buckets_priced_24h: i64,
 }
 
 impl TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics) {
@@ -33,6 +37,8 @@ impl TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics) {
             volume_24h_usd: usd(row.volume_24h_usd, "volume_24h_usd")?,
             fees_24h_usd: usd(row.fees_24h_usd, "fees_24h_usd")?,
             protocol_fees_24h_usd: usd(row.protocol_fees_24h_usd, "protocol_fees_24h_usd")?,
+            swap_buckets_24h: row.swap_buckets_24h,
+            swap_buckets_priced_24h: row.swap_buckets_priced_24h,
         };
         Ok((pool_address, analytics))
     }

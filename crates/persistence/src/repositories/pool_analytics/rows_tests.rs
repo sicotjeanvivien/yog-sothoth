@@ -22,6 +22,8 @@ fn valid_row() -> PoolAnalyticsRow {
         volume_24h_usd: Some(BigDecimal::from_str("789.01").unwrap()),
         fees_24h_usd: Some(BigDecimal::from_str("12.34").unwrap()),
         protocol_fees_24h_usd: Some(BigDecimal::from_str("2.46").unwrap()),
+        swap_buckets_24h: 24,
+        swap_buckets_priced_24h: 24,
     }
 }
 
@@ -49,6 +51,8 @@ fn try_from_valid_row_returns_pair_with_all_fields_mapped() {
         analytics.protocol_fees_24h_usd,
         Some(Decimal::from_str("2.46").unwrap())
     );
+    assert_eq!(analytics.swap_buckets_24h, 24);
+    assert_eq!(analytics.swap_buckets_priced_24h, 24);
 }
 
 #[test]
@@ -58,6 +62,8 @@ fn try_from_with_none_metrics_returns_pair_with_none_analytics() {
     let row = PoolAnalyticsRow {
         tvl_usd: None,
         volume_24h_usd: None,
+        swap_buckets_24h: 0,
+        swap_buckets_priced_24h: 0,
         ..valid_row()
     };
 
@@ -66,6 +72,28 @@ fn try_from_with_none_metrics_returns_pair_with_none_analytics() {
 
     assert_eq!(analytics.tvl_usd, None);
     assert_eq!(analytics.volume_24h_usd, None);
+    assert_eq!(analytics.swap_buckets_24h, 0);
+}
+
+#[test]
+fn try_from_partial_coverage_carries_both_counters() {
+    // The case the counters exist for: a window that traded for 24 hours but
+    // could only be valued for 14 of them. The sum is a sub-total — the pair
+    // of counters is the only thing that says so.
+    let row = PoolAnalyticsRow {
+        swap_buckets_24h: 24,
+        swap_buckets_priced_24h: 14,
+        ..valid_row()
+    };
+
+    let (_, analytics) = <(Pubkey, PoolAnalytics)>::try_from(row).expect("should convert");
+
+    assert!(
+        analytics.volume_24h_usd.is_some(),
+        "a partially covered window still surfaces its sub-total"
+    );
+    assert_eq!(analytics.swap_buckets_24h, 24);
+    assert_eq!(analytics.swap_buckets_priced_24h, 14);
 }
 
 #[test]

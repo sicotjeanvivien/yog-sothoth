@@ -4,8 +4,12 @@
  * Four scalar cards, stacked on mobile, from `GET /api/stats`:
  *
  *   - Total TVL   (+ coverage hint "N / M priced")
- *   - Volume 24h  (realized, trade-time valued)
- *   - Fees 24h    (realized trading fee revenue) — the differentiator
+ *   - Volume 24h  (realized, trade-time valued; + coverage hint
+ *                 "N / M hours priced" — the sum skips the hours it cannot
+ *                 value, so the bare figure can be a sub-total)
+ *   - Fees 24h    (realized trading fee revenue) — the differentiator. Shares
+ *                 the volume's coverage exactly (one valuation), so it carries
+ *                 no second hint; its ⓘ says so instead.
  *   - Pools       (observed; + discovery hint "+K discovered (24h)")
  *
  * USD values render `—` when null (nothing priceable / no activity in
@@ -40,6 +44,14 @@ export async function OverviewStats({ stats }: { stats: StatsResponse }) {
         <StatCard
           label={t("volume24h")}
           value={formatUsdCompact(stats.volume24hUsd)}
+          hint={
+            stats.swapBuckets24h > 0
+              ? t("bucketCoverage", {
+                priced: stats.swapBucketsPriced24h,
+                total: stats.swapBuckets24h,
+              })
+              : undefined
+          }
           info={t("info.volume24h")}
         />
         <StatCard

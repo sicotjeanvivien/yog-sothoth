@@ -93,6 +93,10 @@ impl PriceWorker {
 
         if mints.is_empty() {
             debug!("price worker: no known mints yet — sleeping");
+            // Both gauges move together or the ratio the README tells you to
+            // alert on (`priced / known`) divides a stale numerator by 0 and
+            // reads +Inf on a cold start.
+            PriceWorkerMetrics::set_priced_mints(0);
             PriceWorkerMetrics::record_tick("no_work", start.elapsed().as_secs_f64());
             return;
         }
@@ -103,13 +107,28 @@ impl PriceWorker {
             Ok(fetched) => fetched,
             Err(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
+                // Third early return, same rule as the other two: the numerator
+                // must never outlive the denominator it was measured against.
+                // Unreachable with the current Jupiter client (it absorbs
+                // per-chunk failures and returns Ok(partial)), which is exactly
+                // why it would rot silently in the next PriceSource.
+                PriceWorkerMetrics::set_priced_mints(0);
                 PriceWorkerMetrics::record_tick("source_hard_error", start.elapsed().as_secs_f64());
                 return;
             }
         };
 
+        // Coverage of this tick: how many of the mints we asked for came back
+        // with a price. Set before the empty check so a source that returns
+        // nothing reports 0 rather than leaving the gauge on its last value.
+        PriceWorkerMetrics::set_priced_mints(fetched.len());
+
         if fetched.is_empty() {
             debug!("price worker: no prices to insert");
+            // `no_prices` was declared in the outcome label set from the start
+            // but never emitted — a tick that priced nothing looked, in the
+            // metrics, exactly like a tick that never happened.
+            PriceWorkerMetrics::record_tick("no_prices", start.elapsed().as_secs_f64());
             return;
         }
 

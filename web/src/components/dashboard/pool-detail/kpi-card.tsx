@@ -28,13 +28,22 @@ const LABEL_CLASS =
 const VALUE_COMPACT_CLASS =
   "font-display text-[21px] text-right font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[24px]";
 
+const HINT_CLASS = "mt-1 text-right text-[13px] leading-[1.4] text-slate-500";
+
 export async function KpiCard({
   label,
   valueCompact,
+  hint,
   info,
 }: {
   label: string;
   valueCompact: string;
+  /**
+   * Optional context line under the value — same slot and styling as the
+   * Overview's `StatCard`, used for the same purpose: honest coverage
+   * ("14 / 24 hours priced"). Cards without one simply omit it.
+   */
+  hint?: string | undefined;
   /** Definition of the metric, shown in an ⓘ popover next to the label. */
   info?: string;
 }) {
@@ -51,6 +60,7 @@ export async function KpiCard({
         )}
       </div>
       <p className={VALUE_COMPACT_CLASS}>{valueCompact}</p>
+      {hint ? <p className={HINT_CLASS}>{hint}</p> : null}
     </div>
   );
 }

@@ -40,3 +40,10 @@ metrics-exporter-prometheus = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
 async-trait = { workspace = true }
+
+[dev-dependencies]
+# `DebuggingRecorder` + `with_local_recorder`: lets a test assert on the price
+# worker's coverage gauge and tick outcomes. Thread-local, so it stays safe
+# under the parallel test harness. Same dev-only dependency as yog-indexer —
+# the `debugging` feature is not free, but none of it reaches a binary.
+metrics-util = { workspace = true, features = ["debugging"] }

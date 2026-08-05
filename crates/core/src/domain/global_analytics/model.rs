@@ -31,10 +31,18 @@ use rust_decimal::Decimal;
 ///     coverage from the two.
 ///   - `volume_24h_usd` / `fees_24h_usd` are the summed realized volume and
 ///     trading fee over the last 24h, valued at trade-time prices.
+///   - `swap_buckets_24h` / `swap_buckets_priced_24h` are the coverage of those
+///     two, in the same numerator/denominator spirit as `pools_priced`: how
+///     many (pool, hour) buckets had swaps, and how many of them the valuation
+///     covered. Without them a partially covered sum reads exactly like a
+///     complete one — see [`crate::domain::PoolAnalytics`] for the full
+///     rationale.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalAnalytics {
     pub total_tvl_usd: Option<Decimal>,
     pub pools_priced: i64,
     pub volume_24h_usd: Option<Decimal>,
     pub fees_24h_usd: Option<Decimal>,
+    pub swap_buckets_24h: i64,
+    pub swap_buckets_priced_24h: i64,
 }

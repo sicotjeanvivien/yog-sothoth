@@ -171,8 +171,36 @@ Documented on the affected types and enforced at construction time:
 - **Four fee components separated** — `claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee` — so detectors can distinguish LP yield from protocol revenue.
 - **Lossless `u128` in DB** — `next_sqrt_price` (Q64.64) and `liquidity_delta` are stored as `NUMERIC(39, 0)`; conversion happens in `persistence`, never here.
 - **Off-chain decimal prices** — `TokenPrice::price_usd` is a `rust_decimal::Decimal` (infra-neutral, no `sqlx` leak).
+- **Integer signedness follows whoever owns the number** — on-chain quantities are unsigned (`u64` / `u128`), database-produced counts are `i64`. Decided 5 August 2026; the reasoning and the counter-argument are below.
 - **Every event carries its position in the chain** — `slot`, `event_index` and `transaction_index` sit on all 19 DAMM v2 event types, assembled once per transaction as an `EventPosition` (see `domain/event_position.rs`) and threaded through the translators. `event_index` numbers the transaction's Anchor self-CPI payloads *including the ones we don't decode*, which is what lets `(signature, event_index, timestamp)` be a stable unique key: numbering only recognised events would renumber stored rows the day a new discriminator is implemented. The contract that guarantees it is the filter in `extract_anchor_event_cpis` — widen it freely, never narrow it (its doc-comment says why). `transaction_index` is `None` on the `getTransaction` path and exists for the gRPC migration.
 - **An insert reports what it did** — event repositories return `InsertOutcome::{Inserted, Skipped}`, not `()`. `ON CONFLICT DO NOTHING` makes "no error" ambiguous, and discarding the difference is how a too-narrow unique key silently dropped 3–8 % of a pool's swaps until the August 2026 audit.
+
+### Integer signedness: why counts are `i64`
+
+On-chain quantities are **unsigned** — `amount_a: u64`, `slot: u64`,
+`liquidity_delta: u128` — because the *chain* defines them that way. Carrying
+them as `i64` would be a type-level lie, which is why `persistence` converts
+through `convert_i64_to_u64` and raises `RepositoryError::Integrity` if a stored
+value ever comes back negative.
+
+Counts produced by the database are **`i64`**: `pools_priced`, `observed`,
+`pool_count`, `swap_buckets_24h`, `swap_count`. They have no upstream unsigned
+truth to preserve — they are born from `COUNT(*)`, which is a `BIGINT`, and
+Postgres has no unsigned integer type at all. `u64` would not make them *truer*,
+only narrower. Database identities (`id: i64`, from `BIGSERIAL`) follow for the
+same reason.
+
+Row types in `persistence` are `i64` regardless, and that part is not a choice:
+there is no `Decode<Postgres> for u64`.
+
+⚠️ **The counter-argument is real and was weighed.** An `i64` count arguably
+lets the storage type define the domain, which is what the infra-neutrality rule
+above forbids in spirit. It was decided against on **5 August 2026** (audit
+PR #106): no known defect would have been prevented, the values are bounded by
+row counts far below `i64::MAX`, and the "never negative" invariant is already
+enforced where it can actually be violated — at the wire boundary, by the web's
+`z.number().int().nonnegative()`. Switching would be all nine counters or none;
+anything partial puts two conventions in one struct.
 
 ## Tests
 

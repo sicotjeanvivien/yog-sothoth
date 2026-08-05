@@ -16,17 +16,15 @@ use rust_decimal::Decimal;
 
 /// USD-denominated metrics for a single pool.
 ///
-/// All fields are `Option` because the inputs may not be fully
+/// The USD fields are `Option` because the inputs may not be fully
 /// available:
 ///
 ///   - `tvl_usd` is `None` if the pool has no current state yet,
 ///     or if either token has no known price.
-///   - `volume_24h_usd` is `None` if the pool has no swaps in the
-///     last 24h whose tokens had a known price at the time of the
-///     swap. A partial volume (some swaps priced, some not) is
-///     returned as `Some(sum_of_priced_swaps)` — we surface what
-///     we have rather than collapse the value because of partial
-///     coverage.
+///   - `volume_24h_usd` is `None` only when *no* hour of the window
+///     could be valued at all. A partially covered window is returned
+///     as `Some(sum_of_valued_hours)` — we surface what we have rather
+///     than collapse the value.
 ///   - `fees_24h_usd` / `protocol_fees_24h_usd` are the realized
 ///     trading fee and Meteora's share of it over the same 24h
 ///     window, valued at trade-time prices exactly like volume.
@@ -34,12 +32,34 @@ use rust_decimal::Decimal;
 ///     is `fees_24h_usd - protocol_fees_24h_usd`; the effective fee
 ///     rate is `fees_24h_usd / volume_24h_usd` — both left to the
 ///     presentation layer to derive.
+///
+/// # Why the two bucket counters exist
+///
+/// Surfacing a partial sum is defensible; surfacing it *silently* is
+/// not. `SUM` skips the hours it cannot value, so a window covered at
+/// 58 % returned a number indistinguishable from a complete one — a
+/// sub-total presented as a total. `swap_buckets_24h` and
+/// `swap_buckets_priced_24h` are that missing signal, the same
+/// numerator/denominator pattern as `GlobalAnalytics::pools_priced`:
+/// hours with at least one swap, and how many of them the USD
+/// valuation actually covered. They apply to all three USD fields
+/// above at once — the three share a valuation, so an hour lost to one
+/// is lost to all.
+///
+/// The denominator counts hours *with swaps*, not hours with any
+/// activity: an hour holding only a liquidity event is not a volume
+/// coverage failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolAnalytics {
     pub tvl_usd: Option<Decimal>,
     pub volume_24h_usd: Option<Decimal>,
     pub fees_24h_usd: Option<Decimal>,
     pub protocol_fees_24h_usd: Option<Decimal>,
+    /// Hours of the 24h window that had at least one swap.
+    pub swap_buckets_24h: i64,
+    /// …of which the USD valuation covered. Never greater than
+    /// `swap_buckets_24h`; equal to it means full coverage.
+    pub swap_buckets_priced_24h: i64,
 }
 
 impl PoolAnalytics {
@@ -52,6 +72,8 @@ impl PoolAnalytics {
             volume_24h_usd: None,
             fees_24h_usd: None,
             protocol_fees_24h_usd: None,
+            swap_buckets_24h: 0,
+            swap_buckets_priced_24h: 0,
         }
     }
 }
@@ -66,6 +88,11 @@ impl PoolAnalytics {
 /// but not another, and because USD valuation needs a known price for the
 /// tokens involved at that time — `None` means "no priced activity of this kind
 /// in this bucket", surfaced rather than coerced to zero.
+///
+/// A bucket with a non-null `swap_count` and a null `volume_usd` is therefore
+/// meaningful and expected: the hour traded and could not be valued. It is the
+/// per-bucket form of the coverage counters on [`PoolAnalytics`], which is why
+/// this type needs none of its own — a caller derives coverage by counting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolHistoryBucket {
     /// Start of the hourly bucket (UTC).

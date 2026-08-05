@@ -58,12 +58,25 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
             -- 24h volume + realized fees, rolled up from the shared
             -- per-(pool, hour) USD valuation view (baseline §15) — same
             -- trade-time valuation as before, no longer duplicated here.
+            --
+            -- The two counters next to the sums are the coverage `SUM` hides:
+            -- it skips the buckets it cannot value, so a partially covered
+            -- window returned a sub-total that read exactly like a total.
+            -- The denominator is `swap_count IS NOT NULL`, NOT `COUNT(*)` —
+            -- the view unions the buckets of all four caggs, and a bucket
+            -- holding only a liquidity event is not a *volume* coverage
+            -- failure.
             volume_per_pool AS (
                 SELECT
                     a.pool_address,
                     SUM(a.volume_usd)        AS volume_24h_usd,
                     SUM(a.fees_usd)          AS fees_24h_usd,
-                    SUM(a.protocol_fees_usd) AS protocol_fees_24h_usd
+                    SUM(a.protocol_fees_usd) AS protocol_fees_24h_usd,
+                    COUNT(*) FILTER (WHERE a.swap_count IS NOT NULL)
+                        AS swap_buckets_24h,
+                    COUNT(*) FILTER (WHERE a.swap_count IS NOT NULL
+                                       AND a.volume_usd IS NOT NULL)
+                        AS swap_buckets_priced_24h
                 FROM meteora_damm_v2_pool_hourly_activity a
                 WHERE a.pool_address = ANY($1::TEXT[])
                   AND a.bucket > NOW() - INTERVAL '24 hours'
@@ -74,7 +87,11 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 t.tvl_usd      AS "tvl_usd?",
                 v.volume_24h_usd AS "volume_24h_usd?",
                 v.fees_24h_usd AS "fees_24h_usd?",
-                v.protocol_fees_24h_usd AS "protocol_fees_24h_usd?"
+                v.protocol_fees_24h_usd AS "protocol_fees_24h_usd?",
+                -- A pool with no activity at all misses the LEFT JOIN entirely:
+                -- zero buckets, zero priced — not "unknown coverage".
+                COALESCE(v.swap_buckets_24h, 0)        AS "swap_buckets_24h!",
+                COALESCE(v.swap_buckets_priced_24h, 0) AS "swap_buckets_priced_24h!"
             FROM requested r
             LEFT JOIN tvl_per_pool t    ON t.pool_address = r.pool_address
             LEFT JOIN volume_per_pool v ON v.pool_address = r.pool_address
@@ -101,6 +118,13 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         // `meteora_damm_v2_pool_hourly_activity` VIEW (baseline §15) — this
         // query just slices it to one pool and window. The macro still verifies
         // these columns against the view.
+        //
+        // Behaviour change in migration 002: a pool whose mints are not
+        // resolved yet used to yield an EMPTY series (the view INNER-joined
+        // `token_metadata`, so its buckets did not exist). It now yields its
+        // swap buckets with a non-null `swap_count` and null USD columns —
+        // "it traded, we could not price it" instead of "nothing happened".
+        // Every USD field was already nullable, so the wire shape is unchanged.
         let rows = sqlx::query_as!(
             PoolHistoryRow,
             r#"

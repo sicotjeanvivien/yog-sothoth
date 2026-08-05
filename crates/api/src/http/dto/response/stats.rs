@@ -21,7 +21,12 @@ use crate::application::StatsAggregate;
 ///   - `total_tvl_usd` + `pools_priced`: summed current TVL and how many pools
 ///     it covers (the coverage numerator; denominator is `pools_observed`).
 ///   - `volume_24h_usd` / `fees_24h_usd`: summed realized volume and trading
-///     fee over the last 24h, trade-time valued.
+///     fee over the last 24h, trade-time valued — with
+///     `swap_buckets_priced_24h` / `swap_buckets_24h` as *their* coverage, the
+///     same numerator/denominator pattern as the TVL pair above: (pool, hour)
+///     buckets that had swaps, and how many of them could be valued. The sum
+///     skips what it cannot value, so without this pair a partially covered
+///     total is indistinguishable from a complete one.
 ///   - `pools_observed`: every pool ever seen. `pools_discovered_24h`: those
 ///     first seen in the last 24h (the discovery pulse).
 #[derive(Debug, Serialize)]
@@ -31,6 +36,8 @@ pub(crate) struct StatsResponse {
     pools_priced: i64,
     volume_24h_usd: Option<Decimal>,
     fees_24h_usd: Option<Decimal>,
+    swap_buckets_24h: i64,
+    swap_buckets_priced_24h: i64,
     pools_observed: i64,
     pools_discovered_24h: i64,
 }
@@ -42,8 +49,14 @@ impl From<StatsAggregate> for StatsResponse {
             pools_priced: agg.analytics.pools_priced,
             volume_24h_usd: agg.analytics.volume_24h_usd,
             fees_24h_usd: agg.analytics.fees_24h_usd,
+            swap_buckets_24h: agg.analytics.swap_buckets_24h,
+            swap_buckets_priced_24h: agg.analytics.swap_buckets_priced_24h,
             pools_observed: agg.counts.observed,
             pools_discovered_24h: agg.counts.discovered_24h,
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/stats_tests.rs"]
+mod tests;

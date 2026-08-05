@@ -10,6 +10,8 @@ pub(super) struct GlobalAnalyticsRow {
     pub(super) pools_priced: i64,
     pub(super) volume_24h_usd: Option<BigDecimal>,
     pub(super) fees_24h_usd: Option<BigDecimal>,
+    pub(super) swap_buckets_24h: i64,
+    pub(super) swap_buckets_priced_24h: i64,
 }
 
 impl TryFrom<GlobalAnalyticsRow> for GlobalAnalytics {
@@ -23,6 +25,9 @@ impl TryFrom<GlobalAnalyticsRow> for GlobalAnalytics {
             pools_priced: row.pools_priced,
             volume_24h_usd: usd(row.volume_24h_usd, "volume_24h_usd")?,
             fees_24h_usd: usd(row.fees_24h_usd, "fees_24h_usd")?,
+            // COUNT never yields NULL, and the CTE always returns its one row.
+            swap_buckets_24h: row.swap_buckets_24h,
+            swap_buckets_priced_24h: row.swap_buckets_priced_24h,
         })
     }
 }
