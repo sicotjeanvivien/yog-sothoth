@@ -174,7 +174,11 @@ async fn seed_watched_pools() -> Result<()> {
             "  will be subscribed at indexer start"
         );
     }
-    tracing::warn!(
+    // INFO, not WARN. This fires on every seed, with no condition detected —
+    // and the pool shipped by default is SOL-USDC, the one pick whose rationale
+    // does not decay, so it would cry loudest where the risk is lowest. An
+    // unconditional WARN is noise, and noise is how a real one gets ignored.
+    tracing::info!(
         "review the selection before starting the indexer: a pool that has gone \
          quiet subscribes fine, logs nothing abnormal, and collects nothing"
     );
