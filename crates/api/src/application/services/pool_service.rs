@@ -256,6 +256,7 @@ impl PoolService {
         Ok(Some(EnrichedPoolDetail {
             pool: self.enrich(pool, analytics, signals).await?,
             properties,
+            evaluated_at: Utc::now(),
         }))
     }
 

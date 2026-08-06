@@ -114,6 +114,7 @@ fn damm_v2_properties(addr: solana_pubkey::Pubkey) -> PoolProperties {
         referral_fee_percent: None,
         base_fee_kind: Some("constant".to_string()),
         has_dynamic_fee: Some(false),
+        fee_scheduler: None,
     })
 }
 

@@ -6,7 +6,9 @@ use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 use crate::http::dto::EmbeddedTokenResponse;
 use crate::testing::{make_pool, make_signal_record, pk};
 use rust_decimal::Decimal;
-use yog_core::domain::{MeteoraDlmmPoolProperties, PoolAnalytics, PoolProperties};
+use yog_core::domain::{
+    MeteoraDammV2PoolProperties, MeteoraDlmmPoolProperties, PoolAnalytics, PoolProperties,
+};
 
 #[test]
 fn effective_fee_bps_is_fees_over_volume_in_bps() {
@@ -130,6 +132,8 @@ fn pool_detail_nests_damm_v2_properties_under_their_protocol() {
         referral_fee_percent: Some(20),
         base_fee_kind: Some("constant".to_string()),
         has_dynamic_fee: Some(false),
+        current_fee_bps: None,
+        fee_scheduler_expired: None,
     }));
 
     let block = json
@@ -172,6 +176,8 @@ fn the_two_protocol_blocks_are_mutually_exclusive() {
         referral_fee_percent: Some(20),
         base_fee_kind: Some("constant".to_string()),
         has_dynamic_fee: Some(false),
+        current_fee_bps: None,
+        fee_scheduler_expired: None,
     }));
     assert!(damm.get("meteoraDammV2").is_some());
     assert!(damm.get("meteoraDlmm").is_none());
@@ -218,6 +224,7 @@ fn the_from_impl_routes_each_protocol_to_its_own_block() {
             max_volatility_accumulator: Some(100_000),
             protocol_share: Some(1_000),
         })),
+        evaluated_at: chrono::Utc::now(),
     });
     assert!(dlmm.meteora_dlmm.is_some(), "DLMM must reach its own block");
     assert!(dlmm.meteora_damm_v2.is_none());
@@ -225,6 +232,7 @@ fn the_from_impl_routes_each_protocol_to_its_own_block() {
     let none = PoolDetailResponse::from(EnrichedPoolDetail {
         pool: enriched_pool(),
         properties: None,
+        evaluated_at: chrono::Utc::now(),
     });
     assert!(none.meteora_dlmm.is_none());
     assert!(none.meteora_damm_v2.is_none());
@@ -284,4 +292,97 @@ fn a_quiet_pool_reports_zero_buckets_not_full_coverage() {
     assert_eq!(json["swapBuckets24h"], 0);
     assert_eq!(json["swapBucketsPriced24h"], 0);
     assert_eq!(json["volume24hUsd"], serde_json::Value::Null);
+}
+
+// ── The current fee of a scheduler pool ──────────────────────────────
+
+/// `28BDU1…`'s real curve, from the account fixtures: cliff 5000 bps decaying
+/// linearly to 400 over 144 periods of 600 s, activated 2026-07-27.
+fn scheduler_properties() -> MeteoraDammV2PoolProperties {
+    MeteoraDammV2PoolProperties {
+        pool_address: pk(1),
+        protocol_fee_percent: Some(20),
+        referral_fee_percent: Some(20),
+        base_fee_kind: Some("scheduler_linear".to_string()),
+        has_dynamic_fee: Some(true),
+        fee_scheduler: Some(yog_core::amm::damm_v2::FeeSchedulerParams {
+            cliff_fee_numerator: 500_000_000,
+            number_of_period: 144,
+            period_frequency: 600,
+            reduction_factor: 3_194_444,
+            activation_point: 1_785_180_416,
+            activation_type: 1,
+            kind: yog_core::amm::damm_v2::BaseFeeKind::SchedulerLinear,
+        }),
+    }
+}
+
+fn at(secs: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::TimeZone::timestamp_opt(&chrono::Utc, secs, 0).unwrap()
+}
+
+/// The measurement that opened ticket 07, reproduced end to end.
+///
+/// This pool's scheduler expired on 2026-07-28. A trader pays the 400 bps floor;
+/// `feeBps` still publishes the 5000 bps genesis tier, a factor of 12.5. The
+/// response must carry both — the tier for the contract `feeBps` has always had,
+/// and the fee actually in force next to it.
+#[test]
+fn an_expired_scheduler_reports_its_floor_beside_the_genesis_tier() {
+    let expired = at(1_785_180_416 + 144 * 600 + 86_400);
+    let r = MeteoraDammV2PropertiesResponse::build(scheduler_properties(), expired);
+
+    // 500_000_000 − 144 × 3_194_444 = 40_000_064 → 400.00064 bps. Asserted to
+    // the digit rather than rounded: the point of computing the curve instead of
+    // approximating it is that the last digits are the chain's, not ours.
+    assert_eq!(
+        r.current_fee_bps,
+        Some(Decimal::new(40_000_064, 5)),
+        "the floor is ~400 bps, not the 5000 bps cliff"
+    );
+    assert_eq!(r.fee_scheduler_expired, Some(true));
+}
+
+#[test]
+fn a_live_scheduler_reports_a_fee_between_its_cliff_and_its_floor() {
+    let mid = at(1_785_180_416 + 72 * 600);
+    let r = MeteoraDammV2PropertiesResponse::build(scheduler_properties(), mid);
+
+    let fee = r.current_fee_bps.expect("a live curve has a current fee");
+    assert!(
+        fee < Decimal::new(5000, 0) && fee > Decimal::new(400, 0),
+        "expected a fee strictly inside (400, 5000), got {fee}"
+    );
+    assert_eq!(r.fee_scheduler_expired, Some(false));
+}
+
+/// A slot-activated curve is not evaluated — `network_status` holds a slot but
+/// this service does not read it, and no captured mainnet account uses slot
+/// activation. `None` says "not established"; it must never fall back to the
+/// cliff, which is the number this whole change exists to stop presenting as
+/// current.
+#[test]
+fn a_slot_activated_scheduler_reports_no_current_fee_rather_than_its_cliff() {
+    let mut props = scheduler_properties();
+    props.fee_scheduler = props.fee_scheduler.map(|mut s| {
+        s.activation_type = 0;
+        s
+    });
+    let r = MeteoraDammV2PropertiesResponse::build(props, at(1_785_180_416 + 86_400));
+
+    assert_eq!(r.current_fee_bps, None);
+    assert_eq!(r.fee_scheduler_expired, None);
+}
+
+/// A constant fee has no curve, so there is nothing to report — `feeBps` alone
+/// already tells the whole truth about it.
+#[test]
+fn a_constant_fee_reports_no_current_fee() {
+    let mut props = scheduler_properties();
+    props.base_fee_kind = Some("constant".to_string());
+    props.fee_scheduler = None;
+    let r = MeteoraDammV2PropertiesResponse::build(props, at(1_785_180_416));
+
+    assert_eq!(r.current_fee_bps, None);
+    assert_eq!(r.fee_scheduler_expired, None);
 }

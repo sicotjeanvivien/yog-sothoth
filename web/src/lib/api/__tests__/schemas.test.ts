@@ -160,6 +160,8 @@ describe("PoolSchema", () => {
         referralFeePercent: 20,
         baseFeeKind: null,
         hasDynamicFee: null,
+        currentFeeBps: null,
+        feeSchedulerExpired: null,
       },
     });
     expect(parsed.meteoraDammV2?.baseFeeKind).toBeNull();
@@ -174,6 +176,8 @@ describe("PoolSchema", () => {
         referralFeePercent: null,
         baseFeeKind: "constant",
         hasDynamicFee: false,
+        currentFeeBps: null,
+        feeSchedulerExpired: null,
       },
     });
     expect(parsed.meteoraDammV2?.protocolFeePercent).toBeNull();
@@ -189,6 +193,8 @@ describe("PoolSchema", () => {
           referralFeePercent: 0,
           baseFeeKind: "constant",
           hasDynamicFee: false,
+          currentFeeBps: null,
+          feeSchedulerExpired: null,
         },
       }),
     ).toThrow();

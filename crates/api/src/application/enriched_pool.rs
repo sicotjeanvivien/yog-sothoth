@@ -6,6 +6,7 @@
 //! is free of any HTTP/wire concern. The HTTP layer maps it to its
 //! own `PoolResponse` DTO.
 
+use chrono::{DateTime, Utc};
 use yog_core::{
     RepositoryResult,
     domain::{
@@ -94,4 +95,12 @@ pub(crate) struct EnrichedPoolDetail {
     /// that nothing between the repository and the wire DTO has to know which
     /// protocol this is.
     pub(crate) properties: Option<PoolProperties>,
+
+    /// When this read happened, used to place a fee scheduler on its decay
+    /// curve.
+    ///
+    /// Carried rather than taken with `Utc::now()` at serialization time for one
+    /// reason: a DTO that reads the clock cannot be asserted on. The service
+    /// fills it once per request, and a test pins it.
+    pub(crate) evaluated_at: DateTime<Utc>,
 }

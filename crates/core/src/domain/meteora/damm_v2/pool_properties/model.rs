@@ -55,6 +55,16 @@ pub struct MeteoraDammV2PoolProperties {
     /// the same account read. Orthogonal to `base_fee_kind` — a pool can run a
     /// scheduler and a dynamic fee at once. `None` until resolved.
     pub has_dynamic_fee: Option<bool>,
+
+    /// The decay curve, when the pool has one — everything needed to answer
+    /// "what does this pool charge **now**" rather than only "what did it charge
+    /// at genesis".
+    ///
+    /// `None` covers both "not resolved yet" and "this fee shape has no curve"
+    /// (constant, market-cap scheduler, rate limiter). Neither lets a caller
+    /// place the fee in time, so they need not be told apart here — `base_fee_kind`
+    /// is what distinguishes them when it matters.
+    pub fee_scheduler: Option<FeeSchedulerParams>,
 }
 
 /// The cp-amm-only properties one read of a `Pool` account yields. Written by

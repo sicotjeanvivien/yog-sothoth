@@ -1,4 +1,5 @@
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 
 use crate::CoreResult;
 use crate::amm::common::price_impact;
@@ -13,7 +14,7 @@ const FEE_DENOMINATOR: u64 = 1_000_000_000;
 /// Decoded from the `BaseFeeMode` discriminant plus the scheduler period
 /// count — the mode byte alone is not enough, since a scheduler mode with
 /// zero periods is a constant fee (see [`base_fee_kind_from`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BaseFeeKind {
     /// Fixed fee — no scheduling (any scheduler mode with
     /// `number_of_period == 0`).
@@ -200,7 +201,7 @@ const MAX_EXPONENTIAL: u32 = 0x8_0000;
 /// account yields garbage, which is visible on real fixtures (one returns
 /// 13 722 280 043 814 587 382). The decoder is what refuses to build this
 /// struct for those modes; nothing here can detect it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeeSchedulerParams {
     /// Fee numerator at period 0 — the **starting** fee, hence the maximum of a
     /// decaying curve.

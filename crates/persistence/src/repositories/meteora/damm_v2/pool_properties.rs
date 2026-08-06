@@ -78,7 +78,9 @@ impl PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
             MeteoraDammV2PoolPropertiesRow,
             r#"
             SELECT pool_address, protocol_fee_percent,
-                   referral_fee_percent, base_fee_kind, has_dynamic_fee
+                   referral_fee_percent, base_fee_kind, has_dynamic_fee,
+                   cliff_fee_numerator, number_of_period, period_frequency,
+                   reduction_factor, activation_point, activation_type
             FROM meteora_damm_v2_pool_properties
             WHERE pool_address = $1
             "#,

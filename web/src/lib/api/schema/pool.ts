@@ -128,12 +128,23 @@ export type PoolResponse = z.infer<typeof PoolSchema>;
  *
  * The two groups have different writers and either can land first, so a block
  * with only one group filled is a normal state.
+ *
+ * `currentFeeBps` is the base fee **actually in force now** for a pool whose fee
+ * decays over time. `feeBps` on the pool itself is the genesis tier — the fee at
+ * period 0, which for a scheduler is the *maximum* of a decreasing curve; the
+ * two differ by up to ×49 on real pools. It is null whenever it cannot be
+ * established honestly: no scheduler, a curve that does not decay on time
+ * (market-cap scheduler, rate limiter), an unresolved account, or a
+ * slot-activated pool. `feeSchedulerExpired` says the decay is over and the fee
+ * will not move again.
  */
 export const MeteoraDammV2PropertiesSchema = z.object({
   protocolFeePercent: FeePercent.nullable(),
   referralFeePercent: FeePercent.nullable(),
   baseFeeKind: z.string().nullable(),
   hasDynamicFee: z.boolean().nullable(),
+  currentFeeBps: BigDecimal.nullable(),
+  feeSchedulerExpired: z.boolean().nullable(),
 });
 
 /**
