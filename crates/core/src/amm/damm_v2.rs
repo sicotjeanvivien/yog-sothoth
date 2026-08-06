@@ -252,14 +252,25 @@ impl FeeSchedulerParams {
     /// not-yet-activated pool sits at its **floor**, not at its cliff. That is
     /// cp-amm's behaviour (`fee_time_scheduler.rs`), it is not in the public
     /// docs, and it is the opposite of what the name "cliff" suggests.
-    fn elapsed_periods(&self, current_point: u64) -> u16 {
-        if current_point < self.activation_point || self.period_frequency == 0 {
-            return self.number_of_period;
+    ///
+    /// `None` when `period_frequency` is zero: cp-amm divides by it, so the
+    /// on-chain program errors out there and so do we. Returning the floor
+    /// instead — the first shape of this function — would have invented a fee
+    /// the chain refuses to compute, in a port whose only value is fidelity.
+    /// Unreachable on real data (every captured account with
+    /// `period_frequency == 0` also has `number_of_period == 0`, hence a
+    /// constant fee and no scheduler at all), which is exactly why it must not
+    /// be papered over.
+    fn elapsed_periods(&self, current_point: u64) -> Option<u16> {
+        if current_point < self.activation_point {
+            return Some(self.number_of_period);
         }
-        let elapsed = (current_point - self.activation_point) / self.period_frequency;
-        u16::try_from(elapsed)
-            .unwrap_or(u16::MAX)
-            .min(self.number_of_period)
+        let elapsed = (current_point - self.activation_point).checked_div(self.period_frequency)?;
+        Some(
+            u16::try_from(elapsed)
+                .unwrap_or(u16::MAX)
+                .min(self.number_of_period),
+        )
     }
 }
 
@@ -273,7 +284,7 @@ impl FeeSchedulerParams {
 ///
 /// Returns `None` only on arithmetic the on-chain program would also reject.
 pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) -> Option<u64> {
-    let period = params.elapsed_periods(current_point);
+    let period = params.elapsed_periods(current_point)?;
     match params.kind {
         BaseFeeKind::SchedulerLinear => {
             let drop = u64::from(period).checked_mul(params.reduction_factor)?;
@@ -282,9 +293,12 @@ pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) ->
         BaseFeeKind::SchedulerExponential => {
             fee_in_period(params.cliff_fee_numerator, params.reduction_factor, period)
         }
-        // Not a time scheduler: its fee is whatever the cliff says, and the
-        // caller should not have built these params in the first place.
-        _ => Some(params.cliff_fee_numerator),
+        // Not a time scheduler. Unreachable — the decoder only builds these
+        // params for the two modes above — and `None` rather than the cliff on
+        // purpose: the cliff is precisely the wrong number this whole ticket
+        // exists to stop publishing, so a fallback that returns it would quietly
+        // reinstate the defect the day this arm becomes reachable.
+        _ => None,
     }
 }
 

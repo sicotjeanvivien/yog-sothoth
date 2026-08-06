@@ -94,6 +94,9 @@ fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties 
         referral_fee_percent: 20,
         base_fee_kind,
         has_dynamic_fee: true,
+        // The satellite does not persist the decay curve yet — that arrives
+        // with the migration that gives it columns.
+        fee_scheduler: None,
     })
 }
 

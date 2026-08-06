@@ -135,8 +135,22 @@ pub(in crate::application::decoder) const REDUCTION_FACTOR_OFFSET: usize = 32;
 pub(in crate::application::decoder) const ACTIVATION_POINT_OFFSET: usize = 472;
 pub(in crate::application::decoder) const ACTIVATION_TYPE_OFFSET: usize = 480;
 
-/// Minimum length for every field above to be in bounds.
-const MIN_LEN: usize = ACTIVATION_TYPE_OFFSET + 1;
+/// Minimum length for the fields this decoder **requires**: the mints and the
+/// cliff fee. A shorter buffer is a rejected account.
+///
+/// ⚠️ It deliberately does **not** cover `activation_point` / `activation_type`.
+/// Those feed one optional field, and the rule this type already states for an
+/// unknown `BaseFeeMode` applies identically: refusing the whole account to get
+/// an optional extra would drop the mints and the fee tier with it, and a pool
+/// that never resolves never leaves `list_unresolved` — it would sit at the head
+/// of the queue forever, starving every pool behind it. An account too short for
+/// the scheduler costs the scheduler and nothing else; [`SCHEDULER_MIN_LEN`] is
+/// what guards those reads.
+const MIN_LEN: usize = TOKEN_B_MINT_OFFSET + 32;
+
+/// Length needed for the fee-scheduler reads, checked separately from
+/// [`MIN_LEN`] so a short account degrades instead of being refused.
+const SCHEDULER_MIN_LEN: usize = ACTIVATION_TYPE_OFFSET + 1;
 
 /// Decode a cp-amm `Pool` account.
 ///
@@ -224,8 +238,11 @@ fn decode_fee_scheduler(
     ) {
         return None;
     }
+    if data.len() < SCHEDULER_MIN_LEN {
+        return None;
+    }
 
-    // In bounds: `MIN_LEN` covers through `ACTIVATION_TYPE_OFFSET`.
+    // In bounds: the length check above covers through `ACTIVATION_TYPE_OFFSET`.
     let read_u64 = |at: usize| {
         u64::from_le_bytes(
             data[at..at + 8]

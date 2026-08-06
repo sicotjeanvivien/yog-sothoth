@@ -48,6 +48,9 @@ fn expected_properties() -> PoolAccountProperties {
         referral_fee_percent: 20,
         base_fee_kind: Some(BaseFeeKind::Constant),
         has_dynamic_fee: true,
+        // A constant fee has no decay curve to carry — the synthetic account
+        // this mirrors is built with `number_of_period == 0`.
+        fee_scheduler: None,
     })
 }
 

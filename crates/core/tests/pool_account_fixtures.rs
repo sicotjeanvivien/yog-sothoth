@@ -99,17 +99,17 @@ struct Expected {
 
 #[rustfmt::skip]
 const EXPECTED: &[Expected] = &[
-    Expected { pool: "28BDU1aghznh8t9Z1imygPU2DrLzw34FC5V9MHYb3HSA", kind: BaseFeeKind::SchedulerLinear, fee_bps: "5000", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "G95DFf3fjMqvTraw2T5EduHshNsrrNcaEA4QsD1upump", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" , scheduler: Some((600, 3_194_444, 1_785_180_416)) },
-    Expected { pool: "2hoh2jW3RLRLRrLagb6aWPL3txRMfWsgNstC4j2cdRhW", kind: BaseFeeKind::MarketCapSchedulerExponential, fee_bps: "300", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "RszpWXeCRFhKg2DV4MeCZYe1WEsZ6M5Wpgr5SyB1nat", mint_b: "So11111111111111111111111111111111111111112" , scheduler: None },
-    Expected { pool: "4EqtnwiCSDJQJvVBrLh7pVdCxmo9rGKd66u4Esmq5Utt", kind: BaseFeeKind::MarketCapSchedulerLinear, fee_bps: "200", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "AoQGnPGXWHo9FfSVhPTmhJGvGXisEDwfaRPnDHHRpump", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" , scheduler: None },
-    Expected { pool: "59cbVFRS9GSYeMPVrNQtDyzGnaN8o3fyWZcPJxFuNZjD", kind: BaseFeeKind::SchedulerExponential, fee_bps: "1500", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "oEVufzrtcAvuefkbg2iQku9A6UbFh9f4V5kEiPARQEN", mint_b: "So11111111111111111111111111111111111111112" , scheduler: Some((1, 649, 1_783_696_139)) },
-    Expected { pool: "7j7Qm6oeWZ2MFRve3kPWg1fE5cXYLDFPYe9982SjWrbC", kind: BaseFeeKind::RateLimiter, fee_bps: "400", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "PDqSePtjwXYaruFX7hdujV9wf4X7Z4fu5d2iVMCpump", mint_b: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" , scheduler: None },
-    Expected { pool: "8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie", kind: BaseFeeKind::Constant, fee_bps: "4", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "So11111111111111111111111111111111111111112", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" , scheduler: None },
-    Expected { pool: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j", kind: BaseFeeKind::Constant, fee_bps: "25", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "So11111111111111111111111111111111111111112", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" , scheduler: None },
-    Expected { pool: "FvAQ9jyDAqSGtTmLm5Mgpq3NhVhjfwEU8e6gUmtS1PqQ", kind: BaseFeeKind::SchedulerExponential, fee_bps: "9900", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "9xzmB67zWX8PJiGpQFbWuNBXTqyPpu2qV3mxQfhqUREV", mint_b: "UWUy7J86LUiBv5SjAUZ53LMGhtnqvbQ7QNSSkyupump" , scheduler: Some((1, 326, 1_783_799_458)) },
-    Expected { pool: "FvXPAoRBA6QMWBMqjy1rCLuRkXDH3Q3zD6ZAv8yJ8U7j", kind: BaseFeeKind::MarketCapSchedulerExponential, fee_bps: "200", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "CCNN1WcqyhZntkSEb4fX6ARNT9TWoQNJ4SvoZxYzBAGS", mint_b: "So11111111111111111111111111111111111111112" , scheduler: None },
-    Expected { pool: "KKyUyWncRfakBZh2M318BFfdR6332WWu1NePd9amQtj", kind: BaseFeeKind::MarketCapSchedulerLinear, fee_bps: "100", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "SV151D5pjygAKA8aJJcKzm4wFnRX5G92Fye94jQJk7g", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" , scheduler: None },
-    Expected { pool: "sZchbRCFoUcr3xzUhqtngzXCr2DUnvurd5hTx9NtXZB", kind: BaseFeeKind::SchedulerLinear, fee_bps: "1000", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "5je5ondjVJcHjWz2v4mLZn7PsQGr47XQFjFTfrtCu1ox", mint_b: "So11111111111111111111111111111111111111112" , scheduler: Some((3, 900_000, 1_778_597_368)) },
+    Expected { pool: "28BDU1aghznh8t9Z1imygPU2DrLzw34FC5V9MHYb3HSA", kind: BaseFeeKind::SchedulerLinear, fee_bps: "5000", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "G95DFf3fjMqvTraw2T5EduHshNsrrNcaEA4QsD1upump", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", scheduler: Some((600, 3_194_444, 1_785_180_416)) },
+    Expected { pool: "2hoh2jW3RLRLRrLagb6aWPL3txRMfWsgNstC4j2cdRhW", kind: BaseFeeKind::MarketCapSchedulerExponential, fee_bps: "300", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "RszpWXeCRFhKg2DV4MeCZYe1WEsZ6M5Wpgr5SyB1nat", mint_b: "So11111111111111111111111111111111111111112", scheduler: None },
+    Expected { pool: "4EqtnwiCSDJQJvVBrLh7pVdCxmo9rGKd66u4Esmq5Utt", kind: BaseFeeKind::MarketCapSchedulerLinear, fee_bps: "200", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "AoQGnPGXWHo9FfSVhPTmhJGvGXisEDwfaRPnDHHRpump", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", scheduler: None },
+    Expected { pool: "59cbVFRS9GSYeMPVrNQtDyzGnaN8o3fyWZcPJxFuNZjD", kind: BaseFeeKind::SchedulerExponential, fee_bps: "1500", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "oEVufzrtcAvuefkbg2iQku9A6UbFh9f4V5kEiPARQEN", mint_b: "So11111111111111111111111111111111111111112", scheduler: Some((1, 649, 1_783_696_139)) },
+    Expected { pool: "7j7Qm6oeWZ2MFRve3kPWg1fE5cXYLDFPYe9982SjWrbC", kind: BaseFeeKind::RateLimiter, fee_bps: "400", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "PDqSePtjwXYaruFX7hdujV9wf4X7Z4fu5d2iVMCpump", mint_b: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", scheduler: None },
+    Expected { pool: "8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie", kind: BaseFeeKind::Constant, fee_bps: "4", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "So11111111111111111111111111111111111111112", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", scheduler: None },
+    Expected { pool: "CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j", kind: BaseFeeKind::Constant, fee_bps: "25", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "So11111111111111111111111111111111111111112", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", scheduler: None },
+    Expected { pool: "FvAQ9jyDAqSGtTmLm5Mgpq3NhVhjfwEU8e6gUmtS1PqQ", kind: BaseFeeKind::SchedulerExponential, fee_bps: "9900", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "9xzmB67zWX8PJiGpQFbWuNBXTqyPpu2qV3mxQfhqUREV", mint_b: "UWUy7J86LUiBv5SjAUZ53LMGhtnqvbQ7QNSSkyupump", scheduler: Some((1, 326, 1_783_799_458)) },
+    Expected { pool: "FvXPAoRBA6QMWBMqjy1rCLuRkXDH3Q3zD6ZAv8yJ8U7j", kind: BaseFeeKind::MarketCapSchedulerExponential, fee_bps: "200", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "CCNN1WcqyhZntkSEb4fX6ARNT9TWoQNJ4SvoZxYzBAGS", mint_b: "So11111111111111111111111111111111111111112", scheduler: None },
+    Expected { pool: "KKyUyWncRfakBZh2M318BFfdR6332WWu1NePd9amQtj", kind: BaseFeeKind::MarketCapSchedulerLinear, fee_bps: "100", dynamic: true, protocol_pct: 20, referral_pct: 20, mint_a: "SV151D5pjygAKA8aJJcKzm4wFnRX5G92Fye94jQJk7g", mint_b: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", scheduler: None },
+    Expected { pool: "sZchbRCFoUcr3xzUhqtngzXCr2DUnvurd5hTx9NtXZB", kind: BaseFeeKind::SchedulerLinear, fee_bps: "1000", dynamic: false, protocol_pct: 20, referral_pct: 20, mint_a: "5je5ondjVJcHjWz2v4mLZn7PsQGr47XQFjFTfrtCu1ox", mint_b: "So11111111111111111111111111111111111111112", scheduler: Some((3, 900_000, 1_778_597_368)) },
 ];
 
 const CP_AMM_DIR: &str = "damm_v2";
@@ -555,5 +555,37 @@ fn the_fixtures_cover_every_fee_mode() {
     assert!(
         EXPECTED.iter().any(|e| !e.dynamic),
         "no pool without a dynamic fee"
+    );
+}
+
+/// A truncated account must still yield its mints and fee tier.
+///
+/// The scheduler reads sit at 472/480, far past the mints at 168/200. Widening
+/// the hard `MIN_LEN` to cover them — the first shape of this change — turned a
+/// partially-readable account into a rejected one, which is the failure mode
+/// `base_fee_kind` is explicitly designed to avoid: a pool that never resolves
+/// never leaves `list_unresolved`, so it sits at the head of the queue forever
+/// and starves every pool behind it. An optional field must cost only itself.
+#[test]
+fn an_account_too_short_for_the_scheduler_still_yields_its_mints() {
+    let fixture = load(CP_AMM_DIR, EXPECTED[0].pool);
+    let full = base64_decode(&fixture.data_base64);
+    let owner = Pubkey::from_str(&fixture.owner).expect("owner");
+    let truncated = &full[..300];
+
+    let decoded = decode_pool_account(&owner, truncated)
+        .expect("the mints sit at 168/200 — well inside 300 bytes");
+
+    assert_eq!(
+        decoded.registry.token_a_mint,
+        Pubkey::from_str(EXPECTED[0].mint_a).unwrap()
+    );
+    let PoolAccountProperties::MeteoraDammV2(props) = decoded.properties else {
+        panic!("decoded as another protocol")
+    };
+    assert_eq!(props.base_fee_kind, Some(EXPECTED[0].kind));
+    assert_eq!(
+        props.fee_scheduler, None,
+        "the curve is unavailable, and that is all that is unavailable"
     );
 }

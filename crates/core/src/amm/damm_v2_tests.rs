@@ -294,3 +294,40 @@ fn a_zero_reduction_factor_never_moves() {
         Some(990_000_000)
     );
 }
+
+/// A zero `period_frequency` makes cp-amm's `safe_div` fail, so it must make us
+/// fail too — not quietly return the floor, which is a fee the chain refuses to
+/// compute. Unreachable on real accounts; that is the point of pinning it.
+#[test]
+fn a_zero_period_frequency_yields_no_fee_rather_than_an_invented_one() {
+    let p = FeeSchedulerParams {
+        period_frequency: 0,
+        ..fixture_28bdu1()
+    };
+    assert_eq!(base_fee_numerator_at(&p, p.activation_point + 1), None);
+    // Before activation the division is never reached, so that branch still
+    // answers — matching the source, which tests the ordering the same way.
+    assert!(base_fee_numerator_at(&p, p.activation_point - 1).is_some());
+}
+
+/// The kinds that must never reach this function get `None`, never the cliff.
+/// Returning the cliff would republish the exact number this ticket removes.
+#[test]
+fn a_non_time_scheduler_kind_yields_no_fee_not_the_cliff() {
+    for kind in [
+        BaseFeeKind::Constant,
+        BaseFeeKind::RateLimiter,
+        BaseFeeKind::MarketCapSchedulerLinear,
+        BaseFeeKind::MarketCapSchedulerExponential,
+    ] {
+        let p = FeeSchedulerParams {
+            kind,
+            ..fixture_28bdu1()
+        };
+        assert_eq!(
+            base_fee_numerator_at(&p, p.activation_point + 1_000),
+            None,
+            "{kind:?} must not fall back to the cliff"
+        );
+    }
+}
