@@ -386,3 +386,30 @@ fn a_constant_fee_reports_no_current_fee() {
     assert_eq!(r.current_fee_bps, None);
     assert_eq!(r.fee_scheduler_expired, None);
 }
+
+/// The two fields never disagree.
+///
+/// They document the same preconditions ("`None` under the same conditions"),
+/// so an evaluation the chain itself would refuse must silence **both**. The
+/// first shape of this code derived `expired` independently and reported
+/// `{currentFeeBps: null, feeSchedulerExpired: true}` — telling a consumer the
+/// decay is over and that there is no fee, about one pool, in one payload.
+///
+/// A zero `period_frequency` is the reachable case: the decoder gates on the
+/// mode, not on the curve's contents, so such an account is stored with a curve
+/// while `elapsed_periods` refuses to divide by it.
+#[test]
+fn a_curve_that_cannot_be_evaluated_silences_both_fields() {
+    let mut props = scheduler_properties();
+    props.fee_scheduler = props.fee_scheduler.map(|mut s| {
+        s.period_frequency = 0;
+        s
+    });
+    let r = MeteoraDammV2PropertiesResponse::build(props, at(1_785_180_416 + 86_400));
+
+    assert_eq!(r.current_fee_bps, None);
+    assert_eq!(
+        r.fee_scheduler_expired, None,
+        "expiry must not be reported for a curve whose fee could not be computed"
+    );
+}

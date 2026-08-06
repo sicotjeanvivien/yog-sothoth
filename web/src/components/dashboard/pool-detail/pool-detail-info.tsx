@@ -41,7 +41,7 @@ import type { PoolDetailResponse } from "@/lib/api/schema/pool";
 import type { TokenResponse } from "@/lib/api/schema/token";
 
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
-import { formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
+import { formatComputedFeeBps, formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsd } from "@/lib/format/format-usd";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
@@ -109,7 +109,7 @@ export async function PoolDetailInfo({
             {pool.meteoraDammV2?.currentFeeBps != null && (
               <InfoRow label={t("currentFee")} info={t("help.currentFee")}>
                 <span>
-                  {formatFeeBps(pool.meteoraDammV2.currentFeeBps)}
+                  {formatComputedFeeBps(pool.meteoraDammV2.currentFeeBps)}
                   {pool.meteoraDammV2.feeSchedulerExpired === true && (
                     <span className="text-muted-foreground">
                       {" "}

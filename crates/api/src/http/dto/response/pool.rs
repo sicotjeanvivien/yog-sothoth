@@ -255,15 +255,25 @@ impl MeteoraDammV2PropertiesResponse {
     /// established" rather than inventing a fee, and the seam is one field wide
     /// if a slot-activated pool ever shows up.
     fn build(p: MeteoraDammV2PoolProperties, evaluated_at: DateTime<Utc>) -> Self {
-        let point = p
+        // Both fields come from ONE successful evaluation, deliberately.
+        //
+        // Deriving `expired` independently — `point.map(...)` next to the
+        // `and_then` below — let the pair disagree: an arithmetic the chain also
+        // refuses (a zero `period_frequency`, or a linear curve whose total
+        // decay exceeds its cliff) yields no fee while still reporting
+        // `expired: true`, which contradicts what this field documents. A
+        // consumer reading "the decay is over" alongside a null fee has been
+        // told two incompatible things about the same pool.
+        let evaluated = p
             .fee_scheduler
             .filter(|s| s.activation_type == TIMESTAMP_ACTIVATION)
-            .map(|s| (s, evaluated_at.timestamp().max(0) as u64));
+            .map(|s| (s, evaluated_at.timestamp().max(0) as u64))
+            .and_then(|(s, now)| {
+                base_fee_numerator_at(&s, now).map(|fee| (fee, s.is_expired_at(now)))
+            });
 
-        let current_fee_bps = point
-            .and_then(|(s, now)| base_fee_numerator_at(&s, now))
-            .map(fee_numerator_to_bps);
-        let fee_scheduler_expired = point.map(|(s, now)| s.is_expired_at(now));
+        let current_fee_bps = evaluated.map(|(fee, _)| fee_numerator_to_bps(fee));
+        let fee_scheduler_expired = evaluated.map(|(_, expired)| expired);
 
         Self {
             protocol_fee_percent: p.protocol_fee_percent,

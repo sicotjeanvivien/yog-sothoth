@@ -77,3 +77,26 @@ COMMENT ON COLUMN meteora_damm_v2_pool_properties.activation_type IS
     'Unit of activation_point and period_frequency: 0 = slot, 1 = timestamp.';
 COMMENT ON COLUMN meteora_damm_v2_pool_properties.cliff_fee_numerator IS
     'Fee numerator at period 0 — the curve maximum, NOT what a trader pays once the scheduler has decayed.';
+
+
+-- ── Backfill: without this, the feature ships inert ──────────────────────────
+-- Adding the columns is not enough. `PoolAccountResolver::list_unresolved`
+-- proposes a pool only when `needs_refresh` is raised or one of the columns it
+-- tests is NULL — and the six above are **deliberately not** among them, because
+-- they are legitimately NULL for a constant fee, a market-cap scheduler and a
+-- rate limiter. Testing them would put those pools back in the queue on every
+-- cycle forever and starve the ones behind, which is the exact failure the
+-- queue's protocol filter exists to prevent (see that query's doc).
+--
+-- Consequence, without the line below: every pool resolved before this migration
+-- has all the tested columns filled and `needs_refresh = FALSE`, so its account
+-- is never re-read and its curve stays NULL **permanently**. Only pools
+-- discovered afterwards would get one. The 333 scheduler pools this migration
+-- exists for would keep publishing their genesis cliff, and nothing would say so.
+--
+-- Raising the flag is the mechanism the schema already has for "re-read this
+-- account", and it terminates on its own: `set_registry_properties` lowers it as
+-- the last step of each resolution, and the worker's batch cap drains the
+-- backlog over a handful of ticks. It costs one account read per pool, which is
+-- what a back-fill of an account-derived column costs by definition.
+UPDATE pools SET needs_refresh = TRUE WHERE protocol = 'meteora_damm_v2';

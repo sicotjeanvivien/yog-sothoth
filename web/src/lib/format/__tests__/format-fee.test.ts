@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatFeeBps, formatFeeSplit } from "../format-fee";
+import { formatComputedFeeBps, formatFeeBps, formatFeeSplit } from "../format-fee";
 
 const LABELS = { protocol: "Protocol", referral: "Referral" };
 
@@ -37,5 +37,25 @@ describe("formatFeeSplit", () => {
   it("renders an em-dash when either percent is unknown", () => {
     expect(formatFeeSplit(null, 20, LABELS)).toBe("—");
     expect(formatFeeSplit(20, null, LABELS)).toBe("—");
+  });
+});
+
+describe("formatComputedFeeBps", () => {
+  // The PR's headline case: 28BDU1…'s linear floor is numerator 40_000_064,
+  // i.e. 400.00064 bps. `formatFeeBps` renders that as "4.000006%", which reads
+  // as a glitch beside a tidy "50%" tier.
+  it("rounds a decayed fee instead of showing the chain's last digits", () => {
+    expect(formatComputedFeeBps("400.00064")).toBe("4%");
+    expect(formatFeeBps("400.00064")).toBe("4.000006%");
+  });
+
+  it("keeps a basis point of resolution", () => {
+    expect(formatComputedFeeBps("25.39394")).toBe("0.25%");
+    expect(formatComputedFeeBps("1234.5")).toBe("12.35%");
+  });
+
+  it("is the dash when the fee could not be established", () => {
+    expect(formatComputedFeeBps(null)).toBe("—");
+    expect(formatComputedFeeBps("not-a-number")).toBe("—");
   });
 });
