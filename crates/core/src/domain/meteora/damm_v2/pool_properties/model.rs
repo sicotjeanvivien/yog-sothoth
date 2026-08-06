@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use solana_pubkey::Pubkey;
 
-use crate::amm::damm_v2::BaseFeeKind;
+use crate::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 
 /// Pool properties that only exist for DAMM v2 — the per-protocol satellite of
 /// the cross-protocol [`crate::domain::Pool`] registry.
@@ -105,4 +105,14 @@ pub struct MeteoraDammV2PoolAccountProperties {
     /// `DynamicFeeStruct::initialized`. Always decodable — it is a flag byte at
     /// a fixed offset, with no mode to recognise and no tri-state to resolve.
     pub has_dynamic_fee: bool,
+
+    /// Where the base fee sits on its decay curve — `Some` **only** for the two
+    /// time-scheduler modes.
+    ///
+    /// `None` covers three different situations on purpose, because none of
+    /// them lets us place a fee in time: a constant fee (nothing decays), a
+    /// market-cap scheduler (it decays on capitalisation, which we do not
+    /// have), and `rate_limiter` (its fee rises with swap size, and it lays
+    /// different fields over the same bytes).
+    pub fee_scheduler: Option<FeeSchedulerParams>,
 }

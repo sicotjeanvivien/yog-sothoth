@@ -169,6 +169,212 @@ pub fn net_price_impact(
 }
 
 // ============================================================
+// Fee scheduler — the base fee as a function of time
+// ============================================================
+
+/// Basis-point denominator of the exponential decay factor
+/// (`cp-amm::constants::fee::MAX_BASIS_POINT`).
+const MAX_BASIS_POINT: u128 = 10_000;
+
+/// 1.0 in Q64.64 (`cp-amm::constants::ONE_Q64`).
+const ONE_Q64: u128 = 1u128 << 64;
+
+/// Q64.64 fractional bit count (`cp-amm::math::fee_math::SCALE_OFFSET`).
+const SCALE_OFFSET: u32 = 64;
+
+/// Exponent ceiling of [`pow`] (`cp-amm::math::fee_math::MAX_EXPONENTIAL`).
+/// Above it the Q64.64 result cannot be represented.
+const MAX_EXPONENTIAL: u32 = 0x8_0000;
+
+/// The parameters a **time-based** fee scheduler needs to place a pool's base
+/// fee on its decay curve.
+///
+/// A named struct rather than six positional arguments: four of the six are
+/// integers of similar magnitude, so a swapped pair would compile silently and
+/// produce a plausible-but-wrong fee.
+///
+/// ⚠️ Only meaningful for [`BaseFeeKind::SchedulerLinear`] and
+/// [`BaseFeeKind::SchedulerExponential`]. The market-cap schedulers decay on
+/// capitalisation rather than time, and `rate_limiter` reinterprets the very
+/// same account bytes — reading `period_frequency` off a mode-2 or mode-4
+/// account yields garbage, which is visible on real fixtures (one returns
+/// 13 722 280 043 814 587 382). The decoder is what refuses to build this
+/// struct for those modes; nothing here can detect it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FeeSchedulerParams {
+    /// Fee numerator at period 0 — the **starting** fee, hence the maximum of a
+    /// decaying curve.
+    pub cliff_fee_numerator: u64,
+    /// How many periods the decay runs for. Past it, the fee is frozen at the
+    /// floor.
+    pub number_of_period: u16,
+    /// Length of one period, in the unit named by `activation_type`.
+    pub period_frequency: u64,
+    /// Decay per period: subtracted from the numerator (linear) or applied as
+    /// `(1 - reduction_factor / 10_000)` per period (exponential).
+    pub reduction_factor: u64,
+    /// Start of the curve, a slot or a Unix timestamp.
+    pub activation_point: u64,
+    /// Which unit `activation_point` and `period_frequency` are in:
+    /// **0 = slot, 1 = timestamp**. All eleven captured mainnet accounts use 1.
+    pub activation_type: u8,
+    /// Linear or exponential. Any other kind must not reach this type.
+    pub kind: BaseFeeKind,
+}
+
+impl FeeSchedulerParams {
+    /// The point past which the fee stops moving:
+    /// `activation_point + number_of_period × period_frequency`.
+    ///
+    /// `None` on overflow, which no real account produces but which a garbage
+    /// decode would.
+    pub fn expiry_point(&self) -> Option<u64> {
+        u64::from(self.number_of_period)
+            .checked_mul(self.period_frequency)
+            .and_then(|span| self.activation_point.checked_add(span))
+    }
+
+    /// Whether the decay has finished at `current_point` — the fee is then
+    /// static at its floor, and the cliff has no relation to what a trader pays.
+    ///
+    /// This is the case that made the audit's measurement so wide: both pools
+    /// found at ×5 and ×49 had **expired** schedulers, so the gap was permanent
+    /// rather than a snapshot taken mid-decay.
+    pub fn is_expired_at(&self, current_point: u64) -> bool {
+        self.expiry_point()
+            .is_some_and(|expiry| current_point > expiry)
+    }
+
+    /// How many periods have elapsed at `current_point`, clamped to
+    /// `number_of_period`.
+    ///
+    /// ⚠️ **Before activation the period is `number_of_period`, not 0** — so a
+    /// not-yet-activated pool sits at its **floor**, not at its cliff. That is
+    /// cp-amm's behaviour (`fee_time_scheduler.rs`), it is not in the public
+    /// docs, and it is the opposite of what the name "cliff" suggests.
+    fn elapsed_periods(&self, current_point: u64) -> u16 {
+        if current_point < self.activation_point || self.period_frequency == 0 {
+            return self.number_of_period;
+        }
+        let elapsed = (current_point - self.activation_point) / self.period_frequency;
+        u16::try_from(elapsed)
+            .unwrap_or(u16::MAX)
+            .min(self.number_of_period)
+    }
+}
+
+/// The **base fee numerator actually in force** at `current_point`.
+///
+/// Transcribed from cp-amm's `FeeTimeScheduler::get_base_fee_numerator`
+/// (`programs/cp-amm/src/base_fee/fee_time_scheduler.rs`) and
+/// `get_fee_in_period` (`math/fee_math.rs`), read from the source rather than
+/// the public documentation — the docs give an approximate formula and omit
+/// both the before-activation branch and the Q64.64 arithmetic.
+///
+/// Returns `None` only on arithmetic the on-chain program would also reject.
+pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) -> Option<u64> {
+    let period = params.elapsed_periods(current_point);
+    match params.kind {
+        BaseFeeKind::SchedulerLinear => {
+            let drop = u64::from(period).checked_mul(params.reduction_factor)?;
+            params.cliff_fee_numerator.checked_sub(drop)
+        }
+        BaseFeeKind::SchedulerExponential => {
+            fee_in_period(params.cliff_fee_numerator, params.reduction_factor, period)
+        }
+        // Not a time scheduler: its fee is whatever the cliff says, and the
+        // caller should not have built these params in the first place.
+        _ => Some(params.cliff_fee_numerator),
+    }
+}
+
+/// `cliff × (1 - reduction_factor / 10_000) ^ passed_period`, in Q64.64.
+///
+/// Verbatim port of cp-amm's `get_fee_in_period`, including its
+/// `reduction_factor == 0` short-circuit.
+fn fee_in_period(
+    cliff_fee_numerator: u64,
+    reduction_factor: u64,
+    passed_period: u16,
+) -> Option<u64> {
+    if reduction_factor == 0 {
+        return Some(cliff_fee_numerator);
+    }
+    let bps = u128::from(reduction_factor)
+        .checked_shl(SCALE_OFFSET)?
+        .checked_div(MAX_BASIS_POINT)?;
+    let base = ONE_Q64.checked_sub(bps)?;
+    let result = pow(base, i32::from(passed_period))?;
+    let fee = result.checked_mul(u128::from(cliff_fee_numerator))? >> SCALE_OFFSET;
+    u64::try_from(fee).ok()
+}
+
+/// Q64.64 exponentiation by squaring — a port of cp-amm's `pow`
+/// (`math/fee_math.rs`), kept structurally faithful rather than rewritten.
+///
+/// ## Why not `f64::powi`
+///
+/// The on-chain fee is whatever this integer arithmetic yields, truncation
+/// included. A floating-point approximation would disagree with the chain in
+/// the last basis points — precisely the range that separates a 400 bps floor
+/// from a 402 bps one, and precisely what this whole ticket is about.
+///
+/// ## The inversion branch
+///
+/// cp-amm inverts the base when `base >= 1.0` so that repeated squaring shrinks
+/// instead of overflowing. **The fee scheduler never takes that branch**: its
+/// base is `1 - reduction_factor/10_000`, always below 1. It is transcribed
+/// anyway — dropping a branch because today's only caller cannot reach it is
+/// how a port silently diverges from its source.
+fn pow(base: u128, exp: i32) -> Option<u128> {
+    if exp == i32::MIN {
+        return None;
+    }
+    if exp == 0 {
+        return Some(ONE_Q64);
+    }
+
+    let mut invert = exp.is_negative();
+    let exp: u32 = exp.unsigned_abs();
+    if exp >= MAX_EXPONENTIAL {
+        return None;
+    }
+
+    let mut squared_base = base;
+    let mut result = ONE_Q64;
+
+    if squared_base >= result {
+        squared_base = u128::MAX.checked_div(squared_base)?;
+        invert = !invert;
+    }
+
+    // cp-amm unrolls this over 19 bits (0x1 … 0x40000): nineteen tests with
+    // eighteen squarings *between* them. A loop is the same computation without
+    // inviting a copy/paste slip on the nineteenth line — but it must not square
+    // after the last test, or it can overflow and return `None` where the chain
+    // returns a fee.
+    let mut bit = 1u32;
+    loop {
+        if exp & bit > 0 {
+            result = result.checked_mul(squared_base)? >> SCALE_OFFSET;
+        }
+        bit <<= 1;
+        if bit >= MAX_EXPONENTIAL {
+            break;
+        }
+        squared_base = squared_base.checked_mul(squared_base)? >> SCALE_OFFSET;
+    }
+
+    if result == 0 {
+        return None;
+    }
+    if invert {
+        result = u128::MAX.checked_div(result)?;
+    }
+    Some(result)
+}
+
+// ============================================================
 // Tests
 // ============================================================
 
