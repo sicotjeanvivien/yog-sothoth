@@ -64,9 +64,11 @@ fn try_from_valid_row_returns_state_with_all_fields_mapped() {
 
 #[test]
 fn try_from_with_none_optionals_returns_state_with_none() {
-    // Both Option fields go through `convert_optional`; pin that None inputs
-    // produce None outputs (and not, say, `Some(0)` from a misplaced
-    // `unwrap_or_default`).
+    // The two Option fields take different routes: `last_sqrt_price` goes
+    // through `convert_optional`, `last_swap_at` is a plain move. Pin that both
+    // turn a None input into a None output — the one worth guarding is the
+    // converted one, where a misplaced `unwrap_or_default` would yield
+    // `Some(0)`, i.e. a sqrt_price of zero passed off as an observed value.
     let row = PoolCurrentStateRow {
         last_sqrt_price: None,
         last_swap_at: None,

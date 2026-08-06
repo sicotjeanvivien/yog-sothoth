@@ -16,8 +16,7 @@ use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, Protocol};
 
 /// Kind of the most recent event that touched a pool.
 ///
-/// Mirrors the `last_event_kind` CHECK constraint in
-/// `003_pool_current_state.sql`.
+/// Mirrors the `last_event_kind` CHECK constraint in `001_baseline.sql` §4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LastEventKind {
     Swap,
@@ -70,8 +69,8 @@ impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
 
 /// Latest known state of a pool, materialized from the event stream.
 ///
-/// Field ordering follows the SQL column ordering in
-/// `003_pool_current_state.sql` for ease of cross-reference.
+/// Field ordering follows the SQL column ordering in `001_baseline.sql` §4,
+/// for ease of cross-reference.
 ///
 /// * `reserve_a` / `reserve_b` are u64 in the protocol's canonical
 ///   (token_a, token_b) order; on the wire they map to `BIGINT`, matching
