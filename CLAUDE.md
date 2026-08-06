@@ -29,12 +29,21 @@ cargo fmt --all
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
     -p yog-signals --all-targets --all-features -- -D warnings
 
-# Test — workspace unit tests (DB-free)
-cargo test --workspace --all-features
+# Test — workspace unit tests, DB-free (575 tests)
+cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
+# ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
+# un-gates the 116 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 691, not 575 — the
+# integration tests are INCLUDED in that total, not additional to it.
+cargo test --workspace --all-features
+
 # Integration tests are DB-backed and #[ignore]d by default — they need a live Postgres.
+# `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`:
+# sqlx::test creates a throwaway DB per test, which `yog_migrate` may not do
+# ("permission denied for database yog_sothoth" — all 116 fail in ~1s).
 # The Postgres must run with `timescaledb.max_background_workers = 0` (see
 # docker-compose.yml): sqlx::test creates a fresh DB per test whose cagg refresh
 # policies (baseline §13) otherwise have the TimescaleDB job scheduler race

@@ -16,7 +16,7 @@ use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::PgPool;
 use yog_core::domain::{
-    EventPosition, MeteoraDammV2LiquidityEventKind, PoolCurrentStateLookup,
+    EventPosition, LastEventKind, MeteoraDammV2LiquidityEventKind, PoolCurrentStateLookup,
     PoolCurrentStateRepository, PoolCurrentStateUpsert, Protocol,
 };
 use yog_persistence::PgPoolCurrentStateRepository;
@@ -233,6 +233,21 @@ async fn last_event_at_is_still_recorded_though_it_no_longer_orders(pool: PgPool
     assert_eq!(stored_event_at(&pool).await, ts());
 }
 
+/// `reserve_a` carries the per-call marker. It used to be the projection's
+/// `liquidity` column, dropped in migration 003 — the assertion needs a field
+/// that actually differs between the two writes, otherwise "the later one
+/// landed" is unobservable and the test passes on a broken guard.
+fn liquidity_upsert(event_position: EventPosition, reserve_a: u64) -> PoolCurrentStateUpsert {
+    PoolCurrentStateUpsert::from_liquidity(
+        pk(1),
+        Protocol::MeteoraDammV2,
+        event_position,
+        MeteoraDammV2LiquidityEventKind::Add,
+        reserve_a,
+        200,
+    )
+}
+
 /// Liquidity events share the upsert, so they share the guard. Worth its own
 /// test rather than an assumption: the two paths build their payload in
 /// different places.
@@ -241,30 +256,15 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
     seed_pool(&pool).await;
     let repo = PgPoolCurrentStateRepository::new(pool.clone());
 
-    // `reserve_a` carries the per-call marker. It used to be the projection's
-    // `liquidity` column, dropped in migration 003 — the assertion needs a
-    // field that actually differs between the two writes, otherwise "the later
-    // one landed" is unobservable and the test passes on a broken guard.
-    let liquidity = |event_position: EventPosition, reserve_a: u64| {
-        PoolCurrentStateUpsert::from_liquidity(
-            pk(1),
-            Protocol::MeteoraDammV2,
-            event_position,
-            MeteoraDammV2LiquidityEventKind::Add,
-            reserve_a,
-            200,
-        )
-    };
-
     assert!(
-        repo.upsert(&liquidity(position(300, 0, 1), 10))
+        repo.upsert(&liquidity_upsert(position(300, 0, 1), 10))
             .await
             .unwrap()
             .applied
     );
 
     let later = repo
-        .upsert(&liquidity(position(300, 1, 1), 20))
+        .upsert(&liquidity_upsert(position(300, 1, 1), 20))
         .await
         .unwrap();
     assert!(
@@ -280,6 +280,65 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
         .expect("row")
         .reserve_a;
     assert_eq!(stored, 20, "the second write must be the one that stuck");
+}
+
+/// A liquidity event must not erase the price the last swap left behind.
+///
+/// `last_sqrt_price` / `last_swap_at` are the projection's only kind-specific
+/// state — a liquidity payload carries neither, and the `COALESCE(EXCLUDED.x,
+/// pool_current_state.x)` in the UPDATE branch is what keeps the stored value.
+/// The trait states it as a MUST (`PoolCurrentStateRepository`), three
+/// doc-comments repeat it, and until this test **nothing exercised it**:
+/// removing both COALESCE left all 116 integration tests green.
+///
+/// What it costs when it breaks is not a wrong number, it is a missing pool.
+/// `pool_price_snapshot` filters on `last_sqrt_price IS NOT NULL AND
+/// last_swap_at IS NOT NULL`, so a nulled pair drops the pool out of the view
+/// and `price_oracle_deviation` silently stops evaluating it — no error, no log.
+///
+/// Mutation-checked: replace either COALESCE with a bare `EXCLUDED.x` and this
+/// fails on the corresponding assertion.
+#[sqlx::test]
+async fn a_liquidity_event_preserves_the_price_left_by_the_last_swap(pool: PgPool) {
+    seed_pool(&pool).await;
+    let repo = PgPoolCurrentStateRepository::new(pool.clone());
+
+    assert!(
+        repo.upsert(&swap(position(300, 0, 1), 1_111))
+            .await
+            .unwrap()
+            .applied
+    );
+
+    // Strictly later position, so the guard accepts it and the UPDATE branch
+    // runs — which is the branch that could clobber the swap's columns.
+    assert!(
+        repo.upsert(&liquidity_upsert(position(300, 1, 1), 42))
+            .await
+            .unwrap()
+            .applied
+    );
+
+    let stored = repo
+        .get_by_address(&pk(1).to_string())
+        .await
+        .unwrap()
+        .expect("row");
+
+    assert_eq!(
+        stored.last_sqrt_price,
+        Some(1_111),
+        "the liquidity event carries no sqrt_price — the swap's must survive it"
+    );
+    assert_eq!(
+        stored.last_swap_at,
+        Some(ts()),
+        "same for the swap timestamp: a liquidity event is not a swap"
+    );
+    // And the liquidity event's own columns did land, so the preservation is
+    // not just "the second write was rejected".
+    assert_eq!(stored.reserve_a, 42);
+    assert_eq!(stored.last_event_kind, LastEventKind::LiquidityAdd);
 }
 
 /// The headline case, end to end: a real routed transaction must leave the
