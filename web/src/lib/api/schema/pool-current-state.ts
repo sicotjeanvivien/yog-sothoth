@@ -14,8 +14,12 @@ import { BigDecimal, Rfc3339, U128String } from "./shared";
  * appearing in this projection (see CQRS read model in
  * `crates/core/src/domain/pool_current_state.rs`).
  *
- * `reserveA`/`reserveB` (u64) and `lastSqrtPrice`/`liquidity` (u128) are
- * all emitted as digit-only strings to survive the JS 2^53 ceiling.
+ * `reserveA`/`reserveB` (u64) and `lastSqrtPrice` (u128) are all emitted as
+ * digit-only strings to survive the JS 2^53 ceiling.
+ *
+ * There is no liquidity `L` here: the field that claimed to be one carried a
+ * position's unsigned `liquidityDelta`, and was removed server-side. Per-movement
+ * liquidity lives on `GET /api/pools/{address}/liquidity-events`.
  */
 export const PoolCurrentStateSchema = z.object({
   poolAddress: z.string().min(1),
@@ -40,9 +44,6 @@ export const PoolCurrentStateSchema = z.object({
   spotPriceAInB: BigDecimal.nullable(),
 
   lastSwapAt: Rfc3339.nullable(),
-
-  liquidity: U128String.nullable(),
-  lastLiquidityAt: Rfc3339.nullable(),
 
   updatedAt: Rfc3339,
 });

@@ -16,8 +16,7 @@ use crate::domain::{EventPosition, MeteoraDammV2LiquidityEventKind, Protocol};
 
 /// Kind of the most recent event that touched a pool.
 ///
-/// Mirrors the `last_event_kind` CHECK constraint in
-/// `003_pool_current_state.sql`.
+/// Mirrors the `last_event_kind` CHECK constraint in `001_baseline.sql` §4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LastEventKind {
     Swap,
@@ -70,16 +69,19 @@ impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
 
 /// Latest known state of a pool, materialized from the event stream.
 ///
-/// Field ordering follows the SQL column ordering in
-/// `003_pool_current_state.sql` for ease of cross-reference.
+/// Field ordering follows the SQL column ordering in `001_baseline.sql` §4,
+/// for ease of cross-reference.
 ///
 /// * `reserve_a` / `reserve_b` are u64 in the protocol's canonical
 ///   (token_a, token_b) order; on the wire they map to `BIGINT`, matching
 ///   the upstream `swap_events` / `liquidity_events` hypertables.
 /// * `last_sqrt_price` is `None` until the first swap is observed
 ///   (Q64.64 fixed-point as u128, stored as `NUMERIC(39, 0)`).
-/// * `liquidity` is `None` until the first liquidity event is observed
-///   (concentrated-liquidity L as u128, stored as `NUMERIC(39, 0)`).
+///
+/// The projection carries **no liquidity L**, deliberately: cp-amm emits the
+/// pool's L on no event, so a column claiming to hold it held a position's
+/// unsigned `liquidity_delta` instead (migration 003 dropped it). A real L
+/// would have to be read off the on-chain `Pool` account.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PoolCurrentState {
     pub pool_address: Pubkey,
@@ -95,9 +97,6 @@ pub struct PoolCurrentState {
     pub last_sqrt_price: Option<u128>,
     pub last_swap_at: Option<DateTime<Utc>>,
 
-    pub liquidity: Option<u128>,
-    pub last_liquidity_at: Option<DateTime<Utc>>,
-
     pub updated_at: DateTime<Utc>,
 }
 
@@ -106,8 +105,8 @@ pub struct PoolCurrentState {
 ///
 /// Constructed by the indexer from the event it just persisted. Unlike
 /// [`PoolCurrentState`], this struct carries only what the event provides —
-/// e.g. a swap-derived upsert sets `sqrt_price` but leaves `liquidity` as
-/// `None` (existing value is preserved by the repository).
+/// a liquidity-derived upsert leaves `sqrt_price` as `None`, and the existing
+/// value is preserved by the repository.
 ///
 /// See the repository contract for the merge semantics and the stale-write
 /// guard.
@@ -129,9 +128,6 @@ pub struct PoolCurrentStateUpsert {
 
     /// Set only when the upsert originates from a swap event.
     pub sqrt_price: Option<u128>,
-
-    /// Set only when the upsert originates from a liquidity event.
-    pub liquidity: Option<u128>,
 }
 
 impl PoolCurrentStateUpsert {
@@ -152,7 +148,6 @@ impl PoolCurrentStateUpsert {
             reserve_a,
             reserve_b,
             sqrt_price: Some(sqrt_price),
-            liquidity: None,
         }
     }
 
@@ -161,6 +156,11 @@ impl PoolCurrentStateUpsert {
     /// `kind` is the domain enum; its mapping to the projection event kind
     /// goes through the [`From<MeteoraDammV2LiquidityEventKind> for LastEventKind`] impl
     /// defined above so add/remove sourcing stays in one place.
+    ///
+    /// The event's `liquidity_delta` is deliberately **not** carried here: it is
+    /// one position's unsigned movement, not the pool's L, and the projection
+    /// stopped pretending otherwise in migration 003. It stays where it is
+    /// meaningful — on the liquidity event row, next to its `kind`.
     pub fn from_liquidity(
         pool_address: Pubkey,
         protocol: Protocol,
@@ -168,7 +168,6 @@ impl PoolCurrentStateUpsert {
         kind: MeteoraDammV2LiquidityEventKind,
         reserve_a: u64,
         reserve_b: u64,
-        liquidity: u128,
     ) -> Self {
         Self {
             pool_address,
@@ -178,7 +177,6 @@ impl PoolCurrentStateUpsert {
             reserve_a,
             reserve_b,
             sqrt_price: None,
-            liquidity: Some(liquidity),
         }
     }
 }

@@ -60,7 +60,6 @@ fn from_swap_marks_kind_as_swap_and_sets_only_sqrt_price() {
     );
     assert_eq!(upsert.event_kind, LastEventKind::Swap);
     assert_eq!(upsert.sqrt_price, Some(9_999));
-    assert_eq!(upsert.liquidity, None);
     // The position is carried through whole — the repository orders on its
     // slot/event_index, and displays its signature/timestamp.
     assert_eq!(upsert.event_position, position(now));
@@ -76,7 +75,6 @@ fn from_liquidity_maps_kind_through_domain_enum() {
         MeteoraDammV2LiquidityEventKind::Add,
         100,
         200,
-        42,
     );
     let remove = PoolCurrentStateUpsert::from_liquidity(
         pk(1),
@@ -85,10 +83,10 @@ fn from_liquidity_maps_kind_through_domain_enum() {
         MeteoraDammV2LiquidityEventKind::Remove,
         100,
         200,
-        42,
     );
     assert_eq!(add.event_kind, LastEventKind::LiquidityAdd);
     assert_eq!(remove.event_kind, LastEventKind::LiquidityRemove);
+    // A liquidity event sets no sqrt_price — the repository preserves the one
+    // already stored. That is now the projection's only kind-specific state.
     assert_eq!(add.sqrt_price, None);
-    assert_eq!(add.liquidity, Some(42));
 }

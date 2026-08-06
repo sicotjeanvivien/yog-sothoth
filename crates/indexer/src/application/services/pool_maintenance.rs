@@ -172,7 +172,6 @@ impl PoolMaintenance {
             event.liquidity_event_kind,
             event.reserve_a_after,
             event.reserve_b_after,
-            event.liquidity_delta,
         );
         self.apply_pool_current_state_upsert(protocol, &upsert)
             .await;

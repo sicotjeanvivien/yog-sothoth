@@ -30,8 +30,6 @@ fn valid_row() -> PoolCurrentStateRow {
         reserve_b: 20_000_000,
         last_sqrt_price: Some(BigDecimal::from(42_000_000_u64)),
         last_swap_at: Some(now),
-        liquidity: Some(BigDecimal::from(100_000_000_u64)),
-        last_liquidity_at: Some(now - Duration::seconds(60)),
         updated_at: now + Duration::seconds(1),
     }
 }
@@ -48,7 +46,6 @@ fn try_from_valid_row_returns_state_with_all_fields_mapped() {
     // Snapshot timestamp values before consuming the row.
     let last_event_at = row.last_event_at;
     let last_swap_at = row.last_swap_at;
-    let last_liquidity_at = row.last_liquidity_at;
     let updated_at = row.updated_at;
 
     let state = PoolCurrentState::try_from(row).expect("valid row should convert");
@@ -62,21 +59,19 @@ fn try_from_valid_row_returns_state_with_all_fields_mapped() {
     assert_eq!(state.reserve_b, 20_000_000);
     assert_eq!(state.last_sqrt_price, Some(42_000_000_u128));
     assert_eq!(state.last_swap_at, last_swap_at);
-    assert_eq!(state.liquidity, Some(100_000_000_u128));
-    assert_eq!(state.last_liquidity_at, last_liquidity_at);
     assert_eq!(state.updated_at, updated_at);
 }
 
 #[test]
 fn try_from_with_none_optionals_returns_state_with_none() {
-    // The four Option fields go through `convert_optional`; pin that None
-    // inputs produce None outputs (and not, say, `Some(0)` from a misplaced
-    // `unwrap_or_default`).
+    // The two Option fields take different routes: `last_sqrt_price` goes
+    // through `convert_optional`, `last_swap_at` is a plain move. Pin that both
+    // turn a None input into a None output — the one worth guarding is the
+    // converted one, where a misplaced `unwrap_or_default` would yield
+    // `Some(0)`, i.e. a sqrt_price of zero passed off as an observed value.
     let row = PoolCurrentStateRow {
         last_sqrt_price: None,
         last_swap_at: None,
-        liquidity: None,
-        last_liquidity_at: None,
         ..valid_row()
     };
 
@@ -84,22 +79,18 @@ fn try_from_with_none_optionals_returns_state_with_none() {
 
     assert_eq!(state.last_sqrt_price, None);
     assert_eq!(state.last_swap_at, None);
-    assert_eq!(state.liquidity, None);
-    assert_eq!(state.last_liquidity_at, None);
 }
 
 #[test]
 fn try_from_preserves_distinct_timestamps_in_correct_fields() {
-    // Four distinct timestamp values — a field swap in the TryFrom
+    // Three distinct timestamp values — a field swap in the TryFrom
     // would surface as a mismatched assert below.
     let last_event_at = Utc::now();
     let last_swap_at = last_event_at + Duration::seconds(10);
-    let last_liquidity_at = last_event_at + Duration::seconds(20);
     let updated_at = last_event_at + Duration::seconds(30);
     let row = PoolCurrentStateRow {
         last_event_at,
         last_swap_at: Some(last_swap_at),
-        last_liquidity_at: Some(last_liquidity_at),
         updated_at,
         ..valid_row()
     };
@@ -108,7 +99,6 @@ fn try_from_preserves_distinct_timestamps_in_correct_fields() {
 
     assert_eq!(state.last_event_at, last_event_at);
     assert_eq!(state.last_swap_at, Some(last_swap_at));
-    assert_eq!(state.last_liquidity_at, Some(last_liquidity_at));
     assert_eq!(state.updated_at, updated_at);
 }
 
@@ -165,20 +155,6 @@ fn try_from_negative_reserve_b_returns_integrity() {
 fn try_from_negative_last_sqrt_price_returns_integrity() {
     let row = PoolCurrentStateRow {
         last_sqrt_price: Some(BigDecimal::from(-1_i64)),
-        ..valid_row()
-    };
-    let err = PoolCurrentState::try_from(row)
-        .expect_err("negative BigDecimal should fail u128 conversion");
-    assert!(
-        matches!(err, RepositoryError::Integrity(_)),
-        "expected Integrity, got {err:?}"
-    );
-}
-
-#[test]
-fn try_from_negative_liquidity_returns_integrity() {
-    let row = PoolCurrentStateRow {
-        liquidity: Some(BigDecimal::from(-1_i64)),
         ..valid_row()
     };
     let err = PoolCurrentState::try_from(row)

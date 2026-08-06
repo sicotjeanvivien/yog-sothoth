@@ -7,9 +7,15 @@ use crate::application::PoolCurrentStateView;
 
 /// `GET /api/pools/{address}/latest-state` response body.
 ///
-/// `reserve_a` / `reserve_b` (u64) and `last_sqrt_price` / `liquidity`
-/// (u128) are all emitted as JSON strings to preserve their full range
-/// across the JS bridge — a JSON-number consumer truncates above 2^53.
+/// `reserve_a` / `reserve_b` (u64) and `last_sqrt_price` (u128) are all
+/// emitted as JSON strings to preserve their full range across the JS bridge —
+/// a JSON-number consumer truncates above 2^53.
+///
+/// There is no liquidity `L` here, deliberately: the field that claimed to be
+/// one published a position's unsigned `liquidity_delta` instead, and was
+/// removed in migration 003. Per-movement liquidity lives on
+/// `GET /api/pools/{address}/liquidity-events`, under its own name and next to
+/// the add/remove kind that gives it a sign.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolCurrentStateResponse {
@@ -35,10 +41,6 @@ pub(crate) struct PoolCurrentStateResponse {
 
     pub(crate) last_swap_at: Option<DateTime<Utc>>,
 
-    /// Concentrated-liquidity L; encoded as a string to keep precision in JS.
-    pub(crate) liquidity: Option<String>,
-    pub(crate) last_liquidity_at: Option<DateTime<Utc>>,
-
     pub(crate) updated_at: DateTime<Utc>,
 }
 
@@ -59,8 +61,6 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
             last_sqrt_price: state.last_sqrt_price.map(|v| v.to_string()),
             spot_price_a_in_b,
             last_swap_at: state.last_swap_at,
-            liquidity: state.liquidity.map(|v| v.to_string()),
-            last_liquidity_at: state.last_liquidity_at,
             updated_at: state.updated_at,
         }
     }

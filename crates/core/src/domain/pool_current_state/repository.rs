@@ -34,8 +34,10 @@ use crate::{
 ///
 /// * [`upsert`](Self::upsert) MUST preserve `last_sqrt_price` / `last_swap_at`
 ///   when the incoming payload is a liquidity event (i.e. `sqrt_price`
-///   is `None`), and conversely preserve `liquidity` / `last_liquidity_at`
-///   when the payload is a swap event.
+///   is `None`). That pair is the only kind-specific state the projection
+///   still carries: the liquidity side used to hold a `liquidity` /
+///   `last_liquidity_at` pair, dropped in migration 003 because the value was
+///   a position's delta, not the pool's L.
 ///
 /// * [`upsert`](Self::upsert) MUST refresh `updated_at` to `NOW()` on every
 ///   successful write (whether or not the stale-write guard applied).

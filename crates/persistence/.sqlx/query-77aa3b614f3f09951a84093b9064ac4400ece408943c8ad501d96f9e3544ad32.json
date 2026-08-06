@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                pool_address,\n                protocol,\n                last_event_at,\n                last_event_kind,\n                last_signature,\n                reserve_a,\n                reserve_b,\n                last_sqrt_price,\n                last_swap_at,\n                liquidity,\n                last_liquidity_at,\n                updated_at\n            FROM pool_current_state\n            WHERE ($1::TIMESTAMPTZ IS NULL OR last_event_at < $1)\n            ORDER BY last_event_at DESC, pool_address ASC\n            LIMIT $2\n            ",
+  "query": "\n            SELECT\n                pool_address,\n                protocol,\n                last_event_at,\n                last_event_kind,\n                last_signature,\n                reserve_a,\n                reserve_b,\n                last_sqrt_price,\n                last_swap_at,\n                updated_at\n            FROM pool_current_state\n            WHERE pool_address = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -50,24 +50,13 @@
       },
       {
         "ordinal": 9,
-        "name": "liquidity",
-        "type_info": "Numeric"
-      },
-      {
-        "ordinal": 10,
-        "name": "last_liquidity_at",
-        "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 11,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Timestamptz",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -80,10 +69,8 @@
       false,
       true,
       true,
-      true,
-      true,
       false
     ]
   },
-  "hash": "7a527e7ef6dd0692c7953973b11ad07939da0732514867dafe0d4dfbbd68f33c"
+  "hash": "77aa3b614f3f09951a84093b9064ac4400ece408943c8ad501d96f9e3544ad32"
 }

@@ -1,0 +1,91 @@
+-- ============================================================================
+-- 003_drop_pool_current_state_liquidity.sql — a column that named a quantity
+-- it never held
+-- ============================================================================
+-- Fixes the finding of `.project` ticket 06. `pool_current_state.liquidity` was
+-- declared as the pool's concentrated-liquidity **L** — in this schema (§4,
+-- "Liquidity (L): updated by liquidity events only", and the `COMMENT ON COLUMN`
+-- right below it) and in the API DTO that published it ("Concentrated-liquidity
+-- L; encoded as a string to keep precision in JS").
+--
+-- What it actually held is `EvtLiquidityChange.liquidity_delta`: the size of
+-- **one position's** movement, unsigned, written last-write-wins.
+--
+-- ## Two defects, stacked
+--
+-- 1. **It is a delta, not a total.** Each event overwrites rather than
+--    accumulating, so the column reports the size of the most recent LP
+--    movement — never a pool-wide quantity. A pool whose real L is ~1 004 700,
+--    after an add of 5 000 and a remove of 300, published `300`.
+-- 2. **The sign is dropped.** `change_type` (0 = add, 1 = remove) is decoded and
+--    survives as `last_event_kind` in the very same row, but it is never applied
+--    to the number. A remove of 42 writes exactly what an add of 42 writes.
+--
+-- The two grandeurs have no common order of magnitude. This was not an
+-- approximation that drifted; it was a different quantity under a name that
+-- asserted otherwise.
+--
+-- ## The rule was already written down, one join away
+--
+-- §13's liquidity aggregate states it and honours it:
+--
+--     `liquidity_delta` is an unsigned magnitude (u128) — summing it across
+--     both kinds would be meaningless, so every value is split by kind.
+--
+--     SUM(liquidity_delta) FILTER (WHERE liquidity_event_kind = 'add')    AS liquidity_added,
+--     SUM(liquidity_delta) FILTER (WHERE liquidity_event_kind = 'remove') AS liquidity_removed,
+--
+-- Two columns, never mixed. The projection did what that comment forbids —
+-- except instead of summing both directions it kept whichever came last. Same
+-- rule, applied at one site out of two.
+--
+-- ## Why DROP rather than fix in place
+--
+-- **The pool's L is in no event.** cp-amm emits it neither on
+-- `EvtLiquidityChange` nor on `EvtSwap2`; only `EvtInitializePool` carries a
+-- genesis `liquidity`, stale from the first movement. So there is nothing to
+-- correct the column *with*. The two ways to obtain a real L both build
+-- something new:
+--
+--   * read `pool.liquidity` off the on-chain `Pool` account (the decoder and
+--     `PoolAccountWorker` already exist) — but the worker is a one-shot
+--     back-fill, so a value that moves on every event would need either a
+--     periodic refresh of every pool or one RPC read per movement;
+--   * accumulate signed deltas — only converges for a pool observed since
+--     genesis, which is false for nearly all of them.
+--
+-- Neither is served by keeping the current column: a fresh column fed by the
+-- account decoder owes nothing to this one. So the honest move is to stop
+-- publishing and stop storing, and let a future need build the right thing.
+--
+-- ## Nothing reads it
+--
+-- Verified before dropping: no VIEW (`pool_current_tvl` reads `reserve_a` /
+-- `reserve_b`, `pool_price_snapshot` reads `last_sqrt_price` / `last_swap_at`),
+-- no detector, no KPI — the web pool page renders `reserveA`, `reserveB` and
+-- `spotPriceAInB` and never touches these two. They travelled event → table →
+-- struct → JSON and stopped there, which is precisely how a wrong value stays
+-- wrong for months without anyone noticing.
+--
+-- `last_liquidity_at` is NOT wrong — it is the timestamp of the last liquidity
+-- event, exact and well defined. It goes because nothing reads it either, and
+-- `last_event_at` + `last_event_kind` already answer "when did this pool move".
+-- Its counterpart `last_swap_at` stays: `pool_price_snapshot` exposes it and
+-- `price_oracle_deviation` gates on it, so that one is a live field.
+--
+-- ## Scope
+--
+-- The event layer is untouched. `meteora_damm_v2_liquidity_events.liquidity_delta`
+-- (§13) is a faithful record, sits next to its `liquidity_event_kind`, and is
+-- published under its own name by `/api/pools/{address}/liquidity-events`. The
+-- defect was in the projection, and only there.
+--
+-- The `COMMENT ON COLUMN` of §4 needs no statement of its own: Postgres drops a
+-- column's comment with the column. No index to drop either — the only one on
+-- this table is `idx_pool_current_state_protocol` — and the GRANTs are
+-- table-level, so the privilege matrix is unchanged.
+-- ============================================================================
+
+ALTER TABLE pool_current_state
+    DROP COLUMN liquidity,
+    DROP COLUMN last_liquidity_at;
