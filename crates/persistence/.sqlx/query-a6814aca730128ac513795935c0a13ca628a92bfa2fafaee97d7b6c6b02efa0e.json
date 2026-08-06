@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT cliff_fee_numerator, number_of_period, period_frequency,\n                  reduction_factor, activation_point, activation_type\n           FROM meteora_damm_v2_pool_properties WHERE pool_address = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cliff_fee_numerator",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "number_of_period",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "period_frequency",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "reduction_factor",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "activation_point",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "activation_type",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "a6814aca730128ac513795935c0a13ca628a92bfa2fafaee97d7b6c6b02efa0e"
+}

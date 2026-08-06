@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO meteora_damm_v2_pool_properties\n                (pool_address, protocol_fee_percent, referral_fee_percent,\n                 base_fee_kind, has_dynamic_fee,\n                 cliff_fee_numerator, number_of_period, period_frequency,\n                 reduction_factor, activation_point, activation_type)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n            ON CONFLICT (pool_address) DO UPDATE\n                SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,\n                    referral_fee_percent = EXCLUDED.referral_fee_percent,\n                    has_dynamic_fee      = EXCLUDED.has_dynamic_fee,\n                    -- COALESCE, not EXCLUDED: an account whose BaseFeeMode we\n                    -- cannot map sends NULL, and that must not erase a kind an\n                    -- earlier decode already established.\n                    base_fee_kind        = COALESCE(EXCLUDED.base_fee_kind,\n                                                    meteora_damm_v2_pool_properties.base_fee_kind),\n                    -- Plain EXCLUDED here, deliberately unlike the line above.\n                    -- These six describe a curve, and a NULL means \"this read\n                    -- established no curve\" — which is the truth to record, not\n                    -- a value to protect. Preserving them would let a pool whose\n                    -- fee shape genuinely changed keep publishing a decay it no\n                    -- longer has, and a stale curve is worse than none: it is\n                    -- confidently wrong instead of visibly absent.\n                    cliff_fee_numerator  = EXCLUDED.cliff_fee_numerator,\n                    number_of_period     = EXCLUDED.number_of_period,\n                    period_frequency     = EXCLUDED.period_frequency,\n                    reduction_factor     = EXCLUDED.reduction_factor,\n                    activation_point     = EXCLUDED.activation_point,\n                    activation_type      = EXCLUDED.activation_type\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int2",
+        "Int2",
+        "Text",
+        "Bool",
+        "Int8",
+        "Int4",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "99b86ea10f8c332177a9cf03e5a6e56c9d8771d7f513256115ebe42c325bfe26"
+}
