@@ -241,15 +241,18 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
     seed_pool(&pool).await;
     let repo = PgPoolCurrentStateRepository::new(pool.clone());
 
-    let liquidity = |event_position: EventPosition, delta: u128| {
+    // `reserve_a` carries the per-call marker. It used to be the projection's
+    // `liquidity` column, dropped in migration 003 — the assertion needs a
+    // field that actually differs between the two writes, otherwise "the later
+    // one landed" is unobservable and the test passes on a broken guard.
+    let liquidity = |event_position: EventPosition, reserve_a: u64| {
         PoolCurrentStateUpsert::from_liquidity(
             pk(1),
             Protocol::MeteoraDammV2,
             event_position,
             MeteoraDammV2LiquidityEventKind::Add,
-            100,
+            reserve_a,
             200,
-            delta,
         )
     };
 
@@ -275,8 +278,8 @@ async fn the_liquidity_path_shares_the_same_ordering(pool: PgPool) {
         .await
         .unwrap()
         .expect("row")
-        .liquidity;
-    assert_eq!(stored, Some(20));
+        .reserve_a;
+    assert_eq!(stored, 20, "the second write must be the one that stuck");
 }
 
 /// The headline case, end to end: a real routed transaction must leave the

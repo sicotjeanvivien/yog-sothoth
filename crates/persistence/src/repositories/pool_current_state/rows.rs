@@ -22,8 +22,6 @@ pub(super) struct PoolCurrentStateRow {
     pub(super) reserve_b: i64,
     pub(super) last_sqrt_price: Option<BigDecimal>,
     pub(super) last_swap_at: Option<DateTime<Utc>>,
-    pub(super) liquidity: Option<BigDecimal>,
-    pub(super) last_liquidity_at: Option<DateTime<Utc>>,
     pub(super) updated_at: DateTime<Utc>,
 }
 
@@ -53,8 +51,6 @@ impl TryFrom<PoolCurrentStateRow> for PoolCurrentState {
                 convert_bigdecimal_to_u128,
             )?,
             last_swap_at: row.last_swap_at,
-            liquidity: convert_optional(row.liquidity, "liquidity", convert_bigdecimal_to_u128)?,
-            last_liquidity_at: row.last_liquidity_at,
             updated_at: row.updated_at,
         })
     }

@@ -8,14 +8,15 @@
 //!   raising an error. It used to compare `last_event_at`, whose second
 //!   granularity rejected a third of all updates (baseline §4).
 //! * `last_sqrt_price` / `last_swap_at` are preserved on liquidity events by
-//!   `COALESCE(EXCLUDED.x, pool_current_state.x)`, and vice versa for
-//!   `liquidity` / `last_liquidity_at` on swap events.
+//!   `COALESCE(EXCLUDED.x, pool_current_state.x)`. That pair is the only
+//!   kind-specific state left: a `liquidity` / `last_liquidity_at` pair was
+//!   preserved symmetrically until migration 003 dropped it (it held a
+//!   position's unsigned delta under a name claiming the pool's L).
 //! * `updated_at` is bumped to `NOW()` on every accepted write.
 //!
 //! Column type mapping (matches the migration and the upstream event tables):
 //!   * `reserve_a` / `reserve_b`                  BIGINT          ↔ u64
 //!   * `last_sqrt_price`                          NUMERIC(39, 0)  ↔ u128
-//!   * `liquidity`                                NUMERIC(39, 0)  ↔ u128
 //!
 //! Conversions go through the shared helpers in `repository_utils` to keep
 //! error mapping consistent across the crate.
@@ -91,20 +92,13 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
         let sqrt_price = upsert
             .sqrt_price
             .map(|v| convert_u128_to_bigdecimal(v, "sqrt_price"));
-        let liquidity = upsert
-            .liquidity
-            .map(|v| convert_u128_to_bigdecimal(v, "liquidity"));
 
-        // `last_swap_at` is set only for swap events; `last_liquidity_at` only
-        // for liquidity events. The COALESCE in the UPDATE branch keeps the
-        // previous value for the field the current event doesn't touch.
+        // `last_swap_at` is set only for swap events. The COALESCE in the UPDATE
+        // branch keeps the previous value when the current event is a liquidity
+        // one, which doesn't touch it.
         let event_at = upsert.event_position.timestamp;
         let last_swap_at = match upsert.event_kind {
             LastEventKind::Swap => Some(event_at),
-            _ => None,
-        };
-        let last_liquidity_at = match upsert.event_kind {
-            LastEventKind::LiquidityAdd | LastEventKind::LiquidityRemove => Some(event_at),
             _ => None,
         };
 
@@ -126,7 +120,6 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
                     last_event_at, last_event_kind, last_signature,
                     reserve_a, reserve_b,
                     last_sqrt_price, last_swap_at,
-                    liquidity, last_liquidity_at,
                     updated_at,
                     last_slot, last_event_index, last_transaction_index
                 )
@@ -135,9 +128,8 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
                     $3, $4, $5,
                     $6, $7,
                     $8, $9,
-                    $10, $11,
                     NOW(),
-                    $12, $13, $14
+                    $10, $11, $12
                 )
                 ON CONFLICT (pool_address) DO UPDATE SET
                     protocol               = EXCLUDED.protocol,
@@ -146,10 +138,8 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
                     last_signature         = EXCLUDED.last_signature,
                     reserve_a              = EXCLUDED.reserve_a,
                     reserve_b              = EXCLUDED.reserve_b,
-                    last_sqrt_price        = COALESCE(EXCLUDED.last_sqrt_price,   pool_current_state.last_sqrt_price),
-                    last_swap_at           = COALESCE(EXCLUDED.last_swap_at,      pool_current_state.last_swap_at),
-                    liquidity              = COALESCE(EXCLUDED.liquidity,         pool_current_state.liquidity),
-                    last_liquidity_at      = COALESCE(EXCLUDED.last_liquidity_at, pool_current_state.last_liquidity_at),
+                    last_sqrt_price        = COALESCE(EXCLUDED.last_sqrt_price, pool_current_state.last_sqrt_price),
+                    last_swap_at           = COALESCE(EXCLUDED.last_swap_at,    pool_current_state.last_swap_at),
                     updated_at             = NOW(),
                     last_slot              = EXCLUDED.last_slot,
                     last_event_index       = EXCLUDED.last_event_index,
@@ -196,8 +186,6 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
             reserve_b,
             sqrt_price,
             last_swap_at,
-            liquidity,
-            last_liquidity_at,
             slot,
             event_index,
             transaction_index,
@@ -238,8 +226,6 @@ impl PoolCurrentStateLookup for PgPoolCurrentStateRepository {
                 reserve_b,
                 last_sqrt_price,
                 last_swap_at,
-                liquidity,
-                last_liquidity_at,
                 updated_at
             FROM pool_current_state
             WHERE pool_address = $1
@@ -280,8 +266,6 @@ impl PoolCurrentStateLookup for PgPoolCurrentStateRepository {
                 reserve_b,
                 last_sqrt_price,
                 last_swap_at,
-                liquidity,
-                last_liquidity_at,
                 updated_at
             FROM pool_current_state
             WHERE ($1::TIMESTAMPTZ IS NULL OR last_event_at < $1)

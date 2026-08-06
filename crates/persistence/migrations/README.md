@@ -25,6 +25,15 @@ rebuilt. That was free precisely because no cagg had ever materialized a bucket
 the scheduler runs. A cagg cannot be `ALTER`ed, so any future column added to
 one costs the same drop — and by then, a backfill.
 
+`003_drop_pool_current_state_liquidity.sql` — drops `pool_current_state.liquidity`
+and `last_liquidity_at`. The first named the pool's concentrated-liquidity **L**
+and held a single position's unsigned `liquidity_delta`, last-write-wins; the
+second was exact but read by nobody. **A DROP COLUMN is forward-only like any
+other migration**: the data is not recoverable from the schema afterwards, so
+the justification belongs in the file header, and it is there. Nothing was lost
+here — the same magnitude stays on the liquidity event rows, next to the
+add/remove kind that gives it meaning.
+
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs

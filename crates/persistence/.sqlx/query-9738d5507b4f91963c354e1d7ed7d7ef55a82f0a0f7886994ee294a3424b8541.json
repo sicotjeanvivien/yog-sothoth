@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH previous AS (\n                SELECT last_slot, last_signature\n                FROM pool_current_state\n                WHERE pool_address = $1\n            ),\n            upserted AS (\n                INSERT INTO pool_current_state (\n                    pool_address, protocol,\n                    last_event_at, last_event_kind, last_signature,\n                    reserve_a, reserve_b,\n                    last_sqrt_price, last_swap_at,\n                    updated_at,\n                    last_slot, last_event_index, last_transaction_index\n                )\n                VALUES (\n                    $1, $2,\n                    $3, $4, $5,\n                    $6, $7,\n                    $8, $9,\n                    NOW(),\n                    $10, $11, $12\n                )\n                ON CONFLICT (pool_address) DO UPDATE SET\n                    protocol               = EXCLUDED.protocol,\n                    last_event_at          = EXCLUDED.last_event_at,\n                    last_event_kind        = EXCLUDED.last_event_kind,\n                    last_signature         = EXCLUDED.last_signature,\n                    reserve_a              = EXCLUDED.reserve_a,\n                    reserve_b              = EXCLUDED.reserve_b,\n                    last_sqrt_price        = COALESCE(EXCLUDED.last_sqrt_price, pool_current_state.last_sqrt_price),\n                    last_swap_at           = COALESCE(EXCLUDED.last_swap_at,    pool_current_state.last_swap_at),\n                    updated_at             = NOW(),\n                    last_slot              = EXCLUDED.last_slot,\n                    last_event_index       = EXCLUDED.last_event_index,\n                    last_transaction_index = EXCLUDED.last_transaction_index\n                -- Lexicographic tuple comparison. `last_event_at` is still\n                -- written above, for display, but no longer orders anything:\n                -- it has second granularity and 56 % of swaps share theirs.\n                -- The COALESCE lets gRPC make this a total order later by\n                -- filling `transaction_index`, with no further migration.\n                --\n                -- Within one slot the comparison is NOT a fair tie-break, and\n                -- the shortcut worth avoiding is calling it \"wrong in either\n                -- direction\": `event_index` numbers the emissions of ONE\n                -- transaction, so comparing it across two is comparing unlike\n                -- things, and the state converges to whichever has the largest\n                -- index. That systematically favours a leg deep inside a\n                -- routed transaction over a single-leg swap of the same block.\n                -- It is kept because it is **order-independent** — the final\n                -- state is a function of the event set, not of delivery order,\n                -- so a replay reproduces it. Last-writer-wins would be\n                -- unbiased and non-deterministic instead.\n                WHERE (\n                        pool_current_state.last_slot,\n                        COALESCE(pool_current_state.last_transaction_index, 0),\n                        pool_current_state.last_event_index\n                      ) < (\n                        EXCLUDED.last_slot,\n                        COALESCE(EXCLUDED.last_transaction_index, 0),\n                        EXCLUDED.last_event_index\n                      )\n                RETURNING 1 AS applied\n            )\n            SELECT\n                EXISTS (SELECT 1 FROM upserted)          AS \"applied!\",\n                (SELECT last_slot      FROM previous)    AS previous_slot,\n                (SELECT last_signature FROM previous)    AS previous_signature\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "applied!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "previous_slot",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "previous_signature",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Numeric",
+        "Timestamptz",
+        "Int8",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9738d5507b4f91963c354e1d7ed7d7ef55a82f0a0f7886994ee294a3424b8541"
+}
