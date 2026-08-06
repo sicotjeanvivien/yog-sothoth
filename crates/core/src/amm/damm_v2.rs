@@ -187,6 +187,11 @@ const SCALE_OFFSET: u32 = 64;
 /// Above it the Q64.64 result cannot be represented.
 const MAX_EXPONENTIAL: u32 = 0x8_0000;
 
+/// A curve whose periods have no length never advances, and cp-amm returns its
+/// cliff rather than failing — the short-circuit that opens
+/// `get_base_fee_numerator` (`fee_time_scheduler.rs:122`).
+const ZERO_FREQUENCY_STAYS_AT_CLIFF: u64 = 0;
+
 /// The parameters a **time-based** fee scheduler needs to place a pool's base
 /// fee on its decay curve.
 ///
@@ -254,24 +259,38 @@ impl FeeSchedulerParams {
     /// cp-amm's behaviour (`fee_time_scheduler.rs`), it is not in the public
     /// docs, and it is the opposite of what the name "cliff" suggests.
     ///
-    /// `None` when `period_frequency` is zero: cp-amm divides by it, so the
-    /// on-chain program errors out there and so do we. Returning the floor
-    /// instead — the first shape of this function — would have invented a fee
-    /// the chain refuses to compute, in a port whose only value is fidelity.
-    /// Unreachable on real data (every captured account with
-    /// `period_frequency == 0` also has `number_of_period == 0`, hence a
-    /// constant fee and no scheduler at all), which is exactly why it must not
-    /// be papered over.
-    fn elapsed_periods(&self, current_point: u64) -> Option<u16> {
-        if current_point < self.activation_point {
-            return Some(self.number_of_period);
+    /// ⚠️ **A zero `period_frequency` is not an error**: cp-amm short-circuits on
+    /// it *before* anything else and returns the cliff
+    /// (`fee_time_scheduler.rs:122`), so a curve that cannot advance simply
+    /// never leaves its starting point. [`ZERO_FREQUENCY_STAYS_AT_CLIFF`] carries
+    /// that, and this function reports "no elapsed periods" for it.
+    ///
+    /// Two earlier shapes of this got it wrong in opposite directions — first
+    /// returning the floor, then returning `None` on the strength of a
+    /// `safe_div` that the short-circuit means is never reached. Both were
+    /// written from a summary of the source rather than the source. On-chain
+    /// `validate` requires the three scheduler fields to be non-zero together,
+    /// so no real account exercises this; it is transcribed because a port that
+    /// drops an unreachable branch is a port that has quietly stopped being one.
+    fn elapsed_periods(&self, current_point: u64) -> u16 {
+        if current_point < self.activation_point || self.period_frequency == 0 {
+            return if self.period_frequency == 0 {
+                0
+            } else {
+                self.number_of_period
+            };
         }
-        let elapsed = (current_point - self.activation_point).checked_div(self.period_frequency)?;
-        Some(
-            u16::try_from(elapsed)
-                .unwrap_or(u16::MAX)
-                .min(self.number_of_period),
-        )
+        let elapsed = (current_point - self.activation_point) / self.period_frequency;
+        // Saturate then clamp. cp-amm clamps in `u64` and casts afterwards, so
+        // its cast can never fail; doing it in this order is equivalent because
+        // `number_of_period` is itself a `u16`. **The saturation is load-bearing**:
+        // a real pool with a one-second period passes `u16::MAX` elapsed periods
+        // about 18 hours after activation, and a wrapping or zeroing conversion
+        // there would send it back to period 0 — republishing the cliff, which is
+        // the exact defect this module exists to remove.
+        u16::try_from(elapsed)
+            .unwrap_or(u16::MAX)
+            .min(self.number_of_period)
     }
 }
 
@@ -285,7 +304,10 @@ impl FeeSchedulerParams {
 ///
 /// Returns `None` only on arithmetic the on-chain program would also reject.
 pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) -> Option<u64> {
-    let period = params.elapsed_periods(current_point)?;
+    if params.period_frequency == ZERO_FREQUENCY_STAYS_AT_CLIFF {
+        return Some(params.cliff_fee_numerator);
+    }
+    let period = params.elapsed_periods(current_point);
     match params.kind {
         BaseFeeKind::SchedulerLinear => {
             let drop = u64::from(period).checked_mul(params.reduction_factor)?;

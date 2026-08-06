@@ -395,14 +395,19 @@ fn a_constant_fee_reports_no_current_fee() {
 /// `{currentFeeBps: null, feeSchedulerExpired: true}` — telling a consumer the
 /// decay is over and that there is no fee, about one pool, in one payload.
 ///
-/// A zero `period_frequency` is the reachable case: the decoder gates on the
-/// mode, not on the curve's contents, so such an account is stored with a curve
-/// while `elapsed_periods` refuses to divide by it.
+/// The reachable case is a linear curve whose total decay exceeds its cliff:
+/// `cliff.checked_sub(periods × reduction_factor)` yields `None`, exactly as
+/// cp-amm's `safe_sub` would error. The decoder gates on the *mode*, not on the
+/// curve's contents, so such an account is stored with a curve it cannot
+/// evaluate.
+///
+/// (A zero `period_frequency` is *not* this case — cp-amm short-circuits it to
+/// the cliff, and so do we.)
 #[test]
 fn a_curve_that_cannot_be_evaluated_silences_both_fields() {
     let mut props = scheduler_properties();
     props.fee_scheduler = props.fee_scheduler.map(|mut s| {
-        s.period_frequency = 0;
+        s.reduction_factor = s.cliff_fee_numerator;
         s
     });
     let r = MeteoraDammV2PropertiesResponse::build(props, at(1_785_180_416 + 86_400));

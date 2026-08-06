@@ -295,19 +295,89 @@ fn a_zero_reduction_factor_never_moves() {
     );
 }
 
-/// A zero `period_frequency` makes cp-amm's `safe_div` fail, so it must make us
-/// fail too — not quietly return the floor, which is a fee the chain refuses to
-/// compute. Unreachable on real accounts; that is the point of pinning it.
+/// A zero `period_frequency` returns the **cliff**, at any point in time.
+///
+/// cp-amm short-circuits on it as the first statement of
+/// `get_base_fee_numerator`, before the pre-activation branch and before any
+/// division: a curve whose periods have no length never advances, so it stays
+/// where it started. Two earlier shapes of our port returned the floor, then
+/// `None`, both from a summary of the source rather than the source itself.
+///
+/// Unreachable on real accounts — on-chain `validate` requires the three
+/// scheduler fields to be non-zero together — which is exactly why it is pinned
+/// rather than left to drift.
 #[test]
-fn a_zero_period_frequency_yields_no_fee_rather_than_an_invented_one() {
+fn a_zero_period_frequency_stays_at_the_cliff() {
     let p = FeeSchedulerParams {
         period_frequency: 0,
         ..fixture_28bdu1()
     };
-    assert_eq!(base_fee_numerator_at(&p, p.activation_point + 1), None);
-    // Before activation the division is never reached, so that branch still
-    // answers — matching the source, which tests the ordering the same way.
-    assert!(base_fee_numerator_at(&p, p.activation_point - 1).is_some());
+    for point in [p.activation_point - 1, p.activation_point, u64::MAX] {
+        assert_eq!(
+            base_fee_numerator_at(&p, point),
+            Some(500_000_000),
+            "a curve that cannot advance stays at its cliff, at every point"
+        );
+    }
+}
+
+/// The `u16` saturation is load-bearing, and **reachable in production today**.
+///
+/// `FvAQ9j…` and `59cbVF…` both run a one-second period (read from their real
+/// account bytes), so `u16::MAX` elapsed periods is passed about **18 hours**
+/// after activation — months ago for both. A conversion that wrapped or zeroed
+/// instead of saturating would send them back to period 0 and republish the
+/// cliff: 9900 bps instead of 25.39, a factor of 390, which is the very defect
+/// this module removes.
+///
+/// Mutation-checked: `unwrap_or(u16::MAX)` → `unwrap_or(0)` fails here.
+#[test]
+fn an_elapsed_count_past_u16_saturates_instead_of_wrapping_to_the_cliff() {
+    let p = fixture_fvaq9j();
+    let long_after = p.activation_point + u64::from(u16::MAX) + 1;
+
+    let fee = base_fee_numerator_at(&p, long_after).expect("evaluable");
+    assert_eq!(
+        fee,
+        base_fee_numerator_at(&p, p.expiry_point().unwrap()).unwrap(),
+        "past the last period the fee is the floor, not the cliff"
+    );
+    assert_ne!(fee, p.cliff_fee_numerator);
+}
+
+/// The expiry boundary itself: `is_expired_at` is strict, so the last point of
+/// the curve is not yet expired. A public field deserves its edge pinned.
+#[test]
+fn expiry_is_strict_at_its_own_boundary() {
+    let p = fixture_28bdu1();
+    let expiry = p.expiry_point().unwrap();
+    assert!(
+        !p.is_expired_at(expiry),
+        "the last point is still on the curve"
+    );
+    assert!(p.is_expired_at(expiry + 1));
+}
+
+/// `pow`'s inversion branch, exercised directly.
+///
+/// The fee scheduler never reaches it — its base is `1 - rf/10_000`, always
+/// below 1. It is transcribed anyway, and this module's own doc-comment says why:
+/// "dropping a branch because today's only caller cannot reach it is how a port
+/// silently diverges from its source". Leaving it untested is the same omission
+/// wearing a different hat.
+#[test]
+fn pow_inverts_a_base_above_one_like_the_source_does() {
+    // 2.0 in Q64.64, squared, is 4.0 — the branch must not change the value.
+    let two = ONE_Q64 * 2;
+    let four = pow(two, 2).expect("2^2 is representable");
+    let ratio = four / ONE_Q64;
+    assert!(
+        (3..=4).contains(&ratio),
+        "expected ~4.0 in Q64.64, got a ratio of {ratio}"
+    );
+    // Exponent 0 is 1.0 whatever the base, on both sides of the branch.
+    assert_eq!(pow(two, 0), Some(ONE_Q64));
+    assert_eq!(pow(ONE_Q64 / 2, 0), Some(ONE_Q64));
 }
 
 /// The kinds that must never reach this function get `None`, never the cliff.
