@@ -1,6 +1,9 @@
-//! Integration tests for `yog-persistence`, DB-backed and `#[ignore]`d by
-//! default — they need a live Postgres (see CLAUDE.md for the
-//! `timescaledb.max_background_workers = 0` requirement).
+//! Integration tests for `yog-persistence`, DB-backed and gated on the
+//! `integration-tests` feature by the `#![cfg(...)]` below — **not** `#[ignore]`d,
+//! so `--include-ignored` does nothing here and the runs report `0 ignored`.
+//! They need a live Postgres, reached with an admin `DATABASE_URL` (see
+//! CLAUDE.md for that and the `timescaledb.max_background_workers = 0`
+//! requirement).
 //!
 //! **One file per subject, one single test binary.** Cargo auto-discovers every
 //! `.rs` directly under `tests/` as its own target, which would mean one link

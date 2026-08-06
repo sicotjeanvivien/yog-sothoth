@@ -35,20 +35,27 @@ cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 116 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 691, not 575 — the
+# un-gates the 117 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 692, not 575 — the
 # integration tests are INCLUDED in that total, not additional to it.
 cargo test --workspace --all-features
 
-# Integration tests are DB-backed and #[ignore]d by default — they need a live Postgres.
-# `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`:
-# sqlx::test creates a throwaway DB per test, which `yog_migrate` may not do
-# ("permission denied for database yog_sothoth" — all 116 fail in ~1s).
+# Integration tests are DB-backed and gated on the `integration-tests` feature
+# (`tests/main.rs` is `#![cfg(...)]`-gated, NOT `#[ignore]`d — the runs report
+# `0 ignored`, and `--include-ignored` is a no-op here). They need a live Postgres.
+#
+# `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`.
+# sqlx::test builds a throwaway schema `_sqlx_test` in the maintenance database
+# and `yog_migrate` lacks CREATE on it — that is where the failure lands, before
+# the missing `rolcreatedb` ever comes into play. The symptom is all 117 failing
+# in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
+# reads like a regression and is not one.
+#
 # The Postgres must run with `timescaledb.max_background_workers = 0` (see
 # docker-compose.yml): sqlx::test creates a fresh DB per test whose cagg refresh
 # policies (baseline §13) otherwise have the TimescaleDB job scheduler race
 # the next test's migration DDL on the shared catalog ("tuple concurrently deleted").
-cargo test -p yog-persistence --features integration-tests -- --include-ignored
+cargo test -p yog-persistence --features integration-tests
 
 # Run a binary natively (see "Local dev" for the DB it expects)
 cargo run -p yog-indexer        # or yog-api, yog-context, yog-signals
