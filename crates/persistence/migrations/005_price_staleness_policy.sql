@@ -3,10 +3,12 @@
 -- ============================================================================
 -- Until this migration there was NO policy on how old a price may be. Measured
 -- on 7 August 2026: **7 views** read `token_prices` through **17 LATERAL
--- lookups**, and exactly **one** of them bounded the age — `pool_price_snapshot`
--- (024), which merely exposes `fetched_at` so that `price_oracle_deviation` can
--- gate in Rust (`max_price_age`, 15 min). The other sixteen took whatever the
--- most recent row happened to be, however old.
+-- lookups**, and **none of the seventeen bounded the age in SQL** — every one
+-- took whatever the most recent row happened to be, however old. Exactly one
+-- view, `pool_price_snapshot` (024), made the age *knowable* by carrying
+-- `fetched_at` through, and exactly one consumer acted on it:
+-- `price_oracle_deviation` gates in Rust (`max_price_age`, 15 min). So the rule
+-- existed, once, downstream of one view out of seven.
 --
 -- ## The failure that motivated it
 --
@@ -30,15 +32,28 @@
 --   * **latest** (020) — no time reference at all, the price is "current". The
 --     question is how old it is **relative to now()**.
 --
--- Hence two constants, not one: 1 hour for as-of (one bucket width — a price
--- more than a bucket away was not describing that hour), 15 minutes for latest
--- (the value `price_oracle_deviation` already settled on; the price worker
--- samples every 30 s, so 15 min is 30 missed ticks — wide enough to absorb a
--- Jupiter hiccup, tight enough to catch a real outage).
+-- Hence two constants, not one: 1 hour for as-of (one bucket width), 15 minutes
+-- for latest (the value `price_oracle_deviation` already settled on; the price
+-- worker samples every 30 s, so 15 min is 30 missed ticks — wide enough to
+-- absorb a Jupiter hiccup, tight enough to catch a real outage).
+--
+-- ⚠️ **What "1 hour" actually buys, stated precisely.** The reference is the
+-- bucket's START, so for `[10:00, 11:00)` the accepted price window is
+-- `[09:00, 10:00]` — the hour BEFORE the bucket, never inside it. Two
+-- consequences that "one bucket width" alone does not convey:
+--
+--   * a swap at 10:59 may be valued by a price fetched at 09:00, i.e. **1 h 59 m
+--     old** relative to that trade. The envelope is up to two bucket widths per
+--     event, not one;
+--   * a price fetched at 10:30 — inside the very hour being valued — is
+--     REJECTED, because the pre-existing `fetched_at <= h.bucket` half excludes
+--     it. That half is not new and the direction is conservative (never value a
+--     bucket with a price from its own future), so this is a widening of the
+--     as-of contract's description, not of its behaviour.
 --
 -- ## Why functions rather than literals
 --
--- The rule was previously applied at one site out of seventeen. Spelling
+-- The rule previously existed at one site out of seventeen, and in Rust. Spelling
 -- `INTERVAL '1 hour'` sixteen times is how that happens again. The interval is
 -- named once; changing the policy is one migration and one line.
 --
@@ -67,6 +82,29 @@
 --     effective price of 002. A staleness bound must not pretend to treat it.
 --   * **View 023 keeps reading the swap cagg directly.** Making it read the
 --     priced view is ticket 08's fix; it is not mixed in here.
+--
+-- ## ⚠️ An as-of gap is PERMANENT; a latest gap heals itself
+--
+-- The two bounds fail very differently over time, and the operational cost sits
+-- almost entirely on one of them:
+--
+--   * `pool_current_tvl` recovers the instant `yog-context` comes back — the
+--     lookup is relative to `now()`, so the next tick repopulates it;
+--   * every as-of view does NOT. A gap in `token_prices` NULLs `volume_usd`,
+--     `fees_usd` and the `liquidity_*_usd` figures for the buckets it spans,
+--     **forever**. `crates/context/src` has no price backfill: the worker only
+--     ever inserts at `fetched_at = now()`, so nothing repairs history.
+--
+-- So the first real context outage leaves a permanent hole in `/history`,
+-- `pool_analytics` and `global_analytics`. That is the intended trade — a wrong
+-- number is worse than an absent one, and the coverage counters make the absence
+-- visible — but it is a trade, and it was made here. If backfilling is ever
+-- wanted, it is a `yog-context` change, not a loosening of this bound.
+--
+-- Measured before merging: the bound cost 1 bucket out of 40 on the dev
+-- database. ⚠️ That figure describes a HEALTHY window — 32 of 33 mints priced,
+-- all fresh to 25 s, no dropout to observe. It says nothing about the cost of an
+-- outage, and must not be quoted as if it did.
 --
 -- ## The asymmetry this leaves standing, on purpose
 --

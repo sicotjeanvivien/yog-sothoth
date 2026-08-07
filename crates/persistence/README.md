@@ -228,6 +228,18 @@ point, and confusing the two is how it gets written wrong:
 ago valued by a price from ten days ago is correct; bounding it on the present
 would erase the whole history.
 
+⚠️ "1 h" is measured from the bucket's **start**, so for `[10:00, 11:00)` the
+accepted window is `[09:00, 10:00]` — the hour *before* the bucket, never inside
+it. A trade at 10:59 can therefore carry a price 1 h 59 m older than itself, and
+a price fetched at 10:30 is rejected. Up to two bucket widths per event, not one.
+
+⚠️ **An as-of gap never heals.** The latest bound recovers on the next
+`yog-context` tick; the as-of one does not — the worker only inserts at
+`fetched_at = now()` and there is no backfill, so a context outage leaves a
+*permanent* hole in `volume_usd` / `fees_usd` / `liquidity_*_usd` for the buckets
+it spans. Intended (a wrong number is worse than an absent one, and the coverage
+counters surface the absence), but it is a trade, not a free win.
+
 Both intervals are SQL functions, declared once in migration 005 and called from
 every valuation view. They are `IMMUTABLE`, so the planner folds them and the
 bound becomes an *index condition* on `idx_token_prices_mint_recent` rather than

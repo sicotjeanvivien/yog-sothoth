@@ -35,8 +35,8 @@ cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 125 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 720, not 595 — the
+# un-gates the 126 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 721, not 595 — the
 # integration tests are INCLUDED in that total, not additional to it.
 cargo test --workspace --all-features
 

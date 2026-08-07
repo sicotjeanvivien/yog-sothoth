@@ -245,22 +245,54 @@ async fn current_tvl_goes_absent_when_the_price_stops_being_refreshed(pool: PgPo
 
 // ── 4. The constraint: no view reads prices without a bound ─────────────────
 
-#[sqlx::test]
-async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
-    // `pool_price_snapshot` is the one deliberate exemption: it publishes raw
-    // inputs WITH their `fetched_at` so that price_oracle_deviation can gate in
-    // Rust, paired with its `max_spot_age` guard on `last_swap_at`. The policy
-    // binds valuation, not comparison — see migration 005's header.
-    const EXEMPT: &str = "pool_price_snapshot";
+/// `pool_price_snapshot` is the one deliberate exemption: it publishes raw
+/// inputs WITH their `fetched_at` so that `price_oracle_deviation` can gate in
+/// Rust, paired with its `max_spot_age` guard on `last_swap_at`. The policy
+/// binds valuation, not comparison — see migration 005's header.
+const EXEMPT: &str = "pool_price_snapshot";
 
-    let views: Vec<(String, String)> = sqlx::query_as(
+/// The guard's verdict on one view definition: `Some((bounds, lookups))` when it
+/// reads prices without bounding every read.
+///
+/// ⚠️ Counted per LOOKUP, not per view. `meteora_damm_v2_pool_hourly_activity`
+/// holds five independent price LATERALs (`liq_v` ×2, `pos_fee_v` ×2, `reward_v`
+/// ×1); a `contains("yog_price_max_age")` stays green with four of the five
+/// unbounded — reproducing, inside the very guard against it, the "rule applied
+/// at one site out of seventeen" this policy exists to fix.
+///
+/// The invariant is one bound per lookup, exactly: 2/2 five times over, 5/5 for
+/// the activity view. Hence `!=` and not `<` — a view carrying two bounds on one
+/// lookup and none on its sibling is not compliant either.
+///
+/// ⚠️ `lookups == 0` is a FAILURE, not a pass. `FROM token_prices` only appears
+/// when the read is a LATERAL subquery; a plain `JOIN token_prices tp ON …` —
+/// the more natural shape for someone adding a simple price read — deparses
+/// without it, and a `bounds < lookups` counter then reads 0/0 and waves it
+/// through. Callers establish that the view reads the table before asking, so
+/// counting no lookup means the guard cannot reason about it and must say so
+/// rather than stay silent. `catches_a_price_read_that_is_not_a_lateral` below
+/// is the proof this branch bites.
+fn unbounded_lookups(definition: &str) -> Option<(usize, usize)> {
+    let lookups = definition.matches("FROM token_prices").count();
+    let bounds = definition.matches("yog_price_max_age").count();
+    (lookups == 0 || bounds != lookups).then_some((bounds, lookups))
+}
+
+/// Every view in `public` that reads `token_prices`, with its definition.
+async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
+    sqlx::query_as(
         "SELECT viewname, definition FROM pg_views
          WHERE schemaname = 'public' AND definition LIKE '%token_prices%'
          ORDER BY viewname",
     )
-    .fetch_all(&pool)
+    .fetch_all(pool)
     .await
-    .unwrap();
+    .unwrap()
+}
+
+#[sqlx::test]
+async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
+    let views = price_reading_views(&pool).await;
 
     assert!(
         views.len() >= 7,
@@ -277,21 +309,11 @@ async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
          meaningless and must be removed"
     );
 
-    // ⚠️ Counted per LOOKUP, not per view. `meteora_damm_v2_pool_hourly_activity`
-    // holds five independent price LATERALs (`liq_v` ×2, `pos_fee_v` ×2,
-    // `reward_v` ×1); a `contains("yog_price_max_age")` would stay green with
-    // four of the five unbounded — reproducing, inside the very guard against it,
-    // the "rule applied at one site out of seventeen" this policy exists to fix.
-    //
-    // The invariant is exact: every bounded view has one bound per lookup
-    // (2/2 five times over, 5/5 for the activity view).
     let unbounded: Vec<String> = views
         .iter()
         .filter(|(name, _)| name != EXEMPT)
         .filter_map(|(name, def)| {
-            let lookups = def.matches("FROM token_prices").count();
-            let bounds = def.matches("yog_price_max_age").count();
-            (bounds < lookups).then(|| format!("{name} ({bounds}/{lookups} bornés)"))
+            unbounded_lookups(def).map(|(b, l)| format!("{name} ({b}/{l} bornés)"))
         })
         .collect();
 
@@ -302,5 +324,41 @@ async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
          yog_price_max_age_asof()` (or the _latest() variant for a current-price \
          lookup) — the rule used to live at one site out of seventeen, which is \
          how it got lost"
+    );
+}
+
+#[sqlx::test]
+async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
+    // A guard nobody has seen fail is a guard nobody has tested. The view above
+    // asserts compliance, which stays green whether or not the predicate works;
+    // this one asserts the predicate itself bites on the shape most likely to be
+    // written next — a plain join, with no `FROM token_prices` to count.
+    sqlx::query(
+        "CREATE VIEW _guard_probe_plain_join AS
+           SELECT p.pool_address, tp.price_usd
+           FROM pools p JOIN token_prices tp ON tp.mint = p.token_a_mint::TEXT",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let views = price_reading_views(&pool).await;
+    let (_, definition) = views
+        .iter()
+        .find(|(name, _)| name == "_guard_probe_plain_join")
+        .expect("the probe reads token_prices, so the enumeration must find it");
+
+    assert_eq!(
+        definition.matches("FROM token_prices").count(),
+        0,
+        "premise of this test: a plain join deparses WITHOUT `FROM token_prices`. \
+         If Postgres ever renders it otherwise, the 0/0 hole this guards against \
+         no longer exists and the `lookups == 0` branch can be revisited"
+    );
+    assert_eq!(
+        unbounded_lookups(definition),
+        Some((0, 0)),
+        "an unbounded price read must be flagged even when no lookup can be \
+         counted — a `bounds < lookups` predicate scores this 0/0 and lets it pass"
     );
 }
