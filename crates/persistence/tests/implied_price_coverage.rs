@@ -70,18 +70,38 @@ async fn insert_pool(pool: &PgPool, pool_addr: &str, mint_a: &str, mint_b: &str)
     }
 }
 
-/// Price a mint well before any bucket, so the as-of lookup hits it.
+/// Price a mint the way `yog-context` actually does: one observation per hour,
+/// from `since_hours_ago` up to now.
+///
+/// A single row is not enough since migration 005. The as-of lookup takes the
+/// most recent price at or before the bucket's START, and no older than
+/// `yog_price_max_age_asof()` — so one observation covers exactly the ONE bucket
+/// whose start falls in the hour after it. Seeding a lone row 48 hours back, as
+/// this helper used to, priced nothing at all.
+///
+/// A test that needs a mint unpriced before some point expresses it by starting
+/// the series there: that is absence, which the staleness policy deliberately
+/// does not treat.
+async fn price_mint_since(pool: &PgPool, mint: &str, price: &str, since_hours_ago: i64) {
+    let now = Utc::now();
+    for h in 0..=since_hours_ago {
+        sqlx::query(
+            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
+             VALUES ($1,$2::NUMERIC,'jupiter',$3)",
+        )
+        .bind(mint)
+        .bind(price)
+        .bind(now - Duration::hours(h))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+}
+
+/// A continuously-priced mint — the ordinary case, covering every bucket these
+/// fixtures place.
 async fn price_mint(pool: &PgPool, mint: &str, price: &str) {
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(mint)
-    .bind(price)
-    .bind(Utc::now() - Duration::hours(48))
-    .execute(pool)
-    .await
-    .unwrap();
+    price_mint_since(pool, mint, price, 48).await;
 }
 
 /// Parameters of one swap insert. A struct rather than eight positional
@@ -291,18 +311,11 @@ async fn partial_coverage_reports_both_counters(pool: PgPool) {
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
 
     let now = Utc::now();
-    // Token B is priced from 3 hours ago onward — so the bucket 5 hours back
-    // has no price to anchor on, while the two recent ones do.
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(&mint_b)
-    .bind(PRICE_B)
-    .bind(now - Duration::hours(4))
-    .execute(&pool)
-    .await
-    .unwrap();
+    // Token B is priced from 4 hours ago onward — so the bucket 6 hours back has
+    // no price to anchor on, while the two recent ones do. The series must be
+    // continuous from that point: a lone observation at -4h would leave the -1h
+    // bucket unpriced too, and the test would pass for the wrong reason.
+    price_mint_since(&pool, &mint_b, PRICE_B, 4).await;
 
     insert_balanced_pair(&pool, &pool_addr, "old", now - Duration::hours(6)).await;
     insert_balanced_pair(&pool, &pool_addr, "mid", now - Duration::hours(3)).await;

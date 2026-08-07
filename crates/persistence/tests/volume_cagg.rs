@@ -49,7 +49,9 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     let mint_a = pk(2).to_string();
     let mint_b = pk(3).to_string();
     let now = Utc::now();
-    // Prices fetched well before the swap buckets so the as-of lookup hits them.
+    // Metadata timestamp. Prices themselves are sampled hourly below: "well
+    // before the bucket" stopped being enough at migration 005, which bounds how
+    // far back the as-of lookup may reach.
     let price_at = now - Duration::hours(3);
 
     sqlx::query(
@@ -77,18 +79,22 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
         .unwrap();
     }
 
-    // Token A = $2.0, token B = $100.0.
+    // Token A = $2.0, token B = $100.0, sampled hourly like the price worker
+    // does — one observation covers exactly the one bucket whose start falls in
+    // the hour after it.
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-        )
-        .bind(mint)
-        .bind(price)
-        .bind(price_at)
-        .execute(&pool)
-        .await
-        .unwrap();
+        for h in 0..=4 {
+            sqlx::query(
+                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
+                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
+            )
+            .bind(mint)
+            .bind(price)
+            .bind(now - Duration::hours(h))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
     }
 
     // a_to_b: input side is amount_a = 1_000_000 (1.0 @ 6 dec) → 1.0 × $2  = $2

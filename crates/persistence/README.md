@@ -213,6 +213,46 @@ though both halves are correct: a "turnover = volume / TVL" — a natural produc
 ask — would divide a trade-time numerator by a current-price denominator. If
 such a metric is ever added, pick one convention for both halves.
 
+### How old a price may be (migration 005)
+
+A price observation has a **validity window**; outside it there is no price, only
+a NULL. The two conventions above take the bound from a different reference
+point, and confusing the two is how it gets written wrong:
+
+| convention | bound | measured against |
+|---|---|---|
+| **stock** / latest | `yog_price_max_age_latest()` — 15 min | `now()` |
+| **flow** / as-of | `yog_price_max_age_asof()` — 1 h | the bucket's start, or the event's own timestamp |
+
+⚠️ The as-of bound is **never** measured against `now()`. A bucket from ten days
+ago valued by a price from ten days ago is correct; bounding it on the present
+would erase the whole history.
+
+Both intervals are SQL functions, declared once in migration 005 and called from
+every valuation view. They are `IMMUTABLE`, so the planner folds them and the
+bound becomes an *index condition* on `idx_token_prices_mint_recent` rather than
+a filter. **Do not inline the interval literal** — the rule previously lived at
+one site out of seventeen, which is exactly how it got lost.
+
+Two consequences worth knowing before you touch a valuation view:
+
+- `pool_current_tvl` goes NULL when `yog-context` stops refreshing prices, so a
+  dead enrichment loop makes the TVL *disappear* rather than freeze at a stale
+  figure. That is deliberate — `tvl_drain` reads the same view and must not
+  compute ratios against a quote from yesterday.
+- `pool_price_snapshot` is the one **exempt** view, and the exemption is the
+  policy's boundary rather than an oversight: it publishes no USD figure, only
+  raw inputs with their `fetched_at`, and `price_oracle_deviation` gates on them
+  in Rust alongside its `max_spot_age` guard. **The policy binds valuation, not
+  comparison.**
+
+`price_staleness.rs` enumerates the price-reading views from `pg_views` and fails
+on any that applies neither bound — so a view added later cannot quietly opt out.
+
+Note what this does *not* cover: a mint carries no price at all before
+`yog-context` first knows it. That is **absence**, not expiry, and no staleness
+bound reaches it — see the implied price below.
+
 ### Three ways to say "we don't know", and what each one does
 
 A missing price does not behave the same way everywhere in the chain:

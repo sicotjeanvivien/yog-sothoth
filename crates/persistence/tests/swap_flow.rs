@@ -76,18 +76,25 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
         .unwrap();
     }
 
-    // Token A = $2.0, token B = $100.0.
+    // Token A = $2.0, token B = $100.0, sampled hourly like the price worker
+    // does. One observation per mint is not enough since migration 005: the
+    // as-of lookup wants a price at or before the bucket's START and no older
+    // than `yog_price_max_age_asof()`, so a single row covers exactly one hour.
+    // A lone row at -3h priced the -2h bucket and left the -1h one dark, which
+    // read as $4 of a_to_b flow instead of $6.
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-        )
-        .bind(mint)
-        .bind(price)
-        .bind(price_at)
-        .execute(&pool)
-        .await
-        .unwrap();
+        for h in 0..=4 {
+            sqlx::query(
+                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
+                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
+            )
+            .bind(mint)
+            .bind(price)
+            .bind(now - Duration::hours(h))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
     }
 
     // Two a_to_b swaps: input side amount_a totals 3_000_000 (3.0 @ 6 dec)

@@ -42,9 +42,16 @@ async fn insert_liquidity_event(
     .unwrap();
 }
 
-/// Seed one pool (token A: 6 decimals @ $2, token B: 9 decimals @ $100)
-/// and return its address string.
-async fn seed_pool(pool: &PgPool, price_at: DateTime<Utc>) -> String {
+/// Seed one pool (token A: 6 decimals @ $2, token B: 9 decimals @ $100),
+/// priced hourly from `priced_since` up to now, and return its address string.
+///
+/// The series has to be continuous AND to reach the present, because this test
+/// crosses both bounds migration 005 introduced: the as-of one behind
+/// `meteora_damm_v2_pool_hourly_liquidity_flow` (no older than one hour before
+/// the bucket's start) and the latest one behind `pool_current_tvl` (no older
+/// than 15 minutes from now). A lone observation nine hours back satisfied
+/// neither — the flow read $0 and the TVL came out NULL.
+async fn seed_pool(pool: &PgPool, priced_since: DateTime<Utc>) -> String {
     let pool_addr = pk(1).to_string();
     let mint_a = pk(2).to_string();
     let mint_b = pk(3).to_string();
@@ -67,23 +74,27 @@ async fn seed_pool(pool: &PgPool, price_at: DateTime<Utc>) -> String {
         )
         .bind(mint)
         .bind(decimals)
-        .bind(price_at)
+        .bind(priced_since)
         .execute(pool)
         .await
         .unwrap();
     }
 
+    let now = Utc::now();
+    let hours = (now - priced_since).num_hours().max(0);
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-        )
-        .bind(mint)
-        .bind(price)
-        .bind(price_at)
-        .execute(pool)
-        .await
-        .unwrap();
+        for h in 0..=hours {
+            sqlx::query(
+                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
+                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
+            )
+            .bind(mint)
+            .bind(price)
+            .bind(now - Duration::hours(h))
+            .execute(pool)
+            .await
+            .unwrap();
+        }
     }
 
     pool_addr

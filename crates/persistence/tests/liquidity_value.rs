@@ -101,9 +101,15 @@ async fn values_both_legs_at_the_as_of_price(pool: PgPool) {
 
     // Price as-of the event: A = $71.5, B = $1.0. A LATER price for A ($999)
     // must be ignored — the valuation is trade-time, not current.
-    insert_price(&pool, &mint_a, "71.5", event_at - Duration::hours(2)).await;
+    //
+    // The as-of observations sit 30 minutes before the event, not two hours:
+    // migration 005 bounds how far back the lookup may reach
+    // (`yog_price_max_age_asof()`, one hour), and view 021 measures that against
+    // the event's own timestamp. At -2h both legs went unpriced and `value_usd`
+    // came back NULL.
+    insert_price(&pool, &mint_a, "71.5", event_at - Duration::minutes(30)).await;
     insert_price(&pool, &mint_a, "999.0", event_at + Duration::hours(2)).await;
-    insert_price(&pool, &mint_b, "1.0", event_at - Duration::hours(2)).await;
+    insert_price(&pool, &mint_b, "1.0", event_at - Duration::minutes(30)).await;
 
     // 5 SOL (5e9 @ 9 dec) + 100 USDC (100e6 @ 6 dec)
     //   = 5 × 71.5 + 100 × 1.0 = 457.5

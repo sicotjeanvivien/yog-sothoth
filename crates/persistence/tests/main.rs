@@ -38,6 +38,7 @@ mod pool_pagination;
 mod pool_price_snapshot;
 mod pool_properties;
 mod pool_search;
+mod price_staleness;
 mod privileges;
 mod set_pool_status;
 mod signal_dedup;
