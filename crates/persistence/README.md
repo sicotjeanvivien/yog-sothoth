@@ -259,7 +259,12 @@ Two consequences worth knowing before you touch a valuation view:
   comparison.**
 
 `price_staleness.rs` enumerates the price-reading views from `pg_views` and fails
-on any that applies neither bound — so a view added later cannot quietly opt out.
+on any whose **bound count differs from its lookup count** — per lookup, not per
+view, so a view with five price LATERALs and one bound is caught. A view that
+reads `token_prices` without any countable lookup (a plain `JOIN` deparses
+without `FROM token_prices`) is a failure too, not a pass. So a view added later
+cannot quietly opt out. It is a tripwire for the forgotten site, not a proof:
+substring counting cannot tell two bounds on one lookup from one bound each.
 
 Note what this does *not* cover: a mint carries no price at all before
 `yog-context` first knows it. That is **absence**, not expiry, and no staleness

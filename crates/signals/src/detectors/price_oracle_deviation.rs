@@ -144,8 +144,12 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 continue;
             }
 
+            // Distinguished from `undecodable`: this one means we have not
+            // shipped a decoder for that protocol yet, which is a backlog item
+            // rather than a pathological pair. Conflating them would hide a
+            // whole protocol behind noise from a handful of extreme pools.
             let Some(spot) = spot_price_a_in_b(&snapshot) else {
-                EngineMetrics::record_skipped(self.name(), "undecodable");
+                EngineMetrics::record_skipped(self.name(), "no_decoder");
                 continue;
             };
 

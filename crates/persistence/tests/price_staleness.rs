@@ -186,6 +186,29 @@ async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
         "the event row must still appear — only its value goes absent — and the \
          frontend renders a dash rather than a stale $102"
     );
+
+    // Positive control, in the same test rather than in another file: without
+    // it this would stay green if view 021 were changed to NULL `value_usd`
+    // unconditionally. A guard that only ever asserts absence proves nothing
+    // about the bound.
+    insert_price(&pool, &mint_a, "2.0", event_at - Duration::minutes(20)).await;
+    insert_price(&pool, &mint_b, "100.0", event_at - Duration::minutes(20)).await;
+
+    let value: Option<f64> = sqlx::query_scalar(
+        "SELECT value_usd::DOUBLE PRECISION
+         FROM meteora_damm_v2_liquidity_events_valued
+         WHERE signature = 'evt_stale'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let value = value.expect("an in-window observation values the very same event");
+    // 1.0 A at $2 + 1.0 B at $100 = $102.
+    assert!(
+        (value - 102.0).abs() < 1e-6,
+        "expected $102 once a price lands inside the window, got {value}"
+    );
 }
 
 // ── 3. The latest bound (view 020), the outage this migration makes visible ──
