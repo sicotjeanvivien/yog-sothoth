@@ -30,3 +30,8 @@ chrono = { workspace = true }
 rust_decimal = { workspace = true }
 async-trait = { workspace = true }
 solana-pubkey = { workspace = true }
+
+[dev-dependencies]
+# `DebuggingRecorder` lets the detector tests assert that a skip is actually
+# COUNTED, not merely not-signalled. Same recipe as yog-indexer and yog-context.
+metrics-util = { workspace = true, features = ["debugging"] }

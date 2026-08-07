@@ -125,6 +125,35 @@ Prometheus metrics on `:9000/metrics` (host port `9002` in compose):
 per-detector tick counters, evaluation durations, emitted/suppressed signal
 counts, failure counters.
 
+**`yog_signals_skipped_total{detector, reason}`** counts pools a detector
+declined to evaluate — `unpriced` (the window was not entirely valuable),
+`no_tvl` (current TVL unpriceable), `stale` (an input older than its freshness
+gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol — a
+backlog item, not a data problem), `undecodable` (an oracle ratio that will not
+compute). Emitting nothing is the right answer to a pool we cannot value; staying
+*quiet* about how often that happens is not, because degrading price coverage
+would then look exactly like a calm market.
+
+⚠️ Alert on **`skipped / considered`**, using
+`yog_signals_considered_total{detector}` — the pools a tick was handed, before
+any guard. Not `skipped / tick_total`: `skipped` counts per POOL and `tick_total`
+per TICK, so that ratio reads "pools skipped per run" and moves with the pool
+count rather than with coverage. It would sit near 32 forever and tell you
+nothing.
+
+⚠️ `considered` counts every pool handed to the detector, including those that
+then fall below `min_volume_usd` / `min_tvl_usd`. Those are *evaluated and judged
+immaterial*, not unseen, and they are deliberately NOT counted as skips — so
+`skipped / considered` is the share we cannot see out of everything we looked at,
+not out of everything we could have signalled on.
+
+Measured on the dev database on 7 August 2026, over a 24 h window: 68 pools of
+100 evaluated, 32 skipped — **all 32 because neither of the pool's two tokens has
+any price at all**, so the implied rate of migration 002 has nothing to anchor
+on. None came from unresolved metadata. A skip is a pool nothing could have
+valued, not one that was given up on; the number moves when `yog-context` prices
+more mints, and nowhere else.
+
 ## Run
 
 ```bash

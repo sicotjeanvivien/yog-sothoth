@@ -28,6 +28,8 @@ use yog_core::domain::{
     Signal, SignalDetector,
 };
 
+use crate::metrics::{EngineMetrics, SkipReason};
+
 /// Tuning knobs of the price-oracle-deviation detector, as loaded from the
 /// environment by the bootstrap config. A named-field struct rather than
 /// constructor arguments: the fields pair up by type (`Duration` ×2,
@@ -112,6 +114,7 @@ impl SignalDetector for PriceOracleDeviationDetector {
 
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let snapshots = self.snapshot_repo.latest().await?;
+        EngineMetrics::record_considered(self.name(), snapshots.len());
 
         let price_cutoff = ctx.evaluated_at - self.settings.max_price_age;
         let spot_cutoff = ctx.evaluated_at - self.settings.max_spot_age;
@@ -119,28 +122,39 @@ impl SignalDetector for PriceOracleDeviationDetector {
         let mut signals = Vec::new();
         for snapshot in snapshots {
             // Freshness gates: a stale side makes the comparison
-            // meaningless, not alarming.
+            // meaningless, not alarming. Counted rather than silent, like the
+            // other detectors' guards — a detector going quiet because its
+            // inputs went stale must not look like a quiet market.
             if snapshot.last_swap_at < spot_cutoff
                 || snapshot.price_a_fetched_at < price_cutoff
                 || snapshot.price_b_fetched_at < price_cutoff
             {
+                EngineMetrics::record_skipped(self.name(), SkipReason::Stale);
                 continue;
             }
 
             // Oracle price of A in B units. checked_div covers both the
             // zero-price row and a magnitude overflow on extreme pairs.
             let Some(oracle) = snapshot.price_a_usd.checked_div(snapshot.price_b_usd) else {
+                EngineMetrics::record_skipped(self.name(), SkipReason::Undecodable);
                 continue;
             };
             if oracle <= Decimal::ZERO {
+                EngineMetrics::record_skipped(self.name(), SkipReason::Undecodable);
                 continue;
             }
 
+            // Distinguished from `undecodable`: this one means we have not
+            // shipped a decoder for that protocol yet, which is a backlog item
+            // rather than a pathological pair. Conflating them would hide a
+            // whole protocol behind noise from a handful of extreme pools.
             let Some(spot) = spot_price_a_in_b(&snapshot) else {
+                EngineMetrics::record_skipped(self.name(), SkipReason::NoDecoder);
                 continue;
             };
 
             let Some(deviation) = (spot - oracle).checked_div(oracle) else {
+                EngineMetrics::record_skipped(self.name(), SkipReason::Undecodable);
                 continue;
             };
             let magnitude = deviation.abs();

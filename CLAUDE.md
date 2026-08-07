@@ -29,14 +29,14 @@ cargo fmt --all
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
     -p yog-signals --all-targets --all-features -- -D warnings
 
-# Test — workspace unit tests, DB-free (575 tests)
+# Test — workspace unit tests, DB-free (605 tests, measured 7 Aug 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 117 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 692, not 575 — the
+# un-gates the 130 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 735, not 605 — the
 # integration tests are INCLUDED in that total, not additional to it.
 cargo test --workspace --all-features
 
@@ -47,7 +47,7 @@ cargo test --workspace --all-features
 # `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`.
 # sqlx::test builds a throwaway schema `_sqlx_test` in the maintenance database
 # and `yog_migrate` lacks CREATE on it — that is where the failure lands, before
-# the missing `rolcreatedb` ever comes into play. The symptom is all 117 failing
+# the missing `rolcreatedb` ever comes into play. The symptom is all 130 failing
 # in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
 # reads like a regression and is not one.
 #
@@ -69,8 +69,12 @@ Web (run from `web/`): `npm run dev`, `npm run build`, `npm run lint`, `npm run 
 Queries use `sqlx::query!`/`query_as!` macros validated at compile time against committed snapshots in `crates/persistence/.sqlx/`. The workspace builds with `SQLX_OFFLINE=true`. **After adding or changing any `sqlx::query!` call you must regenerate the cache and commit it**, or the `sqlx-check` CI job fails:
 
 ```bash
-cd crates/persistence && cargo sqlx prepare
+cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
 ```
+
+⚠️ **The trailing flags are not optional.** A bare `cargo sqlx prepare` only compiles the lib and bins, so it never sees the `query!` calls inside `tests/` — and rather than leaving them alone it **deletes their cache entries**. Measured 7 August 2026: the bare form dropped the two `meteora_damm_v2_pool_properties` queries of `tests/pool_properties.rs`. `--all-features` is what un-gates those tests (`integration-tests`); `--all-targets` is what compiles them.
+
+⚠️ **And `sqlx-check` will not catch it.** The CI job runs `cargo sqlx prepare --check -- --tests` (`.github/workflows/crates.yml:299`) — no `--all-features`, so `tests/main.rs` stays `#![cfg(…)]`-gated out and those two queries are never expanded. `--check` also tolerates *extra* cache entries, which is why CI is green today with entries it does not verify. So a bare `prepare` sails past `sqlx-check` and surfaces later as an **offline compile error in the `test-integration` job** — a failure far from its cause. Aligning the CI flags with the ones above would close that gap.
 
 ## Choosing how to write a query (decided 2026-06; no SeaQuery/ORM)
 

@@ -22,10 +22,17 @@ pub struct PoolLiquidityFlow {
     pub pool_address: Pubkey,
 
     /// USD value added to the pool in the window (`add` events).
-    pub added_usd: Decimal,
+    ///
+    /// `None` when the window was not entirely valuable — some hour in it
+    /// carried an amount whose token had no usable price. **Unknown, not
+    /// zero**: summing only the valuable hours would publish a sub-total
+    /// dressed as a total, which under-estimates the drain and loses the
+    /// signal rather than faking one. `None` together with `removed_usd`.
+    pub added_usd: Option<Decimal>,
 
     /// USD value removed from the pool in the window (`remove` events).
-    pub removed_usd: Decimal,
+    /// `None` under the same condition, and always alongside `added_usd`.
+    pub removed_usd: Option<Decimal>,
 
     /// The pool's current TVL in USD. `None` when the pool cannot be
     /// valued (unknown token price, unresolved mints, or no reconstructed

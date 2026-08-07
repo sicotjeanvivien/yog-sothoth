@@ -31,9 +31,22 @@ impl LiquidityFlowRepository for MockFlowRepo {
 fn flow(seed: u8, added: i64, removed: i64, tvl: Option<i64>) -> PoolLiquidityFlow {
     PoolLiquidityFlow {
         pool_address: pk(seed),
-        added_usd: usd(added),
-        removed_usd: usd(removed),
+        added_usd: Some(usd(added)),
+        removed_usd: Some(usd(removed)),
         tvl_usd: tvl.map(usd),
+    }
+}
+
+/// A pool with a perfectly valued TVL whose *window* could not be fully
+/// valued. This is the mixed case the ticket's 6 August update found: it
+/// clears the `tvl_usd` guard, so before the fix it went through with a
+/// sub-total and under-estimated the drain.
+fn unvaluable_flow(seed: u8, tvl: i64) -> PoolLiquidityFlow {
+    PoolLiquidityFlow {
+        pool_address: pk(seed),
+        added_usd: None,
+        removed_usd: None,
+        tvl_usd: Some(usd(tvl)),
     }
 }
 
@@ -157,4 +170,112 @@ async fn each_pool_is_judged_independently() {
     assert_eq!(signals[0].severity, Severity::Warning);
     assert_eq!(signals[1].pool_address, pk(3));
     assert_eq!(signals[1].severity, Severity::Critical);
+}
+
+// ── The silent half of `.project` ticket 08 ─────────────────────────────────
+
+#[tokio::test]
+async fn a_partly_unvaluable_window_is_skipped_rather_than_under_reported() {
+    // The case the ticket's 6 August update added, and the one that had no
+    // coverage at all. `SUM` skips unvaluable buckets, so a window only PARTLY
+    // priced used to arrive as a sub-total — small enough to look like calm,
+    // large enough to clear every guard. The TVL guard does not catch it: the
+    // TVL here is perfectly known.
+    //
+    // A drain that cannot be measured must be absent, not small.
+    let signals = run(&detector(vec![unvaluable_flow(1, 100_000)])).await;
+    assert!(
+        signals.is_empty(),
+        "an unvaluable window says nothing about the drain; got {signals:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
+    let signals = run(&detector(vec![
+        unvaluable_flow(1, 100_000),
+        flow(2, 0, 90_000, Some(10_000)), // 90k removed on 100k starting → 0.9
+    ]))
+    .await;
+    assert_eq!(signals.len(), 1);
+    assert_eq!(signals[0].pool_address, pk(2));
+}
+
+// ── The two skip reasons are distinguished, and both are counted ─────────────
+//
+// `tvl_drain` is the only detector with two causes of skipping on the same
+// pool population, and they mean different things to whoever reads the
+// dashboard: `no_tvl` says the pool's *current state* cannot be valued,
+// `unpriced` says its *window* could not. Collapsing them would leave an
+// operator unable to tell a dead `yog-context` from a token nobody prices.
+
+use super::super::metrics_probe::{Snapshot, counter, snapshot};
+
+fn snapshot_one_evaluation(det: TvlDrainDetector) -> Snapshot {
+    snapshot(|| async move {
+        run(&det).await;
+    })
+}
+
+#[test]
+fn each_skip_reason_is_counted_under_its_own_label() {
+    let snap = snapshot_one_evaluation(detector(vec![
+        flow(1, 0, 60_000, None),         // no TVL → no_tvl
+        unvaluable_flow(2, 100_000),      // TVL fine, window not → unpriced
+        flow(3, 0, 90_000, Some(10_000)), // valuable, drains → signals
+    ]));
+
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_considered_total",
+            &[("detector", "tvl_drain")]
+        ),
+        Some(3),
+        "the denominator counts every pool handed over, guards included"
+    );
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_skipped_total",
+            &[("detector", "tvl_drain"), ("reason", "no_tvl")]
+        ),
+        Some(1),
+        "an unvaluable current TVL is its own cause and must not hide behind \
+         the window one"
+    );
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_skipped_total",
+            &[("detector", "tvl_drain"), ("reason", "unpriced")]
+        ),
+        Some(1),
+        "a window that could not be valued is the other cause, counted apart"
+    );
+}
+
+#[test]
+fn a_healthy_pool_is_considered_but_never_skipped() {
+    // Net inflow: evaluated, judged healthy. That is not a skip, and counting
+    // it as one would make `skipped/considered` climb on a thriving pool.
+    let snap = snapshot_one_evaluation(detector(vec![flow(1, 80_000, 20_000, Some(100_000))]));
+
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_considered_total",
+            &[("detector", "tvl_drain")]
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_skipped_total",
+            &[("detector", "tvl_drain"), ("reason", "unpriced")]
+        ),
+        None,
+        "a pool we valued and found healthy was seen, not missed"
+    );
 }

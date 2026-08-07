@@ -38,15 +38,30 @@ impl SwapFlowRepository for PgSwapFlowRepository {
         since: DateTime<Utc>,
     ) -> RepositoryResult<Vec<PoolSwapFlow>> {
         // Postgres pushes the `bucket > $1` predicate down into the swap CA,
-        // so this only touches recent buckets (no materialization). COALESCE
-        // keeps a direction that had no priced volume at 0 rather than NULL.
+        // so this only touches recent buckets (no materialization).
+        //
+        // ⚠️ No COALESCE. It used to keep a direction with no priced volume at
+        // 0 rather than NULL, which made "unknown" indistinguishable from a
+        // real zero — and since the two directions were coalesced
+        // INDEPENDENTLY, one unpriced side yielded `(0 − X)/X = −1.0` exactly:
+        // a guaranteed maximum-magnitude Critical from `flow_imbalance` on a
+        // possibly balanced pool (`.project` ticket 08).
+        //
+        // `bool_and` is the other half, and it is not redundant: `SUM` skips
+        // NULLs on its own, so dropping the COALESCE alone would still publish
+        // a **sub-total** for a partially valuable window, silently. Requiring
+        // the whole window makes the sub-total unrepresentable — either every
+        // bucket was valuable and the sum is a true total, or the caller gets
+        // NULL and the detector skips the pool.
         let rows = sqlx::query_as!(
             PoolSwapFlowRow,
             r#"
             SELECT
-                pool_address                                 AS "pool_address!",
-                COALESCE(SUM(volume_a_to_b_usd), 0::NUMERIC) AS "volume_a_to_b_usd!",
-                COALESCE(SUM(volume_b_to_a_usd), 0::NUMERIC) AS "volume_b_to_a_usd!"
+                pool_address AS "pool_address!",
+                CASE WHEN bool_and(valuation_complete)
+                     THEN SUM(volume_a_to_b_usd) END AS "volume_a_to_b_usd?",
+                CASE WHEN bool_and(valuation_complete)
+                     THEN SUM(volume_b_to_a_usd) END AS "volume_b_to_a_usd?"
             FROM meteora_damm_v2_pool_hourly_flow
             WHERE bucket > $1
             GROUP BY pool_address

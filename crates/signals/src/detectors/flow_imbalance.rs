@@ -25,6 +25,8 @@ use yog_core::domain::{
     DetectorError, EvalContext, Protocol, Severity, Signal, SignalDetector, SwapFlowRepository,
 };
 
+use crate::metrics::{EngineMetrics, SkipReason};
+
 /// Tuning knobs of the flow-imbalance detector, as loaded from the
 /// environment by the bootstrap config. A named-field struct rather than
 /// constructor arguments: half of these share a type (`Decimal` ×3,
@@ -93,17 +95,30 @@ impl SignalDetector for FlowImbalanceDetector {
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let since = ctx.evaluated_at - self.settings.window;
         let flows = self.flow_repo.directional_volume_since(since).await?;
+        EngineMetrics::record_considered(self.name(), flows.len());
 
         let mut signals = Vec::new();
         for flow in flows {
-            let total = flow.volume_a_to_b_usd + flow.volume_b_to_a_usd;
+            // Valuation guard, and it comes FIRST because the alternative is
+            // not a smaller number, it is the loudest possible wrong one. When
+            // a window is not entirely valuable both directions arrive as
+            // `None` together; reading either as 0 gave `(0 − X)/X = −1.0`
+            // exactly — a guaranteed Critical, at maximum magnitude, on a pool
+            // that may be perfectly balanced and merely half-unseen.
+            let (Some(a_to_b), Some(b_to_a)) = (flow.volume_a_to_b_usd, flow.volume_b_to_a_usd)
+            else {
+                EngineMetrics::record_skipped(self.name(), SkipReason::Unpriced);
+                continue;
+            };
+
+            let total = a_to_b + b_to_a;
             // Volume floor: skip pools too thin for the ratio to mean anything
             // (also guards the division below against a zero denominator).
             if total < self.settings.min_volume_usd || total.is_zero() {
                 continue;
             }
 
-            let imbalance = (flow.volume_a_to_b_usd - flow.volume_b_to_a_usd) / total;
+            let imbalance = (a_to_b - b_to_a) / total;
             let magnitude = imbalance.abs();
             if magnitude < self.settings.threshold {
                 continue;

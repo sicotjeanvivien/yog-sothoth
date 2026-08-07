@@ -30,7 +30,7 @@
 //! version of one of those fixtures then gave the OPPOSITE result. A fixture
 //! that cannot occur is a test that cannot fail for the right reason.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_mint, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -68,20 +68,6 @@ async fn insert_pool(pool: &PgPool, pool_addr: &str, mint_a: &str, mint_b: &str)
         .await
         .unwrap();
     }
-}
-
-/// Price a mint well before any bucket, so the as-of lookup hits it.
-async fn price_mint(pool: &PgPool, mint: &str, price: &str) {
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(mint)
-    .bind(price)
-    .bind(Utc::now() - Duration::hours(48))
-    .execute(pool)
-    .await
-    .unwrap();
 }
 
 /// Parameters of one swap insert. A struct rather than eight positional
@@ -291,18 +277,11 @@ async fn partial_coverage_reports_both_counters(pool: PgPool) {
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
 
     let now = Utc::now();
-    // Token B is priced from 3 hours ago onward — so the bucket 5 hours back
-    // has no price to anchor on, while the two recent ones do.
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(&mint_b)
-    .bind(PRICE_B)
-    .bind(now - Duration::hours(4))
-    .execute(&pool)
-    .await
-    .unwrap();
+    // Token B is priced from 4 hours ago onward — so the bucket 6 hours back has
+    // no price to anchor on, while the two recent ones do. The series must be
+    // continuous from that point: a lone observation at -4h would leave the -1h
+    // bucket unpriced too, and the test would pass for the wrong reason.
+    price_mint_since(&pool, &mint_b, PRICE_B, 4).await;
 
     insert_balanced_pair(&pool, &pool_addr, "old", now - Duration::hours(6)).await;
     insert_balanced_pair(&pool, &pool_addr, "mid", now - Duration::hours(3)).await;
