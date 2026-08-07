@@ -200,3 +200,82 @@ async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
     assert_eq!(signals.len(), 1);
     assert_eq!(signals[0].pool_address, pk(2));
 }
+
+// ── The two skip reasons are distinguished, and both are counted ─────────────
+//
+// `tvl_drain` is the only detector with two causes of skipping on the same
+// pool population, and they mean different things to whoever reads the
+// dashboard: `no_tvl` says the pool's *current state* cannot be valued,
+// `unpriced` says its *window* could not. Collapsing them would leave an
+// operator unable to tell a dead `yog-context` from a token nobody prices.
+
+use super::super::metrics_probe::{Snapshot, counter, snapshot};
+
+fn snapshot_one_evaluation(det: TvlDrainDetector) -> Snapshot {
+    snapshot(|| async move {
+        run(&det).await;
+    })
+}
+
+#[test]
+fn each_skip_reason_is_counted_under_its_own_label() {
+    let snap = snapshot_one_evaluation(detector(vec![
+        flow(1, 0, 60_000, None),         // no TVL → no_tvl
+        unvaluable_flow(2, 100_000),      // TVL fine, window not → unpriced
+        flow(3, 0, 90_000, Some(10_000)), // valuable, drains → signals
+    ]));
+
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_considered_total",
+            &[("detector", "tvl_drain")]
+        ),
+        Some(3),
+        "the denominator counts every pool handed over, guards included"
+    );
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_skipped_total",
+            &[("detector", "tvl_drain"), ("reason", "no_tvl")]
+        ),
+        Some(1),
+        "an unvaluable current TVL is its own cause and must not hide behind \
+         the window one"
+    );
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_skipped_total",
+            &[("detector", "tvl_drain"), ("reason", "unpriced")]
+        ),
+        Some(1),
+        "a window that could not be valued is the other cause, counted apart"
+    );
+}
+
+#[test]
+fn a_healthy_pool_is_considered_but_never_skipped() {
+    // Net inflow: evaluated, judged healthy. That is not a skip, and counting
+    // it as one would make `skipped/considered` climb on a thriving pool.
+    let snap = snapshot_one_evaluation(detector(vec![flow(1, 80_000, 20_000, Some(100_000))]));
+
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_considered_total",
+            &[("detector", "tvl_drain")]
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        counter(
+            &snap,
+            "yog_signals_skipped_total",
+            &[("detector", "tvl_drain"), ("reason", "unpriced")]
+        ),
+        None,
+        "a pool we valued and found healthy was seen, not missed"
+    );
+}

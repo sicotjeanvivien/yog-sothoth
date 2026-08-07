@@ -29,14 +29,14 @@ cargo fmt --all
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
     -p yog-signals --all-targets --all-features -- -D warnings
 
-# Test — workspace unit tests, DB-free (601 tests, measured 7 Aug 2026)
+# Test — workspace unit tests, DB-free (605 tests, measured 7 Aug 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
 # un-gates the 130 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 731, not 601 — the
+# `cargo test --workspace --all-features` therefore reports 735, not 605 — the
 # integration tests are INCLUDED in that total, not additional to it.
 cargo test --workspace --all-features
 

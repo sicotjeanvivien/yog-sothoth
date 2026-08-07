@@ -170,3 +170,82 @@ async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
     assert_eq!(signals[0].pool_address, pk(2));
     assert_eq!(signals[0].severity, Severity::Critical);
 }
+
+// ── The skip must be a NUMBER, not merely an absence of signal ───────────────
+//
+// Everything above asserts that an unvaluable pool emits nothing. That half is
+// satisfied just as well by a detector that has stopped working. The counters
+// are what separates "we looked and there was nothing" from "we could not
+// look", and until here nothing asserted they fire at all — a guard reordered
+// above its counter, or a `continue` slipped in before one, would be invisible.
+//
+// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
+// CURRENT THREAD for the duration of a closure, so the future has to be driven
+// inside it. Same recipe as yog-indexer's persistor test and yog-context's
+// price-worker test.
+
+use super::super::metrics_probe::{counter, snapshot};
+
+/// Evaluate once under a thread-local recorder and return its snapshot.
+fn snapshot_one_evaluation(det: FlowImbalanceDetector) -> super::super::metrics_probe::Snapshot {
+    snapshot(|| async move {
+        run(&det).await;
+    })
+}
+
+#[test]
+fn an_unvaluable_pool_is_counted_not_just_silently_dropped() {
+    let snapshot = snapshot_one_evaluation(detector(vec![
+        unvaluable_flow(1),
+        unvaluable_flow(2),
+        flow(3, 10_000, 0), // valuable, and lopsided enough to signal
+    ]));
+
+    assert_eq!(
+        counter(
+            &snapshot,
+            "yog_signals_considered_total",
+            &[("detector", "flow_imbalance")]
+        ),
+        Some(3),
+        "all three pools were handed to the detector — this is the denominator \
+         without which the skip count says nothing"
+    );
+    assert_eq!(
+        counter(
+            &snapshot,
+            "yog_signals_skipped_total",
+            &[("detector", "flow_imbalance"), ("reason", "unpriced")]
+        ),
+        Some(2),
+        "two of them could not be valued, and the metric has to say so — \
+         'no signal' and 'cannot see' must not read alike on a dashboard"
+    );
+}
+
+#[test]
+fn a_pool_below_the_volume_floor_is_not_counted_as_a_skip() {
+    // The distinction the signals README documents: below the floor is
+    // *evaluated and judged immaterial*, not unseen. Counting it as a skip
+    // would inflate `skipped/considered` with pools we saw perfectly well and
+    // make a coverage alert fire on a quiet market.
+    let snapshot = snapshot_one_evaluation(detector(vec![flow(1, 50, 0)]));
+
+    assert_eq!(
+        counter(
+            &snapshot,
+            "yog_signals_considered_total",
+            &[("detector", "flow_imbalance")]
+        ),
+        Some(1)
+    );
+    assert_eq!(
+        counter(
+            &snapshot,
+            "yog_signals_skipped_total",
+            &[("detector", "flow_imbalance"), ("reason", "unpriced")]
+        ),
+        None,
+        "a pool below the volume floor was seen, not missed"
+    );
+}
