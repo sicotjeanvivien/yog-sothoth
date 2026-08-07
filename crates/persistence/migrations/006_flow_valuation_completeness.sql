@@ -100,17 +100,34 @@ GRANT SELECT ON meteora_damm_v2_pool_hourly_flow TO yog_signals;
 -- that has it right: valuing both token legs of a direction is what makes its
 -- failure symmetric, and 023 was to converge on it, never the reverse.
 --
--- Only the flag is added. `added_usd IS NOT NULL` would carry the same
--- information here — NULL propagates across both legs, so a NULL value already
--- means "a price was missing" — but deriving the rule in one repository while
--- the other reads a named column is how a rule ends up applied at one site out
--- of two. The word is the same at both call sites, and it is spelled out here.
+-- Two things are added: the flag, and the SAME empty-leg `CASE` the swap view
+-- gets above. The second is not symmetry for its own sake — without it the
+-- invariant this whole migration rests on does not hold on this side.
+--
+-- ⚠️ **`valuation_complete` must imply "no leg is NULL", and here it did not.**
+-- A side is REQUIRED only when it carries an amount, but the value expression
+-- still multiplies the untouched side: `(0 / 10^dec_b) * pb.price_usd`, and
+-- `0 * NULL` is NULL. So a bucket where B moved nothing and B has no price came
+-- out `valuation_complete = TRUE` with `added_usd = NULL` — `bool_and` stayed
+-- true, `SUM` skipped the row, and the repository published the sub-total this
+-- migration exists to make unrepresentable. Verified on a live database.
+--
+-- The shape is ordinary rather than exotic: a single-sided add or remove on a
+-- concentrated position whose counter-token has no price in `[bucket-1h,
+-- bucket]` — a state migration 005 turned from "never priced" into an everyday
+-- one. `added_usd IS NOT NULL` is strictly STRONGER than `valuation_complete`,
+-- and the weaker of the two was being used as the gate.
 --
 -- A side is REQUIRED when it carries any amount at all, in either direction; a
 -- required side must have a price. Unlike the priced view of 002 there is no
 -- decimals check: `pool_tokens` INNER-joins `token_metadata`, so a bucket whose
 -- mints are unresolved never reaches this expression — it has already vanished.
 -- That pre-existing asymmetry is left alone here.
+--
+-- What does NOT change is the arithmetic the ticket praises: a direction still
+-- sums BOTH token legs, so a price missing on a side that actually moved still
+-- annihilates both directions together. The `CASE` only stops a side that moved
+-- NOTHING from annihilating them.
 DROP VIEW meteora_damm_v2_pool_hourly_liquidity_flow;
 
 CREATE VIEW meteora_damm_v2_pool_hourly_liquidity_flow AS
@@ -124,11 +141,15 @@ WITH pool_tokens AS (
 SELECT
     h.pool_address,
     h.bucket,
-    (COALESCE(h.amount_a_added, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * pa.price_usd
-  + (COALESCE(h.amount_b_added, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * pb.price_usd
+    CASE WHEN COALESCE(h.amount_a_added, 0) = 0 THEN 0
+         ELSE (h.amount_a_added::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * pa.price_usd END
+  + CASE WHEN COALESCE(h.amount_b_added, 0) = 0 THEN 0
+         ELSE (h.amount_b_added::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * pb.price_usd END
         AS added_usd,
-    (COALESCE(h.amount_a_removed, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * pa.price_usd
-  + (COALESCE(h.amount_b_removed, 0)::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * pb.price_usd
+    CASE WHEN COALESCE(h.amount_a_removed, 0) = 0 THEN 0
+         ELSE (h.amount_a_removed::NUMERIC / POWER(10::NUMERIC, pt.dec_a)) * pa.price_usd END
+  + CASE WHEN COALESCE(h.amount_b_removed, 0) = 0 THEN 0
+         ELSE (h.amount_b_removed::NUMERIC / POWER(10::NUMERIC, pt.dec_b)) * pb.price_usd END
         AS removed_usd,
     NOT (
         (COALESCE(h.amount_a_added, 0) + COALESCE(h.amount_a_removed, 0) > 0

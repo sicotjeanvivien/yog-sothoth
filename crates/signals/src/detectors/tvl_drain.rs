@@ -100,6 +100,7 @@ impl SignalDetector for TvlDrainDetector {
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let since = ctx.evaluated_at - self.settings.window;
         let flows = self.flow_repo.liquidity_flow_since(since).await?;
+        EngineMetrics::record_considered(self.name(), flows.len());
 
         let mut signals = Vec::new();
         for flow in flows {

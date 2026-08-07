@@ -17,9 +17,10 @@
 //!      each — this one covers the ones nobody thought to write a test for.
 //!
 //! Both bounded lookups are exercised through the VIEW rather than through a
-//! repository: the repositories `COALESCE` their sums, so a NULL would arrive
-//! indistinguishable from a real zero. That collapse is `.project` ticket 08's
-//! subject; here the point is what the view itself publishes.
+//! repository, so that what is asserted is what the view itself publishes,
+//! independently of how the flow repositories then aggregate it (`bool_and` +
+//! `SUM`, migration 006 — the `COALESCE` that used to flatten a NULL into a
+//! real-looking zero is gone).
 
 use super::helpers::pk;
 use chrono::{DateTime, Duration, DurationRound, Utc};
@@ -261,8 +262,11 @@ const EXEMPT: &str = "pool_price_snapshot";
 /// at one site out of seventeen" this policy exists to fix.
 ///
 /// The invariant is one bound per lookup, exactly: 2/2 five times over, 5/5 for
-/// the activity view. Hence `!=` and not `<` — a view carrying two bounds on one
-/// lookup and none on its sibling is not compliant either.
+/// the activity view. `!=` rather than `<` so that a count drifting either way
+/// is reported — though note what substring counting cannot see: two bounds on
+/// ONE lookup and none on its sibling still totals 2/2 and passes. Catching
+/// that would need parsing, not counting; the guard is a tripwire for the
+/// forgotten site, not a proof of correctness.
 ///
 /// ⚠️ `lookups == 0` is a FAILURE, not a pass. `FROM token_prices` only appears
 /// when the read is a LATERAL subquery; a plain `JOIN token_prices tp ON …` —

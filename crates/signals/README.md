@@ -126,12 +126,19 @@ per-detector tick counters, evaluation durations, emitted/suppressed signal
 counts, failure counters.
 
 **`yog_signals_skipped_total{detector, reason}`** counts pools a detector
-declined to evaluate — `reason=unpriced` (the window was not entirely valuable)
-or `no_tvl` (the pool's current TVL could not be priced). Emitting nothing is the
-right answer to a pool we cannot value; staying *quiet* about how often that
-happens is not, because degrading price coverage would then look exactly like a
-calm market. Watch the ratio against `yog_signals_tick_total`, not the absolute
-count.
+declined to evaluate — `unpriced` (the window was not entirely valuable),
+`no_tvl` (current TVL unpriceable), `stale` (an input older than its freshness
+gate), `undecodable` (no `sqrt_price` decoder, or an oracle ratio that will not
+compute). Emitting nothing is the right answer to a pool we cannot value; staying
+*quiet* about how often that happens is not, because degrading price coverage
+would then look exactly like a calm market.
+
+⚠️ Alert on **`skipped / considered`**, using
+`yog_signals_considered_total{detector}` — the pools a tick was handed, before
+any guard. Not `skipped / tick_total`: `skipped` counts per POOL and `tick_total`
+per TICK, so that ratio reads "pools skipped per run" and moves with the pool
+count rather than with coverage. It would sit near 32 forever and tell you
+nothing.
 
 Measured on the dev database on 7 August 2026, over a 24 h window: 68 pools of
 100 evaluated, 32 skipped — **all 32 because neither of the pool's two tokens has

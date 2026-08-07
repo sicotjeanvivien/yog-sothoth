@@ -286,3 +286,58 @@ async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
          MIXED case, the one the tvl_usd guard cannot catch"
     );
 }
+
+#[sqlx::test]
+async fn an_untouched_leg_does_not_void_a_valuable_bucket(pool: PgPool) {
+    // The asymmetric case: one mint priced, the other not, and an hour that
+    // moved only the priced one. Nothing about token B needs converting —
+    // there was no B — so the bucket is worth exactly what the A side is worth.
+    //
+    // Without the empty-leg `CASE`, `(0 / 10^dec_b) * NULL` is NULL and the
+    // whole `added_usd` goes NULL **while `valuation_complete` stays TRUE**
+    // (B carries no amount, so it is not required). `bool_and` therefore stays
+    // true, `SUM` skips the row, and the repository publishes a sub-total —
+    // the exact defect this migration claims to make unrepresentable.
+    //
+    // The previous test cannot catch this: it prices and un-prices both mints
+    // together, so the flag and the value always agree there.
+    let now = Utc::now();
+    let pool_addr = seed_pool(&pool, now - Duration::hours(2)).await;
+
+    // Token B loses its price entirely — a mint Jupiter does not cover.
+    sqlx::query("DELETE FROM token_prices WHERE mint = $1")
+        .bind(pk(3).to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // 2.0 A added (6 dec) at $2, and not one lamport of B.
+    insert_liquidity_event(
+        &pool,
+        &pool_addr,
+        "sig_single_sided",
+        "add",
+        2_000_000,
+        0,
+        now - Duration::hours(1),
+    )
+    .await;
+
+    let repo = PgLiquidityFlowRepository::new(pool.clone());
+    let flows = repo
+        .liquidity_flow_since(now - Duration::hours(24))
+        .await
+        .unwrap();
+    let flow = flows.iter().find(|f| f.pool_address == pk(1)).unwrap();
+
+    let added = flow
+        .added_usd
+        .expect("the A side is priced and is all that moved — this is knowable");
+    assert!(close(added, 4), "2.0 A at $2 is $4, got {added}");
+    assert_eq!(
+        flow.removed_usd,
+        Some(Decimal::ZERO),
+        "nothing was removed: zero in any currency, and B's missing price says \
+         nothing about it"
+    );
+}

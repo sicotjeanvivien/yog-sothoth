@@ -95,6 +95,7 @@ impl SignalDetector for FlowImbalanceDetector {
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let since = ctx.evaluated_at - self.settings.window;
         let flows = self.flow_repo.directional_volume_since(since).await?;
+        EngineMetrics::record_considered(self.name(), flows.len());
 
         let mut signals = Vec::new();
         for flow in flows {

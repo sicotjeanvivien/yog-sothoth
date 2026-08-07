@@ -11,6 +11,7 @@ use metrics::{counter, describe_counter};
 const TICK_TOTAL: &str = "yog_signals_tick_total";
 const EMITTED_TOTAL: &str = "yog_signals_emitted_total";
 const SKIPPED_TOTAL: &str = "yog_signals_skipped_total";
+const CONSIDERED_TOTAL: &str = "yog_signals_considered_total";
 
 /// Counters for the engine's per-detector poll loops.
 pub struct EngineMetrics;
@@ -30,7 +31,12 @@ impl EngineMetrics {
         describe_counter!(
             SKIPPED_TOTAL,
             "Pools a detector declined to evaluate, cumulative \
-             (labels: detector, reason=unpriced|no_tvl)"
+             (labels: detector, reason=unpriced|no_tvl|stale|undecodable)"
+        );
+        describe_counter!(
+            CONSIDERED_TOTAL,
+            "Pools a detector was handed, cumulative (label: detector) — the \
+             denominator SKIPPED_TOTAL needs to mean anything"
         );
     }
 
@@ -54,5 +60,16 @@ impl EngineMetrics {
     /// calm market.
     pub(crate) fn record_skipped(detector: &'static str, reason: &'static str) {
         counter!(SKIPPED_TOTAL, "detector" => detector, "reason" => reason).increment(1);
+    }
+
+    /// Record how many pools a tick was handed, before any guard.
+    ///
+    /// Without it `skipped` has no denominator: it counts per POOL while
+    /// `tick_total` counts per TICK, so `skipped / tick` reads as "pools skipped
+    /// per run" and moves with the pool count rather than with price coverage —
+    /// an alert built on it says nothing. `skipped / considered` is the share of
+    /// the universe a detector cannot see, which is the thing worth watching.
+    pub(crate) fn record_considered(detector: &'static str, count: usize) {
+        counter!(CONSIDERED_TOTAL, "detector" => detector).increment(count as u64);
     }
 }
