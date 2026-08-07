@@ -26,6 +26,31 @@ export function formatFeeBps(feeBps: string | null): string {
 }
 
 /**
+ * Format a *computed* fee for display — the current fee of a pool whose base
+ * fee decays over time.
+ *
+ * {@link formatFeeBps} exists for genesis tiers, which are chosen by a human and
+ * are therefore clean (`25`, `2.5`, `5000`). A decayed fee is the output of the
+ * chain's integer arithmetic and almost never is: the floor of a real linear
+ * scheduler is `400.00064` bps, which that formatter renders as `"4.000006%"` —
+ * correct to the digit, and indistinguishable from a rendering bug sitting under
+ * a tidy `50%`.
+ *
+ * So this one rounds for reading rather than trimming for exactness: at most two
+ * decimals of a percent (one basis point), which is finer than any fee tier in
+ * use and coarse enough to look like a number someone meant.
+ */
+export function formatComputedFeeBps(feeBps: string | null): string {
+  if (feeBps === null) return DASH;
+
+  const bps = Number(feeBps);
+  if (!Number.isFinite(bps)) return DASH;
+
+  const percent = bps / 100;
+  return `${percent.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+/**
  * Format the *configured* fee split (protocol / referral percents) for display,
  * e.g. `"Protocol 20% · Referral 20%"`.
  *

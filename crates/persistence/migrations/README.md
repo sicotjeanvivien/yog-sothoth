@@ -34,6 +34,15 @@ the justification belongs in the file header, and it is there. Nothing was lost
 here — the same magnitude stays on the liquidity event rows, next to the
 add/remove kind that gives it meaning.
 
+`004_fee_scheduler_params.sql` — six columns on the cp-amm satellite holding a
+fee scheduler's decay curve, so a pool's base fee can be evaluated at read time
+instead of being frozen on its genesis cliff (ticket 07, measured wrong by ×5
+and ×49). They are NULL for every fee shape that has no time curve, and that
+NULL is a decoded fact: `BaseFeeInfo` is 32 bytes the modes reinterpret, so the
+same offsets under a market-cap scheduler or a rate limiter yield
+plausible-looking nonsense. **No GRANT** — this satellite is granted at table
+level, unlike `pools` whose `yog_context` rights are column-scoped.
+
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs

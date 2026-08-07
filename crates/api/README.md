@@ -122,7 +122,8 @@ top level**, plus one optional block named after the pool's protocol:
   // Present only for a DAMM v2 pool that has resolved properties.
   "meteoraDammV2": {
     "protocolFeePercent": 20, "referralFeePercent": 20,
-    "baseFeeKind": "constant", "hasDynamicFee": false
+    "baseFeeKind": "constant", "hasDynamicFee": false,
+    "currentFeeBps": null, "feeSchedulerExpired": null
   },
 
   // …and its DLMM sibling, for a `meteora_dlmm` pool. Mutually exclusive with
@@ -147,10 +148,21 @@ Three consequences worth knowing:
   exhaustively on `PoolProperties`, so a new variant stops the build there rather
   than dropping the block from the wire in silence.
 
-`feeBps` is normalized across protocols: it is the pool's **base** fee — the
-floor a swapper pays before any volatility-driven part — whether that comes from
-cp-amm's cliff numerator or DLMM's `baseFactor × binStep`. That is what lets
-`/api/pools/fee-tiers` and the `fee_bps` filter span both protocols.
+`feeBps` is normalized across protocols: it is the pool's **genesis base fee**,
+whether that comes from cp-amm's cliff numerator or DLMM's
+`baseFactor × binStep`. That is what lets `/api/pools/fee-tiers` and the
+`fee_bps` filter span both protocols.
+
+⚠️ **It is a floor for some pools and a ceiling for others**, and the difference
+is not cosmetic. On DLMM, and on a cp-amm pool with a constant fee or a rate
+limiter, it is the floor a swapper pays before any volatility-driven part. On a
+cp-amm **fee scheduler** — 34 % of the pools observed — it is the fee at period
+0 of a *decreasing* curve, so it is the **maximum**, and measured against
+Meteora's own API it was off by ×5 and ×49 on two live pools. `currentFeeBps` in
+the `meteoraDammV2` block is that curve evaluated at read time; it is `null`
+whenever it cannot be established honestly (no time curve, unresolved account,
+or a slot-activated pool). `effectiveFeeBps` — realized fees over realized
+volume — is the other honest number, and needs no decoding at all.
 
 ⚠️ **Same definition, different upper bound.** Two pools at the same `feeBps`
 are not interchangeable: a DLMM pool's variable fee is bounded by its own

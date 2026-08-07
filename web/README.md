@@ -202,7 +202,11 @@ descending and re-picking it would be a no-op click that reads as broken.
 **Pool detail** — tabs for swaps, liquidity and alerts, plus the fee block. The
 zod schema (`schema/pool.ts`) models the detail payload's optional
 `meteoraDammV2` block (protocol/referral fee percents, `baseFeeKind`,
-`hasDynamicFee`), surfaced as the `FeeTypeBadge`. The API also serves a
+`hasDynamicFee`, `currentFeeBps`, `feeSchedulerExpired`), surfaced as the
+`FeeTypeBadge` and, for a pool whose fee decays, a "current fee" row under the
+tier. That row uses `formatComputedFeeBps`, not `formatFeeBps`: a tier is
+human-chosen and clean, a decayed fee is the chain's integer arithmetic and
+renders as `4.000006%` if trimmed rather than rounded. The API also serves a
 `meteoraDlmm` sibling block; the dashboard does not model it yet — no DLMM pool
 reaches `pools` until event extraction lands in v0.2.0.
 

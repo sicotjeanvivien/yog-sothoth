@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pool_address, protocol_fee_percent,\n                   referral_fee_percent, base_fee_kind, has_dynamic_fee,\n                   cliff_fee_numerator, number_of_period, period_frequency,\n                   reduction_factor, activation_point, activation_type\n            FROM meteora_damm_v2_pool_properties\n            WHERE pool_address = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pool_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "protocol_fee_percent",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "referral_fee_percent",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "base_fee_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "has_dynamic_fee",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "cliff_fee_numerator",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "number_of_period",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "period_frequency",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "reduction_factor",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "activation_point",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "activation_type",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d3a6a738f02406d7ffcb2543b1c2dc74fb4b75bfe7ff83cd1ca7260e066a12b5"
+}

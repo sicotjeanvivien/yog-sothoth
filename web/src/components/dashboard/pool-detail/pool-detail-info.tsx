@@ -41,7 +41,7 @@ import type { PoolDetailResponse } from "@/lib/api/schema/pool";
 import type { TokenResponse } from "@/lib/api/schema/token";
 
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
-import { formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
+import { formatComputedFeeBps, formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatUsd } from "@/lib/format/format-usd";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
@@ -102,6 +102,23 @@ export async function PoolDetailInfo({
             <InfoRow label={t("feeTier")} info={t("help.feeTier")}>
               <span>{formatFeeBps(pool.feeBps)}</span>
             </InfoRow>
+
+            {/* Only for a pool whose fee decays: for every other shape the tier
+                above is already the whole truth, and a second identical number
+                would be noise. */}
+            {pool.meteoraDammV2?.currentFeeBps != null && (
+              <InfoRow label={t("currentFee")} info={t("help.currentFee")}>
+                <span>
+                  {formatComputedFeeBps(pool.meteoraDammV2.currentFeeBps)}
+                  {pool.meteoraDammV2.feeSchedulerExpired === true && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      ({t("feeSchedulerExpired")})
+                    </span>
+                  )}
+                </span>
+              </InfoRow>
+            )}
 
             <InfoRow label={t("feeType")} info={t("help.feeType")}>
               <FeeTypeBadge

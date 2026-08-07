@@ -153,6 +153,8 @@
         "poolAddress": "Pool address",
         "protocol": "Protocol",
         "feeTier": "Fee tier",
+        "currentFee": "Current base fee",
+        "feeSchedulerExpired": "decay finished",
         "feeType": "Fee type",
         "feeSplit": "Fee split",
         "feeKind": {
@@ -182,6 +184,7 @@
         "copyTokenMint": "Copy token mint",
         "help": {
           "feeTier": "The pool's base trading fee (genesis tier), in basis points — 100 bps = 1%.",
+          "currentFee": "The base fee actually charged right now. The tier above is the genesis one: for a pool with a decaying fee it is the maximum of the curve, not what a trader pays today.",
           "feeType": "How the base fee behaves: fixed, an anti-sniper scheduler (linear/exponential decay), or a rate limiter — decoded at genesis. \"Dynamic\" additionally flags a volatility-based variable fee.",
           "feeSplit": "Configured split of the trading fee between Meteora and the referral program, read from the pool's on-chain account.",
           "effectiveFee": "The realized rate: fees collected / volume over 24h, in basis points. Can differ from the base tier.",

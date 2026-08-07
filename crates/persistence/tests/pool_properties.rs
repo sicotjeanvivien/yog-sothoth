@@ -23,7 +23,7 @@ use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
 use yog_core::RepositoryError;
-use yog_core::amm::damm_v2::BaseFeeKind;
+use yog_core::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 use yog_core::domain::{
     MeteoraDammV2PoolAccountProperties, MeteoraDammV2PoolProperties,
     MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties, PoolAccountProperties,
@@ -94,6 +94,8 @@ fn properties_only(base_fee_kind: Option<BaseFeeKind>) -> PoolAccountProperties 
         referral_fee_percent: 20,
         base_fee_kind,
         has_dynamic_fee: true,
+        // No decay curve — the helper builds a pool whose fee does not decay.
+        fee_scheduler: None,
     })
 }
 
@@ -846,4 +848,127 @@ async fn set_pool_account_does_not_touch_the_registry(pool: PgPool) {
         "the registry's mints are not this repo's to write"
     );
     assert_eq!(row.1, None, "nor its fee_bps");
+}
+
+/// The fee-scheduler curve makes the full round trip, and its absence is
+/// written rather than skipped.
+///
+/// Six columns of one decoded curve. The test pins two things the upsert could
+/// get wrong in opposite directions: that a curve lands intact (a swapped pair
+/// among four same-typed integers would compile silently), and that a **later
+/// read without a curve clears it** — plain `EXCLUDED`, deliberately unlike the
+/// `COALESCE` that protects `base_fee_kind` one line above it. A pool whose fee
+/// shape genuinely changed must not keep publishing a decay it no longer has:
+/// a stale curve is confidently wrong, an absent one is visibly absent.
+#[sqlx::test]
+async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+
+    // `28BDU1…`'s real curve: 5000 bps decaying to 400 over 144 × 600 s.
+    let scheduler = FeeSchedulerParams {
+        cliff_fee_numerator: 500_000_000,
+        number_of_period: 144,
+        period_frequency: 600,
+        reduction_factor: 3_194_444,
+        activation_point: 1_785_180_416,
+        activation_type: 1,
+        kind: BaseFeeKind::SchedulerLinear,
+    };
+    let with_curve = PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
+        protocol_fee_percent: 20,
+        referral_fee_percent: 20,
+        base_fee_kind: Some(BaseFeeKind::SchedulerLinear),
+        has_dynamic_fee: true,
+        fee_scheduler: Some(scheduler),
+    });
+
+    repo.set_pool_account(&pk(1), &with_curve).await.unwrap();
+
+    let row = sqlx::query!(
+        r#"SELECT cliff_fee_numerator, number_of_period, period_frequency,
+                  reduction_factor, activation_point, activation_type
+           FROM meteora_damm_v2_pool_properties WHERE pool_address = $1"#,
+        pk(1).to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(row.cliff_fee_numerator, Some(500_000_000));
+    assert_eq!(row.number_of_period, Some(144));
+    assert_eq!(row.period_frequency, Some(600));
+    assert_eq!(row.reduction_factor, Some(3_194_444));
+    assert_eq!(row.activation_point, Some(1_785_180_416));
+    assert_eq!(row.activation_type, Some(1));
+
+    // Now a read that establishes no curve — a constant pool, or an account too
+    // short for the scheduler offsets. The six must go back to NULL.
+    repo.set_pool_account(&pk(1), &properties_only(Some(BaseFeeKind::Constant)))
+        .await
+        .unwrap();
+
+    let cleared = sqlx::query!(
+        r#"SELECT cliff_fee_numerator, period_frequency, activation_type
+           FROM meteora_damm_v2_pool_properties WHERE pool_address = $1"#,
+        pk(1).to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        cleared.cliff_fee_numerator, None,
+        "a curve must not outlive the shape it belonged to"
+    );
+    assert_eq!(cleared.period_frequency, None);
+    assert_eq!(cleared.activation_type, None);
+}
+
+/// A curve that does not fit `BIGINT` costs the curve, not the whole satellite.
+///
+/// cp-amm bounds `cliff_fee_numerator`, `reduction_factor` and
+/// `activation_point`, but bounds `period_frequency` by nothing beyond `!= 0` —
+/// and pool creation is permissionless, so a `u64` past `i64::MAX` is writable
+/// on chain today. Propagating that conversion failure with `?` would fail the
+/// entire write: the percents, the fee shape and the dynamic-fee flag would not
+/// land either, the worker would return before `set_registry_properties`, and
+/// the pool would keep `needs_refresh` raised and a NULL satellite row — taking
+/// a slot of every batch, forever, for a field nobody required.
+#[sqlx::test]
+async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+
+    let props = PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
+        protocol_fee_percent: 20,
+        referral_fee_percent: 20,
+        base_fee_kind: Some(BaseFeeKind::SchedulerLinear),
+        has_dynamic_fee: true,
+        fee_scheduler: Some(FeeSchedulerParams {
+            cliff_fee_numerator: 500_000_000,
+            number_of_period: 144,
+            // Past i64::MAX — no BIGINT holds it.
+            period_frequency: u64::MAX,
+            reduction_factor: 3_194_444,
+            activation_point: 1_785_180_416,
+            activation_type: 1,
+            kind: BaseFeeKind::SchedulerLinear,
+        }),
+    });
+
+    repo.set_pool_account(&pk(1), &props)
+        .await
+        .expect("an unstorable curve must not fail the write");
+
+    let stored = read_properties(&repo, &pk(1))
+        .await
+        .expect("the satellite row must exist");
+    assert_eq!(stored.protocol_fee_percent, Some(20));
+    assert_eq!(stored.base_fee_kind.as_deref(), Some("scheduler_linear"));
+    assert_eq!(stored.has_dynamic_fee, Some(true));
+    assert!(
+        stored.fee_scheduler.is_none(),
+        "the curve is what is lost, and all that is lost"
+    );
 }

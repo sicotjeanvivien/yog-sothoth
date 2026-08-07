@@ -257,9 +257,15 @@ The rule and its boundary:
   column, selected by whether a price was observed. The algebra cancels when
   the hour's flow is balanced, but that case is rare in practice (**35 of 36
   implied buckets were one-directional** on 5 August 2026 — a token thin enough
-  to need the fallback trades one way at a time). And `f` cannot be read
-  reliably today: `pools.fee_bps` is frozen on the scheduler cliff, off by ×5
-  and ×49 where it was checked (ticket 07). Still a large net gain over a NULL,
+  to need the fallback trades one way at a time). **`f` is now readable**, which
+  it was not when 002 shipped: `pools.fee_bps` is still the genesis cliff — off
+  by ×5 and ×49 where it was checked — but migration 004 stores the decay curve
+  and `amm::damm_v2::base_fee_numerator_at` evaluates it, so the fee actually in
+  force is available to bound this error. ⚠️ Available, **not yet applied**: no
+  consumer of `volume_usd` uses it today, and bounding the published figure with
+  it is its own change. Two gaps remain regardless — a market-cap scheduler or a
+  rate limiter has no time curve to evaluate, and a slot-activated pool is not
+  evaluated at all (none has been observed). Still a large net gain over a NULL,
   which carries no information at all. `price_a_implied` / `price_b_implied` say
   which buckets used the fallback, but they stop at the view: propagating them
   to the API and the dashboard is a product decision that has not been made, so

@@ -48,7 +48,7 @@ use yog_core::{
     },
 };
 
-use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
+use crate::repositories::helper::{convert_string_to_pubkey, convert_u64_to_i64, map_sqlx_error};
 use rows::MeteoraDammV2PoolPropertiesRow;
 
 pub struct PgMeteoraDammV2PoolPropertiesRepository {
@@ -78,7 +78,9 @@ impl PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
             MeteoraDammV2PoolPropertiesRow,
             r#"
             SELECT pool_address, protocol_fee_percent,
-                   referral_fee_percent, base_fee_kind, has_dynamic_fee
+                   referral_fee_percent, base_fee_kind, has_dynamic_fee,
+                   cliff_fee_numerator, number_of_period, period_frequency,
+                   reduction_factor, activation_point, activation_type
             FROM meteora_damm_v2_pool_properties
             WHERE pool_address = $1
             "#,
@@ -209,12 +211,50 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         );
         let base_fee_kind = properties.base_fee_kind.map(|kind| kind.as_str());
 
+        // The decay curve, or six NULLs — converted as a unit, and **dropped as
+        // a unit** rather than propagated with `?`.
+        //
+        // ⚠️ `?` here would sacrifice the whole satellite write for one optional
+        // field: the percents, the fee shape and the dynamic-fee flag would all
+        // fail to land because a curve did not fit. Worse, the pool would then
+        // never resolve at all — the worker returns before
+        // `set_registry_properties`, so `needs_refresh` stays raised and
+        // `props.pool_address IS NULL` stays true, and the pool occupies a slot
+        // of every batch forever while logging a warning. That is the exact
+        // starvation `list_unresolved` is built to avoid, and the same rule the
+        // decoder states one layer up: **an optional field must cost only
+        // itself**.
+        //
+        // Not hypothetical: cp-amm's `validate` bounds `cliff_fee_numerator`
+        // (max fee), `reduction_factor` (min/max fee) and `activation_point`
+        // (a timestamp), but bounds `period_frequency` by nothing beyond
+        // `!= 0` — and pool creation is permissionless, so a `u64` past
+        // `i64::MAX` is a value someone can write on chain today.
+        let scheduler = properties.fee_scheduler.and_then(|s| {
+            Some((
+                convert_u64_to_i64(s.cliff_fee_numerator, "cliff_fee_numerator").ok()?,
+                i32::from(s.number_of_period),
+                convert_u64_to_i64(s.period_frequency, "period_frequency").ok()?,
+                convert_u64_to_i64(s.reduction_factor, "reduction_factor").ok()?,
+                convert_u64_to_i64(s.activation_point, "activation_point").ok()?,
+                i16::from(s.activation_type),
+            ))
+        });
+        let cliff = scheduler.map(|s| s.0);
+        let number_of_period = scheduler.map(|s| s.1);
+        let period_frequency = scheduler.map(|s| s.2);
+        let reduction_factor = scheduler.map(|s| s.3);
+        let activation_point = scheduler.map(|s| s.4);
+        let activation_type = scheduler.map(|s| s.5);
+
         sqlx::query!(
             r#"
             INSERT INTO meteora_damm_v2_pool_properties
                 (pool_address, protocol_fee_percent, referral_fee_percent,
-                 base_fee_kind, has_dynamic_fee)
-            VALUES ($1, $2, $3, $4, $5)
+                 base_fee_kind, has_dynamic_fee,
+                 cliff_fee_numerator, number_of_period, period_frequency,
+                 reduction_factor, activation_point, activation_type)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (pool_address) DO UPDATE
                 SET protocol_fee_percent = EXCLUDED.protocol_fee_percent,
                     referral_fee_percent = EXCLUDED.referral_fee_percent,
@@ -223,13 +263,32 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
                     -- cannot map sends NULL, and that must not erase a kind an
                     -- earlier decode already established.
                     base_fee_kind        = COALESCE(EXCLUDED.base_fee_kind,
-                                                    meteora_damm_v2_pool_properties.base_fee_kind)
+                                                    meteora_damm_v2_pool_properties.base_fee_kind),
+                    -- Plain EXCLUDED here, deliberately unlike the line above.
+                    -- These six describe a curve, and a NULL means "this read
+                    -- established no curve" — which is the truth to record, not
+                    -- a value to protect. Preserving them would let a pool whose
+                    -- fee shape genuinely changed keep publishing a decay it no
+                    -- longer has, and a stale curve is worse than none: it is
+                    -- confidently wrong instead of visibly absent.
+                    cliff_fee_numerator  = EXCLUDED.cliff_fee_numerator,
+                    number_of_period     = EXCLUDED.number_of_period,
+                    period_frequency     = EXCLUDED.period_frequency,
+                    reduction_factor     = EXCLUDED.reduction_factor,
+                    activation_point     = EXCLUDED.activation_point,
+                    activation_type      = EXCLUDED.activation_type
             "#,
             pool_address.to_string(),
             protocol_pct,
             referral_pct,
             base_fee_kind,
             properties.has_dynamic_fee,
+            cliff,
+            number_of_period,
+            period_frequency,
+            reduction_factor,
+            activation_point,
+            activation_type,
         )
         .execute(&self.pool)
         .await
