@@ -273,10 +273,30 @@ A missing price does not behave the same way everywhere in the chain:
 |---|---|---|
 | `INNER JOIN token_metadata` | the row **disappears** | top of §15's views — unresolved mints |
 | `LEFT JOIN LATERAL` on the price | the value is **NULL**, and NULL propagates through the whole arithmetic expression | the valuation CTEs |
-| `COALESCE(…, 0)` downstream | NULL becomes a **hard zero**, indistinguishable from a real one | the signal-engine flow repositories |
+| ~~`COALESCE(…, 0)` downstream~~ | ~~NULL becomes a **hard zero**~~ | **removed in migration 006** — see below |
 
-`SUM` then *skips* NULLs, so a partially valued window silently returns a
-sub-total. That is why the analytics repositories ship **coverage counters**
+The third mechanism is gone from the signal-engine flow repositories, and it is
+not coming back: coalescing the two swap directions *independently* turned one
+missing price into `(0 − X)/X = −1.0` exactly, a guaranteed maximum-magnitude
+`flow_imbalance` Critical on a possibly balanced pool. The rule is now:
+
+> **A flow whose window is not entirely valuable is UNKNOWN, not zero.**
+
+Expressed identically at both call sites, over a `valuation_complete` column the
+two flow views carry:
+
+```sql
+CASE WHEN bool_and(valuation_complete) THEN SUM(<column>) END
+```
+
+⚠️ **`bool_and` is not decoration.** Dropping the `COALESCE` alone is *not
+enough*: `SUM` skips NULLs by itself, so a window where only some hours are
+valuable returns a **sub-total with no NULL anywhere** — the silent half of the
+defect, and the one that costs a missed signal rather than a false one.
+Requiring the whole window makes the sub-total unrepresentable.
+
+`SUM` skipping NULLs is also why the analytics repositories ship **coverage
+counters**
 next to the sums (`swap_buckets_priced_24h` / `swap_buckets_24h`, mirroring
 `pools_priced` / `pools_observed`): the value alone cannot say how complete it
 is. Adding a new aggregate over a valued view means adding its coverage too.

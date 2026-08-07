@@ -31,9 +31,22 @@ impl LiquidityFlowRepository for MockFlowRepo {
 fn flow(seed: u8, added: i64, removed: i64, tvl: Option<i64>) -> PoolLiquidityFlow {
     PoolLiquidityFlow {
         pool_address: pk(seed),
-        added_usd: usd(added),
-        removed_usd: usd(removed),
+        added_usd: Some(usd(added)),
+        removed_usd: Some(usd(removed)),
         tvl_usd: tvl.map(usd),
+    }
+}
+
+/// A pool with a perfectly valued TVL whose *window* could not be fully
+/// valued. This is the mixed case the ticket's 6 August update found: it
+/// clears the `tvl_usd` guard, so before the fix it went through with a
+/// sub-total and under-estimated the drain.
+fn unvaluable_flow(seed: u8, tvl: i64) -> PoolLiquidityFlow {
+    PoolLiquidityFlow {
+        pool_address: pk(seed),
+        added_usd: None,
+        removed_usd: None,
+        tvl_usd: Some(usd(tvl)),
     }
 }
 
@@ -157,4 +170,33 @@ async fn each_pool_is_judged_independently() {
     assert_eq!(signals[0].severity, Severity::Warning);
     assert_eq!(signals[1].pool_address, pk(3));
     assert_eq!(signals[1].severity, Severity::Critical);
+}
+
+// ── The silent half of `.project` ticket 08 ─────────────────────────────────
+
+#[tokio::test]
+async fn a_partly_unvaluable_window_is_skipped_rather_than_under_reported() {
+    // The case the ticket's 6 August update added, and the one that had no
+    // coverage at all. `SUM` skips unvaluable buckets, so a window only PARTLY
+    // priced used to arrive as a sub-total — small enough to look like calm,
+    // large enough to clear every guard. The TVL guard does not catch it: the
+    // TVL here is perfectly known.
+    //
+    // A drain that cannot be measured must be absent, not small.
+    let signals = run(&detector(vec![unvaluable_flow(1, 100_000)])).await;
+    assert!(
+        signals.is_empty(),
+        "an unvaluable window says nothing about the drain; got {signals:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
+    let signals = run(&detector(vec![
+        unvaluable_flow(1, 100_000),
+        flow(2, 0, 90_000, Some(10_000)), // 90k removed on 100k starting → 0.9
+    ]))
+    .await;
+    assert_eq!(signals.len(), 1);
+    assert_eq!(signals[0].pool_address, pk(2));
 }

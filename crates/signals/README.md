@@ -125,6 +125,21 @@ Prometheus metrics on `:9000/metrics` (host port `9002` in compose):
 per-detector tick counters, evaluation durations, emitted/suppressed signal
 counts, failure counters.
 
+**`yog_signals_skipped_total{detector, reason}`** counts pools a detector
+declined to evaluate — `reason=unpriced` (the window was not entirely valuable)
+or `no_tvl` (the pool's current TVL could not be priced). Emitting nothing is the
+right answer to a pool we cannot value; staying *quiet* about how often that
+happens is not, because degrading price coverage would then look exactly like a
+calm market. Watch the ratio against `yog_signals_tick_total`, not the absolute
+count.
+
+Measured on the dev database on 7 August 2026, over a 24 h window: 68 pools of
+100 evaluated, 32 skipped — **all 32 because neither of the pool's two tokens has
+any price at all**, so the implied rate of migration 002 has nothing to anchor
+on. None came from unresolved metadata. A skip is a pool nothing could have
+valued, not one that was given up on; the number moves when `yog-context` prices
+more mints, and nowhere else.
+
 ## Run
 
 ```bash

@@ -10,6 +10,7 @@ use metrics::{counter, describe_counter};
 
 const TICK_TOTAL: &str = "yog_signals_tick_total";
 const EMITTED_TOTAL: &str = "yog_signals_emitted_total";
+const SKIPPED_TOTAL: &str = "yog_signals_skipped_total";
 
 /// Counters for the engine's per-detector poll loops.
 pub struct EngineMetrics;
@@ -26,6 +27,11 @@ impl EngineMetrics {
             EMITTED_TOTAL,
             "Signals persisted, cumulative (label: detector)"
         );
+        describe_counter!(
+            SKIPPED_TOTAL,
+            "Pools a detector declined to evaluate, cumulative \
+             (labels: detector, reason=unpriced|no_tvl)"
+        );
     }
 
     /// Record one completed tick with its outcome.
@@ -36,5 +42,17 @@ impl EngineMetrics {
     /// Record signals successfully persisted on a tick.
     pub(crate) fn record_emitted(detector: &'static str, count: usize) {
         counter!(EMITTED_TOTAL, "detector" => detector).increment(count as u64);
+    }
+
+    /// Record one pool a detector declined to evaluate.
+    ///
+    /// A pool skipped for want of a price must be a **number, not a silence**:
+    /// it is the only way to tell "nothing is happening" from "we stopped being
+    /// able to see". Emitting no signal is the right answer to an unvaluable
+    /// pool (`.project` ticket 08) — staying quiet about how often that happens
+    /// is not, because a degrading price coverage then looks exactly like a
+    /// calm market.
+    pub(crate) fn record_skipped(detector: &'static str, reason: &'static str) {
+        counter!(SKIPPED_TOTAL, "detector" => detector, "reason" => reason).increment(1);
     }
 }

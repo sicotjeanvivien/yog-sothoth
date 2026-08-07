@@ -17,8 +17,8 @@ fn valid_row() -> PoolSwapFlowRow {
         pool_address: VALID_POOL.into(),
         // Two distinct values — a direction swap in the TryFrom would
         // surface as a mismatched assert.
-        volume_a_to_b_usd: "1234.5".parse().unwrap(),
-        volume_b_to_a_usd: "678.9".parse().unwrap(),
+        volume_a_to_b_usd: Some("1234.5".parse().unwrap()),
+        volume_b_to_a_usd: Some("678.9".parse().unwrap()),
     }
 }
 
@@ -27,8 +27,25 @@ fn try_from_valid_row_maps_each_direction_to_its_field() {
     let flow = PoolSwapFlow::try_from(valid_row()).expect("valid row should convert");
 
     assert_eq!(flow.pool_address.to_string(), VALID_POOL);
-    assert_eq!(flow.volume_a_to_b_usd, Decimal::new(12_345, 1));
-    assert_eq!(flow.volume_b_to_a_usd, Decimal::new(6_789, 1));
+    assert_eq!(flow.volume_a_to_b_usd, Some(Decimal::new(12_345, 1)));
+    assert_eq!(flow.volume_b_to_a_usd, Some(Decimal::new(6_789, 1)));
+}
+
+#[test]
+fn try_from_null_volumes_maps_to_none_rather_than_zero() {
+    // The query returns NULL for a window that was not entirely valuable. It
+    // must survive the conversion AS an absence: mapping it to `Decimal::ZERO`
+    // here would re-introduce, one layer lower, the exact collapse the
+    // repository stopped doing (`.project` ticket 08).
+    let row = PoolSwapFlowRow {
+        pool_address: VALID_POOL.into(),
+        volume_a_to_b_usd: None,
+        volume_b_to_a_usd: None,
+    };
+    let flow = PoolSwapFlow::try_from(row).expect("a NULL volume is valid, not an error");
+
+    assert_eq!(flow.volume_a_to_b_usd, None);
+    assert_eq!(flow.volume_b_to_a_usd, None);
 }
 
 #[test]
@@ -48,7 +65,7 @@ fn try_from_invalid_pool_address_returns_integrity() {
 fn try_from_volume_beyond_decimal_range_returns_integrity() {
     // NUMERIC can carry magnitudes rust_decimal cannot (max ~7.9e28).
     let row = PoolSwapFlowRow {
-        volume_a_to_b_usd: "1e40".parse().unwrap(),
+        volume_a_to_b_usd: Some("1e40".parse().unwrap()),
         ..valid_row()
     };
     let err = PoolSwapFlow::try_from(row).expect_err("overflowing volume should fail");

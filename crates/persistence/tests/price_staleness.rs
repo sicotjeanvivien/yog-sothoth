@@ -294,9 +294,15 @@ async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
 async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
     let views = price_reading_views(&pool).await;
 
+    // Six since migration 006. `meteora_damm_v2_pool_hourly_flow` used to be
+    // the seventh: it now reads `meteora_damm_v2_swap_events_hourly_priced`
+    // instead of `token_prices` directly, so it leaves this enumeration while
+    // KEEPING the bound — it inherits it from the priced view. A view that
+    // stops reading prices is allowed to leave; one that still reads them is
+    // not, and that is what the per-lookup count below enforces.
     assert!(
-        views.len() >= 7,
-        "expected the seven known price-reading views, found {} — if a view was \
+        views.len() >= 6,
+        "expected the six known price-reading views, found {} — if a view was \
          removed, update this test deliberately rather than letting the guard \
          quietly cover less",
         views.len()

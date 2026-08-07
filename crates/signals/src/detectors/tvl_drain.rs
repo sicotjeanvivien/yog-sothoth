@@ -32,6 +32,8 @@ use yog_core::domain::{
     DetectorError, EvalContext, LiquidityFlowRepository, Protocol, Severity, Signal, SignalDetector,
 };
 
+use crate::metrics::EngineMetrics;
+
 /// Tuning knobs of the TVL-drain detector, as loaded from the environment
 /// by the bootstrap config. A named-field struct rather than constructor
 /// arguments: half of these share a type (`Decimal` ×3, durations ×3), so
@@ -102,12 +104,26 @@ impl SignalDetector for TvlDrainDetector {
         let mut signals = Vec::new();
         for flow in flows {
             // TVL guard: an unvaluable pool yields no signal, not a fake one.
+            // It used to be a pure silence; it is now counted, because "no
+            // drain detected" and "cannot see this pool" are not the same
+            // statement and only one of them is reassuring.
             let Some(tvl) = flow.tvl_usd else {
+                EngineMetrics::record_skipped(self.name(), "no_tvl");
+                continue;
+            };
+
+            // Flow guard. A window only partly valuable used to arrive as a
+            // sub-total dressed as a total: `SUM` skipped the unpriced buckets
+            // and the repository's COALESCE hid what was left. That passed the
+            // TVL guard above whenever the window was merely PARTLY unpriced,
+            // and under-estimated the drain — a missed signal, in silence.
+            let (Some(added), Some(removed)) = (flow.added_usd, flow.removed_usd) else {
+                EngineMetrics::record_skipped(self.name(), "unpriced");
                 continue;
             };
 
             // LP churn (rebalancing) nets out; net inflow is a healthy pool.
-            let net_removed = flow.removed_usd - flow.added_usd;
+            let net_removed = removed - added;
             if net_removed <= Decimal::ZERO {
                 continue;
             }

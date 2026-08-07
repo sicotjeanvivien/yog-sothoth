@@ -40,19 +40,29 @@ impl LiquidityFlowRepository for PgLiquidityFlowRepository {
         since: DateTime<Utc>,
     ) -> RepositoryResult<Vec<PoolLiquidityFlow>> {
         // Postgres pushes the `bucket > $1` predicate down into the
-        // liquidity CA, so this only touches recent buckets. COALESCE keeps
-        // a direction with no priced flow at 0 rather than NULL; `tvl_usd`
-        // stays nullable on purpose (LEFT JOIN — a pool with no valued
-        // current state must surface as unvaluable, not vanish, so the
-        // detector can count what it skips).
+        // liquidity CA, so this only touches recent buckets. `tvl_usd` stays
+        // nullable on purpose (LEFT JOIN — a pool with no valued current
+        // state must surface as unvaluable, not vanish, so the detector can
+        // count what it skips).
+        //
+        // ⚠️ No COALESCE, and `bool_and` for the same reasons as the swap
+        // flow — written identically on purpose. The view already propagates
+        // NULL across both token legs of a direction, which is the behaviour
+        // `.project` ticket 08 wants; the defect was here, one level up, where
+        // `SUM` skipped the unvaluable buckets and the COALESCE dressed the
+        // remainder as a total. That sub-total slipped past `tvl_drain`'s
+        // `tvl_usd` guard whenever the window was only PARTLY unpriced, and it
+        // under-estimated the drain — a missed signal, silently.
         let rows = sqlx::query_as!(
             PoolLiquidityFlowRow,
             r#"
             SELECT
-                f.pool_address                          AS "pool_address!",
-                COALESCE(SUM(f.added_usd), 0::NUMERIC)  AS "added_usd!",
-                COALESCE(SUM(f.removed_usd), 0::NUMERIC) AS "removed_usd!",
-                t.tvl_usd                               AS "tvl_usd?"
+                f.pool_address AS "pool_address!",
+                CASE WHEN bool_and(f.valuation_complete)
+                     THEN SUM(f.added_usd) END   AS "added_usd?",
+                CASE WHEN bool_and(f.valuation_complete)
+                     THEN SUM(f.removed_usd) END AS "removed_usd?",
+                t.tvl_usd                        AS "tvl_usd?"
             FROM meteora_damm_v2_pool_hourly_liquidity_flow f
             LEFT JOIN pool_current_tvl t ON t.pool_address = f.pool_address
             WHERE f.bucket > $1

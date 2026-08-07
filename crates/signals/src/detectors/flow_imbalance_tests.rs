@@ -31,8 +31,19 @@ impl SwapFlowRepository for MockFlowRepo {
 fn flow(seed: u8, a2b: i64, b2a: i64) -> PoolSwapFlow {
     PoolSwapFlow {
         pool_address: pk(seed),
-        volume_a_to_b_usd: usd(a2b),
-        volume_b_to_a_usd: usd(b2a),
+        volume_a_to_b_usd: Some(usd(a2b)),
+        volume_b_to_a_usd: Some(usd(b2a)),
+    }
+}
+
+/// A pool whose window could not be fully valued — some hour carried an
+/// amount in a token with no usable price. Both directions arrive absent
+/// together; that is the shape the repository now produces.
+fn unvaluable_flow(seed: u8) -> PoolSwapFlow {
+    PoolSwapFlow {
+        pool_address: pk(seed),
+        volume_a_to_b_usd: None,
+        volume_b_to_a_usd: None,
     }
 }
 
@@ -123,4 +134,39 @@ async fn mixed_batch_emits_only_qualifying_pools() {
     assert_eq!(signals[0].severity, Severity::Warning);
     assert_eq!(signals[1].pool_address, pk(3));
     assert_eq!(signals[1].severity, Severity::Critical);
+}
+
+// ── The defect `.project` ticket 08 exists to remove ─────────────────────────
+
+#[tokio::test]
+async fn an_unvaluable_window_emits_nothing_rather_than_a_critical() {
+    // The test the ticket asks for by name. Before the fix, a window whose
+    // token A had no usable price arrived with that direction COALESCEd to 0
+    // while the other kept its full value — so this pool produced
+    // `(0 − X)/X = −1.0` exactly: a Critical at maximum magnitude, on a pool
+    // that may be perfectly balanced and merely half-unseen.
+    //
+    // Mutation check: give `unvaluable_flow` a `Some(usd(0))` on one direction
+    // and a real value on the other, and this goes red with one Critical at
+    // -1.0 — which is precisely what the old COALESCE produced.
+    let signals = run(&detector(vec![unvaluable_flow(1)])).await;
+    assert!(
+        signals.is_empty(),
+        "an unvaluable window is unknown, not one-sided; got {signals:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
+    // The skip is per pool. A batch must not lose its good pools because one
+    // of them could not be valued — that would trade a false positive for a
+    // false negative on everything else.
+    let signals = run(&detector(vec![
+        unvaluable_flow(1),
+        flow(2, 10_000, 0), // 1.0 → Critical
+    ]))
+    .await;
+    assert_eq!(signals.len(), 1);
+    assert_eq!(signals[0].pool_address, pk(2));
+    assert_eq!(signals[0].severity, Severity::Critical);
 }
