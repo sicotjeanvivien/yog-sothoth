@@ -69,8 +69,10 @@ Web (run from `web/`): `npm run dev`, `npm run build`, `npm run lint`, `npm run 
 Queries use `sqlx::query!`/`query_as!` macros validated at compile time against committed snapshots in `crates/persistence/.sqlx/`. The workspace builds with `SQLX_OFFLINE=true`. **After adding or changing any `sqlx::query!` call you must regenerate the cache and commit it**, or the `sqlx-check` CI job fails:
 
 ```bash
-cd crates/persistence && cargo sqlx prepare
+cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
 ```
+
+⚠️ **The trailing flags are not optional.** A bare `cargo sqlx prepare` only compiles the lib and bins, so it never sees the `query!` calls inside `tests/` — and rather than leaving them alone it **deletes their cache entries**, which is precisely what makes `sqlx-check` fail. Measured 7 August 2026: the bare form dropped the two `meteora_damm_v2_pool_properties` queries of `tests/pool_properties.rs`. `--all-features` is what un-gates those tests (`integration-tests`); `--all-targets` is what compiles them.
 
 ## Choosing how to write a query (decided 2026-06; no SeaQuery/ORM)
 
