@@ -25,7 +25,7 @@ use yog_core::domain::{
     DetectorError, EvalContext, Protocol, Severity, Signal, SignalDetector, SwapFlowRepository,
 };
 
-use crate::metrics::EngineMetrics;
+use crate::metrics::{EngineMetrics, SkipReason};
 
 /// Tuning knobs of the flow-imbalance detector, as loaded from the
 /// environment by the bootstrap config. A named-field struct rather than
@@ -107,7 +107,7 @@ impl SignalDetector for FlowImbalanceDetector {
             // that may be perfectly balanced and merely half-unseen.
             let (Some(a_to_b), Some(b_to_a)) = (flow.volume_a_to_b_usd, flow.volume_b_to_a_usd)
             else {
-                EngineMetrics::record_skipped(self.name(), "unpriced");
+                EngineMetrics::record_skipped(self.name(), SkipReason::Unpriced);
                 continue;
             };
 

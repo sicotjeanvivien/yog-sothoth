@@ -28,7 +28,7 @@ use yog_core::domain::{
     Signal, SignalDetector,
 };
 
-use crate::metrics::EngineMetrics;
+use crate::metrics::{EngineMetrics, SkipReason};
 
 /// Tuning knobs of the price-oracle-deviation detector, as loaded from the
 /// environment by the bootstrap config. A named-field struct rather than
@@ -129,18 +129,18 @@ impl SignalDetector for PriceOracleDeviationDetector {
                 || snapshot.price_a_fetched_at < price_cutoff
                 || snapshot.price_b_fetched_at < price_cutoff
             {
-                EngineMetrics::record_skipped(self.name(), "stale");
+                EngineMetrics::record_skipped(self.name(), SkipReason::Stale);
                 continue;
             }
 
             // Oracle price of A in B units. checked_div covers both the
             // zero-price row and a magnitude overflow on extreme pairs.
             let Some(oracle) = snapshot.price_a_usd.checked_div(snapshot.price_b_usd) else {
-                EngineMetrics::record_skipped(self.name(), "undecodable");
+                EngineMetrics::record_skipped(self.name(), SkipReason::Undecodable);
                 continue;
             };
             if oracle <= Decimal::ZERO {
-                EngineMetrics::record_skipped(self.name(), "undecodable");
+                EngineMetrics::record_skipped(self.name(), SkipReason::Undecodable);
                 continue;
             }
 
@@ -149,12 +149,12 @@ impl SignalDetector for PriceOracleDeviationDetector {
             // rather than a pathological pair. Conflating them would hide a
             // whole protocol behind noise from a handful of extreme pools.
             let Some(spot) = spot_price_a_in_b(&snapshot) else {
-                EngineMetrics::record_skipped(self.name(), "no_decoder");
+                EngineMetrics::record_skipped(self.name(), SkipReason::NoDecoder);
                 continue;
             };
 
             let Some(deviation) = (spot - oracle).checked_div(oracle) else {
-                EngineMetrics::record_skipped(self.name(), "undecodable");
+                EngineMetrics::record_skipped(self.name(), SkipReason::Undecodable);
                 continue;
             };
             let magnitude = deviation.abs();

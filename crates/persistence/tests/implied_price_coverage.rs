@@ -30,7 +30,7 @@
 //! version of one of those fixtures then gave the OPPOSITE result. A fixture
 //! that cannot occur is a test that cannot fail for the right reason.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_mint, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -68,40 +68,6 @@ async fn insert_pool(pool: &PgPool, pool_addr: &str, mint_a: &str, mint_b: &str)
         .await
         .unwrap();
     }
-}
-
-/// Price a mint the way `yog-context` actually does: one observation per hour,
-/// from `since_hours_ago` up to now.
-///
-/// A single row is not enough since migration 005. The as-of lookup takes the
-/// most recent price at or before the bucket's START, and no older than
-/// `yog_price_max_age_asof()` — so one observation covers exactly the ONE bucket
-/// whose start falls in the hour after it. Seeding a lone row 48 hours back, as
-/// this helper used to, priced nothing at all.
-///
-/// A test that needs a mint unpriced before some point expresses it by starting
-/// the series there: that is absence, which the staleness policy deliberately
-/// does not treat.
-async fn price_mint_since(pool: &PgPool, mint: &str, price: &str, since_hours_ago: i64) {
-    let now = Utc::now();
-    for h in 0..=since_hours_ago {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-        )
-        .bind(mint)
-        .bind(price)
-        .bind(now - Duration::hours(h))
-        .execute(pool)
-        .await
-        .unwrap();
-    }
-}
-
-/// A continuously-priced mint — the ordinary case, covering every bucket these
-/// fixtures place.
-async fn price_mint(pool: &PgPool, mint: &str, price: &str) {
-    price_mint_since(pool, mint, price, 48).await;
 }
 
 /// Parameters of one swap insert. A struct rather than eight positional

@@ -305,12 +305,23 @@ fn unbounded_lookups(definition: &str) -> Option<(usize, usize)> {
     (lookups == 0 || bounds != lookups).then_some((bounds, lookups))
 }
 
-/// Every view in `public` that reads `token_prices`, with its definition.
+/// Every relation in `public` that reads `token_prices`, with its definition.
+///
+/// ⚠️ `pg_matviews` as well as `pg_views`. A `MATERIALIZED VIEW` — or a
+/// TimescaleDB continuous aggregate, which is one — lives in a different
+/// catalog and would escape a `pg_views`-only guard entirely. That is not a
+/// hypothetical shape: CLAUDE.md names materialization as *the* performance
+/// tool of this project ("the perf tool is materialization … that's what the
+/// hourly CAs already do"), so the next price-reading relation is as likely to
+/// be materialized as not. Zero today; the guard covers it before there is one.
 async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
     sqlx::query_as(
         "SELECT viewname, definition FROM pg_views
          WHERE schemaname = 'public' AND definition LIKE '%token_prices%'
-         ORDER BY viewname",
+         UNION ALL
+         SELECT matviewname, definition FROM pg_matviews
+         WHERE schemaname = 'public' AND definition LIKE '%token_prices%'
+         ORDER BY 1",
     )
     .fetch_all(pool)
     .await

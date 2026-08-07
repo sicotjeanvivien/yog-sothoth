@@ -7,7 +7,7 @@
 //! drifting from their per-pool twins. `/api/stats` is the most-read endpoint
 //! of the dashboard; the number it prints deserves a test that can go red.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_mint};
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 
@@ -52,19 +52,7 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
     // as-of lookup reaches back at most `yog_price_max_age_asof()` from the
     // bucket's start, so a single 48-hour-old row prices no bucket at all.
     if let Some(price) = price_b {
-        let now = Utc::now();
-        for h in 0..=48 {
-            sqlx::query(
-                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-            )
-            .bind(&mint_b)
-            .bind(price)
-            .bind(now - Duration::hours(h))
-            .execute(pool)
-            .await
-            .unwrap();
-        }
+        price_mint(pool, &mint_b, price).await;
     }
 
     pool_addr

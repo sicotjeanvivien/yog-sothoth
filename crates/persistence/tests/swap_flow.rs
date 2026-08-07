@@ -7,7 +7,7 @@
 //! trade-time price WITHOUT collapsing them (unlike view 019) — a_to_b priced
 //! by token A's input side, b_to_a by token B's — summed over the window.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -83,18 +83,7 @@ async fn directional_volume_splits_and_windows(pool: PgPool) {
     // A lone row at -3h priced the -2h bucket and left the -1h one dark, which
     // read as $4 of a_to_b flow instead of $6.
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
-        for h in 0..=4 {
-            sqlx::query(
-                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-            )
-            .bind(mint)
-            .bind(price)
-            .bind(now - Duration::hours(h))
-            .execute(&pool)
-            .await
-            .unwrap();
-        }
+        price_mint_since(&pool, mint, price, 4).await;
     }
 
     // Two a_to_b swaps: input side amount_a totals 3_000_000 (3.0 @ 6 dec)
@@ -200,17 +189,7 @@ async fn seed_pool_with_unpriced_a(pool: &PgPool, priced_hours: i64) -> String {
         .unwrap();
     }
 
-    for h in 0..=priced_hours {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1,'100.0'::NUMERIC,'jupiter',$2)",
-        )
-        .bind(&mint_b)
-        .bind(now - Duration::hours(h))
-        .execute(pool)
-        .await
-        .unwrap();
-    }
+    price_mint_since(pool, &mint_b, "100.0", priced_hours).await;
 
     pool_addr
 }

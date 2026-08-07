@@ -8,7 +8,7 @@
 //! only the INPUT side of each swap (a_to_b → amount_a, b_to_a → amount_b),
 //! over the trailing 24h window.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -83,18 +83,7 @@ async fn volume_24h_reads_cagg_with_trade_time_pricing(pool: PgPool) {
     // does — one observation covers exactly the one bucket whose start falls in
     // the hour after it.
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
-        for h in 0..=4 {
-            sqlx::query(
-                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-            )
-            .bind(mint)
-            .bind(price)
-            .bind(now - Duration::hours(h))
-            .execute(&pool)
-            .await
-            .unwrap();
-        }
+        price_mint_since(&pool, mint, price, 4).await;
     }
 
     // a_to_b: input side is amount_a = 1_000_000 (1.0 @ 6 dec) → 1.0 × $2  = $2

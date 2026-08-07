@@ -45,6 +45,22 @@
 -- Both views expose the column under the SAME NAME so the two repositories read
 -- the same word. The predicates necessarily differ — the amounts differ — but
 -- the notion is named once per view and consumed identically.
+--
+-- ⚠️ **`valuation_complete` is never NULL, and the fix depends on it.**
+-- `bool_and` IGNORES NULLs, so a window of one NULL flag among true ones would
+-- aggregate to TRUE, `SUM` would skip that bucket, and the repository would
+-- publish the very sub-total this migration exists to forbid — the fix quietly
+-- defeating itself. It cannot happen: in both views the flag is
+-- `NOT((COALESCE(…) > 0 AND … IS NULL) OR (…))`, whose every operand is either
+-- `COALESCE`-d or an `IS NULL` test, so the expression is total. Load-bearing
+-- and invisible, hence written down.
+--
+-- ⚠️ **Two view-on-view dependencies now exist, not one.** Migration 005's drop
+-- block says "only one … 019 selects from the priced view of 002"; that is no
+-- longer true and 005 is frozen. After this migration, 019 AND 023 both select
+-- from `meteora_damm_v2_swap_events_hourly_priced`. Anyone writing a migration
+-- that drops the priced view must drop both first. Postgres refuses the DROP
+-- rather than corrupting anything, so this is a signpost, not a hazard.
 
 
 -- ── meteora_damm_v2_pool_hourly_flow (023, now reading the priced view) ─────

@@ -8,7 +8,7 @@
 //! the repository sums the window and joins the pool's current TVL
 //! (`pool_current_tvl`, nullable).
 
-use super::helpers::pk;
+use super::helpers::{pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -80,21 +80,9 @@ async fn seed_pool(pool: &PgPool, priced_since: DateTime<Utc>) -> String {
         .unwrap();
     }
 
-    let now = Utc::now();
-    let hours = (now - priced_since).num_hours().max(0);
+    let hours = (Utc::now() - priced_since).num_hours().max(0);
     for (mint, price) in [(&mint_a, "2.0"), (&mint_b, "100.0")] {
-        for h in 0..=hours {
-            sqlx::query(
-                "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-                 VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-            )
-            .bind(mint)
-            .bind(price)
-            .bind(now - Duration::hours(h))
-            .execute(pool)
-            .await
-            .unwrap();
-        }
+        price_mint_since(pool, mint, price, hours).await;
     }
 
     pool_addr
