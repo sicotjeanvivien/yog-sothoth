@@ -924,3 +924,51 @@ async fn the_fee_scheduler_curve_round_trips_and_can_be_cleared(pool: PgPool) {
     assert_eq!(cleared.period_frequency, None);
     assert_eq!(cleared.activation_type, None);
 }
+
+/// A curve that does not fit `BIGINT` costs the curve, not the whole satellite.
+///
+/// cp-amm bounds `cliff_fee_numerator`, `reduction_factor` and
+/// `activation_point`, but bounds `period_frequency` by nothing beyond `!= 0` —
+/// and pool creation is permissionless, so a `u64` past `i64::MAX` is writable
+/// on chain today. Propagating that conversion failure with `?` would fail the
+/// entire write: the percents, the fee shape and the dynamic-fee flag would not
+/// land either, the worker would return before `set_registry_properties`, and
+/// the pool would keep `needs_refresh` raised and a NULL satellite row — taking
+/// a slot of every batch, forever, for a field nobody required.
+#[sqlx::test]
+async fn an_out_of_range_curve_costs_the_curve_and_nothing_else(pool: PgPool) {
+    let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
+    seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
+
+    let props = PoolAccountProperties::MeteoraDammV2(MeteoraDammV2PoolAccountProperties {
+        protocol_fee_percent: 20,
+        referral_fee_percent: 20,
+        base_fee_kind: Some(BaseFeeKind::SchedulerLinear),
+        has_dynamic_fee: true,
+        fee_scheduler: Some(FeeSchedulerParams {
+            cliff_fee_numerator: 500_000_000,
+            number_of_period: 144,
+            // Past i64::MAX — no BIGINT holds it.
+            period_frequency: u64::MAX,
+            reduction_factor: 3_194_444,
+            activation_point: 1_785_180_416,
+            activation_type: 1,
+            kind: BaseFeeKind::SchedulerLinear,
+        }),
+    });
+
+    repo.set_pool_account(&pk(1), &props)
+        .await
+        .expect("an unstorable curve must not fail the write");
+
+    let stored = read_properties(&repo, &pk(1))
+        .await
+        .expect("the satellite row must exist");
+    assert_eq!(stored.protocol_fee_percent, Some(20));
+    assert_eq!(stored.base_fee_kind.as_deref(), Some("scheduler_linear"));
+    assert_eq!(stored.has_dynamic_fee, Some(true));
+    assert!(
+        stored.fee_scheduler.is_none(),
+        "the curve is what is lost, and all that is lost"
+    );
+}

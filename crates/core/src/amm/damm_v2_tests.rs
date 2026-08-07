@@ -370,11 +370,11 @@ fn pow_inverts_a_base_above_one_like_the_source_does() {
     // 2.0 in Q64.64, squared, is 4.0 — the branch must not change the value.
     let two = ONE_Q64 * 2;
     let four = pow(two, 2).expect("2^2 is representable");
-    let ratio = four / ONE_Q64;
-    assert!(
-        (3..=4).contains(&ratio),
-        "expected ~4.0 in Q64.64, got a ratio of {ratio}"
-    );
+    // Exactly 4: the inversion path computes (2^128 − 1) / (2^62 − 1), whose
+    // integer ratio to ONE_Q64 is 4 on the nose. A tolerance band would accept
+    // −25 % in the one module whose argument is that the last digits are the
+    // chain's.
+    assert_eq!(four / ONE_Q64, 4);
     // Exponent 0 is 1.0 whatever the base, on both sides of the branch.
     assert_eq!(pow(two, 0), Some(ONE_Q64));
     assert_eq!(pow(ONE_Q64 / 2, 0), Some(ONE_Q64));

@@ -14,7 +14,11 @@ const FEE_DENOMINATOR: u64 = 1_000_000_000;
 /// Decoded from the `BaseFeeMode` discriminant plus the scheduler period
 /// count — the mode byte alone is not enough, since a scheduler mode with
 /// zero periods is a constant fee (see [`base_fee_kind_from`]).
+/// Serialized in `snake_case` so serde agrees with [`BaseFeeKind::as_str`],
+/// which the DB column and the wire already use. Two text spellings of one enum
+/// is a divergence waiting for its first consumer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BaseFeeKind {
     /// Fixed fee — no scheduling (any scheduler mode with
     /// `number_of_period == 0`).
@@ -273,12 +277,11 @@ impl FeeSchedulerParams {
     /// so no real account exercises this; it is transcribed because a port that
     /// drops an unreachable branch is a port that has quietly stopped being one.
     fn elapsed_periods(&self, current_point: u64) -> u16 {
-        if current_point < self.activation_point || self.period_frequency == 0 {
-            return if self.period_frequency == 0 {
-                0
-            } else {
-                self.number_of_period
-            };
+        if self.period_frequency == ZERO_FREQUENCY_STAYS_AT_CLIFF {
+            return 0;
+        }
+        if current_point < self.activation_point {
+            return self.number_of_period;
         }
         let elapsed = (current_point - self.activation_point) / self.period_frequency;
         // Saturate then clamp. cp-amm clamps in `u64` and casts afterwards, so

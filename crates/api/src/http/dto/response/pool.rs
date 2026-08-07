@@ -233,8 +233,14 @@ pub(crate) struct MeteoraDammV2PropertiesResponse {
     /// **slot-activated** pool, see below.
     pub(crate) current_fee_bps: Option<Decimal>,
 
-    /// Whether the decay has finished, in which case `currentFeeBps` is the
-    /// floor and will not move again. `None` under the same conditions as above.
+    /// Whether the decay has finished — `currentFeeBps` will not move again.
+    /// `None` under the same conditions as above.
+    ///
+    /// It is the *floor* in every case a real account can produce. The one
+    /// exception is a curve with a zero `period_frequency`, which never advances
+    /// and stays at its **cliff** while still reporting as finished — cp-amm
+    /// says the same, and its `validate` makes the combination unreachable on
+    /// chain.
     pub(crate) fee_scheduler_expired: Option<bool>,
 }
 
@@ -259,11 +265,10 @@ impl MeteoraDammV2PropertiesResponse {
         //
         // Deriving `expired` independently — `point.map(...)` next to the
         // `and_then` below — let the pair disagree: an arithmetic the chain also
-        // refuses (a zero `period_frequency`, or a linear curve whose total
-        // decay exceeds its cliff) yields no fee while still reporting
-        // `expired: true`, which contradicts what this field documents. A
-        // consumer reading "the decay is over" alongside a null fee has been
-        // told two incompatible things about the same pool.
+        // refuses (a linear curve whose total decay exceeds its cliff) yields no
+        // fee while still reporting `expired: true`, which contradicts what this
+        // field documents. A consumer reading "the decay is over" alongside a
+        // null fee has been told two incompatible things about the same pool.
         let evaluated = p
             .fee_scheduler
             .filter(|s| s.activation_type == TIMESTAMP_ACTIVATION)
