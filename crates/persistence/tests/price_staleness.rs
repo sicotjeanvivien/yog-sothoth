@@ -277,17 +277,30 @@ async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
          meaningless and must be removed"
     );
 
-    let unbounded: Vec<&str> = views
+    // ⚠️ Counted per LOOKUP, not per view. `meteora_damm_v2_pool_hourly_activity`
+    // holds five independent price LATERALs (`liq_v` ×2, `pos_fee_v` ×2,
+    // `reward_v` ×1); a `contains("yog_price_max_age")` would stay green with
+    // four of the five unbounded — reproducing, inside the very guard against it,
+    // the "rule applied at one site out of seventeen" this policy exists to fix.
+    //
+    // The invariant is exact: every bounded view has one bound per lookup
+    // (2/2 five times over, 5/5 for the activity view).
+    let unbounded: Vec<String> = views
         .iter()
-        .filter(|(name, def)| name != EXEMPT && !def.contains("yog_price_max_age"))
-        .map(|(name, _)| name.as_str())
+        .filter(|(name, _)| name != EXEMPT)
+        .filter_map(|(name, def)| {
+            let lookups = def.matches("FROM token_prices").count();
+            let bounds = def.matches("yog_price_max_age").count();
+            (bounds < lookups).then(|| format!("{name} ({bounds}/{lookups} bornés)"))
+        })
         .collect();
 
     assert!(
         unbounded.is_empty(),
-        "these views read token_prices without applying the staleness policy: \
-         {unbounded:?}. Add `fetched_at >= <reference> - yog_price_max_age_asof()` \
-         (or the _latest() variant for a current-price lookup) — the rule used to \
-         live at one site out of seventeen, which is how it got lost"
+        "these views read token_prices without applying the staleness policy to \
+         every lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
+         yog_price_max_age_asof()` (or the _latest() variant for a current-price \
+         lookup) — the rule used to live at one site out of seventeen, which is \
+         how it got lost"
     );
 }
