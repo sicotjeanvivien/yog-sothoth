@@ -78,6 +78,22 @@ definition, written in two places, one of which went stale.
 `start_offset = 31 days` to `29`, against an unchanged `drop_after = 30 days`.
 No view is touched and no aggregate rebuilt, so the window above is not spent.
 
+**Verified against a live scheduler, which no test can do.** Every test and
+every CI run applies migrations with `max_background_workers = 0`; production
+applies them with the scheduler already ticking, and 008 *removes* four policies
+whose jobs may be executing at that moment. Measured 10 August 2026:
+
+- three fresh databases bootstrapped end to end with the scheduler at 8 workers
+  and 30 live jobs on the neighbouring database — 8/8 migrations, four policies
+  at 29 days, every time;
+- then, on one of them, the four refresh jobs forced to `schedule_interval =
+  1 second` over 20 days of seeded swaps, and 008 replayed **35 times**. The jobs
+  really ran throughout (15–20 executions each, 0 failures) and every replay
+  succeeded — 0 failures out of 35. The aggregate materialized 479 buckets.
+
+So the deployment path is exercised, not assumed. That was the last unchecked
+item of `.project` ticket 03.
+
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs
