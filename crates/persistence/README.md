@@ -39,7 +39,7 @@ persistence/
     │   └── scripts/         ← the provisioning SQL, `include_str!`d into it
     │       ├── setup_roles.sql         (roles + structural privileges, admin)
     │       └── setup_watched_pools.sql (startup allowlist seed, admin)
-    └── tests/               ← DB-backed integration tests (#[ignore]d by default)
+    └── tests/               ← DB-backed integration tests (feature `integration-tests`)
         ├── main.rs          ← the ONLY test target; declares every file below
         ├── helpers.rs       ← shared sentinels (pk, sg, ts)
         └── <subject>.rs     ← one file per event / read path
@@ -563,8 +563,17 @@ committing — CI runs `cargo sqlx prepare --check` against a real Postgres:
 
 ```bash
 cd crates/persistence
-cargo sqlx prepare
+cargo sqlx prepare -- --all-targets --all-features
 ```
+
+⚠️ **The trailing flags are not optional**, and this file used to omit them. A
+bare `cargo sqlx prepare` compiles only the lib and bins, never sees the
+`query!` calls inside `tests/`, and rather than leaving their cache entries
+alone it **deletes** them. `sqlx-check` does not catch it either — it runs
+without `--all-features`, so those queries are never expanded, and it tolerates
+extra entries. The breakage surfaces later as an offline compile error in the
+`test-integration` job, far from its cause. Same warning, with the measurement,
+in `CLAUDE.md`.
 
 ## Integration tests
 

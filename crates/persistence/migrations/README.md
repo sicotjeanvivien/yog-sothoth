@@ -74,69 +74,6 @@ definition, written in two places, one of which went stale.
 `start_offset = 31 days` to `29`, against an unchanged `drop_after = 30 days`.
 No view is touched and no aggregate rebuilt, so the window above is not spent.
 
-## The rule that binds a refresh policy to a retention policy
-
-> **`start_offset` must be STRICTLY smaller than `drop_after`.**
-
-A refresh must never look at a range whose raw rows may already be gone.
-`drop_chunks` logs an invalidation over what it removes; a refresh is
-invalidation-driven, so a window containing that invalidation recomputes the
-range from rows that no longer exist and writes back the nothing it finds —
-**deleting** the materialized buckets. The retention never touches the
-aggregate; the refresh does.
-
-⚠️ **The 7-day chunk geometry does not protect you.** A chunk is dropped only
-once entirely older than `drop_after`, which *looks* like it keeps the dropped
-range clear of a window that only overshoots by a day. It does not, because
-retention runs **daily**: a chunk is dropped at the first run after its end
-crosses the line, so its newest rows are then between 30 and 31 days old —
-inside a 31-day window. Measured 10 August 2026 on the real geometry:
-**2160 materialized buckets → 2136, exactly 24 — one day of history per chunk
-dropped**, permanently, about one day in seven beyond the 30-day line.
-
-Both directions are asserted by `tests/cagg_retention.rs`: the rule itself, read
-out of the TimescaleDB catalog for all four pairs, and the behaviour it exists
-for. ⚠️ `001_baseline.sql:1664` still carries the reasoning that produced the
-bug — *"start_offset spans the full 30d retention window (raw rows never live
-longer)"* — and forward-only means it cannot be corrected there.
-
-## Watching the job scheduler run, locally
-
-`docker-compose.yml` pins `timescaledb.max_background_workers = 0`, and it has
-to stay there: `sqlx::test` creates a database per test and the scheduler races
-the next test's DDL on the shared catalog. So no cagg had ever materialized a
-bucket, and no policy had ever run — which is why every finding above went
-unnoticed. To look, without committing anything:
-
-```bash
-cat > /tmp/scheduler-on.yml <<'YML'
-services:
-  postgres:
-    command: ["postgres", "-c", "timescaledb.max_background_workers=8"]
-YML
-docker compose -f docker-compose.yml -f /tmp/scheduler-on.yml up -d postgres
-# … observe, then put it back:
-docker compose up -d postgres
-```
-
-What to look at — `timescaledb_information.job_stats` joined to `jobs` for
-`total_runs` / `total_failures`, and the materialization watermark:
-
-```sql
-SELECT ca.view_name,
-       to_timestamp(_timescaledb_functions.cagg_watermark(h.id) / 1000000.0)
-  FROM timescaledb_information.continuous_aggregates ca
-  JOIN _timescaledb_catalog.hypertable h
-    ON h.table_name = ca.materialization_hypertable_name;
-```
-
-Done on 10 August 2026: all four refresh policies ran and succeeded on the first
-scheduler tick, and the swap aggregate materialized **185 buckets** — the first
-time any of them has. `claim_reward_events_hourly` stayed at `-infinity`, which
-is correct: its raw table holds no rows. ⚠️ Note the consequence for the
-free-rebuild window above — it is closed on any database where the scheduler has
-now run, this dev one included.
-
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs
@@ -210,6 +147,116 @@ set no longer contains. The database would report itself up to date while its
 recorded history describes a schema nobody can reproduce. That recipe exists for
 one narrow case — a committed file edited in ways an applied database provably
 never evaluated — and this is not it.
+
+## The rule that binds a refresh policy to a retention policy
+
+> **`start_offset` must be STRICTLY smaller than `drop_after`.**
+
+A refresh must never look at a range whose raw rows may already be gone.
+`drop_chunks` logs an invalidation over what it removes; a refresh is
+invalidation-driven, so a window containing that invalidation recomputes the
+range from rows that no longer exist and writes back the nothing it finds —
+**deleting** the materialized buckets. The retention never touches the
+aggregate; the refresh does.
+
+⚠️ **The 7-day chunk geometry does not protect you.** A chunk is dropped only
+once entirely older than `drop_after`, which *looks* like it keeps the dropped
+range clear of a window that only overshoots by a day. It does not, because
+retention runs **daily**: a chunk is dropped at the first run after its end
+crosses the line, so its newest rows are then between 30 and 31 days old —
+inside a 31-day window. Measured 10 August 2026 on the real geometry:
+**2160 materialized buckets → 2136, exactly 24 — one day of history per chunk
+dropped**, permanently, about one day in seven beyond the 30-day line.
+
+Both directions are asserted by `tests/cagg_retention.rs`: the rule itself, read
+out of the TimescaleDB catalog for all four pairs, and the behaviour it exists
+for. ⚠️ `001_baseline.sql:1664` still carries the reasoning that produced the
+bug — *"start_offset spans the full 30d retention window (raw rows never live
+longer)"* — and forward-only means it cannot be corrected there.
+
+### ☠️ Never `refresh_continuous_aggregate(cagg, NULL, NULL)` on a live database
+
+The rule above constrains **the scheduled policy**. It does not, and cannot,
+constrain a refresh someone types. The invalidations the policy now carefully
+never reaches do not expire — they accumulate in the invalidation log for ever —
+so a full-range refresh processes all of them at once and deletes every
+materialized bucket whose raw rows retention has dropped.
+
+Measured 10 August 2026, on a database where migration 008 was already applied
+and the policy's own refresh had just run clean:
+
+| refresh | buckets |
+|---|---|
+| policy window (`29 days`) | **2160** — "already up-to-date" |
+| then `NULL, NULL` | **779** |
+
+**1381 buckets destroyed by one command**, on a correctly configured database.
+
+This is not a hypothetical footgun: the paragraph on 007 above says the next
+cagg rebuild *"will need a backfill"*, and a full-range refresh is the obvious
+way to do one. It is the wrong way. A backfill must be run in **bounded slices
+that stay inside the retention** — `CALL refresh_continuous_aggregate(cagg,
+now() - INTERVAL '29 days', now() - INTERVAL '1 hour')` — and history older than
+the raw retention cannot be rebuilt at all, because the rows it was computed
+from are gone. That is the real cost of a late rebuild, and it is why columns
+belong in the rebuild you are already doing.
+
+`tests/cagg_retention.rs` pins this behaviour too, so the warning stays
+falsifiable: if TimescaleDB ever stops recomputing over dropped ranges, that
+test fails and this section can go.
+
+## Watching the job scheduler run, locally
+
+`docker-compose.yml` pins `timescaledb.max_background_workers = 0`, and it has
+to stay there: `sqlx::test` creates a database per test and the scheduler races
+the next test's DDL on the shared catalog. So no cagg had ever materialized a
+bucket, and no policy had ever run — which is why every finding above went
+unnoticed.
+
+⚠️ **Read the price before running this.** Turning the scheduler on is not free
+and not fully reversible:
+
+- while it is on, the integration suite is **flaky** — that race is the reason
+  for the pin, and it is the same one described under *What a local run cannot
+  prove* below. Do not run tests until it is off again;
+- the caggs will materialize, which **permanently closes the free-rebuild
+  window** on that database: from then on, dropping and recreating an aggregate
+  costs a backfill, with the caveat above that history older than the raw
+  retention cannot be backfilled at all.
+
+The restore step is therefore **not optional**, and it does not undo the second
+point. With that understood:
+
+```bash
+cat > /tmp/scheduler-on.yml <<'YML'
+services:
+  postgres:
+    command: ["postgres", "-c", "timescaledb.max_background_workers=8"]
+YML
+docker compose -f docker-compose.yml -f /tmp/scheduler-on.yml up -d postgres
+
+# … observe, then PUT IT BACK before running any test:
+docker compose up -d postgres
+psql "$DATABASE_URL" -c "SHOW timescaledb.max_background_workers;"   # must be 0
+```
+
+What to look at — `timescaledb_information.job_stats` joined to `jobs` for
+`total_runs` / `total_failures`, and the materialization watermark:
+
+```sql
+SELECT ca.view_name,
+       to_timestamp(_timescaledb_functions.cagg_watermark(h.id) / 1000000.0)
+  FROM timescaledb_information.continuous_aggregates ca
+  JOIN _timescaledb_catalog.hypertable h
+    ON h.table_name = ca.materialization_hypertable_name;
+```
+
+Done on 10 August 2026: all four refresh policies ran and succeeded on the first
+scheduler tick, and the swap aggregate materialized **185 buckets** — the first
+time any of them has. `claim_reward_events_hourly` stayed at `-infinity`, which
+is correct: its raw table holds no rows. ⚠️ Note the consequence for the
+free-rebuild window above — it is closed on any database where the scheduler has
+now run, this dev one included.
 
 ## Forward-only
 

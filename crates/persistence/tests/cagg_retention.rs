@@ -11,10 +11,16 @@
 //! on a throwaway database: 288 materialized buckets, retention drop, ONE
 //! refresh over `[now-31d, now-1h]`, 130 left.
 //!
-//! The rule is therefore `start_offset < drop_after`, and it is asserted twice:
-//! once as itself, read out of the TimescaleDB catalog, and once through the
-//! behaviour it exists for. The rule alone would not say *why* it is the right
-//! rule; the behaviour alone would not say which knob to turn.
+//! The rule is therefore `start_offset < drop_after`, and it takes three tests,
+//! because no one of them says the whole thing:
+//!
+//!   1. the rule itself, read out of the TimescaleDB catalog for all four pairs
+//!      — this is what fails when a migration re-declares the wrong offset;
+//!   2. the behaviour it exists for, reproduced at the instant the daily
+//!      retention cuts — the rule alone would not say *why* it is the right one;
+//!   3. and ☠️ the destruction that survives the rule: the policy is
+//!      constrained, a refresh someone types is not. That one asserts a LOSS on
+//!      purpose.
 
 use super::helpers::pk;
 use chrono::{DateTime, Utc};
@@ -63,12 +69,32 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
         .await
         .expect("the policy pairs must be readable from the catalog");
 
+    // ⚠️ Counted independently of the query above, and this is the point: both
+    // of its joins are INNER, so an aggregate that never declared a refresh
+    // policy — or whose raw table never declared a retention one — drops out of
+    // the result entirely. `found` would then still match EXPECTED_CAGGS and the
+    // rule would go unchecked on exactly the aggregate that has no rule. A
+    // future protocol adding its cagg and forgetting the policy is the concrete
+    // case: it would materialize nothing, for ever, silently.
+    let declared: i64 = sqlx::query_scalar(
+        "SELECT count(*)::BIGINT FROM timescaledb_information.continuous_aggregates",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        declared as usize,
+        EXPECTED_CAGGS.len(),
+        "a continuous aggregate exists that this test does not know about — add \
+         it to EXPECTED_CAGGS, and give it the two policies before you do"
+    );
+
     let found: Vec<String> = rows.iter().map(|r| r.get::<String, _>("cagg")).collect();
     assert_eq!(
         found, EXPECTED_CAGGS,
         "every continuous aggregate must have BOTH a refresh policy and a \
          retention policy on its source hypertable — a missing one drops out of \
-         the join and takes its pair out of this check"
+         the join, which is why the count above is taken separately"
     );
 
     for row in &rows {
@@ -292,5 +318,82 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
         oldest_after, oldest_before,
         "the aggregate's history must not lose its oldest end — that history \
          surviving the raw retention is the reason the cagg exists"
+    );
+}
+
+#[sqlx::test]
+async fn a_full_range_refresh_still_destroys_the_history(pool: PgPool) {
+    // ☠️ This test asserts a DESTRUCTION, on purpose.
+    //
+    // Migration 008 constrains the scheduled policy. It cannot constrain a
+    // refresh someone types, and the invalidations the policy now carefully
+    // never reaches do not expire — they accumulate for ever. So
+    // `refresh_continuous_aggregate(cagg, NULL, NULL)` processes all of them at
+    // once and deletes every materialized bucket whose raw rows are gone.
+    //
+    // That matters operationally: `migrations/README.md` says the next cagg
+    // rebuild will need a backfill, and a full-range refresh is the obvious way
+    // to run one. It is the wrong way. Measured on a database with 008 applied
+    // and the policy refresh already clean: 2160 buckets → 779.
+    //
+    // Pinning it here keeps the warning falsifiable. If TimescaleDB ever stops
+    // recomputing over dropped ranges, this test fails — and that is the signal
+    // to delete the warning, not to delete the test quietly.
+    let addr = pk(1).to_string();
+    sqlx::query(
+        "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
+         VALUES ($1,'meteora_damm_v2',$2,$3)",
+    )
+    .bind(&addr)
+    .bind(pk(2).to_string())
+    .bind(pk(3).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_swap_events
+           (pool_address, signature, trade_direction,
+            amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
+            claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a,
+            timestamp, slot, event_index)
+         SELECT $1, 'sig-' || h, 'a_to_b', 1000, 1000, 0, 0, 0, 10, 0, 0, 0, true,
+                now() - (h || ' hours')::interval, 0, 0
+           FROM generate_series(1, 90 * 24) h",
+    )
+    .bind(&addr)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_hourly', NULL, NULL)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (before, _) = materialized_buckets(&pool).await;
+
+    sqlx::query(
+        "SELECT drop_chunks('meteora_damm_v2_swap_events', older_than => INTERVAL '30 days')",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        "CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_hourly', NULL, NULL)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (after, _) = materialized_buckets(&pool).await;
+
+    assert!(
+        after < before,
+        "a full-range refresh over dropped raw data is expected to DESTROY \
+         history ({before} buckets before, {after} after). If this ever stops \
+         being true, the ☠️ warning in migrations/README.md can go — check, \
+         do not assume."
     );
 }
