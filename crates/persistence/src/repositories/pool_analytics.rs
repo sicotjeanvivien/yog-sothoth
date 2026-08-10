@@ -71,7 +71,13 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                     a.pool_address,
                     SUM(a.volume_usd)        AS volume_24h_usd,
                     SUM(a.fees_usd)          AS fees_24h_usd,
+                    -- The three shares are summed independently rather than
+                    -- one being derived from the others: the split is defined
+                    -- once, in the view, and `SUM` is linear so the window
+                    -- totals stay additive without restating the formula here.
                     SUM(a.protocol_fees_usd) AS protocol_fees_24h_usd,
+                    SUM(a.referral_fees_usd) AS referral_fees_24h_usd,
+                    SUM(a.lp_fees_usd)       AS lp_fees_24h_usd,
                     COUNT(*) FILTER (WHERE a.swap_count IS NOT NULL)
                         AS swap_buckets_24h,
                     COUNT(*) FILTER (WHERE a.swap_count IS NOT NULL
@@ -88,6 +94,8 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 v.volume_24h_usd AS "volume_24h_usd?",
                 v.fees_24h_usd AS "fees_24h_usd?",
                 v.protocol_fees_24h_usd AS "protocol_fees_24h_usd?",
+                v.referral_fees_24h_usd AS "referral_fees_24h_usd?",
+                v.lp_fees_24h_usd AS "lp_fees_24h_usd?",
                 -- A pool with no activity at all misses the LEFT JOIN entirely:
                 -- zero buckets, zero priced — not "unknown coverage".
                 COALESCE(v.swap_buckets_24h, 0)        AS "swap_buckets_24h!",
@@ -133,6 +141,8 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 volume_usd,
                 fees_usd,
                 protocol_fees_usd,
+                referral_fees_usd,
+                lp_fees_usd,
                 swap_count,
                 liquidity_added_usd,
                 liquidity_removed_usd,

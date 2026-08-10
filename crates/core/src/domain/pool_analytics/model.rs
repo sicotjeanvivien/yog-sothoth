@@ -25,13 +25,34 @@ use rust_decimal::Decimal;
 ///     could be valued at all. A partially covered window is returned
 ///     as `Some(sum_of_valued_hours)` — we surface what we have rather
 ///     than collapse the value.
-///   - `fees_24h_usd` / `protocol_fees_24h_usd` are the realized
-///     trading fee and Meteora's share of it over the same 24h
-///     window, valued at trade-time prices exactly like volume.
-///     `None` under the same partial-coverage rules. The LP share
-///     is `fees_24h_usd - protocol_fees_24h_usd`; the effective fee
-///     rate is `fees_24h_usd / volume_24h_usd` — both left to the
-///     presentation layer to derive.
+///   - `fees_24h_usd` is the realized trading fee over the same 24h
+///     window, valued at trade-time prices exactly like volume, and
+///     `None` under the same partial-coverage rules. Its three shares
+///     — `lp_fees_24h_usd`, `protocol_fees_24h_usd`,
+///     `referral_fees_24h_usd` — sum back to it exactly, and are
+///     `None` together with it.
+///
+/// # Why the fee split is read, not derived
+///
+/// cp-amm takes the referral out of the PROTOCOL share, not the LP one
+/// (`cp-amm/src/state/fee.rs::split_fees`):
+///
+/// ```text
+/// protocol_fee_brut = fee_amount × protocol_fee_percent / 100
+/// trading_fee       = fee_amount − protocol_fee_brut   → claiming + compounding
+/// referral_fee      = protocol_fee_brut × referral_fee_percent / 100
+/// protocol_fee      = protocol_fee_brut − referral_fee   ← what is emitted
+/// ```
+///
+/// So the LP share is `claiming + compounding`, NOT
+/// `fees - protocol_fees` — that formula credits the referral to the
+/// liquidity providers, which is the defect `.project` ticket 05
+/// records. The split is therefore computed once, in
+/// `meteora_damm_v2_pool_hourly_activity`, and carried here as three
+/// read values. Do not re-derive one of them from the others.
+///
+/// The effective fee rate is still left to the presentation layer:
+/// `fees_24h_usd / volume_24h_usd` is a ratio, not a share.
 ///
 /// # Why the two bucket counters exist
 ///
@@ -42,9 +63,9 @@ use rust_decimal::Decimal;
 /// `swap_buckets_priced_24h` are that missing signal, the same
 /// numerator/denominator pattern as `GlobalAnalytics::pools_priced`:
 /// hours with at least one swap, and how many of them the USD
-/// valuation actually covered. They apply to all three USD fields
-/// above at once — the three share a valuation, so an hour lost to one
-/// is lost to all.
+/// valuation actually covered. They apply to every USD field above at
+/// once — all of them share one valuation, so an hour lost to one is
+/// lost to all.
 ///
 /// The denominator counts hours *with swaps*, not hours with any
 /// activity: an hour holding only a liquidity event is not a volume
@@ -54,7 +75,15 @@ pub struct PoolAnalytics {
     pub tvl_usd: Option<Decimal>,
     pub volume_24h_usd: Option<Decimal>,
     pub fees_24h_usd: Option<Decimal>,
+    /// The three shares of `fees_24h_usd`, summing back to it exactly.
+    /// `protocol` is what cp-amm emits (already net of the referral),
+    /// `referral` the referrer's cut of the protocol share, and `lp`
+    /// what is left for the liquidity providers (`claiming +
+    /// compounding`) — see the type doc for why `lp` is not
+    /// `fees - protocol`.
     pub protocol_fees_24h_usd: Option<Decimal>,
+    pub referral_fees_24h_usd: Option<Decimal>,
+    pub lp_fees_24h_usd: Option<Decimal>,
     /// Hours of the 24h window that had at least one swap.
     pub swap_buckets_24h: i64,
     /// …of which the USD valuation covered. Never greater than
@@ -72,6 +101,8 @@ impl PoolAnalytics {
             volume_24h_usd: None,
             fees_24h_usd: None,
             protocol_fees_24h_usd: None,
+            referral_fees_24h_usd: None,
+            lp_fees_24h_usd: None,
             swap_buckets_24h: 0,
             swap_buckets_priced_24h: 0,
         }
@@ -98,9 +129,14 @@ pub struct PoolHistoryBucket {
     /// Start of the hourly bucket (UTC).
     pub bucket: DateTime<Utc>,
     pub volume_usd: Option<Decimal>,
-    /// Realized trading fee and Meteora's cut of it (from swaps).
+    /// Realized trading fee from swaps, and its three shares — same
+    /// definition and same caveat as on [`PoolAnalytics`]: they sum
+    /// back to `fees_usd`, and `lp_fees_usd` is NOT
+    /// `fees_usd - protocol_fees_usd`.
     pub fees_usd: Option<Decimal>,
     pub protocol_fees_usd: Option<Decimal>,
+    pub referral_fees_usd: Option<Decimal>,
+    pub lp_fees_usd: Option<Decimal>,
     pub liquidity_added_usd: Option<Decimal>,
     pub liquidity_removed_usd: Option<Decimal>,
     /// LP position fees actually claimed in this bucket.

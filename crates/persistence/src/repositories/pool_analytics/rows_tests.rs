@@ -20,8 +20,14 @@ fn valid_row() -> PoolAnalyticsRow {
         pool_address: VALID_POOL.into(),
         tvl_usd: Some(BigDecimal::from_str("1234.56").unwrap()),
         volume_24h_usd: Some(BigDecimal::from_str("789.01").unwrap()),
+        // The three shares sum back to `fees_24h_usd` exactly, as the view
+        // guarantees — 2.46 + 0.10 + 9.78 = 12.34. The happy-path test asserts
+        // that identity, so a fixture edited to a non-additive triple fails
+        // here rather than quietly weakening the other cases.
         fees_24h_usd: Some(BigDecimal::from_str("12.34").unwrap()),
         protocol_fees_24h_usd: Some(BigDecimal::from_str("2.46").unwrap()),
+        referral_fees_24h_usd: Some(BigDecimal::from_str("0.10").unwrap()),
+        lp_fees_24h_usd: Some(BigDecimal::from_str("9.78").unwrap()),
         swap_buckets_24h: 24,
         swap_buckets_priced_24h: 24,
     }
@@ -50,6 +56,24 @@ fn try_from_valid_row_returns_pair_with_all_fields_mapped() {
     assert_eq!(
         analytics.protocol_fees_24h_usd,
         Some(Decimal::from_str("2.46").unwrap())
+    );
+    assert_eq!(
+        analytics.referral_fees_24h_usd,
+        Some(Decimal::from_str("0.10").unwrap())
+    );
+    assert_eq!(
+        analytics.lp_fees_24h_usd,
+        Some(Decimal::from_str("9.78").unwrap())
+    );
+    // The conversion must not disturb the additivity the view produces. This
+    // asserts the mapping, not the SQL — `fee_split.rs` is where the split
+    // itself is proved.
+    assert_eq!(
+        analytics.lp_fees_24h_usd.unwrap()
+            + analytics.protocol_fees_24h_usd.unwrap()
+            + analytics.referral_fees_24h_usd.unwrap(),
+        analytics.fees_24h_usd.unwrap(),
+        "the three shares must sum back to the total"
     );
     assert_eq!(analytics.swap_buckets_24h, 24);
     assert_eq!(analytics.swap_buckets_priced_24h, 24);
