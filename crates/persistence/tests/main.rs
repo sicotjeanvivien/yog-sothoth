@@ -17,6 +17,7 @@
 
 mod helpers;
 
+mod cagg_retention;
 mod claim_caggs;
 mod claim_protocol_fee;
 mod close_position;
