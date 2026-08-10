@@ -252,6 +252,8 @@ fn pool_response_serialises_the_coverage_counters_in_camel_case() {
         volume_24h_usd: Some(Decimal::new(1_400_000, 0)),
         fees_24h_usd: Some(Decimal::new(3_500, 0)),
         protocol_fees_24h_usd: Some(Decimal::new(700, 0)),
+        referral_fees_24h_usd: Some(Decimal::new(140, 0)),
+        lp_fees_24h_usd: Some(Decimal::new(2_660, 0)),
         swap_buckets_24h: 24,
         swap_buckets_priced_24h: 14,
     };
@@ -273,6 +275,46 @@ fn pool_response_serialises_the_coverage_counters_in_camel_case() {
     // `BigDecimal` zod type expects and what preserves the trailing digits the
     // SQL produces. (The struct doc claimed "JSON numbers"; it was wrong.)
     assert_eq!(json["volume24hUsd"], serde_json::json!("1400000"));
+}
+
+// ── The fee split reaches the wire, and is not recomputed ────────────────────
+
+/// `lpFees24hUsd` was derived here as `fees - protocol`, which credits the
+/// referral to the LPs (`.project` ticket 05). It is now read from the
+/// analytics, where the split is computed once in SQL.
+///
+/// The fixture makes the two answers differ — `3500 - 700 = 2800` against a
+/// true LP share of `2660` — so this fails if the subtraction ever comes back.
+#[test]
+fn pool_response_carries_the_three_fee_shares_without_recomputing_them() {
+    let analytics = PoolAnalytics {
+        tvl_usd: None,
+        volume_24h_usd: Some(Decimal::new(1_400_000, 0)),
+        fees_24h_usd: Some(Decimal::new(3_500, 0)),
+        protocol_fees_24h_usd: Some(Decimal::new(700, 0)),
+        referral_fees_24h_usd: Some(Decimal::new(140, 0)),
+        lp_fees_24h_usd: Some(Decimal::new(2_660, 0)),
+        swap_buckets_24h: 24,
+        swap_buckets_priced_24h: 24,
+    };
+
+    let resp = PoolResponse::new(
+        make_pool(pk(1), pk(2), pk(3)),
+        EmbeddedTokenResponse::from_sources(Some(pk(2)), None, None),
+        EmbeddedTokenResponse::from_sources(Some(pk(3)), None, None),
+        analytics,
+        Vec::new(),
+    );
+    let json = serde_json::to_value(&resp).expect("PoolResponse must serialise");
+
+    assert_eq!(json["fees24hUsd"], serde_json::json!("3500"));
+    assert_eq!(json["protocolFees24hUsd"], serde_json::json!("700"));
+    assert_eq!(json["referralFees24hUsd"], serde_json::json!("140"));
+    assert_eq!(
+        json["lpFees24hUsd"],
+        serde_json::json!("2660"),
+        "the LP share is claiming + compounding, not fees - protocol"
+    );
 }
 
 /// A window covered end to end must be distinguishable from a quiet pool: the
