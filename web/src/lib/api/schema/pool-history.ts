@@ -18,6 +18,7 @@ import { BigDecimal, Rfc3339 } from "./shared";
  *     volume_usd: Option<Decimal>,
  *     fees_usd: Option<Decimal>,
  *     protocol_fees_usd: Option<Decimal>,
+ *     referral_fees_usd: Option<Decimal>,
  *     lp_fees_usd: Option<Decimal>,
  *     effective_fee_bps: Option<Decimal>,
  *     liquidity_added_usd: Option<Decimal>,
@@ -30,6 +31,9 @@ import { BigDecimal, Rfc3339 } from "./shared";
  *
  * USD metrics arrive as precision-safe decimal strings (`BigDecimal`),
  * null when no priced activity of that kind happened in the bucket.
+ * `protocolFeesUsd`, `referralFeesUsd` and `lpFeesUsd` are the three shares
+ * of `feesUsd`, summing back to it exactly — see `pool.ts` for why
+ * `lpFeesUsd` must be read rather than derived from the other two.
  * `swapCount` is a plain JSON number. The endpoint returns the buckets as
  * an ordered array (oldest → newest), not a paginated page.
  */
@@ -38,6 +42,7 @@ export const PoolHistoryBucketSchema = z.object({
   volumeUsd: BigDecimal.nullable(),
   feesUsd: BigDecimal.nullable(),
   protocolFeesUsd: BigDecimal.nullable(),
+  referralFeesUsd: BigDecimal.nullable(),
   lpFeesUsd: BigDecimal.nullable(),
   effectiveFeeBps: BigDecimal.nullable(),
   liquidityAddedUsd: BigDecimal.nullable(),

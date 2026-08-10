@@ -209,6 +209,10 @@ export async function PoolDetailInfo({
               <span>{formatUsd(pool.protocolFees24hUsd)}</span>
             </InfoRow>
 
+            <InfoRow label={t("referralCut")} info={t("help.referralCut")}>
+              <span>{formatUsd(pool.referralFees24hUsd)}</span>
+            </InfoRow>
+
             <InfoRow label={t("lpCut")} info={t("help.lpCut")}>
               <span>{formatUsd(pool.lpFees24hUsd)}</span>
             </InfoRow>

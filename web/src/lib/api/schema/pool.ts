@@ -43,6 +43,7 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  *     volume_24h_usd: Option<Decimal>,
  *     fees_24h_usd: Option<Decimal>,
  *     protocol_fees_24h_usd: Option<Decimal>,
+ *     referral_fees_24h_usd: Option<Decimal>,
  *     lp_fees_24h_usd: Option<Decimal>,
  *     effective_fee_bps: Option<Decimal>,
  *     swap_buckets_24h: i64,
@@ -61,10 +62,19 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  * `meteoraDammV2` block, returned only by `GET /api/pools/{address}`.
  *
  * The `*Fees24hUsd` block is the *realized* fee over the last 24h, valued
- * at trade-time prices like `volume24hUsd` (same null rules): total
- * (`fees24hUsd`), Meteora's cut (`protocolFees24hUsd`), the LP cut
- * (`lpFees24hUsd` = total − protocol). `effectiveFeeBps` is the realized
- * rate `fees / volume * 10000` — null when volume is absent or zero.
+ * at trade-time prices like `volume24hUsd` (same null rules): the total
+ * (`fees24hUsd`) and its three shares — Meteora's cut
+ * (`protocolFees24hUsd`), the referrer's cut (`referralFees24hUsd`), and
+ * the LP cut (`lpFees24hUsd`). The three sum back to the total exactly and
+ * are null together with it.
+ *
+ * ⚠️ `lpFees24hUsd` is NOT `total − protocol`. cp-amm takes the referral out
+ * of the protocol share, so that formula credits it to the LPs — it is the
+ * bug this field's server-side split was introduced to remove. Read the
+ * value; never re-derive it.
+ *
+ * `effectiveFeeBps` is the realized rate `fees / volume * 10000` — null when
+ * volume is absent or zero.
  *
  * Naming is camelCase end-to-end (Rust `rename_all = "camelCase"`),
  * so the schema mirrors that. USD-denominated values arrive as
@@ -94,9 +104,10 @@ export const PoolSchema = z.object({
   volume24hUsd: BigDecimal.nullable(),
   fees24hUsd: BigDecimal.nullable(),
   protocolFees24hUsd: BigDecimal.nullable(),
+  referralFees24hUsd: BigDecimal.nullable(),
   lpFees24hUsd: BigDecimal.nullable(),
   effectiveFeeBps: BigDecimal.nullable(),
-  // Coverage of the four USD figures above: hours of the window that traded,
+  // Coverage of the USD figures above: hours of the window that traded,
   // and how many of them could be valued.
   swapBuckets24h: z.number().int().nonnegative(),
   swapBucketsPriced24h: z.number().int().nonnegative(),
