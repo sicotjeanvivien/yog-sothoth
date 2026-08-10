@@ -119,7 +119,19 @@ export function formatUsdShares(
   const totalCents = displayedCents(totalValue);
   const rawCents = values.map((v) => v * 100);
   const sumRaw = rawCents.reduce((a, b) => a + b, 0);
-  if (Math.abs(sumRaw - totalValue * 100) > 0.5) {
+  const exactCents = totalValue * 100;
+
+  // The shares are a partition, or nothing below is allowed to run.
+  //
+  // The only slack this needs to absorb is `Number.parseFloat` on the decimal
+  // strings — the server computes the shares in NUMERIC, where the partition is
+  // exact. That error is a few ulps, so the tolerance is RELATIVE and tiny.
+  // ⚠️ It was half a cent, which is twelve orders of magnitude too generous:
+  // `["5.004", "4.992"]` under a `10.00` total is $0.004 of real API drift, and
+  // it slipped through to be silently redistributed into `$5.01 + $4.99` — the
+  // exact thing the doc-comment above promises not to do.
+  const slack = Math.max(1e-6, Math.abs(exactCents) * 1e-12);
+  if (Math.abs(sumRaw - exactCents) > slack) {
     return plain(); // the shares are not a partition — say so by not hiding it
   }
 

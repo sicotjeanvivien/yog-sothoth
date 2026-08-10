@@ -82,6 +82,18 @@ describe("formatUsdShares", () => {
     ]);
   });
 
+  it("catches a sub-cent non-partition, not just a gross one", () => {
+    // `5.004 + 4.992 = 9.996`, four tenths of a cent short of the total. The
+    // shares are exact in NUMERIC server-side, so that gap is the API's, not
+    // the parser's — and a half-cent tolerance let it through to be balanced
+    // into `$5.01 + $4.99`, which reads as a clean partition of `$10.00`.
+    // Formatted plainly the rows show `$5.00 + $4.99` and stay visibly short.
+    expect(formatUsdShares("10.00", ["5.004", "4.992"])).toEqual([
+      "$5.00",
+      "$4.99",
+    ]);
+  });
+
   it("falls back to plain formatting when the total is unknown", () => {
     expect(formatUsdShares(null, ["1.005", "2.005"])).toEqual([
       "$1.01",

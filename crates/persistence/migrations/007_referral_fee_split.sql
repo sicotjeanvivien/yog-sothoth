@@ -53,6 +53,13 @@
 --
 --     fees_usd = lp_fees_usd + protocol_fees_usd + referral_fees_usd
 --
+-- ⚠️ `001_baseline.sql` §13 — the header of this same aggregate, and the file
+-- people read to learn an object's current shape — still says "the LP share is
+-- (fee_in_x - protocol_fee_in_x)". That is the formula this migration removes,
+-- and forward-only means it cannot be edited there. It is flagged in
+-- `migrations/README.md`; this note is the other end of the pointer, for
+-- whoever diffs the two definitions side by side.
+--
 -- ## Why the split is computed here and not in the DTO
 --
 -- It was computed in TWO presentation sites (`api/.../pool.rs` and

@@ -59,6 +59,17 @@ August without adding these columns. The next one will need a backfill. A cagg
 cannot be `ALTER`ed, so a column you can foresee wanting belongs in the rebuild
 you are already doing.
 
+⚠️ **`001_baseline.sql` §13 still states the pre-007 rule as current fact** —
+"so the LP share is `(fee_in_x - protocol_fee_in_x)`", in the header of this
+very aggregate. It is wrong, and forward-only means it cannot be edited. That
+matters more than a stale comment usually would: by this file's own argument
+(*"a comment that says 'see migration 036' still resolves"*), the baseline is
+where people go to read the current shape of an object — so the next reader of
+the swap cagg meets, first, the formula 007 exists to remove. The correct rule
+is in `007`'s header and in `crates/persistence/README.md` → *The realized fee
+split*. This is the same defect the ticket is about, one level up: one
+definition, written in two places, one of which went stale.
+
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs
