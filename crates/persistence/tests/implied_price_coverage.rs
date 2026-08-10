@@ -676,7 +676,7 @@ async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
 // ── 12. The five swap-derived USD figures are valued, or not, as one ─────────
 
 #[sqlx::test]
-async fn volume_fees_and_protocol_fees_are_null_together(pool: PgPool) {
+async fn volume_and_every_fee_share_are_null_together(pool: PgPool) {
     // Found in review #5, and it was a regression introduced by the previous
     // round's own fix: applying the zero-leg CASE per FIGURE let the three
     // diverge, because they draw on different amounts. Measured before the
