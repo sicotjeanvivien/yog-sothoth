@@ -96,7 +96,9 @@ pub(crate) struct PoolResponse {
     /// links an hour's fee tier to whether its tokens were priced — but it is
     /// not the same statement as "the rate is unaffected".
     pub(crate) effective_fee_bps: Option<Decimal>,
-    /// Coverage of the USD figures above: hours of the window that had at
+    /// Coverage of the five swap-derived USD figures above — `volume_24h_usd`
+    /// and the four fee figures, **not** `tvl_usd`, which is valued at the
+    /// latest price rather than per bucket: hours of the window that had at
     /// least one swap, and how many of them could be valued. Shipped as raw
     /// counters like `poolsPriced`/`poolsObserved` on `/api/stats` — the
     /// presentation layer turns them into a coverage label. Equal values mean

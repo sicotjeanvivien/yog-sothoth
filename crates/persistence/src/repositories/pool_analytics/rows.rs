@@ -22,8 +22,9 @@ pub(super) struct PoolAnalyticsRow {
     pub(super) protocol_fees_24h_usd: Option<BigDecimal>,
     pub(super) referral_fees_24h_usd: Option<BigDecimal>,
     pub(super) lp_fees_24h_usd: Option<BigDecimal>,
-    /// Coverage of the sums above, COALESCEd to 0 by the query — a
-    /// missing pool means "no buckets", never "unknown".
+    /// Coverage of the five swap-derived sums above (not `tvl_usd`),
+    /// COALESCEd to 0 by the query — a missing pool means "no buckets",
+    /// never "unknown".
     pub(super) swap_buckets_24h: i64,
     pub(super) swap_buckets_priced_24h: i64,
 }

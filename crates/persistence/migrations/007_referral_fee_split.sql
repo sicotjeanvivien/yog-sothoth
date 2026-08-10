@@ -37,8 +37,9 @@
 -- rather than doubled, and why that is still free today (no cagg has ever
 -- materialized a bucket; the job scheduler has been off since 16 June —
 -- ticket 03). It is not repeated here. What IS worth recording: this is the
--- third rebuild of this aggregate in three migrations, and 002 already had the
--- window open on 5 August without adding these two columns. `migrations/
+-- SECOND rebuild of this aggregate — its third definition, across three
+-- migrations (001 created it, 002 rebuilt it, this one rebuilds it again) — and
+-- 002 already had the window open on 5 August without adding them. `migrations/
 -- README.md` dates the end of the free rebuild at the first scheduler run in
 -- production, so the columns go in now rather than when they are needed.
 --

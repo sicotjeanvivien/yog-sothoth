@@ -63,9 +63,11 @@ use rust_decimal::Decimal;
 /// `swap_buckets_priced_24h` are that missing signal, the same
 /// numerator/denominator pattern as `GlobalAnalytics::pools_priced`:
 /// hours with at least one swap, and how many of them the USD
-/// valuation actually covered. They apply to every USD field above at
-/// once — all of them share one valuation, so an hour lost to one is
-/// lost to all.
+/// valuation actually covered. They apply to the **five swap-derived**
+/// fields above at once — `volume_24h_usd` and the four fee figures —
+/// because those share one valuation, so an hour lost to one is lost
+/// to all. ⚠️ Not `tvl_usd`: it is a stock, valued at the latest price
+/// rather than per bucket, and these counters say nothing about it.
 ///
 /// The denominator counts hours *with swaps*, not hours with any
 /// activity: an hour holding only a liquidity event is not a volume

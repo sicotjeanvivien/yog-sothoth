@@ -90,9 +90,10 @@ export type PoolSignal = z.infer<typeof PoolSignalSchema>;
  * that could be valued — a sub-total. `swapBucketsPriced24h` /
  * `swapBuckets24h` is the coverage that tells the two apart; without it a
  * 58 %-covered figure reads exactly like a complete one. It applies to
- * `volume24hUsd`, `fees24hUsd` and the two fee splits at once (they share one
+ * `volume24hUsd`, `fees24hUsd` and the three fee shares at once (they share one
  * valuation), but NOT to `effectiveFeeBps`, whose numerator and denominator
- * are lost on the same hours and therefore cancel.
+ * are lost on the same hours and therefore cancel — and NOT to `tvlUsd`, which
+ * is a stock valued at the latest price rather than per bucket.
  */
 export const PoolSchema = z.object({
   poolAddress: z.string().min(1),
@@ -107,8 +108,8 @@ export const PoolSchema = z.object({
   referralFees24hUsd: BigDecimal.nullable(),
   lpFees24hUsd: BigDecimal.nullable(),
   effectiveFeeBps: BigDecimal.nullable(),
-  // Coverage of the USD figures above: hours of the window that traded,
-  // and how many of them could be valued.
+  // Coverage of the five swap-derived USD figures above (not `tvlUsd`):
+  // hours of the window that traded, and how many of them could be valued.
   swapBuckets24h: z.number().int().nonnegative(),
   swapBucketsPriced24h: z.number().int().nonnegative(),
   // Signals emitted by the pool over the last 24h, newest first,
