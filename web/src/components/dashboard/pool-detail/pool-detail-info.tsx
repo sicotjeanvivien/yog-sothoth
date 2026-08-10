@@ -26,7 +26,13 @@
  *   - Fees 24h      (precise USD, realized trading-fee revenue)
  *   - Effective fee (realized 24h rate: fees / volume, `—` when no volume)
  *   - Protocol cut  (Meteora's share of the realized 24h fee, USD)
- *   - LP cut        (the LP share = total − protocol, USD)
+ *   - Referral cut  (the referrers' share — taken out of Meteora's, not the LPs')
+ *   - LP cut        (what is left for the liquidity providers)
+ *
+ * ⚠️ The last three are shares of "Fees 24h" and are formatted as a GROUP
+ * (`formatUsdShares`), not one by one: rounded independently to the cent they
+ * can display a sum a cent off the total they sit under, on a card that
+ * invites exactly that check.
  *
  * The block is a Server Component end-to-end; only the embedded
  * `CopyButton` islands hydrate on the client. Each row is a two-
@@ -43,7 +49,7 @@ import type { TokenResponse } from "@/lib/api/schema/token";
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
 import { formatComputedFeeBps, formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
-import { formatUsd } from "@/lib/format/format-usd";
+import { formatUsd, formatUsdShares } from "@/lib/format/format-usd";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
 
@@ -78,6 +84,14 @@ export async function PoolDetailInfo({
   locale: string;
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.info");
+
+  // Formatted as one group so the three rows add up to the "Fees 24h" row
+  // above them. Order matters only for tie-breaking, not for the values.
+  const [protocolCut, referralCut, lpCut] = formatUsdShares(pool.fees24hUsd, [
+    pool.protocolFees24hUsd,
+    pool.referralFees24hUsd,
+    pool.lpFees24hUsd,
+  ]);
 
   return (
     <section className="mt-6 px-6 lg:px-10">
@@ -206,11 +220,15 @@ export async function PoolDetailInfo({
             </InfoRow>
 
             <InfoRow label={t("protocolCut")} info={t("help.protocolCut")}>
-              <span>{formatUsd(pool.protocolFees24hUsd)}</span>
+              <span>{protocolCut}</span>
+            </InfoRow>
+
+            <InfoRow label={t("referralCut")} info={t("help.referralCut")}>
+              <span>{referralCut}</span>
             </InfoRow>
 
             <InfoRow label={t("lpCut")} info={t("help.lpCut")}>
-              <span>{formatUsd(pool.lpFees24hUsd)}</span>
+              <span>{lpCut}</span>
             </InfoRow>
           </div>
         </div>

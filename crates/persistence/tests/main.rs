@@ -22,6 +22,7 @@ mod claim_protocol_fee;
 mod close_position;
 mod create_position;
 mod event_index_uniqueness;
+mod fee_split;
 mod fund_reward;
 mod global_analytics_coverage;
 mod implied_price_coverage;

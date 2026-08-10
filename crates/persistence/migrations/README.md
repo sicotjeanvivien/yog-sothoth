@@ -43,6 +43,33 @@ same offsets under a market-cap scheduler or a rate limiter yield
 plausible-looking nonsense. **No GRANT** — this satellite is granted at table
 level, unlike `pools` whose `yog_context` rights are column-scoped.
 
+`005_price_staleness_policy.sql` and `006_flow_valuation_completeness.sql` are
+not described here: they redefine views (and, for 005, add the two price-age
+functions) without changing any table. Their headers carry the reasoning, and
+nothing this file could add would beat reading them.
+
+`007_referral_fee_split.sql` — **the second drop and rebuild of the swap cagg**,
+for two columns (`referral_fee_in_a` / `referral_fee_in_b`) that let the
+realized fee be split into the three shares cp-amm actually applies (ticket 05:
+the LP share was published as `fees − protocol`, which credits the referral to
+the LPs). Still free, for the same reason 002 was — no bucket has ever been
+materialized. ⚠️ **That is the point to carry forward, not the fix**: two
+migrations have now paid nothing for a rebuild, and 002 had the window open in
+August without adding these columns. The next one will need a backfill. A cagg
+cannot be `ALTER`ed, so a column you can foresee wanting belongs in the rebuild
+you are already doing.
+
+⚠️ **`001_baseline.sql` §13 still states the pre-007 rule as current fact** —
+"so the LP share is `(fee_in_x - protocol_fee_in_x)`", in the header of this
+very aggregate. It is wrong, and forward-only means it cannot be edited. That
+matters more than a stale comment usually would: by this file's own argument
+(*"a comment that says 'see migration 036' still resolves"*), the baseline is
+where people go to read the current shape of an object — so the next reader of
+the swap cagg meets, first, the formula 007 exists to remove. The correct rule
+is in `007`'s header and in `crates/persistence/README.md` → *The realized fee
+split*. This is the same defect the ticket is about, one level up: one
+definition, written in two places, one of which went stale.
+
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
 001 + 014 + 015 + 018 + 027 + 036 + 037 + 038 and replaying the ADD/DROPs

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                bucket                AS \"bucket!\",\n                volume_usd,\n                fees_usd,\n                protocol_fees_usd,\n                swap_count,\n                liquidity_added_usd,\n                liquidity_removed_usd,\n                fees_claimed_usd,\n                rewards_claimed_usd\n            FROM meteora_damm_v2_pool_hourly_activity\n            WHERE pool_address = $1\n              AND bucket > NOW() - make_interval(days => $2)\n            ORDER BY bucket\n            ",
+  "query": "\n            SELECT\n                bucket                AS \"bucket!\",\n                volume_usd,\n                fees_usd,\n                protocol_fees_usd,\n                referral_fees_usd,\n                lp_fees_usd,\n                swap_count,\n                liquidity_added_usd,\n                liquidity_removed_usd,\n                fees_claimed_usd,\n                rewards_claimed_usd\n            FROM meteora_damm_v2_pool_hourly_activity\n            WHERE pool_address = $1\n              AND bucket > NOW() - make_interval(days => $2)\n            ORDER BY bucket\n            ",
   "describe": {
     "columns": [
       {
@@ -25,26 +25,36 @@
       },
       {
         "ordinal": 4,
-        "name": "swap_count",
-        "type_info": "Int8"
+        "name": "referral_fees_usd",
+        "type_info": "Numeric"
       },
       {
         "ordinal": 5,
-        "name": "liquidity_added_usd",
+        "name": "lp_fees_usd",
         "type_info": "Numeric"
       },
       {
         "ordinal": 6,
-        "name": "liquidity_removed_usd",
-        "type_info": "Numeric"
+        "name": "swap_count",
+        "type_info": "Int8"
       },
       {
         "ordinal": 7,
-        "name": "fees_claimed_usd",
+        "name": "liquidity_added_usd",
         "type_info": "Numeric"
       },
       {
         "ordinal": 8,
+        "name": "liquidity_removed_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 9,
+        "name": "fees_claimed_usd",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 10,
         "name": "rewards_claimed_usd",
         "type_info": "Numeric"
       }
@@ -64,8 +74,10 @@
       true,
       true,
       true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "3d8a1bc53df338fef9dbd44f8f631c56001111652ee500d71646cfa701eda61f"
+  "hash": "06c812a6e19360f5e56798db50301559f1bf93c4dd606fcdd47e6cfc2abdf17b"
 }

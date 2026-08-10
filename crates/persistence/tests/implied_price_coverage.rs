@@ -673,20 +673,26 @@ async fn an_empty_leg_does_not_cancel_a_computable_bucket(pool: PgPool) {
     assert!(a.protocol_fees_24h_usd.is_some());
 }
 
-// ── 12. The three USD figures are valued, or not, as one ─────────────────────
+// ── 12. The five swap-derived USD figures are valued, or not, as one ─────────
 
 #[sqlx::test]
-async fn volume_fees_and_protocol_fees_are_null_together(pool: PgPool) {
+async fn volume_and_every_fee_share_are_null_together(pool: PgPool) {
     // Found in review #5, and it was a regression introduced by the previous
     // round's own fix: applying the zero-leg CASE per FIGURE let the three
     // diverge, because they draw on different amounts. Measured before the
     // bucket-level guard existed: `volume_usd = NULL` next to `fees_usd = 0.18`.
     //
-    // Three consumers assume the coupling and break without it — `lpFees =
-    // fees - protocol` can go negative, `effectiveFeeBps` divides two disjoint
-    // sets of hours, and the coverage counters key on `volume_usd` alone while
-    // a fee figure sits on screen. That last one is this ticket's own defect,
-    // re-created by its fix.
+    // Three consumers assume the coupling and break without it — the fee split,
+    // whose LP share is a subtraction and can go negative; `effectiveFeeBps`,
+    // which divides two disjoint sets of hours; and the coverage counters, keyed
+    // on `volume_usd` alone while a fee figure sits on screen. That last one is
+    // this ticket's own defect, re-created by its fix.
+    //
+    // Migration 007 widened the coupled set from three figures to five. This
+    // fixture charges its whole fee through `claiming_fee`, so it pins the two
+    // new shares at NULL rather than at a value — the case where a share escapes
+    // the gate carrying a real number is `fee_split.rs`'s
+    // `an_unvaluable_bucket_nulls_every_share`.
     //
     // The fixture: token A has no metadata (volume sits on the unpriceable
     // side), token B is priced and carries the fee.
@@ -734,8 +740,14 @@ async fn volume_fees_and_protocol_fees_are_null_together(pool: PgPool) {
     let a = analytics.get(&pk(1)).expect("pool must be present");
 
     assert_eq!(
-        (a.volume_24h_usd, a.fees_24h_usd, a.protocol_fees_24h_usd),
-        (None, None, None),
+        (
+            a.volume_24h_usd,
+            a.fees_24h_usd,
+            a.protocol_fees_24h_usd,
+            a.referral_fees_24h_usd,
+            a.lp_fees_24h_usd,
+        ),
+        (None, None, None, None, None),
         "the volume sits on a token that cannot be valued, so the whole bucket          is unvaluable — a fee figure surviving alone would make lpFees,          effectiveFeeBps and the coverage counters lie at once"
     );
     assert_eq!(a.swap_buckets_24h, 1);

@@ -40,8 +40,12 @@ export function validPool() {
     tvlUsd: "1332007.7148736200400326721044",
     volume24hUsd: "47964.973514780605664520660399",
     fees24hUsd: "119.912433786951514161301650",
+    // The three shares add up to fees24hUsd exactly, as the API guarantees.
+    // The referral is ~0.2 % of the total, which is the order of magnitude
+    // actually measured on mainnet pools — most swaps carry no referral.
     protocolFees24hUsd: "23.982486757390302832260330",
-    lpFees24hUsd: "95.929947029561211329041320",
+    referralFees24hUsd: "0.239824867573903028322603",
+    lpFees24hUsd: "95.690122161987308300718717",
     effectiveFeeBps: "25",
     swapBuckets24h: 24,
     swapBucketsPriced24h: 24,
@@ -64,7 +68,8 @@ export function validPoolHistoryBucket() {
     volumeUsd: "16070.42",
     feesUsd: "160.70",
     protocolFeesUsd: "30.45",
-    lpFeesUsd: "130.25",
+    referralFeesUsd: "0.30",
+    lpFeesUsd: "129.95",
     effectiveFeeBps: "100",
     liquidityAddedUsd: null,
     liquidityRemovedUsd: null,

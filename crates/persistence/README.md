@@ -354,15 +354,51 @@ The rule and its boundary:
   rate is only used on the flow that produced it.
 
 **Valuability is decided per bucket, not per figure** — `valuation_complete` on
-the same view. Volume, fees and protocol fees draw on different amounts, so
-deciding figure by figure let them stop being NULL together, and three
-consumers assume they are: `lpFees = fees − protocol` (which then goes
-negative), `effectiveFeeBps` (which then divides two disjoint sets of hours),
-and the coverage counters (keyed on `volume_usd` alone). A side is *required*
+the same view. Volume and the fee figures draw on different amounts, so deciding
+figure by figure let them stop being NULL together, and three consumers assume
+they are: the fee split (whose LP share is a subtraction, and would go negative),
+`effectiveFeeBps` (which then divides two disjoint sets of hours), and the
+coverage counters (keyed on `volume_usd` alone). A side is *required*
 when it carries any amount at all, and a required side needs **both** a price
 and a scale — an observed price without a `token_metadata` row still yields
 `POWER(10, NULL)`. A side carrying nothing is not required, which is what lets a
 one-way hour be valued from the side that actually traded.
+
+### The realized fee split (migration 007)
+
+`meteora_damm_v2_pool_hourly_activity` publishes the realized trading fee as a
+total plus **three shares that partition it exactly**:
+
+```
+fees_usd = lp_fees_usd + protocol_fees_usd + referral_fees_usd
+```
+
+They come from the cascade cp-amm applies in `state/fee.rs::split_fees`. The
+part worth memorising is that the **referral is taken out of the protocol
+share**, not the LP one:
+
+```
+protocol_fee_brut = fee_amount × protocol_fee_percent / 100
+trading_fee       = fee_amount − protocol_fee_brut   → claiming + compounding
+referral_fee      = protocol_fee_brut × referral_fee_percent / 100
+protocol_fee      = protocol_fee_brut − referral_fee   ← what the event carries
+```
+
+So the LP share is `claiming + compounding`, and ⚠️ **`fees − protocol` is
+wrong** — it credits the referral to the liquidity providers. That was the
+published figure until migration 007 (`.project` ticket 05), measured at 0,14 %
+to 0,89 % of a pool's fees. The four components summing to the total was never
+in question: the emitted `protocol_fee` is already net, so `fee_in_*` in the
+cagg double-counts nothing. Only the split was wrong.
+
+The split is computed **once, in SQL**, and read straight through `core`,
+the DTOs and the dashboard. It was previously derived in two presentation sites
+with a copy of the formula each. Do not re-derive one share from the others —
+that is how the defect returns.
+
+`fee_in_a` / `fee_in_b` in the cagg deliberately stay the total of the four
+components: that is Meteora's "Trading Fee", the denominator of
+`effectiveFeeBps`, and what keeps the three shares additive.
 
 ## The `yog-migrate` binary
 

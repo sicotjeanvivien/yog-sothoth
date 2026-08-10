@@ -69,11 +69,18 @@ pub(crate) struct PoolResponse {
     // put one protocol's vocabulary in every protocol's row.
     pub(crate) tvl_usd: Option<Decimal>,
     pub(crate) volume_24h_usd: Option<Decimal>,
-    /// Realized trading fee over the last 24h (USD), and its split: Meteora's
-    /// cut, the LP cut (`fees - protocol`). `None` under the same partial-price
-    /// coverage rules as `volume_24h_usd`.
+    /// Realized trading fee over the last 24h (USD), and its three shares:
+    /// Meteora's cut, the referrer's cut, and what is left for the LPs. They
+    /// sum back to `fees_24h_usd` exactly, and are `None` together with it,
+    /// under the same partial-price coverage rules as `volume_24h_usd`.
+    ///
+    /// All four are read straight from the analytics — the split is computed
+    /// once in SQL. `lp_fees_24h_usd` is **not** `fees - protocol`: cp-amm
+    /// takes the referral out of the protocol share, so that formula credits
+    /// it to the LPs (`.project` ticket 05). Do not reintroduce it here.
     pub(crate) fees_24h_usd: Option<Decimal>,
     pub(crate) protocol_fees_24h_usd: Option<Decimal>,
+    pub(crate) referral_fees_24h_usd: Option<Decimal>,
     pub(crate) lp_fees_24h_usd: Option<Decimal>,
     /// Effective realized fee rate in basis points (`fees / volume * 10000`)
     /// over the 24h window. `None` when volume is absent or zero.
@@ -89,7 +96,9 @@ pub(crate) struct PoolResponse {
     /// links an hour's fee tier to whether its tokens were priced — but it is
     /// not the same statement as "the rate is unaffected".
     pub(crate) effective_fee_bps: Option<Decimal>,
-    /// Coverage of the four USD figures above: hours of the window that had at
+    /// Coverage of the five swap-derived USD figures above — `volume_24h_usd`
+    /// and the four fee figures, **not** `tvl_usd`, which is valued at the
+    /// latest price rather than per bucket: hours of the window that had at
     /// least one swap, and how many of them could be valued. Shipped as raw
     /// counters like `poolsPriced`/`poolsObserved` on `/api/stats` — the
     /// presentation layer turns them into a coverage label. Equal values mean
@@ -108,7 +117,17 @@ pub(crate) struct PoolResponse {
 /// Effective realized fee rate in basis points over the window:
 /// `fees / volume * 10_000`. `None` when volume is unknown or zero (no
 /// meaningful rate, and avoids a division by zero).
-fn effective_fee_bps(fees_usd: Option<Decimal>, volume_usd: Option<Decimal>) -> Option<Decimal> {
+///
+/// Shared with [`super::pool_history`], which publishes the same rate per
+/// bucket: it had its own inline copy of this `match` until the two were
+/// merged. Unlike the fee split — which moved into SQL because it is a
+/// property of the data — this one stays in the presentation layer on
+/// purpose: it is a ratio of two published figures, not a fourth share, and
+/// its `None` rule is about division, not about valuability.
+pub(super) fn effective_fee_bps(
+    fees_usd: Option<Decimal>,
+    volume_usd: Option<Decimal>,
+) -> Option<Decimal> {
     match (fees_usd, volume_usd) {
         (Some(fees), Some(volume)) if !volume.is_zero() => {
             Some(fees / volume * Decimal::from(10_000))
@@ -139,11 +158,8 @@ impl PoolResponse {
             volume_24h_usd: analytics.volume_24h_usd,
             fees_24h_usd: analytics.fees_24h_usd,
             protocol_fees_24h_usd: analytics.protocol_fees_24h_usd,
-            // LP share = total realized fee minus the protocol's cut.
-            lp_fees_24h_usd: match (analytics.fees_24h_usd, analytics.protocol_fees_24h_usd) {
-                (Some(fees), Some(protocol)) => Some(fees - protocol),
-                _ => None,
-            },
+            referral_fees_24h_usd: analytics.referral_fees_24h_usd,
+            lp_fees_24h_usd: analytics.lp_fees_24h_usd,
             effective_fee_bps: effective_fee_bps(analytics.fees_24h_usd, analytics.volume_24h_usd),
             swap_buckets_24h: analytics.swap_buckets_24h,
             swap_buckets_priced_24h: analytics.swap_buckets_priced_24h,

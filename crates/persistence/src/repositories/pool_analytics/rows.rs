@@ -20,8 +20,11 @@ pub(super) struct PoolAnalyticsRow {
     pub(super) volume_24h_usd: Option<BigDecimal>,
     pub(super) fees_24h_usd: Option<BigDecimal>,
     pub(super) protocol_fees_24h_usd: Option<BigDecimal>,
-    /// Coverage of the three sums above, COALESCEd to 0 by the query — a
-    /// missing pool means "no buckets", never "unknown".
+    pub(super) referral_fees_24h_usd: Option<BigDecimal>,
+    pub(super) lp_fees_24h_usd: Option<BigDecimal>,
+    /// Coverage of the five swap-derived sums above (not `tvl_usd`),
+    /// COALESCEd to 0 by the query — a missing pool means "no buckets",
+    /// never "unknown".
     pub(super) swap_buckets_24h: i64,
     pub(super) swap_buckets_priced_24h: i64,
 }
@@ -37,6 +40,8 @@ impl TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics) {
             volume_24h_usd: usd(row.volume_24h_usd, "volume_24h_usd")?,
             fees_24h_usd: usd(row.fees_24h_usd, "fees_24h_usd")?,
             protocol_fees_24h_usd: usd(row.protocol_fees_24h_usd, "protocol_fees_24h_usd")?,
+            referral_fees_24h_usd: usd(row.referral_fees_24h_usd, "referral_fees_24h_usd")?,
+            lp_fees_24h_usd: usd(row.lp_fees_24h_usd, "lp_fees_24h_usd")?,
             swap_buckets_24h: row.swap_buckets_24h,
             swap_buckets_priced_24h: row.swap_buckets_priced_24h,
         };
@@ -53,6 +58,8 @@ pub(super) struct PoolHistoryRow {
     pub(super) volume_usd: Option<BigDecimal>,
     pub(super) fees_usd: Option<BigDecimal>,
     pub(super) protocol_fees_usd: Option<BigDecimal>,
+    pub(super) referral_fees_usd: Option<BigDecimal>,
+    pub(super) lp_fees_usd: Option<BigDecimal>,
     pub(super) liquidity_added_usd: Option<BigDecimal>,
     pub(super) liquidity_removed_usd: Option<BigDecimal>,
     pub(super) fees_claimed_usd: Option<BigDecimal>,
@@ -70,6 +77,8 @@ impl TryFrom<PoolHistoryRow> for PoolHistoryBucket {
             volume_usd: usd(row.volume_usd, "volume_usd")?,
             fees_usd: usd(row.fees_usd, "fees_usd")?,
             protocol_fees_usd: usd(row.protocol_fees_usd, "protocol_fees_usd")?,
+            referral_fees_usd: usd(row.referral_fees_usd, "referral_fees_usd")?,
+            lp_fees_usd: usd(row.lp_fees_usd, "lp_fees_usd")?,
             liquidity_added_usd: usd(row.liquidity_added_usd, "liquidity_added_usd")?,
             liquidity_removed_usd: usd(row.liquidity_removed_usd, "liquidity_removed_usd")?,
             fees_claimed_usd: usd(row.fees_claimed_usd, "fees_claimed_usd")?,
