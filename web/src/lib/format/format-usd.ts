@@ -30,6 +30,18 @@ const FORMATTER = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
+/**
+ * Same rounding as `FORMATTER`, without the currency symbol or the thousands
+ * separators, so the result parses straight back to a number. Only used to
+ * learn how many cents a value *displays* as — see `displayedCents`.
+ */
+const CENTS_FORMATTER = new Intl.NumberFormat("en-US", {
+  notation: "standard",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  useGrouping: false,
+});
+
 const EMPTY = "—";
 
 export function formatUsdCompact(value: string | null | undefined): string {
@@ -97,8 +109,14 @@ export function formatUsdShares(
     values.push(value);
   }
 
-  // In cents, where the display lives.
-  const totalCents = Math.round(totalValue * 100);
+  // In cents, where the display lives. The target has to be the cents the
+  // TOTAL ROW SHOWS, not the cents a float multiplication computes: `Intl`
+  // rounds the shortest decimal representation half-expand, while `0.145 * 100`
+  // is `14.499999999999998` in binary and rounds DOWN. Balancing the shares
+  // against the second number would re-create, at exact half-cents, the very
+  // one-cent mismatch this function exists to remove — `$0.10 + $0.04` under a
+  // total rendered `$0.15`.
+  const totalCents = displayedCents(totalValue);
   const rawCents = values.map((v) => v * 100);
   const sumRaw = rawCents.reduce((a, b) => a + b, 0);
   if (Math.abs(sumRaw - totalValue * 100) > 0.5) {
@@ -121,6 +139,15 @@ export function formatUsdShares(
   return floors.map((c, i) =>
     FORMATTER.format((c + (roundedUp.has(i) ? 1 : 0)) / 100),
   );
+}
+
+/**
+ * How many cents this amount is *rendered* as — the same rounding `formatUsd`
+ * applies, read back as an integer. Goes through the formatter rather than
+ * reimplementing its rule, so the two cannot drift apart.
+ */
+function displayedCents(value: number): number {
+  return Math.round(Number.parseFloat(CENTS_FORMATTER.format(value)) * 100);
 }
 
 function toFinite(value: string | null | undefined): number | null {

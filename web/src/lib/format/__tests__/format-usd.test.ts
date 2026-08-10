@@ -27,9 +27,11 @@ describe("formatUsdShares", () => {
     expect(centsOf(shares)).toBe(190);
   });
 
-  it("gives the leftover cents to the largest discarded fractions", () => {
-    // Three shares of $1.00, each $0.3333…: two cents to hand out, and every
-    // fraction is equal, so the tie-break keeps the declared order.
+  it("gives the leftover cent to the largest discarded fraction", () => {
+    // Three thirds of $1.00: ONE cent to hand out, and the third share has the
+    // biggest discarded fraction (.3334 against .3333), so it gets it. (An
+    // earlier version of this comment claimed two cents and equal fractions —
+    // it described a fixture the test did not build.)
     const shares = formatUsdShares("1.00", [
       "0.333333",
       "0.333333",
@@ -38,6 +40,28 @@ describe("formatUsdShares", () => {
 
     expect(shares).toEqual(["$0.33", "$0.33", "$0.34"]);
     expect(centsOf(shares)).toBe(100);
+  });
+
+  it("breaks a tie on the declared order, so the output is stable", () => {
+    // Both fractions are exactly .5, so the largest-remainder rule alone does
+    // not decide. Without a deterministic tie-break the same data could render
+    // two different ways between two requests.
+    expect(formatUsdShares("0.01", ["0.005", "0.005"])).toEqual([
+      "$0.01",
+      "$0.00",
+    ]);
+  });
+
+  it("balances against the cents the total is DISPLAYED as", () => {
+    // `0.145 * 100` is `14.499999999999998` in binary and rounds down, while
+    // the total row renders `$0.15` (Intl rounds the shortest decimal repr
+    // half-expand). Targeting the float would put `$0.10 + $0.04` under a
+    // `$0.15` total — the mismatch this whole function removes.
+    const total = formatUsd("0.145");
+    const shares = formatUsdShares("0.145", ["0.100", "0.045"]);
+
+    expect(total).toBe("$0.15");
+    expect(centsOf(shares)).toBe(centsOf([total]));
   });
 
   it("leaves exact shares untouched", () => {
