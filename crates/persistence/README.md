@@ -568,17 +568,29 @@ cargo sqlx prepare
 
 ## Integration tests
 
-DB-backed tests live in `tests/` and are `#[ignore]`d by default:
+DB-backed tests live in `tests/` and are gated on the `integration-tests`
+feature — `tests/main.rs` opens with `#![cfg(feature = "integration-tests")]`:
 
 ```bash
-cargo test -p yog-persistence --features integration-tests -- --include-ignored
+cargo test -p yog-persistence --features integration-tests
 ```
+
+⚠️ They are **not** `#[ignore]`d, whatever this file used to say. The runs
+report `0 ignored` and `--include-ignored` is a no-op here; without the feature
+the whole target compiles to nothing rather than to a list of skipped tests.
 
 They need a live Postgres running with `timescaledb.max_background_workers = 0`
 (as configured in `docker-compose.yml`): `sqlx::test` creates a fresh database
 per test, and the cagg refresh policies of the baseline (§13) otherwise have
 the TimescaleDB job scheduler race the next test's migration DDL on the shared
-catalog ("tuple concurrently deleted").
+catalog ("tuple concurrently deleted"). Turning the scheduler on deliberately,
+to watch the policies run, has its own recipe in
+[`migrations/README.md`](./migrations/README.md).
+
+`DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`:
+`sqlx::test` builds a throwaway schema in the maintenance database and
+`yog_migrate` lacks CREATE on it. The symptom is every test failing in about a
+second on SQLSTATE 42501, which reads like a regression and is not one.
 
 **One file per subject, one single binary.** Cargo auto-discovers every `.rs`
 directly under `tests/` as its own test target, which relinks the whole crate
