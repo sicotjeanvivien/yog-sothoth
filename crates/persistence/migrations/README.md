@@ -59,6 +59,10 @@ August without adding these columns. The next one will need a backfill. A cagg
 cannot be `ALTER`ed, so a column you can foresee wanting belongs in the rebuild
 you are already doing.
 
+☠️ **And read *`refresh_continuous_aggregate(cagg, NULL, NULL)` once retention
+has run* below before you do that backfill.** The obvious way to run one is the
+command that destroys the history you are trying to rebuild.
+
 ⚠️ **`001_baseline.sql` §13 still states the pre-007 rule as current fact** —
 "so the LP share is `(fee_in_x - protocol_fee_in_x)`", in the header of this
 very aggregate. It is wrong, and forward-only means it cannot be edited. That
@@ -174,13 +178,31 @@ for. ⚠️ `001_baseline.sql:1664` still carries the reasoning that produced th
 bug — *"start_offset spans the full 30d retention window (raw rows never live
 longer)"* — and forward-only means it cannot be corrected there.
 
-### ☠️ Never `refresh_continuous_aggregate(cagg, NULL, NULL)` on a live database
+### ☠️ `refresh_continuous_aggregate(cagg, NULL, NULL)` once retention has run
 
 The rule above constrains **the scheduled policy**. It does not, and cannot,
 constrain a refresh someone types. The invalidations the policy now carefully
 never reaches do not expire — they accumulate in the invalidation log for ever —
 so a full-range refresh processes all of them at once and deletes every
 materialized bucket whose raw rows retention has dropped.
+
+⚠️ **The precondition matters, and cuts the other way before it is met.** The
+destruction needs invalidations, and those are logged by `drop_chunks`. On a
+database where retention has never dropped a chunk — a fresh deploy, or any
+database younger than `drop_after` — the log is empty and a full-range refresh
+is **harmless and useful**: it is the only way to materialize history that
+accumulated while the scheduler was off. Getting this backwards is its own
+data loss: refuse the full refresh, enable the scheduler, and the retention job
+drops raw rows that were never materialized and now never can be. So:
+
+| state of the database | full-range refresh |
+|---|---|
+| retention has never dropped a chunk | **do it** — before enabling the scheduler |
+| retention has dropped at least once | **never** — see below |
+
+`SELECT count(*) FROM timescaledb_information.jobs j JOIN
+timescaledb_information.job_stats s USING (job_id) WHERE j.proc_name =
+'policy_retention' AND s.total_successes > 0;` tells you which side you are on.
 
 Measured 10 August 2026, on a database where migration 008 was already applied
 and the policy's own refresh had just run clean:

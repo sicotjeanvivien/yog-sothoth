@@ -456,11 +456,24 @@ does. Migration `008` moved the four policies to `29 days` for that reason; the
 measurement, and why the 7-day chunk geometry does not save you, are in
 [`migrations/README.md`](./migrations/README.md).
 
-Two integration tests hold the line (`tests/cagg_retention.rs`): one reads the
-four pairs out of the TimescaleDB catalog and asserts the inequality, the other
-reproduces the destruction the inequality prevents. Adding a fifth aggregate
-means adding its pair — the first test asserts the count, so a policy that never
-gets declared fails loudly instead of silently opting out.
+☠️ **The rule does not close the hole, it only closes the policy.** A refresh
+someone types is not constrained by it: on a database where retention has
+already dropped chunks, `refresh_continuous_aggregate(cagg, NULL, NULL)`
+processes every accumulated invalidation at once and deletes the history —
+measured at **2160 buckets → 779** on a database with 008 applied. Before
+retention has ever dropped a chunk the same command is harmless and is the right
+way to capture a backlog. Both sides, and how to tell which one you are on, are
+in [`migrations/README.md`](./migrations/README.md).
+
+Three integration tests hold the line (`tests/cagg_retention.rs`): one reads the
+pairs out of the TimescaleDB catalog and asserts the inequality, one reproduces
+the destruction the inequality prevents, and one pins the destruction that
+survives it — asserting a loss, so the warning above stays falsifiable. Adding a
+fifth aggregate means adding its refresh policy; the first test counts the
+aggregates separately from the join, so one that never declares a policy fails
+loudly instead of silently opting out. A source hypertable with **no** retention
+policy is fine and exempt (`signals` is the precedent): nothing clears its rows,
+so no offset can reach a cleared range.
 
 ### Pool-properties satellites, and the invariant that ties them to `pools`
 

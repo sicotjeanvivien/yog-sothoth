@@ -46,6 +46,18 @@ const EXPECTED_CAGGS: [&str; 4] = [
 /// The interval comparison itself is left to Postgres — it is the one that
 /// knows how to order `INTERVAL`s — and comes back as a boolean next to the two
 /// values in their readable form.
+///
+/// ⚠️ The retention side is **LEFT** joined, on purpose. A source hypertable
+/// without a retention policy is not a violation: nothing ever clears its rows,
+/// so no `start_offset` can reach a cleared range and the rule holds vacuously.
+/// `signals` is the standing precedent — `001_baseline.sql:702`, *"No
+/// add_retention_policy: signals are sparse and are the product output"*. An
+/// INNER join here would demand a retention policy the schema deliberately
+/// refuses, and push whoever hit it toward adding one.
+///
+/// The refresh side stays INNER, and the count is checked separately below:
+/// there, a missing policy IS the defect — the aggregate would never
+/// materialize anything.
 const POLICY_PAIRS_SQL: &str = "
     SELECT ca.view_name::TEXT                        AS cagg,
            ca.hypertable_name::TEXT                  AS raw_table,
@@ -57,7 +69,7 @@ const POLICY_PAIRS_SQL: &str = "
       JOIN timescaledb_information.jobs rf
         ON rf.proc_name = 'policy_refresh_continuous_aggregate'
        AND rf.hypertable_name = ca.view_name
-      JOIN timescaledb_information.jobs rt
+      LEFT JOIN timescaledb_information.jobs rt
         ON rt.proc_name = 'policy_retention'
        AND rt.hypertable_name = ca.hypertable_name
      ORDER BY ca.view_name";
@@ -86,26 +98,33 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
         declared as usize,
         EXPECTED_CAGGS.len(),
         "a continuous aggregate exists that this test does not know about — add \
-         it to EXPECTED_CAGGS, and give it the two policies before you do"
+         it to EXPECTED_CAGGS, and give it a refresh policy before you do"
     );
 
     let found: Vec<String> = rows.iter().map(|r| r.get::<String, _>("cagg")).collect();
     assert_eq!(
         found, EXPECTED_CAGGS,
-        "every continuous aggregate must have BOTH a refresh policy and a \
-         retention policy on its source hypertable — a missing one drops out of \
-         the join, which is why the count above is taken separately"
+        "every continuous aggregate must have a refresh policy — one without is \
+         an aggregate that never materializes a bucket, and it drops out of the \
+         INNER join above, which is why the count is taken separately"
     );
 
     for row in &rows {
         let cagg: String = row.get("cagg");
         let raw_table: String = row.get("raw_table");
         let start_offset: String = row.get("start_offset");
-        let drop_after: String = row.get("drop_after");
-        let stays_inside: bool = row.get("refresh_stays_inside");
+        let drop_after: Option<String> = row.get("drop_after");
+        let stays_inside: Option<bool> = row.get("refresh_stays_inside");
 
-        assert!(
+        let Some(drop_after) = drop_after else {
+            // No retention on the source: nothing ever clears its rows, so the
+            // rule holds with nothing to check. See the note on POLICY_PAIRS_SQL.
+            continue;
+        };
+
+        assert_eq!(
             stays_inside,
+            Some(true),
             "{cagg}: start_offset ({start_offset}) must stay STRICTLY under \
              {raw_table}'s drop_after ({drop_after}). A refresh reaching past \
              the retention recomputes a range whose raw rows are gone and \

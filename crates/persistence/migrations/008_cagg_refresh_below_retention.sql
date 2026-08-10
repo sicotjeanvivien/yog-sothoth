@@ -79,9 +79,23 @@
 -- `refresh_continuous_aggregate` (see §13's note on why the migrations declare
 -- a policy instead of calling it).
 --
--- The invariant is asserted by `tests/cagg_retention.rs`, in both forms: the
--- rule itself, read out of `timescaledb_information.jobs`, and the behaviour
--- the rule exists for.
+-- The invariant is asserted by `tests/cagg_retention.rs`, in three forms: the
+-- rule itself, read out of `timescaledb_information.jobs`; the behaviour the
+-- rule exists for; and the destruction that SURVIVES it.
+--
+-- ## ☠️ What this migration does not, and cannot, fix
+--
+-- It constrains the scheduled policy. It does not constrain a refresh someone
+-- types. The invalidations the policy now never reaches do not expire, so once
+-- retention has dropped its first chunk, `refresh_continuous_aggregate(cagg,
+-- NULL, NULL)` processes all of them at once and deletes every materialized
+-- bucket whose raw rows are gone — measured at 2160 → 779 on a database with
+-- THIS migration applied and the policy refresh already clean.
+--
+-- Before retention has ever dropped a chunk the same command is harmless, and
+-- is the right way to capture a backlog accumulated while the scheduler was
+-- off. `migrations/README.md` carries both sides and the query that tells you
+-- which one you are on. Read it before running a backfill.
 -- ============================================================================
 
 
