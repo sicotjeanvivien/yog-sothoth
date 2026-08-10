@@ -148,7 +148,7 @@ cargo run --bin yog-migrate -p yog-persistence
 
 # If any sqlx::query!/query_as! macro now hits the new schema, regenerate the
 # offline cache or the sqlx-check CI job fails:
-cd crates/persistence && cargo sqlx prepare
+cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
 ```
 
 Commit **the new migration AND the updated `crates/persistence/.sqlx/`** together.

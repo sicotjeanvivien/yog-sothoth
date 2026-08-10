@@ -45,7 +45,7 @@ If the query already exists, skip to Step 3.
 - Map errors to `RepositoryError` at the boundary.
 - **Regenerate the SQLx cache** (mandatory — CI's `sqlx-check` fails otherwise):
   ```bash
-  cd crates/persistence && cargo sqlx prepare
+  cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
   ```
   Commit the updated `crates/persistence/.sqlx/`.
 - Remember the privilege model: the api process connects as the **read-only `yog_api`

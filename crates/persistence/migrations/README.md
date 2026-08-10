@@ -200,9 +200,28 @@ drops raw rows that were never materialized and now never can be. So:
 | retention has never dropped a chunk | **do it** — before enabling the scheduler |
 | retention has dropped at least once | **never** — see below |
 
-`SELECT count(*) FROM timescaledb_information.jobs j JOIN
-timescaledb_information.job_stats s USING (job_id) WHERE j.proc_name =
-'policy_retention' AND s.total_successes > 0;` tells you which side you are on.
+To tell which side you are on, ask the question that actually matters — **is
+there materialized history older than the oldest surviving raw row?** — rather
+than whether the retention job has run:
+
+```sql
+SELECT (SELECT min(bucket) FROM meteora_damm_v2_swap_events_hourly)         AS oldest_bucket,
+       (SELECT time_bucket('1 hour', min(timestamp))
+          FROM meteora_damm_v2_swap_events)                                 AS oldest_raw,
+       (SELECT min(bucket) FROM meteora_damm_v2_swap_events_hourly)
+         < (SELECT time_bucket('1 hour', min(timestamp))
+              FROM meteora_damm_v2_swap_events)  AS a_full_refresh_would_destroy;
+```
+
+⚠️ **Do not use "has the retention job succeeded?" for this** — an earlier
+version of this section did, and it was wrong in the direction the paragraph
+above calls its own data loss. A retention run that finds nothing old enough
+still *succeeds*: with the scheduler on, all four jobs report
+`total_successes = 1` within a day, while the first chunk drop is thirty days
+out. Measured on this dev database: that check answers **4** — "never run a full
+refresh" — on a database whose oldest raw row is 2026-08-05 and where no chunk
+has ever been dropped, i.e. exactly the one that should run it. The query above
+answers `f` on the same database.
 
 Measured 10 August 2026, on a database where migration 008 was already applied
 and the policy's own refresh had just run clean:
@@ -509,7 +528,7 @@ When you add a new migration:
    macros against the new schema:
    ```sh
    cd crates/persistence
-   cargo sqlx prepare
+   cargo sqlx prepare -- --all-targets --all-features
    ```
 4. Commit the new migration AND the updated `.sqlx/` snapshot.
 

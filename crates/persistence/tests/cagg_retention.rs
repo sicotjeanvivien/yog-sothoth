@@ -81,13 +81,20 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
         .await
         .expect("the policy pairs must be readable from the catalog");
 
-    // ⚠️ Counted independently of the query above, and this is the point: both
-    // of its joins are INNER, so an aggregate that never declared a refresh
-    // policy — or whose raw table never declared a retention one — drops out of
-    // the result entirely. `found` would then still match EXPECTED_CAGGS and the
-    // rule would go unchecked on exactly the aggregate that has no rule. A
-    // future protocol adding its cagg and forgetting the policy is the concrete
-    // case: it would materialize nothing, for ever, silently.
+    // ⚠️ Counted independently of the query above, because the two assertions
+    // catch different things and neither covers the other:
+    //
+    //   * `found == EXPECTED_CAGGS` catches an aggregate that exists and has no
+    //     refresh policy — that side of the join is INNER, so it drops out of
+    //     `rows` and the list no longer matches;
+    //   * this count catches the case the list cannot see — a fifth aggregate
+    //     that someone added to `EXPECTED_CAGGS` and to the schema, but whose
+    //     policy was never declared, would make both sets agree at four only if
+    //     the constant were also left alone. Counting the catalog directly is
+    //     what makes "this test knows about every cagg" checkable.
+    //
+    // (The retention side is a LEFT join and is deliberately allowed to be
+    // absent — see the note on POLICY_PAIRS_SQL.)
     let declared: i64 = sqlx::query_scalar(
         "SELECT count(*)::BIGINT FROM timescaledb_information.continuous_aggregates",
     )
