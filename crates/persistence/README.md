@@ -438,6 +438,30 @@ invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
 traded totals and adds `meteora_damm_v2_swap_events_hourly_priced` — the
 implied-price rule above.
 
+### A refresh policy must stay inside its retention policy
+
+The four hourly continuous aggregates each sit on a raw hypertable with a
+30-day retention. The relation between the two policies is a **rule, not a
+preference**:
+
+```
+start_offset  <  drop_after
+```
+
+`drop_chunks` logs an invalidation over the range it removes, and a refresh is
+invalidation-driven — so a refresh window that reaches past the retention
+recomputes a range whose raw rows are gone and writes back nothing, **deleting**
+the materialized buckets. The retention never touches the aggregate; the refresh
+does. Migration `008` moved the four policies to `29 days` for that reason; the
+measurement, and why the 7-day chunk geometry does not save you, are in
+[`migrations/README.md`](./migrations/README.md).
+
+Two integration tests hold the line (`tests/cagg_retention.rs`): one reads the
+four pairs out of the TimescaleDB catalog and asserts the inequality, the other
+reproduces the destruction the inequality prevents. Adding a fifth aggregate
+means adding its pair — the first test asserts the count, so a policy that never
+gets declared fails loudly instead of silently opting out.
+
 ### Pool-properties satellites, and the invariant that ties them to `pools`
 
 A satellite table holds the properties that exist for **one** protocol only, so
