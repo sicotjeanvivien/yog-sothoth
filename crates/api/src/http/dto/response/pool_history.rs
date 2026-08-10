@@ -1,10 +1,11 @@
 //! Wire shape for one hourly bucket of a pool's activity history.
 //!
 //! Mirrors `yog_core::domain::PoolHistoryBucket`, with one
-//! presentation-derived field (`effectiveFeeBps`) computed the same way as on
-//! `PoolResponse`. Returned as a plain ordered array (oldest → newest) by
-//! `GET /api/pools/{address}/history` — chart-ready, no pagination (the window
-//! is bounded by `days`).
+//! presentation-derived field (`effectiveFeeBps`) computed by the **same
+//! function** as on `PoolResponse` — `pool::effective_fee_bps`, which this
+//! module used to duplicate inline. Returned as a plain ordered array (oldest →
+//! newest) by `GET /api/pools/{address}/history` — chart-ready, no pagination
+//! (the window is bounded by `days`).
 //!
 //! `lpFeesUsd` used to be derived here too, as `fees - protocol`. It is now
 //! read from the domain type: that formula credited the referral to the LPs,
@@ -16,6 +17,8 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 
 use yog_core::domain::PoolHistoryBucket;
+
+use super::pool::effective_fee_bps;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,12 +39,6 @@ pub(crate) struct PoolHistoryBucketResponse {
 
 impl From<PoolHistoryBucket> for PoolHistoryBucketResponse {
     fn from(b: PoolHistoryBucket) -> Self {
-        let effective_fee_bps = match (b.fees_usd, b.volume_usd) {
-            (Some(fees), Some(volume)) if !volume.is_zero() => {
-                Some(fees / volume * Decimal::from(10_000))
-            }
-            _ => None,
-        };
         Self {
             bucket: b.bucket,
             volume_usd: b.volume_usd,
@@ -49,7 +46,7 @@ impl From<PoolHistoryBucket> for PoolHistoryBucketResponse {
             protocol_fees_usd: b.protocol_fees_usd,
             referral_fees_usd: b.referral_fees_usd,
             lp_fees_usd: b.lp_fees_usd,
-            effective_fee_bps,
+            effective_fee_bps: effective_fee_bps(b.fees_usd, b.volume_usd),
             liquidity_added_usd: b.liquidity_added_usd,
             liquidity_removed_usd: b.liquidity_removed_usd,
             fees_claimed_usd: b.fees_claimed_usd,

@@ -117,7 +117,17 @@ pub(crate) struct PoolResponse {
 /// Effective realized fee rate in basis points over the window:
 /// `fees / volume * 10_000`. `None` when volume is unknown or zero (no
 /// meaningful rate, and avoids a division by zero).
-fn effective_fee_bps(fees_usd: Option<Decimal>, volume_usd: Option<Decimal>) -> Option<Decimal> {
+///
+/// Shared with [`super::pool_history`], which publishes the same rate per
+/// bucket: it had its own inline copy of this `match` until the two were
+/// merged. Unlike the fee split — which moved into SQL because it is a
+/// property of the data — this one stays in the presentation layer on
+/// purpose: it is a ratio of two published figures, not a fourth share, and
+/// its `None` rule is about division, not about valuability.
+pub(super) fn effective_fee_bps(
+    fees_usd: Option<Decimal>,
+    volume_usd: Option<Decimal>,
+) -> Option<Decimal> {
     match (fees_usd, volume_usd) {
         (Some(fees), Some(volume)) if !volume.is_zero() => {
             Some(fees / volume * Decimal::from(10_000))
