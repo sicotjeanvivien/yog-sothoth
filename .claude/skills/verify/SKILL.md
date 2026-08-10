@@ -58,7 +58,7 @@ VALUES ('flow_imbalance','meteora_damm_v2','<addr from GET /api/pools>','warning
 
 ## Gotchas
 
-- SQLx: any new/changed `query!` needs `cd crates/persistence && cargo sqlx prepare`
+- SQLx: any new/changed `query!` needs `cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features`
   against the live DB before the workspace compiles offline.
 - Local signals data is stale (last detector run date) — always check
   `SELECT max(triggered_at) FROM signals;` before assuming "no data" is a bug.

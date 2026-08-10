@@ -167,7 +167,7 @@ cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer \
     --all-targets --all-features -- -D warnings
 
 # DB-backed integration tests (need live Postgres, see persistence/README.md)
-cargo test -p yog-persistence --features integration-tests -- --include-ignored
+cargo test -p yog-persistence --features integration-tests
 ```
 
 The Rust version is pinned in `rust-toolchain.toml` at the repo root — don't override it.
@@ -216,7 +216,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
 - Implement the satellite's `PoolAccountResolver` (write + queue) and `PoolPropertiesLookup` (read) on the same `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
-- Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare`).
+- Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features`).
 - Re-export the new repositories from `lib.rs`.
 
 ### 3. In `indexer`

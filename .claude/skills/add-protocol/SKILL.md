@@ -83,7 +83,7 @@ prices. Lossless `u128` becomes `BigDecimal` **only** at the persistence boundar
   `Row + TryFrom<XxxRow> for XxxDomain` convention. Re-export from `lib.rs`.
 - **Regenerate the SQLx cache** (mandatory — CI's `sqlx-check` fails otherwise):
   ```bash
-  cd crates/persistence && cargo sqlx prepare
+  cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
   ```
   Commit the updated `crates/persistence/.sqlx/`.
 
@@ -125,7 +125,7 @@ cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persist
     --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 # DB-backed repo tests (needs live Postgres):
-cargo test -p yog-persistence --features integration-tests -- --include-ignored
+cargo test -p yog-persistence --features integration-tests
 ```
 
 Confirm the sub-persistor actually runs end-to-end against a DB before calling it done

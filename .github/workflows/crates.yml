@@ -172,12 +172,15 @@ jobs:
           test "$(psql -h localhost -U yog -d yog_sothoth -tAc \
             'SHOW timescaledb.max_background_workers;')" = "0"
 
+      # No `-- --include-ignored`: `tests/main.rs` is `#![cfg(feature =
+      # "integration-tests")]`-gated, not `#[ignore]`d. The flag was a no-op and
+      # the last surviving evidence for a belief the docs used to state and no
+      # longer do.
       - name: Run integration tests
         run: |
           cargo test \
             -p yog-persistence \
-            --features integration-tests \
-            -- --include-ignored
+            --features integration-tests
 
   audit:
     name: Audit

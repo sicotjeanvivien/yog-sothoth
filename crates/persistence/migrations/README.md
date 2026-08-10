@@ -59,6 +59,10 @@ August without adding these columns. The next one will need a backfill. A cagg
 cannot be `ALTER`ed, so a column you can foresee wanting belongs in the rebuild
 you are already doing.
 
+☠️ **And read *`refresh_continuous_aggregate(cagg, NULL, NULL)` once retention
+has run* below before you do that backfill.** The obvious way to run one is the
+command that destroys the history you are trying to rebuild.
+
 ⚠️ **`001_baseline.sql` §13 still states the pre-007 rule as current fact** —
 "so the LP share is `(fee_in_x - protocol_fee_in_x)`", in the header of this
 very aggregate. It is wrong, and forward-only means it cannot be edited. That
@@ -69,6 +73,26 @@ the swap cagg meets, first, the formula 007 exists to remove. The correct rule
 is in `007`'s header and in `crates/persistence/README.md` → *The realized fee
 split*. This is the same defect the ticket is about, one level up: one
 definition, written in two places, one of which went stale.
+
+`008_cagg_refresh_below_retention.sql` — moves the four refresh policies from
+`start_offset = 31 days` to `29`, against an unchanged `drop_after = 30 days`.
+No view is touched and no aggregate rebuilt, so the window above is not spent.
+
+**Verified against a live scheduler, which no test can do.** Every test and
+every CI run applies migrations with `max_background_workers = 0`; production
+applies them with the scheduler already ticking, and 008 *removes* four policies
+whose jobs may be executing at that moment. Measured 10 August 2026:
+
+- three fresh databases bootstrapped end to end with the scheduler at 8 workers
+  and 30 live jobs on the neighbouring database — 8/8 migrations, four policies
+  at 29 days, every time;
+- then, on one of them, the four refresh jobs forced to `schedule_interval =
+  1 second` over 20 days of seeded swaps, and 008 replayed **35 times**. The jobs
+  really ran throughout (15–20 executions each, 0 failures) and every replay
+  succeeded — 0 failures out of 35. The aggregate materialized 479 buckets.
+
+So the deployment path is exercised, not assumed. That was the last unchecked
+item of `.project` ticket 03.
 
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading
@@ -143,6 +167,153 @@ set no longer contains. The database would report itself up to date while its
 recorded history describes a schema nobody can reproduce. That recipe exists for
 one narrow case — a committed file edited in ways an applied database provably
 never evaluated — and this is not it.
+
+## The rule that binds a refresh policy to a retention policy
+
+> **`start_offset` must be STRICTLY smaller than `drop_after`.**
+
+A refresh must never look at a range whose raw rows may already be gone.
+`drop_chunks` logs an invalidation over what it removes; a refresh is
+invalidation-driven, so a window containing that invalidation recomputes the
+range from rows that no longer exist and writes back the nothing it finds —
+**deleting** the materialized buckets. The retention never touches the
+aggregate; the refresh does.
+
+⚠️ **The 7-day chunk geometry does not protect you.** A chunk is dropped only
+once entirely older than `drop_after`, which *looks* like it keeps the dropped
+range clear of a window that only overshoots by a day. It does not, because
+retention runs **daily**: a chunk is dropped at the first run after its end
+crosses the line, so its newest rows are then between 30 and 31 days old —
+inside a 31-day window. Measured 10 August 2026 on the real geometry:
+**2160 materialized buckets → 2136, exactly 24 — one day of history per chunk
+dropped**, permanently, about one day in seven beyond the 30-day line.
+
+Both directions are asserted by `tests/cagg_retention.rs`: the rule itself, read
+out of the TimescaleDB catalog for all four pairs, and the behaviour it exists
+for. ⚠️ `001_baseline.sql:1664` still carries the reasoning that produced the
+bug — *"start_offset spans the full 30d retention window (raw rows never live
+longer)"* — and forward-only means it cannot be corrected there.
+
+### ☠️ `refresh_continuous_aggregate(cagg, NULL, NULL)` once retention has run
+
+The rule above constrains **the scheduled policy**. It does not, and cannot,
+constrain a refresh someone types. The invalidations the policy now carefully
+never reaches do not expire — they accumulate in the invalidation log for ever —
+so a full-range refresh processes all of them at once and deletes every
+materialized bucket whose raw rows retention has dropped.
+
+⚠️ **The precondition matters, and cuts the other way before it is met.** The
+destruction needs invalidations, and those are logged by `drop_chunks`. On a
+database where retention has never dropped a chunk — a fresh deploy, or any
+database younger than `drop_after` — the log is empty and a full-range refresh
+is **harmless and useful**: it is the only way to materialize history that
+accumulated while the scheduler was off. Getting this backwards is its own
+data loss: refuse the full refresh, enable the scheduler, and the retention job
+drops raw rows that were never materialized and now never can be. So:
+
+| state of the database | full-range refresh |
+|---|---|
+| retention has never dropped a chunk | **do it** — before enabling the scheduler |
+| retention has dropped at least once | **never** — see below |
+
+To tell which side you are on, ask the question that actually matters — **is
+there materialized history older than the oldest surviving raw row?** — rather
+than whether the retention job has run:
+
+```sql
+SELECT (SELECT min(bucket) FROM meteora_damm_v2_swap_events_hourly)         AS oldest_bucket,
+       (SELECT time_bucket('1 hour', min(timestamp))
+          FROM meteora_damm_v2_swap_events)                                 AS oldest_raw,
+       (SELECT min(bucket) FROM meteora_damm_v2_swap_events_hourly)
+         < (SELECT time_bucket('1 hour', min(timestamp))
+              FROM meteora_damm_v2_swap_events)  AS a_full_refresh_would_destroy;
+```
+
+⚠️ **Do not use "has the retention job succeeded?" for this** — an earlier
+version of this section did, and it was wrong in the direction the paragraph
+above calls its own data loss. A retention run that finds nothing old enough
+still *succeeds*: with the scheduler on, all four jobs report
+`total_successes = 1` within a day, while the first chunk drop is thirty days
+out. Measured on this dev database: that check answers **4** — "never run a full
+refresh" — on a database whose oldest raw row is 2026-08-05 and where no chunk
+has ever been dropped, i.e. exactly the one that should run it. The query above
+answers `f` on the same database.
+
+Measured 10 August 2026, on a database where migration 008 was already applied
+and the policy's own refresh had just run clean:
+
+| refresh | buckets |
+|---|---|
+| policy window (`29 days`) | **2160** — "already up-to-date" |
+| then `NULL, NULL` | **779** |
+
+**1381 buckets destroyed by one command**, on a correctly configured database.
+
+This is not a hypothetical footgun: the paragraph on 007 above says the next
+cagg rebuild *"will need a backfill"*, and a full-range refresh is the obvious
+way to do one. It is the wrong way. A backfill must be run in **bounded slices
+that stay inside the retention** — `CALL refresh_continuous_aggregate(cagg,
+now() - INTERVAL '29 days', now() - INTERVAL '1 hour')` — and history older than
+the raw retention cannot be rebuilt at all, because the rows it was computed
+from are gone. That is the real cost of a late rebuild, and it is why columns
+belong in the rebuild you are already doing.
+
+`tests/cagg_retention.rs` pins this behaviour too, so the warning stays
+falsifiable: if TimescaleDB ever stops recomputing over dropped ranges, that
+test fails and this section can go.
+
+## Watching the job scheduler run, locally
+
+`docker-compose.yml` pins `timescaledb.max_background_workers = 0`, and it has
+to stay there: `sqlx::test` creates a database per test and the scheduler races
+the next test's DDL on the shared catalog. So no cagg had ever materialized a
+bucket, and no policy had ever run — which is why every finding above went
+unnoticed.
+
+⚠️ **Read the price before running this.** Turning the scheduler on is not free
+and not fully reversible:
+
+- while it is on, the integration suite is **flaky** — that race is the reason
+  for the pin, and it is the same one described under *What a local run cannot
+  prove* below. Do not run tests until it is off again;
+- the caggs will materialize, which **permanently closes the free-rebuild
+  window** on that database: from then on, dropping and recreating an aggregate
+  costs a backfill, with the caveat above that history older than the raw
+  retention cannot be backfilled at all.
+
+The restore step is therefore **not optional**, and it does not undo the second
+point. With that understood:
+
+```bash
+cat > /tmp/scheduler-on.yml <<'YML'
+services:
+  postgres:
+    command: ["postgres", "-c", "timescaledb.max_background_workers=8"]
+YML
+docker compose -f docker-compose.yml -f /tmp/scheduler-on.yml up -d postgres
+
+# … observe, then PUT IT BACK before running any test:
+docker compose up -d postgres
+psql "$DATABASE_URL" -c "SHOW timescaledb.max_background_workers;"   # must be 0
+```
+
+What to look at — `timescaledb_information.job_stats` joined to `jobs` for
+`total_runs` / `total_failures`, and the materialization watermark:
+
+```sql
+SELECT ca.view_name,
+       to_timestamp(_timescaledb_functions.cagg_watermark(h.id) / 1000000.0)
+  FROM timescaledb_information.continuous_aggregates ca
+  JOIN _timescaledb_catalog.hypertable h
+    ON h.table_name = ca.materialization_hypertable_name;
+```
+
+Done on 10 August 2026: all four refresh policies ran and succeeded on the first
+scheduler tick, and the swap aggregate materialized **185 buckets** — the first
+time any of them has. `claim_reward_events_hourly` stayed at `-infinity`, which
+is correct: its raw table holds no rows. ⚠️ Note the consequence for the
+free-rebuild window above — it is closed on any database where the scheduler has
+now run, this dev one included.
 
 ## Forward-only
 
@@ -373,7 +544,7 @@ When you add a new migration:
    macros against the new schema:
    ```sh
    cd crates/persistence
-   cargo sqlx prepare
+   cargo sqlx prepare -- --all-targets --all-features
    ```
 4. Commit the new migration AND the updated `.sqlx/` snapshot.
 

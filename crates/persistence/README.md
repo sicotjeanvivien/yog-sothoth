@@ -39,7 +39,7 @@ persistence/
     │   └── scripts/         ← the provisioning SQL, `include_str!`d into it
     │       ├── setup_roles.sql         (roles + structural privileges, admin)
     │       └── setup_watched_pools.sql (startup allowlist seed, admin)
-    └── tests/               ← DB-backed integration tests (#[ignore]d by default)
+    └── tests/               ← DB-backed integration tests (feature `integration-tests`)
         ├── main.rs          ← the ONLY test target; declares every file below
         ├── helpers.rs       ← shared sentinels (pk, sg, ts)
         └── <subject>.rs     ← one file per event / read path
@@ -438,6 +438,43 @@ invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
 traded totals and adds `meteora_damm_v2_swap_events_hourly_priced` — the
 implied-price rule above.
 
+### A refresh policy must stay inside its retention policy
+
+The four hourly continuous aggregates each sit on a raw hypertable with a
+30-day retention. The relation between the two policies is a **rule, not a
+preference**:
+
+```
+start_offset  <  drop_after
+```
+
+`drop_chunks` logs an invalidation over the range it removes, and a refresh is
+invalidation-driven — so a refresh window that reaches past the retention
+recomputes a range whose raw rows are gone and writes back nothing, **deleting**
+the materialized buckets. The retention never touches the aggregate; the refresh
+does. Migration `008` moved the four policies to `29 days` for that reason; the
+measurement, and why the 7-day chunk geometry does not save you, are in
+[`migrations/README.md`](./migrations/README.md).
+
+☠️ **The rule does not close the hole, it only closes the policy.** A refresh
+someone types is not constrained by it: on a database where retention has
+already dropped chunks, `refresh_continuous_aggregate(cagg, NULL, NULL)`
+processes every accumulated invalidation at once and deletes the history —
+measured at **2160 buckets → 779** on a database with 008 applied. Before
+retention has ever dropped a chunk the same command is harmless and is the right
+way to capture a backlog. Both sides, and how to tell which one you are on, are
+in [`migrations/README.md`](./migrations/README.md).
+
+Three integration tests hold the line (`tests/cagg_retention.rs`): one reads the
+pairs out of the TimescaleDB catalog and asserts the inequality, one reproduces
+the destruction the inequality prevents, and one pins the destruction that
+survives it — asserting a loss, so the warning above stays falsifiable. Adding a
+fifth aggregate means adding its refresh policy; the first test counts the
+aggregates separately from the join, so one that never declares a policy fails
+loudly instead of silently opting out. A source hypertable with **no** retention
+policy is fine and exempt (`signals` is the precedent): nothing clears its rows,
+so no offset can reach a cleared range.
+
 ### Pool-properties satellites, and the invariant that ties them to `pools`
 
 A satellite table holds the properties that exist for **one** protocol only, so
@@ -539,22 +576,43 @@ committing — CI runs `cargo sqlx prepare --check` against a real Postgres:
 
 ```bash
 cd crates/persistence
-cargo sqlx prepare
+cargo sqlx prepare -- --all-targets --all-features
 ```
+
+⚠️ **The trailing flags are not optional**, and this file used to omit them. A
+bare `cargo sqlx prepare` compiles only the lib and bins, never sees the
+`query!` calls inside `tests/`, and rather than leaving their cache entries
+alone it **deletes** them. `sqlx-check` does not catch it either — it runs
+without `--all-features`, so those queries are never expanded, and it tolerates
+extra entries. The breakage surfaces later as an offline compile error in the
+`test-integration` job, far from its cause. Same warning, with the measurement,
+in `CLAUDE.md`.
 
 ## Integration tests
 
-DB-backed tests live in `tests/` and are `#[ignore]`d by default:
+DB-backed tests live in `tests/` and are gated on the `integration-tests`
+feature — `tests/main.rs` opens with `#![cfg(feature = "integration-tests")]`:
 
 ```bash
-cargo test -p yog-persistence --features integration-tests -- --include-ignored
+cargo test -p yog-persistence --features integration-tests
 ```
+
+⚠️ They are **not** `#[ignore]`d, whatever this file used to say. The runs
+report `0 ignored` and `--include-ignored` is a no-op here; without the feature
+the whole target compiles to nothing rather than to a list of skipped tests.
 
 They need a live Postgres running with `timescaledb.max_background_workers = 0`
 (as configured in `docker-compose.yml`): `sqlx::test` creates a fresh database
 per test, and the cagg refresh policies of the baseline (§13) otherwise have
 the TimescaleDB job scheduler race the next test's migration DDL on the shared
-catalog ("tuple concurrently deleted").
+catalog ("tuple concurrently deleted"). Turning the scheduler on deliberately,
+to watch the policies run, has its own recipe in
+[`migrations/README.md`](./migrations/README.md).
+
+`DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`:
+`sqlx::test` builds a throwaway schema in the maintenance database and
+`yog_migrate` lacks CREATE on it. The symptom is every test failing in about a
+second on SQLSTATE 42501, which reads like a regression and is not one.
 
 **One file per subject, one single binary.** Cargo auto-discovers every `.rs`
 directly under `tests/` as its own test target, which relinks the whole crate
