@@ -88,6 +88,19 @@ pub struct PoolPage {
     /// above an instant taken a moment ago. Note that a **backward** page
     /// landing back on the first page still carries a cursor, so it does get a
     /// non-zero count — `is_first` does not imply `0`.
+    ///
+    /// # What it does not cover
+    ///
+    /// The fence restores the immutability of the sort *key*, not of set
+    /// *membership*. A pool can **enter** a filtered listing mid-traversal
+    /// without being touched at all: `yog-context` resolves its properties and
+    /// writes `fee_bps` without moving `last_seen_at`, so a pool sitting above
+    /// the cursor can start matching a `fee_bps` filter it did not match
+    /// before. It is never shown, and it is not counted here either — this
+    /// count keys strictly on `last_seen_at`. Silent, and not something the
+    /// count can be widened to catch: nothing records when a row entered a
+    /// filter. Worth knowing before reading `touched_since` as "everything
+    /// this traversal cannot show you".
     pub touched_since: i64,
 }
 

@@ -669,3 +669,76 @@ async fn first_seen_traversal_is_unfenced(pool: PgPool) {
         "a touched pool must still be reachable under an immutable sort"
     );
 }
+
+// ── The invariant the fence rests on: `last_seen_at` only grows ─────
+//
+// The fence turns "a touched row moves across the cursor" into "a touched
+// row leaves the result set" *because* the column only ever increases. It
+// bounds from above only, so a row moving DOWN is invisible to it — it
+// re-enters the traversal below a cursor already passed and gets served a
+// second time. Nothing enforced that until `GREATEST` did: `upsert` writes
+// the indexer process clock, `touch_last_seen` writes Postgres' `NOW()`,
+// and events are persisted concurrently.
+
+/// A stale observation must not walk the column backwards, whichever writer
+/// carries it.
+#[sqlx::test]
+async fn last_seen_at_never_moves_backwards(pool: PgPool) {
+    use yog_core::domain::PoolRepository;
+
+    seed_pool(&pool, pk(1), ts(100), ts(300)).await;
+    let repo = PgPoolRepository::new(pool.clone());
+
+    // An upsert carrying an *older* instant than what is stored — a swap
+    // whose event was decoded before a concurrent touch committed.
+    repo.upsert(&Pool {
+        pool_address: pk(1),
+        protocol: Protocol::MeteoraDammV2,
+        token_a_mint: Some(pk(200)),
+        token_b_mint: Some(pk(201)),
+        fee_bps: None,
+        first_seen_at: ts(100),
+        last_seen_at: ts(200),
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(
+        last_seen_of(&pool, pk(1)).await,
+        ts(300),
+        "an older observation must not lower last_seen_at"
+    );
+
+    // A newer one still moves it forward — the guard must not freeze the
+    // column, only floor it.
+    repo.upsert(&Pool {
+        pool_address: pk(1),
+        protocol: Protocol::MeteoraDammV2,
+        token_a_mint: Some(pk(200)),
+        token_b_mint: Some(pk(201)),
+        fee_bps: None,
+        first_seen_at: ts(100),
+        last_seen_at: ts(400),
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(last_seen_of(&pool, pk(1)).await, ts(400));
+
+    // `touch_last_seen` writes NOW(), which is later than every seeded
+    // instant, so it must move the column forward and not be floored away.
+    repo.touch_last_seen(&pk(1)).await.unwrap();
+    assert!(
+        last_seen_of(&pool, pk(1)).await > ts(400),
+        "a touch at NOW() must still advance the column"
+    );
+}
+
+/// Read one pool's `last_seen_at` straight from the table.
+async fn last_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
+    sqlx::query_scalar::<_, DateTime<Utc>>("SELECT last_seen_at FROM pools WHERE pool_address = $1")
+        .bind(addr.to_string())
+        .fetch_one(pool)
+        .await
+        .expect("read last_seen_at failed")
+}

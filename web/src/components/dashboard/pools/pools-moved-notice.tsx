@@ -24,10 +24,18 @@
  * two apart after the fact — so the count is an upper bound, and the wording
  * says only what is certain ("became active since {when}").
  *
- * It is **not** relative to now: `asOf` is stamped in the URL, so a bookmarked
- * or shared page replays its own anchor however old it is. That is why the
- * message names the anchor instant instead of saying "since this page loaded",
- * which would be a lie on a link opened tomorrow.
+ * It is **not** relative to now: `asOf` is stamped in the URL, so a page kept
+ * open or shared carries its own anchor rather than the reader's clock. That is
+ * why the message names the anchor instant instead of saying "since this page
+ * loaded", which would be a lie on a link opened later. (The server re-anchors
+ * a cursor older than an hour, so the wording never has to explain a snapshot
+ * from last week.)
+ *
+ * And it counts *movement*, not membership: with a fee or search filter active,
+ * a pool can enter the filtered set mid-traversal because `yog-context`
+ * resolved its properties, without its activity moving at all. Such a pool is
+ * neither shown nor counted. So this notice reports what it can see leave, not
+ * everything the page cannot show.
  *
  * Renders wherever the count is non-zero, first page included — a backward
  * navigation that lands back on page 1 still carries a cursor, so it carries a

@@ -124,6 +124,19 @@ counted too. Once a pool is touched its previous `last_seen_at` is gone, so
 nothing can distinguish the two after the fact. Surface it as "became active
 since `asOf`", never as "pools you missed".
 
+⚠️ And it is a bound on **movement**, not on membership. With `fee_bps` or `q`
+active, a pool can enter the filtered set mid-traversal without being touched —
+`yog-context` resolving its properties writes `fee_bps` without moving
+`last_seen_at`. Such a pool is neither shown nor counted, and no count keyed on
+`last_seen_at` can catch it: nothing records when a row started matching a
+filter.
+
+A cursor's `asOf` is validated like every other field it carries. One in the
+future would make the anchor match everything — the traversal silently
+unanchored while `touchedSince` reports `0` — and one older than an hour is a
+bookmarked URL rather than a live traversal, replaying a stale snapshot. Either
+way the server re-anchors on a fresh instant instead of honouring the claim.
+
 What this does and does not buy: under `last_seen_asc` the duplicate is gone,
 and backward navigation no longer pulls in rows that moved. Under
 `last_seen_desc` a pool touched mid-traversal still isn't shown by that

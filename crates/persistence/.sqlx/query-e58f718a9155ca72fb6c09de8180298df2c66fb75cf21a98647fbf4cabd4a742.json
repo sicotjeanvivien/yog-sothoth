@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pools SET last_seen_at = GREATEST(last_seen_at, NOW()) WHERE pool_address = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e58f718a9155ca72fb6c09de8180298df2c66fb75cf21a98647fbf4cabd4a742"
+}

@@ -33,9 +33,17 @@ pub(crate) struct PageResponse<T> {
 /// - `asOf` is the instant this traversal is anchored to. `null` when the sort
 ///   is over an immutable column, which needs no anchor.
 /// - `touchedSince` is how many pools matching the same filters became active
-///   after `asOf` — i.e. moved to the head of the list, past a reader who is
-///   already deeper in it. `0` on a first page. It exists so that a listing
-///   which cannot show those pools can at least say how many there are.
+///   after `asOf`, and so moved to the **end of the ordering** — the head of
+///   the list under `last_seen_desc`, its tail under `last_seen_asc`. It exists
+///   so that a listing which cannot show those pools can at least say how many
+///   there are; a client that reports it should send the reader to the end the
+///   sort actually points at, not to the first page in both cases.
+///
+/// `touchedSince` is `0` whenever the anchor was minted by that same call — a
+/// first page, or a `position` jump — but **not** on a backward page that lands
+/// back on the first page: it carries a cursor, so it carries a real count. It
+/// is also an upper bound on what the reader missed rather than a count of it;
+/// `crates/api/README.md` states both caveats in full.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolPageResponse<T> {

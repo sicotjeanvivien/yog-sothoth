@@ -60,6 +60,39 @@ impl PgPoolRepository {
 
 const MAX_PAGE_SIZE: i64 = 200;
 
+/// How stale a cursor's snapshot fence may be before the traversal re-anchors.
+///
+/// A listing is read in minutes; an hour is already far past any live
+/// traversal. Beyond it the cursor is not a reader mid-scroll, it is a
+/// bookmarked or shared URL, and replaying its anchor serves a snapshot of the
+/// past while `touched_since` counts most of the table. Re-anchoring costs that
+/// one hop its guarantee — exactly what a cursor minted before the fence
+/// existed already costs — and buys back a page that means something.
+const MAX_FENCE_AGE: chrono::Duration = chrono::Duration::hours(1);
+
+/// Resolve the fence a traversal runs under, from the one the cursor claims.
+///
+/// A cursor is base64 JSON handed back by the client: unsigned, editable, and
+/// replayable at any later date. Every other field it carries is validated, and
+/// this one bounds the query on both sides, so it is validated too:
+///
+/// - **above `now`** — an `as_of` in the future makes `last_seen_at <= as_of`
+///   match everything. The traversal is silently unanchored, which is the
+///   original bug back in full, and `touched_since` reports `0`, so the client
+///   states that nothing moved. Clamping is what stops a hand-edited cursor
+///   from turning the fix off while claiming it is on.
+/// - **older than [`MAX_FENCE_AGE`]** — an ancient `as_of` also drops the
+///   selectivity of the `touched_since` range predicate, degrading it toward a
+///   full scan on an input the caller controls.
+///
+/// Both bounds collapse to the same repair: mint a fresh fence.
+fn clamp_fence(claimed: Option<DateTime<Utc>>, now: DateTime<Utc>) -> DateTime<Utc> {
+    match claimed {
+        Some(as_of) if as_of <= now && now - as_of <= MAX_FENCE_AGE => as_of,
+        _ => now,
+    }
+}
+
 /// How many fee tiers the filter offers. The dozen-or-so real tiers hold the
 /// vast majority of pools; capping at the most common keeps the dropdown short
 /// and drops the long tail of one-off dynamic-fee/launch values.
@@ -77,6 +110,23 @@ pub(super) fn fee_bps_to_numeric(
 
 #[async_trait]
 impl PoolRepository for PgPoolRepository {
+    /// # `GREATEST` is what makes `last_seen_at` monotonic
+    ///
+    /// The pool listing's snapshot fence (`PoolPage`) rests on the column only
+    /// ever growing: that is what turns "a touched row moves across the cursor"
+    /// into "a touched row leaves the result set". A plain
+    /// `SET last_seen_at = EXCLUDED.last_seen_at` did not guarantee it. The
+    /// value here is the *indexer process* clock, captured before the round
+    /// trip, while `touch_last_seen` writes Postgres' `NOW()` — two clocks, and
+    /// events persisted concurrently. A touch committing `NOW()` followed by an
+    /// in-flight upsert carrying an earlier instant walked the column
+    /// backwards, and a row moving *down* re-enters a traversal below a cursor
+    /// already passed, to be served a second time. The fence bounds from above
+    /// only; it cannot catch that.
+    ///
+    /// So the invariant is enforced where it is written rather than assumed
+    /// where it is read. A pool is *last seen* at the latest instant anything
+    /// saw it, which is also what the column's name has always claimed.
     async fn upsert(&self, pool: &Pool) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
@@ -85,7 +135,7 @@ impl PoolRepository for PgPoolRepository {
                  first_seen_at, last_seen_at)
             VALUES ($1, $2, $3, $4, $5, $5)
             ON CONFLICT (pool_address) DO UPDATE
-                SET last_seen_at = EXCLUDED.last_seen_at
+                SET last_seen_at = GREATEST(pools.last_seen_at, EXCLUDED.last_seen_at)
             "#,
             pool.pool_address.to_string(),
             pool.protocol.as_str(),
@@ -99,9 +149,14 @@ impl PoolRepository for PgPoolRepository {
         Ok(())
     }
 
+    /// `GREATEST` for the same reason as [`Self::upsert`], and at every write
+    /// site rather than at the one that happened to be looked at: this one
+    /// writes Postgres' clock and the other the indexer's, so either can be
+    /// the later of the two. An invariant honoured by one writer out of two is
+    /// not an invariant.
     async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()> {
         sqlx::query!(
-            r#"UPDATE pools SET last_seen_at = NOW() WHERE pool_address = $1"#,
+            r#"UPDATE pools SET last_seen_at = GREATEST(last_seen_at, NOW()) WHERE pool_address = $1"#,
             pool_address.to_string(),
         )
         .execute(&self.pool)
@@ -237,24 +292,19 @@ impl PoolCatalog for PgPoolRepository {
         // only place that builds this SQL, so the invariant cannot be
         // forgotten by a future caller. It is carried forward by the cursor,
         // and re-minted whenever there is none — first page, `position` jump,
-        // or a cursor issued before this field existed (which then re-anchors
-        // the traversal from the next page on).
+        // or a cursor issued before this field existed.
         //
         // Taken from the application clock, while `touch_last_seen` writes
-        // Postgres' `NOW()`. Same host today, so the two agree; were they to
-        // drift, a pool whose stored timestamp runs ahead of this clock would
-        // sit above its own listing's anchor and stay out of the first page
-        // until the clocks meet again. Reading `NOW()` from the database would
-        // close that at the cost of a round-trip on every listing — not worth
-        // paying for a skew that does not exist in this deployment, but the
-        // trade is here rather than left to be re-derived.
+        // Postgres' `NOW()`. Same host today, so the two agree. A drift either
+        // way is bounded by NTP and costs at most the pools touched inside that
+        // window; reading `NOW()` from the database would close it at the price
+        // of a round-trip on every listing, which is not a trade worth making
+        // here — but it is the trade, written down rather than re-derived.
         let as_of: Option<DateTime<Utc>> = match sort_column {
-            PoolSortColumn::LastSeen => Some(
-                active_cursor
-                    .as_ref()
-                    .and_then(|c| c.as_of)
-                    .unwrap_or_else(Utc::now),
-            ),
+            PoolSortColumn::LastSeen => Some(clamp_fence(
+                active_cursor.as_ref().and_then(|c| c.as_of),
+                Utc::now(),
+            )),
             // Immutable sort column: nothing can move across the cursor.
             PoolSortColumn::FirstSeen => None,
         };
@@ -350,5 +400,58 @@ impl PoolCatalog for PgPoolRepository {
                 pool_count: r.pool_count,
             })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_FENCE_AGE, clamp_fence};
+    use chrono::{Duration, TimeZone, Utc};
+
+    fn now() -> chrono::DateTime<Utc> {
+        Utc.timestamp_opt(1_800_000_000, 0).unwrap()
+    }
+
+    /// A live traversal keeps its anchor. Re-minting on every page would undo
+    /// the whole point: the fence has to be the *same* instant across the walk.
+    #[test]
+    fn a_recent_fence_is_honoured() {
+        let claimed = now() - Duration::minutes(3);
+        assert_eq!(clamp_fence(Some(claimed), now()), claimed);
+    }
+
+    /// No claim, no anchor to honour — mint one. This is the first page, a
+    /// `position` jump, and any cursor issued before the field existed.
+    #[test]
+    fn an_absent_fence_is_minted() {
+        assert_eq!(clamp_fence(None, now()), now());
+    }
+
+    /// A cursor is unsigned base64 the client hands back, so a fence in the
+    /// future is reachable by hand-editing one. Honouring it would make
+    /// `last_seen_at <= as_of` match everything: the traversal unanchored, the
+    /// original skip/duplicate bug back, and `touched_since` reporting 0 —
+    /// the fix switched off while the response claims it is on.
+    #[test]
+    fn a_fence_in_the_future_is_refused() {
+        let claimed = now() + Duration::hours(6);
+        assert_eq!(clamp_fence(Some(claimed), now()), now());
+    }
+
+    /// Past the cutoff the cursor is a bookmark, not a reader mid-scroll:
+    /// replaying it serves a stale snapshot and leaves the `touched_since`
+    /// range predicate selecting most of the table.
+    #[test]
+    fn a_stale_fence_is_re_anchored() {
+        let claimed = now() - MAX_FENCE_AGE - Duration::seconds(1);
+        assert_eq!(clamp_fence(Some(claimed), now()), now());
+    }
+
+    /// Exactly at the cutoff is still honoured — the bound is inclusive, and
+    /// saying so pins which side of `<=` the code is on.
+    #[test]
+    fn the_staleness_bound_is_inclusive() {
+        let claimed = now() - MAX_FENCE_AGE;
+        assert_eq!(clamp_fence(Some(claimed), now()), claimed);
     }
 }
