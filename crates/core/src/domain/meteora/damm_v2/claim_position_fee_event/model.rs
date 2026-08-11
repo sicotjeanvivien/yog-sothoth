@@ -11,8 +11,10 @@ use solana_signature::Signature;
 ///
 /// # Conventions
 ///
-/// `fee_a_claimed` / `fee_b_claimed` align with the canonical pool ordering
-/// — see [`crate::domain::SwapEvent`] for details.
+/// `fee_a_claimed` / `fee_b_claimed` are in the pool's own
+/// `(token_a, token_b)` order — see
+/// [`crate::domain::MeteoraDammV2SwapEvent`] for what that order guarantees,
+/// and for why it is not a sort of the mints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeteoraDammV2ClaimPositionFeeEvent {
     pub pool_address: Pubkey,

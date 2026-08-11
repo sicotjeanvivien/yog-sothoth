@@ -145,10 +145,28 @@ pub fn sqrt_price_to_price_a_in_b(
     Decimal::from_f64_retain(price).map(|d| d.normalize())
 }
 
-/// Apply the DAMM v2 fee to an input amount.
-///
-/// Fee is expressed in basis points (1 bp = 0.01%).
+/// Apply the DAMM v2 fee to an input amount, in basis points (1 bp = 0.01%).
 /// Returns the amount net of fees.
+///
+/// ⚠️ **Dormant, and it disagrees with cp-amm in three independent ways.** No
+/// caller anywhere, which is why none of them has ever produced a wrong number;
+/// they are listed because each one survives even if the constant-product model
+/// of [`super::common`] is one day replaced, and because "apply the fee" reads
+/// like a settled question:
+///
+/// 1. **`fee_bps: u32` truncates sub-bp tiers.** A pool at 2.5 bps becomes 2 —
+///    a 20 % error on the fee. [`fee_numerator_to_bps`], twenty lines above in
+///    this same file, returns `Decimal` precisely to keep those fractions.
+/// 2. **It rounds down; cp-amm rounds up.** The program computes
+///    `⌈amount × numerator / 1e9⌉`, so this under-charges by up to one unit on
+///    every trade.
+/// 3. **It takes the fee off the input.** Under `CollectFeeMode::BothToken`
+///    cp-amm takes it off the **output** — a choice `compute_fee_token_is_a`
+///    already models correctly in the indexer's translator, from the pool's own
+///    `collect_fee_mode`, which this signature cannot even express.
+///
+/// Fixing them means deciding a `Decimal` signature, a rounding direction and a
+/// fee-side parameter — worth doing against a real caller, not in advance.
 pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     let fee = amount_in.checked_mul(fee_bps as u128).ok_or_else(|| {
         crate::error::CoreError::ArithmeticOverflow {
@@ -159,10 +177,18 @@ pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     Ok(amount_in.saturating_sub(fee))
 }
 
-/// Compute the net price impact of a DAMM v2 swap, after fees.
+/// Net price impact of a DAMM v2 swap, after fees.
 ///
 /// DAMM v2 applies fees before the swap is executed — the effective
 /// amount_in used for the x·y=k calculation is amount_in net of fees.
+///
+/// ⚠️ **Dormant, and it inherits both problems above**: the fee treatment of
+/// [`fee_adjusted_amount`] and the constant-product model of
+/// [`super::common::price_impact`], which understates impact on a
+/// concentrated-liquidity pool. It is also the most *plausible-looking* name in
+/// the module — "net price impact, after fees" is exactly what a price-impact
+/// detector would reach for, and it would get an optimistic number with no
+/// error to catch. See the [`super::common`] module note before wiring it.
 pub fn net_price_impact(
     reserve_a: u128,
     reserve_b: u128,

@@ -374,6 +374,29 @@ after they had merged. Both times the diff above came back empty or limited to
 The squash itself is the largest instance of this window ever taken, and it
 closes it: from `002_` onwards there is production data behind the rule.
 
+### A frozen comment can go stale, and the file cannot be the place it is fixed
+
+Forward-only freezes the *comments* along with the SQL, so a header that
+described the code accurately when it was written keeps describing it long
+after the code moved on. That drift cannot be repaired in place — the fix
+belongs here, where the reader can find it next to the file it corrects.
+
+**`pools.fee_bps`, baseline §015.** The header still says the column is
+*"unknown between a pool's discovery (swap/liquidity stream) and the arrival of
+its InitializePool event, and left NULL if the fee blob ever fails to decode
+(unknown BaseFeeMode)"*. Neither half holds since §036/§038: the
+`InitializePool` event no longer writes this column, and **nothing decodes a fee
+blob any more**. `fee_bps` is written by a single writer, yog-context, from the
+on-chain `Pool` account, and it is NULL until that read happens — the flag that
+schedules the read is `needs_refresh`, not the arrival of any event.
+
+What in that header is still exact, and worth reading twice: *"for a
+fee-scheduler (anti-sniper) pool this is the genesis cliff, not the live decayed
+rate"*. The column is the floor at genesis. The fee a trader pays **now** is
+derived at read time from the decoded curve (`base_fee_numerator_at`) and is a
+different number — up to ×49 apart on a pool whose scheduler has expired, which
+is what the audit measured against Meteora's own API.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped

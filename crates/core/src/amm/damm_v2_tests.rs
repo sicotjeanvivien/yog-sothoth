@@ -401,3 +401,56 @@ fn a_non_time_scheduler_kind_yields_no_fee_not_the_cliff() {
         );
     }
 }
+
+// ── The cap that must NOT be applied ──────────────────────────────
+//
+// `core/README.md` used to state that this function "saturates at the
+// chain's 10 % cap". It never did, and it must not: cp-amm's ceiling is a
+// function of the pool's `fee_version` — 5000 bps (50 %) in v0, 9900 bps
+// (99 %) in v1 — while 10 % is `MAX_FEE_NUMERATOR_POST_UPDATE`, the cap on
+// an operator *update*, not on a pool.
+//
+// The danger was never the doc: it was someone reading it, finding the
+// function does not match, and "fixing" the code. Clamping to 1000 bps
+// would report 10 % for a legitimate anti-sniper launch pool, silently —
+// `fee_bps` is an unconstrained NUMERIC and the value stays plausible.
+// These assertions are what turns that into a red test.
+
+/// The v1 ceiling, 99 %, converts whole. A clamp at any of the plausible
+/// wrong values — 1000 bps, or cp-amm's own v0 cap — reddens this.
+#[test]
+fn a_v1_ceiling_fee_converts_without_clamping() {
+    assert_eq!(fee_numerator_to_bps(990_000_000).to_string(), "9900");
+}
+
+/// And the v0 ceiling, 50 %, which the function's own doc-comment already
+/// gives as an example. Kept distinct so a clamp introduced at exactly one
+/// of the two caps cannot pass.
+#[test]
+fn a_v0_ceiling_fee_converts_without_clamping() {
+    assert_eq!(fee_numerator_to_bps(500_000_000).to_string(), "5000");
+}
+
+/// Above every cp-amm ceiling the conversion still just divides. The
+/// function's contract is arithmetic, not validation — an out-of-range
+/// numerator is an abnormal *account*, and flattening it here would hide
+/// that behind a number indistinguishable from a real 10 % tier.
+#[test]
+fn a_numerator_past_every_ceiling_is_still_converted_not_flattened() {
+    assert_eq!(fee_numerator_to_bps(1_000_000_000).to_string(), "10000");
+}
+
+/// The other end, and the reason the return type is `Decimal`: sub-bp tiers
+/// survive. An integer conversion would round 2.5 bps to 2 — the same class
+/// of silent loss as the clamp, at the opposite end of the range.
+///
+/// Compared as a `Decimal` rather than a string: the division yields scale 2
+/// (`"2.50"`), and asserting the rendering would tie this test to a formatting
+/// detail instead of to the value it is about.
+#[test]
+fn a_sub_bp_tier_keeps_its_fraction() {
+    assert_eq!(
+        fee_numerator_to_bps(250_000),
+        Decimal::from_str_exact("2.5").unwrap()
+    );
+}
