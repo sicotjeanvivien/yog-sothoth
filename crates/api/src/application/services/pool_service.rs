@@ -14,14 +14,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
-    Page, RepositoryResult,
+    RepositoryResult,
     domain::{
         FeeTier, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
-        PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolPropertiesLookup,
+        PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolPage, PoolPropertiesLookup,
         PoolRankMetric, SignalFeed, SignalRecord, TokenMetadataLookup, TokenPriceLookup,
     },
 };
@@ -39,13 +39,18 @@ const RECENT_SIGNALS_WINDOW_HOURS: i64 = 24;
 const RECENT_SIGNALS_PER_POOL: i64 = 20;
 
 /// A page of enriched pools, preserving the pagination metadata from
-/// the underlying `Page<Pool>`.
+/// the underlying `PoolPage`.
 pub(crate) struct EnrichedPoolPage {
     pub(crate) items: Vec<EnrichedPool>,
     pub(crate) next_cursor: Option<yog_core::Cursor>,
     pub(crate) prev_cursor: Option<yog_core::Cursor>,
     pub(crate) is_first: bool,
     pub(crate) is_last: bool,
+    /// The instant this traversal is anchored to, and how many pools have
+    /// since moved above it. Passed through untouched — see
+    /// [`yog_core::domain::PoolPage`] for what they mean and why they exist.
+    pub(crate) as_of: Option<DateTime<Utc>>,
+    pub(crate) touched_since: i64,
 }
 /// A pool's latest observed state plus its derived spot price.
 ///
@@ -114,7 +119,8 @@ impl PoolService {
     /// Paginate pools and enrich each with token context and analytics.
     ///
     /// Choreography:
-    ///   1. `find_paginated` → a `Page<Pool>` with navigation metadata.
+    ///   1. `find_paginated` → a `PoolPage`: the items with their navigation
+    ///      metadata, plus the traversal's snapshot fence.
     ///   2. `batch_compute` → analytics for the whole page in one query.
     ///   3. per pool, both sides: metadata + latest price lookups.
     ///
@@ -125,7 +131,11 @@ impl PoolService {
         &self,
         query: PoolListQuery,
     ) -> RepositoryResult<EnrichedPoolPage> {
-        let page: Page<Pool> = self.pool_repository.find_paginated(query).await?;
+        let PoolPage {
+            page,
+            as_of,
+            touched_since,
+        } = self.pool_repository.find_paginated(query).await?;
 
         let addresses: Vec<solana_pubkey::Pubkey> =
             page.items.iter().map(|p| p.pool_address).collect();
@@ -152,6 +162,8 @@ impl PoolService {
             prev_cursor: page.prev_cursor,
             is_first: page.is_first,
             is_last: page.is_last,
+            as_of,
+            touched_since,
         })
     }
 

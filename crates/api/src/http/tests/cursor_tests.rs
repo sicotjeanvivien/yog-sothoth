@@ -34,6 +34,19 @@ fn pool_cursor() -> PoolCursor {
         sort_column: yog_core::PoolSortColumn::FirstSeen,
         sort_value: ts(1_700_000_000),
         pool_address: pk(7),
+        as_of: None,
+    }
+}
+
+/// A cursor over the mutable sort column, which carries the traversal's
+/// snapshot fence. The `FirstSeen` one above deliberately does not — the
+/// round-trip has to preserve both cases.
+fn fenced_pool_cursor() -> PoolCursor {
+    PoolCursor {
+        sort_column: yog_core::PoolSortColumn::LastSeen,
+        sort_value: ts(1_700_000_000),
+        pool_address: pk(7),
+        as_of: Some(ts(1_700_000_900)),
     }
 }
 
@@ -69,6 +82,42 @@ fn pool_cursor_round_trip() {
     let encoded = encode_cursor(&Cursor::Pool(original.clone())).unwrap();
     let decoded = decode_pool_cursor(&encoded).unwrap();
     assert_eq!(decoded, original);
+}
+
+/// Losing the fence on the wire would silently un-anchor the traversal: the
+/// next page would mint a fresh one and the ordering would move again.
+#[test]
+fn pool_cursor_round_trip_preserves_the_snapshot_fence() {
+    let original = fenced_pool_cursor();
+    let encoded = encode_cursor(&Cursor::Pool(original.clone())).unwrap();
+    let decoded = decode_pool_cursor(&encoded).unwrap();
+    assert_eq!(decoded, original);
+    assert_eq!(decoded.as_of, original.as_of);
+}
+
+/// A cursor minted before the fence existed must still decode — a reader
+/// mid-traversal at deploy time keeps navigating, and the repository re-anchors
+/// them from the next page on. Rejecting it would 400 a URL that was valid when
+/// it was issued.
+#[test]
+fn pool_cursor_without_as_of_decodes_as_unfenced() {
+    let blob = URL_SAFE_NO_PAD_ENCODE(
+        r#"{"sort_column":"last_seen","sort_value":"2026-05-25T12:00:00Z",
+            "pool_address":"11111111111111111111111111111111"}"#,
+    );
+    let decoded = decode_pool_cursor(&blob).expect("legacy cursor should still decode");
+    assert_eq!(decoded.as_of, None);
+}
+
+/// The fence goes through the same total decoding as every other field: a
+/// tampered value is a 400, never a panic and never a silently dropped anchor.
+#[test]
+fn rejects_malformed_as_of() {
+    let blob = URL_SAFE_NO_PAD_ENCODE(
+        r#"{"sort_column":"last_seen","sort_value":"2026-05-25T12:00:00Z",
+            "pool_address":"11111111111111111111111111111111","as_of":"yesterday"}"#,
+    );
+    assert_bad_request(decode_pool_cursor(&blob));
 }
 
 #[test]
@@ -203,9 +252,15 @@ fn rejects_json_with_wrong_shape() {
 
 #[test]
 fn rejects_malformed_timestamp() {
-    // Correct shape, but `first_seen_at` is not RFC3339.
+    // Correct shape, but `sort_value` is not RFC3339.
+    //
+    // The blob must carry the *real* wire field names: an earlier version used
+    // `first_seen_at`, which serde rejects as a missing field before the
+    // timestamp is ever parsed — the test passed without exercising the line it
+    // names.
     let blob = URL_SAFE_NO_PAD_ENCODE(
-        r#"{"first_seen_at":"yesterday","pool_address":"11111111111111111111111111111111"}"#,
+        r#"{"sort_column":"first_seen","sort_value":"yesterday",
+            "pool_address":"11111111111111111111111111111111"}"#,
     );
     assert_bad_request(decode_pool_cursor(&blob));
 }
@@ -214,7 +269,8 @@ fn rejects_malformed_timestamp() {
 fn rejects_malformed_pool_address() {
     // Correct shape and timestamp, but the address is not valid base58.
     let blob = URL_SAFE_NO_PAD_ENCODE(
-        r#"{"first_seen_at":"2026-05-25T12:00:00Z","pool_address":"not-a-pubkey!"}"#,
+        r#"{"sort_column":"first_seen","sort_value":"2026-05-25T12:00:00Z",
+            "pool_address":"not-a-pubkey!"}"#,
     );
     assert_bad_request(decode_pool_cursor(&blob));
 }

@@ -8,7 +8,8 @@ use crate::http::{
     cursor::encode_cursor_opt,
     dto::{
         FeeTierResponse, LiquidityEventResponse, PageResponse, PoolCurrentStateResponse,
-        PoolDetailResponse, PoolHistoryBucketResponse, PoolResponse, SwapEventResponse,
+        PoolDetailResponse, PoolHistoryBucketResponse, PoolPageResponse, PoolResponse,
+        SwapEventResponse,
         request::{
             GetPoolHistoryRequest, GetPoolLatestStateRequest, GetPoolRequest,
             ListPoolLiquidityRequest, ListPoolSwapsRequest, ListPoolsRequest, ListTopPoolsRequest,
@@ -25,7 +26,7 @@ use crate::http::{
 pub(crate) async fn list_pools(
     State(state): State<AppState>,
     Query(query): Query<PageQuery>,
-) -> Result<Json<PageResponse<PoolResponse>>, ApiError> {
+) -> Result<Json<PoolPageResponse<PoolResponse>>, ApiError> {
     let request = ListPoolsRequest::parse(query)?;
     let page = state.pool_service.list_pools(request.into_query()).await?;
 
@@ -33,12 +34,16 @@ pub(crate) async fn list_pools(
     let next_cursor = encode_cursor_opt(page.next_cursor.as_ref())?;
     let prev_cursor = encode_cursor_opt(page.prev_cursor.as_ref())?;
 
-    Ok(Json(PageResponse {
-        items,
-        next_cursor,
-        prev_cursor,
-        is_first: page.is_first,
-        is_last: page.is_last,
+    Ok(Json(PoolPageResponse {
+        page: PageResponse {
+            items,
+            next_cursor,
+            prev_cursor,
+            is_first: page.is_first,
+            is_last: page.is_last,
+        },
+        as_of: page.as_of.map(|t| t.to_rfc3339()),
+        touched_since: page.touched_since,
     }))
 }
 

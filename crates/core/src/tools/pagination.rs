@@ -91,11 +91,19 @@ pub enum PagePosition {
 
 /// Column on which the pool listing can be sorted.
 ///
-/// Restricted to materialized columns of the `pools` table — values
-/// that exist at rest and can anchor a stable keyset cursor. Derived
-/// metrics (TVL, 24h volume) are computed at read time and cannot be
-/// sorted on until they are materialized into a dedicated analytics
-/// table; they are deliberately absent here.
+/// Restricted to materialized columns of the `pools` table — values that
+/// exist at rest. Derived metrics (TVL, 24h volume) are computed at read
+/// time and cannot be sorted on until they are materialized into a
+/// dedicated analytics table; they are deliberately absent here.
+///
+/// # Materialized is not enough — a keyset cursor needs *immutable*
+///
+/// `LastSeen` is materialized and is rewritten on every event touching the
+/// pool, which is precisely what a keyset cursor cannot tolerate: a row whose
+/// sort value moves changes side relative to the cursor. Adding a column here
+/// therefore means answering "is it immutable?", not "does it exist at rest?"
+/// — and if it is not, the listing owes it the snapshot fence documented on
+/// [`crate::domain::PoolPage`], which is what makes `LastSeen` safe today.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolSortColumn {
     FirstSeen,
@@ -104,12 +112,14 @@ pub enum PoolSortColumn {
 
 /// Sort order for the pool listing: a column plus a direction.
 ///
-/// The default (`FirstSeenDesc`) preserves the historical ordering
-/// (newest pools first) used before sorting was configurable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Deliberately **not** `Default`: the default ordering is a wire-contract
+/// decision and it is declared once, on the HTTP query param
+/// (`api::http::query::PoolSortParam`). A `Default` here was dead code that
+/// named a *different* variant than the one the API actually serves, i.e. a
+/// second answer to a question that admits one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolSort {
     FirstSeenAsc,
-    #[default]
     FirstSeenDesc,
     LastSeenAsc,
     LastSeenDesc,

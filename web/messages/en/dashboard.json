@@ -90,6 +90,14 @@
         "title": "No pools observed yet",
         "description": "The indexer is running but hasn't captured any pool activity yet. Pools will appear here as soon as on-chain events are picked up."
       },
+      "movedNotice": {
+        "messageDesc": "{count, plural, one {# pool has} other {# pools have}} become active since this listing was anchored ({when}) — {count, plural, one {it is} other {they are}} now at the top of the list.",
+        "messageAsc": "{count, plural, one {# pool has} other {# pools have}} become active since this listing was anchored ({when}) — {count, plural, one {it is} other {they are}} now at the end of the list.",
+        "actionDesc": "Back to the top",
+        "actionAsc": "Jump to the end",
+        "emptyTitle": "Nothing left to show on this page",
+        "emptyDescription": "Every remaining pool became active while you were reading, so all of them moved out of this listing."
+      },
       "error": {
         "title": "Unable to load pools",
         "timeout": "The upstream service took too long to respond. Try refreshing the page in a moment.",

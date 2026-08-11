@@ -25,6 +25,90 @@ pub struct PoolCursor {
     pub sort_column: PoolSortColumn,
     pub sort_value: DateTime<Utc>,
     pub pool_address: Pubkey,
+    /// Snapshot fence of the traversal this cursor belongs to — see
+    /// [`PoolPage::as_of`]. `None` on a sort over an immutable column
+    /// (nothing to fence), and on a cursor minted before this field
+    /// existed: [`PoolCatalog::find_paginated`] then mints a fresh
+    /// fence, so the traversal re-anchors from the next page on.
+    pub as_of: Option<DateTime<Utc>>,
+}
+
+/// A page of the pool listing, plus what the reader needs to know about
+/// the traversal it belongs to — the output of
+/// [`PoolCatalog::find_paginated`].
+///
+/// # Why a page carries a fence
+///
+/// Keyset pagination assumes the sort key is **immutable** for the whole
+/// traversal: each page asks for "the rows after this point". `last_seen_at`
+/// is rewritten on every event touching the pool, so a row whose value moves
+/// crosses to the other side of the cursor — skipped under a descending sort,
+/// returned twice under an ascending one.
+///
+/// `last_seen_at` only ever grows, so pinning `as_of` at the start of the
+/// traversal and reading only `last_seen_at <= as_of` makes the result set
+/// **shrink-only**: a row that is touched no longer moves within the ordering,
+/// it leaves. Inside the fence the key is effectively immutable again, which is
+/// exactly the assumption keyset needs.
+///
+/// What this buys, and what it does not: the duplicate under an ascending sort
+/// is gone, and backward navigation returns the page that was already read.
+/// Under a descending sort the touched pool is still not shown by this
+/// traversal — but it is now *defined* (it moved above `as_of`, i.e. to the head
+/// of the list, which the reader has already passed) and, above all, *countable*
+/// — that count is [`touched_since`], and surfacing it is what keeps the
+/// omission from being silent.
+///
+/// [`touched_since`]: Self::touched_since
+#[derive(Debug, Clone)]
+pub struct PoolPage {
+    pub page: Page<Pool>,
+    /// The instant this traversal is anchored to. `Some` on a sort over
+    /// `last_seen_at`; `None` on a sort over an immutable column, which needs
+    /// no fence.
+    ///
+    /// The **first page is served unfenced** — with no cursor there is no
+    /// keyset assumption to protect, and bounding it could only subtract rows
+    /// (any whose stored instant runs ahead of the reading process's clock),
+    /// on the most-visited page of the product, with `touched_since` reporting
+    /// `0` so nothing would say so. The anchor is minted there all the same
+    /// and carried by the outgoing cursors, so every page after it is fenced.
+    pub as_of: Option<DateTime<Utc>>,
+    /// How many pools **matching the same filters** became active after
+    /// `as_of` — that is, moved above this traversal's fence.
+    ///
+    /// # An upper bound on what was missed, not a count of it
+    ///
+    /// It counts every pool now above the fence, including ones the reader
+    /// has **already been shown** on an earlier page and which were touched
+    /// again since — and under a descending sort those are the likeliest of
+    /// all, since the first page holds exactly the most recently active pools.
+    ///
+    /// This is not a shortcut: it is the only thing computable. Once a pool is
+    /// touched its previous `last_seen_at` is overwritten, so nothing left in
+    /// the database can say whether it used to sit before or after the cursor.
+    /// Callers must therefore word it as what it is — "became active since
+    /// `as_of`" — and never as "pools you missed".
+    ///
+    /// `0` when there is no fence. `0` too whenever the fence was minted by
+    /// this very call (a first page, or a `position` jump): nothing can be
+    /// above an instant taken a moment ago. Note that a **backward** page
+    /// landing back on the first page still carries a cursor, so it does get a
+    /// non-zero count — `is_first` does not imply `0`.
+    ///
+    /// # What it does not cover
+    ///
+    /// The fence restores the immutability of the sort *key*, not of set
+    /// *membership*. A pool can **enter** a filtered listing mid-traversal
+    /// without being touched at all: `yog-context` resolves its properties and
+    /// writes `fee_bps` without moving `last_seen_at`, so a pool sitting above
+    /// the cursor can start matching a `fee_bps` filter it did not match
+    /// before. It is never shown, and it is not counted here either — this
+    /// count keys strictly on `last_seen_at`. Silent, and not something the
+    /// count can be widened to catch: nothing records when a row entered a
+    /// filter. Worth knowing before reading `touched_since` as "everything
+    /// this traversal cannot show you".
+    pub touched_since: i64,
 }
 
 /// Everything a paginated pool listing needs — the input of
@@ -195,10 +279,17 @@ pub trait PoolCatalog: Send + Sync {
     /// Fetch a page of pools described by `query` (see [`PoolListQuery`]
     /// for the navigation / ordering / filter contract).
     ///
-    /// The returned `Page<Pool>` carries enough information for the
-    /// caller to render Previous / Next / First / Last navigation
-    /// without follow-up queries.
-    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>>;
+    /// The returned [`PoolPage`] wraps a `Page<Pool>` carrying enough
+    /// information for the caller to render Previous / Next / First / Last
+    /// navigation without follow-up queries, plus the snapshot fence this
+    /// traversal is anchored to and how many pools have left it.
+    ///
+    /// **The fence is minted here, not by the caller.** `PoolListQuery` has no
+    /// `as_of` field: the value is carried by the cursor the query already
+    /// holds, and an implementation mints a fresh one when there is none. A
+    /// caller cannot forget it, and cannot pass one that disagrees with the
+    /// cursor.
+    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<PoolPage>;
 
     /// The **most common** base-fee tiers (basis points), each with its pool
     /// count — the fee filter's option list (`GET /api/pools/fee-tiers`). The

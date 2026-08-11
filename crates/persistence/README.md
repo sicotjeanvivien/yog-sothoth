@@ -164,6 +164,15 @@ query shape:
 - **Dynamic** (shape varies from user input) → `QueryBuilder`, covered by
   integration tests. The lone case today is `repositories/pool/query.rs`.
 
+  It builds two queries that must agree: the page, and the `touched_since`
+  count beside it. Both go through the same `push_filters`, on purpose — the
+  count means "how many pools *the reader is looking at* have left the
+  traversal", so a copy that drifted would report pools they filtered out.
+  That module also owns the **snapshot fence** (`as_of`) which makes a keyset
+  cursor legal over `last_seen_at`, a column the indexer rewrites on every
+  event; the contract is on `yog_core::domain::PoolPage`, and the fence is
+  minted in `find_paginated` rather than by callers so it cannot be omitted.
+
 A plain VIEW gives **no** performance gain — Postgres inlines it. Choose a
 VIEW for readability; the perf tool is materialization (the hourly continuous
 aggregates), which precomputes at the cost of staleness.

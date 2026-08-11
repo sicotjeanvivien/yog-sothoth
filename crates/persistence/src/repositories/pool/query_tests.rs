@@ -1,5 +1,6 @@
 use super::*;
 use crate::repositories::helper::QueryMode;
+use chrono::TimeZone;
 use yog_core::PoolSort;
 
 // The reference truth table, transcribed from the validated spec.
@@ -255,6 +256,7 @@ fn sql_for_search(search: Option<&str>) -> String {
         cursor_pool_address: None,
         search: search.map(str::to_owned),
         fee_bps: None,
+        as_of: None,
         fetch_limit: 50,
     })
     .into_sql()
@@ -328,5 +330,95 @@ fn no_search_term_adds_no_token_filter() {
     assert!(
         !sql.contains("token_metadata"),
         "absent search must not touch token_metadata: {sql}"
+    );
+}
+
+// ── Snapshot fence ────────────────────────────────────────────
+//
+// The fence is what makes a keyset cursor legal over `last_seen_at`, a
+// column rewritten on every event. These assert its *presence in the
+// SQL*; that it actually holds the traversal together is the DB-backed
+// `pool_pagination` tests' job.
+
+/// Build the listing SQL for a sort and an optional fence.
+fn sql_for_fence(sort: PoolSort, as_of: Option<DateTime<Utc>>) -> String {
+    build(PaginatedPoolsQuery {
+        mode: QueryMode::Forward,
+        sort,
+        cursor_sort_value: None,
+        cursor_pool_address: None,
+        search: None,
+        fee_bps: None,
+        as_of,
+        fetch_limit: 50,
+    })
+    .into_sql()
+}
+
+fn instant() -> DateTime<Utc> {
+    Utc.timestamp_opt(1_800_000_000, 0).unwrap()
+}
+
+/// A fenced traversal reads only rows at or below its anchor — the upper
+/// bound is what turns a mutable sort key into a shrink-only result set.
+#[test]
+fn fence_bounds_last_seen_when_set() {
+    for sort in [PoolSort::LastSeenDesc, PoolSort::LastSeenAsc] {
+        let sql = sql_for_fence(sort, Some(instant()));
+        assert!(
+            sql.contains("AND last_seen_at <= "),
+            "{sort:?} with a fence should bound last_seen_at: {sql}"
+        );
+    }
+}
+
+/// No fence, no bound. The repository omits it on an immutable sort
+/// column, and the builder must not invent one — fencing `first_seen_at`
+/// would hide freshly discovered pools for no reason.
+#[test]
+fn no_fence_leaves_the_listing_unbounded() {
+    let sql = sql_for_fence(PoolSort::FirstSeenDesc, None);
+    assert!(
+        !sql.contains("last_seen_at <= "),
+        "an unfenced sort must not bound last_seen_at: {sql}"
+    );
+}
+
+/// The count is the mirror of the listing bound: same filters, opposite
+/// side of the same instant.
+#[test]
+fn touched_since_count_reads_above_the_fence() {
+    let sql = build_touched_since_count(TouchedSinceQuery {
+        as_of: instant(),
+        search: None,
+        fee_bps: None,
+    })
+    .into_sql();
+
+    assert!(
+        sql.contains("COUNT(*)") && sql.contains("last_seen_at > "),
+        "the count should read strictly above the fence: {sql}"
+    );
+}
+
+/// The count answers "how many of the pools *you are looking at* have
+/// left", so it must carry the listing's filters. A bare `COUNT(*)` over
+/// the whole table would report pools the reader filtered out.
+#[test]
+fn touched_since_count_applies_the_same_filters() {
+    let sql = build_touched_since_count(TouchedSinceQuery {
+        as_of: instant(),
+        search: Some("SOL".to_owned()),
+        fee_bps: Some(BigDecimal::from(25)),
+    })
+    .into_sql();
+
+    assert!(
+        sql.contains("tm.mint IN (pools.token_a_mint, pools.token_b_mint)"),
+        "the count should apply the search filter: {sql}"
+    );
+    assert!(
+        sql.contains("AND fee_bps = "),
+        "the count should apply the fee filter: {sql}"
     );
 }

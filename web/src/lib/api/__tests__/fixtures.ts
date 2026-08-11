@@ -92,6 +92,8 @@ export function validPoolsPage(
     prevCursor: string | null;
     isFirst: boolean;
     isLast: boolean;
+    asOf: string | null;
+    touchedSince: number;
   }> = {},
 ) {
   return {
@@ -100,6 +102,10 @@ export function validPoolsPage(
     prevCursor: null,
     isFirst: true,
     isLast: false,
+    // Defaults match a first page on the default `last_seen_desc` sort: the
+    // traversal is anchored, and nothing can have moved above the anchor yet.
+    asOf: "2026-08-11T09:00:00+00:00",
+    touchedSince: 0,
     ...overrides,
   };
 }
