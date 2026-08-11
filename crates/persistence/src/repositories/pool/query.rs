@@ -33,7 +33,21 @@ pub(super) struct PaginatedPoolsQuery {
     /// `NUMERIC`-compatible `BigDecimal` by the repository. `None` leaves the
     /// fee dimension unfiltered.
     pub(super) fee_bps: Option<BigDecimal>,
+    /// Snapshot fence of the traversal, minted by the repository. When set,
+    /// the listing reads only `last_seen_at <= as_of`, which keeps a mutable
+    /// sort key from moving rows across the cursor mid-traversal — see
+    /// `yog_core::domain::PoolPage`. `None` on a sort over an immutable
+    /// column, which needs no fence.
+    pub(super) as_of: Option<DateTime<Utc>>,
     pub(super) fetch_limit: i64,
+}
+
+/// Input of [`build_touched_since_count`]: the rows that left the traversal
+/// by moving above its fence.
+pub(super) struct TouchedSinceQuery {
+    pub(super) as_of: DateTime<Utc>,
+    pub(super) search: Option<String>,
+    pub(super) fee_bps: Option<BigDecimal>,
 }
 
 /// The physical column name for a sort column. Returned as a static
@@ -147,6 +161,82 @@ fn push_side_match(qb: &mut QueryBuilder<'static, Postgres>, mint_col: &str, ter
     qb.push(" || '%')))");
 }
 
+/// Push the row filters — free-text search and fee tier — shared by the
+/// listing and by the `touched_since` count.
+///
+/// Shared on purpose, and not by copy: the count answers "how many pools the
+/// reader is looking at have left the traversal", so it must see **exactly**
+/// the population the listing sees. A count that ignored these filters would
+/// report pools the reader filtered out.
+fn push_filters(
+    qb: &mut QueryBuilder<'static, Postgres>,
+    search: Option<String>,
+    fee_bps: Option<BigDecimal>,
+) {
+    // ── Search filter ────────────────────────────────────────────
+    // A term containing `/` ("SOL/USDC") is a *pair* filter: the pool
+    // must hold one token matching each side, on the two distinct
+    // sides. Otherwise the term is a single free-text match on the
+    // address or either token's symbol/name. Parsing the `/` here (not
+    // upstream) keeps every search-semantics decision in one place —
+    // this module already owns the address-vs-symbol interpretation.
+    match search.as_deref().map(parse_search) {
+        Some(ParsedSearch::Pair(left, right)) => {
+            // (a matches X AND b matches Y) OR (a matches Y AND b matches X).
+            // Reading each side off a distinct mint column enforces that
+            // the two matched tokens are different by construction.
+            qb.push(" AND ((");
+            push_side_match(qb, "token_a_mint", &left);
+            qb.push(" AND ");
+            push_side_match(qb, "token_b_mint", &right);
+            qb.push(") OR (");
+            push_side_match(qb, "token_a_mint", &right);
+            qb.push(" AND ");
+            push_side_match(qb, "token_b_mint", &left);
+            qb.push("))");
+        }
+        Some(ParsedSearch::Single(term)) => {
+            qb.push(" AND (pool_address = ");
+            qb.push_bind(term.clone());
+            qb.push(
+                " OR EXISTS (SELECT 1 FROM token_metadata tm \
+                 WHERE tm.mint IN (pools.token_a_mint, pools.token_b_mint) \
+                 AND (tm.symbol ILIKE ",
+            );
+            // Wrap the term in % wildcards via SQL concat to keep it bound.
+            qb.push("('%' || ");
+            qb.push_bind(term.clone());
+            qb.push(" || '%') OR tm.name ILIKE ('%' || ");
+            qb.push_bind(term);
+            qb.push(" || '%'))))");
+        }
+        None => {}
+    }
+
+    // ── Fee-tier filter ──────────────────────────────────────────
+    // Exact match on the base fee. The value is a closed set (a tier
+    // returned by `list_fee_tiers`), but it is still user-supplied, so
+    // it goes through `push_bind` like every other value.
+    if let Some(fee) = fee_bps {
+        qb.push(" AND fee_bps = ");
+        qb.push_bind(fee);
+    }
+}
+
+/// Count the pools that left the traversal by being touched after its fence.
+///
+/// The mirror image of the listing's `last_seen_at <= as_of`: same filters,
+/// opposite side of the same instant. Under a descending sort these are the
+/// rows that moved to the head of the list, past a reader who has already been
+/// there — counting them is what keeps their absence from being silent.
+pub(super) fn build_touched_since_count(q: TouchedSinceQuery) -> QueryBuilder<'static, Postgres> {
+    let mut qb: QueryBuilder<Postgres> =
+        QueryBuilder::new("SELECT COUNT(*) FROM pools WHERE last_seen_at > ");
+    qb.push_bind(q.as_of);
+    push_filters(&mut qb, q.search, q.fee_bps);
+    qb
+}
+
 /// Build the full paginated query.
 pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
     let sort_col = column_sql(q.sort.column());
@@ -177,54 +267,18 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
         qb.push("))");
     }
 
-    // ── Search filter ────────────────────────────────────────────
-    // A term containing `/` ("SOL/USDC") is a *pair* filter: the pool
-    // must hold one token matching each side, on the two distinct
-    // sides. Otherwise the term is a single free-text match on the
-    // address or either token's symbol/name. Parsing the `/` here (not
-    // upstream) keeps every search-semantics decision in one place —
-    // this module already owns the address-vs-symbol interpretation.
-    match q.search.as_deref().map(parse_search) {
-        Some(ParsedSearch::Pair(left, right)) => {
-            // (a matches X AND b matches Y) OR (a matches Y AND b matches X).
-            // Reading each side off a distinct mint column enforces that
-            // the two matched tokens are different by construction.
-            qb.push(" AND ((");
-            push_side_match(&mut qb, "token_a_mint", &left);
-            qb.push(" AND ");
-            push_side_match(&mut qb, "token_b_mint", &right);
-            qb.push(") OR (");
-            push_side_match(&mut qb, "token_a_mint", &right);
-            qb.push(" AND ");
-            push_side_match(&mut qb, "token_b_mint", &left);
-            qb.push("))");
-        }
-        Some(ParsedSearch::Single(term)) => {
-            qb.push(" AND (pool_address = ");
-            qb.push_bind(term.clone());
-            qb.push(
-                " OR EXISTS (SELECT 1 FROM token_metadata tm \
-                 WHERE tm.mint IN (pools.token_a_mint, pools.token_b_mint) \
-                 AND (tm.symbol ILIKE ",
-            );
-            // Wrap the term in % wildcards via SQL concat to keep it bound.
-            qb.push("('%' || ");
-            qb.push_bind(term.clone());
-            qb.push(" || '%') OR tm.name ILIKE ('%' || ");
-            qb.push_bind(term);
-            qb.push(" || '%'))))");
-        }
-        None => {}
+    // ── Snapshot fence ───────────────────────────────────────────
+    // Pins the traversal to the instant it started. `last_seen_at` only
+    // grows, so this upper bound makes the result set shrink-only: a pool
+    // touched mid-traversal cannot move across the cursor, it leaves. Only
+    // ever set for a sort over `last_seen_at` — an immutable sort column
+    // needs no fence, and fencing it would hide rows for nothing.
+    if let Some(as_of) = q.as_of {
+        qb.push(" AND last_seen_at <= ");
+        qb.push_bind(as_of);
     }
 
-    // ── Fee-tier filter ──────────────────────────────────────────
-    // Exact match on the base fee. The value is a closed set (a tier
-    // returned by `list_fee_tiers`), but it is still user-supplied, so
-    // it goes through `push_bind` like every other value.
-    if let Some(fee) = q.fee_bps {
-        qb.push(" AND fee_bps = ");
-        qb.push_bind(fee);
-    }
+    push_filters(&mut qb, q.search, q.fee_bps);
 
     // ── Order + limit ────────────────────────────────────────────
     qb.push(" ORDER BY ");

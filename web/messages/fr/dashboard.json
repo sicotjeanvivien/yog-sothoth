@@ -90,6 +90,14 @@
         "title": "Aucune pool observée pour le moment",
         "description": "L'indexeur tourne mais n'a encore capté aucune activité de pool. Les pools apparaîtront ici dès que des événements on-chain seront détectés."
       },
+      "movedNotice": {
+        "messageDesc": "{count, plural, one {# pool est redevenu actif} other {# pools sont redevenus actifs}} depuis l'ancrage de cette liste ({when}) — {count, plural, one {il est} other {ils sont}} maintenant en tête de liste.",
+        "messageAsc": "{count, plural, one {# pool est redevenu actif} other {# pools sont redevenus actifs}} depuis l'ancrage de cette liste ({when}) — {count, plural, one {il est} other {ils sont}} maintenant en fin de liste.",
+        "actionDesc": "Revenir en tête",
+        "actionAsc": "Aller en fin de liste",
+        "emptyTitle": "Plus rien à afficher sur cette page",
+        "emptyDescription": "Tous les pools restants sont redevenus actifs pendant votre lecture : ils sont tous sortis de cette liste."
+      },
       "error": {
         "title": "Impossible de charger les pools",
         "timeout": "Le service en amont a mis trop de temps à répondre. Essayez de rafraîchir la page dans un instant.",

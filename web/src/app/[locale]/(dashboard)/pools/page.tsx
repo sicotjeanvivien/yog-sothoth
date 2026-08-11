@@ -28,6 +28,8 @@ import { PoolsHeader } from "@/components/dashboard/pools/pools-header";
 import { PoolsTable } from "@/components/dashboard/pools/pools-table";
 import { PoolsEmpty } from "@/components/dashboard/pools/pools-empty";
 import { PoolsError } from "@/components/dashboard/pools/pools-error";
+import { PoolsMovedNotice } from "@/components/dashboard/pools/pools-moved-notice";
+import { PoolsEmptied } from "@/components/dashboard/pools/pools-emptied";
 import { Pagination } from "@/components/shared/pagination";
 
 import { fetchPools } from "@/lib/api/server/pools";
@@ -176,12 +178,44 @@ export default async function PoolsPage({
   // "no match" state rather than the cold "nothing indexed yet" one.
   const hasActiveRefinement = search !== undefined || feeBps !== undefined;
 
+  // An anchored listing can come back empty *mid-traversal*: every pool that
+  // was left became active while the reader was reading, and so moved out of
+  // this listing. That is not "no pools indexed" and not "no match" — both of
+  // those would tell the reader something false and, worse, leave them at a
+  // dead end, since an empty page carries no cursor either way. The notice is
+  // the only thing on screen that both explains it and offers the way out.
+  const emptied =
+    outcome.kind === "ok" &&
+    outcome.data.items.length === 0 &&
+    outcome.data.touchedSince > 0 &&
+    outcome.data.asOf !== null;
+
+  // The notice needs a non-null anchor; it is non-null exactly when the sort
+  // is over `last_seen_at`, which is also the only case producing a count.
+  const movedNotice =
+    outcome.kind === "ok" &&
+    outcome.data.touchedSince > 0 &&
+    outcome.data.asOf !== null ? (
+      <PoolsMovedNotice
+        count={outcome.data.touchedSince}
+        asOf={outcome.data.asOf}
+        sort={effectiveSort}
+        locale={locale}
+        searchParams={sp}
+      />
+    ) : null;
+
   return (
     <div className="pb-16">
       <PoolsHeader />
 
       {outcome.kind === "error" ? (
         <PoolsError kind={outcome.reason} />
+      ) : emptied ? (
+        <>
+          {movedNotice}
+          <PoolsEmptied />
+        </>
       ) : outcome.data.items.length === 0 ? (
         hasActiveRefinement ? (
           <PoolsNoResults query={search} />
@@ -190,6 +224,10 @@ export default async function PoolsPage({
         )
       ) : (
         <>
+          {/* Pools that became active after this listing was anchored: they
+              have moved to the end of the ordering, past the reader. See
+              <PoolsMovedNotice />. */}
+          {movedNotice}
           <PoolsTable
             pools={outcome.data.items}
             locale={locale}

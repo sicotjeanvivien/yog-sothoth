@@ -28,9 +28,9 @@ use yog_core::{
         MeteoraDammV2LiquidityEventFeed, MeteoraDammV2LiquidityEventValued, MeteoraDammV2SwapEvent,
         MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed, NetworkStatus,
         NetworkStatusLookup, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCounts,
-        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, PoolListQuery, Protocol, Severity,
-        Signal, SignalCursor, SignalFeed, SignalRecord, TokenMetadata, TokenMetadataLookup,
-        TokenPrice, TokenPriceLookup,
+        PoolCurrentState, PoolCurrentStateLookup, PoolCursor, PoolListQuery, PoolPage, Protocol,
+        Severity, Signal, SignalCursor, SignalFeed, SignalRecord, TokenMetadata,
+        TokenMetadataLookup, TokenPrice, TokenPriceLookup,
     },
 };
 
@@ -83,7 +83,11 @@ pub(crate) fn make_price(mint: Pubkey) -> TokenPrice {
     }
 }
 
-pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> Page<Pool> {
+/// A `PoolPage` over `pools`. Sorted on `FirstSeen`, the immutable column, so
+/// the traversal needs no snapshot fence — hence `as_of: None` and
+/// `touched_since: 0`. The fence's own behaviour is covered where it lives, by
+/// the DB-backed tests of `yog-persistence`.
+pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> PoolPage {
     let prev = if is_first {
         None
     } else {
@@ -92,6 +96,7 @@ pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> Page
                 sort_column: yog_core::PoolSortColumn::FirstSeen,
                 sort_value: ts(1_700_000_000),
                 pool_address: p.pool_address,
+                as_of: None,
             })
         })
     };
@@ -103,15 +108,20 @@ pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> Page
                 sort_column: yog_core::PoolSortColumn::FirstSeen,
                 sort_value: ts(1_700_000_000),
                 pool_address: p.pool_address,
+                as_of: None,
             })
         })
     };
-    Page {
-        items: pools,
-        next_cursor: next,
-        prev_cursor: prev,
-        is_first,
-        is_last,
+    PoolPage {
+        page: Page {
+            items: pools,
+            next_cursor: next,
+            prev_cursor: prev,
+            is_first,
+            is_last,
+        },
+        as_of: None,
+        touched_since: 0,
     }
 }
 
@@ -125,13 +135,13 @@ fn take<T>(slot: &Mutex<Option<RepositoryResult<T>>>) -> RepositoryResult<T> {
 // ── Mock: PoolCatalog ────────────────────────────────────────────
 
 pub(crate) struct PoolRepoOnce {
-    paginated: Mutex<Option<RepositoryResult<Page<Pool>>>>,
+    paginated: Mutex<Option<RepositoryResult<PoolPage>>>,
     by_address: Mutex<Option<RepositoryResult<Option<Pool>>>>,
     by_addresses: Mutex<Option<RepositoryResult<Vec<Pool>>>>,
 }
 
 impl PoolRepoOnce {
-    pub(crate) fn with_page(page: Page<Pool>) -> Self {
+    pub(crate) fn with_page(page: PoolPage) -> Self {
         Self {
             paginated: Mutex::new(Some(Ok(page))),
             by_address: Mutex::new(Some(Ok(None))),
@@ -174,7 +184,7 @@ impl PoolCatalog for PoolRepoOnce {
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         take(&self.by_addresses)
     }
-    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<PoolPage> {
         take(&self.paginated)
     }
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
@@ -242,7 +252,7 @@ impl PoolCatalog for PoolCountsRepo {
     async fn find_by_addresses(&self, _addrs: &[Pubkey]) -> RepositoryResult<Vec<Pool>> {
         unreachable!("find_by_addresses not used by StatsService")
     }
-    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, _query: PoolListQuery) -> RepositoryResult<PoolPage> {
         unreachable!("find_paginated not used by StatsService")
     }
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {

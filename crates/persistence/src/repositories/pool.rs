@@ -3,16 +3,18 @@ mod rows;
 
 use crate::repositories::helper::{PageBuilder, map_sqlx_error, resolve_query_mode};
 use async_trait::async_trait;
-use query::{PaginatedPoolsQuery, build};
+use chrono::{DateTime, Utc};
+use query::{PaginatedPoolsQuery, TouchedSinceQuery, build, build_touched_since_count};
 use rows::PoolRow;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
+use sqlx::types::BigDecimal;
 use std::str::FromStr;
 use yog_core::{
-    Cursor, Page, PoolSortColumn, RepositoryError, RepositoryResult,
+    Cursor, PoolSortColumn, RepositoryError, RepositoryResult,
     domain::{
-        FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolRegistryProperties,
-        PoolRepository,
+        FeeTier, Pool, PoolCatalog, PoolCounts, PoolCursor, PoolListQuery, PoolPage,
+        PoolRegistryProperties, PoolRepository,
     },
 };
 
@@ -23,6 +25,36 @@ pub struct PgPoolRepository {
 impl PgPoolRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// How many pools matching the same filters were touched after the
+    /// traversal's fence — see `PoolPage::touched_since`.
+    ///
+    /// Skipped, and reported as `0`, in the two cases where it is knowably
+    /// nothing: an unfenced sort, and the first page of a traversal (the fence
+    /// was minted an instant ago, so nothing can be above it — running the
+    /// query there would be a round-trip to be told zero).
+    async fn touched_since(
+        &self,
+        as_of: Option<DateTime<Utc>>,
+        had_cursor: bool,
+        search: Option<String>,
+        fee_bps: Option<BigDecimal>,
+    ) -> RepositoryResult<i64> {
+        let Some(as_of) = as_of.filter(|_| had_cursor) else {
+            return Ok(0);
+        };
+
+        let mut qb = build_touched_since_count(TouchedSinceQuery {
+            as_of,
+            search,
+            fee_bps,
+        });
+
+        qb.build_query_scalar::<i64>()
+            .fetch_one(&self.pool)
+            .await
+            .map_err(map_sqlx_error)
     }
 }
 
@@ -181,7 +213,7 @@ impl PoolCatalog for PgPoolRepository {
         rows.into_iter().map(Pool::try_from).collect()
     }
 
-    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<Page<Pool>> {
+    async fn find_paginated(&self, query: PoolListQuery) -> RepositoryResult<PoolPage> {
         let PoolListQuery {
             cursor,
             direction,
@@ -199,6 +231,34 @@ impl PoolCatalog for PgPoolRepository {
 
         let active_cursor = if position.is_some() { None } else { cursor };
         let had_cursor = active_cursor.is_some();
+        let sort_column = sort.column();
+
+        // The snapshot fence is minted HERE, not by the caller: this is the
+        // only place that builds this SQL, so the invariant cannot be
+        // forgotten by a future caller. It is carried forward by the cursor,
+        // and re-minted whenever there is none — first page, `position` jump,
+        // or a cursor issued before this field existed (which then re-anchors
+        // the traversal from the next page on).
+        //
+        // Taken from the application clock, while `touch_last_seen` writes
+        // Postgres' `NOW()`. Same host today, so the two agree; were they to
+        // drift, a pool whose stored timestamp runs ahead of this clock would
+        // sit above its own listing's anchor and stay out of the first page
+        // until the clocks meet again. Reading `NOW()` from the database would
+        // close that at the cost of a round-trip on every listing — not worth
+        // paying for a skew that does not exist in this deployment, but the
+        // trade is here rather than left to be re-derived.
+        let as_of: Option<DateTime<Utc>> = match sort_column {
+            PoolSortColumn::LastSeen => Some(
+                active_cursor
+                    .as_ref()
+                    .and_then(|c| c.as_of)
+                    .unwrap_or_else(Utc::now),
+            ),
+            // Immutable sort column: nothing can move across the cursor.
+            PoolSortColumn::FirstSeen => None,
+        };
+
         let (cursor_sort_value, cursor_pool_address) = match active_cursor {
             Some(c) => (Some(c.sort_value), Some(c.pool_address.to_string())),
             None => (None, None),
@@ -208,15 +268,17 @@ impl PoolCatalog for PgPoolRepository {
         // lossless string round-trip as the write path.
         let fee_bps = fee_bps.map(fee_bps_to_numeric).transpose()?;
 
-        // Build the dynamic query (ORDER BY + keyset + search + fee) and
-        // run it. Mapping goes through PoolRow (FromRow) then Pool::try_from.
+        // Build the dynamic query (ORDER BY + keyset + fence + search + fee)
+        // and run it. Mapping goes through PoolRow (FromRow) then
+        // Pool::try_from.
         let mut qb = build(PaginatedPoolsQuery {
             mode,
             sort,
             cursor_sort_value,
             cursor_pool_address,
-            search,
-            fee_bps,
+            search: search.clone(),
+            fee_bps: fee_bps.clone(),
+            as_of,
             fetch_limit,
         });
 
@@ -231,22 +293,29 @@ impl PoolCatalog for PgPoolRepository {
             .map(Pool::try_from)
             .collect::<Result<_, _>>()?;
 
-        let sort_column = sort.column();
+        let touched_since = self
+            .touched_since(as_of, had_cursor, search, fee_bps)
+            .await?;
 
-        Ok(
-            PageBuilder::new(pools, effective_limit, mode, had_cursor).finalize(|p| {
-                let sort_value = match sort_column {
-                    PoolSortColumn::FirstSeen => p.first_seen_at,
-                    PoolSortColumn::LastSeen => p.last_seen_at,
-                };
+        let page = PageBuilder::new(pools, effective_limit, mode, had_cursor).finalize(|p| {
+            let sort_value = match sort_column {
+                PoolSortColumn::FirstSeen => p.first_seen_at,
+                PoolSortColumn::LastSeen => p.last_seen_at,
+            };
 
-                Cursor::Pool(PoolCursor {
-                    sort_column,
-                    sort_value,
-                    pool_address: p.pool_address,
-                })
-            }),
-        )
+            Cursor::Pool(PoolCursor {
+                sort_column,
+                sort_value,
+                pool_address: p.pool_address,
+                as_of,
+            })
+        });
+
+        Ok(PoolPage {
+            page,
+            as_of,
+            touched_since,
+        })
     }
 
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {

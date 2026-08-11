@@ -108,7 +108,7 @@ async fn first_seen_asc_orders_oldest_first(pool: PgPool) {
         .await
         .unwrap();
 
-    assert_eq!(addrs(&page.items), vec![pk(1), pk(2), pk(3)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(1), pk(2), pk(3)]);
 }
 
 #[sqlx::test]
@@ -121,7 +121,7 @@ async fn first_seen_desc_orders_newest_first(pool: PgPool) {
         .await
         .unwrap();
 
-    assert_eq!(addrs(&page.items), vec![pk(3), pk(2), pk(1)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(3), pk(2), pk(1)]);
 }
 
 #[sqlx::test]
@@ -135,7 +135,7 @@ async fn last_seen_asc_orders_by_last_seen(pool: PgPool) {
         .unwrap();
 
     // last_seen ASC → B(100), C(200), A(300)
-    assert_eq!(addrs(&page.items), vec![pk(2), pk(3), pk(1)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(2), pk(3), pk(1)]);
 }
 
 #[sqlx::test]
@@ -149,7 +149,7 @@ async fn last_seen_desc_orders_by_last_seen(pool: PgPool) {
         .unwrap();
 
     // last_seen DESC → A(300), C(200), B(100)
-    assert_eq!(addrs(&page.items), vec![pk(1), pk(3), pk(2)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(1), pk(3), pk(2)]);
 }
 
 // ── Pagination: walk forward page by page ───────────────────────────
@@ -162,13 +162,13 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
 
     // Page 1: limit 2 → [C, B], has next.
     let p1 = repo.find_paginated(base_query(sort, 2)).await.unwrap();
-    assert_eq!(addrs(&p1.items), vec![pk(3), pk(2)]);
-    assert!(p1.is_first);
-    assert!(!p1.is_last);
-    assert!(p1.next_cursor.is_some());
+    assert_eq!(addrs(&p1.page.items), vec![pk(3), pk(2)]);
+    assert!(p1.page.is_first);
+    assert!(!p1.page.is_last);
+    assert!(p1.page.next_cursor.is_some());
 
     // Page 2: from next_cursor → [A], last page.
-    let cursor = extract_pool_cursor(p1.next_cursor.as_ref().unwrap());
+    let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
     let p2 = repo
         .find_paginated(PoolListQuery {
             cursor: Some(cursor),
@@ -176,10 +176,10 @@ async fn forward_pagination_covers_all_rows_without_overlap(pool: PgPool) {
         })
         .await
         .unwrap();
-    assert_eq!(addrs(&p2.items), vec![pk(1)]);
-    assert!(!p2.is_first);
-    assert!(p2.is_last);
-    assert!(p2.next_cursor.is_none());
+    assert_eq!(addrs(&p2.page.items), vec![pk(1)]);
+    assert!(!p2.page.is_first);
+    assert!(p2.page.is_last);
+    assert!(p2.page.next_cursor.is_none());
 }
 
 // ── Round-trip: Next then Prev returns to the same page ─────────────
@@ -192,7 +192,7 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
 
     // Page 1 [C, B], go Next to page 2.
     let p1 = repo.find_paginated(base_query(sort, 2)).await.unwrap();
-    let next = extract_pool_cursor(p1.next_cursor.as_ref().unwrap());
+    let next = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
 
     let p2 = repo
         .find_paginated(PoolListQuery {
@@ -201,10 +201,10 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
         })
         .await
         .unwrap();
-    assert_eq!(addrs(&p2.items), vec![pk(1)]);
+    assert_eq!(addrs(&p2.page.items), vec![pk(1)]);
 
     // From page 2, go Prev — must return to [C, B] in display order.
-    let prev = extract_pool_cursor(p2.prev_cursor.as_ref().unwrap());
+    let prev = extract_pool_cursor(p2.page.prev_cursor.as_ref().unwrap());
     let back = repo
         .find_paginated(PoolListQuery {
             cursor: Some(prev),
@@ -213,7 +213,7 @@ async fn next_then_prev_returns_to_first_page(pool: PgPool) {
         })
         .await
         .unwrap();
-    assert_eq!(addrs(&back.items), vec![pk(3), pk(2)]);
+    assert_eq!(addrs(&back.page.items), vec![pk(3), pk(2)]);
 }
 
 // ── Position jumps: First / Last ────────────────────────────────────
@@ -235,9 +235,9 @@ async fn position_last_jumps_to_end(pool: PgPool) {
 
     // The very last item in C,B,A order is A; a 2-wide last page is
     // [B, A] in display order.
-    assert_eq!(addrs(&page.items), vec![pk(2), pk(1)]);
-    assert!(page.is_last);
-    assert!(!page.is_first);
+    assert_eq!(addrs(&page.page.items), vec![pk(2), pk(1)]);
+    assert!(page.page.is_last);
+    assert!(!page.page.is_first);
 }
 
 #[sqlx::test]
@@ -255,8 +255,11 @@ async fn position_first_matches_unanchored_first_page(pool: PgPool) {
         .unwrap();
     let implicit_first = repo.find_paginated(base_query(sort, 2)).await.unwrap();
 
-    assert_eq!(addrs(&explicit_first.items), addrs(&implicit_first.items));
-    assert!(explicit_first.is_first);
+    assert_eq!(
+        addrs(&explicit_first.page.items),
+        addrs(&implicit_first.page.items)
+    );
+    assert!(explicit_first.page.is_first);
 }
 
 // ── Empty table ─────────────────────────────────────────────────────
@@ -270,11 +273,11 @@ async fn empty_table_yields_empty_page_at_both_boundaries(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(page.items.is_empty());
-    assert!(page.is_first);
-    assert!(page.is_last);
-    assert!(page.next_cursor.is_none());
-    assert!(page.prev_cursor.is_none());
+    assert!(page.page.items.is_empty());
+    assert!(page.page.is_first);
+    assert!(page.page.is_last);
+    assert!(page.page.next_cursor.is_none());
+    assert!(page.page.prev_cursor.is_none());
 }
 
 // ── Fee-tier filter + option list ───────────────────────────────────
@@ -308,7 +311,7 @@ async fn fee_bps_filter_returns_only_matching_tier(pool: PgPool) {
         .unwrap();
 
     // Only the 25 bps pools, in first_seen ASC order: A, B (C excluded).
-    assert_eq!(addrs(&page.items), vec![pk(1), pk(2)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(1), pk(2)]);
 }
 
 #[sqlx::test]
@@ -326,7 +329,7 @@ async fn fee_bps_filter_no_match_yields_empty_page(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(page.items.is_empty());
+    assert!(page.page.items.is_empty());
 }
 
 #[sqlx::test]
@@ -394,4 +397,275 @@ fn extract_pool_cursor(cursor: &yog_core::Cursor) -> PoolCursor {
         yog_core::Cursor::Pool(c) => c.clone(),
         other => panic!("expected a Pool cursor, got {other:?}"),
     }
+}
+
+// ── Snapshot fence: paginating over a column that moves ─────────────
+//
+// `last_seen_at` is rewritten on every event touching the pool, and a
+// keyset cursor assumes its sort key holds still. The fence pins the
+// traversal to the instant it started so a touched row leaves the result
+// set instead of moving across the cursor — see
+// `yog_core::domain::PoolPage`.
+//
+// Every test below mutates a pool *between two pages*, which is the
+// situation the production bug needed and no earlier test created.
+//
+// ⚠️ Asserting "the touched pool is absent" would NOT catch the bug:
+// absent is exactly what the broken code produced. What separates the two
+// is that the pool never reappears at a *different rank*, that the
+// duplicate is gone, and that the departure is counted.
+
+/// Push a pool's `last_seen_at` above any fence a running test can mint.
+/// An explicit hour ahead, not `NOW()`: the assertion must not depend on
+/// how many microseconds elapsed since the fence was taken.
+async fn touch_pool(pool: &PgPool, addr: Pubkey) {
+    sqlx::query("UPDATE pools SET last_seen_at = $2 WHERE pool_address = $1")
+        .bind(addr.to_string())
+        .bind(Utc::now() + chrono::Duration::hours(1))
+        .execute(pool)
+        .await
+        .expect("touch failed");
+}
+
+/// Ascending traversal, the duplicate case: a pool already shown moves to
+/// the tail and is served a second time. Under the fence it leaves instead.
+#[sqlx::test]
+async fn last_seen_asc_does_not_serve_a_touched_pool_twice(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::LastSeenAsc; // B(100), C(200), A(300)
+
+    // Page 1 → [B].
+    let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
+    assert_eq!(addrs(&p1.page.items), vec![pk(2)]);
+
+    // B is touched: its last_seen jumps past every remaining row, which
+    // without a fence would place it after the cursor — again.
+    touch_pool(&pool, pk(2)).await;
+
+    let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    let p2 = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(cursor),
+            ..base_query(sort, 50)
+        })
+        .await
+        .unwrap();
+
+    let seen: Vec<Pubkey> = addrs(&p1.page.items)
+        .into_iter()
+        .chain(addrs(&p2.page.items))
+        .collect();
+    let mut unique = seen.clone();
+    unique.sort();
+    unique.dedup();
+    assert_eq!(
+        seen.len(),
+        unique.len(),
+        "a pool was served twice across the traversal: {seen:?}"
+    );
+}
+
+/// Descending traversal, backward navigation: a pool touched mid-traversal
+/// has moved to the head of the live list. It must not come back into a
+/// page of *this* traversal, where it would appear at a rank the reader
+/// never saw it in.
+#[sqlx::test]
+async fn last_seen_desc_backward_page_excludes_a_touched_pool(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::LastSeenDesc; // A(300), C(200), B(100)
+
+    // Page 1 → [A, C], then page 2 → [B].
+    let p1 = repo.find_paginated(base_query(sort, 2)).await.unwrap();
+    assert_eq!(addrs(&p1.page.items), vec![pk(1), pk(3)]);
+    let next = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    let p2 = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(next),
+            ..base_query(sort, 2)
+        })
+        .await
+        .unwrap();
+    assert_eq!(addrs(&p2.page.items), vec![pk(2)]);
+
+    // C, already read on page 1, becomes the most recently active pool.
+    touch_pool(&pool, pk(3)).await;
+
+    let prev = extract_pool_cursor(p2.page.prev_cursor.as_ref().unwrap());
+    let back = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(prev),
+            direction: PageDirection::Prev,
+            ..base_query(sort, 2)
+        })
+        .await
+        .unwrap();
+
+    assert!(
+        !addrs(&back.page.items).contains(&pk(3)),
+        "a pool touched mid-traversal re-entered it: {:?}",
+        addrs(&back.page.items)
+    );
+}
+
+/// The departures are counted. This is what keeps a descending listing
+/// honest: it cannot show the pools that moved above its fence, so it says
+/// how many did.
+#[sqlx::test]
+async fn touched_since_counts_the_pools_that_left(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::LastSeenDesc;
+
+    let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
+    assert!(p1.as_of.is_some(), "a last_seen traversal must be anchored");
+    assert_eq!(
+        p1.touched_since, 0,
+        "the fence was just minted; nothing can be above it"
+    );
+
+    touch_pool(&pool, pk(2)).await;
+    touch_pool(&pool, pk(3)).await;
+
+    let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    let p2 = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(cursor),
+            ..base_query(sort, 50)
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        p2.as_of, p1.as_of,
+        "the fence must be carried, not re-minted"
+    );
+    assert_eq!(p2.touched_since, 2);
+
+    // Both remaining pools left, so the page is legitimately EMPTY — with no
+    // cursor either side, since there is no row to build one from. That is
+    // correct here and a dead end for whoever renders it: the count is the
+    // only thing left on the page that can explain it and offer a way out.
+    // Asserting the shape is what makes that obligation visible from the
+    // repository, rather than something a UI discovers in production.
+    assert!(
+        p2.page.items.is_empty(),
+        "expected every remaining pool to have left: {:?}",
+        addrs(&p2.page.items)
+    );
+    assert!(p2.page.next_cursor.is_none() && p2.page.prev_cursor.is_none());
+}
+
+/// The complement of the test above, and the reason both exist: an empty page
+/// is the *right* answer only when everything left. A traversal with rows
+/// remaining must still serve them.
+///
+/// This one does not guard the fence's presence (dropping the fence leaves it
+/// green — the moved pool is out of the keyset window either way); it guards
+/// the fence's **direction and extent**. Inverting the comparison, which is
+/// the realistic typo, reddens it.
+#[sqlx::test]
+async fn fence_removes_only_the_pools_that_moved(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::LastSeenDesc; // A(300), C(200), B(100)
+
+    let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
+    assert_eq!(addrs(&p1.page.items), vec![pk(1)]);
+
+    // Only C moves. B is untouched and must still be served.
+    touch_pool(&pool, pk(3)).await;
+
+    let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    let p2 = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(cursor),
+            ..base_query(sort, 50)
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        addrs(&p2.page.items),
+        vec![pk(2)],
+        "the fence must drop the moved pool and nothing else"
+    );
+    assert_eq!(p2.touched_since, 1);
+}
+
+/// The count is scoped to the same population as the page. A pool the
+/// reader filtered out is not a pool that left *their* listing.
+#[sqlx::test]
+async fn touched_since_ignores_pools_outside_the_active_filter(pool: PgPool) {
+    seed_three(&pool).await;
+    set_fee(&pool, pk(1), dec(25)).await;
+    set_fee(&pool, pk(2), dec(25)).await;
+    set_fee(&pool, pk(3), dec(100)).await; // outside the filter below
+    let repo = PgPoolRepository::new(pool.clone());
+
+    let query = || PoolListQuery {
+        fee_bps: Some(dec(25)),
+        ..base_query(PoolSort::LastSeenDesc, 1)
+    };
+
+    let p1 = repo.find_paginated(query()).await.unwrap();
+    assert_eq!(addrs(&p1.page.items), vec![pk(1)]);
+
+    // One pool inside the filter, one outside. Only the first has left
+    // anything the reader can see.
+    touch_pool(&pool, pk(2)).await;
+    touch_pool(&pool, pk(3)).await;
+
+    let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    let p2 = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(cursor),
+            ..query()
+        })
+        .await
+        .unwrap();
+
+    // B (25 bps) left the filtered listing; C (100 bps) was never in it.
+    assert!(
+        p2.page.items.is_empty(),
+        "expected the filtered remainder to be empty: {:?}",
+        addrs(&p2.page.items)
+    );
+    assert_eq!(
+        p2.touched_since, 1,
+        "the count must apply the page's own filters"
+    );
+}
+
+/// The immutable sort column gets no fence — and must not: fencing it
+/// would hide pools for a mutation that cannot affect their order.
+#[sqlx::test]
+async fn first_seen_traversal_is_unfenced(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::FirstSeenDesc; // C, B, A by first_seen
+
+    let p1 = repo.find_paginated(base_query(sort, 2)).await.unwrap();
+    assert_eq!(addrs(&p1.page.items), vec![pk(3), pk(2)]);
+    assert!(p1.as_of.is_none(), "an immutable sort needs no fence");
+    assert_eq!(p1.touched_since, 0);
+
+    // A's activity changes; its first_seen, and so its rank, does not.
+    touch_pool(&pool, pk(1)).await;
+
+    let cursor = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    let p2 = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(cursor),
+            ..base_query(sort, 2)
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        addrs(&p2.page.items),
+        vec![pk(1)],
+        "a touched pool must still be reachable under an immutable sort"
+    );
 }

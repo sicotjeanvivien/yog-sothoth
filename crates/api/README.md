@@ -96,11 +96,45 @@ covered by integration tests since the macros cannot check it.
 |---|---|---|
 | `q` | free text, or `X/Y` | With a `/` it is a **pair** filter: the pool must hold one token matching each side, on the two distinct mint columns (`SOL/USDC` finds the pool either way round). Without one, a single term matched against the pool address (exact) or either token's symbol/name (`ILIKE`). |
 | `fee_bps` | a decimal string, e.g. `25` | Exact match on the pool's base fee. Meant to be fed from `/api/pools/fee-tiers`, but bound like any user value. |
-| `sort` | `last_seen_desc` (default), `last_seen_asc`, `first_seen_desc`, `first_seen_asc` | Ordering, always tie-broken by `pool_address`. |
+| `sort` | `last_seen_desc` (default), `last_seen_asc`, `first_seen_desc`, `first_seen_asc` | Ordering, always tie-broken by `pool_address`. The `last_seen_*` pair sorts on a **mutable** column — see the snapshot anchor below. |
 | `cursor` / `dir` / `position` / `limit` | see below | Standard cursor pagination. |
 
 The cursor is stamped with the sort column it was built for; passing it back
 under a different `sort` is a 400 rather than a silently wrong page.
+
+#### Sorting on `last_seen_at` — the traversal is a snapshot
+
+`pools.last_seen_at` is rewritten on every event touching the pool, and a
+keyset cursor assumes its sort key holds still: a row whose value moves crosses
+to the other side of the cursor. So a `last_seen_*` traversal is **anchored**:
+the first page mints `asOf`, every cursor carries it, and each page reads only
+`last_seen_at <= asOf`. Since the column only grows, the result set can only
+shrink — a pool touched mid-traversal leaves it rather than moving inside it.
+
+Two fields on the response say so, in addition to the shared envelope:
+
+| Field | Meaning |
+|---|---|
+| `asOf` | The instant the traversal is anchored to, RFC 3339. `null` on a `first_seen_*` sort — an immutable column needs no anchor. |
+| `touchedSince` | How many pools **matching the same `q` / `fee_bps`** became active after `asOf`. `0` whenever the anchor was minted by that same call — a first page, or a `position` jump — but **not** on a backward page that lands back on the first page, which carries a cursor and so a real count. |
+
+⚠️ `touchedSince` is an **upper bound on what the reader missed, not a count of
+it**: a pool they already saw on an earlier page and which was touched again is
+counted too. Once a pool is touched its previous `last_seen_at` is gone, so
+nothing can distinguish the two after the fact. Surface it as "became active
+since `asOf`", never as "pools you missed".
+
+What this does and does not buy: under `last_seen_asc` the duplicate is gone,
+and backward navigation no longer pulls in rows that moved. Under
+`last_seen_desc` a pool touched mid-traversal still isn't shown by that
+traversal — it now belongs at the head of the list, which the reader has
+already passed — but it is counted in `touchedSince` instead of vanishing
+silently. Clients are expected to surface that count and offer a return to the
+first page; the dashboard does.
+
+A cursor minted before `asOf` existed still decodes (the field is optional):
+the traversal simply re-anchors on the next page rather than 400-ing a URL that
+was valid when it was issued.
 
 ### Pool response shapes
 

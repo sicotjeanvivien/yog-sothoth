@@ -27,6 +27,12 @@ struct PoolCursorWire {
     sort_column: String,
     sort_value: String,
     pool_address: String,
+    /// The traversal's snapshot fence, RFC 3339. Absent on a sort over an
+    /// immutable column, and on cursors minted before this field existed —
+    /// which decode to `None` and make the repository mint a fresh fence,
+    /// re-anchoring the traversal rather than rejecting the URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    as_of: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -55,6 +61,7 @@ pub(crate) fn encode_cursor(cursor: &Cursor) -> Result<String, ApiError> {
             sort_column: sort_column_to_wire(c.sort_column).to_string(),
             sort_value: c.sort_value.to_rfc3339(),
             pool_address: c.pool_address.to_string(),
+            as_of: c.as_of.map(|t| t.to_rfc3339()),
         }),
         Cursor::MeteoraDammV2SwapEvent(c) => encode_b64_json(&EventCursorWire {
             timestamp: c.timestamp.to_rfc3339(),
@@ -99,10 +106,12 @@ pub(crate) fn decode_pool_cursor(raw: &str) -> Result<PoolCursor, ApiError> {
     let sort_value = parse_rfc3339(&wire.sort_value)?;
     let pool_address = solana_pubkey::Pubkey::from_str(&wire.pool_address)
         .map_err(|_| ApiError::BadRequest("invalid cursor: malformed pool address".to_string()))?;
+    let as_of = wire.as_of.as_deref().map(parse_rfc3339).transpose()?;
     Ok(PoolCursor {
         sort_column,
         sort_value,
         pool_address,
+        as_of,
     })
 }
 

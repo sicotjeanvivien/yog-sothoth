@@ -29,7 +29,24 @@ export function pageSchema<T extends z.ZodTypeAny>(item: T) {
 
 // ── Concrete pages ────────────────────────────────────────────────────
 
-export const PoolsPageSchema = pageSchema(PoolSchema);
+/**
+ * `GET /api/pools` — the shared envelope plus what this listing alone says
+ * about its traversal.
+ *
+ * `last_seen_at` is rewritten on every event touching a pool, so a listing
+ * sorted on it is anchored to `asOf` (the instant the traversal started) and
+ * reads only pools at or below it. A pool that becomes active after `asOf`
+ * moves to the head of the live list — past a reader who is already deeper in
+ * it — so this traversal cannot show it. `touchedSince` is how many did,
+ * which is what lets the UI say so instead of quietly dropping them.
+ *
+ * `asOf` is `null` when the sort is over an immutable column
+ * (`first_seen_*`), which needs no anchor.
+ */
+export const PoolsPageSchema = pageSchema(PoolSchema).extend({
+  asOf: z.string().nullable(),
+  touchedSince: z.number().int().nonnegative(),
+});
 export type PoolsPageResponse = z.infer<typeof PoolsPageSchema>;
 
 export const SwapEventsPageSchema = pageSchema(SwapEventSchema);

@@ -115,7 +115,7 @@ async fn pair_search_matches_only_the_exact_pair(pool: PgPool) {
 
     // Only the SOL/USDC pool: P2 (SOL/USDT) and P3 (USDC/WBTC) each share
     // exactly one token, which is not enough for a pair match.
-    assert_eq!(addrs(&page.items), vec![pk(P_SOL_USDC)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(P_SOL_USDC)]);
 }
 
 #[sqlx::test]
@@ -127,7 +127,7 @@ async fn pair_search_is_order_independent(pool: PgPool) {
     // in P2). The OR branch must still find it.
     let page = repo.find_paginated(search_query("SOL/USDT")).await.unwrap();
 
-    assert_eq!(addrs(&page.items), vec![pk(P_USDT_SOL)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(P_USDT_SOL)]);
 }
 
 #[sqlx::test]
@@ -137,7 +137,7 @@ async fn pair_search_is_case_insensitive(pool: PgPool) {
 
     let page = repo.find_paginated(search_query("sol/usdc")).await.unwrap();
 
-    assert_eq!(addrs(&page.items), vec![pk(P_SOL_USDC)]);
+    assert_eq!(addrs(&page.page.items), vec![pk(P_SOL_USDC)]);
 }
 
 #[sqlx::test]
@@ -151,7 +151,7 @@ async fn pair_search_no_common_pool_yields_empty(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(page.items.is_empty());
+    assert!(page.page.items.is_empty());
 }
 
 // ── Single term (regression: unchanged behaviour) ───────────────────
@@ -165,7 +165,10 @@ async fn single_term_matches_pools_on_either_side(pool: PgPool) {
     // LastSeenDesc order (P1 seq 3 before P2 seq 2). P3 (USDC/WBTC) excluded.
     let page = repo.find_paginated(search_query("SOL")).await.unwrap();
 
-    assert_eq!(addrs(&page.items), vec![pk(P_SOL_USDC), pk(P_USDT_SOL)]);
+    assert_eq!(
+        addrs(&page.page.items),
+        vec![pk(P_SOL_USDC), pk(P_USDT_SOL)]
+    );
 }
 
 #[sqlx::test]
@@ -176,5 +179,8 @@ async fn blank_side_falls_back_to_single_term(pool: PgPool) {
     // "USDC/" collapses to a single-term "USDC" search: P1 and P3.
     let page = repo.find_paginated(search_query("USDC/")).await.unwrap();
 
-    assert_eq!(addrs(&page.items), vec![pk(P_SOL_USDC), pk(P_USDC_WBTC)]);
+    assert_eq!(
+        addrs(&page.page.items),
+        vec![pk(P_SOL_USDC), pk(P_USDC_WBTC)]
+    );
 }

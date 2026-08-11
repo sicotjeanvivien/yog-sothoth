@@ -22,3 +22,25 @@ pub(crate) struct PageResponse<T> {
     pub(crate) is_first: bool,
     pub(crate) is_last: bool,
 }
+
+/// Wire shape of `GET /api/pools` — the standard envelope plus what the pool
+/// listing alone needs to say about its traversal.
+///
+/// Flattened rather than a field of its own so the four paginated endpoints
+/// keep one envelope on the wire: a client reads `items` / `nextCursor` /
+/// `isLast` the same way here as on the event feeds.
+///
+/// - `asOf` is the instant this traversal is anchored to. `null` when the sort
+///   is over an immutable column, which needs no anchor.
+/// - `touchedSince` is how many pools matching the same filters became active
+///   after `asOf` — i.e. moved to the head of the list, past a reader who is
+///   already deeper in it. `0` on a first page. It exists so that a listing
+///   which cannot show those pools can at least say how many there are.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PoolPageResponse<T> {
+    #[serde(flatten)]
+    pub(crate) page: PageResponse<T>,
+    pub(crate) as_of: Option<String>,
+    pub(crate) touched_since: i64,
+}
