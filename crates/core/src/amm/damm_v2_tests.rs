@@ -420,7 +420,7 @@ fn a_non_time_scheduler_kind_yields_no_fee_not_the_cliff() {
 /// wrong values — 1000 bps, or cp-amm's own v0 cap — reddens this.
 #[test]
 fn a_v1_ceiling_fee_converts_without_clamping() {
-    assert_eq!(fee_numerator_to_bps(990_000_000).to_string(), "9900");
+    assert_eq!(fee_numerator_to_bps(990_000_000), Decimal::from(9900));
 }
 
 /// And the v0 ceiling, 50 %, which the function's own doc-comment already
@@ -428,7 +428,7 @@ fn a_v1_ceiling_fee_converts_without_clamping() {
 /// of the two caps cannot pass.
 #[test]
 fn a_v0_ceiling_fee_converts_without_clamping() {
-    assert_eq!(fee_numerator_to_bps(500_000_000).to_string(), "5000");
+    assert_eq!(fee_numerator_to_bps(500_000_000), Decimal::from(5000));
 }
 
 /// Above every cp-amm ceiling the conversion still just divides. The
@@ -437,16 +437,18 @@ fn a_v0_ceiling_fee_converts_without_clamping() {
 /// that behind a number indistinguishable from a real 10 % tier.
 #[test]
 fn a_numerator_past_every_ceiling_is_still_converted_not_flattened() {
-    assert_eq!(fee_numerator_to_bps(1_000_000_000).to_string(), "10000");
+    assert_eq!(fee_numerator_to_bps(1_000_000_000), Decimal::from(10_000));
 }
 
 /// The other end, and the reason the return type is `Decimal`: sub-bp tiers
 /// survive. An integer conversion would round 2.5 bps to 2 — the same class
 /// of silent loss as the clamp, at the opposite end of the range.
 ///
-/// Compared as a `Decimal` rather than a string: the division yields scale 2
-/// (`"2.50"`), and asserting the rendering would tie this test to a formatting
-/// detail instead of to the value it is about.
+/// Like the three above, compared as a `Decimal` and not a string — here the
+/// division yields scale 2, so `to_string()` is `"2.50"`, and asserting the
+/// rendering would tie the test to a formatting detail instead of to the value
+/// it is about. The ceiling cases happen to render at scale 0 today, which is
+/// exactly why they must not be written that way either.
 #[test]
 fn a_sub_bp_tier_keeps_its_fraction() {
     assert_eq!(

@@ -387,8 +387,11 @@ its InitializePool event, and left NULL if the fee blob ever fails to decode
 (unknown BaseFeeMode)"*. Neither half holds since §036/§038: the
 `InitializePool` event no longer writes this column, and **nothing decodes a fee
 blob any more**. `fee_bps` is written by a single writer, yog-context, from the
-on-chain `Pool` account, and it is NULL until that read happens — the flag that
-schedules the read is `needs_refresh`, not the arrival of any event.
+on-chain `Pool` account, and it is NULL until that read happens. What schedules
+that first read is the **NULL itself**: `list_unresolved` proposes any pool with
+a NULL property column. `needs_refresh` (§038) is the other half — it schedules
+a *re*-read after an event that invalidates a resolved value, since a pool that
+already resolved would otherwise never be proposed again.
 
 What in that header is still exact, and worth reading twice: *"for a
 fee-scheduler (anti-sniper) pool this is the genesis cliff, not the live decayed
@@ -396,6 +399,15 @@ rate"*. The column is the floor at genesis. The fee a trader pays **now** is
 derived at read time from the decoded curve (`base_fee_numerator_at`) and is a
 different number — up to ×49 apart on a pool whose scheduler has expired, which
 is what the audit measured against Meteora's own API.
+
+**"Canonical (token_a, token_b) pool ordering", baseline §001** — on the swap
+table and on `claim_protocol_fee_events`. The order is real and consistent; the
+word *canonical* is what misleads, because it reads as a normalisation. There is
+none: `token_a` / `token_b` are the program's own designation, read off the
+account and stored as-is, and **roughly a third of `pools` rows have
+`token_a_mint > token_b_mint`**. The columns are safe to compare within a pool
+and unsafe to use as a pair identity across pools. `MeteoraDammV2SwapEvent`
+carries the full statement.
 
 This is the right discipline for production safety:
 

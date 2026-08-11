@@ -14,8 +14,11 @@
 //! liquidity is `ΔA = L(1/√P − 1/√P_max)`, which needs the pool's `L` and price
 //! bounds — neither of which any event carries.
 //!
-//! **Nothing in the workspace calls any of this**, and that is the intended
-//! state. Before wiring one in, replace the model; do not reuse the name.
+//! **Nothing outside this module tree calls any of this**, and that is the
+//! intended state: the only caller of [`price_impact`] is
+//! [`super::damm_v2::net_price_impact`], which is dormant for the same reason.
+//! No binary, repository, detector or DTO reaches either. Before wiring one in,
+//! replace the model; do not reuse the name.
 
 use crate::{CoreError, CoreResult};
 

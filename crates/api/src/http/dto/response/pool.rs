@@ -230,8 +230,11 @@ pub(crate) struct MeteoraDammV2PropertiesResponse {
     pub(crate) protocol_fee_percent: Option<u8>,
     pub(crate) referral_fee_percent: Option<u8>,
     /// How the base fee behaves over time: `constant`, `scheduler_linear`,
-    /// `scheduler_exponential` or `rate_limiter`. `None` if the genesis event
-    /// was never seen, or if its fee blob failed to decode.
+    /// `scheduler_exponential` or `rate_limiter`. Comes from the protocol
+    /// satellite, written by yog-context from the on-chain account. `None`
+    /// while the pool is still unresolved, or if its `BaseFeeMode` discriminant
+    /// is one this crate does not map — never "no genesis event", which plays
+    /// no part in filling this column.
     pub(crate) base_fee_kind: Option<String>,
     /// Whether a volatility-based dynamic fee sits on top of the base fee.
     pub(crate) has_dynamic_fee: Option<bool>,

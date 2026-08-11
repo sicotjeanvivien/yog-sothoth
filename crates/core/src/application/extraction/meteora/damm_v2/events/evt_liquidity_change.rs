@@ -18,7 +18,8 @@ pub fn discriminator_liquidity_change() -> [u8; DISCRIMINATOR_LEN] {
 /// - `1`: liquidity removed
 ///
 /// `reserve_a_amount` / `reserve_b_amount` are post-change reserves in the
-/// canonical pool ordering — same convention as [`EvtSwap2`].
+/// pool's own `(token_a, token_b)` order — same convention as [`EvtSwap2`],
+/// and like it, not a sort of the mints.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtLiquidityChange {
     pub pool: Pubkey,

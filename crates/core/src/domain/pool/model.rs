@@ -34,10 +34,18 @@ pub struct Pool {
     /// Mint of token B. `None` until resolved by yog-context.
     pub token_b_mint: Option<Pubkey>,
 
-    /// Base trading fee in basis points, decoded from the pool's genesis fee
-    /// config (`InitializePool`). `None` until that event is seen (or if the
-    /// fee blob failed to decode). For a fee-scheduler pool this is the genesis
-    /// cliff, not the live decayed rate.
+    /// Base trading fee in basis points, read from the on-chain `Pool` account
+    /// by yog-context — its single writer. `None` until that read happens,
+    /// which the enrichment queue schedules on the column being NULL.
+    ///
+    /// It is **not** decoded from the `InitializePool` event: nothing decodes a
+    /// fee blob any more (that path went with migration §036/§038), and a pool
+    /// discovered from the swap stream never had a genesis event to begin with.
+    ///
+    /// For a fee-scheduler pool this is the genesis **cliff**, not the live
+    /// decayed rate — the fee a trader pays now is derived at read time from
+    /// the decoded curve (`base_fee_numerator_at`) and can be an order of
+    /// magnitude lower.
     ///
     /// The one fee property that belongs here rather than in a per-protocol
     /// satellite: it is a normalized cross-protocol notion (every AMM has an

@@ -28,9 +28,15 @@ use crate::domain::TradeDirection;
 /// What it does **not** give you is any relation between the two mints, so this
 /// is not a canonical pair key. Deduplicating a pair across pools, or joining a
 /// DAMM v2 pool to a DLMM one on "the same pair", needs a key built explicitly —
-/// `LEAST(mint_a, mint_b)` / `GREATEST(…)` — never `token_a_mint` on the
-/// assumption that it is already the smaller of the two. The wrong answer there
-/// is silent and lands on a third of the table.
+/// never `token_a_mint` on the assumption that it is already the smaller of the
+/// two. The wrong answer there is silent and lands on a third of the table.
+///
+/// One trap inside the remedy: the mints are stored as base58 `TEXT`, so a SQL
+/// `LEAST(a, b)` / `GREATEST(a, b)` orders them *lexicographically in base58*,
+/// while a Rust-side key from `Pubkey::min` / `max` orders them by **raw
+/// bytes**. The two disagree on some pairs. Either is a valid canonical key on
+/// its own; mixing them silently splits a pair in half, so a key that crosses
+/// the boundary has to pick one convention and say which.
 ///
 /// To recover the trader's perspective:
 /// - `trade_direction == AtoB` → trader sent `amount_a`, received `amount_b`

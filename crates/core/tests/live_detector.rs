@@ -150,8 +150,12 @@ fn decoded_swap_values_match_onchain_reality() {
 }
 
 /// `EvtLiquidityChange` — fixtures existed but had no decode test. Validate an
-/// add-liquidity tx end-to-end: clean decode, `Add` kind, canonical sorted
-/// mints, non-zero amounts/reserves/liquidity_delta, translation preserved.
+/// add-liquidity tx end-to-end: clean decode, `Add` kind, non-zero
+/// amounts/reserves/liquidity_delta, translation preserved.
+///
+/// (It used to claim it validated "canonical sorted mints". A liquidity event
+/// carries no mint at all, so there was nothing there to assert — and no sort
+/// anywhere to assert it against.)
 #[test]
 fn decodes_liquidity_add_fixtures() {
     for fixture in ["damm_v2/liquidity_add.json", "damm_v2/liquidity_add_2.json"] {

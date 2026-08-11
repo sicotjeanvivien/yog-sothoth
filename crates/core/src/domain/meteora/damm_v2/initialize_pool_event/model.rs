@@ -19,12 +19,19 @@ use solana_signature::Signature;
 /// `sqrt_*`, `liquidity` are lossless `u128` (`NUMERIC(39, 0)` at the
 /// persistence boundary).
 ///
-/// Unlike the swap/liquidity events, the mints here are **not** re-sorted to
-/// the canonical raw-byte order: cp-amm does not sort them, and `sqrt_price`
-/// and its bounds are tied to the program's native token_a/token_b
-/// orientation (re-sorting would require inverting the price). This event
-/// therefore preserves the on-chain A/B designation; the cross-protocol
-/// `pools` registry is the surface that normalizes to canonical order.
+/// The mints are in the program's native token_a/token_b designation, like
+/// every other event of this protocol. That orientation is load-bearing:
+/// `sqrt_price` and its bounds are expressed against it, so re-ordering the
+/// pair would require inverting the price.
+///
+/// **Nothing re-orders it, here or downstream.** An earlier version of this
+/// note said the swap/liquidity events were re-sorted to a raw-byte order and
+/// that the cross-protocol `pools` registry "normalizes to canonical order";
+/// neither was ever true, and the second is the more misleading, since it
+/// invites a reader to rely on a normalisation step that does not exist. The
+/// registry is filled by yog-context reading the on-chain account, in the
+/// program's order — see [`crate::domain::MeteoraDammV2SwapEvent`] for what
+/// that order guarantees and what it does not.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeteoraDammV2InitializePoolEvent {
     pub pool_address: Pubkey,

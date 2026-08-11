@@ -68,9 +68,10 @@ pub struct SwapResult2 {
 /// anything here.
 ///
 /// The `reserve_*` fields hold the pool reserves **after** the swap, in the
-/// canonical `(token_a, token_b)` ordering defined by the pool — this is
-/// the stable convention we want for time-series analytics, regardless of
-/// swap direction.
+/// pool's own `(token_a, token_b)` order — the program's designation, stable
+/// over the pool's life and independent of swap direction, which is what makes
+/// it usable for time-series analytics. It is **not** a sort of the two mints;
+/// see [`crate::domain::MeteoraDammV2SwapEvent`].
 ///
 /// `trade_direction` reflects the direction the user requested:
 /// - `0` (`AtoB`): user provided token A, received token B

@@ -56,11 +56,13 @@ impl BaseFeeKind {
 /// Map a `BaseFeeMode` discriminant and a scheduler period count to the fee
 /// *shape*.
 ///
-/// Shared by both sources of this pair, which read the same two quantities at
-/// **different offsets**: the genesis event's borsh blob (mode at 26, period
-/// count at 8) and the on-chain account's zero-copy struct (mode at 16, period
-/// count at 22). Only the offsets differ — the meaning does not, so the mapping
-/// lives here once rather than being restated per call site.
+/// Called from one place today — the account decoder, which reads the mode at
+/// offset 16 and the period count at 22 of the zero-copy struct. It is kept
+/// here rather than inlined there because the same two quantities also sit in
+/// the genesis event's borsh blob at different offsets (26 and 8), a blob still
+/// captured verbatim though nothing decodes it any more: the *meaning* of the
+/// pair is protocol knowledge, and it should not have to be rediscovered if a
+/// second reader appears.
 ///
 /// # Why the period count is part of the decision
 ///

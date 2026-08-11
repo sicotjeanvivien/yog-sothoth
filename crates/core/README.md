@@ -170,8 +170,7 @@ Don't invent new vocabulary words for future lenses unless none of these fit.
 
 Documented on the affected types and enforced at construction time:
 
-- **Mints sorted by raw bytes** — in `Pool` and DAMM v2 swap/liquidity events, `token_a_mint` / `token_b_mint` are ordered by `Pubkey::Ord`. Stable regardless of swap direction; differs from the Meteora SDK canonical convention.
-- **Canonical `(token_a, token_b)` exposure** — amounts and reserves are exposed in canonical order; swap direction lives in the `TradeDirection` enum (`AtoB` | `BtoA`).
+- **`(token_a, token_b)` is the program's order, not a sort** — `token_a_mint` / `token_b_mint` hold the designation read off the on-chain account, and **nothing anywhere re-orders it**: measured on the local index, 50 of 136 pools have `token_a_mint > token_b_mint`. What it guarantees is internal consistency — amounts, reserves, the mint columns and the direction of `sqrt_price_to_price_a_in_b` all mean the same side — and stability over a pool's life. What it is *not* is a canonical pair key: deduplicating a pair across pools, or joining DAMM v2 to DLMM on "the same pair", needs a key built explicitly. Swap direction lives in the `TradeDirection` enum (`AtoB` | `BtoA`), read against this order.
 - **No `protocol` field on per-protocol sub-events** — the protocol identity is encoded by the outer `DomainEvent` variant and by the SQL table name itself.
 - **`fee_token_is_a` precomputed** — derived from `(collect_fee_mode, trade_direction)` in the translator, mirroring `cp-amm::FeeMode::get_fee_mode`.
 - **Four fee components separated** — `claiming_fee`, `protocol_fee`, `compounding_fee`, `referral_fee` — so detectors can distinguish LP yield from protocol revenue.
