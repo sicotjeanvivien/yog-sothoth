@@ -742,3 +742,180 @@ async fn last_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
         .await
         .expect("read last_seen_at failed")
 }
+
+// ── What the fence must NOT do ──────────────────────────────────────
+//
+// Each guard below removes a way the fence could hide or repeat a row
+// while looking like it was protecting one.
+
+/// A pool whose stored instant runs ahead of the API process's clock must
+/// still be listed. Bounding the *first* page — where there is no cursor,
+/// hence no keyset assumption to protect — could only ever subtract rows,
+/// and `touched_since` is 0 there, so nothing would report the loss.
+#[sqlx::test]
+async fn an_unanchored_first_page_hides_nothing(pool: PgPool) {
+    seed_three(&pool).await;
+    // A clock ahead of ours, by more than any plausible skew.
+    let ahead = Utc::now() + chrono::Duration::hours(2);
+    sqlx::query("UPDATE pools SET last_seen_at = $2 WHERE pool_address = $1")
+        .bind(pk(2).to_string())
+        .bind(ahead)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = PgPoolRepository::new(pool);
+
+    let page = repo
+        .find_paginated(base_query(PoolSort::LastSeenDesc, 50))
+        .await
+        .unwrap();
+
+    assert!(
+        addrs(&page.page.items).contains(&pk(2)),
+        "a pool ahead of our clock must still be listed: {:?}",
+        addrs(&page.page.items)
+    );
+}
+
+/// A cursor whose anchor is refused loses its place with it. A fresh anchor
+/// over a stale `sort_value` is not a repair: under `LastSeenAsc` a pool
+/// already read and touched since would satisfy both halves of the predicate
+/// and be served a second time — the very duplicate the fence removes.
+#[sqlx::test]
+async fn a_stale_cursor_restarts_at_the_head(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::LastSeenAsc; // B(100), C(200), A(300)
+
+    let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
+    assert_eq!(addrs(&p1.page.items), vec![pk(2)]);
+
+    // The same cursor, its anchor aged past the cutoff — a bookmarked URL
+    // rather than a reader mid-scroll.
+    let mut stale = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    stale.as_of = Some(Utc::now() - chrono::Duration::hours(6));
+
+    let page = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(stale),
+            ..base_query(sort, 1)
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        addrs(&page.page.items),
+        vec![pk(2)],
+        "a refused anchor must restart the listing, not resume it"
+    );
+    assert!(
+        page.page.is_first,
+        "and must say so, so the client can tell it was re-anchored"
+    );
+}
+
+/// The transitional case, which must behave the *opposite* way: a cursor
+/// minted before the anchor existed carries no claim, so it keeps its place
+/// and simply gets one. Refusing these would reset every reader mid-listing
+/// the moment this shipped.
+#[sqlx::test]
+async fn a_cursor_without_an_anchor_keeps_its_place(pool: PgPool) {
+    seed_three(&pool).await;
+    let repo = PgPoolRepository::new(pool.clone());
+    let sort = PoolSort::LastSeenAsc;
+
+    let p1 = repo.find_paginated(base_query(sort, 1)).await.unwrap();
+    let mut legacy = extract_pool_cursor(p1.page.next_cursor.as_ref().unwrap());
+    legacy.as_of = None;
+
+    let page = repo
+        .find_paginated(PoolListQuery {
+            cursor: Some(legacy),
+            ..base_query(sort, 1)
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        addrs(&page.page.items),
+        vec![pk(3)],
+        "a legacy cursor must resume where it pointed"
+    );
+    assert!(page.as_of.is_some(), "and be anchored from here on");
+}
+
+/// The other half of the write rule, and the one `GREATEST` alone would have
+/// turned into a trap: a value **ahead** of the database clock is clamped,
+/// never stored.
+///
+/// Without the clamp, one NTP correction or a suspended VM on the indexer host
+/// writes a future instant that `GREATEST` then makes permanent — no later
+/// write can lower it. Such a pool fails `last_seen_at <= as_of` on every
+/// fenced page while satisfying `last_seen_at > as_of` in the count: invisible
+/// forever, and reported forever as having just moved.
+///
+/// The assertions are against "not in the future" rather than against the
+/// written value: Postgres stores microseconds where `Utc::now()` carries
+/// nanoseconds, so `stored < written` is true by truncation alone and would
+/// hold with the clamp removed.
+#[sqlx::test]
+async fn a_clock_ahead_of_the_database_cannot_store_the_future(pool: PgPool) {
+    use yog_core::domain::PoolRepository;
+
+    let repo = PgPoolRepository::new(pool.clone());
+    let ahead = Utc::now() + chrono::Duration::hours(3);
+
+    let observed = |at| Pool {
+        pool_address: pk(1),
+        protocol: Protocol::MeteoraDammV2,
+        token_a_mint: Some(pk(200)),
+        token_b_mint: Some(pk(201)),
+        fee_bps: None,
+        first_seen_at: at,
+        last_seen_at: at,
+    };
+
+    // On INSERT: neither column may land in the future.
+    repo.upsert(&observed(ahead)).await.unwrap();
+    let ceiling = Utc::now();
+    assert!(
+        last_seen_of(&pool, pk(1)).await <= ceiling,
+        "an insert must not store an instant ahead of the database clock"
+    );
+    assert!(first_seen_of(&pool, pk(1)).await <= ceiling);
+
+    // And on UPDATE, where `GREATEST` would otherwise make it permanent.
+    repo.upsert(&observed(ahead)).await.unwrap();
+    let ceiling = Utc::now();
+    let stored = last_seen_of(&pool, pk(1)).await;
+    assert!(
+        stored <= ceiling,
+        "an upsert must not store an instant ahead of the database clock: {stored}"
+    );
+
+    // A row already holding a future instant is repaired by its next write,
+    // rather than merely not being made worse.
+    sqlx::query("UPDATE pools SET last_seen_at = $2 WHERE pool_address = $1")
+        .bind(pk(1).to_string())
+        .bind(ahead)
+        .execute(&pool)
+        .await
+        .unwrap();
+    repo.upsert(&observed(Utc::now())).await.unwrap();
+    let ceiling = Utc::now();
+    assert!(
+        last_seen_of(&pool, pk(1)).await <= ceiling,
+        "a row stuck in the future must come back on its next write"
+    );
+}
+
+/// Read one pool's `first_seen_at` straight from the table.
+async fn first_seen_of(pool: &PgPool, addr: Pubkey) -> DateTime<Utc> {
+    sqlx::query_scalar::<_, DateTime<Utc>>(
+        "SELECT first_seen_at FROM pools WHERE pool_address = $1",
+    )
+    .bind(addr.to_string())
+    .fetch_one(pool)
+    .await
+    .expect("read first_seen_at failed")
+}

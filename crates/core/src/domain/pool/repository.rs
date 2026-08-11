@@ -66,6 +66,13 @@ pub struct PoolPage {
     /// The instant this traversal is anchored to. `Some` on a sort over
     /// `last_seen_at`; `None` on a sort over an immutable column, which needs
     /// no fence.
+    ///
+    /// The **first page is served unfenced** — with no cursor there is no
+    /// keyset assumption to protect, and bounding it could only subtract rows
+    /// (any whose stored instant runs ahead of the reading process's clock),
+    /// on the most-visited page of the product, with `touched_since` reporting
+    /// `0` so nothing would say so. The anchor is minted there all the same
+    /// and carried by the outgoing cursors, so every page after it is fenced.
     pub as_of: Option<DateTime<Utc>>,
     /// How many pools **matching the same filters** became active after
     /// `as_of` — that is, moved above this traversal's fence.

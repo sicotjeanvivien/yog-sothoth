@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE pools SET last_seen_at = NOW() WHERE pool_address = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f1933a766db7afa1c772c9d008f076e132f408c3b9afad5cbcfd7da8232bba1"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO pools\n                (pool_address, protocol, token_a_mint, token_b_mint,\n                 first_seen_at, last_seen_at)\n            VALUES ($1, $2, $3, $4, LEAST($5, NOW()), LEAST($5, NOW()))\n            ON CONFLICT (pool_address) DO UPDATE\n                SET last_seen_at = GREATEST(\n                        LEAST(pools.last_seen_at, NOW()),\n                        EXCLUDED.last_seen_at\n                    )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0940f7527831156856c6d5d44cc857b98abc4290380287d908acf30956ede6cc"
+}

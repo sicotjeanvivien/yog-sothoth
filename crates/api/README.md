@@ -134,8 +134,19 @@ filter.
 A cursor's `asOf` is validated like every other field it carries. One in the
 future would make the anchor match everything — the traversal silently
 unanchored while `touchedSince` reports `0` — and one older than an hour is a
-bookmarked URL rather than a live traversal, replaying a stale snapshot. Either
-way the server re-anchors on a fresh instant instead of honouring the claim.
+bookmarked URL rather than a live traversal, replaying a stale snapshot.
+
+**A refused `asOf` costs the cursor its place too**, and the listing restarts at
+the head: a fresh anchor over the old cursor position would reintroduce, for one
+hop, exactly the bug the anchor exists to prevent. `isFirst: true` on the
+response is how a client tells that this happened. A cursor carrying **no**
+`asOf` at all is the one exception — it was minted before the field existed, so
+it keeps its place and simply gets an anchor.
+
+The **first page of a traversal is served unfenced**: with no cursor there is no
+keyset assumption to protect, and bounding it could only hide rows. The anchor
+is minted there all the same and stamped into the outgoing cursors, so every
+page after it is fenced.
 
 What this does and does not buy: under `last_seen_asc` the duplicate is gone,
 and backward navigation no longer pulls in rows that moved. Under
