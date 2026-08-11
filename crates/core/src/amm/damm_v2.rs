@@ -150,11 +150,12 @@ pub fn sqrt_price_to_price_a_in_b(
 /// Apply the DAMM v2 fee to an input amount, in basis points (1 bp = 0.01%).
 /// Returns the amount net of fees.
 ///
-/// ⚠️ **Dormant, and it disagrees with cp-amm in three independent ways.** No
-/// caller anywhere, which is why none of them has ever produced a wrong number;
-/// they are listed because each one survives even if the constant-product model
-/// of [`super::common`] is one day replaced, and because "apply the fee" reads
-/// like a settled question:
+/// ⚠️ **Dormant, and it disagrees with cp-amm in three independent ways.** Its
+/// only caller is [`net_price_impact`], dormant for the same reason — nothing
+/// outside this pair reaches it, which is why none of these has ever produced a
+/// wrong number. They are listed because each survives even if the
+/// constant-product model of [`super::common`] is one day replaced, and because
+/// "apply the fee" reads like a settled question:
 ///
 /// 1. **`fee_bps: u32` truncates sub-bp tiers.** A pool at 2.5 bps becomes 2 —
 ///    a 20 % error on the fee. [`fee_numerator_to_bps`], twenty lines above in
@@ -179,17 +180,19 @@ pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     Ok(amount_in.saturating_sub(fee))
 }
 
-/// Net price impact of a DAMM v2 swap, after fees.
+/// Net price impact of a DAMM v2 swap, after fees: the fee is taken off
+/// `amount_in`, and the remainder drives the impact calculation.
 ///
-/// DAMM v2 applies fees before the swap is executed — the effective
-/// amount_in used for the x·y=k calculation is amount_in net of fees.
+/// ⚠️ **Dormant, and it inherits both problems above.** From
+/// [`fee_adjusted_amount`], the three fee divergences — including that taking
+/// the fee off the *input* is only one of cp-amm's two modes, so the premise of
+/// the line above is itself half right. From [`super::common::price_impact`],
+/// a constant-product model whose error on a concentrated-liquidity pool has no
+/// fixed sign.
 ///
-/// ⚠️ **Dormant, and it inherits both problems above**: the fee treatment of
-/// [`fee_adjusted_amount`] and the constant-product model of
-/// [`super::common::price_impact`], which understates impact on a
-/// concentrated-liquidity pool. It is also the most *plausible-looking* name in
-/// the module — "net price impact, after fees" is exactly what a price-impact
-/// detector would reach for, and it would get an optimistic number with no
+/// It is also the most *plausible-looking* name in the module — "net price
+/// impact, after fees" is exactly what a price-impact detector would reach for,
+/// and it would get a number that is neither a floor nor a ceiling, with no
 /// error to catch. See the [`super::common`] module note before wiring it.
 pub fn net_price_impact(
     reserve_a: u128,

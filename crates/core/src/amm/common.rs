@@ -2,17 +2,32 @@
 //! project indexes.**
 //!
 //! Every function here models `x·y=k` over the pool's *total* reserves. DAMM v2
-//! and DLMM are concentrated-liquidity AMMs: the same reserves back a bounded
-//! price range, so a trade moves the price far more than these formulas say.
-//! The error has a direction — **x·y=k understates the impact, so the answer is
-//! optimistic, not merely inaccurate**. A detector wired to one of these would
-//! publish confident, reassuringly low numbers.
+//! and DLMM are concentrated-liquidity AMMs, where the reserves in the vault and
+//! the depth backing the current price are two different quantities.
+//!
+//! **The error has no fixed sign — it depends on where the liquidity sits**, so
+//! the result cannot be read as a bound in either direction. Two mechanisms pull
+//! against each other:
+//!
+//! - *In range*, a position behaves like a constant-product pool with **virtual**
+//!   reserves larger than the real ones (`L/√P` and `L·√P`). Feeding the real
+//!   reserves in therefore models a shallower pool than exists and **overstates**
+//!   the impact — by a lot. A pool at `P = 1` with range `[0.9, 1.1]` and
+//!   ~1000 A / ~1100 B really moves 0.9 % on a 100 A trade; `price_impact` on
+//!   those reserves answers 17 %.
+//! - *Out of range*, the vault still holds positions that back no trade at the
+//!   current price at all. Their reserves inflate the totals and pull the answer
+//!   the other way, **understating** the impact — the case a one-sided launch
+//!   pool lands in.
+//!
+//! Which one dominates is a property of the pool's liquidity distribution, which
+//! is exactly what these formulas do not have. The correct formulation is
+//! `ΔA = L(1/√P − 1/√P_max)`, needing the pool's `L` and price bounds — neither
+//! of which any event carries.
 //!
 //! Kept rather than deleted, deliberately, with the warning attached at each
-//! definition: the derivation is real work and the trap is documented where the
-//! next detector author will look. The correct formulation for concentrated
-//! liquidity is `ΔA = L(1/√P − 1/√P_max)`, which needs the pool's `L` and price
-//! bounds — neither of which any event carries.
+//! definition: the derivation is real work and the trap belongs where the next
+//! detector author will look.
 //!
 //! **Nothing outside this module tree calls any of this**, and that is the
 //! intended state: the only caller of [`price_impact`] is
@@ -56,10 +71,11 @@ pub fn spot_price(reserve_a: u128, reserve_b: u128) -> CoreResult<u128> {
 ///
 /// Uses Q64 prices to stay in integer arithmetic throughout.
 ///
-/// ⚠️ **Dormant and optimistic** — see the module note. This is the constant
-/// product model applied to vault totals; on a concentrated-liquidity pool the
-/// true impact is larger, so a signal built on it would under-report exactly
-/// the events worth alerting on.
+/// ⚠️ **Dormant, and wrong by an amount whose sign is not fixed** — see the
+/// module note. Constant product over vault totals over-reports when the
+/// liquidity sits around the price (the usual case, and by a wide margin) and
+/// under-reports when most of it is parked out of range. A signal built on it
+/// would be neither a floor nor a ceiling.
 pub fn price_impact(reserve_a: u128, reserve_b: u128, amount_in: u128) -> CoreResult<u32> {
     let price_before = spot_price(reserve_a, reserve_b)?;
 
