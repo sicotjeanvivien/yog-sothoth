@@ -150,8 +150,12 @@ fn decoded_swap_values_match_onchain_reality() {
 }
 
 /// `EvtLiquidityChange` — fixtures existed but had no decode test. Validate an
-/// add-liquidity tx end-to-end: clean decode, `Add` kind, canonical sorted
-/// mints, non-zero amounts/reserves/liquidity_delta, translation preserved.
+/// add-liquidity tx end-to-end: clean decode, `Add` kind, non-zero
+/// amounts/reserves/liquidity_delta, translation preserved.
+///
+/// (It used to claim it validated "canonical sorted mints". A liquidity event
+/// carries no mint at all, so there was nothing there to assert — and no sort
+/// anywhere to assert it against.)
 #[test]
 fn decodes_liquidity_add_fixtures() {
     for fixture in ["damm_v2/liquidity_add.json", "damm_v2/liquidity_add_2.json"] {
@@ -213,7 +217,9 @@ fn extracts_swap_via_router_correctly() {
     //     is what disambiguates.
     //
     // Expected: exactly one EvtSwap2 extracted and successfully translated
-    // into a SwapEvent with correct mints (SOL, USDC sorted by raw bytes).
+    // into a SwapEvent. (Mints are not on the event at all any more — they are
+    // a pool property resolved from the account by yog-context — so there is
+    // nothing mint-related to assert; see the note further down.)
 
     let json = include_str!("fixtures/damm_v2/swap_via_router.json");
     let tx: EncodedConfirmedTransactionWithStatusMeta =
@@ -332,10 +338,19 @@ fn decodes_initialize_pool_fixtures() {
             init.activation_type
         );
         // NOTE: cp-amm does NOT emit mints sorted by raw bytes — the event
-        // preserves the program's native token_a/token_b designation. The
-        // `initialize_pool_events` table stores this native order as-is; the
-        // pool *registry* upsert re-sorts to the canonical convention shared
-        // with the swap/liquidity tables (see persist_initialize_pool).
+        // preserves the program's native token_a/token_b designation, and
+        // `initialize_pool_events` stores that order as-is.
+        //
+        // Nothing re-sorts it downstream either. An earlier version of this
+        // note claimed the pool *registry* upsert normalised the pair to a
+        // canonical order; it never did, and that is the more dangerous half
+        // of the claim, because it invites a reader to trust a step that does
+        // not exist. `persist_initialize_pool` calls `discover_pool`, which
+        // writes NULL mints; yog-context later fills them from the account, in
+        // the program's order. Roughly a third of `pools` rows therefore have
+        // `token_a_mint > token_b_mint` — see the conventions section on
+        // `MeteoraDammV2SwapEvent` for what that order does and does not
+        // guarantee.
     }
 }
 

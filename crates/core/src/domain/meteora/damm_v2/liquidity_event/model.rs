@@ -56,8 +56,10 @@ impl std::str::FromStr for MeteoraDammV2LiquidityEventKind {
 ///
 /// # Conventions
 ///
-/// `amount_a` / `amount_b` and `reserve_a_after` / `reserve_b_after` follow
-/// the canonical pool ordering — see [`crate::domain::SwapEvent`] for details.
+/// `amount_a` / `amount_b` and `reserve_a_after` / `reserve_b_after` are in
+/// the pool's own `(token_a, token_b)` order — see
+/// [`crate::domain::MeteoraDammV2SwapEvent`] for what that order guarantees,
+/// and for why it is not a sort of the mints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeteoraDammV2LiquidityEvent {
     pub pool_address: Pubkey,

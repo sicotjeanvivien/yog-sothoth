@@ -56,11 +56,13 @@ impl BaseFeeKind {
 /// Map a `BaseFeeMode` discriminant and a scheduler period count to the fee
 /// *shape*.
 ///
-/// Shared by both sources of this pair, which read the same two quantities at
-/// **different offsets**: the genesis event's borsh blob (mode at 26, period
-/// count at 8) and the on-chain account's zero-copy struct (mode at 16, period
-/// count at 22). Only the offsets differ — the meaning does not, so the mapping
-/// lives here once rather than being restated per call site.
+/// Called from one place today — the account decoder, which reads the mode at
+/// offset 16 and the period count at 22 of the zero-copy struct. It is kept
+/// here rather than inlined there because the same two quantities also sit in
+/// the genesis event's borsh blob at different offsets (26 and 8), a blob still
+/// captured verbatim though nothing decodes it any more: the *meaning* of the
+/// pair is protocol knowledge, and it should not have to be rediscovered if a
+/// second reader appears.
 ///
 /// # Why the period count is part of the decision
 ///
@@ -145,10 +147,29 @@ pub fn sqrt_price_to_price_a_in_b(
     Decimal::from_f64_retain(price).map(|d| d.normalize())
 }
 
-/// Apply the DAMM v2 fee to an input amount.
-///
-/// Fee is expressed in basis points (1 bp = 0.01%).
+/// Apply the DAMM v2 fee to an input amount, in basis points (1 bp = 0.01%).
 /// Returns the amount net of fees.
+///
+/// ⚠️ **Dormant, and it disagrees with cp-amm in three independent ways.** Its
+/// only caller is [`net_price_impact`], dormant for the same reason — nothing
+/// outside this pair reaches it, which is why none of these has ever produced a
+/// wrong number. They are listed because each survives even if the
+/// constant-product model of [`super::common`] is one day replaced, and because
+/// "apply the fee" reads like a settled question:
+///
+/// 1. **`fee_bps: u32` truncates sub-bp tiers.** A pool at 2.5 bps becomes 2 —
+///    a 20 % error on the fee. [`fee_numerator_to_bps`], twenty lines above in
+///    this same file, returns `Decimal` precisely to keep those fractions.
+/// 2. **It rounds down; cp-amm rounds up.** The program computes
+///    `⌈amount × numerator / 1e9⌉`, so this under-charges by up to one unit on
+///    every trade.
+/// 3. **It takes the fee off the input.** Under `CollectFeeMode::BothToken`
+///    cp-amm takes it off the **output** — a choice `compute_fee_token_is_a`
+///    already models correctly in the indexer's translator, from the pool's own
+///    `collect_fee_mode`, which this signature cannot even express.
+///
+/// Fixing them means deciding a `Decimal` signature, a rounding direction and a
+/// fee-side parameter — worth doing against a real caller, not in advance.
 pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     let fee = amount_in.checked_mul(fee_bps as u128).ok_or_else(|| {
         crate::error::CoreError::ArithmeticOverflow {
@@ -159,10 +180,20 @@ pub fn fee_adjusted_amount(amount_in: u128, fee_bps: u32) -> CoreResult<u128> {
     Ok(amount_in.saturating_sub(fee))
 }
 
-/// Compute the net price impact of a DAMM v2 swap, after fees.
+/// Net price impact of a DAMM v2 swap, after fees: the fee is taken off
+/// `amount_in`, and the remainder drives the impact calculation.
 ///
-/// DAMM v2 applies fees before the swap is executed — the effective
-/// amount_in used for the x·y=k calculation is amount_in net of fees.
+/// ⚠️ **Dormant, and it inherits both problems above.** From
+/// [`fee_adjusted_amount`], the three fee divergences — including that taking
+/// the fee off the *input* is only one of cp-amm's two modes, so the premise of
+/// the line above is itself half right. From [`super::common::price_impact`],
+/// a constant-product model whose error on a concentrated-liquidity pool has no
+/// fixed sign.
+///
+/// It is also the most *plausible-looking* name in the module — "net price
+/// impact, after fees" is exactly what a price-impact detector would reach for,
+/// and it would get a number that is neither a floor nor a ceiling, with no
+/// error to catch. See the [`super::common`] module note before wiring it.
 pub fn net_price_impact(
     reserve_a: u128,
     reserve_b: u128,

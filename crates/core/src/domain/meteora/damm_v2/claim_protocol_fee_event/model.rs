@@ -10,7 +10,8 @@ use solana_signature::Signature;
 /// from [`crate::domain::MeteoraDammV2ClaimPositionFeeEvent`], which is an LP
 /// claiming *their position's* fees — this is the protocol's own cut leaving
 /// the pool. `token_a_amount` / `token_b_amount` are the absolute amounts
-/// withdrawn in this claim, aligned with the canonical pool ordering.
+/// withdrawn in this claim, in the pool's own `(token_a, token_b)` order — the
+/// program's designation, not a sort of the mints.
 ///
 /// Note: cp-amm also has a `claim_protocol_fee2` instruction emitting a
 /// differently-shaped `EvtClaimProtocolFee2` (single `token_mint` + `amount`)

@@ -72,9 +72,10 @@ impl From<MeteoraDammV2LiquidityEventKind> for LastEventKind {
 /// Field ordering follows the SQL column ordering in `001_baseline.sql` §4,
 /// for ease of cross-reference.
 ///
-/// * `reserve_a` / `reserve_b` are u64 in the protocol's canonical
-///   (token_a, token_b) order; on the wire they map to `BIGINT`, matching
-///   the upstream `swap_events` / `liquidity_events` hypertables.
+/// * `reserve_a` / `reserve_b` are u64 in the pool's own `(token_a, token_b)`
+///   order — the program's designation, not a sort of the mints; on the wire
+///   they map to `BIGINT`, matching the upstream `swap_events` /
+///   `liquidity_events` hypertables.
 /// * `last_sqrt_price` is `None` until the first swap is observed
 ///   (Q64.64 fixed-point as u128, stored as `NUMERIC(39, 0)`).
 ///

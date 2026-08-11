@@ -15,8 +15,9 @@ pub fn discriminator_claim_protocol_fee() -> [u8; DISCRIMINATOR_LEN] {
 /// Emitted when the protocol operator withdraws Meteora's accrued **protocol**
 /// share of trading fees from a pool (distinct from [`EvtClaimPositionFee`],
 /// which is an LP claiming *their position's* fees). `token_a_amount` /
-/// `token_b_amount` are the absolute amounts withdrawn in this claim, aligned
-/// with the canonical pool ordering.
+/// `token_b_amount` are the absolute amounts withdrawn in this claim, in the
+/// pool's own `(token_a, token_b)` order — the program's designation, not a
+/// sort of the mints.
 ///
 /// This is the `emit_cpi!` variant (`ix_claim_protocol_fee`), the one carried
 /// as a self-CPI inner instruction and thus decodable here. cp-amm also has an

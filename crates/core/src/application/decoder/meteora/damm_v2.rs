@@ -34,12 +34,18 @@
 //!
 //! # Do not transpose the event-blob offsets
 //!
-//! `amm::damm_v2` decodes the same *concepts* from `pool_fees_raw`, at different
+//! The genesis event's `pool_fees_raw` carries the same *concepts* at different
 //! offsets: that blob is a borsh `PoolFeeParameters` whose `Option` fields are
 //! variable-length (its dynamic-fee tag moves between byte 1 and byte 9). This
 //! account is a zero-copy struct with no `Option` tags. `base_fee_mode` is at 26
 //! in the blob and 16 here. Copying a constant across would decode silently
 //! wrong.
+//!
+//! Nothing reads that blob today — it is stored verbatim on the genesis event's
+//! own table and never decoded back, this account being the single source of
+//! every pool property. The offsets are kept because the blob is still captured,
+//! so anyone who one day reads it starts from the difference rather than
+//! rediscovering it.
 //!
 //! # There is no partner fee
 //!

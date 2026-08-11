@@ -13,9 +13,30 @@ use crate::domain::TradeDirection;
 ///
 /// # Mint and amount conventions
 ///
-/// All amount and reserve fields follow the **stable canonical ordering**
-/// `(token_a, token_b)`, defined by sorting the two mints by their raw
-/// pubkey bytes. This is the same convention used by [`crate::domain::Pool`].
+/// All amount and reserve fields are in the pool's **`(token_a, token_b)`
+/// order as the program defines it** — the designation read off the on-chain
+/// `Pool` account and stored as-is on [`crate::domain::Pool`].
+///
+/// **It is not a sort.** cp-amm does not order the pair by pubkey bytes, and
+/// nothing downstream re-orders it: measured on the local index, roughly a
+/// third of pools have `token_a_mint > token_b_mint`. What the convention
+/// guarantees is *internal consistency* — `amount_a` / `reserve_a_after`, the
+/// `token_a_mint` column, and the direction of `sqrt_price_to_price_a_in_b` all
+/// mean the same side of the same pool, and that side is stable over the pool's
+/// life.
+///
+/// What it does **not** give you is any relation between the two mints, so this
+/// is not a canonical pair key. Deduplicating a pair across pools, or joining a
+/// DAMM v2 pool to a DLMM one on "the same pair", needs a key built explicitly —
+/// never `token_a_mint` on the assumption that it is already the smaller of the
+/// two. The wrong answer there is silent and lands on a third of the table.
+///
+/// One trap inside the remedy: the mints are stored as base58 `TEXT`, so a SQL
+/// `LEAST(a, b)` / `GREATEST(a, b)` orders them *lexicographically in base58*,
+/// while a Rust-side key from `Pubkey::min` / `max` orders them by **raw
+/// bytes**. The two disagree on some pairs. Either is a valid canonical key on
+/// its own; mixing them silently splits a pair in half, so a key that crosses
+/// the boundary has to pick one convention and say which.
 ///
 /// To recover the trader's perspective:
 /// - `trade_direction == AtoB` → trader sent `amount_a`, received `amount_b`

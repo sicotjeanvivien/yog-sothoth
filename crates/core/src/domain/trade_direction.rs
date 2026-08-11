@@ -1,14 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-/// Direction of a swap, relative to the canonical (token_a, token_b) ordering
-/// of the pool.
+/// Direction of a swap, relative to the pool's own `(token_a, token_b)`
+/// ordering — the designation the program assigns, **not** a sort of the two
+/// mints by their bytes (see
+/// [`crate::domain::MeteoraDammV2SwapEvent`] for what that order does and does
+/// not guarantee).
 ///
 /// - [`TradeDirection::AtoB`]: the trader provided token_a, received token_b
 /// - [`TradeDirection::BtoA`]: the trader provided token_b, received token_a
 ///
-/// Combined with the canonical mint ordering, this is enough to recover what
-/// the trader sent and received from the `amount_a` / `amount_b` fields of a
-/// [`crate::domain::SwapEvent`].
+/// Combined with the pool's `token_a_mint` / `token_b_mint`, this is enough to
+/// recover what the trader sent and received from the `amount_a` / `amount_b`
+/// fields of a swap event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TradeDirection {
