@@ -1,0 +1,134 @@
+-- ============================================================================
+-- 009_price_positivity.sql — a price of zero is not a price
+-- ============================================================================
+-- Closes `.project` ticket `01-audit-prix-nul-hors-de-la-vue-des-swaps`, and
+-- with it the door migration 006 left open on purpose (see its header, "One
+-- door stays open here, deliberately").
+--
+-- `token_prices.price_usd` is `NUMERIC(38, 18) NOT NULL` and carried no
+-- positivity constraint, so **any price below 5e-19 was rounded to exactly 0 on
+-- write**, silently. Verified against the server rather than assumed — Postgres
+-- rounds NUMERIC half away from zero:
+--
+--     0.000000000000000001  (1e-18) -> 0.000000000000000001
+--     0.0000000000000000006 (6e-19) -> 0.000000000000000001
+--     0.0000000000000000005 (5e-19) -> 0.000000000000000001   <- the boundary
+--     0.0000000000000000004 (4e-19) -> 0.000000000000000000   <- becomes zero
+--     0.0000000000000000001 (1e-19) -> 0.000000000000000000
+--
+-- Very-high-supply memecoins live in exactly that regime.
+--
+-- ## Why zero is worse than absent
+--
+-- The whole valuation chain rests on "unknown is not zero". An absent price is
+-- NULL: it annihilates every product it enters, the row comes out NULL, and the
+-- `valuation_complete` guards of migration 006 catch it, skip the pool and
+-- count the skip. A zero *multiplies*. It produces a number — a plausible one —
+-- and those guards ask `price_usd IS NULL`, so they wave it through.
+--
+-- Concretely, `pool_current_tvl` (020) sums two legs. One leg priced at zero
+-- does not yield "TVL = 0", it yields the OTHER leg's value: a silently halved
+-- TVL, non-NULL, counted in `poolsPriced` on /api/stats. And in
+-- `meteora_damm_v2_pool_hourly_liquidity_flow` (025) the flag itself is
+-- computed from `price_usd IS NULL`, so a zero sets `valuation_complete = TRUE`
+-- next to a valuation of zero — the exact substitution finding 08 forbade,
+-- performed by the guard finding 08 installed.
+--
+-- ## Measured before applying, on the dev database (12 August 2026)
+--
+--     rows in token_prices ......................... 49 980  (5 -> 11 August)
+--     at zero ...................................... 0
+--     negative ..................................... 0
+--     smallest positive price observed ............. 1.4e-6
+--
+-- Thirteen orders of magnitude above the boundary: the defect is **dormant on
+-- this dataset**, and the reason to close it is that it traverses a shipped
+-- guard, not that it is firing. Production will index a far wider token
+-- population than the 119 mints seen here.
+--
+-- ## VALIDATING, not NOT VALID
+--
+-- The ticket proposed `NOT VALID` for safety. The measurement makes that the
+-- weaker choice: with zero offending rows there is nothing to defer, and a
+-- `NOT VALID` constraint would assert an invariant it never checked — the kind
+-- of guarantee that cannot fail and therefore proves nothing. Verified in a
+-- rolled-back transaction on the dev database: the validating form applies to
+-- the hypertable and propagates to its chunks (2 chunks -> 3 constraint rows),
+-- scanning the 49 980 existing rows without complaint.
+--
+-- ## ⚠️ Deployment order: the filtering writer goes FIRST
+--
+-- `PgTokenPriceRepository::insert_batch` sends a whole tick as ONE statement,
+-- and its `ON CONFLICT (mint, fetched_at) DO NOTHING` does **not** cover check
+-- violations. A single refused row therefore aborts the insert for every other
+-- mint in that tick.
+--
+-- ⚠️ The same is true at the OTHER end of the column, and this constraint does
+-- not cover it: a price at or above 1e20 exceeds the 20 integer digits of
+-- `NUMERIC(38, 18)` and is refused by the TYPE with `22003` while coercing,
+-- before any CHECK runs. `TokenPrice::is_storable` bounds both ends for exactly
+-- that reason — a filter closing only the low one would leave this outage
+-- reachable from the high one.
+--
+-- Reproduced with this constraint in place, three mints, one of them at 1e-19:
+--
+--     ERROR:  new row for relation "_hyper_1_36_chunk" violates check
+--             constraint "token_prices_price_usd_positive"
+--     DETAIL: Failing row contains (MintPourri, 0.000000000000000000, ...)
+--
+-- — and the two healthy mints were not written. Since the offending mint stays
+-- in the known set, that repeats every tick, and migration 005 established that
+-- an as-of price gap is PERMANENT (there is no backfill). One bad memecoin
+-- would therefore become a total, lasting price outage.
+--
+-- The writer that avoids it is `TokenPrice::is_storable`, and it must be the one
+-- running when this constraint lands. ⚠️ **The compose path cannot express
+-- that**: `docker-compose.yml` declares `yog-context` → `yog-migrate:
+-- service_completed_successfully`, so a `docker compose --profile backend up -d
+-- --build` applies this migration BEFORE the new context container starts,
+-- while the previous one may still be ticking every 30 s. The ordering the
+-- previous sentence asks for is only obtainable by hand:
+--
+--     docker compose stop yog-context
+--     docker compose run --rm yog-migrate
+--     docker compose up -d --build yog-context
+--
+-- Whether that is worth doing is a judgement, not a rule: the exposure lasts one
+-- deploy, it needs a sub-5e-19 price to exist in that window, and none has ever
+-- been observed (0 in 49 980, smallest seen 1.4e-6, thirteen orders of magnitude
+-- away). Today the plain `up` is fine. It stops being fine the day the rejection
+-- counter (`yog_context_price_rejected_total`) is anything but zero — that is
+-- the signal that the manual order has become necessary.
+--
+-- ## What this does to the views: they now DEPEND on the rule, they do not carry it
+--
+-- Before this migration, exactly two of the fifteen LATERAL lookups over
+-- `token_prices` defended themselves — the `NULLIF(price_usd, 0)` pair inside
+-- `meteora_damm_v2_swap_events_hourly_priced`. That view was introduced by 002,
+-- but do not read 002 for its current shape: it has been dropped and recreated
+-- twice since, and **007 holds the live definition** (the pair is at
+-- `007_referral_fee_split.sql:180-181`). The other thirteen read the column raw:
+--
+--     019 meteora_damm_v2_pool_hourly_activity ....... 5  (liq_v x2, pos_fee_v
+--                                                         x2, reward_v x1)
+--     020 pool_current_tvl ........................... 2
+--     021 meteora_damm_v2_liquidity_events_valued .... 2
+--     025 ..._pool_hourly_liquidity_flow ............. 2  (+ its flag)
+--     024 pool_price_snapshot ........................ 2  (out of scope, below)
+--
+-- All of them are now correct by construction. **Do not add `NULLIF(price_usd,
+-- 0)` to any of them**: after this constraint it is unreachable code, and it
+-- would suggest the rule lives in the view when it lives here. 023
+-- (`..._pool_hourly_flow`) needs nothing either — finding 08 already made it
+-- read the priced view rather than `token_prices` directly.
+--
+-- `pool_price_snapshot` (024) stays outside the valuation policy, as migration
+-- 005 set out: it publishes raw inputs with their timestamps so the consumer can
+-- arbitrate, it produces no USD figure. The constraint still covers it, because
+-- the constraint is on the column, not on the reader — which is the point.
+-- ============================================================================
+
+ALTER TABLE token_prices
+    ADD CONSTRAINT token_prices_price_usd_positive CHECK (price_usd > 0);
+
+-- No GRANT: this migration creates no object a runtime role must be granted on.

@@ -4,7 +4,7 @@
 //! Jupiter by the `yog-context` daemon. Pure domain type.
 
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, RoundingStrategy};
 use solana_pubkey::Pubkey;
 
 use crate::CoreError;
@@ -73,3 +73,80 @@ pub struct TokenPrice {
     /// When the price was fetched.
     pub fetched_at: DateTime<Utc>,
 }
+
+/// Decimal scale of the `token_prices.price_usd` column
+/// (`NUMERIC(38, 18)`).
+///
+/// A mirror of the schema, not a preference: it is the number of decimals a
+/// price actually keeps once stored, and therefore the only scale at which
+/// "is this price zero?" can be asked truthfully. Changing the column's scale
+/// without changing this constant makes [`TokenPrice::is_storable`] lie —
+/// `price_positivity.rs` (persistence integration tests) is what catches that.
+pub const PRICE_STORAGE_SCALE: u32 = 18;
+
+/// Total precision of the same column — the `38` in `NUMERIC(38, 18)`.
+///
+/// With [`PRICE_STORAGE_SCALE`] it fixes the *upper* end of what the column can
+/// hold: `38 - 18 = 20` integer digits, so a value must round to strictly less
+/// than `10^20`. Postgres words it exactly that way when it refuses one:
+/// *"A field with precision 38, scale 18 must round to an absolute value less
+/// than 10^20."*
+pub const PRICE_STORAGE_PRECISION: u32 = 38;
+
+/// The exclusive upper bound of [`TokenPrice::is_storable`]: `10^20`.
+fn storage_ceiling() -> Decimal {
+    Decimal::from_i128_with_scale(10i128.pow(PRICE_STORAGE_PRECISION - PRICE_STORAGE_SCALE), 0)
+}
+
+impl TokenPrice {
+    /// Whether `token_prices.price_usd` can actually hold this price.
+    ///
+    /// **Both ends of the column matter, and they fail differently.**
+    ///
+    /// ## The low end — why this is not `price_usd > 0`
+    ///
+    /// The column keeps [`PRICE_STORAGE_SCALE`] decimals, so **any** value below
+    /// `5e-19` is rounded to exactly `0` on write — while being perfectly
+    /// positive in Rust, and positive in SQL right up until the coercion. A
+    /// `> 0` test passes it through and the row lands as a zero.
+    ///
+    /// That zero is the whole problem: an absent price is `NULL`, which
+    /// annihilates every product it takes part in and is caught by the
+    /// `valuation_complete` guards; a zero *multiplies*, yields a plausible
+    /// number, and those guards — which ask `price_usd IS NULL` — wave it
+    /// through. Very-high-supply memecoins live in exactly this regime.
+    ///
+    /// ## The high end — why a ceiling too
+    ///
+    /// [`PRICE_STORAGE_PRECISION`] leaves 20 integer digits, so a price that
+    /// rounds to `10^20` or more is refused by the *column type itself* with
+    /// `22003 numeric_field_overflow` — before any `CHECK` is consulted, so
+    /// `009_price_positivity.sql` does not and cannot guard it. `Decimal` holds
+    /// values up to ~7.9e28 and `usd_price` arrives from Jupiter unvalidated, so
+    /// the value is reachable from the wire.
+    ///
+    /// It matters because the two failures have the *same* blast radius:
+    /// `insert_batch` sends one statement, and `ON CONFLICT DO NOTHING` covers
+    /// neither `23514` nor `22003`. Either one aborts the tick for every other
+    /// mint. A filter that closed only the low end would leave the exact outage
+    /// it was written to prevent reachable from the other side.
+    ///
+    /// ## Why this rounding mode
+    ///
+    /// `MidpointAwayFromZero` is Postgres's own `NUMERIC` rounding, verified
+    /// against the server rather than assumed: `5e-19` stores as `1e-18`,
+    /// `4e-19` stores as `0`. Using rust_decimal's default (banker's rounding)
+    /// would disagree on the exact midpoint. Both bounds are compared *after*
+    /// rounding, which is how Postgres words the overflow rule too.
+    pub fn is_storable(&self) -> bool {
+        let rounded = self
+            .price_usd
+            .round_dp_with_strategy(PRICE_STORAGE_SCALE, RoundingStrategy::MidpointAwayFromZero);
+
+        rounded > Decimal::ZERO && rounded < storage_ceiling()
+    }
+}
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod tests;
