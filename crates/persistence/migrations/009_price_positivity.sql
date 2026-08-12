@@ -96,9 +96,40 @@
 -- Whether that is worth doing is a judgement, not a rule: the exposure lasts one
 -- deploy, it needs a sub-5e-19 price to exist in that window, and none has ever
 -- been observed (0 in 49 980, smallest seen 1.4e-6, thirteen orders of magnitude
--- away). Today the plain `up` is fine. It stops being fine the day the rejection
--- counter (`yog_context_price_rejected_total`) is anything but zero — that is
--- the signal that the manual order has become necessary.
+-- away). Today the plain `up` is fine.
+--
+-- ⚠️ The signal that it has stopped being fine is NOT
+-- `yog_context_price_rejected_total`: that counter ships with the build being
+-- deployed, so it cannot be consulted before the deploy it would gate. Read the
+-- database instead — this is the query that produced the figures above, and it
+-- runs against whatever is already there:
+--
+--     SELECT count(*) FILTER (WHERE price_usd <= 0)  AS to_be_refused,
+--            min(price_usd) FILTER (WHERE price_usd > 0) AS closest_to_the_edge
+--     FROM token_prices;
+--
+-- Non-zero on the left column, or a right column near 5e-19, means take the
+-- manual order. Afterwards the counter is the ongoing watch.
+--
+-- ## ⚠️ If this migration is applied to a database that DOES hold a zero
+--
+-- The validating form then **fails**, and the failure is not local to it: every
+-- daemon in `docker-compose.yml` declares `yog-migrate:
+-- service_completed_successfully`, so the whole backend refuses to start. That
+-- is the correct outcome — the alternative is publishing fabricated coverage —
+-- but there is no `.down.sql` by policy, so the way out is forward:
+--
+--   1. list them: `SELECT mint, price_usd, fetched_at FROM token_prices
+--      WHERE price_usd <= 0;`
+--   2. decide per row. A zero is not a price, so deleting it restores the
+--      truthful state ("we never knew"), and the as-of views will report those
+--      buckets as unvalued rather than as valued-at-zero — which is what they
+--      should always have said;
+--   3. re-run `yog-migrate`.
+--
+-- Measured 0 on the dev database before applying, so this path was not
+-- exercised. It is written down because the environment where it bites is the
+-- one nobody is watching — a staging restore, or a dump predating the audit.
 --
 -- ## What this does to the views: they now DEPEND on the rule, they do not carry it
 --

@@ -33,6 +33,19 @@ impl TokenPriceRepository for PgTokenPriceRepository {
             return Ok(());
         }
 
+        // The trait states the contract; this makes breaking it loud in dev.
+        // Not a validation — filtering here would put the rule in `persistence`,
+        // and it already lives in `TokenPrice::is_storable` and in the schema.
+        // What this catches is a *new caller* that forgot to apply it, which in
+        // production would not fail visibly: it would abort the whole batch and
+        // leave a permanent hole in the price history.
+        debug_assert!(
+            prices.iter().all(TokenPrice::is_storable),
+            "insert_batch received a price the column cannot hold — the caller \
+             must filter on TokenPrice::is_storable first, or this batch aborts \
+             and every other mint in it is lost for good"
+        );
+
         // Variable-arity bulk insert: QueryBuilder is the right tool
         // here, the `query!` macros can't generate VALUES tuples at
         // a runtime-determined arity.

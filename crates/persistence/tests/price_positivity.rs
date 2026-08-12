@@ -177,6 +177,30 @@ async fn the_constraint_is_validated_not_merely_declared(pool: PgPool) {
     );
 }
 
+/// The contract on `TokenPriceRepository::insert_batch` is enforced by a
+/// `debug_assert`, so a caller that forgets to filter fails here rather than
+/// silently dropping a whole tick in production. Gated on `debug_assertions`
+/// because that is exactly when the assertion exists — a `--release` run must
+/// not report a failure for a guard that was compiled out.
+#[cfg(debug_assertions)]
+#[sqlx::test]
+#[should_panic(expected = "the caller must filter")]
+async fn insert_batch_refuses_an_unfiltered_batch_in_debug(pool: PgPool) {
+    use yog_core::domain::TokenPriceRepository;
+    use yog_persistence::PgTokenPriceRepository;
+
+    let repo = PgTokenPriceRepository::new(pool);
+    let _ = repo
+        .insert_batch(&[TokenPrice {
+            mint: pk(1),
+            price_usd: dec("0.0000000000000000004"),
+            price_provider: PriceProvider::Jupiter,
+            confidence: None,
+            fetched_at: Utc::now(),
+        }])
+        .await;
+}
+
 #[sqlx::test]
 async fn agreement_between_the_rust_filter_and_the_constraint(pool: PgPool) {
     // The rule is stated twice on purpose — `TokenPrice::is_storable` so that a
