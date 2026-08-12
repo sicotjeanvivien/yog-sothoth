@@ -113,11 +113,28 @@
 --
 -- ## ⚠️ If this migration is applied to a database that DOES hold a zero
 --
--- The validating form then **fails**, and the failure is not local to it: every
--- daemon in `docker-compose.yml` declares `yog-migrate:
--- service_completed_successfully`, so the whole backend refuses to start. That
--- is the correct outcome — the alternative is publishing fabricated coverage —
--- but there is no `.down.sql` by policy, so the way out is forward:
+-- **Exercised on 12 August 2026**, on a throwaway database seeded with one
+-- healthy price and one at 1e-19 — not reasoned about. What actually happens:
+--
+--     $ yog-migrate
+--     migration failed: while executing migration 9: check constraint
+--     "token_prices_price_usd_positive" of relation "_hyper_1_1_chunk"
+--     is violated by some row
+--     (exit code 1)
+--
+-- **The failure is atomic**, which is the part worth knowing and the part a
+-- reader would otherwise have to guess: sqlx runs each migration in a
+-- transaction, so afterwards `_sqlx_migrations` holds **no row for version 9**,
+-- none marked unsuccessful, and **no half-created constraint**. The database is
+-- left exactly at 008. There is no partial state to clean up before retrying —
+-- only the offending data to deal with.
+--
+-- The blast radius is real though: `yog-indexer`, `yog-api`, `yog-context` and
+-- `yog-signals` all declare `yog-migrate: service_completed_successfully`
+-- (verified, all four), so none of them starts. `yog-web` does start — it has no
+-- such dependency — but it would face an API that isn't there. That is the
+-- correct outcome: the alternative is publishing fabricated coverage. There is
+-- no `.down.sql` by policy, so the way out is forward:
 --
 --   1. list them: `SELECT mint, price_usd, fetched_at FROM token_prices
 --      WHERE price_usd <= 0;`
@@ -127,9 +144,11 @@
 --      should always have said;
 --   3. re-run `yog-migrate`.
 --
--- Measured 0 on the dev database before applying, so this path was not
--- exercised. It is written down because the environment where it bites is the
--- one nobody is watching — a staging restore, or a dump predating the audit.
+-- Those three steps were run end to end on the throwaway database: the healthy
+-- price survived, 009 applied, and the constraint came out validated on the
+-- parent and its chunk. The dev database itself measured 0 before applying, so
+-- this path is written down not for it but for the environment nobody is
+-- watching — a staging restore, or a dump predating the audit.
 --
 -- ## What this does to the views: they now DEPEND on the rule, they do not carry it
 --
