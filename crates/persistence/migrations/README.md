@@ -433,6 +433,49 @@ Note that 006 is also where the measurement lives (*"0 such rows in 37 772"*),
 remeasured at **0 in 49 980** on 12 August 2026 before 009 was applied — which is
 what made the validating form of the constraint the safe one.
 
+**"Very-high-supply memecoins live in exactly that regime",
+`009_price_positivity.sql:19`** — and its variant *"live in precisely that
+range — which is to say, the population this migration exists to rescue"* at
+`002_swap_implied_price.sql:241-243`, on the same line as the stale `CHECK`
+claim above. This is the stated *motivation* for the sub-`5e-19` guard, asserted
+rather than measured, then copied from one file to the other. **They do not.** The guard is right; this
+reason for it is wrong, and left standing it would make a future reader treat a
+dormant defect as an imminent one — enough to take 009's manual deployment order
+for an emergency.
+
+A mint's `decimals` bounds *amounts*, not prices: a price is a ratio, with no
+on-chain quantum (the Bitcoin-satoshi analogy does not transfer). What bounds a
+price below is supply. Whole-token supply is `u64::MAX / 10^decimals`, so
+`price < 5e-19` implies a total valuation under `5e-19 × 1.8447e19 ≈ $9.22` —
+and that is the extreme case, `decimals = 0`. At the pump.fun standard of 6 it
+is `$9.2e-6`.
+
+Measured against live Jupiter data on 12 August 2026, over the 205 mints its
+search and recent-launch endpoints return:
+
+| mint | decimals | supply | price USD | liquidity | FDV |
+|---|---|---|---|---|---|
+| BabyDoge | 1 | 2.96e17 | **3.47e-10** | $116k | $102M |
+| SHIKOKU | 4 | 9.98e14 | 4.00e-10 | $34k | $400k |
+| pump.fun floor | 6 | 1e9 | ~2e-6 | — | ~$2k |
+
+The real population bottoms out around `1e-10` — **nine orders of magnitude
+above the cliff**. BabyDoge would have to fall from $102M FDV to $0.15 to reach
+it, and a token worth cents in total is precisely what Jupiter has no route for:
+it returns no `usdPrice`, `into_fetched_price` drops it, and nothing is written.
+This agrees with what 009 itself measured on the database (0 zeros in 49 980,
+smallest `1.4e-6`) — the two sit thirteen orders of magnitude apart, and the
+header treats that as luck rather than as structure.
+
+What makes the guard worth keeping is stated correctly in
+`TokenPrice::is_storable`, which is editable and now carries the full argument:
+the reachable vector is the wire, not the market — `usd_price` is an unvalidated
+JSON number from a third party, `Decimal` carries ~7.9e28, and `PriceProvider`
+already names two sources besides Jupiter. That is the same justification as the
+column's *high* end, where the economics are more absurd still (a token at
+`1e20` USD) and the `22003` outage no less real. The caveat on the measurement:
+205 mints from targeted queries establish an observed floor, not a proven one.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped

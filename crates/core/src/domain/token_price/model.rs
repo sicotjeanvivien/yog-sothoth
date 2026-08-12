@@ -114,7 +114,38 @@ impl TokenPrice {
     /// annihilates every product it takes part in and is caught by the
     /// `valuation_complete` guards; a zero *multiplies*, yields a plausible
     /// number, and those guards — which ask `price_usd IS NULL` — wave it
-    /// through. Very-high-supply memecoins live in exactly this regime.
+    /// through.
+    ///
+    /// ## How reachable that is — through the wire, not through the market
+    ///
+    /// This doc used to close the paragraph above with *"very-high-supply
+    /// memecoins live in exactly this regime"*. **That is false**, and it is
+    /// frozen verbatim into `002_swap_implied_price.sql` and
+    /// `009_price_positivity.sql`, which forward-only forbids editing — the
+    /// correction for those two lives in
+    /// `crates/persistence/migrations/README.md`.
+    ///
+    /// A mint's `decimals` bounds *amounts*, not prices: a price is a ratio and
+    /// has no on-chain quantum. What bounds it below is supply. Whole-token
+    /// supply is `u64::MAX / 10^decimals`, so a price under `5e-19` implies a
+    /// total valuation under `5e-19 × 1.8447e19 ≈ $9.22` — and that is the
+    /// absolute extreme, at `decimals = 0`. At the pump.fun standard of 6 the
+    /// same bound is `$9.2e-6`.
+    ///
+    /// Measured against live Jupiter data on 12 August 2026, over the 205 mints
+    /// returned by its search and recent-launch endpoints: the floor of the real
+    /// population is ~`1e-10` (BabyDoge, `decimals = 1`, supply `2.96e17`, price
+    /// `3.47e-10`, $116k liquidity, FDV $102M) — nine orders of magnitude above
+    /// the cliff. Reaching it would take that token's FDV to $0.15, and a token
+    /// worth cents in total is the population Jupiter has no route for, which
+    /// comes back with no `usdPrice` at all and is dropped by
+    /// `into_fetched_price` before this filter ever sees it.
+    ///
+    /// So the low end is guarded for the same reason as the high end below, and
+    /// it is not token economics: `usd_price` is an unvalidated JSON number from
+    /// a third party, `Decimal` carries ~7.9e28 with 28 decimals of scale, and
+    /// [`PriceProvider`] already names two sources besides Jupiter. The guard is
+    /// cheap; the input is not trusted.
     ///
     /// ## The high end — why a ceiling too
     ///
