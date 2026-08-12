@@ -553,19 +553,10 @@ async fn a_dlmm_write_for_an_unknown_pool_fails(pool: PgPool) {
 
 // ── The pool↔protocol invariant, in the schema (baseline §8-§9) ──────
 
-/// SQLSTATE of a failed statement, or the test dies with the error it did get.
-///
-/// The reason these tests do not settle for a bare `expect_err`: every one of
-/// them asserts that a *specific* constraint fired, and an unqualified "some
-/// error happened" is satisfied by the constraint not existing at all. Drop the
-/// generated column and `INSERT … (protocol)` still fails — with `42703`,
-/// undefined_column. Same green, nothing proven.
-fn sqlstate(err: &sqlx::Error) -> String {
-    err.as_database_error()
-        .and_then(|e| e.code())
-        .unwrap_or_else(|| panic!("expected a database error, got {err:?}"))
-        .into_owned()
-}
+// `sqlstate` lives in `helpers` — `price_positivity.rs` asserts a SQLSTATE for
+// the same reason, and one definition is what keeps the rationale attached to
+// the rule rather than to whichever test file happened to need it first.
+use super::helpers::sqlstate;
 
 /// `23503` — foreign_key_violation.
 const FOREIGN_KEY_VIOLATION: &str = "23503";

@@ -81,6 +81,9 @@ pub use swap_flow::{PoolSwapFlow, SwapFlowRepository};
 pub use token_metadata::{
     MetadataProvider, TokenMetadata, TokenMetadataLookup, TokenMetadataRepository,
 };
-pub use token_price::{PriceProvider, TokenPrice, TokenPriceLookup, TokenPriceRepository};
+pub use token_price::{
+    PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider, TokenPrice, TokenPriceLookup,
+    TokenPriceRepository,
+};
 pub use trade_direction::TradeDirection;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

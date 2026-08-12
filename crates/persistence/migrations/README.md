@@ -417,6 +417,22 @@ account and stored as-is, and **roughly a third of `pools` rows have
 and unsafe to use as a pair identity across pools. `MeteoraDammV2SwapEvent`
 carries the full statement.
 
+**"the column carries no `CHECK (> 0)`", `002_swap_implied_price.sql:241`** — and
+its twin in `006_flow_valuation_completeness.sql`, the *"⚠️ One door stays open
+here, deliberately"* paragraph, which spells out that `valuation_complete` tests
+`price_usd IS NULL` rather than `NULLIF(price_usd, 0)` so *"a price rounded to
+exactly zero yields `valuation_complete = TRUE` and a valuation of 0"*. **The
+door is shut**: `009_price_positivity.sql` adds a validated
+`CHECK (price_usd > 0)` on `token_prices.price_usd`, so no zero can be stored and
+the flag cannot be reached through one.
+
+Both paragraphs stay worth reading — they are still the clearest description of
+*why* a zero is more dangerous than an absent price, and 006's is the rare case
+of a header naming the gap it was leaving. Only their present tense is wrong.
+Note that 006 is also where the measurement lives (*"0 such rows in 37 772"*),
+remeasured at **0 in 49 980** on 12 August 2026 before 009 was applied — which is
+what made the validating form of the constraint the safe one.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped

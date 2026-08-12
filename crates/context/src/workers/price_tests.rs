@@ -262,6 +262,149 @@ async fn inserts_only_what_source_priced() {
 }
 
 #[tokio::test]
+async fn unstorable_price_is_dropped_before_the_batch() {
+    // 4e-19 is POSITIVE, and stores as exactly 0 in `NUMERIC(38, 18)`. It must
+    // never reach `insert_batch`: migration 009's CHECK would refuse it, and
+    // because the batch is one statement with `ON CONFLICT DO NOTHING` — which
+    // does not cover check violations — that refusal would take the two healthy
+    // mints down with it, every tick.
+    //
+    // A `price_usd > 0` filter passes this value through, so this test is what
+    // stands between the rule and the naive version of it.
+    let mint_a = pk(1);
+    let mint_dust = pk(2);
+    let mint_c = pk(3);
+
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+        mint_a, mint_dust, mint_c,
+    ]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![
+        priced(mint_a, "1.0"),
+        priced(mint_dust, "0.0000000000000000004"),
+        priced(mint_c, "3.0"),
+    ])]));
+
+    let worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+
+    // The healthy mints are still written — the dust price is skipped, not
+    // fatal.
+    let inserts = price_repo.inserts();
+    assert_eq!(inserts.len(), 1, "the batch must still be sent");
+    let batch = &inserts[0];
+    assert_eq!(
+        batch.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![mint_a, mint_c],
+        "only storable prices reach the repository"
+    );
+}
+
+#[tokio::test]
+async fn a_tick_of_only_unstorable_prices_inserts_nothing() {
+    // The empty check now sits after the filter, so this must NOT reach the
+    // repository at all — an insert of an empty batch would be a wasted
+    // round-trip, and `inserts()` staying empty is what proves the ordering.
+    let mint_dust = pk(1);
+
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint_dust]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![priced(
+        mint_dust,
+        "0.0000000000000000001",
+    )])]));
+
+    let worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+
+    assert!(
+        price_repo.inserts().is_empty(),
+        "a tick that keeps nothing must not call insert_batch"
+    );
+}
+
+#[tokio::test]
+async fn an_overflowing_price_is_dropped_before_the_batch() {
+    // The other end of the column. 1e20 has 20 integer digits and overflows
+    // `NUMERIC(38, 18)` with `22003` — refused by the TYPE, so migration 009's
+    // CHECK never even runs. `usd_price` comes off the Jupiter response
+    // unvalidated, so nothing upstream bounds it either, and the abort would
+    // take the two healthy mints with it exactly like a zero would.
+    let mint_a = pk(1);
+    let mint_absurd = pk(2);
+    let mint_c = pk(3);
+
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+        mint_a,
+        mint_absurd,
+        mint_c,
+    ]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![
+        priced(mint_a, "1.0"),
+        priced(mint_absurd, "100000000000000000000"),
+        priced(mint_c, "3.0"),
+    ])]));
+
+    let worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+
+    let inserts = price_repo.inserts();
+    assert_eq!(inserts.len(), 1, "the batch must still be sent");
+    assert_eq!(
+        inserts[0].iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![mint_a, mint_c],
+        "only prices the column can hold reach the repository"
+    );
+}
+
+#[tokio::test]
+async fn midpoint_price_is_kept() {
+    // 5e-19 rounds AWAY from zero and stores as 1e-18 — the filter must not be
+    // over-eager and throw away a price the column can actually hold.
+    let mint = pk(1);
+
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![priced(
+        mint,
+        "0.0000000000000000005",
+    )])]));
+
+    let worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+
+    let inserts = price_repo.inserts();
+    assert_eq!(inserts.len(), 1);
+    assert_eq!(inserts[0].len(), 1);
+    assert_eq!(inserts[0][0].mint, mint);
+}
+
+#[tokio::test]
 async fn list_known_mints_error_skips_cycle_silently() {
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1)]));
     metadata_repo.fail_list_known_once(RepositoryError::Integrity("DB down".into()));

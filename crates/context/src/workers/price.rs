@@ -118,22 +118,8 @@ impl PriceWorker {
             }
         };
 
-        // Coverage of this tick: how many of the mints we asked for came back
-        // with a price. Set before the empty check so a source that returns
-        // nothing reports 0 rather than leaving the gauge on its last value.
-        PriceWorkerMetrics::set_priced_mints(fetched.len());
-
-        if fetched.is_empty() {
-            debug!("price worker: no prices to insert");
-            // `no_prices` was declared in the outcome label set from the start
-            // but never emitted — a tick that priced nothing looked, in the
-            // metrics, exactly like a tick that never happened.
-            PriceWorkerMetrics::record_tick("no_prices", start.elapsed().as_secs_f64());
-            return;
-        }
-
         let now = Utc::now();
-        let to_insert: Vec<TokenPrice> = fetched
+        let priced: Vec<TokenPrice> = fetched
             .into_iter()
             .map(
                 |FetchedPrice {
@@ -149,6 +135,48 @@ impl PriceWorker {
                 },
             )
             .collect();
+
+        // A price the `NUMERIC(38, 18)` column cannot hold is dropped HERE
+        // rather than left for the database to refuse.
+        //
+        // Not a nicety: `insert_batch` sends the whole tick as ONE statement,
+        // and `ON CONFLICT DO NOTHING` covers neither the `CHECK` of migration
+        // 009 (`23514`, a price that rounds to zero) nor the column type's own
+        // overflow (`22003`, a price at or above 10^20). Either one aborts the
+        // insert for *every other mint*, every tick, for as long as that mint
+        // stays in the known set — and migration 005 established that the
+        // resulting as-of gap never heals. The constraint is the guarantee;
+        // this filter is what keeps it from ever firing. See
+        // `TokenPrice::is_storable` for why the test is neither `> 0` nor
+        // one-sided.
+        let (to_insert, rejected): (Vec<TokenPrice>, Vec<TokenPrice>) =
+            priced.into_iter().partition(TokenPrice::is_storable);
+
+        if !rejected.is_empty() {
+            PriceWorkerMetrics::record_rejected(rejected.len());
+            warn!(
+                count = rejected.len(),
+                mints = ?rejected.iter().map(|p| p.mint.to_string()).collect::<Vec<_>>(),
+                "price worker: dropped prices the price column cannot hold"
+            );
+        }
+
+        // Coverage of this tick: how many of the mints we asked for yielded a
+        // price we actually kept. Counted after the filter, because the gauge
+        // answers "what can be valued downstream" — a price rejected here is as
+        // absent, downstream, as one the source never returned. Set before the
+        // empty check so a tick that keeps nothing reports 0 rather than
+        // leaving the gauge on its last value.
+        PriceWorkerMetrics::set_priced_mints(to_insert.len());
+
+        if to_insert.is_empty() {
+            debug!("price worker: no prices to insert");
+            // `no_prices` was declared in the outcome label set from the start
+            // but never emitted — a tick that priced nothing looked, in the
+            // metrics, exactly like a tick that never happened.
+            PriceWorkerMetrics::record_tick("no_prices", start.elapsed().as_secs_f64());
+            return;
+        }
 
         let inserted = to_insert.len();
         if let Err(e) = self.price_repository.insert_batch(&to_insert).await {

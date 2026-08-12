@@ -8,6 +8,26 @@ use sqlx::PgPool;
 pub fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
+
+/// SQLSTATE of a failed statement, or the test dies with the error it did get.
+///
+/// The reason the schema tests do not settle for a bare `expect_err`: every one
+/// of them asserts that a *specific* constraint fired, and an unqualified "some
+/// error happened" is satisfied by the constraint not existing at all. Drop the
+/// generated column and `INSERT … (protocol)` still fails — with `42703`,
+/// undefined_column. Same green, nothing proven.
+pub fn sqlstate(err: &sqlx::Error) -> String {
+    err.as_database_error()
+        .and_then(|e| e.code())
+        .unwrap_or_else(|| panic!("expected a database error, got {err:?}"))
+        .into_owned()
+}
+
+/// `23514` — check_violation.
+pub const CHECK_VIOLATION: &str = "23514";
+/// `22003` — numeric_value_out_of_range, raised by the column TYPE during
+/// coercion, before any constraint is consulted.
+pub const NUMERIC_OVERFLOW: &str = "22003";
 pub fn sg() -> Signature {
     Signature::from([7u8; 64])
 }
@@ -51,4 +71,31 @@ pub async fn price_mint_since(pool: &PgPool, mint: &str, price: &str, since_hour
 /// A continuously-priced mint, covering any bucket a fixture is likely to place.
 pub async fn price_mint(pool: &PgPool, mint: &str, price: &str) {
     price_mint_since(pool, mint, price, 48).await;
+}
+
+/// Drop the positivity constraint of migration 009 so a fixture can seed a price
+/// that stores as zero.
+///
+/// ⚠️ **Only for tests of the layer *below* the constraint.** Since 009 a zero
+/// cannot be written through any normal path, so a test that seeds one is, on
+/// the face of it, testing a state that cannot occur — which this file's own
+/// fixtures rule would forbid.
+///
+/// It is worth testing anyway, and the distinction is which layer is under
+/// examination. The constraint stops a zero from being *stored*; the
+/// `NULLIF(price_usd, 0)` pair inside `meteora_damm_v2_swap_events_hourly_priced`
+/// (live definition in migration **007**, not the 002 that introduced it) stops
+/// a zero that IS stored from being *valued*. The second is still
+/// reachable — a restore from a pre-009 backup, a repair script run with the
+/// constraint dropped, a future migration that relaxes it — and it is the layer
+/// that decides whether a bad row becomes a fabricated number or an honest NULL.
+///
+/// So: call this only where the assertion is about the view's arithmetic.
+/// `price_positivity.rs` is where the constraint itself is asserted, and it must
+/// never call this.
+pub async fn allow_zero_prices(pool: &PgPool) {
+    sqlx::query("ALTER TABLE token_prices DROP CONSTRAINT token_prices_price_usd_positive")
+        .execute(pool)
+        .await
+        .expect("migration 009 must have created the constraint this fixture removes");
 }

@@ -30,7 +30,7 @@
 //! version of one of those fixtures then gave the OPPOSITE result. A fixture
 //! that cannot occur is a test that cannot fail for the right reason.
 
-use super::helpers::{pk, price_mint, price_mint_since};
+use super::helpers::{allow_zero_prices, pk, price_mint, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -563,9 +563,16 @@ async fn a_price_rounded_to_zero_does_not_fabricate_coverage(pool: PgPool) {
     // exists to rescue. `NULLIF` guarded the amounts but not the price, so
     // `implied_a = (traded_b × 0) / traded_a = 0` produced a bucket valued at 0
     // and counted as COVERED.
+    //
+    // Since migration 009 the column refuses a zero outright, so this fixture
+    // has to remove that constraint to reach the case at all. What stays under
+    // test is the layer below it: the view's `NULLIF`, which is what still
+    // stands between a stored zero and a fabricated coverage figure — after a
+    // restore from a pre-009 backup, say. See `helpers::allow_zero_prices`.
     let pool_addr = pk(1).to_string();
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    allow_zero_prices(&pool).await;
     // Rounds to exactly 0 in the column's scale.
     price_mint(&pool, &mint_b, "0.00000000000000000000123").await;
 
@@ -767,9 +774,15 @@ async fn a_zero_price_yields_to_the_implied_rate_instead_of_winning(pool: PgPool
     // the bucket collapses for an unrelated reason. Here token B is perfectly
     // priced, so the bucket IS valuable — just not at the value it produced.
     // Measured before the fix: $180 instead of $270, flagged covered 1/1.
+    //
+    // Same fixture note as test 10: migration 009 now refuses the zero at the
+    // column, so reaching this case means removing that constraint. The
+    // assertion is about the `COALESCE` inside the view, which is a layer below
+    // it and still the one that decides between $180 and $270.
     let pool_addr = pk(1).to_string();
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    allow_zero_prices(&pool).await;
     price_mint(&pool, &mint_a, "0.00000000000000000000123").await; // stored as 0
     price_mint(&pool, &mint_b, PRICE_B).await;
 
