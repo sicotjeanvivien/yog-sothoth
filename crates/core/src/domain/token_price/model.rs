@@ -118,19 +118,22 @@ impl TokenPrice {
     ///
     /// ## How reachable that is — through the wire, not through the market
     ///
-    /// This doc used to close the paragraph above with *"very-high-supply
-    /// memecoins live in exactly this regime"*. **That is false**, and it is
-    /// frozen verbatim into `002_swap_implied_price.sql` and
-    /// `009_price_positivity.sql`, which forward-only forbids editing — the
-    /// correction for those two lives in
+    /// This doc used to close the paragraph above by claiming that
+    /// very-high-supply memecoins live in exactly this regime. **That is
+    /// false**, and the same claim is frozen into two migrations that
+    /// forward-only forbids editing, in two different wordings —
+    /// `009_price_positivity.sql:19` (*"live in exactly that regime"*) and
+    /// `002_swap_implied_price.sql:241-243` (*"live in precisely that range —
+    /// which is to say, the population this migration exists to rescue"*).
+    /// Neither is quotable as a single string; the correction for both lives in
     /// `crates/persistence/migrations/README.md`.
     ///
     /// A mint's `decimals` bounds *amounts*, not prices: a price is a ratio and
     /// has no on-chain quantum. What bounds it below is supply. Whole-token
-    /// supply is `u64::MAX / 10^decimals`, so a price under `5e-19` implies a
-    /// total valuation under `5e-19 × 1.8447e19 ≈ $9.22` — and that is the
-    /// absolute extreme, at `decimals = 0`. At the pump.fun standard of 6 the
-    /// same bound is `$9.2e-6`.
+    /// supply is **at most** `u64::MAX / 10^decimals`, so a price under `5e-19`
+    /// implies a total valuation under `5e-19 × 1.8447e19 ≈ $9.22` — and that is
+    /// the absolute extreme, at `decimals = 0`. At the pump.fun standard of 6
+    /// the same bound is `$9.2e-6`.
     ///
     /// Measured against live Jupiter data on 12 August 2026, over the 205 mints
     /// returned by its search and recent-launch endpoints: the floor of the real
@@ -143,9 +146,17 @@ impl TokenPrice {
     ///
     /// So the low end is guarded for the same reason as the high end below, and
     /// it is not token economics: `usd_price` is an unvalidated JSON number from
-    /// a third party, `Decimal` carries ~7.9e28 with 28 decimals of scale, and
-    /// [`PriceProvider`] already names two sources besides Jupiter. The guard is
-    /// cheap; the input is not trusted.
+    /// a third party. `Decimal`'s maximum scale is 28, so its smallest positive
+    /// value is `1e-28` — the whole band `[1e-28, 5e-19)` is representable in
+    /// Rust, survives every `> 0` test, and rounds to a stored zero. That is the
+    /// bound that matters here; the `7.9e28` cited below is the *other* end of
+    /// the same property and does not bear on this one (a `Decimal` at scale 28
+    /// tops out near `7.9228`, not `7.9e28` — the two bounds cannot hold at
+    /// once). [`PriceProvider`] also reserves two more provenances, `Helius` and
+    /// `Fallback`; neither has a `PriceSource` implementation today, which makes
+    /// them a reason to keep the filter honest for a future writer rather than
+    /// evidence of a second untrusted producer now. The guard is cheap; the
+    /// input is not trusted.
     ///
     /// ## The high end — why a ceiling too
     ///

@@ -445,7 +445,8 @@ for an emergency.
 
 A mint's `decimals` bounds *amounts*, not prices: a price is a ratio, with no
 on-chain quantum (the Bitcoin-satoshi analogy does not transfer). What bounds a
-price below is supply. Whole-token supply is `u64::MAX / 10^decimals`, so
+price below is supply. Whole-token supply is **at most** `u64::MAX / 10^decimals`
+(the table below is the reminder that real mints sit far under that ceiling), so
 `price < 5e-19` implies a total valuation under `5e-19 × 1.8447e19 ≈ $9.22` —
 and that is the extreme case, `decimals = 0`. At the pump.fun standard of 6 it
 is `$9.2e-6`.
@@ -469,12 +470,19 @@ header treats that as luck rather than as structure.
 
 What makes the guard worth keeping is stated correctly in
 `TokenPrice::is_storable`, which is editable and now carries the full argument:
-the reachable vector is the wire, not the market — `usd_price` is an unvalidated
-JSON number from a third party, `Decimal` carries ~7.9e28, and `PriceProvider`
-already names two sources besides Jupiter. That is the same justification as the
-column's *high* end, where the economics are more absurd still (a token at
-`1e20` USD) and the `22003` outage no less real. The caveat on the measurement:
-205 mints from targeted queries establish an observed floor, not a proven one.
+the reachable vector is the wire, not the market. `usd_price` is an unvalidated
+JSON number from a third party, and `Decimal`'s maximum scale of 28 puts its
+smallest positive value at `1e-28`: the whole band `[1e-28, 5e-19)` is
+representable, passes any `> 0` test, and rounds to a stored zero. That is the
+same justification as the column's *high* end, where the economics are more
+absurd still (a token at `1e20` USD) and the `22003` outage no less real.
+
+Two caveats, both on the evidence rather than the conclusion: 205 mints from
+targeted queries establish an observed floor, not a proven one; and
+`PriceProvider`'s two other provenances (`Helius`, `Fallback`) have no
+`PriceSource` implementation today, so exactly one untrusted producer exists —
+they argue for keeping the filter honest ahead of a future writer, not for a
+second live input.
 
 This is the right discipline for production safety:
 
