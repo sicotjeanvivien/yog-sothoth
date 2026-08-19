@@ -21,7 +21,6 @@ persistence/
 ├── src/
 │   ├── database.rs          ← Database::connect, run_migrations, run_script
 │   ├── health.rs            ← PgHealthChecker
-│   ├── migrations.rs        ← test-only checks over migrations/ (see below)
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
@@ -37,6 +36,9 @@ persistence/
 │   └── bin/
 │       ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
 │       │                      seed-watched-pools / bootstrap)
+│       ├── migrate/
+│       │   └── lint.rs      ← test-only: the rules yog-migrate imposes on the
+│       │                      migrations it applies (see below)
 │       └── scripts/         ← the provisioning SQL, `include_str!`d into it
 │           ├── setup_roles.sql         (roles + structural privileges, admin)
 │           └── setup_watched_pools.sql (startup allowlist seed, admin)
@@ -46,7 +48,7 @@ persistence/
     └── <subject>.rs         ← one file per event / read path
 ```
 
-### `migrations.rs` — the checks that run over the migration files
+### `bin/migrate/lint.rs` — the rules `yog-migrate` imposes on its migrations
 
 DB-free unit tests over `migrations/*.sql`, chiefly one rule: **every index is
 named**. Postgres truncates a generated index name to 63 bytes, our table names
@@ -57,10 +59,17 @@ to `create_hypertable`, which is asked for `create_default_indexes => FALSE` so
 its default index is written out too.
 
 ```bash
-cargo test -p yog-persistence migrations
+cargo test -p yog-persistence --bin yog-migrate
 ```
 
-It binds migrations from `010` on. `001`–`009` are frozen history and break the
+They sit with the binary rather than in the library because `migrations/` is
+`yog-migrate`'s subject — this crate binds the processes to the database, that
+binary owns how the schema changes — and they stay *tests* rather than a runtime
+check: a migration that breaks a naming convention is badly written, not
+dangerous to apply, so the sanction is a red pull request, not a blocked
+deployment.
+
+They bind migrations from `010` on. `001`–`009` are frozen history and break the
 rule 70 times; that count is asserted, so the boundary is a fact rather than an
 intention. The rule itself, with the naming budget, is in
 [`migrations/README.md`](migrations/README.md).

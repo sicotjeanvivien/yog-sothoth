@@ -1,4 +1,12 @@
-//! Static checks over `migrations/*.sql`, run as ordinary DB-free unit tests.
+//! The rules `yog-migrate` imposes on the migrations it applies, checked as
+//! ordinary DB-free unit tests of this binary.
+//!
+//! They live here rather than in the crate's library because `migrations/` is
+//! this binary's subject: `yog-persistence` binds the processes to the database,
+//! `yog-migrate` owns how the schema changes. They stay *tests* rather than a
+//! runtime check because a migration that breaks a naming convention is badly
+//! written, not dangerous to apply — the proportionate sanction is a red pull
+//! request, not a blocked deployment.
 //!
 //! # Index names have to be written down
 //!

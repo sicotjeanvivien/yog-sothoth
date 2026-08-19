@@ -15,12 +15,6 @@ mod error;
 mod health;
 mod repositories;
 
-/// Static checks over the migration files — chiefly that every index is named,
-/// so Postgres never has to invent a name it will truncate. Test-only: nothing
-/// here ships in the crate.
-#[cfg(test)]
-mod migrations;
-
 pub use database::Database;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{

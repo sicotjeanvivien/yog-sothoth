@@ -596,10 +596,11 @@ CREATE INDEX meteora_<product>_<event_kind>_ts
 And keep table names within **58** characters, because `<table>_pkey` is the one
 index name that cannot be written by hand.
 
-`src/migrations.rs` enforces all of that, DB-free:
+`src/bin/migrate/lint.rs` enforces all of that, DB-free — it belongs to
+`yog-migrate`, the binary that owns these files:
 
 ```bash
-cargo test -p yog-persistence migrations
+cargo test -p yog-persistence --bin yog-migrate
 ```
 
 **`001`–`009` are out of scope.** They break the rule 70 times over and stay as
