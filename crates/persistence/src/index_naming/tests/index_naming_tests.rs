@@ -4,19 +4,22 @@ use super::*;
 // The port, checked against names Postgres actually produced
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The one collision the schema already carries. These two strings were read
-/// off a live database before being asserted here; they are the fixture the
-/// whole guard rests on.
+/// The one collision the schema already carries, and the truncated default index
+/// `create_hypertable` builds on the longest table. All four strings were read
+/// off a live `timescale/timescaledb:latest-pg16` before being asserted here;
+/// they are the fixture the whole guard rests on.
 const DURATION_TABLE: &str = "meteora_damm_v2_update_reward_duration_events";
 const FUNDER_TABLE: &str = "meteora_damm_v2_update_reward_funder_events";
 const DURATION_INDEX: &str = "meteora_damm_v2_update_reward_signature_event_index_timesta_idx";
 const FUNDER_INDEX: &str = "meteora_damm_v2_update_reward_signature_event_index_timest_idx1";
+const LONGEST_TABLE: &str = "meteora_damm_v2_withdraw_dead_liquidity_reward_events";
+const LONGEST_HYPERTABLE_INDEX: &str =
+    "meteora_damm_v2_withdraw_dead_liquidity_reward_ev_timestamp_idx";
+
+const KEY_COLUMNS: [&str; 3] = ["signature", "event_index", "timestamp"];
 
 fn key_columns() -> Vec<String> {
-    ["signature", "event_index", "timestamp"]
-        .iter()
-        .map(|c| c.to_string())
-        .collect()
+    KEY_COLUMNS.iter().map(|c| c.to_string()).collect()
 }
 
 fn decl(table: &str, columns: &[&str]) -> IndexDecl {
@@ -26,7 +29,16 @@ fn decl(table: &str, columns: &[&str]) -> IndexDecl {
         explicit_name: None,
         table: table.to_string(),
         columns: columns.iter().map(|c| c.to_string()).collect(),
+        origin: Origin::Written,
     }
+}
+
+fn events(decls: Vec<IndexDecl>) -> Vec<Event> {
+    decls.into_iter().map(Event::Index).collect()
+}
+
+fn collided(decls: Vec<IndexDecl>) -> Vec<Collision> {
+    collisions(&events(decls)).expect("no name is freed in these fixtures")
 }
 
 #[test]
@@ -126,12 +138,10 @@ fn choose_relation_name_should_count_the_passes_it_needed() {
 
 #[test]
 fn collisions_should_report_a_colliding_pair() {
-    let indexes = vec![
-        decl(DURATION_TABLE, &["signature", "event_index", "timestamp"]),
-        decl(FUNDER_TABLE, &["signature", "event_index", "timestamp"]),
-    ];
-
-    let found = collisions(&indexes);
+    let found = collided(vec![
+        decl(DURATION_TABLE, &KEY_COLUMNS),
+        decl(FUNDER_TABLE, &KEY_COLUMNS),
+    ]);
 
     assert_eq!(found.len(), 1, "got {found:#?}");
     assert_eq!(found[0].table, FUNDER_TABLE);
@@ -142,28 +152,21 @@ fn collisions_should_report_a_colliding_pair() {
 /// collides with nothing.
 #[test]
 fn collisions_should_be_empty_without_the_second_member() {
-    let indexes = vec![decl(
-        DURATION_TABLE,
-        &["signature", "event_index", "timestamp"],
-    )];
-
-    assert!(collisions(&indexes).is_empty());
+    assert!(collided(vec![decl(DURATION_TABLE, &KEY_COLUMNS)]).is_empty());
 }
 
 /// A brand-new table whose name survives truncation onto an existing one is
 /// exactly the scenario this guard exists for: adding it must be caught.
 #[test]
 fn collisions_should_catch_a_third_table_added_to_the_colliding_family() {
-    let indexes = vec![
-        decl(DURATION_TABLE, &["signature", "event_index", "timestamp"]),
-        decl(FUNDER_TABLE, &["signature", "event_index", "timestamp"]),
+    let found = collided(vec![
+        decl(DURATION_TABLE, &KEY_COLUMNS),
+        decl(FUNDER_TABLE, &KEY_COLUMNS),
         decl(
             "meteora_damm_v2_update_reward_authority_events",
-            &["signature", "event_index", "timestamp"],
+            &KEY_COLUMNS,
         ),
-    ];
-
-    let found = collisions(&indexes);
+    ]);
 
     assert_eq!(found.len(), 2, "got {found:#?}");
     assert_eq!(
@@ -179,10 +182,14 @@ fn collisions_should_catch_a_third_table_added_to_the_colliding_family() {
 /// a schema that is not the same one, with no error raised.
 #[test]
 fn the_suffix_follows_declaration_order() {
-    let columns = ["signature", "event_index", "timestamp"];
-
-    let as_declared = collisions(&[decl(DURATION_TABLE, &columns), decl(FUNDER_TABLE, &columns)]);
-    let swapped = collisions(&[decl(FUNDER_TABLE, &columns), decl(DURATION_TABLE, &columns)]);
+    let as_declared = collided(vec![
+        decl(DURATION_TABLE, &KEY_COLUMNS),
+        decl(FUNDER_TABLE, &KEY_COLUMNS),
+    ]);
+    let swapped = collided(vec![
+        decl(FUNDER_TABLE, &KEY_COLUMNS),
+        decl(DURATION_TABLE, &KEY_COLUMNS),
+    ]);
 
     assert_eq!(as_declared[0].table, FUNDER_TABLE);
     assert_eq!(swapped[0].table, DURATION_TABLE);
@@ -198,12 +205,122 @@ fn the_suffix_follows_declaration_order() {
 fn collisions_should_account_for_explicitly_named_indexes() {
     let mut explicit = decl("pools", &["protocol"]);
     explicit.explicit_name = Some("pools_protocol_idx".to_string());
-    let indexes = vec![explicit, decl("pools", &["protocol"])];
 
-    let found = collisions(&indexes);
+    let found = collided(vec![explicit, decl("pools", &["protocol"])]);
 
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].generated, "pools_protocol_idx1");
+}
+
+/// A name freed mid-replay shifts every suffix after it, and the replay cannot
+/// be right about that — so it must refuse rather than carry on.
+#[test]
+fn collisions_should_refuse_a_statement_that_frees_a_modelled_name() {
+    let dropped = Event::Drop(DropStmt {
+        file: "synthetic.sql".to_string(),
+        line: 2,
+        table: Some("pools".to_string()),
+        index: None,
+        column: Some("protocol".to_string()),
+        statement: "ALTER TABLE pools DROP COLUMN protocol".to_string(),
+    });
+
+    let error = collisions(&[Event::Index(decl("pools", &["protocol"])), dropped])
+        .expect_err("freeing a modelled name must be refused");
+
+    assert!(
+        error.contains("frees the index name `pools_protocol_idx`"),
+        "{error}"
+    );
+}
+
+/// …but a drop that touches nothing we model is not a reason to stop: the
+/// migrations already drop views and unindexed columns.
+#[test]
+fn collisions_should_ignore_a_drop_that_frees_nothing_modelled() {
+    let dropped = Event::Drop(DropStmt {
+        file: "synthetic.sql".to_string(),
+        line: 2,
+        table: Some("pool_current_state".to_string()),
+        index: None,
+        column: Some("liquidity".to_string()),
+        statement: "ALTER TABLE pool_current_state DROP COLUMN liquidity".to_string(),
+    });
+
+    let found = collisions(&[Event::Index(decl("pools", &["protocol"])), dropped])
+        .expect("an unrelated drop is not a reason to refuse");
+
+    assert!(found.is_empty());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// create_hypertable — the 21 index names nobody writes down
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Read off a live TimescaleDB: `create_hypertable` builds a default index on
+/// the time dimension, on the root table, in `public`, named by the very
+/// algorithm this module ports — and on our longest table it is already
+/// truncated to 63 bytes. Miss it and the replay believes a taken name is free.
+#[test]
+fn a_hypertable_contributes_its_default_time_dimension_index() {
+    let scanned = scan_sql(
+        "synthetic.sql",
+        "SELECT create_hypertable('meteora_damm_v2_withdraw_dead_liquidity_reward_events', \
+         'timestamp', chunk_time_interval => INTERVAL '7 days');",
+    )
+    .expect("the call parses");
+
+    let decls: Vec<&IndexDecl> = scanned.indexes().collect();
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].origin, Origin::HypertableDefault);
+    assert_eq!(decls[0].table, LONGEST_TABLE);
+    assert_eq!(decls[0].columns, vec!["timestamp".to_string()]);
+
+    let (name, passes) = generated_index_name(decls[0], &HashSet::new());
+    assert_eq!(name, LONGEST_HYPERTABLE_INDEX);
+    assert_eq!(name.len(), MAX_IDENTIFIER_LEN);
+    assert_eq!(passes, 0);
+}
+
+/// The failure the review reproduced against a real database: without the
+/// hypertable default in `taken`, a later index that truncates onto it is
+/// predicted un-suffixed and the guard reports green on a real collision.
+#[test]
+fn a_hypertable_default_index_takes_the_name_a_later_index_would_want() {
+    let sql = "SELECT create_hypertable('token_prices', 'fetched_at');\n\
+               CREATE INDEX ON token_prices (fetched_at);";
+
+    let scanned = scan_sql("synthetic.sql", sql).expect("parses");
+    let found = collisions(&scanned.events).expect("nothing is freed");
+
+    assert_eq!(found.len(), 1, "got {found:#?}");
+    assert_eq!(found[0].origin, Origin::Written);
+    assert_eq!(found[0].generated, "token_prices_fetched_at_idx1");
+}
+
+#[test]
+fn a_hypertable_with_default_indexes_disabled_contributes_nothing() {
+    let scanned = scan_sql(
+        "synthetic.sql",
+        "SELECT create_hypertable('t', 'ts', create_default_indexes => FALSE);",
+    )
+    .expect("parses");
+
+    assert_eq!(scanned.indexes().count(), 0);
+}
+
+#[test]
+fn scan_should_refuse_a_hypertable_argument_it_cannot_vouch_for() {
+    let error = scan_err("SELECT create_hypertable('t', 'ts', number_partitions => 4);");
+
+    assert!(error.contains("number_partitions"), "{error}");
+}
+
+#[test]
+fn scan_should_refuse_the_legacy_positional_partitioning_column() {
+    let error = scan_err("SELECT create_hypertable('t', 'ts', 'device_id', 4);");
+
+    assert!(error.contains("legacy partitioning_column"), "{error}");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -222,9 +339,10 @@ fn scan_should_read_a_plain_index_declaration() {
     )
     .expect("plain declarations parse");
 
-    assert_eq!(scanned.indexes.len(), 1);
-    assert_eq!(scanned.indexes[0].columns, key_columns());
-    assert_eq!(scanned.indexes[0].explicit_name, None);
+    let decls: Vec<&IndexDecl> = scanned.indexes().collect();
+    assert_eq!(decls.len(), 1);
+    assert_eq!(decls[0].columns, key_columns());
+    assert_eq!(decls[0].explicit_name, None);
 }
 
 #[test]
@@ -236,7 +354,7 @@ fn scan_should_ignore_sort_order_and_opclass_on_a_column() {
     .expect("modifiers parse");
 
     assert_eq!(
-        scanned.indexes[0].columns,
+        scanned.indexes().next().unwrap().columns,
         vec!["pool_address".to_string(), "timestamp".to_string()]
     );
 }
@@ -249,14 +367,12 @@ fn scan_should_read_a_declaration_spread_over_several_lines() {
     )
     .expect("multi-line declarations parse");
 
+    let decl = scanned.indexes().next().unwrap();
     assert_eq!(
-        scanned.indexes[0].explicit_name.as_deref(),
+        decl.explicit_name.as_deref(),
         Some("idx_pools_needs_refresh")
     );
-    assert_eq!(
-        scanned.indexes[0].columns,
-        vec!["needs_refresh".to_string()]
-    );
+    assert_eq!(decl.columns, vec!["needs_refresh".to_string()]);
 }
 
 #[test]
@@ -267,8 +383,53 @@ fn scan_should_skip_comments_and_dollar_quoted_bodies() {
 
     let scanned = scan_sql("synthetic.sql", sql).expect("parses");
 
-    assert_eq!(scanned.indexes.len(), 1);
-    assert_eq!(scanned.indexes[0].table, "real_table");
+    assert_eq!(scanned.indexes().count(), 1);
+    assert_eq!(scanned.indexes().next().unwrap().table, "real_table");
+}
+
+/// A comment must become a *space*, or `INDEX/**/ON` welds into `INDEXON` and
+/// the statement stops looking index-shaped — the quiet way to lose coverage.
+#[test]
+fn scan_should_not_weld_tokens_across_a_comment() {
+    let scanned = scan_sql("synthetic.sql", "CREATE INDEX/**/ON t (a);").expect("parses");
+
+    assert_eq!(scanned.indexes().count(), 1);
+}
+
+/// Postgres nests block comments; a scanner that stops at the first `*/` would
+/// read the tail of the comment as live SQL.
+#[test]
+fn scan_should_nest_block_comments() {
+    let sql = "/* outer /* inner */ CREATE INDEX ON hidden (a); */\n\
+               CREATE INDEX ON real_table (b);";
+
+    let scanned = scan_sql("synthetic.sql", sql).expect("parses");
+
+    let tables: Vec<&str> = scanned.indexes().map(|d| d.table.as_str()).collect();
+    assert_eq!(
+        tables,
+        vec!["real_table"],
+        "the commented-out one is not live"
+    );
+}
+
+#[test]
+fn scan_should_refuse_an_escape_string_literal() {
+    let error = scan_err("INSERT INTO x VALUES (E'\\'');\nCREATE INDEX ON t (a);");
+
+    assert!(error.contains("escape string literals"), "{error}");
+}
+
+/// The backstop for every silent-skip path at once: if a statement mentions
+/// CREATE INDEX and the parser did not turn it into one, that is an error.
+#[test]
+fn scan_should_refuse_when_an_index_statement_was_not_decomposed() {
+    // Nothing here is decomposable into an index, yet the text says CREATE
+    // INDEX — which is exactly what a mis-split or an unrecognised form looks
+    // like from the outside.
+    let error = scan_err("INSERT INTO audit (note) VALUES ('CREATE INDEX ON t (a)');");
+
+    assert!(error.contains("were decomposed"), "{error}");
 }
 
 #[test]
@@ -282,13 +443,31 @@ fn scan_should_refuse_an_include_clause() {
 }
 
 #[test]
-fn scan_should_refuse_a_drop_index() {
-    assert!(scan_err("DROP INDEX some_index;").contains("DROP INDEX is not modelled"));
+fn scan_should_refuse_a_repeated_column() {
+    assert!(scan_err("CREATE INDEX ON t (a, a);").contains("appears twice"));
 }
 
 #[test]
 fn scan_should_refuse_a_schema_qualified_table() {
     assert!(scan_err("CREATE INDEX ON public.t (a);").contains("unsupported table reference"));
+}
+
+#[test]
+fn scan_should_refuse_an_unnamed_unique_constraint() {
+    let error = scan_err("CREATE TABLE t (a TEXT, b TEXT, UNIQUE (a, b));");
+
+    assert!(error.contains("unnamed UNIQUE constraint"), "{error}");
+}
+
+#[test]
+fn scan_should_accept_a_named_unique_constraint() {
+    let scanned = scan_sql(
+        "synthetic.sql",
+        "CREATE TABLE t (a TEXT, b TEXT, CONSTRAINT t_a_b_key UNIQUE (a, b));",
+    )
+    .expect("a named constraint is fine");
+
+    assert_eq!(scanned.tables, vec!["t".to_string()]);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -307,7 +486,7 @@ const PINNED_COLLISIONS: &[(&str, &str)] = &[(FUNDER_TABLE, FUNDER_INDEX)];
 fn migrations_should_not_introduce_a_new_index_name_collision() {
     let scanned = scan_migrations().expect("every migration must be parseable");
 
-    let found = collisions(&scanned.indexes);
+    let found = collisions(&scanned.events).expect("no migration may free a modelled index name");
 
     let actual: Vec<(String, String)> = found
         .iter()
@@ -327,16 +506,27 @@ fn migrations_should_not_introduce_a_new_index_name_collision() {
 
 /// `001_baseline.sql` is frozen — migrations are forward-only — so these counts
 /// can never go stale, and they turn the ticket's prose into an assertion.
+///
+/// 49 written `CREATE INDEX` lines plus the 21 default indexes
+/// `create_hypertable` builds without anyone writing them down: 70 names in
+/// `public`, which is what the live schema holds.
 #[test]
-fn the_baseline_carries_forty_nine_auto_named_indexes_thirty_five_of_them_truncated() {
+fn the_baseline_carries_seventy_auto_named_indexes_thirty_six_of_them_truncated() {
     let baseline = migrations_dir().join("001_baseline.sql");
     let scanned = scan_file(&baseline).expect("the baseline must be parseable");
 
     let auto_named: Vec<&IndexDecl> = scanned
-        .indexes
-        .iter()
+        .indexes()
         .filter(|decl| decl.explicit_name.is_none())
         .collect();
+    let written = auto_named
+        .iter()
+        .filter(|decl| decl.origin == Origin::Written)
+        .count();
+    let from_hypertables = auto_named
+        .iter()
+        .filter(|decl| decl.origin == Origin::HypertableDefault)
+        .count();
     let truncated = auto_named
         .iter()
         .filter(|decl| {
@@ -345,13 +535,17 @@ fn the_baseline_carries_forty_nine_auto_named_indexes_thirty_five_of_them_trunca
         })
         .count();
 
-    assert_eq!(auto_named.len(), 49, "auto-named indexes in the baseline");
-    assert_eq!(truncated, 35, "of which truncated");
+    assert_eq!(written, 49, "written CREATE INDEX lines");
+    assert_eq!(from_hypertables, 21, "create_hypertable default indexes");
+    assert_eq!(auto_named.len(), 70, "auto-named indexes in public");
+    assert_eq!(truncated, 36, "of which truncated");
 }
 
-/// Closes the blind spot left by not parsing `CREATE TABLE` bodies: a
-/// constraint-borne index is named `<table>_pkey`, which only truncates once the
-/// table name passes this length. The longest today is 53.
+/// Closes the blind spot left by not parsing `CREATE TABLE` bodies for primary
+/// keys: `<table>_pkey` carries no column part, so it only truncates once the
+/// table name passes 58 characters. The longest today is 53. (Unnamed `UNIQUE`
+/// constraints, which *do* carry a column part, are refused outright by the
+/// scanner instead.)
 #[test]
 fn no_table_name_is_long_enough_for_its_pkey_to_truncate() {
     let scanned = scan_migrations().expect("every migration must be parseable");
@@ -373,7 +567,7 @@ fn no_table_name_is_long_enough_for_its_pkey_to_truncate() {
 fn every_explicitly_named_index_fits_without_truncation() {
     let scanned = scan_migrations().expect("every migration must be parseable");
 
-    for decl in &scanned.indexes {
+    for decl in scanned.indexes() {
         if let Some(name) = &decl.explicit_name {
             assert!(
                 name.len() <= MAX_IDENTIFIER_LEN,

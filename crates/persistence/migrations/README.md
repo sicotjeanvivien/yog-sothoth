@@ -562,8 +562,11 @@ the keys precisely to leave one rule.
 
 `CREATE UNIQUE INDEX ON …` leaves the name to the server, and the server has
 only 63 bytes for it. Every `meteora_damm_v2_*_events` table is long enough that
-the name gets truncated — **35 of the 49 auto-named indexes in the DDL** — and
-two of them already truncate onto the *same* name:
+the name gets truncated: **36 of the 70 auto-named indexes** the DDL produces —
+49 written `CREATE INDEX` lines, plus 21 nobody writes, because
+`create_hypertable()` builds a default index on the time dimension unless it is
+passed `create_default_indexes => FALSE`. Two already truncate onto the *same*
+name:
 
 ```
 meteora_damm_v2_update_reward_duration_events  → …_signature_event_index_timesta_idx
@@ -582,8 +585,10 @@ cargo test -p yog-persistence index_naming    # DB-free
 ```
 
 `src/index_naming.rs` replays Postgres' `makeObjectName()` /
-`ChooseRelationName()` over these files and fails on any collision beyond the
-one pinned above. **When it goes red, name that index explicitly** rather than
+`ChooseRelationName()` over these files — including the indexes
+`create_hypertable()` adds — and fails on any collision beyond the one pinned
+above. Its predictions were diffed name-for-name against a database with all
+nine migrations applied: 77 indexes, no discrepancy. **When it goes red, name that index explicitly** rather than
 pinning a second collision:
 
 ```sql
@@ -594,8 +599,10 @@ CREATE UNIQUE INDEX meteora_<product>_<event_kind>_sig_uniq
 Watch the budget: the name must fit in **63 characters or Postgres truncates it
 too**, silently, handing you the same problem back. The longest table name today
 is 53 characters (`meteora_damm_v2_withdraw_dead_liquidity_reward_events`), which
-leaves 9 — so an `idx_` prefix does not fit on an event table, and the explicit
-name is written `<table>_<short suffix>`. The guard asserts this bound as well.
+leaves 9 for everything after it — enough for `_sig_uniq`, not for the
+`idx_<table>_<columns>` shape used elsewhere in the schema. On an event table the
+explicit name is therefore written `<table>_<short suffix>`. The guard asserts
+this bound as well.
 
 ⚠️ Do not reason about "the first 63 characters". `makeObjectName()` shortens
 the *table* part and the *column* part separately, trimming whichever is longer

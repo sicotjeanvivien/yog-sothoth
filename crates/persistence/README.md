@@ -63,11 +63,25 @@ the one pinned in the tests. It is `#[cfg(test)]`-only and DB-free:
 cargo test -p yog-persistence index_naming
 ```
 
-Index DDL it cannot decompose (an expression element, `INCLUDE`, a `DROP INDEX`)
-is a **hard failure**, not a skip — a guard that silently covers 48 declarations
-out of 49 reports green while it has stopped working. The convention it enforces,
-and what to do when it goes red, are in
-[`migrations/README.md`](migrations/README.md).
+It models `create_hypertable()` too: unless told `create_default_indexes =>
+FALSE`, TimescaleDB creates a default index on the time dimension, on the root
+table, in `public`, named by this same algorithm — 21 names in the baseline that
+no `CREATE INDEX` line mentions. A name left out of the replay is a name it
+thinks is free, which is how a guard like this reports green over a real
+collision.
+
+Index DDL it cannot decompose — an expression element, `INCLUDE`, a repeated
+column, an unnamed `UNIQUE` constraint, a hypertable argument it cannot vouch
+for, or anything that *frees* a name (`DROP INDEX`, `DROP TABLE`, `ALTER TABLE …
+DROP COLUMN`) — is a **hard failure**, not a skip; a per-file count cross-check
+catches statements that stopped looking index-shaped at all. A guard that
+silently covers 48 declarations out of 49 reports green while it has stopped
+working.
+
+Its predictions were diffed name-for-name against a live
+`timescale/timescaledb:latest-pg16` with all nine migrations applied: **77
+indexes in `public`, no discrepancy**. The convention it enforces, and what to do
+when it goes red, are in [`migrations/README.md`](migrations/README.md).
 
 ## Repository implementations
 
