@@ -37,8 +37,10 @@ persistence/
 │       ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
 │       │                      seed-watched-pools / bootstrap)
 │       ├── migrate/
-│       │   └── lint.rs      ← test-only: the rules yog-migrate imposes on the
-│       │                      migrations it applies (see below)
+│       │   ├── lint.rs      ← test-only: the rules yog-migrate imposes on the
+│       │   │                  migrations it applies (see below)
+│       │   └── tests/
+│       │       └── lint_tests.rs
 │       └── scripts/         ← the provisioning SQL, `include_str!`d into it
 │           ├── setup_roles.sql         (roles + structural privileges, admin)
 │           └── setup_watched_pools.sql (startup allowlist seed, admin)
