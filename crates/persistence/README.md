@@ -18,32 +18,56 @@ persistence/
 ├── migrations/              ← sqlx migrations, forward-only (001_baseline.sql today)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── .sqlx/                   ← committed offline query cache (see below)
-└── src/
-    ├── database.rs          ← Database::connect, run_migrations, run_script
-    ├── health.rs            ← PgHealthChecker
-    ├── repositories/        ← one impl per domain repository trait
-    │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
-    │   │                     sqlx error mapping)
-    │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
-    │   │                     plus the cp-amm pool-properties satellite)
-    │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
-    │   │                     repositories yet)
-    │   ├── pool/, pool_current_state/, pool_analytics/, global_analytics/
-    │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
-    │   ├── token_metadata/, token_price/, network_status/, watched_pool/
-    │   ├── announcement/
-    │   └── event_freshness.rs
-    ├── bin/
-    │   ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
-    │   │                      seed-watched-pools / bootstrap)
-    │   └── scripts/         ← the provisioning SQL, `include_str!`d into it
-    │       ├── setup_roles.sql         (roles + structural privileges, admin)
-    │       └── setup_watched_pools.sql (startup allowlist seed, admin)
-    └── tests/               ← DB-backed integration tests (feature `integration-tests`)
-        ├── main.rs          ← the ONLY test target; declares every file below
-        ├── helpers.rs       ← shared sentinels (pk, sg, ts)
-        └── <subject>.rs     ← one file per event / read path
+├── src/
+│   ├── database.rs          ← Database::connect, run_migrations, run_script
+│   ├── health.rs            ← PgHealthChecker
+│   ├── index_naming.rs      ← test-only guard: replays Postgres' index-name
+│   │                          truncation over migrations/ (see below)
+│   ├── repositories/        ← one impl per domain repository trait
+│   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
+│   │   │                     sqlx error mapping)
+│   │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
+│   │   │                     plus the cp-amm pool-properties satellite)
+│   │   ├── meteora/dlmm/    (the DLMM pool-properties satellite; no event
+│   │   │                     repositories yet)
+│   │   ├── pool/, pool_current_state/, pool_analytics/, global_analytics/
+│   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
+│   │   ├── token_metadata/, token_price/, network_status/, watched_pool/
+│   │   ├── announcement/
+│   │   └── event_freshness.rs
+│   └── bin/
+│       ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /
+│       │                      seed-watched-pools / bootstrap)
+│       └── scripts/         ← the provisioning SQL, `include_str!`d into it
+│           ├── setup_roles.sql         (roles + structural privileges, admin)
+│           └── setup_watched_pools.sql (startup allowlist seed, admin)
+└── tests/                   ← DB-backed integration tests (feature `integration-tests`)
+    ├── main.rs              ← the ONLY test target; declares every file below
+    ├── helpers.rs           ← shared sentinels (pk, sg, ts)
+    └── <subject>.rs         ← one file per event / read path
 ```
+
+### `index_naming.rs` — the guard on auto-generated index names
+
+`CREATE INDEX ON t (…)` lets Postgres name the index, and Postgres truncates
+that name to 63 bytes, then suffixes `1`, `2`, … on collision **in creation
+order**. Two of our tables already collide, so the order in which
+`001_baseline.sql` declares them is load-bearing and nothing enforced it.
+
+This module ports `makeObjectName()` / `ChooseIndexNameAddition()` /
+`ChooseRelationName()` and replays them over `migrations/*.sql`, read from disk
+so a new migration is covered the day it lands. It fails on any collision beyond
+the one pinned in the tests. It is `#[cfg(test)]`-only and DB-free:
+
+```bash
+cargo test -p yog-persistence index_naming
+```
+
+Index DDL it cannot decompose (an expression element, `INCLUDE`, a `DROP INDEX`)
+is a **hard failure**, not a skip — a guard that silently covers 48 declarations
+out of 49 reports green while it has stopped working. The convention it enforces,
+and what to do when it goes red, are in
+[`migrations/README.md`](migrations/README.md).
 
 ## Repository implementations
 

@@ -558,6 +558,55 @@ Do **not** invent a per-kind discriminant (`reward_index`, `second_position`
 and friends). Those predate `event_index`, and migration 041 took them out of
 the keys precisely to leave one rule.
 
+### The index above is auto-named, and that name can collide
+
+`CREATE UNIQUE INDEX ON …` leaves the name to the server, and the server has
+only 63 bytes for it. Every `meteora_damm_v2_*_events` table is long enough that
+the name gets truncated — **35 of the 49 auto-named indexes in the DDL** — and
+two of them already truncate onto the *same* name:
+
+```
+meteora_damm_v2_update_reward_duration_events  → …_signature_event_index_timesta_idx
+meteora_damm_v2_update_reward_funder_events    → …_signature_event_index_timest_idx1
+```
+
+The `1` sits on `funder` for one reason only: `duration` is declared first.
+Declare a third colliding table before it and the suffix moves, so a freshly
+migrated database no longer matches production — **and no error is raised**.
+
+**The rule.** Auto-named indexes stay fine; you do not have to name them. What
+you must do is let the guard tell you, *before* the migration is frozen:
+
+```bash
+cargo test -p yog-persistence index_naming    # DB-free
+```
+
+`src/index_naming.rs` replays Postgres' `makeObjectName()` /
+`ChooseRelationName()` over these files and fails on any collision beyond the
+one pinned above. **When it goes red, name that index explicitly** rather than
+pinning a second collision:
+
+```sql
+CREATE UNIQUE INDEX meteora_<product>_<event_kind>_sig_uniq
+    ON meteora_<product>_<event_kind>_events (signature, event_index, timestamp);
+```
+
+Watch the budget: the name must fit in **63 characters or Postgres truncates it
+too**, silently, handing you the same problem back. The longest table name today
+is 53 characters (`meteora_damm_v2_withdraw_dead_liquidity_reward_events`), which
+leaves 9 — so an `idx_` prefix does not fit on an event table, and the explicit
+name is written `<table>_<short suffix>`. The guard asserts this bound as well.
+
+⚠️ Do not reason about "the first 63 characters". `makeObjectName()` shortens
+the *table* part and the *column* part separately, trimming whichever is longer
+one character at a time, and the disambiguating suffix lands on the label
+(`idx` → `idx1`), costing one character more. That is why the two names above
+differ on the column side too. A prefix-based guess predicts the wrong name and
+misses collisions — replay the algorithm, which is what the guard is for.
+
+Renaming the indexes that already exist is a separate, later job: the names are
+part of the schema, so it takes a migration with `ALTER INDEX … RENAME TO …`.
+
 ## The compression WARNINGs are expected
 
 Enabling compression on an event hypertable makes TimescaleDB emit, once per

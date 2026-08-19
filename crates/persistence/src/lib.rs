@@ -15,6 +15,12 @@ mod error;
 mod health;
 mod repositories;
 
+/// Replays Postgres' index-naming algorithm over the migration DDL so that a
+/// new truncation collision fails a test instead of silently reshuffling the
+/// disambiguating suffixes. Test-only: nothing here ships in the crate.
+#[cfg(test)]
+mod index_naming;
+
 pub use database::Database;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
