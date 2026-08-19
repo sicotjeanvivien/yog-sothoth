@@ -232,5 +232,5 @@ fn violations(sql: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
-#[path = "tests/lint_tests.rs"]
+#[path = "lint_tests.rs"]
 mod tests;
