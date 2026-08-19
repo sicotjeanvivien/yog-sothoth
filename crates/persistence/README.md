@@ -22,7 +22,7 @@ persistence/
 │   ├── database.rs          ← Database::connect, run_migrations, run_script
 │   ├── health.rs            ← PgHealthChecker
 │   ├── index_naming.rs      ← test-only guard: replays Postgres' index-name
-│   │                          truncation over migrations/ (see below)
+│   │   └── tests/             truncation over migrations/ (see below)
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
@@ -70,10 +70,12 @@ no `CREATE INDEX` line mentions. A name left out of the replay is a name it
 thinks is free, which is how a guard like this reports green over a real
 collision.
 
-Statements that *free* a name — `DROP INDEX`, `DROP TABLE`, `ALTER TABLE … DROP
-COLUMN`, `ALTER INDEX … RENAME TO` — are **modelled**, not refused: they are
-ordinary migrations, and the last of them is what `migrations/README.md`
-prescribes when the guard goes red. Index DDL it genuinely cannot decompose — an
+Statements that *free* or move a name — `DROP INDEX`, `DROP TABLE`, `ALTER TABLE
+… DROP COLUMN`, `ALTER INDEX … RENAME TO`, `ALTER TABLE … RENAME` — are
+**modelled**, not refused: they are ordinary migrations, and one of them is what
+`migrations/README.md` prescribes when the guard goes red. A `DROP` of anything
+whose effect on index names has not been ruled on (`DROP SCHEMA`, say) is
+refused; the kinds known to free nothing are listed in `DROPS_NO_INDEX`. Index DDL it genuinely cannot decompose — an
 expression element, `INCLUDE`, a repeated column, an unnamed `UNIQUE` constraint,
 index DDL inside a `DO` block, a hypertable argument it cannot vouch for — is a
 **hard failure**, not a skip, and a per-file count cross-check catches statements

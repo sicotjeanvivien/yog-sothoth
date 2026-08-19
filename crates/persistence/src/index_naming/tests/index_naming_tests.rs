@@ -527,7 +527,10 @@ fn scan_should_not_mistake_a_typed_literal_for_an_escape_string() {
 /// CREATE INDEX and the parser did not turn it into one, that is an error.
 #[test]
 fn scan_should_refuse_when_an_index_statement_was_not_decomposed() {
-    let error = scan_err("INSERT INTO audit (note) VALUES ('CREATE INDEX ON t (a)');");
+    // The *code* says CREATE INDEX and the parser produced nothing — which is
+    // what a mis-split or an unrecognised form looks like from the outside. A
+    // string literal saying it does not count; see the COMMENT ON test above.
+    let error = scan_err("EXPLAIN CREATE INDEX ON t (a);");
 
     assert!(error.contains("were decomposed"), "{error}");
 }
@@ -570,13 +573,9 @@ fn scan_should_refuse_an_unnamed_unique_added_by_alter_table() {
 
 #[test]
 fn scan_should_accept_a_named_unique_constraint() {
-    let scanned = scan_sql(
-        "synthetic.sql",
-        "CREATE TABLE t (a TEXT, b TEXT, CONSTRAINT t_a_b_key UNIQUE (a, b));",
-    )
-    .expect("a named constraint is fine");
+    let replayed = run("CREATE TABLE t (a TEXT, b TEXT, CONSTRAINT t_a_b_key UNIQUE (a, b));");
 
-    assert_eq!(scanned.tables, vec!["t".to_string()]);
+    assert_eq!(replayed.tables, vec!["t".to_string()]);
 }
 
 /// An unlogged or temporary table is still a table: it must reach the `_pkey`
@@ -586,6 +585,203 @@ fn scan_should_recognise_an_unlogged_table() {
     let error = scan_err("CREATE UNLOGGED TABLE t (a TEXT, UNIQUE (a));");
 
     assert!(error.contains("unnamed UNIQUE constraint"), "{error}");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Statements that must NOT be read as "drop the whole table"
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `DROP TRIGGER x ON pools` names a table, but frees nothing. Reading every
+/// non-INDEX drop as a relation drop turned this into "drop `pools`" — and `ON`
+/// parses as a relation name too, so it dropped three things. That is the guard
+/// reporting green on a collision the server does produce.
+#[test]
+fn dropping_a_trigger_frees_no_index_name() {
+    let replayed = run("CREATE INDEX ON pools (protocol);\n\
+                        DROP TRIGGER IF EXISTS ts_insert_blocker ON pools;\n\
+                        CREATE INDEX ON pools (protocol);");
+
+    assert_eq!(replayed.collisions.len(), 1, "{:#?}", replayed.collisions);
+    assert_eq!(replayed.collisions[0].generated, "pools_protocol_idx1");
+}
+
+#[test]
+fn dropping_a_policy_frees_no_index_name() {
+    let replayed = run("CREATE INDEX ON pools (protocol);\n\
+                        DROP POLICY p ON pools;\n\
+                        CREATE INDEX ON pools (protocol);");
+
+    assert_eq!(replayed.collisions.len(), 1);
+}
+
+/// A migration replacing one of the two SQL functions of `005` must not break
+/// the guard — the old parser choked on the argument list.
+#[test]
+fn dropping_a_function_is_not_a_parse_failure() {
+    let replayed = run("DROP FUNCTION yog_price_max_age_asof();\n\
+                        CREATE INDEX ON pools (protocol);");
+
+    assert_eq!(replayed.named.len(), 1);
+}
+
+#[test]
+fn scan_should_refuse_a_drop_kind_it_has_not_ruled_on() {
+    let error = scan_err("DROP SCHEMA public CASCADE;");
+
+    assert!(error.contains("`DROP SCHEMA` is not modelled"), "{error}");
+}
+
+/// A column name the scanner cannot read used to fall back to `None`, which the
+/// replay reads as "drop the whole relation" — a silent widening in a file that
+/// hard-errors everywhere else a name is unreadable.
+#[test]
+fn scan_should_refuse_a_drop_column_whose_name_it_cannot_read() {
+    let error = scan_err("ALTER TABLE pools DROP COLUMN \"Weird\";");
+
+    assert!(error.contains("cannot read the column"), "{error}");
+}
+
+#[test]
+fn a_drop_column_if_exists_still_frees_its_indexes() {
+    let replayed = run("CREATE INDEX ON pools (protocol);\n\
+                        ALTER TABLE pools DROP COLUMN IF EXISTS protocol;\n\
+                        CREATE INDEX ON pools (protocol);");
+
+    assert!(replayed.collisions.is_empty(), "{:#?}", replayed.collisions);
+}
+
+/// The `COLUMN` keyword is optional in Postgres.
+#[test]
+fn a_bare_drop_column_is_understood() {
+    let replayed = run("CREATE INDEX ON pools (protocol);\n\
+                        ALTER TABLE pools DROP protocol;\n\
+                        CREATE INDEX ON pools (protocol);");
+
+    assert!(replayed.collisions.is_empty(), "{:#?}", replayed.collisions);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Renames
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A table rename carries its indexes with it — otherwise the replay keeps
+/// looking for them under the old table and invents a hypertable default index
+/// that the server never creates.
+#[test]
+fn a_table_rename_carries_its_indexes_onto_the_new_name() {
+    let replayed = run("CREATE INDEX ON old_t (ts);\n\
+                        ALTER TABLE old_t RENAME TO new_t;\n\
+                        SELECT create_hypertable('new_t', 'ts');");
+
+    assert_eq!(
+        replayed.named.len(),
+        1,
+        "the renamed index is reused, no default is added: {:#?}",
+        replayed.named
+    );
+    assert_eq!(replayed.tables, Vec::<String>::new());
+}
+
+#[test]
+fn a_column_rename_follows_into_the_indexes_that_use_it() {
+    let replayed = run("CREATE INDEX ON t (old_ts);\n\
+                        ALTER TABLE t RENAME COLUMN old_ts TO ts;\n\
+                        SELECT create_hypertable('t', 'ts');");
+
+    assert_eq!(replayed.named.len(), 1, "{:#?}", replayed.named);
+}
+
+/// The remedy both READMEs prescribe must obey the bound they state: Postgres
+/// truncates an over-long rename target silently, handing the problem back.
+#[test]
+fn a_rename_target_longer_than_the_identifier_limit_is_refused() {
+    let scanned = scan_sql(
+        "synthetic.sql",
+        &format!(
+            "CREATE INDEX ON pools (protocol);\nALTER INDEX pools_protocol_idx RENAME TO {};",
+            "z".repeat(70)
+        ),
+    )
+    .expect("parses");
+
+    let error = replay(&scanned.events).expect_err("an over-long rename must be refused");
+
+    assert!(error.contains("Postgres truncates it"), "{error}");
+}
+
+#[test]
+fn a_rename_onto_a_taken_name_is_refused_even_from_an_unmodelled_index() {
+    let scanned = scan_sql(
+        "synthetic.sql",
+        "CREATE INDEX ON pools (protocol);\n\
+         ALTER INDEX pools_pkey RENAME TO pools_protocol_idx;",
+    )
+    .expect("parses");
+
+    let error = replay(&scanned.events).expect_err("the target name is already taken");
+
+    assert!(error.contains("already taken"), "{error}");
+}
+
+/// Two indexes cannot share a name on the server, so a replay that accepts it
+/// is modelling a database that cannot exist — and its `live` set goes wrong.
+#[test]
+fn an_explicit_name_that_duplicates_an_existing_one_is_refused() {
+    let scanned = scan_sql(
+        "synthetic.sql",
+        "CREATE INDEX ON pools (protocol);\n\
+         CREATE INDEX pools_protocol_idx ON pools (last_seen_at);",
+    )
+    .expect("parses");
+
+    let error = replay(&scanned.events).expect_err("duplicate names must be refused");
+
+    assert!(error.contains("already taken"), "{error}");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The cross-check must read code, not prose
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// These migrations use `COMMENT ON … IS '…'` heavily. A comment that mentions
+/// CREATE INDEX must not fail the whole file.
+#[test]
+fn a_string_literal_mentioning_create_index_is_not_counted() {
+    let replayed = run("COMMENT ON TABLE pools IS 'use CREATE INDEX here';\n\
+                        CREATE INDEX ON pools (protocol);");
+
+    assert_eq!(replayed.named.len(), 1);
+}
+
+#[test]
+fn scan_should_refuse_a_timescale_helper_that_may_add_its_own_index() {
+    let error = scan_err("SELECT add_dimension('t', 'device_id', number_partitions => 4);");
+
+    assert!(error.contains("add_dimension"), "{error}");
+}
+
+/// A drop hidden in a `DO` block is as invisible as a creation, and a231e9b
+/// started modelling drops — so the body has to be searched for those too.
+#[test]
+fn scan_should_refuse_a_drop_hidden_in_a_dollar_quoted_body() {
+    let error = scan_err("DO $$ BEGIN EXECUTE 'DROP INDEX pools_protocol_idx'; END $$;");
+
+    assert!(error.contains("invisible to this guard"), "{error}");
+}
+
+#[test]
+fn scan_should_accept_a_schema_qualified_create_table() {
+    let replayed = run("CREATE TABLE public.foo (a TEXT);");
+
+    assert_eq!(replayed.tables, vec!["foo".to_string()]);
+}
+
+/// A table that no longer exists must stop constraining the naming rules.
+#[test]
+fn a_dropped_table_leaves_the_table_list() {
+    let replayed = run("CREATE TABLE t (a TEXT);\nDROP TABLE t;");
+
+    assert_eq!(replayed.tables, Vec::<String>::new());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -677,7 +873,7 @@ fn the_baseline_carries_seventy_auto_named_indexes_thirty_six_of_them_truncated(
 /// table name passes 58 characters. The longest today is 53.
 #[test]
 fn no_table_name_is_long_enough_for_its_pkey_to_truncate() {
-    for table in &scan_migrations().expect("parseable").tables {
+    for table in &replay_migrations().tables {
         assert_eq!(
             make_object_name(table, None, "pkey"),
             format!("{table}_pkey"),
@@ -693,7 +889,7 @@ fn no_table_name_is_long_enough_for_its_pkey_to_truncate() {
 /// as prose — a table named `…_idx` would break the replay's assumption.
 #[test]
 fn no_table_is_named_like_a_generated_index() {
-    for table in &scan_migrations().expect("parseable").tables {
+    for table in &replay_migrations().tables {
         let tail = table.rsplit('_').next().unwrap_or_default();
         assert!(
             !(tail == "idx"

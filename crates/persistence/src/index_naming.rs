@@ -72,9 +72,14 @@
 //!   `_timescaledb_internal` and are named after `_hyper_N_M_chunk` /
 //!   `_materialized_hypertable_N`, not after our tables.
 //!
-//! Anything else index-shaped that the scanner cannot decompose is a **hard
-//! error**, never a skip, and a per-file count cross-check catches statements
-//! that stopped looking index-shaped at all.
+//! - **TimescaleDB helpers other than `create_hypertable`.** `add_dimension`
+//!   and friends can add their own default index; they are refused, not
+//!   modelled, so the guard stops rather than guesses.
+//!
+//! `CREATE INDEX` and `create_hypertable` are the two index-creating forms the
+//! scanner models, and a per-file count cross-check makes sure none of them
+//! slipped past unrecognised. Anything it cannot decompose is a **hard error**,
+//! never a skip.
 
 use std::collections::HashSet;
 use std::fs;
@@ -130,11 +135,15 @@ struct DropStmt {
     column: Option<String>,
 }
 
-/// `ALTER INDEX … RENAME TO …`: frees one name and takes another.
+/// A rename: `ALTER INDEX … RENAME TO …` frees one index name and takes
+/// another; `ALTER TABLE … RENAME TO …` moves every index of a table onto a new
+/// table name, which changes what `create_hypertable` can reuse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RenameStmt {
     file: String,
     line: usize,
+    /// For a column rename, the table the column belongs to.
+    table: Option<String>,
     from: String,
     to: String,
     statement: String,
@@ -143,10 +152,13 @@ struct RenameStmt {
 /// DDL that bears on index naming, in file order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Event {
+    Table(String),
     Index(IndexDecl),
     Hypertable(HypertableCall),
     Drop(DropStmt),
-    Rename(RenameStmt),
+    RenameIndex(RenameStmt),
+    RenameTable(RenameStmt),
+    RenameColumn(RenameStmt),
 }
 
 /// An index whose generated name needed a disambiguating suffix.
@@ -165,7 +177,6 @@ struct Collision {
 #[derive(Debug, Default)]
 struct Scanned {
     events: Vec<Event>,
-    tables: Vec<String>,
 }
 
 /// An index the replay believes exists right now.
@@ -177,12 +188,20 @@ struct LiveIndex {
     unique: bool,
 }
 
-/// The outcome of replaying the DDL: every index that ends up existing, with the
-/// name Postgres would have given it, and the ones that needed a suffix.
+/// The outcome of replaying the DDL.
 #[derive(Debug, Default)]
 struct Replay {
+    /// The indexes that needed a disambiguating suffix.
     collisions: Vec<Collision>,
+    /// Every index *creation*, with the name Postgres gave it at that moment —
+    /// not the surviving set: a dropped index stays here, and a renamed one
+    /// keeps the name it was born with. [`Replay::live_names`] is the surviving
+    /// set.
     named: Vec<(String, IndexDecl)>,
+    /// Index names that still exist at the end of the replay.
+    live_names: Vec<String>,
+    /// Tables that still exist at the end of the replay.
+    tables: Vec<String>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -398,9 +417,10 @@ fn statements(sql: &str) -> Result<Vec<(usize, String)>, String> {
             current.push(' ');
             continue;
         }
-        // E'…' / U&'…' carry backslash escapes we do not model; refuse rather
-        // than mis-split on an escaped quote. The prefix only counts when the
-        // letter stands alone — `DATE'…'` and `ELSE'x'` are ordinary literals.
+        // E'…' carries backslash escapes we do not model; refuse rather than
+        // mis-split on an escaped quote. The prefix only counts when the letter
+        // stands alone — `DATE'…'` and `ELSE'x'` are ordinary literals. (`U&'…'`
+        // needs no special case: it escapes by doubling, like a plain literal.)
         if (c == 'E' || c == 'e')
             && next == Some('\'')
             && !chars
@@ -462,9 +482,9 @@ fn statements(sql: &str) -> Result<Vec<(usize, String)>, String> {
                 .collect::<String>()
                 .to_uppercase();
             let flat = body.split_whitespace().collect::<Vec<_>>().join(" ");
-            if flat.contains("CREATE INDEX")
-                || flat.contains("CREATE UNIQUE INDEX")
-                || flat.contains("CREATE_HYPERTABLE")
+            if HIDDEN_DDL_MARKERS
+                .iter()
+                .any(|marker| flat.contains(marker))
             {
                 return Err(format!(
                     "line {opened_at}: index DDL inside a {tag} body is invisible to this guard — \
@@ -492,6 +512,18 @@ fn statements(sql: &str) -> Result<Vec<(usize, String)>, String> {
     flush(&mut current, start_line, &mut out);
     Ok(out)
 }
+
+/// Statements that create, remove or rename an index. Inside a `$tag$` body the
+/// scanner cannot decompose them, so their mere presence is refused.
+const HIDDEN_DDL_MARKERS: &[&str] = &[
+    "CREATE INDEX",
+    "CREATE UNIQUE INDEX",
+    "CREATE_HYPERTABLE",
+    "DROP INDEX",
+    "DROP TABLE",
+    "ALTER INDEX",
+    "RENAME TO",
+];
 
 /// `$$` or `$tag$` starting at `i`, if there is one.
 fn dollar_tag(chars: &[char], i: usize) -> Option<String> {
@@ -594,6 +626,10 @@ const NAMING_NEUTRAL_HYPERTABLE_ARGS: &[&str] = &[
     "time_partitioning_func",
 ];
 
+/// TimescaleDB helpers that can add a default index of their own, the way
+/// `create_hypertable` does. None are used today; refusing beats guessing.
+const UNMODELLED_INDEX_HELPERS: &[&str] = &["ADD_DIMENSION", "ADD_REORDER_POLICY"];
+
 /// The advice that actually resolves most refusals, so the message does not send
 /// the reader off to extend a parser when one line of SQL will do.
 const NAME_IT_EXPLICITLY: &str =
@@ -629,7 +665,15 @@ fn scan_sql(name: &str, sql: &str) -> Result<Scanned, String> {
         let upper: Vec<String> = t.iter().map(|token| token.to_uppercase()).collect();
         let kw = |index: usize| upper.get(index).map(String::as_str).unwrap_or_default();
         let at = |index: usize| t.get(index).map(String::as_str).unwrap_or_default();
-        let joined = upper.join(" ");
+        // Built from code tokens only: `COMMENT ON … IS 'use CREATE INDEX here'`
+        // must not be counted as an index statement and then refused for not
+        // decomposing into one.
+        let joined = upper
+            .iter()
+            .filter(|token| !token.starts_with('\'') && !token.starts_with('"'))
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(" ");
         let here = format!("{name}:{line}");
 
         if joined.contains("CREATE INDEX") || joined.contains("CREATE UNIQUE INDEX") {
@@ -637,6 +681,16 @@ fn scan_sql(name: &str, sql: &str) -> Result<Scanned, String> {
         }
         if joined.contains("CREATE_HYPERTABLE") {
             seen_hypertable_statements += 1;
+        }
+        if let Some(helper) = UNMODELLED_INDEX_HELPERS
+            .iter()
+            .find(|helper| joined.contains(*helper))
+        {
+            return Err(format!(
+                "{here}: `{}` can create an index of its own and is not modelled — extend \
+                 index_naming.rs.\n  {statement}",
+                helper.to_ascii_lowercase()
+            ));
         }
 
         // ── statements that free a name ──────────────────────────────────────
@@ -662,9 +716,10 @@ fn scan_sql(name: &str, sql: &str) -> Result<Scanned, String> {
                      index_naming.rs\n  {statement}"
                 ));
             };
-            scanned.events.push(Event::Rename(RenameStmt {
+            scanned.events.push(Event::RenameIndex(RenameStmt {
                 file: name.to_string(),
                 line,
+                table: None,
                 from,
                 to,
                 statement: statement.to_string(),
@@ -685,25 +740,92 @@ fn scan_sql(name: &str, sql: &str) -> Result<Scanned, String> {
                     at(cursor)
                 ));
             };
+            cursor += 1;
             refuse_unnamed_unique(&upper, &here, statement)?;
+
+            // A table rename carries every index with it, and that changes what
+            // a later create_hypertable can reuse. A column rename changes what
+            // an index is *on*, for the same reason.
+            if kw(cursor) == "RENAME" {
+                let renamed = |from: Option<String>, to: Option<String>, column: bool| match (
+                    from, to,
+                ) {
+                    (Some(from), Some(to)) => Ok(RenameStmt {
+                        file: name.to_string(),
+                        line,
+                        table: column.then(|| table.clone()),
+                        from,
+                        to,
+                        statement: statement.to_string(),
+                    }),
+                    _ => Err(format!(
+                        "{here}: cannot read this RENAME — extend index_naming.rs\n  {statement}"
+                    )),
+                };
+                match (kw(cursor + 1), kw(cursor + 2)) {
+                    ("TO", _) => scanned.events.push(Event::RenameTable(renamed(
+                        Some(table.clone()),
+                        plain_identifier(at(cursor + 2)),
+                        false,
+                    )?)),
+                    ("COLUMN", _) | (_, "TO") => {
+                        let offset = usize::from(kw(cursor + 1) == "COLUMN");
+                        if kw(cursor + 2 + offset) != "TO" {
+                            return Err(format!(
+                                "{here}: cannot read this RENAME — extend index_naming.rs\n  \
+                                 {statement}"
+                            ));
+                        }
+                        scanned.events.push(Event::RenameColumn(renamed(
+                            plain_identifier(at(cursor + 1 + offset)),
+                            plain_identifier(at(cursor + 3 + offset)),
+                            true,
+                        )?));
+                    }
+                    _ => {
+                        return Err(format!(
+                            "{here}: cannot read this RENAME — extend index_naming.rs\n  \
+                             {statement}"
+                        ));
+                    }
+                }
+                continue;
+            }
+
             for (position, token) in upper.iter().enumerate() {
                 if token != "DROP" {
                     continue;
                 }
-                match kw(position + 1) {
-                    "COLUMN" => scanned.events.push(Event::Drop(DropStmt {
-                        table: Some(table.clone()),
-                        index: None,
-                        column: plain_identifier(at(position + 2)),
-                    })),
-                    "CONSTRAINT" | "DEFAULT" | "NOT" | "EXPRESSION" | "IDENTITY" => {}
-                    other => {
-                        return Err(format!(
-                            "{here}: `DROP {other}` inside ALTER TABLE is not modelled — extend \
-                             index_naming.rs\n  {statement}"
-                        ));
-                    }
+                // `DROP [COLUMN] [IF EXISTS] <name>` — the COLUMN keyword is
+                // optional in Postgres, and IF EXISTS shifts the name along.
+                let mut at_name = position + 1;
+                if kw(at_name) == "COLUMN" {
+                    at_name += 1;
                 }
+                if matches!(
+                    kw(at_name),
+                    "CONSTRAINT" | "DEFAULT" | "NOT" | "EXPRESSION" | "IDENTITY"
+                ) {
+                    continue;
+                }
+                if kw(at_name) == "IF" && kw(at_name + 1) == "EXISTS" {
+                    at_name += 2;
+                }
+                // Never fall back to "then it drops the whole table": that is a
+                // silent widening, and this file hard-errors everywhere else a
+                // name is unreadable.
+                let Some(column) = plain_identifier(at(at_name)) else {
+                    return Err(format!(
+                        "{here}: cannot read the column this DROP targets (`{}`) — extend \
+                         index_naming.rs\n  {statement}",
+                        at(at_name)
+                    ));
+                };
+                scanned.events.push(Event::Drop(DropStmt {
+                    table: Some(table.clone()),
+                    index: None,
+                    column: Some(column),
+                }));
             }
             continue;
         }
@@ -720,14 +842,14 @@ fn scan_sql(name: &str, sql: &str) -> Result<Scanned, String> {
         if kw(0) == "CREATE"
             && let Some(cursor) = create_table_name_position(&upper)
         {
-            let Some(table) = plain_identifier(at(cursor)) else {
+            let Some(table) = relation_name(at(cursor)) else {
                 return Err(format!(
                     "{here}: unsupported table name `{}`\n  {statement}",
                     at(cursor)
                 ));
             };
             refuse_unnamed_unique(&upper, &here, statement)?;
-            scanned.tables.push(table);
+            scanned.events.push(Event::Table(table));
             continue;
         }
         if kw(0) != "CREATE" {
@@ -932,7 +1054,29 @@ fn relation_name(token: &str) -> Option<String> {
     plain_identifier(bare)
 }
 
+/// Object kinds a `DROP` can name that carry no index of ours, so dropping one
+/// frees nothing the replay is tracking.
+const DROPS_NO_INDEX: &[&str] = &[
+    "TRIGGER",
+    "POLICY",
+    "RULE",
+    "FUNCTION",
+    "PROCEDURE",
+    "TYPE",
+    "DOMAIN",
+    "AGGREGATE",
+    "OPERATOR",
+    "COLLATION",
+    "STATISTICS",
+    "CAST",
+];
+
 /// `DROP INDEX|TABLE|VIEW|MATERIALIZED VIEW [CONCURRENTLY] [IF EXISTS] a, b …`
+///
+/// The kind is **whitelisted**. Treating everything that is not `INDEX` as a
+/// relation drop reads `DROP TRIGGER x ON pools` as "drop the table `pools`" —
+/// `ON` parses as a name too — which silently frees every index name held on
+/// it, and the guard then reports green on a collision the server does produce.
 fn parse_drop(
     t: &[String],
     upper: &[String],
@@ -948,6 +1092,15 @@ fn parse_drop(
     }
     let kind = kw(cursor).to_string();
     cursor += 1;
+    if DROPS_NO_INDEX.contains(&kind.as_str()) {
+        return Ok(Vec::new());
+    }
+    if !matches!(kind.as_str(), "INDEX" | "TABLE" | "VIEW") {
+        return Err(format!(
+            "{here}: `DROP {kind}` is not modelled — decide whether it can free an index name, \
+             then add it to DROPS_NO_INDEX or handle it here.\n  {statement}"
+        ));
+    }
     if kw(cursor) == "CONCURRENTLY" {
         cursor += 1;
     }
@@ -1109,7 +1262,6 @@ fn scan_migrations() -> Result<Scanned, String> {
     for path in migration_files() {
         let scanned = scan_file(&path)?;
         all.events.extend(scanned.events);
-        all.tables.extend(scanned.tables);
     }
     Ok(all)
 }
@@ -1118,11 +1270,13 @@ fn scan_migrations() -> Result<Scanned, String> {
 fn replay(events: &[Event]) -> Result<Replay, String> {
     let mut taken: HashSet<String> = HashSet::new();
     let mut live: Vec<LiveIndex> = Vec::new();
+    let mut tables: Vec<String> = Vec::new();
     let mut out = Replay::default();
 
     for event in events {
         match event {
-            Event::Index(decl) => place(decl, &mut taken, &mut live, &mut out),
+            Event::Table(table) => tables.push(table.clone()),
+            Event::Index(decl) => place(decl, &mut taken, &mut live, &mut out)?,
             Event::Hypertable(call) => {
                 if !call.creates_default_indexes {
                     continue;
@@ -1152,9 +1306,17 @@ fn replay(events: &[Event]) -> Result<Replay, String> {
                     &mut taken,
                     &mut live,
                     &mut out,
-                );
+                )?;
             }
             Event::Drop(drop) => {
+                if let DropStmt {
+                    table: Some(dropped),
+                    column: None,
+                    ..
+                } = drop
+                {
+                    tables.retain(|table| table != dropped);
+                }
                 live.retain(|index| {
                     let hit = match drop {
                         DropStmt {
@@ -1179,26 +1341,63 @@ fn replay(events: &[Event]) -> Result<Replay, String> {
                     !hit
                 });
             }
-            Event::Rename(rename) => {
-                let Some(index) = live.iter_mut().find(|index| index.name == rename.from) else {
-                    // Renaming something we never modelled (a constraint index,
-                    // say) is out of scope, but it still takes a name.
-                    taken.insert(rename.to.clone());
-                    continue;
-                };
-                if taken.contains(&rename.to) {
-                    return Err(format!(
-                        "{}:{}: `{}` is already taken — this migration would fail to apply\n  {}",
-                        rename.file, rename.line, rename.to, rename.statement
-                    ));
+            Event::RenameIndex(rename) => {
+                reserve(&rename.to, rename, &mut taken)?;
+                if let Some(index) = live.iter_mut().find(|index| index.name == rename.from) {
+                    taken.remove(&rename.from);
+                    index.name = rename.to.clone();
                 }
-                taken.remove(&rename.from);
-                taken.insert(rename.to.clone());
-                index.name = rename.to.clone();
+            }
+            // A table rename carries its indexes onto the new name, which is
+            // what a later create_hypertable looks at when deciding whether to
+            // reuse one.
+            Event::RenameTable(rename) => {
+                for table in tables.iter_mut().filter(|table| **table == rename.from) {
+                    table.clone_from(&rename.to);
+                }
+                for index in live.iter_mut().filter(|index| index.table == rename.from) {
+                    index.table.clone_from(&rename.to);
+                }
+            }
+            Event::RenameColumn(rename) => {
+                let table = rename.table.as_deref().unwrap_or_default();
+                for index in live.iter_mut().filter(|index| index.table == table) {
+                    for column in index.columns.iter_mut().filter(|c| **c == rename.from) {
+                        column.clone_from(&rename.to);
+                    }
+                }
             }
         }
     }
+    out.live_names = live.into_iter().map(|index| index.name).collect();
+    out.tables = tables;
     Ok(out)
+}
+
+/// Take a name that the author chose, checking what Postgres would check.
+///
+/// The 63-byte bound matters most here: `migrations/README.md` prescribes
+/// `ALTER INDEX … RENAME TO …` as the way out when this guard goes red, and a
+/// rename target longer than that is silently truncated by the server — handing
+/// the collision problem straight back.
+fn reserve(name: &str, rename: &RenameStmt, taken: &mut HashSet<String>) -> Result<(), String> {
+    if name.len() > MAX_IDENTIFIER_LEN {
+        return Err(format!(
+            "{}:{}: `{name}` is {} characters — Postgres truncates it to {MAX_IDENTIFIER_LEN}, \
+             which is how names start colliding in the first place\n  {}",
+            rename.file,
+            rename.line,
+            name.len(),
+            rename.statement
+        ));
+    }
+    if !taken.insert(name.to_string()) {
+        return Err(format!(
+            "{}:{}: `{name}` is already taken — this migration would fail to apply\n  {}",
+            rename.file, rename.line, rename.statement
+        ));
+    }
+    Ok(())
 }
 
 fn place(
@@ -1206,11 +1405,29 @@ fn place(
     taken: &mut HashSet<String>,
     live: &mut Vec<LiveIndex>,
     out: &mut Replay,
-) {
+) -> Result<(), String> {
     let name = match &decl.explicit_name {
         // An explicit name is reserved as written; Postgres does not
-        // disambiguate it, it errors on a duplicate.
-        Some(name) => name.clone(),
+        // disambiguate it, it errors on a duplicate — and truncates an over-long
+        // one, which would hand back the very problem this guard exists for.
+        Some(name) => {
+            if name.len() > MAX_IDENTIFIER_LEN {
+                return Err(format!(
+                    "{}:{}: `{name}` is {} characters — Postgres truncates it to \
+                     {MAX_IDENTIFIER_LEN}\n",
+                    decl.file,
+                    decl.line,
+                    name.len()
+                ));
+            }
+            if taken.contains(name) {
+                return Err(format!(
+                    "{}:{}: `{name}` is already taken — this migration would fail to apply",
+                    decl.file, decl.line
+                ));
+            }
+            name.clone()
+        }
         None => {
             let (name, passes) = generated_index_name(decl, taken);
             if passes > 0 {
@@ -1234,6 +1451,7 @@ fn place(
         unique: decl.unique,
     });
     out.named.push((name, decl.clone()));
+    Ok(())
 }
 
 #[path = "index_naming/tests/index_naming_tests.rs"]
