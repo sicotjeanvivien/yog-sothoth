@@ -558,63 +558,54 @@ Do **not** invent a per-kind discriminant (`reward_index`, `second_position`
 and friends). Those predate `event_index`, and migration 041 took them out of
 the keys precisely to leave one rule.
 
-### The index above is auto-named, and that name can collide
+### Name every index — do not let the server do it
 
-`CREATE UNIQUE INDEX ON …` leaves the name to the server, and the server has
-only 63 bytes for it. Every `meteora_damm_v2_*_events` table is long enough that
-the name gets truncated: **36 of the 70 auto-named indexes** the DDL produces —
-49 written `CREATE INDEX` lines, plus 21 nobody writes, because
-`create_hypertable()` builds a default index on the time dimension unless it is
-passed `create_default_indexes => FALSE`. Two already truncate onto the *same*
-name:
+`CREATE INDEX ON t (…)` leaves the name to Postgres, which has 63 bytes for it.
+Our table names run to 53 characters, so the generated name gets truncated, and
+when two truncate onto the *same* name Postgres appends `1`, `2`, … **in
+creation order**. Two tables already do:
 
 ```
 meteora_damm_v2_update_reward_duration_events  → …_signature_event_index_timesta_idx
 meteora_damm_v2_update_reward_funder_events    → …_signature_event_index_timest_idx1
 ```
 
-The `1` sits on `funder` for one reason only: `duration` is declared first.
-Declare a third colliding table before it and the suffix moves, so a freshly
-migrated database no longer matches production — **and no error is raised**.
+The `1` sits on `funder` only because `duration` is declared first. Add a third
+table that truncates onto the same name and the suffix moves — a freshly
+migrated database stops matching production, and nothing raises an error,
+because nothing here is illegal.
 
-**The rule.** Auto-named indexes stay fine; you do not have to name them. What
-you must do is let the guard tell you, *before* the migration is frozen:
-
-```bash
-cargo test -p yog-persistence index_naming    # DB-free
-```
-
-`src/index_naming.rs` replays Postgres' `makeObjectName()` /
-`ChooseRelationName()` over these files — including the indexes
-`create_hypertable()` adds — and fails on any collision beyond the one pinned
-above. Its predictions were diffed name-for-name against a database with all
-nine migrations applied: 77 indexes, no discrepancy. **When it goes red, name that index explicitly** rather than
-pinning a second collision:
+So the rule for every migration from `010` on:
 
 ```sql
+-- Name the index. Keep the name within 63 characters: on the longest table
+-- today (53 characters) that leaves 10, so an event table's index is written
+-- <table>_<short suffix>, not idx_<table>_<columns>.
 CREATE UNIQUE INDEX meteora_<product>_<event_kind>_sig_uniq
     ON meteora_<product>_<event_kind>_events (signature, event_index, timestamp);
+
+-- create_hypertable names one too — a default index on the time dimension, in
+-- public. Turn it off and write that index out like any other.
+SELECT create_hypertable('meteora_<product>_<event_kind>_events', 'timestamp',
+                         chunk_time_interval => INTERVAL '7 days',
+                         create_default_indexes => FALSE);
+CREATE INDEX meteora_<product>_<event_kind>_ts
+    ON meteora_<product>_<event_kind>_events (timestamp DESC);
 ```
 
-Watch the budget: the name must fit in **63 characters or Postgres truncates it
-too**, silently, handing you the same problem back. The longest table name today
-is 53 characters (`meteora_damm_v2_withdraw_dead_liquidity_reward_events`), which
-leaves **10** for everything after it — enough for `_sig_uniq` (9), not for the
-`idx_<table>_<columns>` shape used elsewhere in the schema. On an event table the
-explicit name is therefore written `<table>_<short suffix>`. The guard asserts
-this bound as well.
+And keep table names within **58** characters, because `<table>_pkey` is the one
+index name that cannot be written by hand.
 
-⚠️ Do not reason about "the first 63 characters". `makeObjectName()` shortens
-the *table* part and the *column* part separately, trimming whichever is longer
-one character at a time, and the disambiguating suffix lands on the label
-(`idx` → `idx1`), costing one character more. That is why the two names above
-differ on the column side too. A prefix-based guess predicts the wrong name and
-misses collisions — replay the algorithm, which is what the guard is for.
+`src/migrations.rs` enforces all of that, DB-free:
 
-Renaming the indexes that already exist is a separate, later job: the names are
-part of the schema, so it takes a migration with `ALTER INDEX … RENAME TO …`. The
-guard models that statement — the old name comes free, the new one is taken — so
-such a migration replays correctly instead of being refused.
+```bash
+cargo test -p yog-persistence migrations
+```
+
+**`001`–`009` are out of scope.** They break the rule 70 times over and stay as
+they are — migrations are forward-only. Renaming those indexes is a separate job
+needing its own migration with `ALTER INDEX … RENAME TO …`; nothing depends on
+it today.
 
 ## The compression WARNINGs are expected
 

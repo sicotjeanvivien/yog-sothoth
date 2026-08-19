@@ -21,17 +21,7 @@ persistence/
 ├── src/
 │   ├── database.rs          ← Database::connect, run_migrations, run_script
 │   ├── health.rs            ← PgHealthChecker
-│   ├── index_naming.rs      ← test-only guard: replays Postgres' index-name
-│   │                          truncation over migrations/ (see below)
-│   ├── index_naming/
-│   │   ├── pg_names.rs      (the port of makeObjectName & friends)
-│   │   ├── lexer.rs         (SQL → statements → tokens)
-│   │   ├── scan.rs          (files → events, plus the count cross-checks)
-│   │   ├── parse.rs         (one function per statement understood)
-│   │   ├── hypertable.rs    (create_hypertable's default index)
-│   │   ├── replay.rs        (the namespace over time)
-│   │   └── tests/           (one file per module above, plus guard_tests.rs
-│   │                         which runs over the real migrations)
+│   ├── migrations.rs        ← test-only checks over migrations/ (see below)
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
@@ -56,47 +46,23 @@ persistence/
     └── <subject>.rs         ← one file per event / read path
 ```
 
-### `index_naming.rs` — the guard on auto-generated index names
+### `migrations.rs` — the checks that run over the migration files
 
-`CREATE INDEX ON t (…)` lets Postgres name the index, and Postgres truncates
-that name to 63 bytes, then suffixes `1`, `2`, … on collision **in creation
-order**. Two of our tables already collide, so the order in which
-`001_baseline.sql` declares them is load-bearing and nothing enforced it.
-
-This module ports `makeObjectName()` / `ChooseIndexNameAddition()` /
-`ChooseRelationName()` and replays them over `migrations/*.sql`, read from disk
-so a new migration is covered the day it lands. It fails on any collision beyond
-the one pinned in the tests. It is `#[cfg(test)]`-only and DB-free:
+DB-free unit tests over `migrations/*.sql`, chiefly one rule: **every index is
+named**. Postgres truncates a generated index name to 63 bytes, our table names
+leave almost nothing for the suffix, and two already truncate onto the same name
+— so the second one carries a `1` that would move if a third table joined them.
+Naming the index removes the question rather than answering it; the same applies
+to `create_hypertable`, which is asked for `create_default_indexes => FALSE` so
+its default index is written out too.
 
 ```bash
-cargo test -p yog-persistence index_naming
+cargo test -p yog-persistence migrations
 ```
 
-It models `create_hypertable()` too: unless told `create_default_indexes =>
-FALSE`, TimescaleDB creates a default index on the time dimension, on the root
-table, in `public`, named by this same algorithm — 21 names in the baseline that
-no `CREATE INDEX` line mentions. A name left out of the replay is a name it
-thinks is free, which is how a guard like this reports green over a real
-collision.
-
-Statements that *free* or move a name — `DROP INDEX`, `DROP TABLE`, `ALTER TABLE
-… DROP COLUMN`, `ALTER INDEX … RENAME TO`, `ALTER TABLE … RENAME` — are
-**modelled**, not refused: they are ordinary migrations, and one of them is what
-`migrations/README.md` prescribes when the guard goes red. A `DROP` of anything
-whose effect on index names has not been ruled on (`DROP SCHEMA`, say) is
-refused; the kinds known to free nothing are listed in `DROPS_NO_INDEX`. Index DDL it genuinely cannot decompose — an
-expression element, `INCLUDE`, a repeated column, an unnamed `UNIQUE` constraint,
-index DDL inside a `DO` block, a hypertable argument it cannot vouch for — is a
-**hard failure**, not a skip, and a per-file count cross-check catches statements
-that stopped looking index-shaped at all. A guard that silently covers 48
-declarations out of 49 reports green while it has stopped working.
-
-Its predictions were diffed name-for-name against a live
-`timescale/timescaledb:latest-pg16` with all nine migrations applied: the **77
-server-named index relations** it predicts, no discrepancy. (`public` also holds
-the `_pkey` and constraint-borne indexes, which this guard does not enumerate —
-it asserts instead that no table name is long enough for its `_pkey` to
-truncate.) The convention it enforces, and what to do when it goes red, are in
+It binds migrations from `010` on. `001`–`009` are frozen history and break the
+rule 70 times; that count is asserted, so the boundary is a fact rather than an
+intention. The rule itself, with the naming budget, is in
 [`migrations/README.md`](migrations/README.md).
 
 ## Repository implementations
