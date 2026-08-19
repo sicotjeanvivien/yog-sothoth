@@ -22,7 +22,16 @@ persistence/
 │   ├── database.rs          ← Database::connect, run_migrations, run_script
 │   ├── health.rs            ← PgHealthChecker
 │   ├── index_naming.rs      ← test-only guard: replays Postgres' index-name
-│   │   └── tests/             truncation over migrations/ (see below)
+│   │                          truncation over migrations/ (see below)
+│   ├── index_naming/
+│   │   ├── pg_names.rs      (the port of makeObjectName & friends)
+│   │   ├── lexer.rs         (SQL → statements → tokens)
+│   │   ├── scan.rs          (files → events, plus the count cross-checks)
+│   │   ├── parse.rs         (one function per statement understood)
+│   │   ├── hypertable.rs    (create_hypertable's default index)
+│   │   ├── replay.rs        (the namespace over time)
+│   │   └── tests/           (one file per module above, plus guard_tests.rs
+│   │                         which runs over the real migrations)
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
