@@ -221,3 +221,10 @@ async fn connect(var: &str, role: &str) -> Result<Database> {
         .await
         .with_context(|| format!("failed to connect using {var}"))
 }
+
+/// The rules `yog-migrate` imposes on the files it applies — chiefly that every
+/// index is named, so Postgres never has to invent a name it will truncate.
+/// Test-only: nothing here is compiled into the binary that runs.
+#[cfg(test)]
+#[path = "migrate/lint.rs"]
+mod lint;

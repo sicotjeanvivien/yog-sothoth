@@ -558,6 +558,56 @@ Do **not** invent a per-kind discriminant (`reward_index`, `second_position`
 and friends). Those predate `event_index`, and migration 041 took them out of
 the keys precisely to leave one rule.
 
+### Name every index — do not let the server do it
+
+`CREATE INDEX ON t (…)` leaves the name to Postgres, which has 63 bytes for it.
+Our table names run to 53 characters, so the generated name gets truncated, and
+when two truncate onto the *same* name Postgres appends `1`, `2`, … **in
+creation order**. Two tables already do:
+
+```
+meteora_damm_v2_update_reward_duration_events  → …_signature_event_index_timesta_idx
+meteora_damm_v2_update_reward_funder_events    → …_signature_event_index_timest_idx1
+```
+
+The `1` sits on `funder` only because `duration` is declared first. Add a third
+table that truncates onto the same name and the suffix moves — a freshly
+migrated database stops matching production, and nothing raises an error,
+because nothing here is illegal.
+
+So the rule for every migration from `010` on:
+
+```sql
+-- Name the index. Keep the name within 63 characters: on the longest table
+-- today (53 characters) that leaves 10, so an event table's index is written
+-- <table>_<short suffix>, not idx_<table>_<columns>.
+CREATE UNIQUE INDEX meteora_<product>_<event_kind>_sig_uniq
+    ON meteora_<product>_<event_kind>_events (signature, event_index, timestamp);
+
+-- create_hypertable names one too — a default index on the time dimension, in
+-- public. Turn it off and write that index out like any other.
+SELECT create_hypertable('meteora_<product>_<event_kind>_events', 'timestamp',
+                         chunk_time_interval => INTERVAL '7 days',
+                         create_default_indexes => FALSE);
+CREATE INDEX meteora_<product>_<event_kind>_ts
+    ON meteora_<product>_<event_kind>_events (timestamp DESC);
+```
+
+And keep table names within **58** characters, because `<table>_pkey` is the one
+index name that cannot be written by hand.
+
+`src/bin/migrate/lint.rs` enforces all of that, DB-free — it belongs to
+`yog-migrate`, the binary that owns these files:
+
+```bash
+cargo test -p yog-persistence --bin yog-migrate
+```
+
+**`001`–`009` are out of scope.** They break the rule 70 times over and stay as
+they are — migrations are forward-only. Renaming those indexes is a separate job
+needing its own migration with `ALTER INDEX … RENAME TO …`; nothing depends on
+it today.
+
 ## The compression WARNINGs are expected
 
 Enabling compression on an event hypertable makes TimescaleDB emit, once per
