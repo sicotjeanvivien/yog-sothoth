@@ -70,18 +70,23 @@ no `CREATE INDEX` line mentions. A name left out of the replay is a name it
 thinks is free, which is how a guard like this reports green over a real
 collision.
 
-Index DDL it cannot decompose — an expression element, `INCLUDE`, a repeated
-column, an unnamed `UNIQUE` constraint, a hypertable argument it cannot vouch
-for, or anything that *frees* a name (`DROP INDEX`, `DROP TABLE`, `ALTER TABLE …
-DROP COLUMN`) — is a **hard failure**, not a skip; a per-file count cross-check
-catches statements that stopped looking index-shaped at all. A guard that
-silently covers 48 declarations out of 49 reports green while it has stopped
-working.
+Statements that *free* a name — `DROP INDEX`, `DROP TABLE`, `ALTER TABLE … DROP
+COLUMN`, `ALTER INDEX … RENAME TO` — are **modelled**, not refused: they are
+ordinary migrations, and the last of them is what `migrations/README.md`
+prescribes when the guard goes red. Index DDL it genuinely cannot decompose — an
+expression element, `INCLUDE`, a repeated column, an unnamed `UNIQUE` constraint,
+index DDL inside a `DO` block, a hypertable argument it cannot vouch for — is a
+**hard failure**, not a skip, and a per-file count cross-check catches statements
+that stopped looking index-shaped at all. A guard that silently covers 48
+declarations out of 49 reports green while it has stopped working.
 
 Its predictions were diffed name-for-name against a live
-`timescale/timescaledb:latest-pg16` with all nine migrations applied: **77
-indexes in `public`, no discrepancy**. The convention it enforces, and what to do
-when it goes red, are in [`migrations/README.md`](migrations/README.md).
+`timescale/timescaledb:latest-pg16` with all nine migrations applied: the **77
+server-named index relations** it predicts, no discrepancy. (`public` also holds
+the `_pkey` and constraint-borne indexes, which this guard does not enumerate —
+it asserts instead that no table name is long enough for its `_pkey` to
+truncate.) The convention it enforces, and what to do when it goes red, are in
+[`migrations/README.md`](migrations/README.md).
 
 ## Repository implementations
 

@@ -599,7 +599,7 @@ CREATE UNIQUE INDEX meteora_<product>_<event_kind>_sig_uniq
 Watch the budget: the name must fit in **63 characters or Postgres truncates it
 too**, silently, handing you the same problem back. The longest table name today
 is 53 characters (`meteora_damm_v2_withdraw_dead_liquidity_reward_events`), which
-leaves 9 for everything after it — enough for `_sig_uniq`, not for the
+leaves **10** for everything after it — enough for `_sig_uniq` (9), not for the
 `idx_<table>_<columns>` shape used elsewhere in the schema. On an event table the
 explicit name is therefore written `<table>_<short suffix>`. The guard asserts
 this bound as well.
@@ -612,7 +612,9 @@ differ on the column side too. A prefix-based guess predicts the wrong name and
 misses collisions — replay the algorithm, which is what the guard is for.
 
 Renaming the indexes that already exist is a separate, later job: the names are
-part of the schema, so it takes a migration with `ALTER INDEX … RENAME TO …`.
+part of the schema, so it takes a migration with `ALTER INDEX … RENAME TO …`. The
+guard models that statement — the old name comes free, the new one is taken — so
+such a migration replays correctly instead of being refused.
 
 ## The compression WARNINGs are expected
 
