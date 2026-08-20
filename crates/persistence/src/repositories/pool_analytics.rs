@@ -133,6 +133,12 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         // swap buckets with a non-null `swap_count` and null USD columns —
         // "it traded, we could not price it" instead of "nothing happened".
         // Every USD field was already nullable, so the wire shape is unchanged.
+        //
+        // Migration 010 made the same change on the reward side: an hour whose
+        // only activity is a claim on a mint `yog-context` has not resolved now
+        // yields a bucket with EVERY column null (`swap_count` included — it
+        // was not a swap). So a bucket that looks empty is not a bug; it is one
+        // of those two cases.
         let rows = sqlx::query_as!(
             PoolHistoryRow,
             r#"
