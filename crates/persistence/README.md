@@ -315,7 +315,7 @@ A missing price does not behave the same way everywhere in the chain:
 
 | mechanism | effect | where |
 |---|---|---|
-| `INNER JOIN token_metadata` | the row **disappears** | top of §15's views — unresolved mints |
+| `INNER JOIN token_metadata` | the row **disappears** | §15's `pool_tokens` CTE — unresolved mints. `reward_v` left it in migration **010**, the swap path in **002** |
 | `LEFT JOIN LATERAL` on the price | the value is **NULL**, and NULL propagates through the whole arithmetic expression | the valuation CTEs |
 | ~~`COALESCE(…, 0)` downstream~~ | ~~NULL becomes a **hard zero**~~ | **removed in migration 006** — see below |
 
@@ -332,6 +332,24 @@ two flow views carry:
 ```sql
 CASE WHEN bool_and(valuation_complete) THEN SUM(<column>) END
 ```
+
+**The same rule, one level lower, when the aggregation is inside the view.**
+`reward_v` (migration **010**) aggregates ACROSS the reward mints of one
+`(pool, hour)` — the aggregate underneath groups by `mint_reward` too — so its
+sub-total needs no window at all to appear. There is no repository to carry the
+flag, so the `bool_and` sits in the CTE, over a per-row predicate rather than a
+published column:
+
+```sql
+CASE WHEN bool_and((price IS NOT NULL AND decimals IS NOT NULL) OR amount = 0)
+     THEN SUM(CASE WHEN amount = 0 THEN 0 ELSE amount / 10^decimals * price END)
+END
+```
+
+Read the two mechanisms separately: the inner `CASE` is the **empty leg** (a
+mint that paid out nothing is worth zero without any price), the outer
+`bool_and` is **completeness** (one mint that did pay out and cannot be valued
+makes the hour unknown). Neither substitutes for the other.
 
 ⚠️ **`bool_and` is not decoration.** Dropping the `COALESCE` alone is *not
 enough*: `SUM` skips NULLs by itself, so a window where only some hours are

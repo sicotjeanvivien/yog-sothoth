@@ -484,6 +484,25 @@ targeted queries establish an observed floor, not a proven one; and
 they argue for keeping the filter honest ahead of a future writer, not for a
 second live input.
 
+**"none of them carries a completeness flag, so `pool_analytics` can still sum a
+partly-valuable window into a sub-total for those three figures",
+`007_referral_fee_split.sql:221-224`** — carrying forward the caveat of
+`006_flow_valuation_completeness.sql:241-248`, which singles one of the three
+out: *"`reward_v` is worse: its `SUM` aggregates ACROSS reward mints inside the
+view, so one unpriced mint among two already publishes a sub-total per bucket"*.
+**That one is fixed.** `010_reward_valuation_completeness.sql` gives `reward_v`
+the empty-leg `CASE` and the `bool_and` flag, and LEFT-joins `token_metadata` so
+an unresolved mint blocks the aggregate instead of dropping out of it — a row
+that is gone is one `bool_and` never sees. `liq_v` and `pos_fee_v` are
+deliberately untouched, so the sentence still holds for the other two, and 010's
+header carries the warning next to their definition rather than here.
+
+The population was measured before writing it, since our own database has never
+recorded a single reward claim: **435 cp-amm pools carry a reward stream, 2 of
+them carry two** (mainnet, 20 August 2026 — `getProgramAccountsV2`, memcmp on
+`reward_infos[i].initialized`). A dormant defect, like 009's zero price, closed
+because it traverses a shipped guard rather than because it is bleeding.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped
