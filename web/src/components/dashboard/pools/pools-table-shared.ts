@@ -11,15 +11,38 @@
  * the per-pool utilities (copy address, Solscan, watchlist star).
  */
 
+// ⚠️ The volume track is 144px where its neighbours are 112: it is the only
+// one that can carry the coverage mark (`VolumeCoverageMark`), and the mark
+// does not fit in 112. Measured in the browser at the pinned width, on the
+// widest content the cell can hold — an 8-character `$833.33K` next to a
+// two-digit `20/23`:
+//
+//     amount 67.4px + gap 6px + mark 33.1px  =  106.6px of content
+//     112px track → 80px content box         →  26.6px SPILLS
+//     144px track → 112px content box        →  5.4px to spare
+//
+// The spill goes LEFT, because the cell is `justify-end` — which is why
+// `scrollWidth` does not see it (it only counts overflow to the right) and why
+// a screenshot shows nothing until the neighbouring cell's own padding is
+// eaten through. Measure with a Range over the amount's text node, not with
+// scrollWidth, if you touch this again.
+//
+// Cost, stated so it can be argued with: the table now scrolls 32px earlier
+// than it did. Any change to either number must keep TABLE_MIN_WIDTH_CLASS in
+// step — see below.
 export const GRID_COLS =
-  "grid-cols-[minmax(190px,1.8fr)_minmax(84px,0.5fr)_minmax(112px,0.9fr)_minmax(84px,0.6fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(104px,0.7fr)]";
+  "grid-cols-[minmax(190px,1.8fr)_minmax(84px,0.5fr)_minmax(112px,0.9fr)_minmax(84px,0.6fr)_minmax(112px,0.9fr)_minmax(144px,0.9fr)_minmax(112px,0.9fr)_minmax(112px,0.9fr)_minmax(104px,0.7fr)]";
 
 /** Min width below which the table scrolls horizontally instead of squashing.
- *  Sized to the sum of the column minimums (~1022px) so the grid uses those
+ *  Sized to the sum of the column minimums (~1054px) so the grid uses those
  *  minimums exactly, with no forced extra slack. Trimmed once the protocol
  *  cell (icon + "DAMM v2") and the relative-time cells ("il y a 2 h") went
- *  compact — the old 1232px predated that and forced an avoidable scroll. */
-export const TABLE_MIN_WIDTH_CLASS = "min-w-[1030px]";
+ *  compact — the old 1232px predated that and forced an avoidable scroll;
+ *  +32px when the volume track went to 144 for the coverage mark. Measured,
+ *  not assumed: at this width the grid pins every track to its minimum
+ *  exactly (volume cell = 144px on the nose), so this constant IS the sum and
+ *  has to move with it. */
+export const TABLE_MIN_WIDTH_CLASS = "min-w-[1062px]";
 
 // ── Header cells ──────────────────────────────────────────────────────
 // Deliberately understated (11px, medium weight, dim, tight tracking) so the

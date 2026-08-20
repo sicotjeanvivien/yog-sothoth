@@ -16,10 +16,14 @@
  * appear to mean.
  *
  * Pure presentation, no client JS. The sentence the KPI cards spell out is
- * carried by a visually-hidden sibling, NOT by `aria-label`: ARIA forbids a
- * label on a bare `<span>` (role `generic`) and assistive tech may drop it, so
- * the two audiences that most need the explanation — screen readers, and touch
- * users who have no hover for `title` — would be left with a bare "7/8".
+ * carried by a visually-hidden sibling — NOT by `aria-label`, which ARIA
+ * forbids on a bare `<span>` (role `generic`) and which assistive tech may
+ * drop, and NOT by `title` either: `title` becomes the accessible
+ * *description* while the hidden text is the accessible *name*, so carrying
+ * both makes a screen reader announce the same sentence twice. `title` was
+ * also never the right channel for the audience that needs it most — there is
+ * no hover on touch. The reader who wants the rule in prose finds it in the
+ * table's ⓘ; the mark's job is to say WHICH rows are concerned.
  */
 
 import type { VolumeCoverage } from "@/lib/coverage/volume-coverage";
@@ -42,7 +46,7 @@ export function VolumeCoverageMark({
   const label = labelFor(coverage.priced, coverage.total);
 
   return (
-    <span className="ml-1.5 text-[11px] text-slate-500 tabular-nums" title={label}>
+    <span className="ml-1.5 text-[11px] text-slate-500 tabular-nums">
       <span aria-hidden="true">
         {coverage.priced}/{coverage.total}
       </span>

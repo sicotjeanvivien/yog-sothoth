@@ -117,9 +117,15 @@ export async function PoolDetailKpis({
         hint={coverageHint}
         info={t("info.volume24h")}
       />
+      {/* Same hint as the volume: the schema states the coverage governs
+          `volume24hUsd`, `fees24hUsd` and the three fee shares at once — they
+          share one valuation, so an hour skipped for one is skipped for all.
+          Marking one and not the other would let the reader assume the fee
+          figure is complete. */}
       <KpiCard
         label={t("fees24h")}
         valueCompact={formatUsdCompact(pool.fees24hUsd)}
+        hint={coverageHint}
         info={t("info.fees24h")}
       />
       {spotPrice !== null && (

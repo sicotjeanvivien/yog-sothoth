@@ -57,7 +57,7 @@
         "rankBy": "Classer par {metric}",
         "volumeCoverage": "{priced} / {total} heures valorisées",
         "infoVolume": "Classement sur le volume 24 h effectivement valorisé : une heure dont les tokens n'ont pas de prix connu sort de la somme, et une pool dont aucune heure n'est valorisable n'apparaît pas dans ce classement. Une valeur suivie d'une fraction ne couvre que ce nombre d'heures tradées.",
-        "infoTvl": "Classement sur la valeur des réserves au dernier état observé. Une pool dont les deux tokens n'ont pas tous deux un prix connu ne peut pas être valorisée et n'apparaît pas dans ce classement. Contrairement au volume, aucune couverture horaire ne s'applique ici — c'est un instantané, pas une somme sur une fenêtre."
+        "infoTvl": "Classement sur la valeur des réserves au dernier état observé. Une pool dont les deux tokens n'ont pas tous deux un prix connu ne peut pas être valorisée et n'apparaît pas dans ce classement. La valeur classée est un instantané, pas une somme sur une fenêtre : elle ne porte donc pas de couverture horaire — la colonne Volume 24 h continue d'afficher la sienne."
       },
       "latestSignals": {
         "title": "Derniers signaux",
@@ -68,7 +68,8 @@
     "Pools": {
       "page": {
         "title": "Pools",
-        "description": "Toutes les pools de liquidité Meteora observées par l'indexeur. Cliquez sur une ligne pour ouvrir la page détail de la pool. Un volume 24 h suivi d'une fraction ne couvre que ce nombre d'heures tradées — les autres n'ont pas pu être valorisées."
+        "description": "Toutes les pools de liquidité Meteora observées par l'indexeur. Cliquez sur une ligne pour ouvrir la page détail de la pool.",
+        "coverageNote": "Un volume 24 h suivi d'une fraction ne couvre que ce nombre d'heures tradées — les autres n'ont pas pu être valorisées."
       },
       "table": {
         "pair": "Paire",
@@ -129,7 +130,8 @@
     "Watchlist": {
       "page": {
         "title": "Watchlist",
-        "description": "Les pools que vous avez suivies, conservées dans ce navigateur. Aucun compte requis — votre watchlist reste sur cet appareil jusqu'à l'arrivée de la connexion. Un volume 24 h suivi d'une fraction ne couvre que ce nombre d'heures tradées — les autres n'ont pas pu être valorisées."
+        "description": "Les pools que vous avez suivies, conservées dans ce navigateur. Aucun compte requis — votre watchlist reste sur cet appareil jusqu'à l'arrivée de la connexion.",
+        "coverageNote": "Un volume 24 h suivi d'une fraction ne couvre que ce nombre d'heures tradées — les autres n'ont pas pu être valorisées."
       },
       "toggle": {
         "watch": "Suivre",

@@ -8,8 +8,12 @@
  * counters that tell them apart (`swapBuckets24h` / `swapBucketsPriced24h`);
  * this is the one place that decides what they mean for a reader.
  *
- * Pure and shared so the rule lives once, for the three surfaces that state it:
- * the pool-detail KPI, the `/pools` table and the Overview ranking.
+ * Pure and shared so the rule lives once, for the four surfaces that state it:
+ * the pool-detail KPIs, the `/pools` table (and the watchlist that reuses its
+ * row), the Overview ranking, and the Overview volume KPI — that last one over
+ * the GLOBAL counters, pool-hours summed across every pool rather than one
+ * pool's own. The shape is the same, which is why the parameter is structural
+ * rather than a `PoolResponse`.
  *
  * ⚠️ **No threshold, deliberately.** The mark fires on "not fully covered", a
  * fact — not on "below x %", a number nobody has chosen. Penalising thin
@@ -31,14 +35,14 @@ export type VolumeCoverage = {
  * `null` when the pool did not trade in the window: there is no figure to
  * qualify, and a "0 / 0" would read as a failure rather than as silence.
  */
-export function volumeCoverage(pool: {
+export function volumeCoverage(counters: {
   swapBuckets24h: number;
   swapBucketsPriced24h: number;
 }): VolumeCoverage | null {
-  const total = pool.swapBuckets24h;
+  const total = counters.swapBuckets24h;
   if (total <= 0) {
     return null;
   }
-  const priced = pool.swapBucketsPriced24h;
+  const priced = counters.swapBucketsPriced24h;
   return { priced, total, partial: priced < total };
 }
