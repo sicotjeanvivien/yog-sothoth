@@ -15,8 +15,11 @@
  * what the reader needs is to spot the few figures that do not mean what they
  * appear to mean.
  *
- * Pure presentation, no client JS: `title` and `aria-label` carry the sentence
- * the KPI cards spell out, so the fraction is never the only explanation.
+ * Pure presentation, no client JS. The sentence the KPI cards spell out is
+ * carried by a visually-hidden sibling, NOT by `aria-label`: ARIA forbids a
+ * label on a bare `<span>` (role `generic`) and assistive tech may drop it, so
+ * the two audiences that most need the explanation — screen readers, and touch
+ * users who have no hover for `title` — would be left with a bare "7/8".
  */
 
 import type { VolumeCoverage } from "@/lib/coverage/volume-coverage";
@@ -39,12 +42,11 @@ export function VolumeCoverageMark({
   const label = labelFor(coverage.priced, coverage.total);
 
   return (
-    <span
-      className="ml-1.5 text-[11px] text-slate-500 tabular-nums"
-      title={label}
-      aria-label={label}
-    >
-      {coverage.priced}/{coverage.total}
+    <span className="ml-1.5 text-[11px] text-slate-500 tabular-nums" title={label}>
+      <span aria-hidden="true">
+        {coverage.priced}/{coverage.total}
+      </span>
+      <span className="sr-only">{label}</span>
     </span>
   );
 }

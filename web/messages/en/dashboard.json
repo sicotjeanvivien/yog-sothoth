@@ -56,7 +56,8 @@
         "emptyTvl": "No pool has priceable liquidity yet.",
         "rankBy": "Rank by {metric}",
         "volumeCoverage": "{priced} / {total} hours priced",
-        "info": "Ranked on the 24h volume actually valued: an hour whose tokens have no known price leaves the sum, and a pool with no valued hour at all does not appear in this ranking. A figure followed by a fraction covers only that many of the hours it traded."
+        "infoVolume": "Ranked on the 24h volume actually valued: an hour whose tokens have no known price leaves the sum, and a pool with no valued hour at all does not appear in this ranking. A figure followed by a fraction covers only that many of the hours it traded.",
+        "infoTvl": "Ranked on the value of the reserves at the last observed state. A pool whose two tokens do not both have a known price cannot be valued and does not appear in this ranking. Unlike the volume ranking, no hourly coverage applies here — the figure is a snapshot, not a sum over a window."
       },
       "latestSignals": {
         "title": "Latest signals",
@@ -128,7 +129,7 @@
     "Watchlist": {
       "page": {
         "title": "Watchlist",
-        "description": "Pools you starred, kept in this browser. No account needed — your watchlist stays on this device until sign-in ships."
+        "description": "Pools you starred, kept in this browser. No account needed — your watchlist stays on this device until sign-in ships. A 24h volume followed by a fraction covers only that many of the hours the pool traded — the rest could not be valued."
       },
       "toggle": {
         "watch": "Watch",

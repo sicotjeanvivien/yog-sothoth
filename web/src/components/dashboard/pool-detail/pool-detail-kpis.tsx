@@ -42,6 +42,7 @@ import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-sta
 
 import { isFeatureEnabled } from "@/config/features";
 import { formatUsdCompact } from "@/lib/format/format-usd";
+import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { computePoolComposition } from "@/lib/format/pool-composition";
 import { formatPrice } from "@/lib/format/pool-price";
 
@@ -87,14 +88,17 @@ export async function PoolDetailKpis({
 
   // Coverage of the 24h volume: how many of the hours that actually traded
   // could be valued in USD. The sum skips the rest, so a bare figure can be a
-  // sub-total passing for a total. Rendered whenever the pool traded at all —
-  // including at full coverage, since an absent line would be ambiguous with
-  // "no data". A pool that did not trade has nothing to qualify.
-  const volumeCoverage =
-    pool.swapBuckets24h > 0
+  // sub-total passing for a total. `volumeCoverage` owns the one question both
+  // surfaces share — is there anything to qualify at all — and the two answer
+  // the next one differently: a KPI states the coverage even when COMPLETE (an
+  // absent line would read as "no data"), where a table row marks only what is
+  // partial (a mark on every row is noise).
+  const coverage = volumeCoverage(pool);
+  const coverageHint =
+    coverage !== null
       ? t("bucketCoverage", {
-        priced: pool.swapBucketsPriced24h,
-        total: pool.swapBuckets24h,
+        priced: coverage.priced,
+        total: coverage.total,
       })
       : undefined;
 
@@ -110,7 +114,7 @@ export async function PoolDetailKpis({
       <KpiCard
         label={t("volume24h")}
         valueCompact={formatUsdCompact(pool.volume24hUsd)}
-        hint={volumeCoverage}
+        hint={coverageHint}
         info={t("info.volume24h")}
       />
       <KpiCard

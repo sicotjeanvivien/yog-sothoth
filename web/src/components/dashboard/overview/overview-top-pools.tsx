@@ -53,6 +53,7 @@ export async function OverviewTopPools({
   searchParams,
 }: OverviewTopPoolsProps) {
   const t = await getTranslations("Dashboard.Overview.topPools");
+  const tShell = await getTranslations("Dashboard.shell");
 
   let pools: PoolResponse[];
   try {
@@ -66,13 +67,17 @@ export async function OverviewTopPools({
 
   return (
     <div>
-      {/* The ⓘ carries what no row can: this ranking OMITS the pools whose
-          every traded hour was unvaluable — they are absent, not last. */}
+      {/* The ⓘ carries what no row can: this ranking OMITS the pools it cannot
+          value — they are absent, not last. The two metrics exclude on
+          different grounds (an unvaluable hour vs. an unpriced reserve), so the
+          text follows the active one, like the empty state below. */}
       <div className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
           {t("title")}
         </h2>
-        <InfoPopover label={t("title")}>{t("info")}</InfoPopover>
+        <InfoPopover label={tShell("metricInfo")} iconSize={14}>
+          {metric === "tvl" ? t("infoTvl") : t("infoVolume")}
+        </InfoPopover>
       </div>
 
       {pools.length === 0 ? (

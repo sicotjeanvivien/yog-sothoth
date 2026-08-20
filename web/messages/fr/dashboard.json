@@ -56,7 +56,8 @@
         "emptyTvl": "Aucune pool n'a de liquidité valorisable pour l'instant.",
         "rankBy": "Classer par {metric}",
         "volumeCoverage": "{priced} / {total} heures valorisées",
-        "info": "Classement sur le volume 24 h effectivement valorisé : une heure dont les tokens n'ont pas de prix connu sort de la somme, et une pool dont aucune heure n'est valorisable n'apparaît pas dans ce classement. Une valeur suivie d'une fraction ne couvre que ce nombre d'heures tradées."
+        "infoVolume": "Classement sur le volume 24 h effectivement valorisé : une heure dont les tokens n'ont pas de prix connu sort de la somme, et une pool dont aucune heure n'est valorisable n'apparaît pas dans ce classement. Une valeur suivie d'une fraction ne couvre que ce nombre d'heures tradées.",
+        "infoTvl": "Classement sur la valeur des réserves au dernier état observé. Une pool dont les deux tokens n'ont pas tous deux un prix connu ne peut pas être valorisée et n'apparaît pas dans ce classement. Contrairement au volume, aucune couverture horaire ne s'applique ici — c'est un instantané, pas une somme sur une fenêtre."
       },
       "latestSignals": {
         "title": "Derniers signaux",
@@ -128,7 +129,7 @@
     "Watchlist": {
       "page": {
         "title": "Watchlist",
-        "description": "Les pools que vous avez suivies, conservées dans ce navigateur. Aucun compte requis — votre watchlist reste sur cet appareil jusqu'à l'arrivée de la connexion."
+        "description": "Les pools que vous avez suivies, conservées dans ce navigateur. Aucun compte requis — votre watchlist reste sur cet appareil jusqu'à l'arrivée de la connexion. Un volume 24 h suivi d'une fraction ne couvre que ce nombre d'heures tradées — les autres n'ont pas pu être valorisées."
       },
       "toggle": {
         "watch": "Suivre",
