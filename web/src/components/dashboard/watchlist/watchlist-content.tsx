@@ -36,6 +36,7 @@ import {
   HEAD_CELL_CLASS,
   HEAD_CELL_NUMERIC_CLASS,
   TABLE_MIN_WIDTH_CLASS,
+  type CoverageLabel,
   type SignalCellLabels,
 } from "@/components/dashboard/pools/pools-table-shared";
 
@@ -128,6 +129,9 @@ export function WatchlistContent() {
     title: tTable("signalsPopoverTitle"),
   };
 
+  const coverageLabel: CoverageLabel = (priced, total) =>
+    tTable("volumeCoverage", { priced, total });
+
   return (
     <>
       <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
@@ -176,6 +180,7 @@ export function WatchlistContent() {
                 pool={pool}
                 locale={locale}
                 signalLabels={signalLabels}
+                coverageLabel={coverageLabel}
               />
             ))}
           </div>

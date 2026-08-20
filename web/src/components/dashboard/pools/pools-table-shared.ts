@@ -35,6 +35,11 @@ export const CELL_CLASS =
   "px-4 py-3 text-[14px] text-slate-300 align-middle whitespace-nowrap flex items-center";
 export const CELL_NUMERIC_CLASS = `${CELL_CLASS} justify-end font-mono`;
 
+/** Resolves the coverage sentence of one row's 24h volume. Passed in for the
+ *  same reason as `SignalCellLabels`: the row renders in a server tree
+ *  (`/pools`) and a client one (`/watchlist`), so it never translates itself. */
+export type CoverageLabel = (priced: number, total: number) => string;
+
 /** Labels the client-side signal cell needs, resolved once by the table and
  *  passed down as plain strings so the row stays i18n-agnostic. */
 export type SignalCellLabels = {

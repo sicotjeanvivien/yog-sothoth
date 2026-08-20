@@ -13,7 +13,8 @@
  * clickable. Widths come from the shared `GRID_COLS`.
  *
  * USD values render `—` when null (missing prices / no recent swaps); the
- * format helper owns the null check.
+ * format helper owns the null check. The 24h volume carries a coverage mark
+ * when the window was only partly valuable — see `VolumeCoverageMark`.
  */
 
 import { Link } from "@/i18n/navigation";
@@ -22,6 +23,7 @@ import type { PoolResponse } from "@/lib/api/schema/pool";
 import { formatFeeBps } from "@/lib/format/format-fee";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatUsdCompact } from "@/lib/format/format-usd";
+import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { worstSeverity } from "@/lib/signals/worst-severity";
 
 import { PoolPairCell } from "./pool-pair-cell";
@@ -32,21 +34,29 @@ import {
   CELL_CLASS,
   CELL_NUMERIC_CLASS,
   GRID_COLS,
+  type CoverageLabel,
   type SignalCellLabels,
 } from "./pools-table-shared";
+import { VolumeCoverageMark } from "./volume-coverage-mark";
 
-export type { SignalCellLabels };
+export type { CoverageLabel, SignalCellLabels };
 
 export function PoolsTableRow({
   pool,
   locale,
   signalLabels,
+  coverageLabel,
 }: {
   pool: PoolResponse;
   locale: string;
   signalLabels: SignalCellLabels;
+  coverageLabel: CoverageLabel;
 }) {
   const worst = worstSeverity(pool.signals24h);
+  // Marks the 24h volume when the window was not fully valued — including when
+  // NOTHING could be valued, where the cell shows `—`: that dash otherwise
+  // reads as "did not trade", which is a different fact.
+  const coverage = volumeCoverage(pool);
   const href = `/pools/${pool.poolAddress}`;
 
   return (
@@ -86,6 +96,7 @@ export function PoolsTableRow({
       </Link>
       <Link role="cell" href={href} className={CELL_NUMERIC_CLASS}>
         {formatUsdCompact(pool.volume24hUsd)}
+        <VolumeCoverageMark coverage={coverage} labelFor={coverageLabel} />
       </Link>
 
       {/* suppressHydrationWarning: relative to now, so the SSR text can

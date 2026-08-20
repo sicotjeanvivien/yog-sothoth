@@ -12,14 +12,21 @@
  * param resolved by the page. This is the *only* metric-ranked view of pools:
  * the `/pools` list can only sort by first/last-seen (keyset on timestamps).
  *
- * USD cells render `—` when null (the format helper owns the null check).
+ * USD cells render `—` when null (the format helper owns the null check). A
+ * volume that covers only part of the hours it traded carries a coverage mark;
+ * the block's ⓘ says the rest — that a pool with no valuable hour at all is
+ * missing from the ranking entirely, which is the half a per-row mark cannot
+ * express.
  */
 
 import { getTranslations } from "next-intl/server";
 
 import { BlockError } from "@/components/dashboard/block-error";
 import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";
+import { VolumeCoverageMark } from "@/components/dashboard/pools/volume-coverage-mark";
+import { InfoPopover } from "@/components/shared/info-popover";
 import { Link } from "@/i18n/navigation";
+import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { ApiClientError } from "@/lib/api/errors";
 import type { PoolResponse } from "@/lib/api/schema/pool";
 import { fetchTopPools, type PoolRankMetric } from "@/lib/api/server/top-pools";
@@ -59,9 +66,14 @@ export async function OverviewTopPools({
 
   return (
     <div>
-      <h2 className="mb-4 text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
-        {t("title")}
-      </h2>
+      {/* The ⓘ carries what no row can: this ranking OMITS the pools whose
+          every traded hour was unvaluable — they are absent, not last. */}
+      <div className="mb-4 flex items-center gap-2">
+        <h2 className="text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
+          {t("title")}
+        </h2>
+        <InfoPopover label={t("title")}>{t("info")}</InfoPopover>
+      </div>
 
       {pools.length === 0 ? (
         <p className="rounded-[8px] border border-sothoth-500/15 bg-cosmos-700/40 px-4 py-6 text-[14px] text-slate-400">
@@ -112,6 +124,12 @@ export async function OverviewTopPools({
               </div>
               <div role="cell" className={CELL_NUM}>
                 {formatUsdCompact(pool.volume24hUsd)}
+                <VolumeCoverageMark
+                  coverage={volumeCoverage(pool)}
+                  labelFor={(priced, total) =>
+                    t("volumeCoverage", { priced, total })
+                  }
+                />
               </div>
               <div role="cell" className={CELL_NUM}>
                 {formatUsdCompact(pool.tvlUsd)}

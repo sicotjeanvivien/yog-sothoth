@@ -11,6 +11,7 @@ import {
   HEAD_CELL_NUMERIC_CLASS,
   HEAD_CELL_SORTABLE_CLASS,
   TABLE_MIN_WIDTH_CLASS,
+  type CoverageLabel,
   type SignalCellLabels,
 } from "./pools-table-shared";
 import { SortableHeader } from "./sortable-header";
@@ -41,6 +42,9 @@ export async function PoolsTable({
     ariaFor: (count) => t("signalsAria", { count }),
     title: t("signalsPopoverTitle"),
   };
+
+  const coverageLabel: CoverageLabel = (priced, total) =>
+    t("volumeCoverage", { priced, total });
 
   return (
     <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
@@ -105,6 +109,7 @@ export async function PoolsTable({
               pool={pool}
               locale={locale}
               signalLabels={signalLabels}
+              coverageLabel={coverageLabel}
             />
           ))}
         </div>

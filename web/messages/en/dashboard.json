@@ -54,7 +54,9 @@
         "tvl": "TVL",
         "emptyVolume": "No pool has recorded volume in the last 24h.",
         "emptyTvl": "No pool has priceable liquidity yet.",
-        "rankBy": "Rank by {metric}"
+        "rankBy": "Rank by {metric}",
+        "volumeCoverage": "{priced} / {total} hours priced",
+        "info": "Ranked on the 24h volume actually valued: an hour whose tokens have no known price leaves the sum, and a pool with no valued hour at all does not appear in this ranking. A figure followed by a fraction covers only that many of the hours it traded."
       },
       "latestSignals": {
         "title": "Latest signals",
@@ -65,7 +67,7 @@
     "Pools": {
       "page": {
         "title": "Pools",
-        "description": "All Meteora liquidity pools observed by the indexer. Click any row to open the pool's detail page."
+        "description": "All Meteora liquidity pools observed by the indexer. Click any row to open the pool's detail page. A 24h volume followed by a fraction covers only that many of the hours the pool traded — the rest could not be valued."
       },
       "table": {
         "pair": "Pair",
@@ -80,7 +82,8 @@
         "firstSeen": "First seen",
         "sortBy": "Sort by {column}",
         "sortedAscending": "{column} (sorted ascending)",
-        "sortedDescending": "{column} (sorted descending)"
+        "sortedDescending": "{column} (sorted descending)",
+        "volumeCoverage": "{priced} / {total} hours priced"
       },
       "rowActions": {
         "copyAddress": "Copy address",
