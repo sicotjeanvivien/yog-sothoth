@@ -47,17 +47,30 @@ async fn insert_metadata(pool: &PgPool, mint: &str, decimals: i16) {
 /// `None` = the view has no row for this pool at all; `Some(None)` = the bucket
 /// exists and its reward total is unknown. The distinction is the point of
 /// `an_unresolved_reward_mint_still_produces_a_bucket`.
+///
+/// Every fixture here pins its claims to one hour, so the view must hold at
+/// most ONE bucket per pool — asserted rather than assumed. `fetch_optional`
+/// would have returned the first row and dropped the others in silence, so a
+/// fixture that later adds a second hour would read an arbitrary bucket and
+/// pass or fail on the wrong one.
 async fn rewards_usd(pool: &PgPool, pool_addr: &str) -> Option<Option<f64>> {
-    sqlx::query_as::<_, (Option<f64>,)>(
+    let rows = sqlx::query_as::<_, (Option<f64>,)>(
         "SELECT rewards_claimed_usd::DOUBLE PRECISION
          FROM meteora_damm_v2_pool_hourly_activity
          WHERE pool_address = $1",
     )
     .bind(pool_addr)
-    .fetch_optional(pool)
+    .fetch_all(pool)
     .await
-    .unwrap()
-    .map(|(v,)| v)
+    .unwrap();
+
+    assert!(
+        rows.len() <= 1,
+        "the fixture put activity in {} distinct hours; this helper reads a \
+         single bucket and would be answering about an arbitrary one",
+        rows.len()
+    );
+    rows.into_iter().next().map(|(v,)| v)
 }
 
 #[sqlx::test]

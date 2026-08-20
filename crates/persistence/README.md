@@ -341,10 +341,17 @@ flag, so the `bool_and` sits in the CTE, over a per-row predicate rather than a
 published column:
 
 ```sql
-CASE WHEN bool_and((price IS NOT NULL AND decimals IS NOT NULL) OR amount = 0)
-     THEN SUM(CASE WHEN amount = 0 THEN 0 ELSE amount / 10^decimals * price END)
+CASE WHEN bool_and((price IS NOT NULL AND decimals IS NOT NULL)
+                   OR COALESCE(amount, 0) = 0)
+     THEN SUM(CASE WHEN COALESCE(amount, 0) = 0 THEN 0
+                   ELSE amount / 10^decimals * price END)
 END
 ```
+
+⚠️ The `COALESCE` around the amount is not noise: `bool_and` ignores NULLs, so
+a bare `amount = 0` on a nullable amount hands back the sub-total the guard
+exists to forbid. Every operand of the predicate has to be an `IS NOT NULL`
+test or `COALESCE`-d, which is what makes it total.
 
 Read the two mechanisms separately: the inner `CASE` is the **empty leg** (a
 mint that paid out nothing is worth zero without any price), the outer
