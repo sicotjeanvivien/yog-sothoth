@@ -73,6 +73,37 @@ pub async fn price_mint(pool: &PgPool, mint: &str, price: &str) {
     price_mint_since(pool, mint, price, 48).await;
 }
 
+/// One `ClaimReward` event, the way the indexer writes it.
+///
+/// Shared because the reward aggregate is read from two angles — `claim_caggs`
+/// checks that it keeps one row PER MINT, `reward_valuation` checks what the
+/// activity view then does with those rows — and both need the same insert. Two
+/// copies of it would drift apart the day the column list moves.
+pub async fn claim_reward(
+    pool: &PgPool,
+    pool_addr: &str,
+    signature: &str,
+    mint_reward: &str,
+    reward_index: i16,
+    total_reward: i64,
+    timestamp: DateTime<Utc>,
+) {
+    sqlx::query(
+        "INSERT INTO meteora_damm_v2_claim_reward_events
+           (pool_address, signature, position, owner, mint_reward, reward_index, total_reward, timestamp, slot, event_index)
+         VALUES ($1,$2,'pos','own',$3,$4,$5,$6,0,0)",
+    )
+    .bind(pool_addr)
+    .bind(signature)
+    .bind(mint_reward)
+    .bind(reward_index)
+    .bind(total_reward)
+    .bind(timestamp)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// Drop the positivity constraint of migration 009 so a fixture can seed a price
 /// that stores as zero.
 ///

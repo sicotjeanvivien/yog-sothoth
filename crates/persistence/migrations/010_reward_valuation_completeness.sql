@@ -56,6 +56,16 @@
 -- `swap_buckets_priced_24h` / `swap_buckets_24h`). The general position is
 -- counter for `/history`, flag for anything feeding a ranking or a threshold.
 --
+-- ⚠️ By that position the volume RANKING should carry one, and it carries
+-- neither: `top_pool_addresses(PoolRankMetric::Volume24h)` orders on
+-- `SUM(volume_usd)` with `HAVING SUM(volume_usd) IS NOT NULL`, so a pool
+-- priceable 6 hours out of 24 is ranked on its 6-hour sub-total against a
+-- neighbour's full 24. That is `.project` ticket 03 — 34 active pools out of 93
+-- invisible, 5 August 2026, on a window the ticket itself calls too short to be
+-- stable — and its fix is decided: MARK thin coverage in the dashboard rather
+-- than change the order, the API already serialising the counters it needs
+-- (`swapBuckets24h` / `swapBucketsPriced24h`). Named here, left alone.
+--
 -- For these columns the tension does not exist: **no screen renders them** —
 -- `web/src/lib/api/schema/pool-history.ts` parses `rewardsClaimedUsd` and no
 -- component reads it — so the flag costs no display at all. The day the

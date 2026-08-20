@@ -315,7 +315,7 @@ A missing price does not behave the same way everywhere in the chain:
 
 | mechanism | effect | where |
 |---|---|---|
-| `INNER JOIN token_metadata` | the row **disappears** | §15's `pool_tokens` CTE — unresolved mints. `reward_v` left it in migration **010**, the swap path in **002** |
+| `INNER JOIN token_metadata` | the row **disappears** | §15's `pool_tokens` CTE — unresolved mints. `reward_v` dropped it in **010**, the swap path in **002** |
 | `LEFT JOIN LATERAL` on the price | the value is **NULL**, and NULL propagates through the whole arithmetic expression | the valuation CTEs |
 | ~~`COALESCE(…, 0)` downstream~~ | ~~NULL becomes a **hard zero**~~ | **removed in migration 006** — see below |
 

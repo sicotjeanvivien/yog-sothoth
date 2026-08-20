@@ -4,7 +4,7 @@
 //! path yet, so the tests assert the CA aggregates directly. Real-time
 //! aggregation makes the just-inserted rows visible without a manual refresh.
 
-use super::helpers::pk;
+use super::helpers::{claim_reward, pk};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 
@@ -25,32 +25,6 @@ async fn insert_position_fee(
     .bind(signature)
     .bind(fee_a)
     .bind(fee_b)
-    .bind(timestamp)
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn insert_reward(
-    pool: &PgPool,
-    pool_addr: &str,
-    signature: &str,
-    mint_reward: &str,
-    reward_index: i16,
-    total_reward: i64,
-    timestamp: DateTime<Utc>,
-) {
-    sqlx::query(
-        "INSERT INTO meteora_damm_v2_claim_reward_events
-           (pool_address, signature, position, owner, mint_reward, reward_index, total_reward, timestamp, slot, event_index)
-         VALUES ($1,$2,'pos','own',$3,$4,$5,$6,0,0)",
-    )
-    .bind(pool_addr)
-    .bind(signature)
-    .bind(mint_reward)
-    .bind(reward_index)
-    .bind(total_reward)
     .bind(timestamp)
     .execute(pool)
     .await
@@ -86,9 +60,9 @@ async fn claim_reward_cagg_groups_by_mint(pool: PgPool) {
     let ts = Utc::now() - Duration::hours(1);
 
     // Two claims of reward token X, one of token Y — must stay separate rows.
-    insert_reward(&pool, &pool_addr, "r1", &mint_x, 0, 1000, ts).await;
-    insert_reward(&pool, &pool_addr, "r2", &mint_x, 0, 500, ts).await;
-    insert_reward(&pool, &pool_addr, "r3", &mint_y, 1, 700, ts).await;
+    claim_reward(&pool, &pool_addr, "r1", &mint_x, 0, 1000, ts).await;
+    claim_reward(&pool, &pool_addr, "r2", &mint_x, 0, 500, ts).await;
+    claim_reward(&pool, &pool_addr, "r3", &mint_y, 1, 700, ts).await;
 
     let rows: Vec<(String, i64, i64)> = sqlx::query_as(
         "SELECT mint_reward, total_reward::BIGINT, claim_count

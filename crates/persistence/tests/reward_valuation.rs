@@ -20,7 +20,7 @@
 //! the freshly inserted events visible with no manual refresh (same as
 //! `claim_caggs.rs`).
 
-use super::helpers::{pk, price_mint_since};
+use super::helpers::{claim_reward, pk, price_mint_since};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 
@@ -39,31 +39,6 @@ async fn insert_metadata(pool: &PgPool, mint: &str, decimals: i16) {
     .bind(mint)
     .bind(decimals)
     .bind(at)
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-async fn claim_reward(
-    pool: &PgPool,
-    pool_addr: &str,
-    signature: &str,
-    mint_reward: &str,
-    reward_index: i16,
-    total_reward: i64,
-    timestamp: DateTime<Utc>,
-) {
-    sqlx::query(
-        "INSERT INTO meteora_damm_v2_claim_reward_events
-           (pool_address, signature, position, owner, mint_reward, reward_index, total_reward, timestamp, slot, event_index)
-         VALUES ($1,$2,'pos','own',$3,$4,$5,$6,0,0)",
-    )
-    .bind(pool_addr)
-    .bind(signature)
-    .bind(mint_reward)
-    .bind(reward_index)
-    .bind(total_reward)
-    .bind(timestamp)
     .execute(pool)
     .await
     .unwrap();
