@@ -54,7 +54,10 @@
         "tvl": "TVL",
         "emptyVolume": "No pool has recorded volume in the last 24h.",
         "emptyTvl": "No pool has priceable liquidity yet.",
-        "rankBy": "Rank by {metric}"
+        "rankBy": "Rank by {metric}",
+        "volumeCoverage": "{priced} / {total} hours priced",
+        "infoVolume": "Ranked on the 24h volume actually valued: an hour whose tokens have no known price leaves the sum, and a pool with no valued hour at all does not appear in this ranking. A figure followed by a fraction covers only that many of the hours it traded.",
+        "infoTvl": "Ranked on the value of the reserves at the last observed state. A pool whose two tokens do not both have a known price cannot be valued and does not appear in this ranking. The ranking figure is a snapshot rather than a sum over a window, so it carries no hourly coverage of its own — the Volume 24h column keeps showing its own."
       },
       "latestSignals": {
         "title": "Latest signals",
@@ -65,7 +68,8 @@
     "Pools": {
       "page": {
         "title": "Pools",
-        "description": "All Meteora liquidity pools observed by the indexer. Click any row to open the pool's detail page."
+        "description": "All Meteora liquidity pools observed by the indexer. Click any row to open the pool's detail page.",
+        "coverageNote": "A 24h volume followed by a fraction covers only that many of the hours the pool traded — the rest could not be valued."
       },
       "table": {
         "pair": "Pair",
@@ -80,7 +84,8 @@
         "firstSeen": "First seen",
         "sortBy": "Sort by {column}",
         "sortedAscending": "{column} (sorted ascending)",
-        "sortedDescending": "{column} (sorted descending)"
+        "sortedDescending": "{column} (sorted descending)",
+        "volumeCoverage": "{priced} / {total} hours priced"
       },
       "rowActions": {
         "copyAddress": "Copy address",
@@ -125,7 +130,8 @@
     "Watchlist": {
       "page": {
         "title": "Watchlist",
-        "description": "Pools you starred, kept in this browser. No account needed — your watchlist stays on this device until sign-in ships."
+        "description": "Pools you starred, kept in this browser. No account needed — your watchlist stays on this device until sign-in ships.",
+        "coverageNote": "A 24h volume followed by a fraction covers only that many of the hours the pool traded — the rest could not be valued."
       },
       "toggle": {
         "watch": "Watch",

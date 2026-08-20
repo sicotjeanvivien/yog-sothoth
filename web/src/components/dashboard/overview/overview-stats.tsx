@@ -23,11 +23,17 @@ import { getTranslations } from "next-intl/server";
 import type { StatsResponse } from "@/lib/api/schema/stats";
 import { formatCount } from "@/lib/format/format-count";
 import { formatUsdCompact } from "@/lib/format/format-usd";
+import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 
 import { StatCard } from "./stat-card";
 
 export async function OverviewStats({ stats }: { stats: StatsResponse }) {
   const t = await getTranslations("Dashboard.Overview.kpis");
+
+  // Same guard as every other coverage line — here over the GLOBAL counters
+  // (pool-hours across all pools) rather than one pool's. The KPI states the
+  // coverage even when complete; see `volumeCoverage`.
+  const coverage = volumeCoverage(stats);
 
   return (
     <section className="px-6 lg:px-10">
@@ -45,10 +51,10 @@ export async function OverviewStats({ stats }: { stats: StatsResponse }) {
           label={t("volume24h")}
           value={formatUsdCompact(stats.volume24hUsd)}
           hint={
-            stats.swapBuckets24h > 0
+            coverage !== null
               ? t("bucketCoverage", {
-                priced: stats.swapBucketsPriced24h,
-                total: stats.swapBuckets24h,
+                priced: coverage.priced,
+                total: coverage.total,
               })
               : undefined
           }

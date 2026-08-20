@@ -356,6 +356,7 @@ web/
 │   │   ├── api/                     # API layer (see above)
 │   │   ├── announcements/           # pickAnnouncement + dismiss cookie
 │   │   ├── config/                  # zod-validated env (server + client)
+│   │   ├── coverage/                # volumeCoverage (pure, tested)
 │   │   ├── format/                  # pubkey, date, number, fee formatters
 │   │   ├── signals/                 # mergeSignals, filterSignals,
 │   │   │                            # worstSeverity (pure, tested)

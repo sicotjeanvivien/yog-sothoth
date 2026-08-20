@@ -33,7 +33,10 @@ export async function PoolsHeader() {
             {t("title")}
           </h1>
           <InfoPopover label={tShell("pageInfo")}>
-            {t("description")}
+            {/* `description` is also the page's <meta description>; the
+                coverage caveat is a separate key so it reaches the reader
+                here without pushing the meta past its useful length. */}
+            {t("description")} {t("coverageNote")}
           </InfoPopover>
         </div>
 

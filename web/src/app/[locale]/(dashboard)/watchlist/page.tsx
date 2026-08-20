@@ -44,7 +44,11 @@ export default async function WatchlistPage({ params }: WatchlistPageProps) {
         <h1 className="font-display text-[20px] leading-[1.2] font-bold tracking-[0.03em] text-[#f5f2ff]">
           {t("title")}
         </h1>
-        <InfoPopover label={tShell("pageInfo")}>{t("description")}</InfoPopover>
+        {/* `description` doubles as the page's <meta description>, so the
+            coverage caveat lives in its own key — see the pools header. */}
+        <InfoPopover label={tShell("pageInfo")}>
+          {t("description")} {t("coverageNote")}
+        </InfoPopover>
       </header>
 
       <WatchlistContent />
