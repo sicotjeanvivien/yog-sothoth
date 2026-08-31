@@ -1,6 +1,6 @@
 //! Behaviour oracle for the whole DAMM v2 extraction pipeline.
 //!
-//! Runs **every** mainnet fixture of `tests/fixtures/damm_v2/` through the
+//! Runs **every** mainnet fixture of `yog-core`'s `tests/fixtures/damm_v2/`
 //! public entry point and compares a deterministic digest of the outcome —
 //! events, `event_index`, unknown discriminators, failures — against a
 //! committed witness file.
@@ -20,7 +20,7 @@
 //!
 //! # Regenerating
 //!
-//! `UPDATE_GOLDEN=1 cargo test -p yog-core extraction_over_every_fixture`
+//! `UPDATE_GOLDEN=1 cargo test -p yog-indexer extraction_over_every_fixture`
 //! rewrites the witness. Only ever do that when the change of behaviour is the
 //! point — the diff is the review.
 
@@ -40,7 +40,7 @@ fn fixtures_dir() -> PathBuf {
 }
 
 fn golden_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/extraction.txt")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/golden/extraction.txt")
 }
 
 /// Every `*.json` directly inside the fixtures directory, sorted by name.

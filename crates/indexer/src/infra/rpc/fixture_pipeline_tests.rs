@@ -8,10 +8,10 @@
 //! against mainnet — they capture the exact shape the RPC returns, so
 //! these tests double as regression guards if the JSON schema ever drifts.
 //!
-//! The fixtures are read from `../core/tests/fixtures/` by path, as
-//! `yog-persistence` already does: their whole value is being the verbatim RPC
-//! response, and a second copy would drift from the one the other suites
-//! assert against.
+//! The fixtures stay in `yog-core` and are read from here by path: their whole
+//! value is being the verbatim RPC response, and a second copy would drift from
+//! the one the other suites assert against. They are data, and data does not
+//! follow the code that happens to read it.
 
 use solana_pubkey::{Pubkey, pubkey};
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;

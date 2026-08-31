@@ -137,9 +137,13 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
         slot, 0,
         "slot must come from the transaction, not the default"
     );
-    // `getTransaction` does not return it; the column exists for the gRPC
-    // migration. If this ever fails, the ingestion path started supplying it —
-    // which is good news, and makes the ordering guard total.
+    // The column exists for a source that carries the index natively. This
+    // assertion no longer watches the ingestion path: since the events come from
+    // `conformance::reference_transaction`, `None` here is a constant in
+    // `yog-core`, not an observation. The tripwire that would notice a provider
+    // starting to return `transactionIndex` is the adapter's conformance test in
+    // `yog-indexer`; what this line still guards is that the value survives
+    // extraction and persistence unchanged.
     assert_eq!(transaction_index, None);
 }
 

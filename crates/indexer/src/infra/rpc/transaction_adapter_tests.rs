@@ -1,7 +1,7 @@
 //! The two transaction-level refusals of the RPC adapter.
 //!
-//! The happy path is covered by the whole fixture corpus (`tests/live_detector.rs`
-//! and the behaviour oracle). What no fixture exercises is what the adapter
+//! The happy path is covered by the whole fixture corpus (the two sibling
+//! suites: `fixture_pipeline_tests` and `extraction_oracle_tests`). What no fixture exercises is what the adapter
 //! *rejects* — and both refusals matter: `timestamp` is a partitioning column
 //! and part of every event's unique key, so a transaction without one must not
 //! reach extraction at all.

@@ -56,7 +56,9 @@ Two suites drive the whole pipeline from the fixtures in `../core/tests/fixtures
 — read by path, because their value is being the verbatim RPC response and a
 second copy would drift. They are unit tests rather than `tests/` targets
 because this crate is a binary: an integration target could not reach a
-`pub(crate)` adapter without making it public for the tests' sake.
+`pub(crate)` adapter without making it public for the tests' sake. The oracle's
+witness lives in `testdata/golden/`, not `tests/`, so nothing sits in the
+directory Cargo reserves for the targets this crate deliberately does not have.
 
 ## Three-stage pipeline
 
