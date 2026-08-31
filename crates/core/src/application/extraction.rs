@@ -6,7 +6,6 @@ mod extraction_dispatcher;
 pub mod meteora;
 mod on_chain_transaction;
 mod outcome;
-pub mod rpc;
 
 pub(crate) use anchor_event::{
     DISCRIMINATOR_LEN, decode_anchor_event_cpi, extract_anchor_event_cpis,

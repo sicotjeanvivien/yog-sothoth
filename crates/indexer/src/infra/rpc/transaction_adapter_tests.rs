@@ -8,6 +8,8 @@
 //!
 //! Built by taking a real mainnet fixture and removing exactly one thing, so
 //! the test cannot pass because the transaction was malformed some other way.
+//! The fixtures stay in `yog-core` and are read from here by path — their value
+//! is being the verbatim RPC response, and a second copy would drift.
 
 use super::*;
 
@@ -17,7 +19,7 @@ fn fixture_json() -> serde_json::Value {
 
 fn named_fixture_json(name: &str) -> serde_json::Value {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/damm_v2")
+        .join("../core/tests/fixtures/damm_v2")
         .join(name);
     let raw = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
@@ -130,5 +132,5 @@ fn the_reference_transaction_is_what_this_adapter_produces() {
 
     let on_chain_tx = from_rpc(&parse(json)).expect("the reference fixture must convert");
 
-    crate::application::extraction::conformance::assert_matches_reference(&on_chain_tx);
+    yog_core::application::extraction::conformance::assert_matches_reference(&on_chain_tx);
 }

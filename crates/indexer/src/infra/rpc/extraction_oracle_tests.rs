@@ -29,12 +29,14 @@ use std::path::{Path, PathBuf};
 
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 use yog_core::application::extraction::{
-    EventExtractor, ExtractionOutcome, MeteoraDammV2, discriminator_hex, rpc,
+    EventExtractor, ExtractionOutcome, MeteoraDammV2, discriminator_hex,
 };
+
+use super::from_rpc;
 
 /// Directory holding the mainnet transactions, and the witness they produce.
 fn fixtures_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/damm_v2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../core/tests/fixtures/damm_v2")
 }
 
 fn golden_path() -> PathBuf {
@@ -119,12 +121,12 @@ fn digest() -> String {
 
         match serde_json::from_str::<EncodedConfirmedTransactionWithStatusMeta>(&raw) {
             Err(e) => writeln!(out, "  PARSE ERROR {e}").unwrap(),
-            Ok(tx) => match rpc::from_rpc(&tx)
-                .and_then(|on_chain_tx| extractor.extract_events(&on_chain_tx))
-            {
-                Err(e) => writeln!(out, "  EXTRACTION ERROR {e}").unwrap(),
-                Ok(outcome) => out.push_str(&render(&outcome)),
-            },
+            Ok(tx) => {
+                match from_rpc(&tx).and_then(|on_chain_tx| extractor.extract_events(&on_chain_tx)) {
+                    Err(e) => writeln!(out, "  EXTRACTION ERROR {e}").unwrap(),
+                    Ok(outcome) => out.push_str(&render(&outcome)),
+                }
+            }
         }
     }
 

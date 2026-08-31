@@ -25,6 +25,13 @@ solana-pubkey = { workspace = true }
 
 # Serialization
 serde_json = { workspace = true }
+# The JSON-RPC transaction shape and its base58 payloads: read by
+# `infra::rpc::transaction_adapter`, which turns them into the neutral
+# `OnChainTransaction`. They live here rather than in `yog-core` because `core`
+# has no business naming a transport.
+solana-transaction-status-client-types = { workspace = true }
+bs58 = { workspace = true }
+solana-signature = { workspace = true }
 
 # Errors / logging / config
 thiserror = { workspace = true }
@@ -49,5 +56,6 @@ rust_decimal = { workspace = true }
 # pulls `endian-type`, `nibble_vec`, `ordered-float` and `radix_trie` into
 # Cargo.lock. Dev-only, so none of it reaches a binary.
 metrics-util = { workspace = true, features = ["debugging"] }
-# Construct dummy Signatures in the event-persistor dispatch tests.
-solana-signature = { workspace = true }
+# `conformance::reference_transaction` — the expectation every source adapter
+# must satisfy, which `transaction_adapter`'s tests pin to the mainnet fixture.
+yog-core = { path = "../core", features = ["test-support"] }

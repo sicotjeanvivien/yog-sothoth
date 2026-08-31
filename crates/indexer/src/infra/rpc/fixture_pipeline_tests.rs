@@ -1,12 +1,17 @@
 //! Live integration tests for the DAMM v2 wire event extractor.
 //!
 //! Each test loads a real Solana transaction (saved as JSON in
-//! `tests/fixtures/`) and asserts that the extractor produces the
-//! expected wire events.
+//! `yog-core`'s fixture directory) and asserts that the extractor produces
+//! the expected wire events.
 //!
 //! Fixtures are dumped via `solana confirm -v <signature> --output json`
 //! against mainnet — they capture the exact shape the RPC returns, so
 //! these tests double as regression guards if the JSON schema ever drifts.
+//!
+//! The fixtures are read from `../core/tests/fixtures/` by path, as
+//! `yog-persistence` already does: their whole value is being the verbatim RPC
+//! response, and a second copy would drift from the one the other suites
+//! assert against.
 
 use solana_pubkey::{Pubkey, pubkey};
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
@@ -19,10 +24,11 @@ use yog_core::{
             events::DammV2WireEvent,
             extractor::{ExtractFailure, extract_wire_events},
         },
-        rpc,
     },
     domain::{DomainEvent, MeteoraDammV2Event, MeteoraDammV2LiquidityEventKind},
 };
+
+use super::from_rpc;
 
 const CP_AMM_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 
@@ -35,8 +41,7 @@ const CP_AMM_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6m
 /// assertion errors later.
 fn load_fixture(name: &str) -> OnChainTransaction {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("tests");
-    path.push("fixtures");
+    path.push("../core/tests/fixtures");
     path.push(name);
 
     let raw = std::fs::read_to_string(&path)
@@ -45,7 +50,7 @@ fn load_fixture(name: &str) -> OnChainTransaction {
     let tx: EncodedConfirmedTransactionWithStatusMeta = serde_json::from_str(&raw)
         .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()));
 
-    rpc::from_rpc(&tx).unwrap_or_else(|e| panic!("failed to adapt fixture {}: {e}", path.display()))
+    from_rpc(&tx).unwrap_or_else(|e| panic!("failed to adapt fixture {}: {e}", path.display()))
 }
 
 /// The reference transaction `2qJrr...` contains two `swap` (legacy)

@@ -17,14 +17,12 @@ test-support = []
 # Serialization / encoding
 serde = { workspace = true }
 borsh = { workspace = true }
-bs58 = { workspace = true }
 sha2 = { workspace = true }
 
 # Solana
 solana-pubkey = { workspace = true, optional = true, default-features = false }
 solana-signature = { workspace = true }
 solana-transaction-status = { workspace = true, optional = true, default-features = false }
-solana-transaction-status-client-types = { workspace = true }
 
 # Misc
 chrono = { workspace = true }
