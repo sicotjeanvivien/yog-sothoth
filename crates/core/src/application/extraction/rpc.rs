@@ -50,7 +50,22 @@ pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Tr
     })
 }
 
-/// Extract the first transaction signature.
+/// Extract the transaction's signature — `signatures[0]`, which **is** its id.
+///
+/// Not an arbitrary pick among several. A transaction carries one signature per
+/// required signer, ordered to match the leading account keys, and
+/// `account_keys[0]` is the fee payer — so `signatures[0]` is what Solana calls
+/// the transaction id: what an explorer indexes, and the argument
+/// `getTransaction` is queried by. Ten of the 27 mainnet fixtures in
+/// `core/tests/fixtures/damm_v2/` carry two or three signatures; the extra ones
+/// are co-signers. They authenticate the transaction, none of them identifies
+/// it.
+///
+/// Which matters beyond tidiness: `signature` is part of the unique key of
+/// every event table, and a re-ingestion re-fetches by
+/// `getTransaction(signature)`. Keying rows on any other element would file
+/// them under something no lookup can find — and under something that moves if
+/// the co-signer set changes.
 fn extract_signature(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Signature> {
     match &tx.transaction.transaction {
         EncodedTransaction::Json(ui_tx) => {
