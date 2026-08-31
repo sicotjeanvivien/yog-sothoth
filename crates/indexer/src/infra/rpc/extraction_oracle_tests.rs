@@ -8,7 +8,7 @@
 //! # What it is for
 //!
 //! It exists to make a refactoring provable, not to describe expected values:
-//! `live_detector.rs` asserts what each event *should* contain, this one
+//! `fixture_pipeline_tests` asserts what each event *should* contain, this one
 //! asserts that **nothing at all changed**. The witness was generated from the
 //! pre-refactoring code and committed on its own, so the diff of any later
 //! commit shows immediately whether behaviour moved.

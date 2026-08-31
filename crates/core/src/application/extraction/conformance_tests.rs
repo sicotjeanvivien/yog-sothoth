@@ -7,13 +7,17 @@
 //! copying 392 hex characters twice.
 
 use super::*;
-use crate::application::extraction::anchor_event::EVENT_IX_TAG;
+use crate::application::extraction::anchor_event::{DISCRIMINATOR_LEN, EVENT_IX_TAG};
+use crate::application::extraction::meteora::damm_v2::events::discriminator_swap2;
 
 #[test]
 fn both_reference_payloads_are_anchor_event_emissions() {
-    // A dropped digit shifts every byte after it, so a payload that still opens
-    // with Anchor's tag and still holds cp-amm's discriminator was transcribed
-    // whole. Cheaper than re-reading 392 characters, and it fails loudly.
+    // A dropped digit shifts every byte after it; a mistyped one does not. So
+    // check both ends of the framing — Anchor's tag, then the event
+    // discriminator that follows it — plus the length. Cheaper than re-reading
+    // 392 characters, and it fails loudly.
+    let swap2 = discriminator_swap2();
+
     for (index, payload) in reference_transaction()
         .inner_instructions
         .iter()
@@ -24,6 +28,12 @@ fn both_reference_payloads_are_anchor_event_emissions() {
             &EVENT_IX_TAG,
             "payload {index} does not start with the Anchor event_cpi tag — \
              a hex digit was likely lost in transcription"
+        );
+        assert_eq!(
+            &payload.data[EVENT_IX_TAG.len()..EVENT_IX_TAG.len() + DISCRIMINATOR_LEN],
+            &swap2,
+            "payload {index} does not carry the EvtSwap2 discriminator — the \
+             reference transaction is two swaps and nothing else"
         );
         assert_eq!(
             payload.data.len(),
