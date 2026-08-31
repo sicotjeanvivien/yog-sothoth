@@ -1,4 +1,6 @@
 mod anchor_event;
+#[cfg(any(test, feature = "test-support"))]
+pub mod conformance;
 mod event_extractor;
 mod extraction_dispatcher;
 pub mod meteora;

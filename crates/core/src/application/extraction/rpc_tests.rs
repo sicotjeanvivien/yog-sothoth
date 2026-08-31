@@ -113,3 +113,22 @@ fn group_order_from_the_source_does_not_change_the_payload_order() {
         "the payload order followed the order the groups were serialized in"
     );
 }
+
+/// **The pin.** The reference expectation in `conformance` is hand-written; this
+/// is the one test that ties it to a real mainnet response, and every other
+/// consumer of that expectation — a future protobuf adapter, the persistence
+/// integration test — trusts it because of this assertion.
+///
+/// Delete it and `conformance` becomes what its own doc-comment warns against:
+/// a transcription agreeing with the code that reads it.
+///
+/// Mutation-checked: swap the two payloads in `conformance::reference_transaction`
+/// and this fails with `payload 0: bytes differ`.
+#[test]
+fn the_reference_transaction_is_what_this_adapter_produces() {
+    let json = named_fixture_json("swap_double.json");
+
+    let on_chain_tx = from_rpc(&parse(json)).expect("the reference fixture must convert");
+
+    crate::application::extraction::conformance::assert_matches_reference(&on_chain_tx);
+}

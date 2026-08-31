@@ -6172,7 +6172,6 @@ dependencies = [
  "chrono",
  "dotenvy",
  "rust_decimal",
- "serde_json",
  "solana-pubkey 4.1.0",
  "solana-signature",
  "sqlx",

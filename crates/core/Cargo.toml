@@ -7,6 +7,11 @@ edition = "2024"
 default = ["solana"]
 solana = ["dep:solana-transaction-status", "dep:solana-pubkey"]
 wasm = []
+# Exposes `application::extraction::conformance` — the shared expectation every
+# source adapter must satisfy, plus the reference transaction it is proven on.
+# Enabled by the dev-dependencies of the crates that host those adapters and
+# their tests; it reaches no binary.
+test-support = []
 
 [dependencies]
 # Serialization / encoding
