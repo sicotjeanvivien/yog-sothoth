@@ -5,7 +5,9 @@ edition = "2024"
 
 [features]
 default = ["solana"]
-solana = ["dep:solana-transaction-status", "dep:solana-pubkey"]
+# `Pubkey` — the address type every domain entity carries. Optional and on by
+# default so a wasm build can drop it; nothing else hides behind this feature.
+solana = ["dep:solana-pubkey"]
 wasm = []
 # Exposes `application::extraction::conformance` — the shared expectation every
 # source adapter must satisfy, plus the reference transaction it is proven on.
@@ -22,7 +24,6 @@ sha2 = { workspace = true }
 # Solana
 solana-pubkey = { workspace = true, optional = true, default-features = false }
 solana-signature = { workspace = true }
-solana-transaction-status = { workspace = true, optional = true, default-features = false }
 
 # Misc
 chrono = { workspace = true }
