@@ -5,8 +5,11 @@ edition = "2024"
 
 [features]
 default = ["solana"]
-# `Pubkey` — the address type every domain entity carries. Optional and on by
-# default so a wasm build can drop it; nothing else hides behind this feature.
+# `Pubkey` — the address type every domain entity carries, and since 31 August
+# 2026 the only thing behind this feature. ⚠️ Optional in name only: `Pubkey` is
+# imported unconditionally across `domain/`, so `--no-default-features` does not
+# compile (75 errors, measured). Making it truly optional is a separate job —
+# gating every domain type — and nothing needs it until a wasm build does.
 solana = ["dep:solana-pubkey"]
 wasm = []
 # Exposes `application::extraction::conformance` — the shared expectation every

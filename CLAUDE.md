@@ -29,14 +29,20 @@ cargo fmt --all
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
     -p yog-signals --all-targets --all-features -- -D warnings
 
-# Test — workspace unit tests, DB-free (653 tests, measured 31 Aug 2026)
+# Test — workspace unit tests, DB-free (660 tests, measured 31 Aug 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
+# ⚠️ Since the adapter moved (31 Aug 2026), `-p yog-core extraction` no longer
+# runs the 27-fixture oracle nor the 19 extractor fixture tests: they live in
+# `yog-indexer`, beside the adapter that builds their input. Extraction work
+# needs BOTH — this can be green while the oracle is red.
+cargo test -p yog-indexer                  # the fixture suites and the oracle
+
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
 # un-gates the 161 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 814, not 653 — the
+# `cargo test --workspace --all-features` therefore reports 821, not 660 — the
 # integration tests are INCLUDED in that total, not additional to it. All three
 # counts were measured 31 Aug 2026, against a live Postgres.
 cargo test --workspace --all-features

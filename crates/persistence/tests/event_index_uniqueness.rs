@@ -137,13 +137,14 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
         slot, 0,
         "slot must come from the transaction, not the default"
     );
-    // The column exists for a source that carries the index natively. This
-    // assertion no longer watches the ingestion path: since the events come from
-    // `conformance::reference_transaction`, `None` here is a constant in
-    // `yog-core`, not an observation. The tripwire that would notice a provider
-    // starting to return `transactionIndex` is the adapter's conformance test in
-    // `yog-indexer`; what this line still guards is that the value survives
-    // extraction and persistence unchanged.
+    // The column exists for a source that carries the index natively. What this
+    // line guards is narrow and worth stating exactly: that `None` survives
+    // extraction and persistence unchanged. It observes nothing about the
+    // provider — the value comes from a constant in
+    // `conformance::reference_transaction`, and the adapter's own tests read a
+    // committed fixture, so **no test anywhere watches a live provider start
+    // returning `transactionIndex`**. The old comment promised that tripwire;
+    // it never existed. Only a run against a real endpoint would notice.
     assert_eq!(transaction_index, None);
 }
 

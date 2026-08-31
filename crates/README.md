@@ -237,7 +237,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 ### 6. Tests
 
-Add fixture transactions under `core/tests/fixtures/` (one per recognized signature for the new protocol) and extend the extraction integration tests in `core/tests/`. Add the account fixtures mentioned in step 1, and the privilege-matrix lines mentioned in step 2.
+Add fixture transactions under `core/tests/fixtures/` — they stay in `core`, they are data — and extend the extraction tests in `indexer/src/infra/rpc/fixture_pipeline_tests.rs`, which live beside the adapter that turns a fixture into an `OnChainTransaction`. Add the account fixtures mentioned in step 1, and the privilege-matrix lines mentioned in step 2.
 
 ### What stays narrow
 
