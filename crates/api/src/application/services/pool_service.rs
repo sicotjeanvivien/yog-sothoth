@@ -227,9 +227,12 @@ impl PoolService {
     /// The pool detail sheet: the enriched pool plus its protocol-specific
     /// properties.
     ///
-    /// The satellite is only queried when the pool's protocol has a lookup — a
-    /// DLMM pool costs no extra round-trip. The list endpoints do not
-    /// call this at all; they neither need the block nor pay for it.
+    /// The satellite is only queried when the pool's protocol has a lookup.
+    /// **Every protocol registered today has one** — DAMM v2 and DLMM both —
+    /// so the detail sheet always pays that extra round-trip; the `None` arm is
+    /// the guard for a protocol wired before its satellite exists, not a case
+    /// that happens now. The list endpoints do not call this at all; they
+    /// neither need the block nor pay for it.
     ///
     /// No protocol is named here: the pool's own `protocol` selects the lookup.
     /// Adding one means registering a lookup at wiring time, not editing this
