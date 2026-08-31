@@ -39,9 +39,10 @@ pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Tr
         position: TransactionPosition {
             signature: extract_signature(tx)?,
             timestamp: extract_timestamp(tx)?,
-            // Read straight off the envelope: unlike the two above they need no
-            // parsing, and `transaction_index` is `None` on this path —
-            // `getTransaction` does not return it (see `EventPosition`).
+            // Read straight off the envelope: unlike the two above they need
+            // no parsing. `transaction_index` is optional in the response and
+            // absent on the ingestion path in use — a property of the
+            // provider, not of `getTransaction`; see `EventPosition`.
             slot: tx.slot,
             transaction_index: tx.transaction_index,
         },
