@@ -14,21 +14,25 @@ use std::path::PathBuf;
 
 use yog_core::{
     application::extraction::{
-        EventExtractor, MeteoraDammV2,
+        EventExtractor, MeteoraDammV2, TransactionView,
         meteora::damm_v2::{
             events::DammV2WireEvent,
             extractor::{ExtractFailure, extract_wire_events},
         },
+        rpc,
     },
     domain::{DomainEvent, MeteoraDammV2Event, MeteoraDammV2LiquidityEventKind},
 };
 
-const CP_AMM_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
+const CP_AMM_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 
-/// Load and parse a fixture file by name. Panics on any error — fixtures
-/// are part of the test contract, missing or malformed ones should fail
-/// the test loudly rather than producing confusing assertion errors later.
-fn load_fixture(name: &str) -> EncodedConfirmedTransactionWithStatusMeta {
+/// Load a fixture file by name and hand it to the pipeline in the shape the
+/// pipeline actually reads: the neutral view, filled by the JSON-RPC adapter.
+///
+/// Panics on any error — fixtures are part of the test contract, missing or
+/// malformed ones should fail the test loudly rather than producing confusing
+/// assertion errors later.
+fn load_fixture(name: &str) -> TransactionView {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests");
     path.push("fixtures");
@@ -37,8 +41,10 @@ fn load_fixture(name: &str) -> EncodedConfirmedTransactionWithStatusMeta {
     let raw = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
 
-    serde_json::from_str(&raw)
-        .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()))
+    let tx: EncodedConfirmedTransactionWithStatusMeta = serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()));
+
+    rpc::from_rpc(&tx).unwrap_or_else(|e| panic!("failed to adapt fixture {}: {e}", path.display()))
 }
 
 /// The reference transaction `2qJrr...` contains two `swap` (legacy)
@@ -48,7 +54,7 @@ fn load_fixture(name: &str) -> EncodedConfirmedTransactionWithStatusMeta {
 fn extracts_both_swaps_from_double_swap_tx() {
     let tx = load_fixture("damm_v2/swap_double.json");
 
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     // Sanity: no failure path triggered.
     assert!(
         extracted.failures.is_empty(),
@@ -90,7 +96,7 @@ fn extracts_both_swaps_from_double_swap_tx() {
 fn decoded_swap_values_match_onchain_reality() {
     let tx = load_fixture("damm_v2/swap_double.json");
 
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert_eq!(extracted.events.len(), 2, "expected 2 events");
     assert!(extracted.failures.is_empty());
     assert!(extracted.unknown.is_empty());
@@ -160,7 +166,7 @@ fn decoded_swap_values_match_onchain_reality() {
 fn decodes_liquidity_add_fixtures() {
     for fixture in ["damm_v2/liquidity_add.json", "damm_v2/liquidity_add_2.json"] {
         let tx = load_fixture(fixture);
-        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
         assert!(
             extracted.failures.is_empty(),
             "{fixture}: {:?}",
@@ -221,9 +227,7 @@ fn extracts_swap_via_router_correctly() {
     // a pool property resolved from the account by yog-context — so there is
     // nothing mint-related to assert; see the note further down.)
 
-    let json = include_str!("fixtures/damm_v2/swap_via_router.json");
-    let tx: EncodedConfirmedTransactionWithStatusMeta =
-        serde_json::from_str(json).expect("failed to deserialize transaction");
+    let tx = load_fixture("damm_v2/swap_via_router.json");
 
     let pool = MeteoraDammV2::new();
     let outcome = pool
@@ -284,7 +288,7 @@ fn decodes_initialize_pool_fixtures() {
         "damm_v2/initialize_pool_6.json",
     ] {
         let tx = load_fixture(fixture);
-        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
         assert!(
             extracted.failures.is_empty(),
@@ -361,7 +365,7 @@ fn decodes_initialize_pool_fixtures() {
 #[test]
 fn decodes_claim_protocol_fee_fixture() {
     let tx = load_fixture("damm_v2/claim_protocol_fee.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
     assert!(
         extracted.failures.is_empty(),
@@ -402,7 +406,7 @@ fn decodes_claim_protocol_fee_fixture() {
 #[test]
 fn decodes_initialize_reward_fixture() {
     let tx = load_fixture("damm_v2/initialize_reward.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
     assert!(
         extracted.failures.is_empty(),
@@ -453,7 +457,7 @@ fn decodes_initialize_reward_fixture() {
 fn decodes_fund_reward_fixtures() {
     // Fresh slot: opened and funded in one transaction.
     let tx = load_fixture("damm_v2/initialize_reward.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(
         extracted.failures.is_empty(),
         "unexpected extraction failures: {:?}",
@@ -503,7 +507,7 @@ fn decodes_fund_reward_fixtures() {
 
     // Re-fund of a live slot: carry-forward regime.
     let tx = load_fixture("damm_v2/fund_reward.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(
         extracted.failures.is_empty(),
         "unexpected extraction failures: {:?}",
@@ -562,7 +566,7 @@ fn decodes_fund_reward_fixtures() {
 #[test]
 fn decodes_withdraw_ineligible_reward_fixture() {
     let tx = load_fixture("damm_v2/withdraw_ineligible_reward.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
     assert!(
         extracted.failures.is_empty(),
@@ -626,7 +630,7 @@ fn decodes_withdraw_ineligible_reward_fixture() {
 #[test]
 fn zap_protocol_fee_emits_no_event_of_its_own() {
     let tx = load_fixture("damm_v2/zap_protocol_fee.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
     assert!(
         extracted.failures.is_empty(),
@@ -679,7 +683,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
         "damm_v2/split_position2.json",
     ] {
         let tx = load_fixture(fixture);
-        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
         assert!(
             extracted.failures.is_empty(),
@@ -760,7 +764,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
 
     // The second fixture creates the receiving position in the same tx.
     let tx = load_fixture("damm_v2/split_position2.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(
         extracted
             .events
@@ -781,7 +785,7 @@ fn decodes_create_position_from_genesis_fixtures() {
         "damm_v2/initialize_pool_2.json",
     ] {
         let tx = load_fixture(fixture);
-        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
         assert!(
             extracted.failures.is_empty(),
             "{fixture}: failures: {:?}",
@@ -842,7 +846,7 @@ fn decodes_create_position_from_genesis_fixtures() {
 #[test]
 fn decodes_close_position_fixture() {
     let tx = load_fixture("damm_v2/close_position.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(extracted.failures.is_empty(), "{:?}", extracted.failures);
 
     let close = extracted
@@ -887,7 +891,7 @@ fn decodes_close_position_fixture() {
 #[test]
 fn decodes_lock_position_fixture() {
     let tx = load_fixture("damm_v2/lock_position.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(extracted.failures.is_empty(), "{:?}", extracted.failures);
 
     let lock = extracted
@@ -957,7 +961,7 @@ fn decodes_lock_position_fixture() {
 #[test]
 fn decodes_permanent_lock_position_fixture() {
     let tx = load_fixture("damm_v2/permanent_lock_position.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     // This tx also contains an 8-byte tag-only cp-amm self-CPI that trips the
     // anchor decoder (a benign, pre-existing skip-and-log case). Tolerate that
     // AnchorDecode failure, but a Borsh failure would mean a *recognized* event
@@ -1021,7 +1025,7 @@ fn decodes_permanent_lock_position_fixture() {
 #[test]
 fn decodes_claim_position_fee_fixture() {
     let tx = load_fixture("damm_v2/claim_position_fee.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(
         !extracted
             .failures
@@ -1064,7 +1068,7 @@ fn decodes_claim_position_fee_fixture() {
 #[test]
 fn decodes_claim_reward_fixture() {
     let tx = load_fixture("damm_v2/claim_reward.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
     assert!(
         !extracted
             .failures
@@ -1112,7 +1116,7 @@ fn decodes_claim_reward_fixture() {
 #[test]
 fn decodes_update_pool_fees_fixture() {
     let tx = load_fixture("damm_v2/update_pool_fees.json");
-    let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+    let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
     assert!(
         extracted.failures.is_empty(),
@@ -1197,7 +1201,7 @@ fn event_index_counts_dropped_payloads_too() {
         ("damm_v2/split_position2.json", vec![0u16, 2u16]),
     ] {
         let tx = load_fixture(fixture);
-        let extracted = extract_wire_events(&tx, CP_AMM_PROGRAM_ID);
+        let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
 
         let indices: Vec<u16> = extracted.events.iter().map(|e| e.event_index).collect();
         assert_eq!(

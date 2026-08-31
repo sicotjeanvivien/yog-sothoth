@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 use yog_core::application::extraction::{
-    EventExtractor, ExtractionOutcome, MeteoraDammV2, discriminator_hex,
+    EventExtractor, ExtractionOutcome, MeteoraDammV2, discriminator_hex, rpc,
 };
 
 /// Directory holding the mainnet transactions, and the witness they produce.
@@ -119,7 +119,7 @@ fn digest() -> String {
 
         match serde_json::from_str::<EncodedConfirmedTransactionWithStatusMeta>(&raw) {
             Err(e) => writeln!(out, "  PARSE ERROR {e}").unwrap(),
-            Ok(tx) => match extractor.extract_events(&tx) {
+            Ok(tx) => match rpc::from_rpc(&tx).and_then(|view| extractor.extract_events(&view)) {
                 Err(e) => writeln!(out, "  EXTRACTION ERROR {e}").unwrap(),
                 Ok(outcome) => out.push_str(&render(&outcome)),
             },
