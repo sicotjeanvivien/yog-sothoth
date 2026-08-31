@@ -6,7 +6,7 @@ use solana_pubkey::Pubkey;
 
 use crate::CoreResult;
 use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
-use crate::application::extraction::{EventExtractor, ExtractionOutcome, TransactionView};
+use crate::application::extraction::{EventExtractor, ExtractionOutcome, OnChainTransaction};
 use crate::domain::{Protocol, TransactionPosition};
 
 use self::extractor::extract_wire_events;
@@ -39,12 +39,12 @@ impl EventExtractor for MeteoraDammV2 {
         self.program_id
     }
 
-    fn extract_events(&self, tx: &TransactionView) -> CoreResult<ExtractionOutcome> {
+    fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome> {
         // Step 1: extract wire events from the inner-instruction payloads.
         let wire_outcome = extract_wire_events(tx, &self.program_id);
 
         // Step 2: translate each wire event into a domain event. The
-        // coordinate comes ready-made on the view — whichever source filled it.
+        // coordinate comes ready-made — whichever source filled it.
         translate_extracted_events(wire_outcome, self.protocol, tx.position)
     }
 }

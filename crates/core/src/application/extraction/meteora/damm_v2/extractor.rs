@@ -3,7 +3,7 @@
 //! Bridges three pieces:
 //! - the generic Anchor event_cpi decoder ([`crate::protocols::anchor_event`])
 //! - the DAMM v2 wire event mirrors ([`super::events`])
-//! - the neutral transaction shape ([`TransactionView`])
+//! - the neutral transaction shape ([`OnChainTransaction`])
 //!
 //! The extractor walks every inner-instruction payload targeted at the cp-amm
 //! program, decodes those that look like Anchor self-CPI event emissions,
@@ -29,7 +29,7 @@ use solana_pubkey::Pubkey;
 
 use crate::{
     application::extraction::{
-        DISCRIMINATOR_LEN, TransactionView, decode_anchor_event_cpi, extract_anchor_event_cpis,
+        DISCRIMINATOR_LEN, OnChainTransaction, decode_anchor_event_cpi, extract_anchor_event_cpis,
     },
     error::AnchorDecodeError,
 };
@@ -147,7 +147,7 @@ pub enum ExtractFailure {
 /// Never errors out. A transaction with no inner instructions, no events
 /// for cp-amm, or only events we don't recognize all return a well-formed
 /// [`ExtractedEvents`].
-pub fn extract_wire_events(tx: &TransactionView, program_id: &Pubkey) -> ExtractedEvents {
+pub fn extract_wire_events(tx: &OnChainTransaction, program_id: &Pubkey) -> ExtractedEvents {
     let raw_payloads = extract_anchor_event_cpis(tx, program_id);
 
     // Pre-compute discriminators once per transaction.

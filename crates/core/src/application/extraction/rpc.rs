@@ -1,8 +1,8 @@
-//! JSON-RPC adapter: `getTransaction` response → [`TransactionView`].
+//! JSON-RPC adapter: `getTransaction` response → [`OnChainTransaction`].
 //!
 //! This is the **only** module of `core` that names the JSON-RPC transport.
 //! Everything downstream — the trait, the dispatcher, the per-protocol
-//! extractors, the Anchor decoder — sees a [`TransactionView`] and cannot tell
+//! extractors, the Anchor decoder — sees a [`OnChainTransaction`] and cannot tell
 //! which source filled it. A second source (Yellowstone gRPC) adds a sibling
 //! adapter, not a second code path through extraction.
 //!
@@ -24,18 +24,18 @@ pub use solana_transaction_status_client_types::{
     UiParsedInstruction, UiTransactionEncoding, option_serializer::OptionSerializer,
 };
 
-use crate::application::extraction::{InnerInstructionPayload, TransactionView};
+use crate::application::extraction::{InnerInstructionPayload, OnChainTransaction};
 use crate::domain::TransactionPosition;
 use crate::{CoreError, CoreResult};
 
-/// Build the neutral view from a `getTransaction` response.
+/// Build the transport-neutral transaction from a `getTransaction` response.
 ///
 /// Fails only on a transaction-level malformation — an encoding that carries no
 /// signature, an unparsable signature, or a missing `blockTime`. A transaction
 /// with no inner instructions is not a failure: it yields an empty payload list
 /// and extraction reports "nothing to record".
-pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<TransactionView> {
-    Ok(TransactionView {
+pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<OnChainTransaction> {
+    Ok(OnChainTransaction {
         position: TransactionPosition {
             signature: extract_signature(tx)?,
             timestamp: extract_timestamp(tx)?,
@@ -102,12 +102,12 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
     })
 }
 
-/// Flatten `meta.innerInstructions` into the ordered payload list the view owes
-/// its readers.
+/// Flatten `meta.innerInstructions` into the ordered payload list an
+/// [`OnChainTransaction`] owes its readers.
 ///
 /// Groups are sorted by the outer instruction they belong to, never left in
 /// whatever order the RPC serialized them — the order is the `event_index`
-/// contract documented on [`TransactionView::inner_instructions`].
+/// contract documented on [`OnChainTransaction::inner_instructions`].
 ///
 /// Instructions the RPC returns in another shape than `PartiallyDecoded` are
 /// dropped, and so are those whose `data` is not valid base58. Both are
@@ -119,12 +119,13 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 ///
 /// # The base58 decoding this costs, knowingly
 ///
-/// The view is program-agnostic, so `data` is decoded for every payload, where
-/// the pre-view code decoded only those already matched to the target program —
+/// [`OnChainTransaction`] is program-agnostic, so `data` is decoded for every
+/// payload, where the code before it decoded only those already matched to the
+/// target program —
 /// the program filter now runs downstream, in `extract_anchor_event_cpis`.
 /// Measured on the fixture corpus: 74 decodes instead of 60, worst case 8
 /// instead of 2 (`zap_protocol_fee.json`, a router-shaped transaction). It is
-/// pure waste for the DLMM stub, which discards the view entirely.
+/// pure waste for the DLMM stub, which discards the transaction entirely.
 ///
 /// Accepted rather than optimised: the alternative is to keep the payload
 /// encoded and decode on demand, which puts "this arrived as base58" — a

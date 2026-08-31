@@ -38,9 +38,9 @@ pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
     let tx: EncodedConfirmedTransactionWithStatusMeta =
         serde_json::from_str(&raw).expect("fixture is not a valid RPC transaction");
 
-    let view = rpc::from_rpc(&tx).expect("fixture is not adaptable");
+    let on_chain_tx = rpc::from_rpc(&tx).expect("fixture is not adaptable");
     let outcome = MeteoraDammV2::new()
-        .extract_events(&view)
+        .extract_events(&on_chain_tx)
         .expect("extraction failed on the fixture");
 
     outcome

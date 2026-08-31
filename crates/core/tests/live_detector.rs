@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use yog_core::{
     application::extraction::{
-        EventExtractor, MeteoraDammV2, TransactionView,
+        EventExtractor, MeteoraDammV2, OnChainTransaction,
         meteora::damm_v2::{
             events::DammV2WireEvent,
             extractor::{ExtractFailure, extract_wire_events},
@@ -32,7 +32,7 @@ const CP_AMM_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6m
 /// Panics on any error — fixtures are part of the test contract, missing or
 /// malformed ones should fail the test loudly rather than producing confusing
 /// assertion errors later.
-fn load_fixture(name: &str) -> TransactionView {
+fn load_fixture(name: &str) -> OnChainTransaction {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests");
     path.push("fixtures");

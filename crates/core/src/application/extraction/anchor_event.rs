@@ -32,7 +32,7 @@
 //!   acting as event signer)
 //! - `data == [tag][discriminator][payload]`, which the source's adapter has
 //!   already decoded into bytes on
-//!   [`TransactionView::inner_instructions`](crate::application::extraction::TransactionView::inner_instructions)
+//!   [`OnChainTransaction::inner_instructions`](crate::application::extraction::OnChainTransaction::inner_instructions)
 //!
 //! [`extract_anchor_event_cpis`] isolates these instructions; the caller
 //! then runs each through [`decode_anchor_event_cpi`] to obtain the
@@ -40,12 +40,12 @@
 //! into a known struct.
 //!
 //! Nothing here knows how the transaction reached the process: it reads the
-//! neutral [`TransactionView`], which the JSON-RPC adapter
+//! neutral [`OnChainTransaction`], which the JSON-RPC adapter
 //! ([`crate::application::extraction::rpc`]) fills today.
 
 use solana_pubkey::Pubkey;
 
-use crate::application::extraction::TransactionView;
+use crate::application::extraction::OnChainTransaction;
 use crate::error::AnchorDecodeError;
 
 /// Length of an Anchor event discriminator, in bytes.
@@ -121,10 +121,10 @@ pub(crate) fn decode_anchor_event_cpi(
 /// The position of a payload in this function's output is persisted as
 /// `event_index`. Narrowing the filter renumbers events already stored — the
 /// full reasoning, which applies identically to the adapter that fills the
-/// view, is on
+/// transaction, is on
 /// [`InnerInstructionPayload`](crate::application::extraction::InnerInstructionPayload).
 pub(crate) fn extract_anchor_event_cpis<'a>(
-    tx: &'a TransactionView,
+    tx: &'a OnChainTransaction,
     target_program_id: &Pubkey,
 ) -> Vec<&'a [u8]> {
     tx.inner_instructions

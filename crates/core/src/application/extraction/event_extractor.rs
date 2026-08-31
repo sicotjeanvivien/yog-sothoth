@@ -2,7 +2,7 @@ use solana_pubkey::Pubkey;
 
 use crate::{
     CoreResult,
-    application::extraction::{ExtractionOutcome, TransactionView},
+    application::extraction::{ExtractionOutcome, OnChainTransaction},
 };
 
 /// Common interface for all supported AMM protocols.
@@ -10,7 +10,7 @@ use crate::{
 /// Each protocol implements this trait. The indexer dispatches incoming
 /// transactions to the correct implementation based on `program_id()`.
 ///
-/// The transaction arrives as a [`TransactionView`] — the neutral shape every
+/// The transaction arrives as a [`OnChainTransaction`] — the neutral shape every
 /// source adapter produces — so no implementation names a transport.
 ///
 /// # Contract
@@ -30,5 +30,5 @@ pub trait EventExtractor: Send + Sync {
     fn program_id(&self) -> Pubkey;
 
     /// Extract every domain event the transaction emitted for this protocol.
-    fn extract_events(&self, tx: &TransactionView) -> CoreResult<ExtractionOutcome>;
+    fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome>;
 }

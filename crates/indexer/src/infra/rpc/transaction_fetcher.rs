@@ -32,7 +32,7 @@ impl TransactionFetcher {
     /// is classified into a typed `FetchError` at the boundary.
     ///
     /// The `JsonParsed` encoding is not a preference: it is what the adapter
-    /// that turns this response into a `TransactionView` reads (the
+    /// that turns this response into a `OnChainTransaction` reads (the
     /// `PartiallyDecoded` inner instructions only that encoding produces).
     /// Both live in `yog_core::application::extraction::rpc`, together.
     pub(crate) async fn fetch(

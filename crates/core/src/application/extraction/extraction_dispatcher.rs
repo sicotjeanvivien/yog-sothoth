@@ -7,7 +7,7 @@
 
 use crate::CoreResult;
 use crate::application::extraction::EventExtractor;
-use crate::application::extraction::TransactionView;
+use crate::application::extraction::OnChainTransaction;
 use crate::application::extraction::{
     ExtractionOutcome,
     meteora::{MeteoraDammV2, MeteoraDlmm},
@@ -33,7 +33,7 @@ impl ExtractionDispatcher {
     pub fn extract(
         &self,
         protocol: Protocol,
-        tx: &TransactionView,
+        tx: &OnChainTransaction,
     ) -> CoreResult<ExtractionOutcome> {
         match protocol {
             Protocol::MeteoraDammV2 => self.damm_v2.extract_events(tx),
