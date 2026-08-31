@@ -138,17 +138,22 @@ witnessed by the same thing:
 
 - `tests/extraction_oracle.rs` freezes the outcome of all 27 mainnet fixtures —
   events, `event_index`, unknowns, failures — against a committed witness.
-  Rotating the instruction groups by one turns `initialize_reward.json` and
-  `split_position2.json` red; the other 25 carry a single group, where a
-  rotation is a no-op. So the corpus witnesses the order **within** a group;
+  Reversing the instruction groups turns **6** of them red — the 6 whose cp-amm
+  payloads actually span more than one group (`claim_position_fee`,
+  `close_position`, `initialize_reward`, `lock_position`, `split_position2`,
+  `swap_double`). The other 21 emit all their payloads from a single group, so
+  no reordering of groups can be observed on them, whatever the corpus size;
 - it does **not** witness the sort by group index, because every mainnet fixture
   already arrives in ascending order — delete `sort_by_key` and the whole suite
   stays green. That is what
   `rpc::tests::group_order_from_the_source_does_not_change_the_payload_order`
   is for: it hands the groups over reversed and fails without the sort.
 
-Both mutations were run, not assumed. A guard nobody has seen fail is a guard
-nobody has tested.
+Both mutations were run and their reach counted, not assumed. The count matters
+as much as the red: `rotate_left(1)`, the first mutation tried, reddens only 2
+fixtures — it moves group 0 to the end, so it is invisible unless group 0 itself
+carries payloads. A mutation that reddens *something* proves less than one whose
+blast radius you have measured.
 
 ## Anchor `event_cpi` extraction pipeline
 

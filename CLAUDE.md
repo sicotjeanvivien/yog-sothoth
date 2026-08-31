@@ -37,7 +37,7 @@ cargo test -p yog-core -- --exact <test>   # one exact test
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
 # un-gates the 156 DB-backed tests and needs everything the section below does.
 # `cargo test --workspace --all-features` therefore reports 810, not 654 — the
-# integration tests are INCLUDED in that total, not additional to it. (809 is
+# integration tests are INCLUDED in that total, not additional to it. (810 is
 # 654 + 156, *derived*: 654 was measured 31 Aug 2026, the 156 on 19 Aug.)
 cargo test --workspace --all-features
 

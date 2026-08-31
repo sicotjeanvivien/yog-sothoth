@@ -100,6 +100,21 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 /// RPC's own parser recognizes (SPL Token and friends), which Anchor self-CPI
 /// instructions never are. Narrowing this any further renumbers stored events —
 /// see [`InnerInstructionPayload`].
+///
+/// # The base58 decoding this costs, knowingly
+///
+/// The view is program-agnostic, so `data` is decoded for every payload, where
+/// the pre-view code decoded only those already matched to the target program —
+/// the program filter now runs downstream, in `extract_anchor_event_cpis`.
+/// Measured on the fixture corpus: 74 decodes instead of 60, worst case 8
+/// instead of 2 (`zap_protocol_fee.json`, a router-shaped transaction). It is
+/// pure waste for the DAMM v1 / DLMM stubs, which discard the view entirely.
+///
+/// Accepted rather than optimised: the alternative is to keep the payload
+/// encoded and decode on demand, which puts "this arrived as base58" — a
+/// property of one transport — back into the neutral type every other source
+/// must fill. That trade is the whole point of the type; a bounded handful of
+/// small decodes per transaction is not.
 fn extract_inner_instructions(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
 ) -> Vec<InnerInstructionPayload> {

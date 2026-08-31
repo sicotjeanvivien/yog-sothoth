@@ -151,30 +151,45 @@ fn extraction_over_every_fixture_is_unchanged() {
         )
     });
 
-    if actual != expected {
-        let (line, exp, act) = first_difference(&expected, &actual);
-        panic!(
+    if actual == expected {
+        return;
+    }
+
+    match first_difference(&expected, &actual) {
+        Some((line, exp, act)) => panic!(
             "extraction behaviour changed at line {line} of {}\n  witness: {exp}\n  actual:  {act}",
             path.display()
-        );
+        ),
+        // Every line matches, so nothing about extraction moved: the files
+        // differ in trailing whitespace alone — a lost final newline, an
+        // editor, a `.gitattributes` rule. Said plainly, because the obvious
+        // failure text here would send the reader hunting a regression that
+        // does not exist.
+        None => panic!(
+            "{} differs from the current output in trailing whitespace only — \
+             extraction behaviour is unchanged. Restore the file's trailing \
+             newline, or regenerate it with UPDATE_GOLDEN=1.",
+            path.display()
+        ),
     }
 }
 
 /// First differing line, so a failure names what moved instead of dumping two
-/// several-hundred-line blobs side by side.
-fn first_difference(expected: &str, actual: &str) -> (usize, String, String) {
+/// several-hundred-line blobs side by side. `None` when the two agree line by
+/// line — `str::lines` swallows trailing whitespace, so that case is real.
+fn first_difference(expected: &str, actual: &str) -> Option<(usize, String, String)> {
     let mut exp_lines = expected.lines();
     let mut act_lines = actual.lines();
 
     for line in 1.. {
         match (exp_lines.next(), act_lines.next()) {
-            (None, None) => return (line, "<end>".into(), "<end>".into()),
+            (None, None) => return None,
             (e, a) if e != a => {
-                return (
+                return Some((
                     line,
                     e.unwrap_or("<end>").to_string(),
                     a.unwrap_or("<end>").to_string(),
-                );
+                ));
             }
             _ => {}
         }
