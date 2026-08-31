@@ -49,13 +49,6 @@ pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Tr
     })
 }
 
-impl TransactionView {
-    /// Convenience form of [`from_rpc`].
-    pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Self> {
-        from_rpc(tx)
-    }
-}
-
 /// Extract the first transaction signature.
 fn extract_signature(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<Signature> {
     match &tx.transaction.transaction {

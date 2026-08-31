@@ -55,10 +55,18 @@ pub struct TransactionView {
 /// "is this really an event" is the job of the decoder downstream
 /// ([`super::decode_anchor_event_cpi`], which checks the Anchor tag).
 ///
-/// Make an adapter stricter — drop a payload it keeps today — and every event
-/// after the dropped one in its transaction shifts down by one, with the silent
-/// duplication described on [`TransactionView::inner_instructions`]. So: only
-/// ever *widen*. A genuine narrowing is a migration (renumber, or version the
+/// What the rule protects is precise, and worth stating precisely: numbering
+/// happens *after* the filter on the emitting program, so dropping a payload
+/// addressed **to that program** shifts every event after it down by one, with
+/// the silent duplication described on
+/// [`TransactionView::inner_instructions`]. Dropping one addressed elsewhere
+/// costs nothing — which is why the JSON-RPC adapter is free to skip the
+/// instruction shapes it cannot represent (an SPL Token transfer the RPC
+/// already parsed) without violating anything.
+///
+/// An adapter cannot tell the two apart in advance, though: it does not know
+/// which program will be filtered on. So the working rule stays "only ever
+/// widen", and a genuine narrowing is a migration (renumber, or version the
 /// column), not an edit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InnerInstructionPayload {

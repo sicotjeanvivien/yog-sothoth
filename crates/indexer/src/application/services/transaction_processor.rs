@@ -4,8 +4,7 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 use yog_core::{
     application::extraction::{
-        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, TransactionView,
-        discriminator_hex,
+        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex, rpc,
     },
     domain::Protocol,
 };
@@ -82,16 +81,15 @@ impl TransactionProcessor {
         // signature, no `blockTime`) is the very same transaction-level
         // failure extraction used to raise on its own, so it takes the same
         // exit: one log, one metric label, no partial persistence.
-        let outcome = match TransactionView::from_rpc(&tx)
-            .and_then(|view| self.extractor.extract(protocol, &view))
-        {
-            Ok(o) => o,
-            Err(e) => {
-                error!(%signature, error = %e, "extraction failed at transaction level");
-                guard.set("extract_failure");
-                return Err(e.into());
-            }
-        };
+        let outcome =
+            match rpc::from_rpc(&tx).and_then(|view| self.extractor.extract(protocol, &view)) {
+                Ok(o) => o,
+                Err(e) => {
+                    error!(%signature, error = %e, "extraction failed at transaction level");
+                    guard.set("extract_failure");
+                    return Err(e.into());
+                }
+            };
 
         self.report_diagnostics(&protocol, &signature, &outcome);
 
