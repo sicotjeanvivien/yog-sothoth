@@ -32,9 +32,9 @@ fn parse(value: serde_json::Value) -> EncodedConfirmedTransactionWithStatusMeta 
 fn unmodified_fixture_is_accepted() {
     // The control: without it, the two tests below could be green because the
     // fixture never converted in the first place.
-    let view = from_rpc(&parse(fixture_json())).expect("the untouched fixture must convert");
+    let on_chain_tx = from_rpc(&parse(fixture_json())).expect("the untouched fixture must convert");
     assert!(
-        !view.inner_instructions.is_empty(),
+        !on_chain_tx.inner_instructions.is_empty(),
         "the fixture must carry inner instructions for the refusals below to mean anything"
     );
 }

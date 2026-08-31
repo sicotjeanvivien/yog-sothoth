@@ -87,7 +87,7 @@ fn spot_price_a_in_b(snapshot: &PoolPriceSnapshot) -> Option<Decimal> {
         ),
         // No sqrt_price decoder for these yet — and the indexer does not
         // ingest them either, so no snapshot carries them today.
-        Protocol::MeteoraDammV1 | Protocol::MeteoraDlmm => None,
+        Protocol::MeteoraDlmm => None,
     }
 }
 

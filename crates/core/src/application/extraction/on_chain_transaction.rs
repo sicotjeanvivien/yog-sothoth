@@ -2,7 +2,7 @@
 //!
 //! `core` has no I/O, and it must not name a transport either: a transaction
 //! may arrive as a JSON-RPC `getTransaction` response today and as a Yellowstone
-//! protobuf update tomorrow. [`TransactionView`] is what the two have in common,
+//! protobuf update tomorrow. [`OnChainTransaction`] is what the two have in common,
 //! and it is the only thing the extractors see. Each source gets an adapter that
 //! fills it — [`super::rpc`] is the one that exists today.
 //!
@@ -17,7 +17,7 @@ use crate::domain::TransactionPosition;
 
 /// A transaction as the extraction pipeline sees it, whatever delivered it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransactionView {
+pub struct OnChainTransaction {
     /// Where the transaction sits in the chain — signature, block time, slot,
     /// and its index within the slot when the source provides one.
     pub position: TransactionPosition,
@@ -50,7 +50,7 @@ pub struct TransactionView {
 /// # ⚠️ Which payloads belong here is frozen for the same reason
 ///
 /// An adapter must be permissive: every inner instruction it can represent
-/// belongs in [`TransactionView::inner_instructions`], regardless of the
+/// belongs in [`OnChainTransaction::inner_instructions`], regardless of the
 /// program that emitted it or of how many accounts it references. Deciding
 /// "is this really an event" is the job of the decoder downstream
 /// ([`super::decode_anchor_event_cpi`], which checks the Anchor tag).
@@ -59,7 +59,7 @@ pub struct TransactionView {
 /// happens *after* the filter on the emitting program, so dropping a payload
 /// addressed **to that program** shifts every event after it down by one, with
 /// the silent duplication described on
-/// [`TransactionView::inner_instructions`]. Dropping one addressed elsewhere
+/// [`OnChainTransaction::inner_instructions`]. Dropping one addressed elsewhere
 /// costs nothing — which is why the JSON-RPC adapter is free to skip the
 /// instruction shapes it cannot represent (an SPL Token transfer the RPC
 /// already parsed) without violating anything.

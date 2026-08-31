@@ -192,7 +192,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 **Extraction side**:
 
 - Create a module under `application/extraction/<platform>/<product>/` (e.g. `extraction/meteora/dlmm/`). Split responsibilities following the DAMM v2 pattern: `events.rs` for wire events (borsh mirrors), `extractor.rs` for walking inner instructions, `translator.rs` for wire → domain translation.
-- Create a top-level struct (e.g. `MeteoraDlmm`) and implement `EventExtractor`. Its input is a `TransactionView` — the neutral shape every source adapter fills — so no protocol handler ever names a transport.
+- Create a top-level struct (e.g. `MeteoraDlmm`) and implement `EventExtractor`. Its input is a `OnChainTransaction` — the neutral shape every source adapter fills — so no protocol handler ever names a transport.
 - Add a new branch to `ExtractionDispatcher::extract` that routes the new `Protocol` variant to the new struct.
 
 **Domain side**:

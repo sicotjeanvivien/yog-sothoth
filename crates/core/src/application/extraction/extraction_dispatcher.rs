@@ -7,17 +7,16 @@
 
 use crate::CoreResult;
 use crate::application::extraction::EventExtractor;
-use crate::application::extraction::TransactionView;
+use crate::application::extraction::OnChainTransaction;
 use crate::application::extraction::{
     ExtractionOutcome,
-    meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
+    meteora::{MeteoraDammV2, MeteoraDlmm},
 };
 use crate::domain::Protocol;
 
 /// Routes extraction calls to the appropriate per-protocol handler.
 pub struct ExtractionDispatcher {
     damm_v2: MeteoraDammV2,
-    damm_v1: MeteoraDammV1,
     dlmm: MeteoraDlmm,
 }
 
@@ -25,7 +24,6 @@ impl ExtractionDispatcher {
     pub fn new() -> Self {
         Self {
             damm_v2: MeteoraDammV2::new(),
-            damm_v1: MeteoraDammV1::new(),
             dlmm: MeteoraDlmm::new(),
         }
     }
@@ -35,11 +33,10 @@ impl ExtractionDispatcher {
     pub fn extract(
         &self,
         protocol: Protocol,
-        tx: &TransactionView,
+        tx: &OnChainTransaction,
     ) -> CoreResult<ExtractionOutcome> {
         match protocol {
             Protocol::MeteoraDammV2 => self.damm_v2.extract_events(tx),
-            Protocol::MeteoraDammV1 => self.damm_v1.extract_events(tx),
             Protocol::MeteoraDlmm => self.dlmm.extract_events(tx),
         }
     }

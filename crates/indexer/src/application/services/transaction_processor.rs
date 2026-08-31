@@ -40,7 +40,7 @@ impl TransactionProcessor {
     ///
     /// Pipeline:
     ///   1. Fetch the full transaction via the TransactionFetcher.
-    ///   2. Adapt the RPC response into the neutral `TransactionView`, then
+    ///   2. Adapt the RPC response into the neutral `OnChainTransaction`, then
     ///      delegate event extraction to the protocol-specific handler.
     ///   3. Hand each extracted event to the EventPersistor — failures
     ///      on one event never abort the others.
@@ -76,20 +76,21 @@ impl TransactionProcessor {
             }
         };
 
-        // The RPC response becomes the neutral view before extraction sees
+        // The RPC response becomes the neutral transaction before extraction sees
         // it — `core` names no transport. A malformation caught here (no
         // signature, no `blockTime`) is the very same transaction-level
         // failure extraction used to raise on its own, so it takes the same
         // exit: one log, one metric label, no partial persistence.
-        let outcome =
-            match rpc::from_rpc(&tx).and_then(|view| self.extractor.extract(protocol, &view)) {
-                Ok(o) => o,
-                Err(e) => {
-                    error!(%signature, error = %e, "extraction failed at transaction level");
-                    guard.set("extract_failure");
-                    return Err(e.into());
-                }
-            };
+        let outcome = match rpc::from_rpc(&tx)
+            .and_then(|on_chain_tx| self.extractor.extract(protocol, &on_chain_tx))
+        {
+            Ok(o) => o,
+            Err(e) => {
+                error!(%signature, error = %e, "extraction failed at transaction level");
+                guard.set("extract_failure");
+                return Err(e.into());
+            }
+        };
 
         self.report_diagnostics(&protocol, &signature, &outcome);
 

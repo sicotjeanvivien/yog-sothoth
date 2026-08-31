@@ -486,22 +486,6 @@ fn a_short_lb_pair_is_rejected_as_truncated_with_its_sizes() {
     );
 }
 
-// ── Protocols recognized but not decoded yet ────────────────────────
-
-/// A known protocol without a decoder is a **coverage gap**, and must not be
-/// reported as an unindexed program — the two call for different reactions.
-///
-/// DAMM v1 is the only one left: DLMM gained its decoder with migration 039.
-#[test]
-fn known_protocol_without_a_decoder_is_rejected_as_a_coverage_gap() {
-    let protocol = Protocol::MeteoraDammV1;
-    assert_eq!(
-        decode_pool_account(&protocol.program_id(), &[0u8; 1112]),
-        Err(PoolAccountRejection::NoDecoder { protocol }),
-        "{protocol} should be a coverage gap, not an unknown program"
-    );
-}
-
 // ── Protocol::from_program_id ───────────────────────────────────────
 
 #[test]

@@ -119,7 +119,9 @@ fn digest() -> String {
 
         match serde_json::from_str::<EncodedConfirmedTransactionWithStatusMeta>(&raw) {
             Err(e) => writeln!(out, "  PARSE ERROR {e}").unwrap(),
-            Ok(tx) => match rpc::from_rpc(&tx).and_then(|view| extractor.extract_events(&view)) {
+            Ok(tx) => match rpc::from_rpc(&tx)
+                .and_then(|on_chain_tx| extractor.extract_events(&on_chain_tx))
+            {
                 Err(e) => writeln!(out, "  EXTRACTION ERROR {e}").unwrap(),
                 Ok(outcome) => out.push_str(&render(&outcome)),
             },

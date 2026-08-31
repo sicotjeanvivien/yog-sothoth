@@ -42,7 +42,7 @@ core/src/
 │   ├── extraction/        ← transaction → domain events use case
 │   │   ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
 │   │   ├── anchor_event.rs  (generic Anchor event_cpi decoder)
-│   │   ├── transaction_view.rs (TransactionView — the neutral input)
+│   │   ├── on_chain_transaction.rs (OnChainTransaction — the neutral input)
 │   │   ├── rpc.rs           (JSON-RPC adapter; the only module naming a transport)
 │   │   ├── event_extractor.rs / extraction_dispatcher.rs
 │   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
@@ -73,7 +73,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 
   What stayed is `base_fee_kind_from`, which is *meant* to be here: it maps a `BaseFeeMode` discriminant and a period count to a `BaseFeeKind` — a rule, not a layout. A scheduler mode with zero periods is a constant fee, and mode 2 (rate limiter) must not consult the period count at all, because its variant reuses those bytes.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method. A keyset cursor is only sound over an **immutable** sort key, and one listing sorts on a mutable one: `pools.last_seen_at`, rewritten on every event. That traversal is therefore anchored to a snapshot instant carried by the cursor (`PoolCursor::as_of`), which turns "the row moved across the cursor" into "the row left the result set" — the contract, and what it does *not* recover, is documented on `domain::PoolPage`. Adding a sort column means answering "is it immutable?", not "is it materialized?".
-- **Transport indirection** (`application/extraction/rpc.rs`) — single point of contact for the JSON-RPC transaction types, and the only module of this crate that names one. It turns a `getTransaction` response into the neutral `TransactionView` and re-exports the types the ingestion binary needs. When the Solana SDK reshuffles those types, or when a second source arrives, this is where it lands.
+- **Transport indirection** (`application/extraction/rpc.rs`) — single point of contact for the JSON-RPC transaction types, and the only module of this crate that names one. It turns a `getTransaction` response into the neutral `OnChainTransaction` and re-exports the types the ingestion binary needs. When the Solana SDK reshuffles those types, or when a second source arrives, this is where it lands.
 - **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.
 
 ## `EventExtractor` and `ExtractionDispatcher`
@@ -82,7 +82,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 /// Per-protocol entry point. One implementation per supported protocol.
 pub trait EventExtractor: Send + Sync {
     fn program_id(&self) -> Pubkey;
-    fn extract_events(&self, tx: &TransactionView) -> CoreResult<ExtractionOutcome>;
+    fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome>;
 }
 
 /// Holds one pre-instantiated EventExtractor per protocol and routes
@@ -90,24 +90,37 @@ pub trait EventExtractor: Send + Sync {
 /// concrete extractors.
 pub struct ExtractionDispatcher {
     damm_v2: MeteoraDammV2,
-    damm_v1: MeteoraDammV1,   // stub — returns an empty outcome
     dlmm: MeteoraDlmm,        // stub — returns an empty outcome
 }
 ```
 
-The `Protocol` enum has three variants today, so the dispatcher has three
-fields: a protocol reaches this match the moment it exists as a variant, well
-before it extracts anything. `MeteoraDammV1` and `MeteoraDlmm` implement
-`EventExtractor` and return `ExtractionOutcome::default()` — an empty outcome,
-not an error, so a transaction of theirs is indexed as "nothing to record"
-rather than counted as a failure.
+The `Protocol` enum has two variants today, so the dispatcher has two fields: a
+protocol reaches this match the moment it exists as a variant, well before it
+extracts anything. `MeteoraDlmm` implements `EventExtractor` and returns
+`ExtractionOutcome::default()` — an empty outcome, not an error, so a DLMM
+transaction is indexed as "nothing to record" rather than counted as a failure.
+
+One nuance the adapter introduced: `rpc::from_rpc` runs *before* the dispatcher,
+so a transaction the adapter refuses — no `blockTime`, an encoding that is not
+`Json` — is a transaction-level failure for *every* protocol, including the ones
+whose extractor reads nothing. The stub never looks at those fields itself.
+Nothing subscribes DLMM today, so the change of exit path is latent; it becomes
+real the day a stub protocol is subscribed ahead of its extractor, and so does
+the base58 decoding the adapter does before the stub discards the transaction.
+
+A variant means "a protocol this project indexes", not "a protocol Meteora
+ships". DAMM v1 was carried as a third, empty variant until 31 August 2026 and
+removed: no extractor, no decoder, no subscription, and no row in any table —
+every arm mentioning it existed only to say "not this one". Meteora's other
+products are on the roadmap, not in the enum; they arrive through the
+add-a-protocol recipe.
 
 The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 
-## `TransactionView` — the neutral input, and its adapters
+## `OnChainTransaction` — the neutral input, and its adapters
 
 `core` has no I/O, and it names no transport either. Extraction reads a
-`TransactionView`: the coordinate that locates an event (`TransactionPosition` —
+`OnChainTransaction`: the coordinate that locates an event (`TransactionPosition` —
 signature, block time, slot, and the transaction's index in its slot when the
 source provides one) plus the ordered list of inner-instruction payloads, each
 with the `Pubkey` of the program it was addressed to. Nothing else. A field
@@ -168,16 +181,16 @@ where `EVENT_IX_TAG = sha256("anchor:event")[..8]` is the fixed prefix injected 
 ```
 whatever the source delivered
         ▼
-[rpc.rs]                 from_rpc(tx) → TransactionView
+[rpc.rs]                 from_rpc(tx) → OnChainTransaction
         │                one adapter per source; the only place naming a transport
         ▼
-[anchor_event.rs]        extract_anchor_event_cpis(view, program_id)
+[anchor_event.rs]        extract_anchor_event_cpis(on_chain_tx, program_id)
         │                keeps the payloads addressed to the program, in order;
         │                the position in that output becomes event_index
         ▼
 [damm_v2/events.rs]      match discriminator → DammV2WireEvent, borsh-deserialize
         ▼
-[damm_v2/translator.rs]  wire → domain, stamped with the view's position;
+[damm_v2/translator.rs]  wire → domain, stamped with the transaction's position;
         │                fee_token_is_a from (collect_fee_mode, trade_direction).
         │                Self-contained — it never reads the transaction: mints
         │                are a pool property, resolved from the account by

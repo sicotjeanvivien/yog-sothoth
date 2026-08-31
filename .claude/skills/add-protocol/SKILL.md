@@ -23,7 +23,7 @@ Confirm with the user (don't assume):
   module + table + repository + `persist_<kind>` method.
 
 Note current state: `Protocol` (`crates/core/src/domain/protocol/model.rs`) already lists
-`MeteoraDammV1` and `MeteoraDlmm`, but `DomainEvent` only has the `MeteoraDammV2` variant
+`MeteoraDlmm`, but `DomainEvent` only has the `MeteoraDammV2` variant
 and `ExtractionDispatcher` only routes DAMM v2 to a real extractor. So "adding a protocol"
 usually means: add the `DomainEvent` outer variant + wire the dispatcher/persistor, and (if
 it's a brand-new protocol not yet in the enum) add the `Protocol` variant + program ID.

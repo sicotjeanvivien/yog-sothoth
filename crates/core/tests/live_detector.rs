@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use yog_core::{
     application::extraction::{
-        EventExtractor, MeteoraDammV2, TransactionView,
+        EventExtractor, MeteoraDammV2, OnChainTransaction,
         meteora::damm_v2::{
             events::DammV2WireEvent,
             extractor::{ExtractFailure, extract_wire_events},
@@ -27,12 +27,13 @@ use yog_core::{
 const CP_AMM_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 
 /// Load a fixture file by name and hand it to the pipeline in the shape the
-/// pipeline actually reads: the neutral view, filled by the JSON-RPC adapter.
+/// pipeline actually reads: the transport-neutral [`OnChainTransaction`],
+/// filled by the JSON-RPC adapter.
 ///
 /// Panics on any error — fixtures are part of the test contract, missing or
 /// malformed ones should fail the test loudly rather than producing confusing
 /// assertion errors later.
-fn load_fixture(name: &str) -> TransactionView {
+fn load_fixture(name: &str) -> OnChainTransaction {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests");
     path.push("fixtures");

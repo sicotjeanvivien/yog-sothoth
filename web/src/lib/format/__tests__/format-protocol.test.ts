@@ -9,7 +9,6 @@ import {
 describe("formatProtocolShortLabel", () => {
   it("drops the Meteora prefix, keeping the product name", () => {
     expect(formatProtocolShortLabel("meteora_damm_v2")).toBe("DAMM v2");
-    expect(formatProtocolShortLabel("meteora_damm_v1")).toBe("DAMM v1");
     expect(formatProtocolShortLabel("meteora_dlmm")).toBe("DLMM");
     expect(formatProtocolShortLabel("meteora_stake2earn")).toBe("Stake2Earn");
   });

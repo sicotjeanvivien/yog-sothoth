@@ -1,7 +1,7 @@
 use solana_pubkey::Pubkey;
 
 use crate::CoreResult;
-use crate::application::extraction::{EventExtractor, ExtractionOutcome, TransactionView};
+use crate::application::extraction::{EventExtractor, ExtractionOutcome, OnChainTransaction};
 use crate::domain::Protocol;
 
 /// Meteora DLMM protocol handler (bin-based liquidity, volatility fees).
@@ -34,7 +34,7 @@ impl EventExtractor for MeteoraDlmm {
         self.program_id
     }
 
-    fn extract_events(&self, _tx: &TransactionView) -> CoreResult<ExtractionOutcome> {
+    fn extract_events(&self, _tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome> {
         // Phase 2 stub — no events extracted yet.
         Ok(ExtractionOutcome::default())
     }

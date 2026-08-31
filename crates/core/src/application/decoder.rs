@@ -60,12 +60,6 @@ pub enum PoolAccountRejection {
     #[error("account owned by an unindexed program: {program_id}")]
     UnknownProgram { program_id: Pubkey },
 
-    /// The protocol is one we know, but its pool account has no decoder yet.
-    /// A coverage gap — and, if it appears, a wiring bug: a queue exists for a
-    /// protocol we cannot read.
-    #[error("no pool-account decoder for {protocol}")]
-    NoDecoder { protocol: Protocol },
-
     /// The account belongs to the right program but is not its pool account —
     /// its Anchor discriminator does not match. The address in `pools` is not
     /// what we think it is.
@@ -100,18 +94,14 @@ pub fn decode_pool_account(
             program_id: *program_id,
         })?;
 
+    // Exhaustive by enumeration, never a wildcard: adding a variant to
+    // `Protocol` stops compilation right here and forces the question "does it
+    // get a decoder now?". A `_` arm would answer it silently with "no" — and
+    // an undecodable protocol is a wiring bug, since the only caller asks for
+    // accounts of pools it queued itself.
     match protocol {
         Protocol::MeteoraDammV2 => meteora::damm_v2::decode_pool_account(data),
         Protocol::MeteoraDlmm => meteora::dlmm::decode_pool_account(data),
-        // A protocol we recognize but cannot decode yet — a coverage gap, not an
-        // unknown program, because the two call for different reactions.
-        //
-        // Every undecoded protocol lands here, and today that is DAMM v1 alone.
-        // Listing it rather than writing `_` is deliberate: the arm is
-        // **exhaustive by enumeration**, so adding a variant to `Protocol` stops
-        // compilation right here and forces the question "does it get a decoder
-        // now?". A wildcard would answer it silently with "no".
-        Protocol::MeteoraDammV1 => Err(PoolAccountRejection::NoDecoder { protocol }),
     }
 }
 
