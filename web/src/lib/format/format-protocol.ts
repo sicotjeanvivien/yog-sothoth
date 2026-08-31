@@ -19,8 +19,6 @@ export function formatProtocolLabel(protocol: string): string {
   switch (protocol) {
     case "meteora_damm_v2":
       return "Meteora DAMM v2";
-    case "meteora_damm_v1":
-      return "Meteora DAMM v1";
     case "meteora_dlmm":
       return "Meteora DLMM";
     case "meteora_stake2earn":
@@ -40,8 +38,6 @@ export function formatProtocolShortLabel(protocol: string): string {
   switch (protocol) {
     case "meteora_damm_v2":
       return "DAMM v2";
-    case "meteora_damm_v1":
-      return "DAMM v1";
     case "meteora_dlmm":
       return "DLMM";
     case "meteora_stake2earn":

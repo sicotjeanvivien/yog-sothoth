@@ -11,6 +11,6 @@ pub(crate) use anchor_event::{
 };
 pub use event_extractor::EventExtractor;
 pub use extraction_dispatcher::ExtractionDispatcher;
-pub use meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm};
+pub use meteora::{MeteoraDammV2, MeteoraDlmm};
 pub use outcome::{ExtractionFailure, ExtractionOutcome, UnknownEventInfo, discriminator_hex};
 pub use transaction_view::{InnerInstructionPayload, TransactionView};

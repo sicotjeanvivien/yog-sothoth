@@ -307,7 +307,6 @@ async fn list_unresolved_never_returns_a_pool_of_another_protocol(pool: PgPool) 
     // The foreign-protocol pools are the *oldest*, so under the pre-036 query
     // they would sit at the head of the queue and starve the DAMM v2 one.
     seed_pool(&pool, pk(1), Protocol::MeteoraDlmm, 1).await;
-    seed_pool(&pool, pk(2), Protocol::MeteoraDammV1, 2).await;
     seed_pool(&pool, pk(3), Protocol::MeteoraDammV2, 3).await;
     let repo = PgMeteoraDammV2PoolPropertiesRepository::new(pool);
 
@@ -473,7 +472,6 @@ async fn each_resolver_rejects_the_other_protocols_payload(pool: PgPool) {
 async fn each_queue_proposes_only_its_own_protocol(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;
     seed_pool(&pool, pk(2), Protocol::MeteoraDlmm, 2).await;
-    seed_pool(&pool, pk(3), Protocol::MeteoraDammV1, 3).await;
 
     let damm = PgMeteoraDammV2PoolPropertiesRepository::new(pool.clone());
     let dlmm = PgMeteoraDlmmPoolPropertiesRepository::new(pool.clone());

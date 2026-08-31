@@ -124,7 +124,7 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 /// the program filter now runs downstream, in `extract_anchor_event_cpis`.
 /// Measured on the fixture corpus: 74 decodes instead of 60, worst case 8
 /// instead of 2 (`zap_protocol_fee.json`, a router-shaped transaction). It is
-/// pure waste for the DAMM v1 / DLMM stubs, which discard the view entirely.
+/// pure waste for the DLMM stub, which discards the view entirely.
 ///
 /// Accepted rather than optimised: the alternative is to keep the payload
 /// encoded and decode on demand, which puts "this arrived as base58" — a

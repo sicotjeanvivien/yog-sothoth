@@ -132,8 +132,11 @@ impl PoolAccountWorker {
             //
             // Every rejection is logged. In this path none of them is routine:
             // the accounts belong to pools this very queue asked for, so a
-            // rejection always means something is off — a stale row, a missing
-            // decoder, or the program having changed its layout.
+            // rejection always means something is off — a stale row, or the
+            // program having changed its layout. "No decoder for this
+            // protocol" used to be a third reason; it is not one any more,
+            // `decode_pool_account` being total over `Protocol` since DAMM v1
+            // left the enum.
             let decoded_account = match decode_pool_account(&account.program_id, &account.data) {
                 Ok(decoded_account) => decoded_account,
                 Err(rejection) => {

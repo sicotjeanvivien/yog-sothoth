@@ -29,16 +29,16 @@ cargo fmt --all
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
     -p yog-signals --all-targets --all-features -- -D warnings
 
-# Test — workspace unit tests, DB-free (654 tests, measured 31 Aug 2026)
+# Test — workspace unit tests, DB-free (653 tests, measured 31 Aug 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 156 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 810, not 654 — the
-# integration tests are INCLUDED in that total, not additional to it. (810 is
-# 654 + 156, *derived*: 654 was measured 31 Aug 2026, the 156 on 19 Aug.)
+# un-gates the 161 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 814, not 653 — the
+# integration tests are INCLUDED in that total, not additional to it. All three
+# counts were measured 31 Aug 2026, against a live Postgres.
 cargo test --workspace --all-features
 
 # Integration tests are DB-backed and gated on the `integration-tests` feature
@@ -48,7 +48,7 @@ cargo test --workspace --all-features
 # `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`.
 # sqlx::test builds a throwaway schema `_sqlx_test` in the maintenance database
 # and `yog_migrate` lacks CREATE on it — that is where the failure lands, before
-# the missing `rolcreatedb` ever comes into play. The symptom is all 156 failing
+# the missing `rolcreatedb` ever comes into play. The symptom is all 161 failing
 # in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
 # reads like a regression and is not one.
 #

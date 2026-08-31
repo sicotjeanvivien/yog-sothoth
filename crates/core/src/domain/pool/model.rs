@@ -25,7 +25,7 @@ pub struct Pool {
     /// On-chain address of the AMM pool.
     pub pool_address: Pubkey,
 
-    /// Protocol this pool belongs to (DAMM v2, DAMM v1, DLMM).
+    /// Protocol this pool belongs to (DAMM v2, DLMM).
     pub protocol: Protocol,
 
     /// Mint of token A. `None` until resolved by yog-context.

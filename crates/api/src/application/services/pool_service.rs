@@ -228,7 +228,7 @@ impl PoolService {
     /// properties.
     ///
     /// The satellite is only queried when the pool's protocol has a lookup — a
-    /// DLMM or DAMM v1 pool costs no extra round-trip. The list endpoints do not
+    /// DLMM pool costs no extra round-trip. The list endpoints do not
     /// call this at all; they neither need the block nor pay for it.
     ///
     /// No protocol is named here: the pool's own `protocol` selects the lookup.

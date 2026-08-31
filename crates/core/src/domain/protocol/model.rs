@@ -8,17 +8,21 @@ use solana_pubkey::{Pubkey, pubkey};
 /// to identify the protocol in stored events and metrics.
 ///
 /// String representations (used in SQL and JSON) are the fully qualified
-/// snake_case variant names: `"meteora_damm_v2"`, `"meteora_damm_v1"`, `"meteora_dlmm"`.
+/// snake_case variant names: `"meteora_damm_v2"`, `"meteora_dlmm"`.
+///
+/// A variant means "a protocol this project indexes", not "a protocol Meteora
+/// ships". DAMM v1 was carried here as an empty placeholder until 31 August
+/// 2026 and removed: it had no extractor, no decoder, no subscription and no
+/// row in any table, so every arm mentioning it existed only to say "not this
+/// one". Adding it back is the add-a-protocol recipe, not an edit here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     MeteoraDammV2,
-    MeteoraDammV1,
     MeteoraDlmm,
 }
 
 const METEORA_DAMM_V2_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
-const METEORA_DAMM_V1_PROGRAM_ID: Pubkey = pubkey!("Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB");
 const METEORA_DLMM_PROGRAM_ID: Pubkey = pubkey!("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
 
 impl Protocol {
@@ -27,7 +31,6 @@ impl Protocol {
     pub fn program_id(&self) -> Pubkey {
         match self {
             Protocol::MeteoraDammV2 => METEORA_DAMM_V2_PROGRAM_ID,
-            Protocol::MeteoraDammV1 => METEORA_DAMM_V1_PROGRAM_ID,
             Protocol::MeteoraDlmm => METEORA_DLMM_PROGRAM_ID,
         }
     }
@@ -54,7 +57,6 @@ impl Protocol {
     pub fn as_str(&self) -> &'static str {
         match self {
             Protocol::MeteoraDammV2 => "meteora_damm_v2",
-            Protocol::MeteoraDammV1 => "meteora_damm_v1",
             Protocol::MeteoraDlmm => "meteora_dlmm",
         }
     }
@@ -62,11 +64,7 @@ impl Protocol {
     /// Returns all supported protocols. Useful at startup to register every
     /// protocol the listener should subscribe to.
     pub fn all() -> &'static [Protocol] {
-        &[
-            Protocol::MeteoraDammV2,
-            Protocol::MeteoraDammV1,
-            Protocol::MeteoraDlmm,
-        ]
+        &[Protocol::MeteoraDammV2, Protocol::MeteoraDlmm]
     }
 }
 
@@ -82,7 +80,6 @@ impl std::str::FromStr for Protocol {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "meteora_damm_v2" => Ok(Protocol::MeteoraDammV2),
-            "meteora_damm_v1" => Ok(Protocol::MeteoraDammV1),
             "meteora_dlmm" => Ok(Protocol::MeteoraDlmm),
             _ => Err(CoreError::UnknownProgram(s.to_string())),
         }

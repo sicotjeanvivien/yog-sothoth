@@ -90,17 +90,30 @@ pub trait EventExtractor: Send + Sync {
 /// concrete extractors.
 pub struct ExtractionDispatcher {
     damm_v2: MeteoraDammV2,
-    damm_v1: MeteoraDammV1,   // stub — returns an empty outcome
     dlmm: MeteoraDlmm,        // stub — returns an empty outcome
 }
 ```
 
-The `Protocol` enum has three variants today, so the dispatcher has three
-fields: a protocol reaches this match the moment it exists as a variant, well
-before it extracts anything. `MeteoraDammV1` and `MeteoraDlmm` implement
-`EventExtractor` and return `ExtractionOutcome::default()` — an empty outcome,
-not an error, so a transaction of theirs is indexed as "nothing to record"
-rather than counted as a failure.
+The `Protocol` enum has two variants today, so the dispatcher has two fields: a
+protocol reaches this match the moment it exists as a variant, well before it
+extracts anything. `MeteoraDlmm` implements `EventExtractor` and returns
+`ExtractionOutcome::default()` — an empty outcome, not an error, so a DLMM
+transaction is indexed as "nothing to record" rather than counted as a failure.
+
+One nuance the adapter introduced: `rpc::from_rpc` runs *before* the dispatcher,
+so a transaction the adapter refuses — no `blockTime`, an encoding that is not
+`Json` — is a transaction-level failure for *every* protocol, including the ones
+whose extractor reads nothing. The stub never looks at those fields itself.
+Nothing subscribes DLMM today, so the change of exit path is latent; it becomes
+real the day a stub protocol is subscribed ahead of its extractor, and so does
+the base58 decoding the adapter does before the stub discards the view.
+
+A variant means "a protocol this project indexes", not "a protocol Meteora
+ships". DAMM v1 was carried as a third, empty variant until 31 August 2026 and
+removed: no extractor, no decoder, no subscription, and no row in any table —
+every arm mentioning it existed only to say "not this one". Meteora's other
+products are on the roadmap, not in the enum; they arrive through the
+add-a-protocol recipe.
 
 The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 
