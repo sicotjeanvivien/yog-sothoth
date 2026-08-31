@@ -1,7 +1,7 @@
-use crate::application::extraction::{EventExtractor, ExtractionOutcome};
-use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
+use solana_pubkey::Pubkey;
 
 use crate::CoreResult;
+use crate::application::extraction::{EventExtractor, ExtractionOutcome, TransactionView};
 use crate::domain::Protocol;
 
 /// Meteora DAMM v1 protocol handler (x·y=k + dual-yield).
@@ -10,16 +10,15 @@ use crate::domain::Protocol;
 /// To be replaced with real extraction once DAMM v1 wire events are mirrored.
 pub struct MeteoraDammV1 {
     _protocol: Protocol,
-    program_id_str: String,
+    program_id: Pubkey,
 }
 
 impl MeteoraDammV1 {
     pub fn new() -> Self {
         let _protocol = Protocol::MeteoraDammV1;
-        let program_id_str = _protocol.program_id().to_string();
         Self {
             _protocol,
-            program_id_str,
+            program_id: _protocol.program_id(),
         }
     }
 }
@@ -31,14 +30,11 @@ impl Default for MeteoraDammV1 {
 }
 
 impl EventExtractor for MeteoraDammV1 {
-    fn program_id(&self) -> &str {
-        &self.program_id_str
+    fn program_id(&self) -> Pubkey {
+        self.program_id
     }
 
-    fn extract_events(
-        &self,
-        _tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<ExtractionOutcome> {
+    fn extract_events(&self, _tx: &TransactionView) -> CoreResult<ExtractionOutcome> {
         // Phase 2 stub — no events extracted yet.
         Ok(ExtractionOutcome::default())
     }

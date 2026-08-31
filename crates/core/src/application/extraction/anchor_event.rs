@@ -30,20 +30,22 @@
 //! - `program_id == <emitting program>`
 //! - `accounts == [event_authority]` (a single account, the program's PDA
 //!   acting as event signer)
-//! - `data == [tag][discriminator][payload]` encoded as base58 in
-//!   `inner_instructions[].instructions[].data`
+//! - `data == [tag][discriminator][payload]`, which the source's adapter has
+//!   already decoded into bytes on
+//!   [`TransactionView::inner_instructions`](crate::application::extraction::TransactionView::inner_instructions)
 //!
 //! [`extract_anchor_event_cpis`] isolates these instructions; the caller
 //! then runs each through [`decode_anchor_event_cpi`] to obtain the
 //! discriminator and payload, and finally borsh-deserializes the payload
 //! into a known struct.
+//!
+//! Nothing here knows how the transaction reached the process: it reads the
+//! neutral [`TransactionView`], which the JSON-RPC adapter
+//! ([`crate::application::extraction::rpc`]) fills today.
 
-use bs58::decode as bs58_decode;
-use solana_transaction_status_client_types::{
-    EncodedConfirmedTransactionWithStatusMeta, UiInstruction, UiParsedInstruction,
-    option_serializer::OptionSerializer,
-};
+use solana_pubkey::Pubkey;
 
+use crate::application::extraction::TransactionView;
 use crate::error::AnchorDecodeError;
 
 /// Length of an Anchor event discriminator, in bytes.
@@ -101,88 +103,35 @@ pub(crate) fn decode_anchor_event_cpi(
 // Extraction from a Solana transaction
 // ---------------------------------------------------------------------------
 
-/// Extract every inner instruction in `tx` that targets `target_program_id`
-/// and could be an Anchor `event_cpi` event emission.
+/// Extract every inner-instruction payload of `tx` addressed to
+/// `target_program_id`, which could be an Anchor `event_cpi` event emission.
 ///
-/// Each returned entry is the **decoded base58 bytes** of an inner
-/// instruction's `data` field — ready to be passed to
+/// Each returned entry is the raw instruction data — ready to be passed to
 /// [`decode_anchor_event_cpi`].
 ///
-/// Filtering is intentionally permissive: we keep every inner instruction
-/// addressed to the target program, regardless of how many accounts it
-/// references. Discriminating "is this really an event" is the job of
-/// [`decode_anchor_event_cpi`], which checks the [`EVENT_IX_TAG`]
-/// prefix. This keeps the extractor stable across Anchor framework
-/// upgrades that might change incidental conventions like account counts.
+/// Filtering is intentionally permissive: we keep every payload addressed to
+/// the target program, regardless of how many accounts it references.
+/// Discriminating "is this really an event" is the job of
+/// [`decode_anchor_event_cpi`], which checks the [`EVENT_IX_TAG`] prefix. This
+/// keeps the extractor stable across Anchor framework upgrades that might
+/// change incidental conventions like account counts.
 ///
-/// Instructions encoded as `Parsed` (rather than `PartiallyDecoded`) are
-/// skipped, because parsed instructions are produced for instructions the
-/// RPC's transaction parser recognizes (SPL Token, etc.) — Anchor self-CPI
-/// instructions never fall into that category.
-pub(crate) fn extract_anchor_event_cpis(
-    tx: &EncodedConfirmedTransactionWithStatusMeta,
-    target_program_id: &str,
-) -> Vec<Vec<u8>> {
-    let Some(meta) = tx.transaction.meta.as_ref() else {
-        return Vec::new();
-    };
-
-    let OptionSerializer::Some(inner_groups) = &meta.inner_instructions else {
-        return Vec::new();
-    };
-
-    // Sorted by the outer instruction they belong to, never left in whatever
-    // order the RPC serialized them. The position of a payload in this vector
-    // becomes its persisted `event_index` (part of the unique key), so a
-    // provider — or the future gRPC path — returning groups in another order
-    // would renumber events already stored and turn a replay into a source of
-    // duplicates. Same reasoning as the frozen filter below.
-    let mut groups: Vec<_> = inner_groups.iter().collect();
-    groups.sort_by_key(|g| g.index);
-
-    let mut out = Vec::new();
-
-    for group in groups {
-        for ix in &group.instructions {
-            if let Some(bytes) = try_extract_self_cpi_data(ix, target_program_id) {
-                out.push(bytes);
-            }
-        }
-    }
-
-    out
-}
-
-/// Try to extract the raw bytes of an inner instruction whose `programId`
-/// matches `target_program_id`. Returns `None` if the instruction targets
-/// a different program, has no `data` field, or fails base58 decoding.
+/// # ⚠️ Only ever widen this filter
 ///
-/// # ⚠️ This filter is frozen by contract — narrowing it corrupts stored data
-///
-/// The position of a payload in [`extract_anchor_event_cpis`]'s output is
-/// persisted as `event_index`, and is part of the unique key of every event
-/// table (`(signature, event_index, timestamp)`). Rows already in the database
-/// were numbered by *this* filter.
-///
-/// Make it stricter — reject a payload it accepts today — and every event
-/// after the rejected one in its transaction shifts down by one. Nothing
-/// fails: re-ingesting those transactions inserts duplicates under the new
-/// numbering, and the old rows stay, unreachable and wrong. It is the same
-/// class of silent corruption as the `(signature, timestamp)` key this
-/// numbering was introduced to fix.
-///
-/// So: only ever *widen* it. If it must genuinely narrow, that is a migration
-/// (renumber, or version the column), not an edit.
-fn try_extract_self_cpi_data(ix: &UiInstruction, target_program_id: &str) -> Option<Vec<u8>> {
-    let UiInstruction::Parsed(UiParsedInstruction::PartiallyDecoded(p)) = ix else {
-        return None;
-    };
-
-    if p.program_id != target_program_id {
-        return None;
-    }
-
-    bs58_decode(&p.data).into_vec().ok()
+/// The position of a payload in this function's output is persisted as
+/// `event_index`. Narrowing the filter renumbers events already stored — the
+/// full reasoning, which applies identically to the adapter that fills the
+/// view, is on
+/// [`InnerInstructionPayload`](crate::application::extraction::InnerInstructionPayload).
+pub(crate) fn extract_anchor_event_cpis<'a>(
+    tx: &'a TransactionView,
+    target_program_id: &Pubkey,
+) -> Vec<&'a [u8]> {
+    tx.inner_instructions
+        .iter()
+        .filter(|ix| ix.program_id == *target_program_id)
+        .map(|ix| ix.data.as_slice())
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

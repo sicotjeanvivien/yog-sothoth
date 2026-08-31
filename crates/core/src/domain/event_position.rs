@@ -29,14 +29,19 @@ use solana_signature::Signature;
 /// `extract_anchor_event_cpis`: protocolar (a self-CPI to the program), never
 /// tied to the discriminators we happen to know. See its doc-comment.
 ///
-/// # `transaction_index` is `None` today
+/// # `transaction_index` is `None` today — the provider's doing, not the API's
 ///
-/// `getTransaction` does not return it (it is `#[serde(default)]` on the
-/// Solana type, and Helius omits it), so the order reachable today is
-/// `(slot, event_index)`: total within a transaction and between slots, but
-/// not between two transactions of the same slot. The field is here so the
-/// gRPC/Geyser migration — where the transaction update carries its `index`
-/// natively — closes that gap without a schema change.
+/// The field is `#[serde(default)]` on the Solana type: a `getTransaction`
+/// response *may* carry it, and some RPCs do — 10 of the 27 mainnet fixtures in
+/// `core/tests/fixtures/damm_v2/` have one. The provider this project ingests
+/// from does not: **measured 31 August 2026, 136 of 136 rows of
+/// `pool_current_state` have `last_transaction_index IS NULL`** — not most, all.
+///
+/// So the order reachable today is `(slot, event_index)`: total within a
+/// transaction and between slots, but not between two transactions of the same
+/// slot. The field is here so a source that carries the index natively — the
+/// gRPC/Geyser update, or an RPC that returns it — closes that gap without a
+/// schema change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventPosition {
     pub signature: Signature,

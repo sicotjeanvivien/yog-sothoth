@@ -1,5 +1,5 @@
 //! Bootstrap utilities shared across yog-sothoth's native binaries
-//! (indexer, api).
+//! (indexer, context, signals, api) and the `yog-migrate` binary.
 //!
 //! This crate hosts what every binary needs at startup, and only that:
 //!

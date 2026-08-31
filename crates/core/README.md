@@ -42,13 +42,14 @@ core/src/
 │   ├── extraction/        ← transaction → domain events use case
 │   │   ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
 │   │   ├── anchor_event.rs  (generic Anchor event_cpi decoder)
+│   │   ├── transaction_view.rs (TransactionView — the neutral input)
+│   │   ├── rpc.rs           (JSON-RPC adapter; the only module naming a transport)
 │   │   ├── event_extractor.rs / extraction_dispatcher.rs
 │   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
 │   └── decoder/           ← account bytes → pool properties use case
 ├── amm/                   ← pure AMM math (damm_v2.rs + dlmm.rs; common.rs is dormant)
 ├── tools/pagination.rs    ← Page<T>, Cursor enum
-├── error/                 ← CoreError, RepositoryError, CoreResult<T>
-└── solana_types.rs        ← re-export hub for Solana SDK types
+└── error/                 ← CoreError, RepositoryError, CoreResult<T>
 ```
 
 File trees here are kept coarse on purpose — the module structure is the contract, the per-file detail lives in the code.
@@ -72,7 +73,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 
   What stayed is `base_fee_kind_from`, which is *meant* to be here: it maps a `BaseFeeMode` discriminant and a period count to a `BaseFeeKind` — a rule, not a layout. A scheduler mode with zero periods is a constant fee, and mode 2 (rate limiter) must not consult the period count at all, because its variant reuses those bytes.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method. A keyset cursor is only sound over an **immutable** sort key, and one listing sorts on a mutable one: `pools.last_seen_at`, rewritten on every event. That traversal is therefore anchored to a snapshot instant carried by the cursor (`PoolCursor::as_of`), which turns "the row moved across the cursor" into "the row left the result set" — the contract, and what it does *not* recover, is documented on `domain::PoolPage`. Adding a sort column means answering "is it immutable?", not "is it materialized?".
-- **Solana SDK indirection** (`solana_types.rs`) — single point of contact for types reshuffled by Solana SDK releases. When the SDK restructures, only this file changes.
+- **Transport indirection** (`application/extraction/rpc.rs`) — single point of contact for the JSON-RPC transaction types, and the only module of this crate that names one. It turns a `getTransaction` response into the neutral `TransactionView` and re-exports the types the ingestion binary needs. When the Solana SDK reshuffles those types, or when a second source arrives, this is where it lands.
 - **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.
 
 ## `EventExtractor` and `ExtractionDispatcher`
@@ -80,11 +81,8 @@ File trees here are kept coarse on purpose — the module structure is the contr
 ```rust
 /// Per-protocol entry point. One implementation per supported protocol.
 pub trait EventExtractor: Send + Sync {
-    fn program_id(&self) -> &str;
-    fn extract_events(
-        &self,
-        tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<ExtractionOutcome>;
+    fn program_id(&self) -> Pubkey;
+    fn extract_events(&self, tx: &TransactionView) -> CoreResult<ExtractionOutcome>;
 }
 
 /// Holds one pre-instantiated EventExtractor per protocol and routes
@@ -106,6 +104,57 @@ rather than counted as a failure.
 
 The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 
+## `TransactionView` — the neutral input, and its adapters
+
+`core` has no I/O, and it names no transport either. Extraction reads a
+`TransactionView`: the coordinate that locates an event (`TransactionPosition` —
+signature, block time, slot, and the transaction's index in its slot when the
+source provides one) plus the ordered list of inner-instruction payloads, each
+with the `Pubkey` of the program it was addressed to. Nothing else. A field
+added here is a dependency the extractors gained on their source.
+
+One **adapter** per source fills it. Today there is one, `extraction/rpc.rs`,
+the only module of this crate that names `EncodedConfirmedTransactionWithStatusMeta`
+— and it also re-exports the transport types `yog-indexer`'s fetcher needs,
+because the encoding and the adapter are one contract: the fetcher must request
+`JsonParsed`, since the adapter reads the `PartiallyDecoded` inner instructions
+only that encoding produces. A Yellowstone gRPC source adds a *sibling adapter*,
+not a second path through extraction; that is the whole point of the shape.
+
+Two invariants every adapter owes, both documented on the type itself and
+neither optional:
+
+- **the order of `inner_instructions`** — a payload's position, after filtering
+  on the emitting program, becomes the persisted `event_index`, part of the
+  unique key of every event table. An adapter that reorders does not fail: it
+  renumbers rows already stored, and a replay starts inserting duplicates;
+- **which payloads it keeps** — permissively, everything it can represent,
+  whatever program it targets. Deciding "is this an event" belongs to
+  `decode_anchor_event_cpi` downstream. Narrowing shifts every event after the
+  dropped one down by one, with the same silent effect. Only ever widen.
+
+What guards them, and how far each guard reaches — because the two are not
+witnessed by the same thing:
+
+- `tests/extraction_oracle.rs` freezes the outcome of all 27 mainnet fixtures —
+  events, `event_index`, unknowns, failures — against a committed witness.
+  Reversing the instruction groups turns **6** of them red — the 6 whose cp-amm
+  payloads actually span more than one group (`claim_position_fee`,
+  `close_position`, `initialize_reward`, `lock_position`, `split_position2`,
+  `swap_double`). The other 21 emit all their payloads from a single group, so
+  no reordering of groups can be observed on them, whatever the corpus size;
+- it does **not** witness the sort by group index, because every mainnet fixture
+  already arrives in ascending order — delete `sort_by_key` and the whole suite
+  stays green. That is what
+  `rpc::tests::group_order_from_the_source_does_not_change_the_payload_order`
+  is for: it hands the groups over reversed and fails without the sort.
+
+Both mutations were run and their reach counted, not assumed. The count matters
+as much as the red: `rotate_left(1)`, the first mutation tried, reddens only 2
+fixtures — it moves group 0 to the end, so it is invisible unless group 0 itself
+carries payloads. A mutation that reddens *something* proves less than one whose
+blast radius you have measured.
+
 ## Anchor `event_cpi` extraction pipeline
 
 Each Meteora program emits its events via Anchor's `emit_cpi!` mechanism — a self-CPI to an `event_authority` PDA, with a stable wire format:
@@ -117,16 +166,22 @@ Each Meteora program emits its events via Anchor's `emit_cpi!` mechanism — a s
 where `EVENT_IX_TAG = sha256("anchor:event")[..8]` is the fixed prefix injected by Anchor. The pipeline runs in three stages:
 
 ```
-EncodedConfirmedTransactionWithStatusMeta
+whatever the source delivered
         ▼
-[anchor_event.rs]        extract_anchor_event_cpis(tx, program_id)
-        │                iterates inner_instructions, filters on programId +
-        │                EVENT_IX_TAG, returns decoded base58 payloads
+[rpc.rs]                 from_rpc(tx) → TransactionView
+        │                one adapter per source; the only place naming a transport
+        ▼
+[anchor_event.rs]        extract_anchor_event_cpis(view, program_id)
+        │                keeps the payloads addressed to the program, in order;
+        │                the position in that output becomes event_index
         ▼
 [damm_v2/events.rs]      match discriminator → DammV2WireEvent, borsh-deserialize
         ▼
-[damm_v2/translator.rs]  wire → domain: mints from surrounding transferChecked,
-        │                fee_token_is_a from (collect_fee_mode, trade_direction)
+[damm_v2/translator.rs]  wire → domain, stamped with the view's position;
+        │                fee_token_is_a from (collect_fee_mode, trade_direction).
+        │                Self-contained — it never reads the transaction: mints
+        │                are a pool property, resolved from the account by
+        │                yog-context.
         ▼
 ExtractionOutcome { events, unknown, failures }
 ```

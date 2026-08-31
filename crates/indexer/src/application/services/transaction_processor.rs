@@ -4,7 +4,7 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 use yog_core::{
     application::extraction::{
-        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex,
+        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex, rpc,
     },
     domain::Protocol,
 };
@@ -40,7 +40,8 @@ impl TransactionProcessor {
     ///
     /// Pipeline:
     ///   1. Fetch the full transaction via the TransactionFetcher.
-    ///   2. Delegate event extraction to the protocol-specific handler.
+    ///   2. Adapt the RPC response into the neutral `TransactionView`, then
+    ///      delegate event extraction to the protocol-specific handler.
     ///   3. Hand each extracted event to the EventPersistor — failures
     ///      on one event never abort the others.
     ///   4. Surface unknown discriminators and extraction failures as
@@ -75,14 +76,20 @@ impl TransactionProcessor {
             }
         };
 
-        let outcome = match self.extractor.extract(protocol, &tx) {
-            Ok(o) => o,
-            Err(e) => {
-                error!(%signature, error = %e, "extraction failed at transaction level");
-                guard.set("extract_failure");
-                return Err(e.into());
-            }
-        };
+        // The RPC response becomes the neutral view before extraction sees
+        // it — `core` names no transport. A malformation caught here (no
+        // signature, no `blockTime`) is the very same transaction-level
+        // failure extraction used to raise on its own, so it takes the same
+        // exit: one log, one metric label, no partial persistence.
+        let outcome =
+            match rpc::from_rpc(&tx).and_then(|view| self.extractor.extract(protocol, &view)) {
+                Ok(o) => o,
+                Err(e) => {
+                    error!(%signature, error = %e, "extraction failed at transaction level");
+                    guard.set("extract_failure");
+                    return Err(e.into());
+                }
+            };
 
         self.report_diagnostics(&protocol, &signature, &outcome);
 

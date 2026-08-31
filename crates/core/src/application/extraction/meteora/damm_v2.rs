@@ -2,12 +2,12 @@ pub mod events;
 pub mod extractor;
 pub(super) mod translator;
 
+use solana_pubkey::Pubkey;
+
 use crate::CoreResult;
-use crate::application::extraction::meteora::{extract_signature, extract_timestamp};
 use crate::application::extraction::outcome::{ExtractionFailure, UnknownEventInfo};
-use crate::application::extraction::{EventExtractor, ExtractionOutcome};
+use crate::application::extraction::{EventExtractor, ExtractionOutcome, TransactionView};
 use crate::domain::{Protocol, TransactionPosition};
-use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 use self::extractor::extract_wire_events;
 use self::translator::translate_wire_event;
@@ -15,16 +15,15 @@ use self::translator::translate_wire_event;
 /// Meteora DAMM v2 protocol handler (x·y=k + dynamic fees + NFT positions).
 pub struct MeteoraDammV2 {
     protocol: Protocol,
-    program_id_str: String,
+    program_id: Pubkey,
 }
 
 impl MeteoraDammV2 {
     pub fn new() -> Self {
         let protocol = Protocol::MeteoraDammV2;
-        let program_id_str = protocol.program_id().to_string();
         Self {
             protocol,
-            program_id_str,
+            program_id: protocol.program_id(),
         }
     }
 }
@@ -36,30 +35,17 @@ impl Default for MeteoraDammV2 {
 }
 
 impl EventExtractor for MeteoraDammV2 {
-    fn program_id(&self) -> &str {
-        &self.program_id_str
+    fn program_id(&self) -> Pubkey {
+        self.program_id
     }
 
-    fn extract_events(
-        &self,
-        tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<ExtractionOutcome> {
-        // `slot` and `transaction_index` are read straight off the transaction:
-        // unlike the signature and the block time they need no parsing, and
-        // `transaction_index` is `None` on the `getTransaction` path (Helius
-        // omits it — see `TransactionPosition`).
-        let transaction_position = TransactionPosition {
-            signature: extract_signature(tx)?,
-            timestamp: extract_timestamp(tx)?,
-            slot: tx.slot,
-            transaction_index: tx.transaction_index,
-        };
+    fn extract_events(&self, tx: &TransactionView) -> CoreResult<ExtractionOutcome> {
+        // Step 1: extract wire events from the inner-instruction payloads.
+        let wire_outcome = extract_wire_events(tx, &self.program_id);
 
-        // Step 1: extract wire events from inner instructions.
-        let wire_outcome = extract_wire_events(tx, &self.program_id_str);
-
-        // Step 2: translate each wire event into a domain event.
-        translate_extracted_events(wire_outcome, self.protocol, transaction_position)
+        // Step 2: translate each wire event into a domain event. The
+        // coordinate comes ready-made on the view — whichever source filled it.
+        translate_extracted_events(wire_outcome, self.protocol, tx.position)
     }
 }
 

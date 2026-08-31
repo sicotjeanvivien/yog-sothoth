@@ -7,12 +7,12 @@
 
 use crate::CoreResult;
 use crate::application::extraction::EventExtractor;
+use crate::application::extraction::TransactionView;
 use crate::application::extraction::{
     ExtractionOutcome,
     meteora::{MeteoraDammV1, MeteoraDammV2, MeteoraDlmm},
 };
 use crate::domain::Protocol;
-use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 
 /// Routes extraction calls to the appropriate per-protocol handler.
 pub struct ExtractionDispatcher {
@@ -35,7 +35,7 @@ impl ExtractionDispatcher {
     pub fn extract(
         &self,
         protocol: Protocol,
-        tx: &EncodedConfirmedTransactionWithStatusMeta,
+        tx: &TransactionView,
     ) -> CoreResult<ExtractionOutcome> {
         match protocol {
             Protocol::MeteoraDammV2 => self.damm_v2.extract_events(tx),

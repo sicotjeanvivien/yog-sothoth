@@ -15,12 +15,12 @@
 use std::path::PathBuf;
 
 use sqlx::PgPool;
+use yog_core::application::extraction::rpc::{self, EncodedConfirmedTransactionWithStatusMeta};
 use yog_core::application::extraction::{EventExtractor, MeteoraDammV2};
 use yog_core::domain::{
     DomainEvent, InsertOutcome, MeteoraDammV2Event, MeteoraDammV2SwapEvent,
     MeteoraDammV2SwapEventRepository,
 };
-use yog_core::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 use yog_persistence::PgMeteoraDammV2SwapEventRepository;
 
 /// The mainnet transaction `2qJrr…`: two swaps on the **same pool**, in
@@ -38,8 +38,9 @@ pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
     let tx: EncodedConfirmedTransactionWithStatusMeta =
         serde_json::from_str(&raw).expect("fixture is not a valid RPC transaction");
 
+    let view = rpc::from_rpc(&tx).expect("fixture is not adaptable");
     let outcome = MeteoraDammV2::new()
-        .extract_events(&tx)
+        .extract_events(&view)
         .expect("extraction failed on the fixture");
 
     outcome

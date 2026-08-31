@@ -3,9 +3,9 @@
 //! Bridges three pieces:
 //! - the generic Anchor event_cpi decoder ([`crate::protocols::anchor_event`])
 //! - the DAMM v2 wire event mirrors ([`super::events`])
-//! - the Solana transaction format ([`EncodedConfirmedTransactionWithStatusMeta`])
+//! - the neutral transaction shape ([`TransactionView`])
 //!
-//! The extractor walks every inner instruction targeted at the cp-amm
+//! The extractor walks every inner-instruction payload targeted at the cp-amm
 //! program, decodes those that look like Anchor self-CPI event emissions,
 //! and dispatches each one to the matching wire event struct based on its
 //! 8-byte discriminator.
@@ -24,12 +24,12 @@
 //! Each failure carries enough structured information for the caller (in
 //! `indexer/`) to log it and emit metrics with appropriate cardinality.
 
-use crate::solana_types::EncodedConfirmedTransactionWithStatusMeta;
 use borsh::BorshDeserialize;
+use solana_pubkey::Pubkey;
 
 use crate::{
     application::extraction::{
-        DISCRIMINATOR_LEN, decode_anchor_event_cpi, extract_anchor_event_cpis,
+        DISCRIMINATOR_LEN, TransactionView, decode_anchor_event_cpi, extract_anchor_event_cpis,
     },
     error::AnchorDecodeError,
 };
@@ -140,19 +140,15 @@ pub enum ExtractFailure {
 
 /// Extract every DAMM v2 wire event the transaction emitted.
 ///
-/// `program_id_str` is the cp-amm program ID as a base58 string — it must
-/// match exactly the program ID that appears in the transaction's inner
-/// instructions (e.g. `"cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"` for
-/// mainnet).
+/// `program_id` is the cp-amm program ID — it must match the program the
+/// transaction's inner instructions were addressed to (e.g.
+/// `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` on mainnet).
 ///
 /// Never errors out. A transaction with no inner instructions, no events
 /// for cp-amm, or only events we don't recognize all return a well-formed
 /// [`ExtractedEvents`].
-pub fn extract_wire_events(
-    tx: &EncodedConfirmedTransactionWithStatusMeta,
-    program_id_str: &str,
-) -> ExtractedEvents {
-    let raw_payloads = extract_anchor_event_cpis(tx, program_id_str);
+pub fn extract_wire_events(tx: &TransactionView, program_id: &Pubkey) -> ExtractedEvents {
+    let raw_payloads = extract_anchor_event_cpis(tx, program_id);
 
     // Pre-compute discriminators once per transaction.
     let known = KnownDiscriminators {

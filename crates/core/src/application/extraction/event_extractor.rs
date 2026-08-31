@@ -1,13 +1,17 @@
-// use solana_transaction_status::EncodedConfirmedTransactionWithStatusMeta;
+use solana_pubkey::Pubkey;
 
-use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
-
-use crate::{CoreResult, application::extraction::ExtractionOutcome};
+use crate::{
+    CoreResult,
+    application::extraction::{ExtractionOutcome, TransactionView},
+};
 
 /// Common interface for all supported AMM protocols.
 ///
 /// Each protocol implements this trait. The indexer dispatches incoming
 /// transactions to the correct implementation based on `program_id()`.
+///
+/// The transaction arrives as a [`TransactionView`] — the neutral shape every
+/// source adapter produces — so no implementation names a transport.
 ///
 /// # Contract
 ///
@@ -22,12 +26,9 @@ use crate::{CoreResult, application::extraction::ExtractionOutcome};
 /// for transaction-level malformations (no log messages, no inner
 /// instructions when they were required, etc.).
 pub trait EventExtractor: Send + Sync {
-    /// Program ID this indexer handles, as base58 string.
-    fn program_id(&self) -> &str;
+    /// Program ID this indexer handles.
+    fn program_id(&self) -> Pubkey;
 
     /// Extract every domain event the transaction emitted for this protocol.
-    fn extract_events(
-        &self,
-        tx: &EncodedConfirmedTransactionWithStatusMeta,
-    ) -> CoreResult<ExtractionOutcome>;
+    fn extract_events(&self, tx: &TransactionView) -> CoreResult<ExtractionOutcome>;
 }
