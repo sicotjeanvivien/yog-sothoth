@@ -8,6 +8,17 @@
 # script shell en CRLF casse dans un conteneur Linux.
 * text=auto eol=lf
 
+# ⚠️ Portée de cette règle sur les migrations. Elle force LF **à l'extraction**,
+# `.sql` compris. Un clone fait sous Windows avec core.autocrlf=true a
+# aujourd'hui des `.sql` en CRLF sur son disque ; en tirant ce commit, ils
+# passent en LF, leur somme de contrôle change, et sqlx la compare à celle que
+# `_sqlx_migrations` a enregistrée à l'époque CRLF — chaque process échoue au
+# démarrage sur VersionMismatch, dont le seul remède connu ici est de recréer la
+# base. Aucun clone dans ce cas au 1er septembre 2026 (le seul est en WSL2,
+# autocrlf non défini, donc déjà en LF sur disque), et la renormalisation qui
+# accompagne ce fichier ne touche aucun `.sql` dans l'index. Mais la garantie
+# vaut pour l'index et pour les clones autocrlf non défini, pas universellement.
+
 # Binaires : jamais normalisés, jamais diffés comme du texte.
 *.png binary
 *.ico binary
