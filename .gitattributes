@@ -1,0 +1,14 @@
+# Fins de ligne : LF partout, dans l'index comme dans la copie de travail, quelle
+# que soit la plateforme. Sans ce fichier, elles dépendent de l'éditeur : une
+# simple édition par outil a converti .github/workflows/crates.yml en entier
+# pendant la PR #126, noyant 110 lignes de vrai changement dans un diff de 722.
+#
+# `eol=lf` et pas seulement `text=auto` : un clone Windows avec
+# core.autocrlf=true recevrait sinon des CRLF dans la copie de travail, et un
+# script shell en CRLF casse dans un conteneur Linux.
+* text=auto eol=lf
+
+# Binaires : jamais normalisés, jamais diffés comme du texte.
+*.png binary
+*.ico binary
+*.webp binary
