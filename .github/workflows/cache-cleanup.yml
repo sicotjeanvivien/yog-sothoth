@@ -12,6 +12,16 @@
 #   - une fois par semaine → filet de rattrapage sur les refs de PR fermées,
 #                            puis élagage des générations mortes de `main`.
 #
+# ⚠️ Deux familles ne sont PAS surveillées, et le quota peut donc encore dériver
+# par là. Les blobs buildkit de `web-docker.yml` (`cache-to: type=gha,mode=max`)
+# ne s'élaguent pas à l'entrée sans orpheliner leur manifeste : il leur faut une
+# règle qui supprime la portée entière, à décider pour elle-même. Et
+# `actions/setup-node` (`cache: npm`, `web-quality.yml`) écrit une entrée par
+# hachage de `package-lock.json` sans que rien n'efface les précédentes — aucune
+# n'existait au 1er septembre 2026, donc le format exact de sa clé n'a pas pu
+# être observé, et on n'écrit pas une règle de suppression contre un format
+# deviné.
+#
 # `rust-cache` écrit une entrée par (job, chaîne d'outils, hachage des
 # dépendances). Il restaure par préfixe et prend la plus récente ; les
 # précédentes ne sont jamais lues et attendent l'éviction.
@@ -28,8 +38,12 @@ on:
     inputs:
       dry_run:
         description: "N'afficher que ce qui serait supprimé"
-        type: string
-        default: "true"
+        # boolean et pas string : un champ texte rend "True", "yes", "1" ou une
+        # valeur vidée, qui échouent tous le test `= "true"` plus bas et arment
+        # donc la suppression pour de bon. La case à cocher rend exactement
+        # `true` ou `false`, et reste vide sur `schedule`.
+        type: boolean
+        default: true
 
 # La ref est dans le groupe : sans elle, fusionner trois PR coup sur coup fait
 # évincer la seconde par la troisième — GitHub ne garde qu'une run en attente
@@ -66,7 +80,12 @@ jobs:
           REF: refs/pull/${{ github.event.number }}/merge
         run: |
           set -euo pipefail
-          echo "avant : $(gh cache list --ref "$REF" --limit 100 --json id --jq 'length') entrée(s)"
+          # Par l'API paginée : `gh cache list --limit 100` sature à 100, et une
+          # PR touchant `web/**` peut dépasser ça à elle seule — buildkit écrit
+          # une entrée par blob de couche.
+          n=$(gh api --paginate "repos/$GH_REPO/actions/caches?per_page=100&ref=$REF" \
+                -q '.actions_caches[].id' | wc -l)
+          echo "avant : $n entrée(s)"
           gh cache delete --all --ref "$REF" --succeed-on-no-caches
           echo "- purge de \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
 
@@ -102,14 +121,28 @@ jobs:
           refs=$(jq -r '[.[] | select(.ref | startswith("refs/pull/")) | .ref] | unique[]' caches.json)
           [ -z "$refs" ] && { echo "aucun cache sur une ref de PR"; exit 0; }
           for ref in $refs; do
-            n=$(echo "$ref" | sed 's|refs/pull/\([0-9]*\)/merge|\1|')
-            state=$(gh pr view "$n" --json state -q .state 2>/dev/null || echo UNKNOWN)
-            if [ "$state" = "OPEN" ]; then
-              echo "PR $n ouverte — on garde ses caches"
+            n=$(echo "$ref" | sed -n 's|^refs/pull/\([0-9][0-9]*\)/merge$|\1|p')
+            if [ -z "$n" ]; then
+              echo "::warning::$ref n'a pas la forme attendue — on ne touche pas"
+              continue
+            fi
+            state=$(gh pr view "$n" --json state -q .state 2>/dev/null || echo INDETERMINE)
+
+            # ⚠️ On n'autorise la suppression que sur un état EXPLICITE. Un 502
+            # ou une limite de débit sur `gh pr view` rendrait INDETERMINE, et
+            # échouer « ouvert » ici supprimerait les caches d'une PR encore en
+            # cours — précisément le job froid à 176 s que ce workflow existe
+            # pour éviter. Dans le doute, on garde.
+            case "$state" in
+              CLOSED|MERGED) ;;
+              *) echo "PR $n : $state — on garde ses caches"; continue ;;
+            esac
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "PR $n : $state → serait purgée ($ref)"
               continue
             fi
             echo "PR $n : $state → purge de $ref"
-            if [ "$DRY_RUN" = "true" ]; then continue; fi
             gh cache delete --all --ref "$ref" --succeed-on-no-caches \
               || echo "::warning::purge de $ref impossible"
           done
@@ -180,7 +213,12 @@ jobs:
           done < <(jq -r '.drop[] | "\(.id) \(.key)"' plan.json)
 
           echo "$gone / $expected supprimée(s)"
-          if [ "$expected" -gt 0 ] && [ "$gone" -eq 0 ]; then
+          # `-gt 1` et non `-gt 0` : avec une seule entrée à supprimer, une
+          # éviction survenue entre l'inventaire et la suppression donne
+          # exactement le même compte qu'un droit manquant, et c'est le message
+          # trompeur qu'on lirait. À partir de deux, tout échouer n'est plus une
+          # course.
+          if [ "$expected" -gt 1 ] && [ "$gone" -eq 0 ]; then
             echo "::error::aucune suppression n'a abouti — droit actions:write manquant ?"
             exit 1
           fi
