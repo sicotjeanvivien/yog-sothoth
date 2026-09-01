@@ -162,7 +162,7 @@ cargo fmt --all
 cargo test --workspace --all-features
 
 # Native crates only — yog-wasm is excluded (deferred scaffold)
-cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer \
+cargo clippy -p yog-api -p yog-bootstrap -p yog-core -p yog-context -p yog-indexer \
     -p yog-persistence -p yog-signals \
     --all-targets --all-features -- -D warnings
 
