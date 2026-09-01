@@ -101,8 +101,16 @@ jobs:
   # Cache: this job's entry measures 492MB, next to 364MB for `check` and
   # 578MB for `test`. Read 1 Sept 2026 with `gh cache list` — the repo was
   # then at 9.96GB against GitHub's 10GB quota, so it is already evicting
-  # LRU. One more entry per ref is the cost here; the matrix this ticket
-  # first retained would have added eight.
+  # LRU. `rust-cache` saves per ref by default, which would add one 492MB
+  # entry PER BRANCH and make the eviction it is measured against likelier:
+  # the warm numbers above were read while `check` was warm off main's
+  # cache, the very entry this job would help push out. Hence `save-if` on
+  # main only below — restore stays available to PRs, which read their base
+  # branch's caches, so the cost is one entry total instead of one per
+  # branch. The trade: the first run on main after a merge pays the cold
+  # 176s, and a PR that moves Cargo.lock restores a partial entry.
+  #
+  # The matrix this ticket first retained would have added eight entries.
   check-per-crate:
     name: Check (per crate)
     runs-on: ubuntu-latest
@@ -110,6 +118,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # One cache entry for this job, not one per branch — see the note
+          # on the 10GB quota above. PRs still restore it from main.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Every workspace member compiles on its own
         run: |
           # GitHub's default shell is `bash -e`, errexit only: without

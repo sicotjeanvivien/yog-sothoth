@@ -32,17 +32,19 @@ cargo fmt --all
 # Measured 31 Aug 2026: `cargo check -p yog-core` returned 261 errors while
 # `--workspace` was green. To reproduce that failure locally:
 crates=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name')
-echo "checking $(echo "$crates" | grep -c .) members"   # 0 here means jq is missing
+n=$(echo "$crates" | grep -c . || true)
+[ "$n" -ge 2 ] || echo "⚠️  $n membre(s) — jq absent ? rien n'a été compilé"
 solo=""
 for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
-[ -z "$solo" ] || echo "❌ ne compilent plus seules :$solo"
+[ -n "$solo" ] && echo "❌ ne compilent plus seules :$solo" || echo "✅ $n/$n compilent seules"
 
-# The CI job `check-per-crate` runs this loop, plus a guard that fails when the
-# member list comes back empty — silence is the pass signal here, so print the
-# count rather than trusting it. Two gaps the job does NOT close: it compiles
-# each crate with its DEFAULT features, and it skips test/bench targets, so a
-# feature only some `--all-features` or dev-dependency path needs is still
-# checked in one grouped invocation, and still maskable.
+# The CI job `check-per-crate` runs this loop with the same two guards, and
+# fails the build on either. Neither ends in silence: an empty member list and
+# a clean pass both say so out loud, because here they would otherwise look
+# alike. Two gaps the job does NOT close: it compiles each crate with its
+# DEFAULT features, and it skips test/bench targets — so a feature that only
+# an `--all-features` or dev-dependency path needs is still checked in one
+# grouped invocation, and still maskable.
 
 # Lint — the seven native crates (yog-wasm is excluded; it's a deferred
 # scaffold). Every one must be named: clippy only DRIVES the packages given
@@ -103,7 +105,7 @@ cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
 
 ⚠️ **The trailing flags are not optional.** A bare `cargo sqlx prepare` only compiles the lib and bins, so it never sees the `query!` calls inside `tests/` — and rather than leaving them alone it **deletes their cache entries**. Measured 7 August 2026: the bare form dropped the two `meteora_damm_v2_pool_properties` queries of `tests/pool_properties.rs`. `--all-features` is what un-gates those tests (`integration-tests`); `--all-targets` is what compiles them.
 
-⚠️ **And `sqlx-check` will not catch it.** The CI job runs `cargo sqlx prepare --check -- --tests` (`.github/workflows/crates.yml:299`) — no `--all-features`, so `tests/main.rs` stays `#![cfg(…)]`-gated out and those two queries are never expanded. `--check` also tolerates *extra* cache entries, which is why CI is green today with entries it does not verify. So a bare `prepare` sails past `sqlx-check` and surfaces later as an **offline compile error in the `test-integration` job** — a failure far from its cause. Aligning the CI flags with the ones above would close that gap.
+⚠️ **And `sqlx-check` will not catch it.** The CI job runs `cargo sqlx prepare --check -- --tests` (the `Verify .sqlx/ is up to date` step of `.github/workflows/crates.yml`) — no `--all-features`, so `tests/main.rs` stays `#![cfg(…)]`-gated out and those two queries are never expanded. `--check` also tolerates *extra* cache entries, which is why CI is green today with entries it does not verify. So a bare `prepare` sails past `sqlx-check` and surfaces later as an **offline compile error in the `test-integration` job** — a failure far from its cause. Aligning the CI flags with the ones above would close that gap.
 
 ## Choosing how to write a query (decided 2026-06; no SeaQuery/ORM)
 
