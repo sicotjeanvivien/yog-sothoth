@@ -9,6 +9,9 @@ build
 .gitignore
 .vscode
 .idea
+# Les deux formes : `*` ne traverse pas les `/` en .dockerignore
+*:Zone.Identifier
+**/*:Zone.Identifier
 *.md
 Dockerfile
 .dockerignore
