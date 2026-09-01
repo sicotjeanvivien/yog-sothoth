@@ -1,0 +1,224 @@
+# Ménage du cache Actions.
+#
+# Le quota est de 10 Go par dépôt, tous jobs et toutes refs confondus, et
+# GitHub évince en LRU une fois dessus. Rien ne nettoie de soi-même, donc du
+# cache mort s'accumule et finit par chasser du cache vivant : mesuré le
+# 1er septembre 2026, 10,44 Go dont ~7,8 Go morts, et la PR la plus récente
+# n'avait plus aucun cache pendant que ceux de trois PR fusionnées survivaient.
+# Une éviction transforme un job chaud en job froid — 42 s contre 176 s sur
+# `check-per-crate`.
+#
+#   - une PR se ferme      → ses caches partent, cette ref ne tournera plus ;
+#   - une fois par semaine → filet de rattrapage sur les refs de PR fermées,
+#                            puis élagage des générations mortes de `main`.
+#
+# ⚠️ Deux familles ne sont PAS surveillées, et le quota peut donc encore dériver
+# par là. Les blobs buildkit de `web-docker.yml` (`cache-to: type=gha,mode=max`)
+# ne s'élaguent pas à l'entrée sans orpheliner leur manifeste : il leur faut une
+# règle qui supprime la portée entière, à décider pour elle-même. Et
+# `actions/setup-node` (`cache: npm`, `web-quality.yml`) écrit une entrée par
+# hachage de `package-lock.json` sans que rien n'efface les précédentes — aucune
+# n'existait au 1er septembre 2026, donc le format exact de sa clé n'a pas pu
+# être observé, et on n'écrit pas une règle de suppression contre un format
+# deviné.
+#
+# `rust-cache` écrit une entrée par (job, chaîne d'outils, hachage des
+# dépendances). Il restaure par préfixe et prend la plus récente ; les
+# précédentes ne sont jamais lues et attendent l'éviction.
+
+name: cache-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    # Lundi 04:00 UTC, hors des heures où l'on pousse.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "N'afficher que ce qui serait supprimé"
+        # boolean et pas string : un champ texte rend "True", "yes", "1" ou une
+        # valeur vidée, qui échouent tous le test `= "true"` plus bas et arment
+        # donc la suppression pour de bon. La case à cocher rend exactement
+        # `true` ou `false`, et reste vide sur `schedule`.
+        type: boolean
+        default: true
+
+# La ref est dans le groupe : sans elle, fusionner trois PR coup sur coup fait
+# évincer la seconde par la troisième — GitHub ne garde qu'une run en attente
+# par groupe — et ses caches ne seraient jamais purgés.
+concurrency:
+  group: cache-cleanup-${{ github.ref }}
+  cancel-in-progress: false
+
+# Le dépôt est en `default_workflow_permissions: read` ; sans cette ligne,
+# toute suppression échoue en 403.
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # À la fermeture d'une PR — ses caches n'ont plus de lecteur
+  # ─────────────────────────────────────────────────────────────────
+  closed-pr:
+    name: Purge closed PR caches
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    # ↑ Sur une PR venue d'un fork, le GITHUB_TOKEN est en lecture seule quoi
+    #   qu'on écrive dans `permissions:` — le job échouerait. On la saute ici ;
+    #   c'est le balayage hebdomadaire ci-dessous qui ramasse ses caches.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete every cache of this PR's ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.number }}/merge
+        run: |
+          set -euo pipefail
+          # Par l'API paginée : `gh cache list --limit 100` sature à 100, et une
+          # PR touchant `web/**` peut dépasser ça à elle seule — buildkit écrit
+          # une entrée par blob de couche.
+          n=$(gh api --paginate "repos/$GH_REPO/actions/caches?per_page=100&ref=$REF" \
+                -q '.actions_caches[].id' | wc -l)
+          echo "avant : $n entrée(s)"
+          gh cache delete --all --ref "$REF" --succeed-on-no-caches
+          echo "- purge de \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ─────────────────────────────────────────────────────────────────
+  # Hebdomadaire — le filet, puis l'élagage
+  # ─────────────────────────────────────────────────────────────────
+  weekly:
+    name: Weekly cache sweep
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      # Vide sur `schedule` — donc on supprime pour de bon. Sur un
+      # déclenchement manuel, "true" par défaut : un job programmé qui détruit
+      # doit pouvoir être lancé à blanc.
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+    steps:
+      # `gh cache list --limit 100` rend les 100 caches les plus RÉCEMMENT
+      # UTILISÉS : au-delà de cent entrées, la fenêtre contient exactement les
+      # caches vivants et exclut la traîne morte qu'on vient supprimer. On
+      # passe donc par l'API paginée, qui les rend tous.
+      - name: Inventory every cache
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/actions/caches?per_page=100" \
+            -q '.actions_caches[]' | jq -s '.' > caches.json
+          echo "$(jq 'length' caches.json) entrée(s) au total"
+
+      - name: Sweep caches of refs whose PR is closed
+        run: |
+          set -uo pipefail
+          refs=$(jq -r '[.[] | select(.ref | startswith("refs/pull/")) | .ref] | unique[]' caches.json)
+          [ -z "$refs" ] && { echo "aucun cache sur une ref de PR"; exit 0; }
+          for ref in $refs; do
+            n=$(echo "$ref" | sed -n 's|^refs/pull/\([0-9][0-9]*\)/merge$|\1|p')
+            if [ -z "$n" ]; then
+              echo "::warning::$ref n'a pas la forme attendue — on ne touche pas"
+              continue
+            fi
+            state=$(gh pr view "$n" --json state -q .state 2>/dev/null || echo INDETERMINE)
+
+            # ⚠️ On n'autorise la suppression que sur un état EXPLICITE. Un 502
+            # ou une limite de débit sur `gh pr view` rendrait INDETERMINE, et
+            # échouer « ouvert » ici supprimerait les caches d'une PR encore en
+            # cours — précisément le job froid à 176 s que ce workflow existe
+            # pour éviter. Dans le doute, on garde.
+            case "$state" in
+              CLOSED|MERGED) ;;
+              *) echo "PR $n : $state — on garde ses caches"; continue ;;
+            esac
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "PR $n : $state → serait purgée ($ref)"
+              continue
+            fi
+            echo "PR $n : $state → purge de $ref"
+            gh cache delete --all --ref "$ref" --succeed-on-no-caches \
+              || echo "::warning::purge de $ref impossible"
+          done
+
+      - name: Prune stale rust-cache generations on main
+        run: |
+          set -uo pipefail
+
+          # ⚠️ On ne touche QUE les clés dont on connaît la structure.
+          # `web-docker.yml` pousse `cache-to: type=gha,mode=max`, et buildkit
+          # écrit une entrée par blob de couche, sous une clé dont le digest ne
+          # contient aucun tiret : les grouper avec la règle ci-dessous les
+          # ramènerait toutes dans un seul groupe, dont on ne garderait qu'une.
+          # On supprimerait le cache Docker et on laisserait son manifeste
+          # pointer vers des blobs disparus.
+          jq '[ .[] | select(.ref == "refs/heads/main")
+                    | select(.key | startswith("v0-rust-")) ]' caches.json > rust.json
+          n=$(jq 'length' rust.json)
+
+          # Zéro entrée est un état LÉGITIME : GitHub évince tout cache inutilisé
+          # depuis 7 jours, et les workflows sont filtrés par `paths`. Une semaine
+          # sans toucher à `crates/**` suffit. Ce n'est pas une erreur — l'échec
+          # d'inventaire, lui, a déjà arrêté l'étape précédente.
+          if [ "$n" -eq 0 ]; then
+            echo "aucune entrée rust-cache sur main — rien à élaguer"
+            exit 0
+          fi
+
+          # Groupé par IDENTITÉ DE JOB — la clé moins ses DEUX derniers segments
+          # — et non par préfixe de restauration. Le premier hachage est celui de
+          # la chaîne d'outils : grouper par préfixe laisserait, à chaque montée
+          # de version, l'ancienne famille en groupe d'un seul élément que rien
+          # n'élaguerait jamais, alors qu'elle ne peut plus être restaurée.
+          jq '
+            group_by(.key | sub("-[^-]+-[^-]+$"; ""))
+            | map(sort_by(.created_at) | reverse)
+            | { keep: map(.[0]), drop: (map(.[1:]) | add // []) }
+          ' rust.json > plan.json
+
+          {
+            echo "### Cache de \`main\`"
+            echo
+            echo "**Gardées** — la plus récente de chaque job :"
+            jq -r '.keep[] | "- `\(.key)` — \(.size_in_bytes/1048576|floor) Mo"' plan.json
+            echo
+            echo "**Périmées** :"
+            jq -r '.drop[] | "- `\(.key)` — \(.size_in_bytes/1048576|floor) Mo"' plan.json
+            jq -r '"\n_À libérer : \((([.drop[].size_in_bytes]|add) // 0)/1073741824*100|floor/100) Go_"' plan.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "dry_run — rien n'est supprimé"
+            exit 0
+          fi
+
+          # Tolérant par entrée : GitHub peut avoir évincé une clé entre
+          # l'inventaire et la suppression. Une course ne doit pas laisser le
+          # reste de la liste non élaguée. On n'échoue que si TOUT a échoué,
+          # ce qui est le symptôme d'un droit manquant, pas d'une course.
+          expected=$(jq '.drop | length' plan.json)
+          gone=0
+          while read -r id key; do
+            if gh cache delete "$id" >/dev/null 2>&1; then
+              gone=$((gone + 1))
+            else
+              echo "::warning::$key déjà parti ou non supprimable"
+            fi
+          done < <(jq -r '.drop[] | "\(.id) \(.key)"' plan.json)
+
+          echo "$gone / $expected supprimée(s)"
+          # `-gt 1` et non `-gt 0` : avec une seule entrée à supprimer, une
+          # éviction survenue entre l'inventaire et la suppression donne
+          # exactement le même compte qu'un droit manquant, et c'est le message
+          # trompeur qu'on lirait. À partir de deux, tout échouer n'est plus une
+          # course.
+          if [ "$expected" -gt 1 ] && [ "$gone" -eq 0 ]; then
+            echo "::error::aucune suppression n'a abouti — droit actions:write manquant ?"
+            exit 1
+          fi
