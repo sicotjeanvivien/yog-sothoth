@@ -86,8 +86,8 @@ jobs:
   # which could mask the very gap we are looking for.
   #
   # Cost, MEASURED on this workflow (PR #126, 1 Sept 2026): 176s on the very
-  # first run — a new job name has no cache to restore — then 50s once it has
-  # its own. `Check` was 37s / 27s on those same two runs, but was warm both
+  # first run — a new job name has no cache to restore — then 42-50s over the
+  # three runs that followed, once it had its own. `Check` was 37s / 27s on those same two runs, but was warm both
   # times (its cache came from main). Eight separate invocations do not share
   # the artifacts of one grouped invocation; that gap is the price of the
   # guard. Wall clock: `Test (integration, DB)` sets it at ~130s, so at 50s
