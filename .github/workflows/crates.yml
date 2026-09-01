@@ -1,15 +1,22 @@
 # Quality checks for the Rust workspace.
 #
-# Five jobs in parallel:
-#   - check    : `cargo check` across the whole workspace (catches
-#                anything that doesn't compile, including the WASM
-#                crate's host build).
-#   - fmt      : `cargo fmt --check`.
-#   - clippy   : `cargo clippy` over the native crates (WASM target
-#                still disabled until v0.3).
-#   - test     : `cargo test` over the native crates.
-#   - audit    : `cargo audit` on Cargo.lock — vulnerability scan of
-#                the dependency tree.
+# Eight jobs in parallel:
+#   - check            : `cargo check` across the whole workspace (catches
+#                        anything that doesn't compile, including the WASM
+#                        crate's host build).
+#   - check-per-crate  : `cargo check -p <crate>`, once per workspace member —
+#                        catches a crate that only compiles because a sibling
+#                        in the same invocation enables a feature for it.
+#   - fmt              : `cargo fmt --check`.
+#   - clippy           : `cargo clippy` over the native crates (WASM target
+#                        still disabled until v0.3).
+#   - test             : `cargo test` over the native crates.
+#   - test-integration : the DB-backed tests, behind the `integration-tests`
+#                        feature, against a real TimescaleDB.
+#   - audit            : `cargo audit` on Cargo.lock — vulnerability scan of
+#                        the dependency tree.
+#   - sqlx-check       : the committed `.sqlx/` cache still matches the
+#                        `query!` macros, against a freshly migrated database.
 #
 # Rust version is pinned by /rust-toolchain.toml — `dtolnay/rust-toolchain@stable`
 # reads it automatically, so we never silently inherit a moving target.
@@ -58,6 +65,61 @@ jobs:
       # yog-persistence, yog-indexer, yog-api, yog-context, yog-wasm)
       # without listing them. New crates are picked up automatically.
       - run: cargo check --workspace --all-targets
+
+  # ─────────────────────────────────────────────────────────────────
+  # check-per-crate — does every member still compile ON ITS OWN?
+  # ─────────────────────────────────────────────────────────────────
+  # Cargo unifies features PER INVOCATION. `check` above passes the whole
+  # workspace to a single `cargo` call, so every member silently inherits
+  # the features its siblings ask for: a crate that forgot to declare one
+  # gets it for free and stays green. One call per crate has nothing to
+  # unify. Measured 31 August 2026: `cargo check -p yog-core` returned 261
+  # errors while `cargo check --workspace --all-targets` was green, and no
+  # job in this file could tell.
+  #
+  # This does NOT replace `check` — that one covers test and bench targets
+  # this loop deliberately leaves out. They are complementary.
+  #
+  # No `--all-targets` here: cheaper AND stricter. Under resolver v2, not
+  # building test targets also avoids unifying dev-dependency features,
+  # which could mask the very gap we are looking for.
+  #
+  # Cost, measured on this workflow: TODO_COLD (cold cache) / TODO_WARM
+  # (warm cache), against TODO_CHECK for the `check` job of the same run.
+  check-per-crate:
+    name: Check (per crate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Every workspace member compiles on its own
+        run: |
+          crates=$(cargo metadata --no-deps --format-version 1 \
+                   | jq -r '.packages[].name')
+          n=$(echo "$crates" | grep -c . || true)
+          echo "$n members: $(echo $crates | tr '\n' ' ')"
+
+          # An empty list would sail through the loop below without
+          # compiling anything, and report green. Fail loudly instead.
+          if [ "$n" -lt 2 ]; then
+            echo "::error::cargo metadata returned $n member(s) — cannot check anything"
+            exit 1
+          fi
+
+          # Keep going after a failure so one run names EVERY offending
+          # crate, the way a `fail-fast: false` matrix would.
+          fail=0
+          for p in $crates; do
+            echo "::group::cargo check -p $p"
+            if ! cargo check -p "$p"; then
+              echo "::error::$p no longer compiles on its own"
+              echo "- \`$p\` no longer compiles on its own" >> "$GITHUB_STEP_SUMMARY"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $fail
 
   fmt:
     name: Format
