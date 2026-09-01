@@ -178,7 +178,7 @@ The Rust version is pinned in `rust-toolchain.toml` at the repo root — don't o
 
 GitHub Actions runs on every push and PR to `main`:
 
-- **`crates.yml`** — Rust workspace: `check`, `fmt`, `clippy -D warnings`, `test`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
+- **`crates.yml`** — Rust workspace: `check`, `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
 - **`web-quality.yml`** / **`web-docker.yml`** — the frontend (see [`web/README.md`](../web/README.md))
 
 ---

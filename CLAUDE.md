@@ -25,6 +25,15 @@ All Rust commands run from the repo root. Toolchain is pinned in `rust-toolchain
 cargo build
 cargo fmt --all
 
+# ⚠️ Every command in this block passes several crates to ONE `cargo` call, and
+# Cargo unifies features per call: a crate that forgot to declare a feature is
+# handed it by a sibling and stays green. Measured 31 Aug 2026 — `cargo check
+# -p yog-core` returned 261 errors while `--workspace` was green. The CI job
+# `check-per-crate` guards this; to reproduce a failure locally:
+for p in $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name'); do
+  cargo check -p "$p" || echo "❌ $p ne compile plus seule"
+done
+
 # Lint — native crates only (yog-wasm is excluded; it's a deferred scaffold)
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
     -p yog-signals --all-targets --all-features -- -D warnings
