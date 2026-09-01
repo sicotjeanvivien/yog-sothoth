@@ -17,6 +17,11 @@ web/.env.*.local
 # OS
 .DS_Store
 Thumbs.db
+# Métadonnée Windows « ce fichier vient d'Internet », attachée en flux annexe
+# invisible sous Windows — mais que WSL expose comme un fichier à part entière,
+# qu'un `git add .` ramasse sans que personne le voie. Trois s'étaient glissés
+# dans web/public/ avec ddd3506.
+*:Zone.Identifier
 
 # IDE
 .vscode/
