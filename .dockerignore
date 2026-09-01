@@ -33,6 +33,11 @@ web/.next/
 .idea/
 .DS_Store
 *.swp
+# Métadonnée Windows exposée en fichier par WSL. Les deux formes sont
+# nécessaires : en .dockerignore, `*` ne traverse pas les `/` — vérifié, le
+# motif seul laisse passer public/logo.png:Zone.Identifier.
+*:Zone.Identifier
+**/*:Zone.Identifier
 
 # Test / coverage / cache
 *.profraw
