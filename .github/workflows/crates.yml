@@ -84,8 +84,14 @@ jobs:
   # building test targets also avoids unifying dev-dependency features,
   # which could mask the very gap we are looking for.
   #
-  # Cost, measured on this workflow: TODO_COLD (cold cache) / TODO_WARM
-  # (warm cache), against TODO_CHECK for the `check` job of the same run.
+  # Cost, MEASURED on this workflow (PR #126, 1 Sept 2026): 176s on the very
+  # first run — a new job name has no cache to restore — then 50s once it has
+  # its own. `Check` was 37s / 27s on those same two runs, but was warm both
+  # times (its cache came from main). Eight separate invocations do not share
+  # the artifacts of one grouped invocation; that gap is the price of the
+  # guard. Wall clock: `Test (integration, DB)` sets it at ~130s, so at 50s
+  # this job adds nothing; the 176s cold run is the one time it was the
+  # longest job (+45s), and it happens once per new cache.
   check-per-crate:
     name: Check (per crate)
     runs-on: ubuntu-latest
