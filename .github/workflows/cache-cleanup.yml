@@ -12,15 +12,20 @@
 #   - une fois par semaine → filet de rattrapage sur les refs de PR fermées,
 #                            puis élagage des générations mortes de `main`.
 #
-# ⚠️ Deux familles ne sont PAS surveillées, et le quota peut donc encore dériver
-# par là. Les blobs buildkit de `web-docker.yml` (`cache-to: type=gha,mode=max`)
-# ne s'élaguent pas à l'entrée sans orpheliner leur manifeste : il leur faut une
-# règle qui supprime la portée entière, à décider pour elle-même. Et
-# `actions/setup-node` (`cache: npm`, `web-quality.yml`) écrit une entrée par
-# hachage de `package-lock.json` sans que rien n'efface les précédentes — aucune
-# n'existait au 1er septembre 2026, donc le format exact de sa clé n'a pas pu
-# être observé, et on n'écrit pas une règle de suppression contre un format
-# deviné.
+# Trois familles écrivent sur `main`, et chacune demande sa propre règle. Elles
+# vivent dans `.github/cache-rules.jq`, fichier séparé pour être exécutable tel
+# quel en local — c'est ainsi qu'il a été éprouvé, et les trois formats de clé
+# y sont écrits tels que relevés le 1er septembre 2026, pas supposés.
+#
+# rust-cache et setup-node s'élaguent par génération : on garde la plus récente
+# de chaque identité de job. Le nombre de segments à retirer de la clé DIFFÈRE
+# entre les deux — deux hachages d'un côté, un seul de l'autre — et c'est
+# exactement ce qu'on aurait eu faux en supposant une forme commune.
+#
+# buildkit ne s'élague PAS à l'entrée : rien ne permet de rattacher un blob à
+# son index, et supprimer des blobs en gardant l'index laisse un manifeste qui
+# pointe vers des couches absentes — le cache n'est pas diminué, il est
+# corrompu. D'où une règle de portée entière, déclenchée par un budget.
 #
 # `rust-cache` écrit une entrée par (job, chaîne d'outils, hachage des
 # dépendances). Il restaure par préfixe et prend la plus récente ; les
@@ -104,6 +109,9 @@ jobs:
       # doit pouvoir être lancé à blanc.
       DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
+      # Le fichier de règles est versionné : il faut le dépôt.
+      - uses: actions/checkout@v4
+
       # `gh cache list --limit 100` rend les 100 caches les plus RÉCEMMENT
       # UTILISÉS : au-delà de cent entrées, la fenêtre contient exactement les
       # caches vivants et exclut la traîne morte qu'on vient supprimer. On
@@ -147,46 +155,45 @@ jobs:
               || echo "::warning::purge de $ref impossible"
           done
 
-      - name: Prune stale rust-cache generations on main
+      - name: Prune main's cache, one rule per family
+        env:
+          # Budget de la portée buildkit. Au-delà, elle part en ENTIER et la
+          # construction suivante repart à froid — c'est le cache le moins cher
+          # à perdre (une image) face aux caches rust, qui servent chaque PR.
+          # Mesurée à 0,47 Go le 1er septembre 2026 pour un quota de dépôt de
+          # 10 Go : la règle est inerte aujourd'hui et mordra quand la famille
+          # aura quadruplé.
+          BUILDKIT_BUDGET: "2147483648"
         run: |
           set -uo pipefail
 
-          # ⚠️ On ne touche QUE les clés dont on connaît la structure.
-          # `web-docker.yml` pousse `cache-to: type=gha,mode=max`, et buildkit
-          # écrit une entrée par blob de couche, sous une clé dont le digest ne
-          # contient aucun tiret : les grouper avec la règle ci-dessous les
-          # ramènerait toutes dans un seul groupe, dont on ne garderait qu'une.
-          # On supprimerait le cache Docker et on laisserait son manifeste
-          # pointer vers des blobs disparus.
-          jq '[ .[] | select(.ref == "refs/heads/main")
-                    | select(.key | startswith("v0-rust-")) ]' caches.json > rust.json
-          n=$(jq 'length' rust.json)
+          n=$(jq '[ .[] | select(.ref == "refs/heads/main") ] | length' caches.json)
 
           # Zéro entrée est un état LÉGITIME : GitHub évince tout cache inutilisé
           # depuis 7 jours, et les workflows sont filtrés par `paths`. Une semaine
-          # sans toucher à `crates/**` suffit. Ce n'est pas une erreur — l'échec
-          # d'inventaire, lui, a déjà arrêté l'étape précédente.
+          # calme suffit. Ce n'est pas une erreur — l'échec d'inventaire, lui, a
+          # déjà arrêté l'étape précédente.
           if [ "$n" -eq 0 ]; then
-            echo "aucune entrée rust-cache sur main — rien à élaguer"
+            echo "aucun cache sur main — rien à élaguer"
             exit 0
           fi
 
-          # Groupé par IDENTITÉ DE JOB — la clé moins ses DEUX derniers segments
-          # — et non par préfixe de restauration. Le premier hachage est celui de
-          # la chaîne d'outils : grouper par préfixe laisserait, à chaque montée
-          # de version, l'ancienne famille en groupe d'un seul élément que rien
-          # n'élaguerait jamais, alors qu'elle ne peut plus être restaurée.
-          jq '
-            group_by(.key | sub("-[^-]+-[^-]+$"; ""))
-            | map(sort_by(.created_at) | reverse)
-            | { keep: map(.[0]), drop: (map(.[1:]) | add // []) }
-          ' rust.json > plan.json
+          jq --argjson budget "$BUILDKIT_BUDGET" \
+             -f .github/cache-rules.jq caches.json > plan.json
 
           {
-            echo "### Cache de \`main\`"
+            echo "### Cache de \`main\` — $n entrée(s)"
             echo
-            echo "**Gardées** — la plus récente de chaque job :"
-            jq -r '.keep[] | "- `\(.key)` — \(.size_in_bytes/1048576|floor) Mo"' plan.json
+            jq -r '"| famille | gardées | supprimées |",
+                   "|---|---|---|",
+                   "| rust-cache | \(.rust.keep|length) | \(.rust.drop|length) |",
+                   "| setup-node | \(.node.keep|length) | \(.node.drop|length) |",
+                   "| buildkit | \(.buildkit.keep|length) | \(.buildkit.drop|length) |"' plan.json
+            echo
+            jq -r 'if .buildkit.over
+                   then "⚠️ Portée buildkit à \(.buildkit.used/1073741824*100|floor/100) Go, au-dessus du budget — elle part en entier, index compris."
+                   else "Portée buildkit à \(.buildkit.used/1073741824*100|floor/100) Go, sous le budget — intacte."
+                   end' plan.json
             echo
             echo "**Périmées** :"
             jq -r '.drop[] | "- `\(.key)` — \(.size_in_bytes/1048576|floor) Mo"' plan.json
@@ -200,8 +207,7 @@ jobs:
 
           # Tolérant par entrée : GitHub peut avoir évincé une clé entre
           # l'inventaire et la suppression. Une course ne doit pas laisser le
-          # reste de la liste non élaguée. On n'échoue que si TOUT a échoué,
-          # ce qui est le symptôme d'un droit manquant, pas d'une course.
+          # reste de la liste non élagué.
           expected=$(jq '.drop | length' plan.json)
           gone=0
           while read -r id key; do
