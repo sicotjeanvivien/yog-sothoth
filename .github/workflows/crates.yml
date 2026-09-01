@@ -8,9 +8,10 @@
 #                        catches a crate that only compiles because a sibling
 #                        in the same invocation enables a feature for it.
 #   - fmt              : `cargo fmt --check`.
-#   - clippy           : `cargo clippy` over the native crates (WASM target
-#                        still disabled until v0.3).
-#   - test             : `cargo test` over the native crates.
+#   - clippy           : `cargo clippy` over six named crates (WASM target
+#                        still disabled until v0.3; yog-bootstrap is not
+#                        listed either — see the note on the `test` job).
+#   - test             : `cargo test` over the same six named crates.
 #   - test-integration : the DB-backed tests, behind the `integration-tests`
 #                        feature, against a real TimescaleDB.
 #   - audit            : `cargo audit` on Cargo.lock — vulnerability scan of
@@ -61,10 +62,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # `cargo check --workspace` covers every member (the eight of
-      # /Cargo.toml) without listing them, so new crates are picked up
-      # automatically. What it CANNOT do is tell whether a member still
-      # compiles on its own — see `check-per-crate` below.
+      # `cargo check --workspace` covers every member without listing any,
+      # so a new crate is picked up on its own. What it CANNOT do is tell
+      # whether a member still compiles ALONE — see `check-per-crate` below.
       - run: cargo check --workspace --all-targets
 
   # ─────────────────────────────────────────────────────────────────
@@ -78,21 +78,32 @@ jobs:
   # errors while `cargo check --workspace --all-targets` was green, and no
   # job in this file could tell.
   #
-  # This does NOT replace `check` — that one covers test and bench targets
-  # this loop deliberately leaves out. They are complementary.
+  # This does NOT replace `check`, which covers the test and bench targets
+  # this loop leaves out. Note what that leaves standing: `check` reaches
+  # those targets only inside one grouped invocation, i.e. under the very
+  # unification this job exists to defeat. A dev-dependency feature nobody
+  # declared is therefore still invisible after this job — a narrower hole
+  # than the one being closed here, and one to close on its own terms.
   #
   # No `--all-targets` here: cheaper AND stricter. Under resolver v2, not
   # building test targets also avoids unifying dev-dependency features,
   # which could mask the very gap we are looking for.
   #
-  # Cost, MEASURED on this workflow (PR #126, 1 Sept 2026): 176s on the very
-  # first run — a new job name has no cache to restore — then 42-50s over the
-  # three runs that followed, once it had its own. `Check` was 37s / 27s on those same two runs, but was warm both
-  # times (its cache came from main). Eight separate invocations do not share
-  # the artifacts of one grouped invocation; that gap is the price of the
-  # guard. Wall clock: `Test (integration, DB)` sets it at ~130s, so at 50s
-  # this job adds nothing; the 176s cold run is the one time it was the
-  # longest job (+45s), and it happens once per new cache.
+  # Cost, MEASURED on this workflow (PR #126, 1 Sept 2026). First run: 176s,
+  # a new job name having no cache to restore. The three runs after it: 42s,
+  # 45s, 50s. `Check` was 27-37s across all four, but warm every time — its
+  # cache comes from main. Eight separate invocations do not share the
+  # artifacts of one grouped invocation; that gap is the price of the guard.
+  #
+  # Wall clock: `Test (integration, DB)` sets it at ~130s, so a warm run of
+  # this job adds nothing. The 176s cold run is the one time it was the
+  # longest job (+45s), and that happens once per new cache.
+  #
+  # Cache: this job's entry measures 492MB, next to 364MB for `check` and
+  # 578MB for `test`. Read 1 Sept 2026 with `gh cache list` — the repo was
+  # then at 9.96GB against GitHub's 10GB quota, so it is already evicting
+  # LRU. One more entry per ref is the cost here; the matrix this ticket
+  # first retained would have added eight.
   check-per-crate:
     name: Check (per crate)
     runs-on: ubuntu-latest

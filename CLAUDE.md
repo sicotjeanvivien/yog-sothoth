@@ -25,22 +25,24 @@ All Rust commands run from the repo root. Toolchain is pinned in `rust-toolchain
 cargo build
 cargo fmt --all
 
-# ⚠️ Cargo unifies features PER INVOCATION, so every command below that passes
-# several crates to one `cargo` call — `check --workspace`, the `clippy` and
-# `test` lines, `test --workspace` — hands each crate the features its siblings
-# asked for. A crate that forgot to declare one stays green there. Measured
-# 31 Aug 2026: `cargo check -p yog-core` returned 261 errors while
+# ⚠️ Cargo unifies features PER INVOCATION, so every command in this block that
+# passes several crates to one `cargo` call — `cargo build` above, the `clippy`
+# and `test` lines below, `test --workspace` — hands each crate the features its
+# siblings asked for. A crate that forgot to declare one stays green there.
+# Measured 31 Aug 2026: `cargo check -p yog-core` returned 261 errors while
 # `--workspace` was green. To reproduce that failure locally:
+crates=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name')
+echo "checking $(echo "$crates" | grep -c .) members"   # 0 here means jq is missing
 solo=""
-for p in $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name'); do
-  cargo check -p "$p" || solo="$solo $p"
-done
+for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 [ -z "$solo" ] || echo "❌ ne compilent plus seules :$solo"
 
-# The CI job `check-per-crate` runs exactly this loop. Note what it does NOT
-# cover: it compiles each crate with its DEFAULT features, so a feature-gated
-# path that only builds under the `--all-features` commands below is still
-# checked in a single grouped invocation, and still maskable.
+# The CI job `check-per-crate` runs this loop, plus a guard that fails when the
+# member list comes back empty — silence is the pass signal here, so print the
+# count rather than trusting it. Two gaps the job does NOT close: it compiles
+# each crate with its DEFAULT features, and it skips test/bench targets, so a
+# feature only some `--all-features` or dev-dependency path needs is still
+# checked in one grouped invocation, and still maskable.
 
 # Lint — native crates only (yog-wasm is excluded; it's a deferred scaffold)
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
