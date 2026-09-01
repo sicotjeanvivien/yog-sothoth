@@ -20,7 +20,9 @@ Thumbs.db
 # Métadonnée Windows « ce fichier vient d'Internet », attachée en flux annexe
 # invisible sous Windows — mais que WSL expose comme un fichier à part entière,
 # qu'un `git add .` ramasse sans que personne le voie. Trois s'étaient glissés
-# dans web/public/ avec ddd3506.
+# dans web/public/, et par trois ajouts d'assets successifs — ddd3506, 8519cc4,
+# 7c6a371 — pas par un seul faux pas : c'est un motif qui se répète à chaque
+# image déposée depuis Windows, d'où la règle plutôt qu'un simple ménage.
 *:Zone.Identifier
 
 # IDE
