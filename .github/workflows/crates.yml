@@ -61,9 +61,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # `cargo check --workspace` covers every member (yog-core,
-      # yog-persistence, yog-indexer, yog-api, yog-context, yog-wasm)
-      # without listing them. New crates are picked up automatically.
+      # `cargo check --workspace` covers every member (the eight of
+      # /Cargo.toml) without listing them, so new crates are picked up
+      # automatically. What it CANNOT do is tell whether a member still
+      # compiles on its own — see `check-per-crate` below.
       - run: cargo check --workspace --all-targets
 
   # ─────────────────────────────────────────────────────────────────
@@ -101,6 +102,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Every workspace member compiles on its own
         run: |
+          # GitHub's default shell is `bash -e`, errexit only: without
+          # pipefail a failing `cargo metadata` is swallowed by `jq`, which
+          # exits 0 on empty input, and the guard below would blame an empty
+          # member list for what is really a broken `cargo metadata`.
+          set -o pipefail
           crates=$(cargo metadata --no-deps --format-version 1 \
                    | jq -r '.packages[].name')
           n=$(echo "$crates" | grep -c . || true)

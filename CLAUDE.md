@@ -25,14 +25,22 @@ All Rust commands run from the repo root. Toolchain is pinned in `rust-toolchain
 cargo build
 cargo fmt --all
 
-# ⚠️ Every command in this block passes several crates to ONE `cargo` call, and
-# Cargo unifies features per call: a crate that forgot to declare a feature is
-# handed it by a sibling and stays green. Measured 31 Aug 2026 — `cargo check
-# -p yog-core` returned 261 errors while `--workspace` was green. The CI job
-# `check-per-crate` guards this; to reproduce a failure locally:
+# ⚠️ Cargo unifies features PER INVOCATION, so every command below that passes
+# several crates to one `cargo` call — `check --workspace`, the `clippy` and
+# `test` lines, `test --workspace` — hands each crate the features its siblings
+# asked for. A crate that forgot to declare one stays green there. Measured
+# 31 Aug 2026: `cargo check -p yog-core` returned 261 errors while
+# `--workspace` was green. To reproduce that failure locally:
+solo=""
 for p in $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name'); do
-  cargo check -p "$p" || echo "❌ $p ne compile plus seule"
+  cargo check -p "$p" || solo="$solo $p"
 done
+[ -z "$solo" ] || echo "❌ ne compilent plus seules :$solo"
+
+# The CI job `check-per-crate` runs exactly this loop. Note what it does NOT
+# cover: it compiles each crate with its DEFAULT features, so a feature-gated
+# path that only builds under the `--all-features` commands below is still
+# checked in a single grouped invocation, and still maskable.
 
 # Lint — native crates only (yog-wasm is excluded; it's a deferred scaffold)
 cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
