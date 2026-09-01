@@ -35,6 +35,17 @@ def scope($prefixes; $budget):
 [ .[] | select(.ref == "refs/heads/main") ]
 | { rust:     gens("v0-rust-";    "-[^-]+-[^-]+$"),
     node:     gens("node-cache-"; "-[^-]+$"),
-    buildkit: scope(["buildkit-blob-", "index-buildkit-"]; $budget) }
-| . + { drop: (.rust.drop + .node.drop + .buildkit.drop),
+    buildkit: scope(["buildkit-blob-", "index-buildkit-"]; $budget),
+    # Ce qu'aucune règle ne réclame — `cargo-audit-<version>` aujourd'hui. Rien
+    # ne le touche ; il est compté pour que le résumé additionne à l'inventaire.
+    autres:   [ .[] | select(.key | test("^(v0-rust-|node-cache-|buildkit-blob-|index-buildkit-)") | not) ] }
+# L'ORDRE de `drop` est porteur : l'index buildkit passe en PREMIER. La boucle
+# de suppression tolère l'échec d'une entrée, donc supprimer les blobs avant
+# l'index laisse, si l'index résiste, un manifeste pointant vers des couches
+# absentes — l'état corrompu que cette règle existe pour éviter. Dans l'autre
+# sens, un échec ne laisse que des blobs orphelins : du quota gâché, que
+# l'éviction à 7 jours ramasse toute seule.
+| . + { drop: ( [ .buildkit.drop[] | select(.key | startswith("index-buildkit-")) ]
+              + [ .buildkit.drop[] | select(.key | startswith("index-buildkit-") | not) ]
+              + .rust.drop + .node.drop ),
         keep: (.rust.keep + .node.keep + .buildkit.keep) }

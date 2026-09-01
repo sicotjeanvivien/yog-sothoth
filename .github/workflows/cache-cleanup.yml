@@ -12,10 +12,16 @@
 #   - une fois par semaine → filet de rattrapage sur les refs de PR fermées,
 #                            puis élagage des générations mortes de `main`.
 #
-# Trois familles écrivent sur `main`, et chacune demande sa propre règle. Elles
+# Quatre familles écrivent sur `main`. Trois ont leur règle ; la quatrième,
+# `cargo-audit-<version>` (6 Mo, `actions-rust-lang/audit`), est laissée intacte
+# à dessein : sa clé est épinglée à la version, donc chaque montée en abandonne
+# une, mais aucune seconde génération n'a encore été observée et 6 Mo ne pèsent
+# rien. Elle apparaît dans le résumé pour que les comptes tombent juste. Elles
 # vivent dans `.github/cache-rules.jq`, fichier séparé pour être exécutable tel
 # quel en local — c'est ainsi qu'il a été éprouvé, et les trois formats de clé
 # y sont écrits tels que relevés le 1er septembre 2026, pas supposés.
+#
+# Les trois règles vivent dans `.github/cache-rules.jq`.
 #
 # rust-cache et setup-node s'élaguent par génération : on garde la plus récente
 # de chaque identité de job. Le nombre de segments à retirer de la clé DIFFÈRE
@@ -160,9 +166,9 @@ jobs:
           # Budget de la portée buildkit. Au-delà, elle part en ENTIER et la
           # construction suivante repart à froid — c'est le cache le moins cher
           # à perdre (une image) face aux caches rust, qui servent chaque PR.
-          # Mesurée à 0,47 Go le 1er septembre 2026 pour un quota de dépôt de
-          # 10 Go : la règle est inerte aujourd'hui et mordra quand la famille
-          # aura quadruplé.
+          # Mesurée à 0,47 Gio le 1er septembre 2026 pour un quota de dépôt de
+          # 10 Go : la règle est inerte aujourd'hui et mord à partir de 4,25 fois
+          # cette taille.
           BUILDKIT_BUDGET: "2147483648"
         run: |
           set -uo pipefail
@@ -188,7 +194,8 @@ jobs:
                    "|---|---|---|",
                    "| rust-cache | \(.rust.keep|length) | \(.rust.drop|length) |",
                    "| setup-node | \(.node.keep|length) | \(.node.drop|length) |",
-                   "| buildkit | \(.buildkit.keep|length) | \(.buildkit.drop|length) |"' plan.json
+                   "| buildkit | \(.buildkit.keep|length) | \(.buildkit.drop|length) |",
+                   "| autres (hors règles) | \(.autres|length) | 0 |"' plan.json
             echo
             jq -r 'if .buildkit.over
                    then "⚠️ Portée buildkit à \(.buildkit.used/1073741824*100|floor/100) Go, au-dessus du budget — elle part en entier, index compris."
@@ -208,13 +215,34 @@ jobs:
           # Tolérant par entrée : GitHub peut avoir évincé une clé entre
           # l'inventaire et la suppression. Une course ne doit pas laisser le
           # reste de la liste non élagué.
+          #
+          # ⚠️ Une exception, et c'est tout l'objet de la règle de portée :
+          # `cache-rules.jq` place l'index buildkit en TÊTE de la liste, et si sa
+          # suppression échoue on renonce à ses blobs. Sans ça, un échec sur le
+          # seul index — un 5xx, une limite de débit après dix-sept appels — vide
+          # les blobs et laisse un manifeste pointant vers des couches absentes.
+          # C'est l'état corrompu qu'on prétend éviter. Renoncer laisse au pire
+          # des blobs orphelins, que l'éviction à 7 jours ramasse.
           expected=$(jq '.drop | length' plan.json)
           gone=0
+          index_perdu=0
           while read -r id key; do
+            case "$key" in
+              buildkit-blob-*)
+                if [ "$index_perdu" -eq 1 ]; then
+                  echo "::warning::$key gardé — son index n'a pas pu être supprimé"
+                  continue
+                fi ;;
+            esac
             if gh cache delete "$id" >/dev/null 2>&1; then
               gone=$((gone + 1))
             else
               echo "::warning::$key déjà parti ou non supprimable"
+              case "$key" in
+                index-buildkit-*)
+                  echo "::warning::index buildkit conservé — on renonce à ses blobs"
+                  index_perdu=1 ;;
+              esac
             fi
           done < <(jq -r '.drop[] | "\(.id) \(.key)"' plan.json)
 
