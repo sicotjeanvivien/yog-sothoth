@@ -12,10 +12,8 @@
 //! looked at. A synthetic pair would only prove that two rows I made different
 //! stay different.
 
-use std::path::PathBuf;
-
 use sqlx::PgPool;
-use yog_core::application::extraction::rpc::{self, EncodedConfirmedTransactionWithStatusMeta};
+use yog_core::application::extraction::conformance::reference_transaction;
 use yog_core::application::extraction::{EventExtractor, MeteoraDammV2};
 use yog_core::domain::{
     DomainEvent, InsertOutcome, MeteoraDammV2Event, MeteoraDammV2SwapEvent,
@@ -26,22 +24,19 @@ use yog_persistence::PgMeteoraDammV2SwapEventRepository;
 /// The mainnet transaction `2qJrr…`: two swaps on the **same pool**, in
 /// opposite directions, one signature, one `blockTime`.
 ///
-/// Read from `yog-core`'s fixture directory instead of copied here: its whole
-/// value is being the verbatim RPC response, and a second copy would drift
-/// from the one the extractor's own tests assert against.
+/// The **real extractor over real bytes**, which is the point — a synthetic pair
+/// would only prove that two rows I made different stay different. What is not
+/// exercised here is the JSON-RPC decoding, and deliberately so: this test is
+/// about a property of on-chain data, not about a transport.
+///
+/// The neutral form comes from `yog-core`'s conformance module, shared with
+/// every source adapter and **pinned to the verbatim mainnet response** by the
+/// adapter's own conformance test. That pin is what makes these bytes the
+/// chain's rather than mine; see the module's doc-comment.
 pub(super) fn swap_double_swaps() -> Vec<MeteoraDammV2SwapEvent> {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("../core/tests/fixtures/damm_v2/swap_double.json");
-
-    let raw = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
-    let tx: EncodedConfirmedTransactionWithStatusMeta =
-        serde_json::from_str(&raw).expect("fixture is not a valid RPC transaction");
-
-    let on_chain_tx = rpc::from_rpc(&tx).expect("fixture is not adaptable");
     let outcome = MeteoraDammV2::new()
-        .extract_events(&on_chain_tx)
-        .expect("extraction failed on the fixture");
+        .extract_events(&reference_transaction())
+        .expect("extraction failed on the reference transaction");
 
     outcome
         .events
@@ -142,9 +137,14 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
         slot, 0,
         "slot must come from the transaction, not the default"
     );
-    // `getTransaction` does not return it; the column exists for the gRPC
-    // migration. If this ever fails, the ingestion path started supplying it —
-    // which is good news, and makes the ordering guard total.
+    // The column exists for a source that carries the index natively. What this
+    // line guards is narrow and worth stating exactly: that `None` survives
+    // extraction and persistence unchanged. It observes nothing about the
+    // provider — the value comes from a constant in
+    // `conformance::reference_transaction`, and the adapter's own tests read a
+    // committed fixture, so **no test anywhere watches a live provider start
+    // returning `transactionIndex`**. The old comment promised that tripwire;
+    // it never existed. Only a run against a real endpoint would notice.
     assert_eq!(transaction_index, None);
 }
 

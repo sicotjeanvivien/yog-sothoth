@@ -5,15 +5,15 @@
 //! instrumentation is the caller's responsibility — no domain awareness
 //! inside the fetcher.
 
+use super::transaction_adapter::{
+    EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
+};
 use solana_commitment_config::CommitmentConfig;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction::Signature};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio_retry::{Retry, strategy::FixedInterval};
-use yog_core::application::extraction::rpc::{
-    EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
-};
 
 /// Fetches confirmed transactions from a Solana RPC node with a bounded
 /// retry strategy.
@@ -31,10 +31,10 @@ impl TransactionFetcher {
     /// Retries up to 5 times at 500ms intervals. The raw RPC error string
     /// is classified into a typed `FetchError` at the boundary.
     ///
-    /// The `JsonParsed` encoding is not a preference: it is what the adapter
-    /// that turns this response into a `OnChainTransaction` reads (the
-    /// `PartiallyDecoded` inner instructions only that encoding produces).
-    /// Both live in `yog_core::application::extraction::rpc`, together.
+    /// The `JsonParsed` encoding is not a preference: it is what
+    /// `transaction_adapter` reads (the `PartiallyDecoded` inner instructions
+    /// only that encoding produces). The two are siblings in this module tree
+    /// so they cannot drift apart.
     pub(crate) async fn fetch(
         &self,
         signature: Signature,

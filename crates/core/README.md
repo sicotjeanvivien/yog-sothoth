@@ -43,7 +43,7 @@ core/src/
 │   │   ├── meteora/damm_v2/ (events.rs borsh mirrors, extractor.rs, translator.rs)
 │   │   ├── anchor_event.rs  (generic Anchor event_cpi decoder)
 │   │   ├── on_chain_transaction.rs (OnChainTransaction — the neutral input)
-│   │   ├── rpc.rs           (JSON-RPC adapter; the only module naming a transport)
+│   │   ├── conformance.rs   (the contract adapters must satisfy — `test-support`)
 │   │   ├── event_extractor.rs / extraction_dispatcher.rs
 │   │   └── outcome.rs       (ExtractionOutcome, ExtractionFailure)
 │   └── decoder/           ← account bytes → pool properties use case
@@ -73,7 +73,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 
   What stayed is `base_fee_kind_from`, which is *meant* to be here: it maps a `BaseFeeMode` discriminant and a period count to a `BaseFeeKind` — a rule, not a layout. A scheduler mode with zero periods is a constant fee, and mode 2 (rate limiter) must not consult the period count at all, because its variant reuses those bytes.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method. A keyset cursor is only sound over an **immutable** sort key, and one listing sorts on a mutable one: `pools.last_seen_at`, rewritten on every event. That traversal is therefore anchored to a snapshot instant carried by the cursor (`PoolCursor::as_of`), which turns "the row moved across the cursor" into "the row left the result set" — the contract, and what it does *not* recover, is documented on `domain::PoolPage`. Adding a sort column means answering "is it immutable?", not "is it materialized?".
-- **Transport indirection** (`application/extraction/rpc.rs`) — single point of contact for the JSON-RPC transaction types, and the only module of this crate that names one. It turns a `getTransaction` response into the neutral `OnChainTransaction` and re-exports the types the ingestion binary needs. When the Solana SDK reshuffles those types, or when a second source arrives, this is where it lands.
+- **The adapter contract** (`application/extraction/conformance.rs`, behind the `test-support` feature) — the expectation every source adapter must satisfy, and the reference transaction it is proven on. This crate states the ordering contract but no longer enforces it: the adapters live in `yog-indexer`, one per source. Without a shared arbiter, two adapters and two independent test suites drift with nothing turning red. It adds no dependency — the reference payloads are hex constants decoded by ten lines rather than by `bs58`, which left this crate with the adapter. With the adapter gone, **no transport dependency remains here at all**: `solana-transaction-status`, unused and pulled in by the default `solana` feature (which now gates only `solana-pubkey`), went with it. That is what makes the no-I/O rule checkable from the manifest instead of taken on trust.
 - **Errors** (`error/`) — `CoreError` for domain-level failures, `RepositoryError` as the boundary type returned by every repository trait. Adapters convert their internal errors (e.g. `sqlx::Error`) into `RepositoryError` at their public surface.
 
 ## `EventExtractor` and `ExtractionDispatcher`
@@ -100,7 +100,7 @@ extracts anything. `MeteoraDlmm` implements `EventExtractor` and returns
 `ExtractionOutcome::default()` — an empty outcome, not an error, so a DLMM
 transaction is indexed as "nothing to record" rather than counted as a failure.
 
-One nuance the adapter introduced: `rpc::from_rpc` runs *before* the dispatcher,
+One nuance the adapter introduced: it runs *before* the dispatcher,
 so a transaction the adapter refuses — no `blockTime`, an encoding that is not
 `Json` — is a transaction-level failure for *every* protocol, including the ones
 whose extractor reads nothing. The stub never looks at those fields itself.
@@ -126,13 +126,21 @@ source provides one) plus the ordered list of inner-instruction payloads, each
 with the `Pubkey` of the program it was addressed to. Nothing else. A field
 added here is a dependency the extractors gained on their source.
 
-One **adapter** per source fills it. Today there is one, `extraction/rpc.rs`,
-the only module of this crate that names `EncodedConfirmedTransactionWithStatusMeta`
-— and it also re-exports the transport types `yog-indexer`'s fetcher needs,
-because the encoding and the adapter are one contract: the fetcher must request
-`JsonParsed`, since the adapter reads the `PartiallyDecoded` inner instructions
-only that encoding produces. A Yellowstone gRPC source adds a *sibling adapter*,
-not a second path through extraction; that is the whole point of the shape.
+One **adapter** per source fills it, and **none of them lives here**: they are
+in `yog-indexer`'s `infra/rpc/` (see [its README](../indexer/README.md)), beside
+the fetcher whose response they read. `core` has no business knowing who
+supplies its transactions, and there may be more suppliers later. A Yellowstone
+gRPC source adds a *sibling module there*, not a second path through extraction;
+that is the whole point of the shape.
+
+What stays here is the **contract** — and, because a contract nobody can check
+is a wish, the arbiter that checks it: `extraction::conformance` (feature
+`test-support`) holds the neutral form of one reference mainnet transaction and
+the assertion every adapter runs against it. Same expectation, one place. Its
+bytes are hand-written, which is normally the trap this repository knows well;
+what saves it is a single test on the JSON-RPC adapter that reaches that
+expectation **from the verbatim mainnet fixture**. That test is the pin; delete
+it and the module becomes the trap.
 
 Two invariants every adapter owes, both documented on the type itself and
 neither optional:
@@ -149,7 +157,7 @@ neither optional:
 What guards them, and how far each guard reaches — because the two are not
 witnessed by the same thing:
 
-- `tests/extraction_oracle.rs` freezes the outcome of all 27 mainnet fixtures —
+- `yog-indexer`'s `extraction_oracle_tests` freezes the outcome of all 27 mainnet fixtures —
   events, `event_index`, unknowns, failures — against a committed witness.
   Reversing the instruction groups turns **6** of them red — the 6 whose cp-amm
   payloads actually span more than one group (`claim_position_fee`,
@@ -159,7 +167,7 @@ witnessed by the same thing:
 - it does **not** witness the sort by group index, because every mainnet fixture
   already arrives in ascending order — delete `sort_by_key` and the whole suite
   stays green. That is what
-  `rpc::tests::group_order_from_the_source_does_not_change_the_payload_order`
+  `yog-indexer`'s `transaction_adapter::tests::group_order_from_the_source_does_not_change_the_payload_order`
   is for: it hands the groups over reversed and fails without the sort.
 
 Both mutations were run and their reach counted, not assumed. The count matters
@@ -181,8 +189,8 @@ where `EVENT_IX_TAG = sha256("anchor:event")[..8]` is the fixed prefix injected 
 ```
 whatever the source delivered
         ▼
-[rpc.rs]                 from_rpc(tx) → OnChainTransaction
-        │                one adapter per source; the only place naming a transport
+[yog-indexer]            infra::rpc::transaction_adapter::from_rpc(tx)
+        │                one adapter per source, none of them in this crate
         ▼
 [anchor_event.rs]        extract_anchor_event_cpis(on_chain_tx, program_id)
         │                keeps the payloads addressed to the program, in order;

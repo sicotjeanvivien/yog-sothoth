@@ -1,13 +1,15 @@
 //! The two transaction-level refusals of the RPC adapter.
 //!
-//! The happy path is covered by the whole fixture corpus (`tests/live_detector.rs`
-//! and the behaviour oracle). What no fixture exercises is what the adapter
+//! The happy path is covered by the whole fixture corpus (the two sibling
+//! suites: `fixture_pipeline_tests` and `extraction_oracle_tests`). What no fixture exercises is what the adapter
 //! *rejects* — and both refusals matter: `timestamp` is a partitioning column
 //! and part of every event's unique key, so a transaction without one must not
 //! reach extraction at all.
 //!
 //! Built by taking a real mainnet fixture and removing exactly one thing, so
 //! the test cannot pass because the transaction was malformed some other way.
+//! The fixtures stay in `yog-core` and are read from here by path — their value
+//! is being the verbatim RPC response, and a second copy would drift.
 
 use super::*;
 
@@ -17,7 +19,7 @@ fn fixture_json() -> serde_json::Value {
 
 fn named_fixture_json(name: &str) -> serde_json::Value {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/damm_v2")
+        .join("../core/tests/fixtures/damm_v2")
         .join(name);
     let raw = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
@@ -112,4 +114,23 @@ fn group_order_from_the_source_does_not_change_the_payload_order() {
         actual.inner_instructions, expected.inner_instructions,
         "the payload order followed the order the groups were serialized in"
     );
+}
+
+/// **The pin.** The reference expectation in `conformance` is hand-written; this
+/// is the one test that ties it to a real mainnet response, and every other
+/// consumer of that expectation — a future protobuf adapter, the persistence
+/// integration test — trusts it because of this assertion.
+///
+/// Delete it and `conformance` becomes what its own doc-comment warns against:
+/// a transcription agreeing with the code that reads it.
+///
+/// Mutation-checked: swap the two payloads in `conformance::reference_transaction`
+/// and this fails with `payload 0: bytes differ`.
+#[test]
+fn the_reference_transaction_is_what_this_adapter_produces() {
+    let json = named_fixture_json("swap_double.json");
+
+    let on_chain_tx = from_rpc(&parse(json)).expect("the reference fixture must convert");
+
+    yog_core::application::extraction::conformance::assert_matches_reference(&on_chain_tx);
 }

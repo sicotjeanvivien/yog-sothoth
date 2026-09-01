@@ -1,6 +1,6 @@
 //! Behaviour oracle for the whole DAMM v2 extraction pipeline.
 //!
-//! Runs **every** mainnet fixture of `tests/fixtures/damm_v2/` through the
+//! Runs **every** mainnet fixture of `yog-core`'s `tests/fixtures/damm_v2/`
 //! public entry point and compares a deterministic digest of the outcome —
 //! events, `event_index`, unknown discriminators, failures — against a
 //! committed witness file.
@@ -8,7 +8,7 @@
 //! # What it is for
 //!
 //! It exists to make a refactoring provable, not to describe expected values:
-//! `live_detector.rs` asserts what each event *should* contain, this one
+//! `fixture_pipeline_tests` asserts what each event *should* contain, this one
 //! asserts that **nothing at all changed**. The witness was generated from the
 //! pre-refactoring code and committed on its own, so the diff of any later
 //! commit shows immediately whether behaviour moved.
@@ -20,7 +20,7 @@
 //!
 //! # Regenerating
 //!
-//! `UPDATE_GOLDEN=1 cargo test -p yog-core extraction_over_every_fixture`
+//! `UPDATE_GOLDEN=1 cargo test -p yog-indexer extraction_over_every_fixture`
 //! rewrites the witness. Only ever do that when the change of behaviour is the
 //! point — the diff is the review.
 
@@ -29,16 +29,18 @@ use std::path::{Path, PathBuf};
 
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
 use yog_core::application::extraction::{
-    EventExtractor, ExtractionOutcome, MeteoraDammV2, discriminator_hex, rpc,
+    EventExtractor, ExtractionOutcome, MeteoraDammV2, discriminator_hex,
 };
+
+use super::from_rpc;
 
 /// Directory holding the mainnet transactions, and the witness they produce.
 fn fixtures_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/damm_v2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../core/tests/fixtures/damm_v2")
 }
 
 fn golden_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/extraction.txt")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/golden/extraction.txt")
 }
 
 /// Every `*.json` directly inside the fixtures directory, sorted by name.
@@ -119,12 +121,12 @@ fn digest() -> String {
 
         match serde_json::from_str::<EncodedConfirmedTransactionWithStatusMeta>(&raw) {
             Err(e) => writeln!(out, "  PARSE ERROR {e}").unwrap(),
-            Ok(tx) => match rpc::from_rpc(&tx)
-                .and_then(|on_chain_tx| extractor.extract_events(&on_chain_tx))
-            {
-                Err(e) => writeln!(out, "  EXTRACTION ERROR {e}").unwrap(),
-                Ok(outcome) => out.push_str(&render(&outcome)),
-            },
+            Ok(tx) => {
+                match from_rpc(&tx).and_then(|on_chain_tx| extractor.extract_events(&on_chain_tx)) {
+                    Err(e) => writeln!(out, "  EXTRACTION ERROR {e}").unwrap(),
+                    Ok(outcome) => out.push_str(&render(&outcome)),
+                }
+            }
         }
     }
 

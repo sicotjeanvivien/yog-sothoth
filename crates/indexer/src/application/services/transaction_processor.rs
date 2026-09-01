@@ -4,14 +4,14 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 use yog_core::{
     application::extraction::{
-        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex, rpc,
+        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex,
     },
     domain::Protocol,
 };
 
 use crate::{
     application::services::{EventPersistor, TransactionProcessorMetrics},
-    infra::{FetchError, TransactionFetcher},
+    infra::{FetchError, TransactionFetcher, from_rpc},
 };
 
 /// Core pipeline — receives a signature, fetches the full transaction via
@@ -81,7 +81,7 @@ impl TransactionProcessor {
         // signature, no `blockTime`) is the very same transaction-level
         // failure extraction used to raise on its own, so it takes the same
         // exit: one log, one metric label, no partial persistence.
-        let outcome = match rpc::from_rpc(&tx)
+        let outcome = match from_rpc(&tx)
             .and_then(|on_chain_tx| self.extractor.extract(protocol, &on_chain_tx))
         {
             Ok(o) => o,

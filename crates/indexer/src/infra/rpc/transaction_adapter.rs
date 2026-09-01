@@ -1,16 +1,20 @@
 //! JSON-RPC adapter: `getTransaction` response → [`OnChainTransaction`].
 //!
-//! This is the **only** module of `core` that names the JSON-RPC transport.
-//! Everything downstream — the trait, the dispatcher, the per-protocol
-//! extractors, the Anchor decoder — sees a [`OnChainTransaction`] and cannot tell
-//! which source filled it. A second source (Yellowstone gRPC) adds a sibling
-//! adapter, not a second code path through extraction.
+//! One of the adapters that fill the neutral transaction `yog-core` extracts
+//! from. It lives here, beside the fetcher whose response it reads, because
+//! `core` has no business knowing who supplies it — a second source
+//! (Yellowstone gRPC) becomes a sibling module, not a second code path through
+//! extraction.
 //!
-//! It also re-exports the transport types the ingestion binary needs, because
-//! the encoding and this adapter are one contract: the fetcher must ask for
-//! `UiTransactionEncoding::JsonParsed`, since [`from_rpc`] reads the
-//! `PartiallyDecoded` inner instructions that only that encoding produces.
-//! Declaring them anywhere else would let the two drift apart.
+//! The encoding and this adapter are **one contract**: `TransactionFetcher`
+//! must ask for `UiTransactionEncoding::JsonParsed`, since [`from_rpc`] reads
+//! the `PartiallyDecoded` inner instructions that only that encoding produces.
+//! Keeping them in the same crate is what stops the two from drifting apart.
+//!
+//! What it owes the rest of the workspace is stated once, in
+//! `yog_core::application::extraction::conformance`, and proven against a real
+//! mainnet response by `the_reference_transaction_is_what_this_adapter_produces`
+//! in this module's tests.
 
 use std::str::FromStr;
 
@@ -19,14 +23,15 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-pub use solana_transaction_status_client_types::{
-    EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction, UiInstruction,
-    UiParsedInstruction, UiTransactionEncoding, option_serializer::OptionSerializer,
+pub(crate) use solana_transaction_status_client_types::{
+    EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
 };
-
-use crate::application::extraction::{InnerInstructionPayload, OnChainTransaction};
-use crate::domain::TransactionPosition;
-use crate::{CoreError, CoreResult};
+use solana_transaction_status_client_types::{
+    EncodedTransaction, UiInstruction, UiParsedInstruction, option_serializer::OptionSerializer,
+};
+use yog_core::application::extraction::{InnerInstructionPayload, OnChainTransaction};
+use yog_core::domain::TransactionPosition;
+use yog_core::{CoreError, CoreResult};
 
 /// Build the transport-neutral transaction from a `getTransaction` response.
 ///
@@ -34,7 +39,9 @@ use crate::{CoreError, CoreResult};
 /// signature, an unparsable signature, or a missing `blockTime`. A transaction
 /// with no inner instructions is not a failure: it yields an empty payload list
 /// and extraction reports "nothing to record".
-pub fn from_rpc(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResult<OnChainTransaction> {
+pub(crate) fn from_rpc(
+    tx: &EncodedConfirmedTransactionWithStatusMeta,
+) -> CoreResult<OnChainTransaction> {
     Ok(OnChainTransaction {
         position: TransactionPosition {
             signature: extract_signature(tx)?,
@@ -167,5 +174,18 @@ fn to_payload(ix: &UiInstruction) -> Option<InnerInstructionPayload> {
 }
 
 #[cfg(test)]
-#[path = "rpc_tests.rs"]
+#[path = "transaction_adapter_tests.rs"]
 mod tests;
+
+// The two suites that drive the whole pipeline from a mainnet fixture. They sit
+// beside the adapter because it is what turns a fixture into something
+// extraction can read — and they are unit tests rather than `tests/` targets
+// because this crate is a binary: an integration target could not reach a
+// `pub(crate)` adapter without making it public for the tests' sake.
+#[cfg(test)]
+#[path = "fixture_pipeline_tests.rs"]
+mod fixture_pipeline_tests;
+
+#[cfg(test)]
+#[path = "extraction_oracle_tests.rs"]
+mod extraction_oracle_tests;

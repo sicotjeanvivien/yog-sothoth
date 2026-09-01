@@ -4,7 +4,9 @@
 //! may arrive as a JSON-RPC `getTransaction` response today and as a Yellowstone
 //! protobuf update tomorrow. [`OnChainTransaction`] is what the two have in common,
 //! and it is the only thing the extractors see. Each source gets an adapter that
-//! fills it — [`super::rpc`] is the one that exists today.
+//! fills it, and **none of them lives in this crate**: they are in `yog-indexer`,
+//! under `infra::rpc`. What stays here is the contract they owe — stated below,
+//! and checkable through [`super::conformance`].
 //!
 //! It carries exactly what extraction needs, and nothing else: the coordinate
 //! that locates an event ([`TransactionPosition`]) and the material to decode

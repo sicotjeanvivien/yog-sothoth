@@ -24,9 +24,21 @@ solana-rpc-client = { version = "4", default-features = false }
 solana-rpc-client-api = { version = "4", default-features = false }
 solana-commitment-config = { version = "3", default-features = false }
 solana-pubsub-client = { version = "4", default-features = false }
-solana-pubkey = { version = "4", default-features = false }
-solana-signature = { version = "3", default-features = false }
-solana-transaction-status = { version = "4", default-features = false }
+# ⚠️ These feature lists are load-bearing and were implicit until 31 August 2026:
+# `solana-transaction-status` used to enable `borsh` and `serde` on `Pubkey` and
+# `serde` on `Signature` as a side effect of being in the graph. Removing it —
+# it was unused — took those with it, and `cargo check -p yog-core` stopped
+# compiling while `--workspace` stayed green, feature unification hiding it
+# behind `yog-indexer`. Declared here so the crates that need them say so.
+solana-pubkey = { version = "4", default-features = false, features = [
+    "borsh",
+    "serde",
+    "std",
+] }
+solana-signature = { version = "3", default-features = false, features = [
+    "serde",
+    "std",
+] }
 solana-transaction-status-client-types = "4"
 
 # Database

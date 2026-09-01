@@ -40,8 +40,8 @@
 //! into a known struct.
 //!
 //! Nothing here knows how the transaction reached the process: it reads the
-//! neutral [`OnChainTransaction`], which the JSON-RPC adapter
-//! ([`crate::application::extraction::rpc`]) fills today.
+//! neutral [`OnChainTransaction`], which an adapter living in the ingestion
+//! crate fills — one per source, none of them named here.
 
 use solana_pubkey::Pubkey;
 

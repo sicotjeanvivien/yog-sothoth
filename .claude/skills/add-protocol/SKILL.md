@@ -114,8 +114,10 @@ Respect **skip-and-log over abort-and-die**: per-event failures are logged + cou
 ## Step 5 — Tests
 
 - Add fixture transactions under `crates/core/tests/fixtures/` (one per recognized
-  signature for the new protocol) and integration tests in
-  `crates/core/tests/live_detector.rs`.
+  signature for the new protocol) and extraction tests in
+  `crates/indexer/src/infra/rpc/fixture_pipeline_tests.rs` — they live beside the
+  adapter that turns a fixture into an `OnChainTransaction`, the fixtures stay in
+  `yog-core`.
 
 ## Verify (run from repo root)
 
@@ -138,5 +140,5 @@ Confirm the sub-persistor actually runs end-to-end against a DB before calling i
 - [ ] Migration created with `GRANT … TO yog_indexer` + VIEW `UNION ALL` branches
 - [ ] `.sqlx/` regenerated and committed
 - [ ] Repos re-exported from `persistence/lib.rs`
-- [ ] Fixtures + `live_detector.rs` tests added
+- [ ] Fixtures added in `yog-core`, extraction tests in `yog-indexer`
 - [ ] fmt / clippy (-D warnings) / tests green

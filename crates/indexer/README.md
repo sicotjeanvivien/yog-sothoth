@@ -29,6 +29,37 @@ indexer/src/
 └── main.rs
 ```
 
+## The source adapters
+
+`yog-core` extracts from an `OnChainTransaction` and never learns who filled it.
+Filling it is this crate's job, one module per source, under `infra/rpc/`:
+
+- `transaction_adapter.rs` turns a `getTransaction` response into that neutral
+  shape. It sits beside `transaction_fetcher.rs` on purpose — the encoding and
+  the adapter are **one contract** (the fetcher must ask for `JsonParsed`,
+  because the adapter reads the `PartiallyDecoded` inner instructions only that
+  encoding produces), and splitting them across crates is what would let the two
+  drift;
+- a Yellowstone gRPC source becomes a sibling module here, not a second path
+  through extraction.
+
+**What an adapter owes**, and how it is held to it: the order of the payloads it
+produces becomes the persisted `event_index`, part of the unique key of every
+event table. An adapter that reorders does not fail — it renumbers rows already
+stored. `yog_core::application::extraction::conformance` states that expectation
+once, on a reference mainnet transaction, and every adapter asserts against it.
+`transaction_adapter`'s own conformance test is what **pins** that expectation to
+reality, by reaching it from the verbatim fixture; the future protobuf adapter
+will be checked against reality rather than against itself because of it.
+
+Two suites drive the whole pipeline from the fixtures in `../core/tests/fixtures/`
+— read by path, because their value is being the verbatim RPC response and a
+second copy would drift. They are unit tests rather than `tests/` targets
+because this crate is a binary: an integration target could not reach a
+`pub(crate)` adapter without making it public for the tests' sake. The oracle's
+witness lives in `testdata/golden/`, not `tests/`, so nothing sits in the
+directory Cargo reserves for the targets this crate deliberately does not have.
+
 ## Three-stage pipeline
 
 The indexer is structured as three Tokio tasks connected by bounded mpsc
