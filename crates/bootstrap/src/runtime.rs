@@ -33,7 +33,11 @@ pub fn init_rustls() {
 /// by `tracing`. Each binary should call this once at the top of `main`,
 /// after `init_rustls` and before any code that emits logs.
 pub fn init_tracing() {
+    // Trimmed like every other environment read: a `\r` from the CRLF `.env`
+    // would make `json\r` fall through to the text branch, and a silent
+    // downgrade to unstructured logs is worse than a loud one.
     let format = std::env::var("LOG_FORMAT").unwrap_or_default();
+    let format = format.trim();
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     if format.eq_ignore_ascii_case("json") {

@@ -60,8 +60,15 @@ pub fn parse_required_bool(key: &str) -> Result<bool, ConfigError> {
 /// Read an optional `u64` environment variable, falling back to
 /// `default` when unset. A present-but-unparseable value is an error.
 ///
-/// Trims for the same reason `required` does — it is the one helper that
-/// does not go through it, having its own fallback path.
+/// Trims for the same reason `required` does, which it cannot reuse: a value
+/// carrying a default is allowed to be absent, and `required` refuses that.
+///
+/// Two siblings are in the same position and trim for the same reason —
+/// `decimal_var` in `yog-signals`, and `LOG_FORMAT` in `init_tracing`. Those
+/// three are the whole list, enumerated rather than assumed (`grep -rn
+/// 'env::var(' crates/`, 2 September 2026): every other environment read in
+/// the workspace goes through `required` and inherits the rule instead of
+/// restating it.
 pub fn duration_var(key: &'static str, default: u64) -> Result<u64, ConfigError> {
     match std::env::var(key).map(|v| v.trim().to_string()) {
         Err(_) => Ok(default),

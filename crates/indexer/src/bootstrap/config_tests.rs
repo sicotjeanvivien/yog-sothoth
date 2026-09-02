@@ -12,7 +12,16 @@ use super::*;
 /// so splitting them would have the two halves race each other.
 #[test]
 fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
-    // SAFETY: no other test in this binary reads or writes these keys.
+    // SAFETY — and the honest version of it: `set_var` is unsound while any
+    // other thread touches the environment *at all*, not merely the same
+    // keys, and cargo runs this binary's tests multi-threaded. There is one
+    // such reader: `env::var_os("UPDATE_GOLDEN")` in the extraction oracle
+    // tests. Nothing here makes that race impossible — a mutex among writers
+    // would not, the reader not holding it — so what is claimed is only that
+    // the window is a handful of instructions at process start-up and has
+    // never been observed to fire. The way to actually close it is to stop
+    // `load` reading the process environment, which is a bigger change than
+    // this test is worth.
     unsafe {
         env::set_var("DATABASE_URL_INDEXER", "postgresql://u:p@localhost:5433/db");
         env::set_var("SOLANA_RPC_WS", "wss://example.invalid");

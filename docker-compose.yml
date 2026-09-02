@@ -118,8 +118,13 @@ services:
       # No default on purpose, unlike the retry budget above and the log
       # knobs below: a default here picks an ingestion mode nobody chose —
       # which is how this file came to ship `:-true`, i.e. (rpc, protocols),
-      # one of the three couples that cannot start today. Unset, the indexer
-      # stops on `MissingVariable`.
+      # one of the three couples that cannot start today.
+      #
+      # Unset, the indexer fails on `MissingVariable` — and, `restart:
+      # unless-stopped` being the policy below, keeps restarting on it. Under
+      # `up -d` the interpolation warning scrolls past, so the symptom is a
+      # container flapping with one config error per restart. Read the log of
+      # the first restart: it names the variable.
       INGEST_SOURCE: ${INGEST_SOURCE}
       INGEST_SCOPE: ${INGEST_SCOPE}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
