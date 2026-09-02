@@ -166,13 +166,10 @@ impl HeliusDasClient {
             .post(&self.rpc_url)
             .json(&request)
             .send()
-            .await
-            .map_err(|e| SourceError::Http(e.to_string()))?
-            .error_for_status()
-            .map_err(|e| SourceError::Http(e.to_string()))?
+            .await?
+            .error_for_status()?
             .json::<DasResponse>()
-            .await
-            .map_err(|e| SourceError::Decode(e.to_string()))?;
+            .await?;
 
         Ok(response
             .result

@@ -24,7 +24,7 @@ const HTTP_TOTAL_TIMEOUT: Duration = Duration::from_secs(15);
 const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Build a provider HTTP client carrying the shared timeouts.
-fn http_client() -> reqwest::Client {
+pub(crate) fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(HTTP_TOTAL_TIMEOUT)
         .connect_timeout(HTTP_CONNECT_TIMEOUT)

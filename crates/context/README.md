@@ -122,6 +122,28 @@ client retries a rate-limited chunk a bounded number of times (pacing on the
 `Retry-After` header when present, capped exponential backoff otherwise)
 before falling back to skip-and-log.
 
+### One invariant, and it is not optional
+
+**Never build `SourceError::Http` or `SourceError::Decode` from a
+`reqwest::Error` by hand.** Use `?`, which goes through
+`impl From<reqwest::Error> for SourceError` in `error/source.rs`.
+
+That conversion calls `reqwest::Error::without_url()` before formatting, and
+that is the only thing standing between an API key and the logs: reqwest puts
+the **full URL** in its own `Display`, query string included, and its
+documentation says so. On 2 September 2026 nine call sites each recopied
+`e.to_string()` unredacted, and one 30-minute provider outage wrote the Helius
+key into **38 log lines**, all produced by that single outage: the leak rate
+follows the *provider's* error rate, not ours.
+
+The redaction sits at the conversion, not at the `warn!`/`error!` call sites,
+so that a site nobody thought of cannot leak. (`yog-indexer` makes the other
+choice — `utils::redact_api_key`, applied when formatting. It works there, but
+it stayed `pub(crate)` and never reached this crate, which is how the leak
+happened.) The conversion also appends the error's cause chain, because
+stripping the URL from reqwest's `Display` otherwise leaves the same four
+words for a refused connection, a DNS failure and a timeout alike.
+
 There is deliberately no in-process respawn logic: a worker never returns
 `Err` from its loop, and a panic exits the whole process, which the container
 restart policy relaunches with a fresh budget. The failure mode that policy
