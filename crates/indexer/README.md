@@ -23,6 +23,10 @@ indexer/src/
 │                            filter chain, TransactionFetcher (HTTP + FetchError)
 ├── bootstrap/             ← Config::load(), Daemon (lifecycle, task wiring,
 │                            shutdown, init_event_persistor)
+├── ingest.rs              ← the two ingestion axes (INGEST_SOURCE /
+│                            INGEST_SCOPE) and which of their couples can
+│                            run — a vocabulary shared by bootstrap/ and
+│                            infra/rpc/, which is why it sits at the root
 ├── error/                 ← typed error per layer
 ├── utils/redact.rs        ← API-key scrubbing for logs
 ├── bin/inspect_logs.rs    ← ad-hoc debugging helper for raw log streams
@@ -232,7 +236,8 @@ and all four couples mean something:
 | **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter — **refused** | production target — **refused** |
 
 **Three of the four are refused today**, for two causes, both raised by
-`check_supported` in `bootstrap/config.rs` **at config load**:
+`check_supported` in `ingest.rs`, which `Config::load` calls **before anything
+else is read**:
 
 - `grpc`, under either scope, has no listener yet — the RPC path is the only
   implemented source;

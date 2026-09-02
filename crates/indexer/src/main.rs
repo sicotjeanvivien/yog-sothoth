@@ -49,6 +49,10 @@ mod error;
 // `infra` — infrastructure utilities (RPC client, dispatcher, listener…).
 mod infra;
 
+// `ingest` — the two ingestion axes and which of their couples can run.
+// A vocabulary, shared by the startup wiring and by `infra::rpc`.
+mod ingest;
+
 mod utils;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
