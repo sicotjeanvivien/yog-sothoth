@@ -322,30 +322,33 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
     let url = format!("{base}/?api-key={SECRET}");
 
     // 1. Non-2xx → transport error, secret gone.
-    let status_err = SourceError::from(
-        reqwest::Client::new()
-            .get(&url)
-            .send()
-            .await
-            .expect("the scripted server answers")
-            .error_for_status()
-            .expect_err("500 must be an error"),
-    );
+    let raw_status = reqwest::Client::new()
+        .get(&url)
+        .send()
+        .await
+        .expect("the scripted server answers")
+        .error_for_status()
+        .expect_err("500 must be an error");
+    // Premise, asserted for the same reason as in `error/source_tests.rs`:
+    // if reqwest stopped attaching the URL to this kind, the check below
+    // would pass while proving nothing about the conversion.
+    assert!(raw_status.to_string().contains(SECRET), "{raw_status}");
+    let status_err = SourceError::from(raw_status);
     assert!(matches!(status_err, SourceError::Http(_)), "{status_err}");
     assert!(!status_err.to_string().contains(SECRET), "{status_err}");
 
     // 2. 2xx with a body that is not JSON → decode error, secret gone, and
     //    the variant still distinguishes it from a transport failure.
-    let decode_err = SourceError::from(
-        reqwest::Client::new()
-            .get(&url)
-            .send()
-            .await
-            .expect("the scripted server answers")
-            .json::<HashMap<String, JupiterPriceEntry>>()
-            .await
-            .expect_err("that body is not JSON"),
-    );
+    let raw_decode = reqwest::Client::new()
+        .get(&url)
+        .send()
+        .await
+        .expect("the scripted server answers")
+        .json::<HashMap<String, JupiterPriceEntry>>()
+        .await
+        .expect_err("that body is not JSON");
+    assert!(raw_decode.to_string().contains(SECRET), "{raw_decode}");
+    let decode_err = SourceError::from(raw_decode);
     assert!(matches!(decode_err, SourceError::Decode(_)), "{decode_err}");
     assert!(!decode_err.to_string().contains(SECRET), "{decode_err}");
 }

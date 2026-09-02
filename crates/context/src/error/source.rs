@@ -1,7 +1,3 @@
-// ── To ADD to crates/context/src/error.rs ────────────────────────────
-//
-// Alongside ConfigError, BootstrapError, WorkerError.
-
 /// Failure of an external data source (HTTP, JSON-RPC, decoding).
 ///
 /// Returned by the source clients (`HeliusDasClient`,
@@ -54,7 +50,22 @@ impl From<reqwest::Error> for SourceError {
         // `.json::<T>()` failures are decode errors, everything else — connect,
         // timeout, non-2xx via `error_for_status` — is transport.
         let is_decode = e.is_decode();
-        let message = e.without_url().to_string();
+        let redacted = e.without_url();
+
+        // reqwest's own `Display` renders the kind and the URL, and *not* the
+        // cause. Strip the URL and a connect failure, a DNS failure, a TLS
+        // handshake failure and both timeouts all render the same four words —
+        // the URL was accidentally carrying the only distinguishing detail.
+        // The cause chain carries none of the secret (reqwest attaches the URL
+        // at the top level only, which `without_url` has just removed), so it
+        // is appended: that is what keeps the log readable after redaction.
+        let mut message = redacted.to_string();
+        let mut cause = std::error::Error::source(&redacted);
+        while let Some(current) = cause {
+            message.push_str(": ");
+            message.push_str(&current.to_string());
+            cause = current.source();
+        }
 
         if is_decode {
             Self::Decode(message)
