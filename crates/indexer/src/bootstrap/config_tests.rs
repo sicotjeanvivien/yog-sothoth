@@ -1,5 +1,7 @@
 use std::env;
 
+use yog_bootstrap::EnvEnum;
+
 use super::*;
 
 /// The message is the whole point of refusing here rather than letting the

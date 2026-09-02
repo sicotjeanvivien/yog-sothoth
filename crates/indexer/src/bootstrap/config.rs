@@ -7,96 +7,66 @@
 //! - `INGEST_SCOPE` — *what is subscribed to*, a program id per watched
 //!   protocol or one entry per row of `watched_pools`.
 //!
-//! They are orthogonal on purpose: all four couples mean something, and the
-//! **three** that cannot run today — for two distinct causes, hence two `Err`
-//! arms — are refused by `check_supported`, which `load` calls before anything
-//! else is read, rather than letting the mistake surface further down as an
-//! unexplained `NoSubscriptionTargets`. Each refusal is a state of this
-//! repository, not a law.
+//! Both are values read once at start-up and immutable afterwards, which is
+//! why their types live under `config/types/` and not beside whoever reads
+//! them: a consumer reads *a setting*, it does not own the type. `SecretUrl`
+//! sits in `yog-bootstrap` for the same reason, and is likewise consumed by
+//! the infrastructure layer.
 //!
-//! **Why `Config` carries a scope but no source.** The source picks *which
-//! listener to build*, and there is one: `RpcListener` **is** the rpc source,
-//! so asking it which source it serves could only ever answer `Rpc`. Nothing
-//! downstream has a use for the value, and a field nobody reads is a field
-//! nobody maintains — it would also not survive `-D warnings`, which is the
-//! honest form of the same statement. `INGEST_SOURCE` is still **read and
-//! validated** here, because refusing an unimplemented source at config load
-//! is the whole point; it joins the struct the day a second listener gives it
-//! a reader, and the dispatch that reads it belongs in `daemon::init_listener`.
+//! The two axes are orthogonal on purpose: all four couples mean something,
+//! and the **three** that cannot run today — for two distinct causes, hence
+//! two `Err` arms — are refused by `check_supported`, which `load` calls
+//! before anything else is read, rather than letting the mistake surface
+//! further down as an unexplained `NoSubscriptionTargets`. Each refusal is a
+//! state of this repository, not a law.
+//!
+//! **Why `Config` carries a scope but no source.** The scope travels into the
+//! runtime: the listener dispatches on it. The source does not travel
+//! anywhere yet — it picks *which listener to build*, and there is one, so
+//! the dispatch that would read it has nowhere to branch. It is still **read
+//! and validated** here, because refusing an unimplemented source at config
+//! load is the whole point; it becomes a field the day `init_listener` has
+//! two arms, which is the gRPC ticket's job, not this module's.
 
-use yog_bootstrap::{
-    ConfigError, EnvEnum, SecretUrl, parse_required_enum, parse_required_u32, required,
-};
+use yog_bootstrap::{ConfigError, SecretUrl, parse_required_enum, parse_required_u32, required};
 
-/// Where the indexer's transactions come from.
-///
-/// Names the acquisition model rather than the wire protocol, because that
-/// is what differs: `Rpc` **notifies then asks** — a `logsSubscribe` socket
-/// carrying signatures, then one `getTransaction` per signature, which is
-/// what caps throughput and drops `transaction_index`. `Grpc` **delivers** —
-/// a single Yellowstone stream carrying whole transactions, no second call.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum IngestSource {
-    Rpc,
-    Grpc,
+mod types;
+
+// `IngestScope` travels on — `bootstrap.rs` re-exports it for the listener.
+// `IngestSource` stops here, for the reason given in the module doc.
+pub(crate) use types::IngestScope;
+use types::IngestSource;
+
+pub(crate) struct Config {
+    pub(crate) database_url: SecretUrl,
+    pub(crate) solana_rpc_ws: SecretUrl,
+    pub(crate) solana_rpc_http: SecretUrl,
+    pub(crate) worker_max_retries: u32,
+    pub(crate) scope: IngestScope,
 }
 
-impl IngestSource {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Rpc => "rpc",
-            Self::Grpc => "grpc",
-        }
-    }
-}
+impl Config {
+    pub(crate) fn load() -> Result<Self, ConfigError> {
+        let source = parse_required_enum::<IngestSource>("INGEST_SOURCE")?;
+        let scope = parse_required_enum::<IngestScope>("INGEST_SCOPE")?;
+        check_supported(source, scope)?;
 
-impl EnvEnum for IngestSource {
-    const EXPECTED: &'static str = "rpc or grpc";
-
-    fn from_env_value(value: &str) -> Option<Self> {
-        match value {
-            "rpc" => Some(Self::Rpc),
-            "grpc" => Some(Self::Grpc),
-            _ => None,
-        }
-    }
-}
-
-/// What the listener subscribes to.
-///
-/// `Protocols` is one subscription per watched protocol, keyed on its
-/// program id — full coverage, and the throughput the free tier cannot
-/// sustain. `Pools` is one per row of `watched_pools`: that is where the
-/// allowlist is enforced — **at the subscription, not by a filter** —
-/// nothing downstream being aware of it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum IngestScope {
-    Protocols,
-    Pools,
-}
-
-impl IngestScope {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Protocols => "protocols",
-            Self::Pools => "pools",
-        }
-    }
-}
-
-impl EnvEnum for IngestScope {
-    const EXPECTED: &'static str = "protocols or pools";
-
-    fn from_env_value(value: &str) -> Option<Self> {
-        match value {
-            "protocols" => Some(Self::Protocols),
-            "pools" => Some(Self::Pools),
-            _ => None,
-        }
+        Ok(Self {
+            database_url: SecretUrl::new(required("DATABASE_URL_INDEXER")?),
+            solana_rpc_ws: SecretUrl::new(required("SOLANA_RPC_WS")?),
+            solana_rpc_http: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
+            worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
+            scope,
+        })
     }
 }
 
 /// Refuse the `(source, scope)` couples this repository cannot honour yet.
+///
+/// Lives here rather than with either type because it validates neither of
+/// them: it validates their *couple*, which is a property of the
+/// configuration as a whole — the same place `validate_ladder` occupies in
+/// `yog-signals`.
 ///
 /// Neither refusal is a law about the two axes — all four couples are
 /// meaningful. What they buy is a failure that *names its cause*:
@@ -142,30 +112,6 @@ fn check_supported(source: IngestSource, scope: IngestScope) -> Result<(), Confi
                 scope.as_str(),
             ),
         }),
-    }
-}
-
-pub(crate) struct Config {
-    pub(crate) database_url: SecretUrl,
-    pub(crate) solana_rpc_ws: SecretUrl,
-    pub(crate) solana_rpc_http: SecretUrl,
-    pub(crate) worker_max_retries: u32,
-    pub(crate) scope: IngestScope,
-}
-
-impl Config {
-    pub(crate) fn load() -> Result<Self, ConfigError> {
-        let source = parse_required_enum::<IngestSource>("INGEST_SOURCE")?;
-        let scope = parse_required_enum::<IngestScope>("INGEST_SCOPE")?;
-        check_supported(source, scope)?;
-
-        Ok(Self {
-            database_url: SecretUrl::new(required("DATABASE_URL_INDEXER")?),
-            solana_rpc_ws: SecretUrl::new(required("SOLANA_RPC_WS")?),
-            solana_rpc_http: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
-            worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
-            scope,
-        })
     }
 }
 

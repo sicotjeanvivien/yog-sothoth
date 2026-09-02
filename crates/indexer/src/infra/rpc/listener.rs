@@ -39,15 +39,10 @@ pub(crate) struct RpcListener {
     watched_protocols: Mutex<HashSet<Protocol>>,
     watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
-    /// What this listener subscribes to: one target per watched protocol,
-    /// or one per row of `watched_pools`.
-    ///
-    /// Both stay. Pool scope is not legacy waiting to be deleted — it is
-    /// how the allowlist is enforced while ingestion is bounded, and it
-    /// remains meaningful on the gRPC path, where the pool addresses go
-    /// into the subscription filter instead. What the RPC upgrade changes
-    /// is the *source* (`INGEST_SOURCE`), a separate axis this listener
-    /// never sees: it only exists on the RPC one.
+    /// Which of the two target shapes to build — see `IngestScope`, which
+    /// owns what the two mean and why both stay. Read here, decided at
+    /// config load; this listener never sees the other axis, `INGEST_SOURCE`,
+    /// having been built because of it.
     scope: IngestScope,
 }
 
