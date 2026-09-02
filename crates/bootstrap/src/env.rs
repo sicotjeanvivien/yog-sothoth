@@ -76,8 +76,8 @@ pub trait EnvEnum: Sized {
 
     /// Map one accepted name to its variant.
     ///
-    /// `value` arrives **already lowercased** — match on lowercase
-    /// literals only, or the variant becomes unreachable.
+    /// `value` arrives **already trimmed and lowercased** — match on bare
+    /// lowercase literals only, or the variant becomes unreachable.
     fn from_env_value(value: &str) -> Option<Self>;
 }
 
@@ -87,9 +87,15 @@ pub trait EnvEnum: Sized {
 /// present but not one of the accepted names — which are listed back to
 /// the operator, since a config that dies at startup should say what it
 /// wanted instead of what it got.
+///
+/// Surrounding whitespace is trimmed for the same reason the value is
+/// lowercased, and it is not cosmetic: this repository's `.env` has CRLF
+/// line endings, and a `\r` that ever reached here would produce
+/// ``invalid value for `X`: got `pools`, expected … or pools`` — a
+/// refusal whose cause is an invisible byte.
 pub fn parse_required_enum<T: EnvEnum>(key: &str) -> Result<T, ConfigError> {
     let raw = required(key)?;
-    T::from_env_value(&raw.to_ascii_lowercase()).ok_or_else(|| ConfigError::InvalidValue {
+    T::from_env_value(&raw.trim().to_ascii_lowercase()).ok_or_else(|| ConfigError::InvalidValue {
         key: key.to_string(),
         value: raw,
         expected: T::EXPECTED,

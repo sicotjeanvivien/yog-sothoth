@@ -108,6 +108,21 @@ fn parse_required_enum_ignores_case() {
     );
 }
 
+/// Same reason as the case test, and less obvious: this repository's
+/// `.env` has CRLF line endings. A `\r` reaching `from_env_value` would
+/// be refused with a message showing a value that looks correct.
+#[test]
+fn parse_required_enum_ignores_surrounding_whitespace() {
+    // SAFETY: unique key, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_ENUM_PADDED", "  Blue\r\n");
+    }
+    assert_eq!(
+        parse_required_enum::<Colour>("YOG_TEST_ENUM_PADDED").unwrap(),
+        Colour::Blue
+    );
+}
+
 #[test]
 fn parse_required_enum_rejects_an_unknown_name_and_lists_the_accepted_ones() {
     // SAFETY: unique key, isolated from other tests

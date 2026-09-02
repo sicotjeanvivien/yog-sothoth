@@ -228,21 +228,23 @@ and all four couples mean something:
 
 | | `INGEST_SCOPE=pools` | `INGEST_SCOPE=protocols` |
 |---|---|---|
-| **`INGEST_SOURCE=rpc`** | what runs today | target mode of the RPC path — **refused at startup** |
-| **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter | production target — **refused at startup** |
+| **`INGEST_SOURCE=rpc`** | what runs today — the only couple that starts | target mode of the RPC path — **refused** |
+| **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter — **refused** | production target — **refused** |
 
-The two refusals are states of this repository, not laws, and they are raised
-by `check_supported` in `bootstrap/config.rs` **at config load**, each naming
-its cause:
+**Three of the four are refused today**, for two causes, both raised by
+`check_supported` in `bootstrap/config.rs` **at config load**:
 
-- `grpc` has no listener yet — the RPC path is the only implemented source;
+- `grpc`, under either scope, has no listener yet — the RPC path is the only
+  implemented source;
 - `protocols` builds its targets from `RpcListener::_watch`, which nothing
   calls: the listener would start with zero targets. It gets wired with the
   gRPC migration.
 
-Both disappear together the day that migration lands. Until then, refusing
-early is what keeps a configuration mistake from surfacing as
-`NoSubscriptionTargets`, which reads like a network fault and is not one.
+Each refusal is a state of this repository, not a law about the axes: all four
+couples are meaningful, and the two `Err` arms disappear together the day that
+migration lands. Until then, refusing early is what keeps a configuration
+mistake from surfacing as `NoSubscriptionTargets`, which reads like a network
+fault and is not one.
 
 Connects to Postgres as `yog_indexer` — RW on event/pool tables, RO on
 `watched_pools`.
