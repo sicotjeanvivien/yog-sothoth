@@ -30,6 +30,37 @@ fn required_fails_when_empty() {
     assert!(matches!(err, ConfigError::MissingVariable(_)));
 }
 
+/// The `.env` of this repository is CRLF, and the documented native
+/// workflow sources it into the shell. Trimming lives in `required`, so
+/// every helper built on it — `parse_required_u32` and the connection
+/// strings included — inherits the fix instead of restating it.
+#[test]
+fn required_trims_surrounding_whitespace() {
+    // SAFETY: unique keys, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_REQUIRED_CRLF", "postgresql://host/db\r\n");
+        env::set_var("YOG_TEST_REQUIRED_U32_CRLF", " 10\r");
+    }
+    assert_eq!(
+        required("YOG_TEST_REQUIRED_CRLF").unwrap(),
+        "postgresql://host/db"
+    );
+    assert_eq!(
+        parse_required_u32("YOG_TEST_REQUIRED_U32_CRLF").unwrap(),
+        10
+    );
+}
+
+#[test]
+fn required_treats_a_blank_value_as_missing() {
+    // SAFETY: unique key, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_REQUIRED_BLANK", "  \r\n");
+    }
+    let err = required("YOG_TEST_REQUIRED_BLANK").unwrap_err();
+    assert!(matches!(err, ConfigError::MissingVariable(_)));
+}
+
 #[test]
 fn parse_required_bool_accepts_true_false_case_insensitive() {
     // SAFETY: unique keys, isolated from other tests

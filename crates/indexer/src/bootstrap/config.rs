@@ -8,9 +8,10 @@
 //!   protocol or one entry per row of `watched_pools`.
 //!
 //! They are orthogonal on purpose: all four couples mean something, and the
-//! two that cannot run **today** are refused here, at load time, rather than
-//! surfacing further down as an unexplained `NoSubscriptionTargets`. Both
-//! refusals are states of this repository, not laws — see `check_supported`.
+//! **three** that cannot run today — for two distinct causes, hence two `Err`
+//! arms — are refused here, at load time, rather than surfacing further down
+//! as an unexplained `NoSubscriptionTargets`. Each refusal is a state of this
+//! repository, not a law — see `check_supported`.
 
 use yog_bootstrap::{
     ConfigError, EnvEnum, SecretUrl, parse_required_enum, parse_required_u32, required,
@@ -115,11 +116,17 @@ impl Config {
 /// Refuse the `(source, scope)` couples this repository cannot honour yet.
 ///
 /// Neither refusal is a law about the two axes — all four couples are
-/// meaningful, and both `Err` arms disappear together the day the Yellowstone
-/// listener lands. What they buy in the meantime is a failure that *names its
-/// cause*: `INGEST_SCOPE=protocols` on the RPC path used to reach the
-/// listener and die there on `NoSubscriptionTargets`, which reads like a
-/// network problem and is a configuration one.
+/// meaningful. What they buy is a failure that *names its cause*:
+/// `INGEST_SCOPE=protocols` on the RPC path used to reach the listener and
+/// die there on `NoSubscriptionTargets`, which reads like a network problem
+/// and is a configuration one.
+///
+/// **The two arms have different preconditions, and do not lift together.**
+/// The `grpc` arm goes when a `GrpcListener` exists. The `(rpc, protocols)`
+/// arm goes when `RpcListener::_watch` has a caller — expected of the gRPC
+/// migration, but a separate fact: lifting it merely because gRPC landed
+/// would restore the failure this whole change was written to remove, an
+/// indexer that cannot start on a fresh clone.
 ///
 /// The match is exhaustive on the couple deliberately. Adding a variant to
 /// either enum — the "gRPC to detect, `getTransaction` to fetch" stepping
