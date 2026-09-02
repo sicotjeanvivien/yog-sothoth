@@ -18,7 +18,6 @@
 //! Delete this file once the question is answered.
 
 use dotenvy::dotenv;
-use std::env;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
@@ -39,7 +38,7 @@ async fn main() -> Result<()> {
     yog_bootstrap::init_rustls();
     dotenv().ok();
     // Read WS URL from env — same key as the main indexer for consistency.
-    let ws_url = env::var("SOLANA_RPC_WS")
+    let ws_url = yog_bootstrap::required("SOLANA_RPC_WS")
         .context("SOLANA_RPC_WS must be set (e.g. wss://api.mainnet-beta.solana.com)")?;
 
     eprintln!("# Connecting to {}", redact(&ws_url));

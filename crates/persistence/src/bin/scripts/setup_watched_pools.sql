@@ -14,7 +14,7 @@
 --
 -- ## Why this file exists at all
 --
--- Under `MODE_PROTOCOL_CENTRIC=false` — the local default — the indexer opens
+-- Under `INGEST_SCOPE=pools` — the local default — the indexer opens
 -- one `logsSubscribe` per active row of `watched_pools`. With no active row it
 -- exits on `NoSubscriptionTargets`, so this step is not optional; without it a
 -- freshly recreated database gives an indexer that cannot start.

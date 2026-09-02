@@ -207,8 +207,16 @@ async fn bootstrap() -> Result<()> {
 }
 
 /// Read a connection URL from the environment, naming the role it must carry.
+///
+/// Goes through `yog_bootstrap::required` rather than `std::env::var` so the
+/// URL inherits the two rules every other variable in the workspace obeys: a
+/// blank value counts as missing, and surrounding whitespace is trimmed. The
+/// second is not cosmetic here — this repository's `.env` is CRLF, and the
+/// native workflow sources it into the shell, so a trailing `\r` would ride
+/// inside the connection string and come back as an opaque network error.
 fn require_env(var: &str, role: &str) -> Result<String> {
-    std::env::var(var).with_context(|| format!("{var} must be set (credentials for {role})"))
+    yog_bootstrap::required(var)
+        .with_context(|| format!("{var} must be set (credentials for {role})"))
 }
 
 /// Connect using the URL held by `var`, which must carry `role`.

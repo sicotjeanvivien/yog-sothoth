@@ -176,7 +176,7 @@ fn init_listener(config: &Config) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(
         config.solana_rpc_ws.expose().to_string(),
         config.worker_max_retries,
-        config.mode_protocol_centric,
+        config.scope,
     ))
 }
 

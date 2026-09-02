@@ -3,14 +3,26 @@ use std::env;
 use crate::error::ConfigError;
 
 /// Read a required environment variable. Returns `MissingVariable` if
-/// the key is absent or empty.
+/// the key is absent, empty, or blank.
 ///
 /// Empty strings are treated as missing on purpose — a `.env` line like
 /// `DATABASE_URL=` is almost certainly an oversight, and silently
 /// returning an empty value would propagate the bug deeper into the
 /// system before failing.
+///
+/// Surrounding whitespace is trimmed **here**, so that every helper
+/// built on this one inherits it rather than restating it: this
+/// repository's `.env` has CRLF line endings, and the documented native
+/// workflow sources it into the shell (`set -a; . ./.env`). A leaked
+/// `\r` then reaches whichever parser reads the value, and produces a
+/// refusal whose cause is an invisible byte — ``got `10`, expected a
+/// non-negative integer`` — or, on a connection string, an opaque
+/// network error. Trimming here is what lets every caller inherit the rule
+/// instead of restating it; this doc deliberately does **not** claim to
+/// cover every environment read in the workspace — that claim was made
+/// three times and was wrong three times, see `duration_var`.
 pub fn required(key: &str) -> Result<String, ConfigError> {
-    match env::var(key) {
+    match env::var(key).map(|v| v.trim().to_string()) {
         Ok(v) if !v.is_empty() => Ok(v),
         _ => Err(ConfigError::MissingVariable(key.to_string())),
     }
@@ -50,8 +62,21 @@ pub fn parse_required_bool(key: &str) -> Result<bool, ConfigError> {
 
 /// Read an optional `u64` environment variable, falling back to
 /// `default` when unset. A present-but-unparseable value is an error.
+///
+/// Trims for the same reason `required` does, which it cannot reuse: a value
+/// carrying a default is allowed to be absent, and `required` refuses that.
+/// Known siblings in the same position, trimming for the same reason:
+/// `decimal_var` in `yog-signals`, and `LOG_FORMAT` / `RUST_LOG` in
+/// `init_tracing`.
+///
+/// **That list is not a guarantee, and no claim here should be read as one.**
+/// It was asserted as exhaustive three times in one day and was wrong three
+/// times — the last miss being `RUST_LOG`, which `tracing-subscriber` reads
+/// *inside its own crate*, so no grep of this workspace's sources could have
+/// found it. A reader adding an environment-backed value: route it through
+/// `required` if it is mandatory, and trim it yourself if it is not.
 pub fn duration_var(key: &'static str, default: u64) -> Result<u64, ConfigError> {
-    match std::env::var(key) {
+    match std::env::var(key).map(|v| v.trim().to_string()) {
         Err(_) => Ok(default),
         Ok(raw) => raw.parse::<u64>().map_err(|_| ConfigError::InvalidValue {
             key: key.to_string(),
@@ -59,6 +84,45 @@ pub fn duration_var(key: &'static str, default: u64) -> Result<u64, ConfigError>
             expected: "a integer (u64)",
         }),
     }
+}
+
+/// A configuration value read from the environment as one of a closed
+/// set of names — the alternative to a `bool` whenever the axis has, or
+/// may one day have, more than two states.
+///
+/// Implementors describe *what* their names are. They do not deal with
+/// case, nor with what an unknown value costs: `parse_required_enum`
+/// owns both, so the rule is written once instead of being restated —
+/// and forgotten — in every enum.
+pub trait EnvEnum: Sized {
+    /// The accepted values, phrased as they appear in the error message
+    /// (e.g. `"rpc or grpc"`).
+    const EXPECTED: &'static str;
+
+    /// Map one accepted name to its variant.
+    ///
+    /// `value` arrives **already trimmed** (by `required`) **and
+    /// lowercased** — match on bare lowercase literals only, or the
+    /// variant becomes unreachable.
+    fn from_env_value(value: &str) -> Option<Self>;
+}
+
+/// Read a required environment variable and parse it as an [`EnvEnum`].
+///
+/// Fails with `MissingVariable` if absent or empty, `InvalidValue` if
+/// present but not one of the accepted names — which are listed back to
+/// the operator, since a config that dies at startup should say what it
+/// wanted instead of what it got.
+///
+/// Case is folded here; whitespace is already gone, trimmed by
+/// `required` for every variable rather than by this helper for two.
+pub fn parse_required_enum<T: EnvEnum>(key: &str) -> Result<T, ConfigError> {
+    let raw = required(key)?;
+    T::from_env_value(&raw.to_ascii_lowercase()).ok_or_else(|| ConfigError::InvalidValue {
+        key: key.to_string(),
+        value: raw,
+        expected: T::EXPECTED,
+    })
 }
 
 #[cfg(test)]

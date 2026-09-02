@@ -241,8 +241,13 @@ fn validate_ladder(
 
 /// Read an optional `Decimal` env var, falling back to `default` when unset.
 /// A present-but-unparseable value is an error (mirrors `duration_var`).
+///
+/// Trims for the same reason `yog_bootstrap::required` does: a `\r` from the
+/// CRLF `.env`, sourced into the shell by the native workflow, would otherwise
+/// be refused as ``got `0.6`, expected a decimal number`` — a message whose
+/// cause is invisible.
 fn decimal_var(key: &'static str, default: Decimal) -> Result<Decimal, ConfigError> {
-    match std::env::var(key) {
+    match std::env::var(key).map(|v| v.trim().to_string()) {
         Err(_) => Ok(default),
         Ok(raw) => raw
             .parse::<Decimal>()

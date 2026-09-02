@@ -695,7 +695,7 @@ Until the indexer runs on an upgraded RPC path (Helius `transactionSubscribe`
 or a managed Yellowstone gRPC stream), ingestion is bounded by an allowlist of
 pools stored in the `watched_pools` table. The protocol-centric architecture is
 preserved — the allowlist bounds **what the indexer subscribes to**, not what it
-accepts once received: under `MODE_PROTOCOL_CENTRIC=false` the listener opens
+accepts once received: under `INGEST_SCOPE=pools` the listener opens
 one `logsSubscribe` per active row instead of one per program id
 (`WatchedPoolService::restore_subscriptions`). Nothing downstream is aware of
 it — no filter, no code path conditioned on a pool list — so lifting the
@@ -874,7 +874,7 @@ place:
 - **A managed Yellowstone gRPC (Geyser) provider** (Shyft, Triton, …) with
   matching throughput.
 
-At that point the indexer switches to `MODE_PROTOCOL_CENTRIC=true` — one
+At that point the indexer switches to `INGEST_SCOPE=protocols` — one
 subscription per program id — and ingestion returns to full protocol-centric
 coverage. The `watched_pools` table stays in the schema; it simply stops being
 read, becoming purely informational rather than enforced.
