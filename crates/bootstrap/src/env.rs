@@ -17,7 +17,10 @@ use crate::error::ConfigError;
 /// `\r` then reaches whichever parser reads the value, and produces a
 /// refusal whose cause is an invisible byte — ``got `10`, expected a
 /// non-negative integer`` — or, on a connection string, an opaque
-/// network error. One definition covers all six required variables.
+/// network error. Trimming here is what lets every caller inherit the rule
+/// instead of restating it; this doc deliberately does **not** claim to
+/// cover every environment read in the workspace — that claim was made
+/// three times and was wrong three times, see `duration_var`.
 pub fn required(key: &str) -> Result<String, ConfigError> {
     match env::var(key).map(|v| v.trim().to_string()) {
         Ok(v) if !v.is_empty() => Ok(v),
@@ -62,13 +65,16 @@ pub fn parse_required_bool(key: &str) -> Result<bool, ConfigError> {
 ///
 /// Trims for the same reason `required` does, which it cannot reuse: a value
 /// carrying a default is allowed to be absent, and `required` refuses that.
+/// Known siblings in the same position, trimming for the same reason:
+/// `decimal_var` in `yog-signals`, and `LOG_FORMAT` / `RUST_LOG` in
+/// `init_tracing`.
 ///
-/// Two siblings are in the same position and trim for the same reason —
-/// `decimal_var` in `yog-signals`, and `LOG_FORMAT` in `init_tracing`. Those
-/// three are the whole list, enumerated rather than assumed (`grep -rn
-/// 'env::var(' crates/`, 2 September 2026): every other environment read in
-/// the workspace goes through `required` and inherits the rule instead of
-/// restating it.
+/// **That list is not a guarantee, and no claim here should be read as one.**
+/// It was asserted as exhaustive three times in one day and was wrong three
+/// times — the last miss being `RUST_LOG`, which `tracing-subscriber` reads
+/// *inside its own crate*, so no grep of this workspace's sources could have
+/// found it. A reader adding an environment-backed value: route it through
+/// `required` if it is mandatory, and trim it yourself if it is not.
 pub fn duration_var(key: &'static str, default: u64) -> Result<u64, ConfigError> {
     match std::env::var(key).map(|v| v.trim().to_string()) {
         Err(_) => Ok(default),

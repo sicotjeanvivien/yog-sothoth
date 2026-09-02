@@ -232,8 +232,8 @@ and all four couples mean something:
 | **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter — **refused** | production target — **refused** |
 
 **Three of the four are refused today**, for two causes, both raised by
-`check_supported` in `bootstrap/config.rs`, which `Config::load` calls
-**before anything else is read**:
+`check_supported` in `bootstrap/config/validator.rs`, which `Config::load`
+calls **before anything else is read**:
 
 - `grpc`, under either scope, has no listener yet — the RPC path is the only
   implemented source;
