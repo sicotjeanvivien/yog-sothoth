@@ -91,10 +91,10 @@ orchestrator of a fleet of `SubscriptionWorker` instances — one per
 (`RPC_WORKER_MAX_RETRIES`). Solana's `logsSubscribe` accepts exactly one
 pubkey per `mentions` filter, so **what a target is depends on the mode**:
 
-- `MODE_PROTOCOL_CENTRIC=true` — one target per watched protocol, the
+- `INGEST_SCOPE=protocols` — one target per watched protocol, the
   subscription pubkey being the program id. The target mode; it needs an RPC
   that can sustain the full firehose.
-- `MODE_PROTOCOL_CENTRIC=false` — one target per row of `watched_pools`,
+- `INGEST_SCOPE=pools` — one target per row of `watched_pools`,
   restored at startup by `WatchedPoolService::restore_subscriptions`. This is
   where the allowlist is enforced: **at the subscription, not by a filter**
   (see [pool observation model](../../README.md#pool-observation-model)).
@@ -210,19 +210,39 @@ DATABASE_URL_INDEXER=postgresql://yog_indexer:...@localhost:5433/yog_sothoth
 SOLANA_RPC_WS=wss://...
 SOLANA_RPC_HTTP=https://...
 RPC_WORKER_MAX_RETRIES=10
-MODE_PROTOCOL_CENTRIC=false
+INGEST_SOURCE=rpc
+INGEST_SCOPE=pools
 ```
 
-All five are required — none has an implicit default, and a missing one fails
+All six are required — none has an implicit default, and a missing one fails
 at startup with a `ConfigError`.
 
-`MODE_PROTOCOL_CENTRIC` picks what the listener subscribes to (see above).
-`false` — one subscription per watched pool — is what runs today, because the
-free RPC tier cannot sustain the firehose; `true` is the target mode and the
-value shipped in `.env.example`. Note that protocol-centric targets are built
-from `RpcListener::_watch`, which nothing calls yet: it gets wired with the gRPC
-migration, so switching the flag today yields `NoSubscriptionTargets` at
-startup.
+### The two ingestion axes
+
+`INGEST_SOURCE` says **where transactions come from** — the acquisition model,
+not the wire protocol: `rpc` notifies then asks (a `logsSubscribe` socket, then
+one `getTransaction` per signature), `grpc` delivers (a Yellowstone stream
+carrying whole transactions). `INGEST_SCOPE` says **what is subscribed to**
+(see above). They are separate variables because they are separate questions,
+and all four couples mean something:
+
+| | `INGEST_SCOPE=pools` | `INGEST_SCOPE=protocols` |
+|---|---|---|
+| **`INGEST_SOURCE=rpc`** | what runs today | target mode of the RPC path — **refused at startup** |
+| **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter | production target — **refused at startup** |
+
+The two refusals are states of this repository, not laws, and they are raised
+by `check_supported` in `bootstrap/config.rs` **at config load**, each naming
+its cause:
+
+- `grpc` has no listener yet — the RPC path is the only implemented source;
+- `protocols` builds its targets from `RpcListener::_watch`, which nothing
+  calls: the listener would start with zero targets. It gets wired with the
+  gRPC migration.
+
+Both disappear together the day that migration lands. Until then, refusing
+early is what keeps a configuration mistake from surfacing as
+`NoSubscriptionTargets`, which reads like a network fault and is not one.
 
 Connects to Postgres as `yog_indexer` — RW on event/pool tables, RO on
 `watched_pools`.

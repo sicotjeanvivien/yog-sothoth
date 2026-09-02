@@ -11,6 +11,7 @@ use yog_core::domain::Protocol;
 
 use crate::{
     application::workers::SubscriptionWorker,
+    bootstrap::IngestScope,
     error::{RpcListenerError, SubscriptionWorkerError},
     infra::rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
 };
@@ -38,29 +39,26 @@ pub(crate) struct RpcListener {
     watched_protocols: Mutex<HashSet<Protocol>>,
     watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
-    /// Selects between protocol-centric (subscribe to programs) and
-    /// pool-centric (subscribe to individual pool accounts) indexing.
+    /// What this listener subscribes to: one target per watched protocol,
+    /// or one per row of `watched_pools`.
     ///
-    /// TODO(post-RPC-upgrade): remove pool-centric mode and this flag.
-    /// Pool-centric exists only because the free public RPC cannot sustain
-    /// the full protocol firehose. Once we migrate to a paid RPC (Helius /
-    /// Shyft / Triton, see roadmap), protocol-centric becomes the only mode
-    /// and `target_pools` + this flag should be deleted.
-    mode_protocol_centric: bool,
+    /// Both stay. Pool scope is not legacy waiting to be deleted — it is
+    /// how the allowlist is enforced while ingestion is bounded, and it
+    /// remains meaningful on the gRPC path, where the pool addresses go
+    /// into the subscription filter instead. What the RPC upgrade changes
+    /// is the *source* (`INGEST_SOURCE`), a separate axis this listener
+    /// never sees: it only exists on the RPC one.
+    scope: IngestScope,
 }
 
 impl RpcListener {
-    pub(crate) fn new(
-        ws_url: String,
-        worker_max_retries: u32,
-        mode_protocol_centric: bool,
-    ) -> Self {
+    pub(crate) fn new(ws_url: String, worker_max_retries: u32, scope: IngestScope) -> Self {
         Self {
             ws_url,
             watched_protocols: Mutex::new(HashSet::new()),
             watched_pools: Mutex::new(HashSet::new()),
             worker_max_retries,
-            mode_protocol_centric,
+            scope,
         }
     }
 
@@ -191,10 +189,9 @@ impl RpcListener {
     async fn build_subscription_targets(
         &self,
     ) -> Result<Vec<SubscriptionTarget>, RpcListenerError> {
-        let targets = if self.mode_protocol_centric {
-            self.target_protocols().await
-        } else {
-            self.target_pools().await
+        let targets = match self.scope {
+            IngestScope::Protocols => self.target_protocols().await,
+            IngestScope::Pools => self.target_pools().await,
         };
 
         if targets.is_empty() {

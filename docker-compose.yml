@@ -115,7 +115,12 @@ services:
       SOLANA_RPC_WS: ${SOLANA_RPC_WS}
       SOLANA_RPC_HTTP: ${SOLANA_RPC_HTTP}
       RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}
-      MODE_PROTOCOL_CENTRIC: ${MODE_PROTOCOL_CENTRIC:-true}
+      # No default on purpose, unlike the retry budget above and the log
+      # knobs below: a default here picks an ingestion mode nobody chose —
+      # which is how this file came to ship `:-true`, the one couple that
+      # cannot start. Unset, the indexer stops on `MissingVariable`.
+      INGEST_SOURCE: ${INGEST_SOURCE}
+      INGEST_SCOPE: ${INGEST_SCOPE}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     entrypoint:

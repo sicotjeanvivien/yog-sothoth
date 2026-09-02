@@ -61,6 +61,41 @@ pub fn duration_var(key: &'static str, default: u64) -> Result<u64, ConfigError>
     }
 }
 
+/// A configuration value read from the environment as one of a closed
+/// set of names — the alternative to a `bool` whenever the axis has, or
+/// may one day have, more than two states.
+///
+/// Implementors describe *what* their names are. They do not deal with
+/// case, nor with what an unknown value costs: `parse_required_enum`
+/// owns both, so the rule is written once instead of being restated —
+/// and forgotten — in every enum.
+pub trait EnvEnum: Sized {
+    /// The accepted values, phrased as they appear in the error message
+    /// (e.g. `"rpc or grpc"`).
+    const EXPECTED: &'static str;
+
+    /// Map one accepted name to its variant.
+    ///
+    /// `value` arrives **already lowercased** — match on lowercase
+    /// literals only, or the variant becomes unreachable.
+    fn from_env_value(value: &str) -> Option<Self>;
+}
+
+/// Read a required environment variable and parse it as an [`EnvEnum`].
+///
+/// Fails with `MissingVariable` if absent or empty, `InvalidValue` if
+/// present but not one of the accepted names — which are listed back to
+/// the operator, since a config that dies at startup should say what it
+/// wanted instead of what it got.
+pub fn parse_required_enum<T: EnvEnum>(key: &str) -> Result<T, ConfigError> {
+    let raw = required(key)?;
+    T::from_env_value(&raw.to_ascii_lowercase()).ok_or_else(|| ConfigError::InvalidValue {
+        key: key.to_string(),
+        value: raw,
+        expected: T::EXPECTED,
+    })
+}
+
 #[cfg(test)]
 #[path = "env_tests.rs"]
 mod tests;
