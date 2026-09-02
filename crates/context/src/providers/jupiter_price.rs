@@ -126,8 +126,7 @@ impl JupiterPriceClient {
             .get(&url)
             .header("x-api-key", &self.api_key)
             .send()
-            .await
-            .map_err(|e| SourceError::Http(e.to_string()))?;
+            .await?;
 
         if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
             return Err(SourceError::RateLimited {
@@ -136,11 +135,9 @@ impl JupiterPriceClient {
         }
 
         let response = response
-            .error_for_status()
-            .map_err(|e| SourceError::Http(e.to_string()))?
+            .error_for_status()?
             .json::<HashMap<String, JupiterPriceEntry>>()
-            .await
-            .map_err(|e| SourceError::Decode(e.to_string()))?;
+            .await?;
 
         Ok(response
             .into_iter()

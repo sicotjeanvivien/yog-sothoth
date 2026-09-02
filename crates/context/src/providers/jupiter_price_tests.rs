@@ -249,6 +249,11 @@ fn response_429(retry_after_secs: u64) -> String {
     )
 }
 
+fn response_500() -> String {
+    "HTTP/1.1 500 Internal Server Error\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+        .to_string()
+}
+
 fn response_200(body: &str) -> String {
     format!(
         "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
@@ -297,4 +302,50 @@ fn full_response_handles_empty_object() {
         .filter_map(into_fetched_price)
         .collect();
     assert!(projected.is_empty());
+}
+
+// ── Redaction: the two error kinds a live server can produce ────────
+
+/// Lives here, and not beside the conversion it tests, because the local
+/// HTTP server above is the only one in the crate — duplicating it to keep
+/// the test "in the right file" would repeat exactly the kind of thing this
+/// whole change is about. The connect-failure half of the proof is in
+/// `error/source_tests.rs`, which needs no server.
+///
+/// Covers what that one cannot: a non-2xx status and an undecodable body,
+/// both requested through a URL carrying a secret.
+#[tokio::test]
+async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret() {
+    const SECRET: &str = "SECRET-DE-TEST-a1b2c3d4";
+
+    let base = serve_scripted_responses(vec![response_500(), response_200("pas du json")]);
+    let url = format!("{base}/?api-key={SECRET}");
+
+    // 1. Non-2xx → transport error, secret gone.
+    let status_err = SourceError::from(
+        reqwest::Client::new()
+            .get(&url)
+            .send()
+            .await
+            .expect("the scripted server answers")
+            .error_for_status()
+            .expect_err("500 must be an error"),
+    );
+    assert!(matches!(status_err, SourceError::Http(_)), "{status_err}");
+    assert!(!status_err.to_string().contains(SECRET), "{status_err}");
+
+    // 2. 2xx with a body that is not JSON → decode error, secret gone, and
+    //    the variant still distinguishes it from a transport failure.
+    let decode_err = SourceError::from(
+        reqwest::Client::new()
+            .get(&url)
+            .send()
+            .await
+            .expect("the scripted server answers")
+            .json::<HashMap<String, JupiterPriceEntry>>()
+            .await
+            .expect_err("that body is not JSON"),
+    );
+    assert!(matches!(decode_err, SourceError::Decode(_)), "{decode_err}");
+    assert!(!decode_err.to_string().contains(SECRET), "{decode_err}");
 }

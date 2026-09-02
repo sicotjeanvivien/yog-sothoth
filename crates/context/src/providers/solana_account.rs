@@ -108,13 +108,10 @@ impl SolanaAccountClient {
             .post(&self.rpc_url)
             .json(&request)
             .send()
-            .await
-            .map_err(|e| SourceError::Http(e.to_string()))?
-            .error_for_status()
-            .map_err(|e| SourceError::Http(e.to_string()))?
+            .await?
+            .error_for_status()?
             .json::<RpcResponse>()
-            .await
-            .map_err(|e| SourceError::Decode(e.to_string()))?;
+            .await?;
 
         // Zip each requested address with its (possibly null) account. Missing
         // accounts and undecodable base64 are dropped — retried next cycle.
