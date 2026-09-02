@@ -321,8 +321,14 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
     let base = serve_scripted_responses(vec![response_500(), response_200("pas du json")]);
     let url = format!("{base}/?api-key={SECRET}");
 
+    // `http_client()` and not `Client::new()`, for the reason spelled out in
+    // `error/source_tests.rs`: the scripted server is a single thread that
+    // `expect`s its way through accept/read/write, and a client with no
+    // timeout turns any mishap there into a test that hangs for ever instead
+    // of one that fails in 15 s with a diagnosis.
+
     // 1. Non-2xx → transport error, secret gone.
-    let raw_status = reqwest::Client::new()
+    let raw_status = crate::providers::http_client()
         .get(&url)
         .send()
         .await
@@ -339,7 +345,7 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
 
     // 2. 2xx with a body that is not JSON → decode error, secret gone, and
     //    the variant still distinguishes it from a transport failure.
-    let raw_decode = reqwest::Client::new()
+    let raw_decode = crate::providers::http_client()
         .get(&url)
         .send()
         .await

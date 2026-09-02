@@ -44,7 +44,17 @@ async fn a_transport_failure_carries_neither_the_url_nor_its_secret() {
     let rendered = converted.to_string();
 
     assert!(!rendered.contains(SECRET), "secret leaked: {rendered}");
-    assert!(!rendered.contains("127.0.0.1"), "url leaked: {rendered}");
+    // The URL is gone in the shape that matters — the query string that
+    // carries the key, and the URL form itself. Deliberately *not* asserting
+    // the absence of `127.0.0.1`: the resolved address is not the secret this
+    // invariant protects, and a purely diagnostic change in hyper-util (which
+    // today writes its connect message without the peer address) would turn
+    // that assertion red without any regression here.
+    assert!(
+        !rendered.contains("api-key="),
+        "query string leaked: {rendered}"
+    );
+    assert!(!rendered.contains("http://"), "url leaked: {rendered}");
     assert!(matches!(converted, SourceError::Http(_)), "{rendered}");
 
     // And the message must still say *what* failed. reqwest renders only the
