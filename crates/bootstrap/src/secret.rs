@@ -7,9 +7,10 @@
 //! the only diagnostic a crashing daemon leaves behind, which this repository
 //! learned the expensive way (see `04 - release/cle-api-en-clair-dans-les-logs.md`
 //! in the tracking repo: "retirer l'URL avait emporté le seul diagnostic qui
-//! restait"). So [`SecretUrl`] keeps the carrier and redacts the three places a
-//! secret hides in a URL — password, path, query string — falling back to the
-//! scheme alone when it cannot locate them with confidence.
+//! restait"). So [`SecretUrl`] keeps the carrier and redacts every component a
+//! URL can hide a credential in — userinfo, path, query string, fragment —
+//! falling back to the scheme alone when it cannot locate them with
+//! confidence.
 //!
 //! # Why `new` is not public
 //!
@@ -79,13 +80,18 @@ impl fmt::Debug for SecretKey {
 
 /// A URL that carries a secret, with the non-secret part kept legible.
 ///
-/// `Display` and `Debug` redact **the three places a URL hides a credential**:
+/// `Display` and `Debug` redact **every component a URL can hide a credential
+/// in**, which is every component except the scheme and the authority's host
+/// and port:
 ///
-/// - the password in the userinfo — `postgres://role:pass@host/db`;
+/// - the userinfo — the password of `postgres://role:pass@host/db`, and the
+///   whole of it for `https://<token>@host`, which is a real auth shape;
 /// - the path — `https://host/v2/<key>`, as Alchemy and QuickNode do;
-/// - the query string — `https://host/?api-key=…`.
+/// - the query string — `https://host/?api-key=…`;
+/// - the fragment — which nothing here reads, so hiding it costs nothing.
 ///
-/// What survives is scheme, role, host and port. That is deliberate: a daemon
+/// What survives is scheme, host and port — plus, for Postgres alone, the role
+/// name and the database name. That is deliberate: a daemon
 /// that dies on startup must still say *which* database or *which* provider it
 /// could not reach.
 ///
@@ -98,11 +104,12 @@ impl fmt::Debug for SecretKey {
 ///   → https://solana-mainnet.g.alchemy.com/***REDACTED***
 /// ```
 ///
-/// **The path is the exception that proves the rule**: it is redacted for every
-/// scheme *except* Postgres, whose path is the database name. A provider nobody
-/// has met yet is covered by default rather than by having been recognised —
-/// see [`redact`] and [`redact_password`] for what happens when even that is
-/// not enough to locate the secret.
+/// **Postgres is the one exception, and it is ours**: its path is the database
+/// name and its passwordless userinfo is a least-privilege role, so both
+/// survive. Every other scheme loses both, which is what makes a provider
+/// nobody has met yet covered by default rather than by having been recognised.
+/// See [`redact_password`] for what happens when even that is not enough to
+/// locate the secret.
 ///
 /// # What this type does not cover
 ///
@@ -154,9 +161,9 @@ impl fmt::Debug for SecretUrl {
 
 /// Redact everything a URL can use to carry a credential, keeping the rest.
 ///
-/// Three places, applied in that order: the password in the userinfo, the path,
-/// and the query string. Deliberately crude, and deliberately without a
-/// URL-parser dependency.
+/// Four components, applied in that order: userinfo, path, query string,
+/// fragment. Deliberately crude, and deliberately without a URL-parser
+/// dependency.
 ///
 /// # The rule fails closed, and that is the point
 ///
@@ -172,7 +179,17 @@ impl fmt::Debug for SecretUrl {
 /// provider or which database a dying process could not reach, which is the
 /// whole reason this is not a blanket `****`.
 fn redact(url: &str) -> String {
-    redact_query(&redact_path(&redact_password(url)))
+    redact_fragment(&redact_query(&redact_path(&redact_password(url))))
+}
+
+/// Is this one of the two Postgres schemes?
+///
+/// The only scheme this module treats specially, and it earns that twice: its
+/// path is the database name, and its userinfo is a least-privilege role name.
+/// Both are diagnostics worth keeping, and both are ours — no third party
+/// decides what goes there.
+fn is_postgres(url: &str) -> bool {
+    url.starts_with("postgres://") || url.starts_with("postgresql://")
 }
 
 /// Replace the password in `scheme://user:password@host` with the placeholder.
@@ -215,8 +232,16 @@ fn redact_password(url: &str) -> String {
         Some(at) if !at_beyond_authority => {
             let userinfo = &authority[..at];
             let Some(colon) = userinfo.find(':') else {
-                // `user@host` — a username alone is not a secret.
-                return url.to_string();
+                // A userinfo with no password. For Postgres that is a role
+                // name, and naming the role is the diagnostic. For anything
+                // else `https://<token>@host` is a real authentication shape,
+                // so the bare userinfo is treated as the secret it may be —
+                // the host still survives.
+                return if is_postgres(url) {
+                    url.to_string()
+                } else {
+                    format!("{}{}{}", &url[..start], REDACTED, &url[start + at..])
+                };
             };
             format!(
                 "{}{}:{}{}",
@@ -245,7 +270,7 @@ fn redact_password(url: &str) -> String {
 /// trailing slash and stays recognisable.
 fn redact_path(url: &str) -> String {
     // Postgres keeps its path: it is the database name.
-    if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+    if is_postgres(url) {
         return url.to_string();
     }
     let Some(scheme_end) = url.find("://") else {
@@ -270,6 +295,24 @@ fn redact_path(url: &str) -> String {
 fn redact_query(url: &str) -> String {
     match url.find('?') {
         Some(idx) => format!("{}?{}", &url[..idx], REDACTED),
+        None => url.to_string(),
+    }
+}
+
+/// Replace the `#fragment` with `#***REDACTED***`, whatever the scheme.
+///
+/// No scheme gate, because no fragment this workspace can produce carries a
+/// diagnostic: nothing here reads one, and an HTTP fragment never reaches the
+/// server at all. Redacting it costs nothing and closes the last structural
+/// component `redact_password` and `redact_path` already treat as a delimiter
+/// without ever hiding — a `#` was recognised in three places and redacted in
+/// none, which is the gap between an invariant stated and an invariant held.
+///
+/// Runs last: [`redact_query`] truncates at the first `?`, so a URL carrying
+/// both has already lost its fragment by the time this sees it.
+fn redact_fragment(url: &str) -> String {
+    match url.find('#') {
+        Some(idx) => format!("{}#{}", &url[..idx], REDACTED),
         None => url.to_string(),
     }
 }

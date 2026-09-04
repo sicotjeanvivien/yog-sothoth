@@ -193,9 +193,9 @@ CONTEXT_PRICE_INTERVAL_SECS=30
 ```
 
 Three of those carry a secret, and none of them reaches the daemon as a
-`String`. `DATABASE_URL_CONTEXT` and `SOLANA_RPC_HTTP` are `SecretUrl` — the
-password, the path and the query string are redacted, the scheme, role, host
-and port stay legible.
+`String`. `DATABASE_URL_CONTEXT` and `SOLANA_RPC_HTTP` are `SecretUrl` — userinfo, path,
+query string and fragment are redacted, the scheme, host and port stay legible,
+and the Postgres URL also keeps its role and database name.
 `JUPITER_API_KEY` is a `SecretKey`, masked whole: a bare key has no carrier
 worth showing, and it is what `SecretUrl` used to return unredacted for want
 of a `?`. `JUPITER_URL` is a plain `String` on purpose — Jupiter authenticates

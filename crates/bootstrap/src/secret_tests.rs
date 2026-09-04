@@ -286,3 +286,59 @@ fn secret_key_masks_values_of_every_shape() {
         assert_eq!(format!("{key:?}"), "SecretKey(****)", "leaked for {raw:?}");
     }
 }
+
+// ---------------------------------------------------------------------------
+// SecretUrl — the fragment, and a userinfo that is itself the credential
+// ---------------------------------------------------------------------------
+
+/// `#` was recognised as a delimiter by two of the three rules and hidden by
+/// none, so a credential parked there came back whole. It is the gap between an
+/// invariant stated — "the places a URL hides a credential" — and one held.
+#[test]
+fn fragment_is_redacted() {
+    for raw in [
+        "https://rpc.example.com/#api-key=abc123",
+        "https://host/path#SECRET",
+        "wss://host#SECRET",
+    ] {
+        let shown = format!("{}", SecretUrl::new(raw));
+        assert!(
+            !shown.contains("abc123") && !shown.contains("SECRET"),
+            "fragment leaked: {shown} (from {raw})"
+        );
+    }
+}
+
+/// A query string and a fragment together: the query rule truncates first, so
+/// the fragment is already gone. Asserted so the ordering is not accidental.
+#[test]
+fn query_and_fragment_together_leave_nothing() {
+    let url = SecretUrl::new("https://host/?api-key=abc123#SECRET");
+    assert_eq!(format!("{url}"), "https://host/?***REDACTED***");
+}
+
+/// `https://<token>@host` is a real authentication shape, so a userinfo with no
+/// password is not automatically a harmless username. The host survives — only
+/// the credential goes.
+#[test]
+fn bare_userinfo_is_a_secret_outside_postgres() {
+    let url = SecretUrl::new("https://SECRETTOKEN@rpc.example.com/");
+    let shown = format!("{url}");
+    assert!(!shown.contains("SECRETTOKEN"), "token leaked: {shown}");
+    assert!(
+        shown.contains("rpc.example.com"),
+        "host lost for nothing: {shown}"
+    );
+}
+
+/// Postgres is the exception, and for a reason that is ours: a userinfo without
+/// a password is one of the five least-privilege role names, and naming the role
+/// is precisely the diagnostic this type exists to keep.
+#[test]
+fn bare_userinfo_in_postgres_is_a_role_name_and_survives() {
+    let url = SecretUrl::new("postgresql://yog@localhost:5433/yog_sothoth");
+    assert_eq!(
+        format!("{url}"),
+        "postgresql://yog@localhost:5433/yog_sothoth"
+    );
+}

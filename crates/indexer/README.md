@@ -217,12 +217,12 @@ INGEST_SCOPE=pools
 All six are required — none has an implicit default, and a missing one fails
 at startup with a `ConfigError`.
 
-The first three carry a secret and are `SecretUrl`s: password, path and query
-string are redacted in `Display` and `Debug`, while scheme, role, host and port
-stay legible so a failed startup still names what it could not reach. The path
-is redacted because providers put credentials there — Alchemy's `/v2/<key>`,
-QuickNode's `/<token>/` — and only Postgres URLs keep theirs, it being the
-database name.
+The first three carry a secret and are `SecretUrl`s: userinfo, path, query
+string and fragment are redacted in `Display` and `Debug`, while scheme, host
+and port stay legible so a failed startup still names what it could not reach.
+The path is redacted because providers put credentials there — Alchemy's
+`/v2/<key>`, QuickNode's `/<token>/` — and only Postgres URLs keep theirs, it
+being the database name.
 
 `SOLANA_RPC_WS` keeps that type all the way down: `RpcListener` clones it once
 per worker, and `SubscriptionWorker` exposes it only as the argument of
