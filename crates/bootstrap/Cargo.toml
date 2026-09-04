@@ -3,6 +3,13 @@ name = "yog-bootstrap"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# Opens `SecretKey::for_tests` / `SecretUrl::for_tests` to other crates' tests.
+# Never enabled by a normal dependency — only as a dev-dependency, so the
+# constructors stay unreachable from production code, which is what makes
+# "a secret is wrapped by the helper" a compiler guarantee rather than a habit.
+test-support = []
+
 [dependencies]
 # Errors
 thiserror = { workspace = true }

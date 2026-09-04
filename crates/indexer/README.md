@@ -24,7 +24,6 @@ indexer/src/
 ├── bootstrap/             ← Config::load(), Daemon (lifecycle, task wiring,
 │                            shutdown, init_event_persistor)
 ├── error/                 ← typed error per layer
-├── utils/redact.rs        ← API-key scrubbing for logs
 ├── bin/inspect_logs.rs    ← ad-hoc debugging helper for raw log streams
 └── main.rs
 ```
@@ -216,6 +215,43 @@ INGEST_SCOPE=pools
 
 All six are required — none has an implicit default, and a missing one fails
 at startup with a `ConfigError`.
+
+The first three carry a secret and are `SecretUrl`s: userinfo, path, query
+string and fragment are redacted in `Display` and `Debug`, while scheme, host
+and port stay legible so a failed startup still names what it could not reach.
+The path is redacted because providers put credentials there — Alchemy's
+`/v2/<key>`, QuickNode's `/<token>/` — and only Postgres URLs keep theirs, it
+being the database name.
+
+`SOLANA_RPC_WS` keeps that type all the way down: `RpcListener` clones it once
+per worker, and `SubscriptionWorker` exposes it only as the argument of
+`PubsubClient::new`. The `inspect_logs` bin reads the same variable through the
+same type. The invariant and the guard that enforces it are documented in
+`crates/README.md`.
+
+### Scrubbing what a third party wrote
+
+`Display` protects the URL while we hold it. It does nothing for an error
+*somebody else* built: measured on 4 September 2026 by driving `RpcClient` at an
+unresolvable host, `reqwest` renders `error sending request for url
+(https://…/v2/<key>)` and `solana-client` passes it through untouched. A
+WebSocket failure, by contrast, says only `unable to connect to server` — it
+carries no URL at all.
+
+`SecretUrl::scrub` removes that. It runs **where the third party's string is
+born**, not where it is later logged: `TransactionFetcher` and
+`NetworkStatusReporter` hold the endpoint for that single purpose, and
+`SubscriptionWorker` already had it. Nothing carrying a URL reaches a `warn!`,
+so no log site has a rule to remember — the placement `yog-context` arrived at
+in `error/source.rs`, after nine call sites each recopied an unredacted error
+and leaked its API key into 38 log lines.
+
+It replaces `utils/redact.rs`, deleted here, whose `redact_api_key` searched for
+the literal `api-key=`. That function could not see a credential in a path, and
+teaching it that shape would have added a fourth thing to recognise to a
+redactor whose whole weakness was having to recognise anything. `scrub` knows
+its **own** secret instead, so a provider that hides a credential somewhere new
+is covered the day the configuration points at it.
 
 ### The two ingestion axes
 

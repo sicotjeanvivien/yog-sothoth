@@ -57,6 +57,7 @@
 
 use anyhow::{Context, Result, bail};
 
+use yog_bootstrap::SecretUrl;
 use yog_core::domain::WatchedPoolRepository;
 use yog_persistence::{Database, PgWatchedPoolRepository};
 
@@ -208,24 +209,29 @@ async fn bootstrap() -> Result<()> {
 
 /// Read a connection URL from the environment, naming the role it must carry.
 ///
-/// Goes through `yog_bootstrap::required` rather than `std::env::var` so the
+/// Goes through `yog_bootstrap::required_secret_url` rather than `std::env::var` so the
 /// URL inherits the two rules every other variable in the workspace obeys: a
 /// blank value counts as missing, and surrounding whitespace is trimmed. The
 /// second is not cosmetic here — this repository's `.env` is CRLF, and the
 /// native workflow sources it into the shell, so a trailing `\r` would ride
 /// inside the connection string and come back as an opaque network error.
-fn require_env(var: &str, role: &str) -> Result<String> {
-    yog_bootstrap::required(var)
+fn require_env(var: &str, role: &str) -> Result<SecretUrl> {
+    yog_bootstrap::required_secret_url(var)
         .with_context(|| format!("{var} must be set (credentials for {role})"))
 }
 
 /// Connect using the URL held by `var`, which must carry `role`.
+///
+/// The URL stays a [`SecretUrl`] until the connection call itself. The comment
+/// that used to say "log the variable, not its value" described a discipline;
+/// the type now makes it a fact — an `anyhow` chain that formats this value
+/// prints the password as `***REDACTED***` and keeps the host and the role,
+/// which is exactly what a failed provisioning run needs to say.
 async fn connect(var: &str, role: &str) -> Result<Database> {
     let url = require_env(var, role)?;
 
-    // The URL carries a password. Log the variable it came from, not its value.
     tracing::info!("connecting with {var}");
-    Database::connect_for_provisioning(&url)
+    Database::connect_for_provisioning(url.expose())
         .await
         .with_context(|| format!("failed to connect using {var}"))
 }

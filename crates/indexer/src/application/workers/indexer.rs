@@ -20,7 +20,7 @@ use tracing::{debug, error, info};
 
 use crate::{
     application::services::TransactionProcessor, error::IndexerWorkerError,
-    infra::QualifiedSignature, utils::redact_api_key,
+    infra::QualifiedSignature,
 };
 
 /// Maximum number of `index_transaction` calls running concurrently.
@@ -116,7 +116,7 @@ async fn index_one(processor: Arc<TransactionProcessor>, qs: QualifiedSignature)
             debug!(%signature, "process ok");
         }
         Err(e) => {
-            let msg = redact_api_key(&e.to_string());
+            let msg = e.to_string();
             error!(error = %msg, %signature, "process failed");
         }
     }

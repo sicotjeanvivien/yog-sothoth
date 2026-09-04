@@ -19,6 +19,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use tracing::warn;
+use yog_bootstrap::SecretKey;
 use yog_core::domain::PriceProvider;
 
 use crate::{
@@ -76,15 +77,17 @@ struct JupiterPriceEntry {
 pub struct JupiterPriceClient {
     http: reqwest::Client,
     /// Jupiter API base URL (e.g. `https://api.jup.ag`); `/price/v3`
-    /// is appended per request.
+    /// is appended per request. Carries no secret — Jupiter authenticates by
+    /// header — so it is a plain `String` on purpose.
     base_url: String,
-    /// API key — sent on every request via `x-api-key`.
-    api_key: String,
+    /// API key — sent on every request via `x-api-key`. Stays a [`SecretKey`]
+    /// until the header is built, one line below.
+    api_key: SecretKey,
 }
 
 impl JupiterPriceClient {
     /// Build the client against the given base URL and API key.
-    pub fn new(base_url: String, api_key: String) -> Self {
+    pub fn new(base_url: String, api_key: SecretKey) -> Self {
         Self {
             http: super::http_client(),
             base_url,
@@ -124,7 +127,7 @@ impl JupiterPriceClient {
         let response = self
             .http
             .get(&url)
-            .header("x-api-key", &self.api_key)
+            .header("x-api-key", self.api_key.expose())
             .send()
             .await?;
 

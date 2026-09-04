@@ -21,6 +21,8 @@ use base64::Engine;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 
+use yog_bootstrap::SecretUrl;
+
 use super::metrics::ProviderMetrics;
 use crate::error::SourceError;
 use crate::source::{PoolAccountSource, RawAccount};
@@ -67,11 +69,13 @@ struct RpcAccount {
 #[derive(Clone)]
 pub struct SolanaAccountClient {
     http: reqwest::Client,
-    rpc_url: String,
+    /// Wrapped for the same reason as [`super::helius_das::HeliusDasClient`]:
+    /// same provider, same URL, same key in its query string.
+    rpc_url: SecretUrl,
 }
 
 impl SolanaAccountClient {
-    pub fn new(rpc_url: String) -> Self {
+    pub fn new(rpc_url: SecretUrl) -> Self {
         Self {
             http: super::http_client(),
             rpc_url,
@@ -105,7 +109,7 @@ impl SolanaAccountClient {
 
         let response = self
             .http
-            .post(&self.rpc_url)
+            .post(self.rpc_url.expose())
             .json(&request)
             .send()
             .await?

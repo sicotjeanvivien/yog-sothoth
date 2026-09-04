@@ -26,7 +26,9 @@
 //! load is the whole point; it becomes a field the day `init_listener` has
 //! two arms, which is the gRPC ticket's job, not this module's.
 
-use yog_bootstrap::{ConfigError, SecretUrl, parse_required_enum, parse_required_u32, required};
+use yog_bootstrap::{
+    ConfigError, SecretUrl, parse_required_enum, parse_required_u32, required_secret_url,
+};
 
 mod types;
 mod validator;
@@ -49,9 +51,9 @@ impl Config {
         check_supported(source, scope)?;
 
         Ok(Self {
-            database_url: SecretUrl::new(required("DATABASE_URL_INDEXER")?),
-            solana_rpc_ws: SecretUrl::new(required("SOLANA_RPC_WS")?),
-            solana_rpc_http: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
+            database_url: required_secret_url("DATABASE_URL_INDEXER")?,
+            solana_rpc_ws: required_secret_url("SOLANA_RPC_WS")?,
+            solana_rpc_http: required_secret_url("SOLANA_RPC_HTTP")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,
         })

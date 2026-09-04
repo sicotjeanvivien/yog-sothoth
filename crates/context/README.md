@@ -137,10 +137,12 @@ key into **38 log lines**, all produced by that single outage: the leak rate
 follows the *provider's* error rate, not ours.
 
 The redaction sits at the conversion, not at the `warn!`/`error!` call sites,
-so that a site nobody thought of cannot leak. (`yog-indexer` makes the other
-choice — `utils::redact_api_key`, applied when formatting. It works there, but
-it stayed `pub(crate)` and never reached this crate, which is how the leak
-happened.) The conversion also appends the error's cause chain, because
+so that a site nobody thought of cannot leak. (`yog-indexer` used to make the
+other choice — `utils::redact_api_key`, applied when formatting. It stayed
+`pub(crate)` and never reached this crate, which is how the leak happened; it
+was removed in September 2026, being blind to a credential in a URL path, and
+the indexer now scrubs at its own boundaries through `SecretUrl::scrub`.) The
+conversion also appends the error's cause chain, because
 stripping the URL from reqwest's `Display` otherwise leaves the same four
 words for a refused connection, a DNS failure and a timeout alike.
 
@@ -191,6 +193,20 @@ JUPITER_API_KEY=...
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
+
+Three of those carry a secret, and none of them reaches the daemon as a
+`String`. `DATABASE_URL_CONTEXT` and `SOLANA_RPC_HTTP` are `SecretUrl` — userinfo, path,
+query string and fragment are redacted, the scheme, host and port stay legible,
+and the Postgres URL also keeps its role and database name.
+`JUPITER_API_KEY` is a `SecretKey`, masked whole: a bare key has no carrier
+worth showing, and it is what `SecretUrl` used to return unredacted for want
+of a `?`. `JUPITER_URL` is a plain `String` on purpose — Jupiter authenticates
+by header, so that URL hides nothing.
+
+The type reaches the wire: `HeliusDasClient` and `SolanaAccountClient` hold a
+`SecretUrl` until `.post(…)`, `JupiterPriceClient` holds a `SecretKey` until
+the `x-api-key` header is built. See `crates/README.md` for the invariant and
+the guard that enforces it.
 
 Connects to Postgres as `yog_context` — RW on `token_metadata` and
 `token_prices`, `UPDATE` on the pool-property columns of `pools`, RO

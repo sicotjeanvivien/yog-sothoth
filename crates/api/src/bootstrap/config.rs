@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::http::HeaderValue;
-use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required};
+use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required, required_secret_url};
 
 /// How often the signal-stream poller checks the feed for new rows, in
 /// seconds. Overridable via `API_SIGNAL_STREAM_POLL_SECS`. Detectors
@@ -37,7 +37,7 @@ impl Config {
         let cors_allowed_origins = parse_cors_origins(&required("API_CORS_ALLOWED_ORIGINS")?)?;
 
         Ok(Self {
-            database_url: SecretUrl::new(required("DATABASE_URL_API")?),
+            database_url: required_secret_url("DATABASE_URL_API")?,
             bind_addr,
             cors_allowed_origins,
             signal_stream_poll: Duration::from_secs(duration_var(

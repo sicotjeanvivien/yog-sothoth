@@ -47,3 +47,7 @@ async-trait = { workspace = true }
 # under the parallel test harness. Same dev-only dependency as yog-indexer —
 # the `debugging` feature is not free, but none of it reaches a binary.
 metrics-util = { workspace = true, features = ["debugging"] }
+# `SecretKey::for_tests`: the price client now holds the API key typed, and a
+# test has no environment to read one from. Dev-only on purpose — enabling it
+# as a normal dependency would reopen the door this ticket closed.
+yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
