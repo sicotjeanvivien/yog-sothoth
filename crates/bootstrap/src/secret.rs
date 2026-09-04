@@ -7,8 +7,9 @@
 //! the only diagnostic a crashing daemon leaves behind, which this repository
 //! learned the expensive way (see `04 - release/cle-api-en-clair-dans-les-logs.md`
 //! in the tracking repo: "retirer l'URL avait emporté le seul diagnostic qui
-//! restait"). So [`SecretUrl`] keeps the carrier and redacts the two places a
-//! secret hides in a URL.
+//! restait"). So [`SecretUrl`] keeps the carrier and redacts the three places a
+//! secret hides in a URL — password, path, query string — falling back to the
+//! scheme alone when it cannot locate them with confidence.
 //!
 //! # Why `new` is not public
 //!
@@ -78,22 +79,30 @@ impl fmt::Debug for SecretKey {
 
 /// A URL that carries a secret, with the non-secret part kept legible.
 ///
-/// `Display` and `Debug` redact **the two places a URL hides a secret**, and
-/// only those:
+/// `Display` and `Debug` redact **the three places a URL hides a credential**:
 ///
 /// - the password in the userinfo — `postgres://role:pass@host/db`;
+/// - the path — `https://host/v2/<key>`, as Alchemy and QuickNode do;
 /// - the query string — `https://host/?api-key=…`.
 ///
-/// Everything else survives: scheme, role, host, port, path. That is
-/// deliberate. A daemon that dies on startup must still say *which* database
-/// or *which* provider it could not reach.
+/// What survives is scheme, role, host and port. That is deliberate: a daemon
+/// that dies on startup must still say *which* database or *which* provider it
+/// could not reach.
 ///
 /// ```text
 /// postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth
 ///   → postgresql://yog_indexer:***REDACTED***@localhost:5433/yog_sothoth
 /// https://mainnet.helius-rpc.com/?api-key=abc123
 ///   → https://mainnet.helius-rpc.com/?***REDACTED***
+/// https://solana-mainnet.g.alchemy.com/v2/abc123
+///   → https://solana-mainnet.g.alchemy.com/***REDACTED***
 /// ```
+///
+/// **The path is the exception that proves the rule**: it is redacted for every
+/// scheme *except* Postgres, whose path is the database name. A provider nobody
+/// has met yet is covered by default rather than by having been recognised —
+/// see [`redact`] and [`redact_password`] for what happens when even that is
+/// not enough to locate the secret.
 ///
 /// # What this type does not cover
 ///
@@ -169,15 +178,27 @@ fn redact(url: &str) -> String {
 /// Replace the password in `scheme://user:password@host` with the placeholder.
 ///
 /// The password is what follows the first `:` of the userinfo, up to the
-/// **last** `@` — last, because a password may legitimately contain `@` while a
-/// hostname may not. The role stays visible: it names which of the five
-/// least-privilege Postgres roles was in play.
+/// **last** `@` of the authority — last, because a password may legitimately
+/// contain a percent-encoded `@` while a hostname may not. The role stays
+/// visible: it names which of the five least-privilege Postgres roles was in
+/// play.
 ///
-/// The `@` is normally inside the authority, which ends at the first `/`, `?`
-/// or `#`. When it is not, an unencoded `/` sits inside the password and has
-/// pushed it past that bound; the search then widens to the whole pre-query
-/// remainder rather than giving up, because giving up here returns the password
-/// in the clear on a URL that looks perfectly ordinary.
+/// # When the boundary is ambiguous, everything goes
+///
+/// The authority ends at the first `/`, `?` or `#`; RFC 3986 requires those to
+/// be percent-encoded inside userinfo. An `@` sitting *past* that bound means
+/// one of two things, and **nothing short of a full parser can tell them
+/// apart**: either the password carries an unencoded delimiter, or a path
+/// segment happens to contain an `@`.
+///
+/// So this function stops guessing and redacts from `://` onward, keeping only
+/// the scheme. It is a real cost — `https://host:8080/pa@th` loses a host that
+/// hides nothing — and it is the cost we choose, because the alternative is the
+/// one this module exists to prevent: an earlier shape of this code tried to
+/// widen the search instead, and printed `postgresql://yog:pa#ss@…` in full.
+///
+/// The condition is narrow on purpose: it needs a `:` in the authority, so a
+/// URL that could not carry a password at all is never touched by it.
 fn redact_password(url: &str) -> String {
     let Some(scheme_end) = url.find("://") else {
         return url.to_string();
@@ -186,29 +207,32 @@ fn redact_password(url: &str) -> String {
     let rest = &url[start..];
 
     let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let search_end = if rest[..authority_end].contains('@') {
-        authority_end
-    } else {
-        rest.find(['?', '#']).unwrap_or(rest.len())
-    };
+    let authority = &rest[..authority_end];
+    let at_beyond_authority = rest[authority_end..].contains('@');
 
-    // No `@` means no userinfo, so no password to hide.
-    let Some(at) = rest[..search_end].rfind('@') else {
-        return url.to_string();
-    };
-    let userinfo = &rest[..at];
-    let Some(colon) = userinfo.find(':') else {
-        // `user@host` — a username alone is not a secret.
-        return url.to_string();
-    };
-
-    format!(
-        "{}{}:{}{}",
-        &url[..start],
-        &userinfo[..colon],
-        REDACTED,
-        &url[start + at..]
-    )
+    match authority.rfind('@') {
+        // Well-formed: the userinfo opens and closes inside the authority.
+        Some(at) if !at_beyond_authority => {
+            let userinfo = &authority[..at];
+            let Some(colon) = userinfo.find(':') else {
+                // `user@host` — a username alone is not a secret.
+                return url.to_string();
+            };
+            format!(
+                "{}{}:{}{}",
+                &url[..start],
+                &userinfo[..colon],
+                REDACTED,
+                &url[start + at..]
+            )
+        }
+        // Ambiguous, and a password could be in there. Fail closed.
+        _ if at_beyond_authority && authority.contains(':') => {
+            format!("{}{}", &url[..start], REDACTED)
+        }
+        // No userinfo, or one that cannot hold a password.
+        _ => url.to_string(),
+    }
 }
 
 /// Replace the path with the placeholder, unless the scheme is Postgres.

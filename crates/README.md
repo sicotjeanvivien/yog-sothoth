@@ -73,6 +73,8 @@ The dependency graph is strict and one-directional:
 
   **The path rule fails closed**, and that is the design: it is redacted for every scheme *except* Postgres, whose path is the database name. So a provider that puts its key in a path segment — Alchemy's `/v2/<key>`, QuickNode's `/<token>/` — is covered by default rather than by having been recognised. An earlier shape of this function knew only about `?`; that is precisely how it came to print a bare API key in the clear.
 
+  So does the userinfo rule. When an `@` sits past the authority bound, the password carries an unencoded delimiter *or* a path segment contains an `@`, and nothing short of a URL parser tells the two apart — so the value comes back as the scheme alone, `postgresql://***REDACTED***`. It costs a diagnostic on a URL that hid nothing (`https://host:8080/pa@th`), and that is the trade: an earlier attempt to disambiguate instead printed `postgresql://yog:pa#ss@…` in full.
+
   Neither is constructible outside the crate: a `Config` gets one from `required_secret_url` / `required_secret_key`, and by no other route, so "a secret is wrapped" is a compiler guarantee rather than a habit repeated at nine sites. `expose()` is the one door out, and it belongs **on the line that consumes the secret** — a `connect`, a request builder, a third-party client constructor. The type travels there; it does not stop at the wiring. `crates/bootstrap/src/exposure_tests.rs` fails the build on any exposure outside that list.
 
   Reaching for `SecretUrl` because it is the one that exists is how `JUPITER_API_KEY` came to sit in a type that could not redact it: a bare key has no `?`, so nothing was redacted.

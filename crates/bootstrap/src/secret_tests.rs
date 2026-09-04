@@ -123,31 +123,56 @@ fn value_without_scheme_is_left_alone_by_the_password_rule() {
     assert_eq!(format!("{url}"), "localhost:5433/yog_sothoth");
 }
 
-/// A `@` in the path must not be read as the end of a userinfo — the host must
-/// survive. (The path itself is redacted by the rule below; what is asserted
-/// here is that `api.jup.ag` did not get treated as a password.)
+// ---------------------------------------------------------------------------
+// SecretUrl — the ambiguous cases, where the rule fails closed
+// ---------------------------------------------------------------------------
+
+/// An unencoded delimiter inside the password pushes the `@` past the authority
+/// bound, and nothing short of a parser can tell that from a path that happens
+/// to contain an `@`. Every one of these leaked at some point: `/` and `#`
+/// returned the URL untouched, `?` printed the password's prefix, and `@`
+/// combined with `/` printed its tail. The rule now keeps the scheme and drops
+/// the rest.
 #[test]
-fn at_sign_in_path_is_not_treated_as_userinfo() {
+fn ambiguous_userinfo_is_redacted_whole() {
+    let cases = [
+        ("postgresql://yog:pa/ss@localhost:5433/yog_sothoth", "pa/ss"),
+        ("postgresql://yog:pa#ss@localhost:5433/yog_sothoth", "pa#ss"),
+        ("postgresql://yog:pa?ss@localhost:5433/yog_sothoth", "pa?ss"),
+        ("postgresql://yog:p@s/s@localhost:5433/yog_sothoth", "p@s/s"),
+    ];
+    for (raw, secret) in cases {
+        let shown = format!("{}", SecretUrl::new(raw));
+        assert_eq!(shown, "postgresql://***REDACTED***", "for {raw}");
+        for fragment in [secret, "pa", "s/s"] {
+            assert!(
+                !shown.contains(fragment),
+                "`{fragment}` survived in {shown} (from {raw})"
+            );
+        }
+    }
+}
+
+/// The cost of failing closed, asserted rather than discovered: a URL with a
+/// port and an `@` in its path is indistinguishable from `user:pass@host`, so
+/// its host goes too. Nothing leaks; a diagnostic is lost. That trade is the
+/// decision, and this test is where it is written down.
+#[test]
+fn failing_closed_can_cost_a_host_that_hid_nothing() {
+    let url = SecretUrl::new("https://host:8080/pa@th");
+    assert_eq!(format!("{url}"), "https://***REDACTED***");
+}
+
+/// The fallback is narrow: without a `:` in the authority there is no password
+/// to protect, so an `@` in the path costs nothing and the host stays.
+#[test]
+fn an_at_in_the_path_alone_does_not_trigger_the_fallback() {
     let url = SecretUrl::new("https://api.jup.ag/price/v3@latest");
     let shown = format!("{url}");
     assert!(
         shown.starts_with("https://api.jup.ag/"),
-        "host mangled: {shown}"
+        "host lost for nothing: {shown}"
     );
-}
-
-/// An unencoded `/` inside a Postgres password pushes the `@` past the
-/// authority delimiter. Bounding the search at the first `/` would return the
-/// password in the clear, on a URL that reads as perfectly ordinary.
-#[test]
-fn password_containing_slash_is_still_redacted() {
-    let url = SecretUrl::new("postgresql://yog:pa/ss@localhost:5433/yog_sothoth");
-    let shown = format!("{url}");
-    assert_eq!(
-        shown,
-        "postgresql://yog:***REDACTED***@localhost:5433/yog_sothoth"
-    );
-    assert!(!shown.contains("pa/ss"), "password leaked: {shown}");
 }
 
 // ---------------------------------------------------------------------------
