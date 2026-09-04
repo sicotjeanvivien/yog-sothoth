@@ -21,6 +21,7 @@ use std::sync::Arc;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use yog_bootstrap::SecretUrl;
 use yog_core::application::extraction::ExtractionDispatcher;
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
@@ -62,7 +63,7 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = init_db(config.database_url.expose())
+        let database = init_db(&config.database_url)
             .await
             .context("database initialization failed")?;
         info!("database initialized");
@@ -163,8 +164,8 @@ impl Daemon {
 /// The database URL is held in `Config::database_url` (a redacted secret),
 /// so we never log it directly — `anyhow::Context` is sufficient to surface
 /// the failure at startup without leaking credentials.
-async fn init_db(database_url: &str) -> anyhow::Result<Database> {
-    let db = Database::connect(database_url)
+async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
+    let db = Database::connect(database_url.expose())
         .await
         .context("failed to connect to database")?;
     tracing::info!("connected to database");
@@ -174,7 +175,7 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 /// Create the RPC WebSocket listener with its watched protocols.
 fn init_listener(config: &Config) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(
-        config.solana_rpc_ws.expose().to_string(),
+        config.solana_rpc_ws.clone(),
         config.worker_max_retries,
         config.scope,
     ))

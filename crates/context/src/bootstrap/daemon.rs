@@ -11,6 +11,7 @@ use anyhow::Context;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use yog_bootstrap::SecretUrl;
 use yog_core::domain::{
     PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
@@ -55,7 +56,7 @@ impl Daemon {
     /// Connect to the database, build the repositories and the source
     /// clients.
     pub(crate) async fn new(config: &Config) -> anyhow::Result<Self> {
-        let database = init_db(config.database_url.expose())
+        let database = init_db(&config.database_url)
             .await
             .context("database initialization failed")?;
         info!("database initialized");
@@ -85,17 +86,17 @@ impl Daemon {
         // the cross-protocol registry.
         let pool_repository: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool));
 
-        // Two independent HTTP clients — one per external source.
-        let metadata_source =
-            Arc::new(HeliusDasClient::new(config.helius_url.expose().to_string()));
+        // Two independent HTTP clients — one per external source. Each takes
+        // the wrapped secret, not the exposed string: the type travels to the
+        // request builder, so `.expose()` never happens this far from the wire.
+        let metadata_source = Arc::new(HeliusDasClient::new(config.helius_url.clone()));
         let price_source = Arc::new(JupiterPriceClient::new(
-            config.jupiter_url.expose().to_string(),
-            config.jupiter_api_key.expose().to_string(),
+            config.jupiter_url.clone(),
+            config.jupiter_api_key.clone(),
         ));
         // Reuses the Solana RPC (getMultipleAccounts) — same provider as DAS.
-        let pool_account_source: Arc<dyn PoolAccountSource> = Arc::new(SolanaAccountClient::new(
-            config.helius_url.expose().to_string(),
-        ));
+        let pool_account_source: Arc<dyn PoolAccountSource> =
+            Arc::new(SolanaAccountClient::new(config.helius_url.clone()));
 
         MetadataWorkerMetrics::register_descriptions();
         PriceWorkerMetrics::register_descriptions();
@@ -168,8 +169,8 @@ impl Daemon {
 /// The database URL is held in `Config::database_url` (a redacted secret),
 /// so we never log it directly — `anyhow::Context` is sufficient to surface
 /// the failure at startup without leaking credentials.
-async fn init_db(database_url: &str) -> anyhow::Result<Database> {
-    let db = Database::connect(database_url)
+async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
+    let db = Database::connect(database_url.expose())
         .await
         .context("failed to connect to database")?;
     tracing::info!("connected to database");

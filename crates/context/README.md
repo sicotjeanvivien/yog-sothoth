@@ -192,6 +192,19 @@ CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
 
+Three of those carry a secret, and none of them reaches the daemon as a
+`String`. `DATABASE_URL_CONTEXT` and `SOLANA_RPC_HTTP` are `SecretUrl` — the
+password and the query string are redacted, the host stays legible.
+`JUPITER_API_KEY` is a `SecretKey`, masked whole: a bare key has no carrier
+worth showing, and it is what `SecretUrl` used to return unredacted for want
+of a `?`. `JUPITER_URL` is a plain `String` on purpose — Jupiter authenticates
+by header, so that URL hides nothing.
+
+The type reaches the wire: `HeliusDasClient` and `SolanaAccountClient` hold a
+`SecretUrl` until `.post(…)`, `JupiterPriceClient` holds a `SecretKey` until
+the `x-api-key` header is built. See `crates/README.md` for the invariant and
+the guard that enforces it.
+
 Connects to Postgres as `yog_context` — RW on `token_metadata` and
 `token_prices`, `UPDATE` on the pool-property columns of `pools`, RO
 otherwise.

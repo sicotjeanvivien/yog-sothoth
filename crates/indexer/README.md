@@ -217,6 +217,15 @@ INGEST_SCOPE=pools
 All six are required — none has an implicit default, and a missing one fails
 at startup with a `ConfigError`.
 
+The first three carry a secret and are `SecretUrl`s: the password of the
+connection string and the query string of a provider endpoint are redacted in
+`Display` and `Debug`, while scheme, role, host and path stay legible so a
+failed startup still names what it could not reach. `SOLANA_RPC_WS` keeps that
+type all the way down — `RpcListener` clones it once per worker and
+`SubscriptionWorker` exposes it only as the argument of `PubsubClient::new`.
+The invariant and the guard that enforces it are documented in
+`crates/README.md`.
+
 ### The two ingestion axes
 
 `INGEST_SOURCE` says **where transactions come from** — the acquisition model,
