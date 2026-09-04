@@ -342,3 +342,132 @@ fn bare_userinfo_in_postgres_is_a_role_name_and_survives() {
         "postgresql://yog@localhost:5433/yog_sothoth"
     );
 }
+
+// ---------------------------------------------------------------------------
+// SecretUrl::scrub — a string somebody else built
+// ---------------------------------------------------------------------------
+
+/// The message shape this exists for, measured on 4 September 2026 by driving
+/// `RpcClient` at an unresolvable host: reqwest renders the whole URL, and
+/// `solana-client` passes it straight through.
+fn reqwest_style_error(url: &str) -> String {
+    format!("error sending request for url ({url})")
+}
+
+#[test]
+fn scrub_removes_a_credential_from_a_third_party_error() {
+    let url = SecretUrl::new("https://solana-mainnet.g.alchemy.com/v2/SUPERSECRETKEY");
+    let scrubbed = url.scrub(&reqwest_style_error(url.expose()));
+    assert!(
+        !scrubbed.contains("SUPERSECRETKEY"),
+        "credential survived: {scrubbed}"
+    );
+    assert!(
+        scrubbed.contains("solana-mainnet.g.alchemy.com"),
+        "host lost — the error no longer says what failed: {scrubbed}"
+    );
+}
+
+/// The carrier is why the whole URL is replaced by its redacted form rather
+/// than by the placeholder: an error that no longer names the endpoint costs
+/// more than it saves.
+#[test]
+fn scrub_keeps_the_sentence_and_the_carrier() {
+    let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
+    let scrubbed = url.scrub(&format!("pool timed out for {}", url.expose()));
+    assert_eq!(
+        scrubbed,
+        "pool timed out for postgresql://yog_indexer:***REDACTED***@localhost:5433/yog_sothoth"
+    );
+}
+
+/// ⚠️ The binding between [`SecretUrl::scrub`] and the redaction rules.
+///
+/// `scrub` derives what to remove from `redact`, so the day `redact` learns a
+/// new hiding place `scrub` learns it too. If someone re-implements
+/// `secret_parts` by re-parsing the URL, this is what turns red.
+///
+/// **The haystack drops the scheme on purpose.** With the URL present verbatim,
+/// the whole-value replacement removes the secret on its own and this test
+/// passes no matter what `secret_parts` returns — which is exactly what it did
+/// in its first shape: a mutation that made `secret_parts` return only the
+/// query string left it green. Stripping the scheme is what forces the
+/// per-part pass to be the thing under test.
+#[test]
+fn scrub_removes_every_secret_that_display_hides() {
+    let cases = [
+        (
+            "postgresql://yog_indexer:hunter2@localhost:5433/db",
+            "hunter2",
+        ),
+        ("https://mainnet.helius-rpc.com/?api-key=abc123", "abc123"),
+        ("https://solana-mainnet.g.alchemy.com/v2/PATHKEY", "PATHKEY"),
+        ("wss://xxx.quiknode.pro/TOKEN123456/", "TOKEN123456"),
+        ("https://rpc.example.com/#FRAGMENTSECRET", "FRAGMENTSECRET"),
+        ("https://TOKENASUSER@rpc.example.com/", "TOKENASUSER"),
+        ("postgresql://yog:pa/ss@localhost:5433/db", "pa/ss"),
+        ("postgresql://yog:pa#ss@localhost:5433/db", "pa#ss"),
+        // Two hiding places at once: a re-parse that handles one and forgets
+        // the other passes every single-secret case above.
+        (
+            "https://host/v2/PATHSECRET?api-key=QUERYSECRET",
+            "PATHSECRET",
+        ),
+        (
+            "https://host/v2/PATHSECRET?api-key=QUERYSECRET",
+            "QUERYSECRET",
+        ),
+    ];
+    for (raw, secret) in cases {
+        let url = SecretUrl::new(raw);
+        assert!(
+            !format!("{url}").contains(secret),
+            "Display leaked {secret} for {raw}"
+        );
+
+        let without_scheme = &raw[raw.find("://").expect("test URLs have a scheme") + 3..];
+        let scrubbed = url.scrub(&format!("connect failed for {without_scheme}"));
+        assert!(
+            !scrubbed.contains(secret),
+            "scrub left {secret} in {scrubbed} (from {raw})"
+        );
+    }
+}
+
+/// A third party may reformat the URL — a normalised trailing slash is the
+/// common one — so the whole-value match misses. The per-part pass is what
+/// catches it, and this is the test that keeps that pass alive.
+#[test]
+fn scrub_still_removes_the_secret_from_a_reformatted_url() {
+    let url = SecretUrl::new("https://rpc.example.com?api-key=SECRET123");
+    let reformatted = "error sending request for url (https://rpc.example.com/?api-key=SECRET123)";
+    let scrubbed = url.scrub(reformatted);
+    assert!(
+        !scrubbed.contains("SECRET123"),
+        "reformatted URL escaped the scrub: {scrubbed}"
+    );
+}
+
+/// A message that never mentioned the URL comes back untouched — the scrub must
+/// not mangle text it has no business in.
+#[test]
+fn scrub_leaves_an_unrelated_message_alone() {
+    let url = SecretUrl::new("https://rpc.example.com/?api-key=abc123");
+    let msg = "transaction not found after retries";
+    assert_eq!(url.scrub(msg), msg);
+}
+
+/// When the userinfo is ambiguous the whole value is the secret, and `scrub`
+/// inherits that from `redact` rather than restating it.
+#[test]
+fn scrub_of_an_ambiguous_url_leaves_nothing_of_it() {
+    let url = SecretUrl::new("postgresql://yog:pa/ss@localhost:5433/yog_sothoth");
+    let scrubbed = url.scrub(&reqwest_style_error(url.expose()));
+    for fragment in ["pa/ss", "localhost", "yog_sothoth"] {
+        assert!(
+            !scrubbed.contains(fragment),
+            "`{fragment}` survived an ambiguous URL: {scrubbed}"
+        );
+    }
+    assert!(scrubbed.starts_with("error sending request for url (postgresql://"));
+}

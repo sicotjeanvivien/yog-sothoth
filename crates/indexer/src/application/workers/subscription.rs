@@ -15,7 +15,6 @@ use yog_bootstrap::SecretUrl;
 use crate::{
     error::SubscriptionWorkerError,
     infra::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
-    utils::redact_api_key,
 };
 
 /// Bounds for the worker's internal retry loop.
@@ -135,13 +134,12 @@ impl SubscriptionWorker {
                     continue;
                 }
                 ConnectOutcome::Failed(err_msg) => {
-                    let redacted = redact_api_key(&err_msg);
                     warn!(
                         protocol = %target.protocol.as_str(),
                         mention = %target.mention,
                         attempt,
                         max = max_attempts,
-                        error = %redacted,
+                        error = %err_msg,
                         "worker attempt failed"
                     );
                     emit(
@@ -150,10 +148,10 @@ impl SubscriptionWorker {
                             protocol: target.protocol,
                             mention: target.mention,
                             attempt,
-                            error: redacted.clone(),
+                            error: err_msg.clone(),
                         },
                     );
-                    last_error = Some(redacted);
+                    last_error = Some(err_msg);
 
                     if attempt >= max_attempts {
                         let msg = last_error.unwrap_or_else(|| "unknown".to_string());
@@ -206,7 +204,7 @@ async fn connect_and_forward(
 ) -> ConnectOutcome {
     let pubsub = match PubsubClient::new(ws_url.expose()).await {
         Ok(c) => c,
-        Err(e) => return ConnectOutcome::Failed(format!("pubsub connect: {e}")),
+        Err(e) => return ConnectOutcome::Failed(ws_url.scrub(&format!("pubsub connect: {e}"))),
     };
 
     let filter = RpcTransactionLogsFilter::Mentions(vec![target.mention.to_string()]);
@@ -216,7 +214,7 @@ async fn connect_and_forward(
 
     let (stream, unsubscribe) = match pubsub.logs_subscribe(filter, config).await {
         Ok(ok) => ok,
-        Err(e) => return ConnectOutcome::Failed(format!("logs_subscribe: {e}")),
+        Err(e) => return ConnectOutcome::Failed(ws_url.scrub(&format!("logs_subscribe: {e}"))),
     };
 
     info!(

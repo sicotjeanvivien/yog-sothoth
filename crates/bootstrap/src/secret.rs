@@ -26,12 +26,22 @@ use std::fmt;
 /// Placeholder substituted for every secret this module hides.
 const REDACTED: &str = "***REDACTED***";
 
+/// Shortest secret fragment [`SecretUrl::scrub`] will replace on its own.
+///
+/// Below it, a fragment is more likely to be a coincidence than a credential —
+/// replacing `v2` or `db` everywhere it appears in an error message would
+/// mangle the text without protecting anything. The whole-URL replacement runs
+/// first and is not subject to this floor, so a short secret inside a URL that
+/// matched whole is still removed; only the reformatted-URL fallback is bounded.
+const MIN_SCRUBBABLE: usize = 4;
+
 /// A secret that carries nothing worth showing — an API key, a token.
 ///
 /// `Display` and `Debug` render `****` **unconditionally**: this type knows
 /// nothing about the shape of what it holds, which is the point. A redactor
 /// that has to recognise a shape is a redactor that misses the next one — the
-/// reasoning is the same one that kept `redact_api_key` out of this crate.
+/// reasoning that eventually retired `yog-indexer`'s `redact_api_key`, which
+/// searched for the literal `api-key=` and never saw a credential in a path.
 ///
 /// Call [`SecretKey::expose`] at the moment of consumption — building a
 /// request header, opening a connection — and never to log or to format an
@@ -142,6 +152,72 @@ impl SecretUrl {
     #[cfg(feature = "test-support")]
     pub fn for_tests(raw: impl Into<String>) -> Self {
         Self::new(raw)
+    }
+
+    /// Remove this URL's secrets from a string **somebody else built**.
+    ///
+    /// `Display` and `Debug` protect the value while we hold it; they do
+    /// nothing for a third-party error that embedded the URL in its own
+    /// message. And those exist: `reqwest`, under `solana-client`, renders
+    /// `error sending request for url (https://…/v2/<key>)`, which reaches a
+    /// `warn!` as a plain `String` that never passed through this type.
+    ///
+    /// # Why this replaces a pattern-matching redactor
+    ///
+    /// The previous answer was `yog-indexer`'s `redact_api_key`, which searched
+    /// for the literal `api-key=`. It could not see a credential in a path, and
+    /// teaching it that shape would only have added a fourth thing to
+    /// recognise. This does not recognise anything: it knows **its own**
+    /// secret, so a provider that hides a credential somewhere new is covered
+    /// the day the configuration points at it.
+    ///
+    /// The whole URL is replaced by its redacted form first, so the host
+    /// survives in the message — an error that no longer says which endpoint
+    /// failed has cost more than it saved. The individual secrets are replaced
+    /// after, which is what catches a URL the third party reformatted (a
+    /// normalised trailing slash, say) and so failed to match whole.
+    pub fn scrub(&self, haystack: &str) -> String {
+        let mut out = haystack.replace(&self.0, &redact(&self.0));
+        for part in self.secret_parts() {
+            if part.len() >= MIN_SCRUBBABLE {
+                out = out.replace(part, REDACTED);
+            }
+        }
+        out
+    }
+
+    /// The substrings of this URL that [`redact`] hides.
+    ///
+    /// **Derived from `redact`, not re-parsed.** The redacted form is split on
+    /// the placeholder, its surviving chunks are located in order inside the raw
+    /// value, and what falls between them is what was hidden. So this cannot
+    /// fall out of step with the redaction rules: the day `redact` learns a new
+    /// hiding place, it appears here too, with no second definition anyone has
+    /// to remember — which is the failure mode that produced this module.
+    ///
+    /// If the chunks cannot be aligned, the whole value is treated as secret.
+    fn secret_parts(&self) -> Vec<&str> {
+        let redacted = redact(&self.0);
+        let mut parts = Vec::new();
+        let mut cursor = 0usize;
+
+        for chunk in redacted.split(REDACTED) {
+            if chunk.is_empty() {
+                continue;
+            }
+            let Some(offset) = self.0[cursor..].find(chunk) else {
+                return vec![&self.0[..]];
+            };
+            let at = cursor + offset;
+            if at > cursor {
+                parts.push(&self.0[cursor..at]);
+            }
+            cursor = at + chunk.len();
+        }
+        if cursor < self.0.len() {
+            parts.push(&self.0[cursor..]);
+        }
+        parts
     }
 }
 

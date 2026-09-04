@@ -13,7 +13,6 @@ use crate::{
         DispatcherMetrics, QualifiedSignature, RawLogEvent, RpcListener, SignatureDispatcher,
         TransactionFetcher,
     },
-    utils::redact_api_key,
 };
 use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -74,14 +73,22 @@ impl Daemon {
         let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
         info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
-        let processor = init_processor(&database, rpc_client.clone())
-            .await
-            .context("indexer service initialization failed")?;
+        let processor = init_processor(
+            &database,
+            rpc_client.clone(),
+            config.solana_rpc_http.clone(),
+        )
+        .await
+        .context("indexer service initialization failed")?;
         info!("indexer service initialized");
 
-        let network_status_reporter = init_network_status_reporter(&database, rpc_client.clone())
-            .await
-            .context("network_status_reporter initialization failed")?;
+        let network_status_reporter = init_network_status_reporter(
+            &database,
+            rpc_client.clone(),
+            config.solana_rpc_http.clone(),
+        )
+        .await
+        .context("network_status_reporter initialization failed")?;
 
         let watched_pool_service = init_watched_pool_service(&database, listener.clone())
             .await
@@ -241,8 +248,9 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 async fn init_processor(
     database: &Database,
     rpc_client: Arc<RpcClient>,
+    rpc_url: SecretUrl,
 ) -> anyhow::Result<Arc<TransactionProcessor>> {
-    let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone()));
+    let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone(), rpc_url));
     info!("transaction fetcher initialized");
     let extraction_dispatcher = Arc::new(ExtractionDispatcher::new());
     info!("event extractor initialized");
@@ -263,11 +271,13 @@ async fn init_processor(
 async fn init_network_status_reporter(
     database: &Database,
     rpc_client: Arc<RpcClient>,
+    rpc_url: SecretUrl,
 ) -> anyhow::Result<NetworkStatusReporter> {
     let pg_network_status_reporter_repository =
         Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
     Ok(NetworkStatusReporter::new(
         rpc_client,
+        rpc_url,
         pg_network_status_reporter_repository,
     ))
 }
@@ -344,13 +354,11 @@ where
             Ok(())
         }
         Ok(Err(e)) => {
-            let msg = redact_api_key(&e.to_string());
-            tracing::error!(error = %msg, "{task_name} failed");
+            tracing::error!(error = %e, "{task_name} failed");
             Err(anyhow::Error::new(e))
         }
         Err(e) => {
-            let msg = redact_api_key(&e.to_string());
-            tracing::error!(error = %msg, "{task_name} panicked");
+            tracing::error!(error = %e, "{task_name} panicked");
             Err(anyhow::anyhow!("{task_name} panicked: {e}"))
         }
     }

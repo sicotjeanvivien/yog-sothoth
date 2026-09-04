@@ -35,11 +35,16 @@ pub enum SourceError {
 /// because nine call sites each recopied `e.to_string()` unredacted.
 ///
 /// The redaction is here, at the boundary, rather than at the logging call
-/// sites, and that placement is the whole point. `yog-indexer` takes the other
-/// approach (`utils::redact_api_key`, applied when formatting): it works there,
-/// it never crossed the crate boundary, and a rule that every present and
+/// sites, and that placement is the whole point: a rule that every present and
 /// future log site must remember is a rule that will be forgotten. Nothing that
 /// comes out of here carries a URL, so no call site can leak one.
+///
+/// `yog-indexer` used to make the other choice — `utils::redact_api_key`,
+/// applied when formatting. It was removed in September 2026, for a second
+/// reason on top of the placement: matching the literal `api-key=` made it
+/// blind to a credential in a URL *path*, which is how Alchemy and QuickNode
+/// authenticate. It now scrubs at the boundary too, through
+/// `SecretUrl::scrub`, which knows its own secret instead of a pattern.
 ///
 /// Losing the URL costs little: which endpoint was called is in the
 /// configuration, and the provider is already named by the log's target.
