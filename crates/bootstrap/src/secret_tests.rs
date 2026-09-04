@@ -123,12 +123,101 @@ fn value_without_scheme_is_left_alone_by_the_password_rule() {
     assert_eq!(format!("{url}"), "localhost:5433/yog_sothoth");
 }
 
-/// The `/` after the authority bounds the search: a `@` in the path must not
-/// be mistaken for the end of a userinfo.
+/// A `@` in the path must not be read as the end of a userinfo — the host must
+/// survive. (The path itself is redacted by the rule below; what is asserted
+/// here is that `api.jup.ag` did not get treated as a password.)
 #[test]
 fn at_sign_in_path_is_not_treated_as_userinfo() {
     let url = SecretUrl::new("https://api.jup.ag/price/v3@latest");
-    assert_eq!(format!("{url}"), "https://api.jup.ag/price/v3@latest");
+    let shown = format!("{url}");
+    assert!(
+        shown.starts_with("https://api.jup.ag/"),
+        "host mangled: {shown}"
+    );
+}
+
+/// An unencoded `/` inside a Postgres password pushes the `@` past the
+/// authority delimiter. Bounding the search at the first `/` would return the
+/// password in the clear, on a URL that reads as perfectly ordinary.
+#[test]
+fn password_containing_slash_is_still_redacted() {
+    let url = SecretUrl::new("postgresql://yog:pa/ss@localhost:5433/yog_sothoth");
+    let shown = format!("{url}");
+    assert_eq!(
+        shown,
+        "postgresql://yog:***REDACTED***@localhost:5433/yog_sothoth"
+    );
+    assert!(!shown.contains("pa/ss"), "password leaked: {shown}");
+}
+
+// ---------------------------------------------------------------------------
+// SecretUrl — the credential in the path
+// ---------------------------------------------------------------------------
+
+/// Alchemy and QuickNode put the key in a path segment, and the repository's
+/// own provider study puts Alchemy first. A rule that only knew about `?` would
+/// print these whole — which is the defect this module exists to close, applied
+/// one level up.
+#[test]
+fn credential_in_the_path_is_redacted() {
+    for raw in [
+        "https://solana-mainnet.g.alchemy.com/v2/SUPERSECRETKEY",
+        "wss://solana-mainnet.g.alchemy.com/v2/SUPERSECRETKEY",
+        "https://xxx.solana-mainnet.quiknode.pro/abcdef123456/",
+    ] {
+        let shown = format!("{}", SecretUrl::new(raw));
+        assert!(
+            !shown.contains("SUPERSECRETKEY") && !shown.contains("abcdef123456"),
+            "credential leaked from the path: {shown}"
+        );
+        assert!(
+            shown.contains("***REDACTED***"),
+            "nothing redacted: {shown}"
+        );
+    }
+}
+
+/// The host names the provider, and that is the diagnostic worth keeping.
+#[test]
+fn path_redaction_keeps_scheme_and_host() {
+    let url = SecretUrl::new("https://solana-mainnet.g.alchemy.com/v2/SUPERSECRETKEY");
+    assert_eq!(
+        format!("{url}"),
+        "https://solana-mainnet.g.alchemy.com/***REDACTED***"
+    );
+}
+
+/// A path made only of separators hides nothing — the far more common
+/// "key in the query string" endpoint keeps its shape.
+#[test]
+fn empty_path_is_left_alone() {
+    let url = SecretUrl::new("https://mainnet.helius-rpc.com/?api-key=abc123");
+    assert_eq!(
+        format!("{url}"),
+        "https://mainnet.helius-rpc.com/?***REDACTED***"
+    );
+}
+
+/// Postgres is the one scheme whose path survives: it is the database name,
+/// and naming the database is what makes this type worth more than `****`.
+#[test]
+fn postgres_path_is_the_database_name_and_survives() {
+    let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
+    let shown = format!("{url}");
+    assert!(
+        shown.ends_with("/yog_sothoth"),
+        "database name lost: {shown}"
+    );
+    assert!(!shown.contains("hunter2"), "password leaked: {shown}");
+}
+
+/// An unknown scheme gets its path hidden rather than shown. The rule fails
+/// closed, so the provider nobody has met yet is covered by default.
+#[test]
+fn unknown_scheme_has_its_path_redacted() {
+    let url = SecretUrl::new("grpc://some-new-provider.example/CREDENTIAL");
+    let shown = format!("{url}");
+    assert!(!shown.contains("CREDENTIAL"), "credential leaked: {shown}");
 }
 
 // ---------------------------------------------------------------------------

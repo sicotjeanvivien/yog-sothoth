@@ -20,8 +20,12 @@ use std::{fs, path::Path};
 
 /// Every file allowed to expose a secret, how many times, and why.
 ///
-/// The count matters as much as the file: a second `.expose()` slipped into a
-/// file that already had one would otherwise ride in unnoticed.
+/// The count is per file, so a *net-new* exposure is caught even in a file that
+/// already had one. ⚠️ What it does **not** catch is a *relocated* one: moving
+/// the `RpcClient::new` exposure of `indexer/bootstrap/daemon.rs` into a
+/// `warn!` in the same file keeps the count at two and passes. This guard
+/// bounds where secrets may escape, file by file; it is not a substitute for
+/// reading the line.
 const ALLOWED: &[(&str, usize, &str)] = &[
     (
         "crates/api/src/bootstrap/app_state.rs",
@@ -52,6 +56,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "crates/indexer/src/application/workers/subscription.rs",
         1,
         "solana-pubsub-client owns the socket — argument of `PubsubClient::new`",
+    ),
+    (
+        "crates/indexer/src/bin/inspect_logs.rs",
+        1,
+        "tokio-tungstenite owns the socket — argument of `connect_async`",
     ),
     (
         "crates/indexer/src/bootstrap/daemon.rs",
@@ -93,10 +102,17 @@ fn count_exposures(source: &str) -> usize {
         .sum()
 }
 
-/// Walk `crates/*/src`, collecting every file that exposes a secret.
+/// Walk the crates' sources, collecting every file that exposes a secret.
 ///
-/// Test sources are skipped: `secret_tests.rs` asserts on `expose` itself, and
-/// a test that builds a client is not a production exposure path.
+/// Two things are skipped, for the same reason: a test is not a production
+/// exposure path. `*_tests.rs` files — the workspace's inline convention — and
+/// whole `tests/` directories, which hold the DB-backed integration suites. A
+/// test that legitimately builds a client from an exposed URL would otherwise
+/// have to be listed in a table titled "every file allowed to expose a
+/// secret", which is exactly the entry this module says should not exist.
+///
+/// `target/` never appears: the walk starts at `crates/`, and build output
+/// lives at the workspace root.
 fn exposure_sites(root: &Path) -> Vec<(String, usize)> {
     let mut found = Vec::new();
     let mut stack = vec![root.join("crates")];
@@ -106,6 +122,10 @@ fn exposure_sites(root: &Path) -> Vec<(String, usize)> {
         for entry in entries {
             let path = entry.expect("readable directory entry").path();
             if path.is_dir() {
+                // `tests/` holds integration suites — see this function's docs.
+                if path.file_name().is_some_and(|n| n == "tests") {
+                    continue;
+                }
                 stack.push(path);
                 continue;
             }
