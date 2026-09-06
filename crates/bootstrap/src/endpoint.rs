@@ -103,6 +103,29 @@ impl Endpoint {
     /// authenticates through, and the fragment, which nothing in this workspace
     /// reads. What stays legible is what the placeholder is actually about —
     /// scheme, host, port, path and query.
+    ///
+    /// # Where this stops, and why it stops there
+    ///
+    /// Path and query stay legible **because that is where the placeholder
+    /// lives**: `?api-key={key}` and `/v2/{key}` are the two shapes the whole
+    /// design exists to print. So a second credential inlined *beside* the
+    /// placeholder — `?api-key={key}&auth=<token>`, or an old key left in a
+    /// path segment — is printed too. That is a real boundary, and it is drawn
+    /// on purpose rather than half-closed: redacting non-placeholder query
+    /// values would cost the legitimate ones (`?commitment=finalized`) and
+    /// would still leave the path, which is the same hiding place one step
+    /// over. A guard that covers two of three hiding places is the defect this
+    /// module was rewritten to remove, not a smaller version of the fix.
+    ///
+    /// The userinfo and the fragment are redacted precisely because they are
+    /// **not** that: no endpoint here authenticates through them and nothing
+    /// reads them, so hiding them costs nothing at all. The rule is not "hide
+    /// what might be secret" — it is *keep what is a diagnostic, drop what
+    /// never is*, which is the same line `redact` draws for Postgres.
+    ///
+    /// What the operator gets, stated plainly: an address is legible in a log
+    /// exactly to the extent that its credentials are in `_KEY` variables. One
+    /// left inline is one printed.
     fn displayed(&self) -> String {
         if self.template.contains(KEY_PLACEHOLDER) {
             redact_fragment(&redact_password(&self.template))
