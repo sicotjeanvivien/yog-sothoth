@@ -24,7 +24,7 @@
 use std::fmt;
 
 /// Placeholder substituted for every secret this module hides.
-const REDACTED: &str = "***REDACTED***";
+pub(crate) const REDACTED: &str = "***REDACTED***";
 
 /// Shortest secret fragment [`SecretUrl::scrub`] will replace on its own.
 ///
@@ -254,7 +254,7 @@ impl fmt::Debug for SecretUrl {
 /// What survives is scheme, userinfo role, host and port: enough to name which
 /// provider or which database a dying process could not reach, which is the
 /// whole reason this is not a blanket `****`.
-fn redact(url: &str) -> String {
+pub(crate) fn redact(url: &str) -> String {
     redact_fragment(&redact_query(&redact_path(&redact_password(url))))
 }
 

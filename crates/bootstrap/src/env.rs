@@ -1,6 +1,7 @@
 use std::env;
 
 use crate::{
+    endpoint::{Endpoint, KEY_PLACEHOLDER},
     error::ConfigError,
     secret::{SecretKey, SecretUrl},
 };
@@ -61,6 +62,68 @@ pub fn required_secret_key(key: &str) -> Result<SecretKey, ConfigError> {
     required(key).map(SecretKey::new)
 }
 
+/// Read an optional environment variable, trimmed, with a blank value read as
+/// absent.
+///
+/// The same rule [`required`] applies, minus the refusal: `FOO=` in a `.env` is
+/// an oversight there and an oversight here, and the two must not disagree on
+/// what "set" means — that disagreement is what would let an empty `_KEY` slip
+/// past [`required_endpoint`]'s guard as if the operator had chosen not to
+/// have one.
+fn optional(key: &str) -> Option<String> {
+    match env::var(key).map(|v| v.trim().to_string()) {
+        Ok(v) if !v.is_empty() => Some(v),
+        _ => None,
+    }
+}
+
+/// Read an external endpoint as the `<PREFIX>_URL` / `<PREFIX>_KEY` pair it is.
+///
+/// The caller passes the **prefix**, and the two variable names are derived
+/// from it — one name, one place. Spelling both at every call site is how a
+/// convention comes to hold at some sites and not others, which is the defect
+/// this whole ticket is about.
+///
+/// # What it refuses, and why each refusal is loud
+///
+/// - the URL carries `{key}` and `<PREFIX>_KEY` is absent or blank →
+///   `MissingVariable`, **naming that variable**. Accepting it would start the
+///   process with a literal `{key}` in its address, and the operator would then
+///   be reading a 401 that nothing connects back to the configuration;
+/// - the URL carries no `{key}` and `<PREFIX>_KEY` is set →
+///   `UnsupportedCombination`. It is the same failure seen from the other side:
+///   a credential that is configured and goes nowhere. Silence here means the
+///   process authenticates as anonymous and the operator has no reason to
+///   suspect it.
+///
+/// A URL with no `{key}` and no key is a **public endpoint**, and is accepted
+/// exactly as written — `api.mainnet-beta.solana.com` wants no credential.
+///
+/// Fails only with those two variants and with the `MissingVariable` of the URL
+/// itself: no value ever reaches [`ConfigError::InvalidValue`], whose `value`
+/// field would put it in the crash log — the rule that binds
+/// [`required_secret_url`] binds here too.
+pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
+    let url_var = format!("{prefix}_URL");
+    let key_var = format!("{prefix}_KEY");
+
+    let template = required(&url_var)?;
+    let key = optional(&key_var);
+
+    match (template.contains(KEY_PLACEHOLDER), key) {
+        (true, Some(raw)) => Ok(Endpoint::new(template, Some(SecretKey::new(raw)))),
+        (true, None) => Err(ConfigError::MissingVariable(key_var)),
+        (false, None) => Ok(Endpoint::new(template, None)),
+        (false, Some(_)) => Err(ConfigError::UnsupportedCombination {
+            detail: format!(
+                "`{key_var}` is set, but `{url_var}` has no `{KEY_PLACEHOLDER}` to \
+                 substitute it into — write `{KEY_PLACEHOLDER}` where the provider \
+                 expects the credential, or unset `{key_var}` if the endpoint is public"
+            ),
+        }),
+    }
+}
+
 /// Read a required environment variable and parse it as a `u32`.
 ///
 /// Fails with `MissingVariable` if absent, `InvalidValue` if present
@@ -99,8 +162,8 @@ pub fn parse_required_bool(key: &str) -> Result<bool, ConfigError> {
 /// Trims for the same reason `required` does, which it cannot reuse: a value
 /// carrying a default is allowed to be absent, and `required` refuses that.
 /// Known siblings in the same position, trimming for the same reason:
-/// `decimal_var` in `yog-signals`, and `LOG_FORMAT` / `RUST_LOG` in
-/// `init_tracing`.
+/// `optional` just above, `decimal_var` in `yog-signals`, and `LOG_FORMAT` /
+/// `RUST_LOG` in `init_tracing`.
 ///
 /// **That list is not a guarantee, and no claim here should be read as one.**
 /// It was asserted as exhaustive three times in one day and was wrong three
