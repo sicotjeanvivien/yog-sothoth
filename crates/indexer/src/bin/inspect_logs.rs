@@ -37,12 +37,12 @@ const MAX_NOTIFICATIONS: usize = 100;
 async fn main() -> Result<()> {
     yog_bootstrap::init_rustls();
     dotenv().ok();
-    // Read WS URL from env — same key as the main indexer for consistency.
-    let ws_url = yog_bootstrap::required("SOLANA_RPC_WS")
+    // Read WS URL from env — same key, and same type, as the main indexer.
+    let ws_url = yog_bootstrap::required_secret_url("SOLANA_RPC_WS")
         .context("SOLANA_RPC_WS must be set (e.g. wss://api.mainnet-beta.solana.com)")?;
 
-    eprintln!("# Connecting to {}", redact(&ws_url));
-    let (mut ws, _) = connect_async(&ws_url)
+    eprintln!("# Connecting to {ws_url}");
+    let (mut ws, _) = connect_async(ws_url.expose())
         .await
         .context("failed to connect to RPC WebSocket")?;
     eprintln!("# Connected.");
@@ -150,25 +150,4 @@ fn dump_notification(index: usize, value: &Value) {
         }
     }
     println!();
-}
-
-/// Redact query-string credentials from a WS URL before logging it to stderr.
-/// Helius and similar providers encode the API key in the URL path or query.
-fn redact(url: &str) -> String {
-    if let Some(q) = url.find('?') {
-        format!("{}?…redacted…", &url[..q])
-    } else if let Some(last_slash) = url.rfind('/') {
-        // Helius uses `wss://mainnet.helius-rpc.com/?api-key=…` OR
-        // `wss://…/v1/?api-key=…` — the `?` branch covers both. For URLs
-        // without query params, redact the trailing path segment which
-        // some providers use for the key.
-        let (head, tail) = url.split_at(last_slash + 1);
-        if tail.len() > 8 && !tail.contains('.') {
-            format!("{head}…redacted…")
-        } else {
-            url.to_string()
-        }
-    } else {
-        url.to_string()
-    }
 }

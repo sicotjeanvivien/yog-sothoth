@@ -19,6 +19,7 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use yog_bootstrap::SecretKey;
 
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
@@ -268,7 +269,7 @@ async fn rate_limited_chunk_recovers_on_retry() {
     // First call 429 (Retry-After: 0 keeps the test instant), second OK.
     let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
 
-    let client = JupiterPriceClient::new(base_url, "test-key".to_string());
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
     let fetched = client.fetch_prices(&[mint]).await.expect("Ok expected");
 
     assert_eq!(fetched.len(), 1, "the retried chunk yields its price");
@@ -283,7 +284,7 @@ async fn chunk_rate_limited_on_every_attempt_is_skipped() {
         .collect();
     let base_url = serve_scripted_responses(responses);
 
-    let client = JupiterPriceClient::new(base_url, "test-key".to_string());
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
     let fetched = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
 
     // Attempts exhausted → skip-and-log, never a hard error.

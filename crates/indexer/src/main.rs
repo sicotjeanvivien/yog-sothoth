@@ -49,8 +49,6 @@ mod error;
 // `infra` — infrastructure utilities (RPC client, dispatcher, listener…).
 mod infra;
 
-mod utils;
-
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::error;

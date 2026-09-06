@@ -7,6 +7,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
+use yog_bootstrap::SecretUrl;
 use yog_core::domain::Protocol;
 
 use crate::{
@@ -35,7 +36,10 @@ const EVENTS_CHANNEL_CAPACITY: usize = 256;
 /// - force a global reconnect when one worker dies (siblings keep running)
 /// - respawn dead workers (future work — see roadmap)
 pub(crate) struct RpcListener {
-    ws_url: String,
+    /// Stays wrapped all the way down to `PubsubClient::new` — provider
+    /// endpoints carry their key in this URL's query string, and the fleet
+    /// clones it once per worker.
+    ws_url: SecretUrl,
     watched_protocols: Mutex<HashSet<Protocol>>,
     watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
@@ -47,7 +51,7 @@ pub(crate) struct RpcListener {
 }
 
 impl RpcListener {
-    pub(crate) fn new(ws_url: String, worker_max_retries: u32, scope: IngestScope) -> Self {
+    pub(crate) fn new(ws_url: SecretUrl, worker_max_retries: u32, scope: IngestScope) -> Self {
         Self {
             ws_url,
             watched_protocols: Mutex::new(HashSet::new()),
@@ -241,7 +245,7 @@ struct WorkerHandle {
 }
 
 fn spawn_worker(
-    ws_url: String,
+    ws_url: SecretUrl,
     target: SubscriptionTarget,
     max_retries: u32,
     dispatcher_tx: mpsc::Sender<RawLogEvent>,

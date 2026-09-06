@@ -1,6 +1,9 @@
 use std::env;
 
-use crate::error::ConfigError;
+use crate::{
+    error::ConfigError,
+    secret::{SecretKey, SecretUrl},
+};
 
 /// Read a required environment variable. Returns `MissingVariable` if
 /// the key is absent, empty, or blank.
@@ -26,6 +29,36 @@ pub fn required(key: &str) -> Result<String, ConfigError> {
         Ok(v) if !v.is_empty() => Ok(v),
         _ => Err(ConfigError::MissingVariable(key.to_string())),
     }
+}
+
+/// Read a required environment variable and wrap it as a [`SecretUrl`].
+///
+/// The only way a downstream crate obtains one: `SecretUrl::new` is
+/// `pub(crate)`, so "a connection string is wrapped" is a fact the compiler
+/// enforces rather than a habit each `Config` has to keep.
+///
+/// # This helper may only fail with `MissingVariable`
+///
+/// It deliberately does no validation, and it must never gain any that reports
+/// through [`ConfigError::InvalidValue`] — that variant carries a `value`
+/// field, and a secret placed there is a secret in the crash log, which is the
+/// exact defect this module exists to close. `MissingVariable` carries the key
+/// alone, which is why it is the only variant reachable from here. The same
+/// rule binds [`required_secret_key`].
+pub fn required_secret_url(key: &str) -> Result<SecretUrl, ConfigError> {
+    required(key).map(SecretUrl::new)
+}
+
+/// Read a required environment variable and wrap it as a [`SecretKey`].
+///
+/// For a value that is *only* a secret — an API key, a token — with no carrier
+/// worth showing. Use [`required_secret_url`] when the value is a URL whose
+/// host and path a startup failure needs to name.
+///
+/// Fails only with `MissingVariable`, for the reason spelled out on
+/// [`required_secret_url`].
+pub fn required_secret_key(key: &str) -> Result<SecretKey, ConfigError> {
+    required(key).map(SecretKey::new)
 }
 
 /// Read a required environment variable and parse it as a `u32`.

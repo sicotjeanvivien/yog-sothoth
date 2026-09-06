@@ -6,7 +6,10 @@
 
 use std::time::Duration;
 
-use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required};
+use yog_bootstrap::{
+    ConfigError, SecretKey, SecretUrl, duration_var, required, required_secret_key,
+    required_secret_url,
+};
 
 /// Default interval between Jupiter price fetches, in seconds.
 ///
@@ -30,10 +33,18 @@ pub(crate) struct Config {
 
     /// Jupiter API base URL (e.g. `https://api.jup.ag`); the client
     /// appends `/price/v3` itself.
-    pub(crate) jupiter_url: SecretUrl,
+    ///
+    /// A plain `String`, and deliberately so: Jupiter authenticates by header,
+    /// so this URL carries no secret. Wrapping it would blur what `SecretUrl`
+    /// asserts — that the value has something to hide.
+    pub(crate) jupiter_url: String,
 
     /// Jupiter API key — sent on every request via `x-api-key`.
-    pub(crate) jupiter_api_key: SecretUrl,
+    ///
+    /// A [`SecretKey`] and not a `SecretUrl`: a bare key has no carrier worth
+    /// showing, and `SecretUrl` would have returned it unredacted for want of
+    /// a `?`.
+    pub(crate) jupiter_api_key: SecretKey,
 
     /// How often the price worker fetches from Jupiter.
     pub(crate) price_interval: Duration,
@@ -45,10 +56,10 @@ pub(crate) struct Config {
 impl Config {
     pub(crate) fn load() -> Result<Self, ConfigError> {
         Ok(Self {
-            database_url: SecretUrl::new(required("DATABASE_URL_CONTEXT")?),
-            helius_url: SecretUrl::new(required("SOLANA_RPC_HTTP")?),
-            jupiter_url: SecretUrl::new(required("JUPITER_URL")?),
-            jupiter_api_key: SecretUrl::new(required("JUPITER_API_KEY")?),
+            database_url: required_secret_url("DATABASE_URL_CONTEXT")?,
+            helius_url: required_secret_url("SOLANA_RPC_HTTP")?,
+            jupiter_url: required("JUPITER_URL")?,
+            jupiter_api_key: required_secret_key("JUPITER_API_KEY")?,
             price_interval: Duration::from_secs(duration_var(
                 "CONTEXT_PRICE_INTERVAL_SECS",
                 DEFAULT_PRICE_INTERVAL_SECS,

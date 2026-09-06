@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
-use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required};
+use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required_secret_url};
 
 /// How often the flow-imbalance detector ticks, in seconds.
 /// Overridable via `SIGNALS_FLOW_INTERVAL_SECS`.
@@ -127,7 +127,7 @@ pub(crate) struct Config {
 impl Config {
     pub(crate) fn load() -> Result<Self, ConfigError> {
         let config = Self {
-            database_url: SecretUrl::new(required("DATABASE_URL_SIGNALS")?),
+            database_url: required_secret_url("DATABASE_URL_SIGNALS")?,
             flow_interval: Duration::from_secs(duration_var(
                 "SIGNALS_FLOW_INTERVAL_SECS",
                 DEFAULT_FLOW_INTERVAL_SECS,

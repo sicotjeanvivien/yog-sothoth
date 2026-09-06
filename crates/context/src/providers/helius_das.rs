@@ -20,6 +20,7 @@ use solana_pubkey::Pubkey;
 use std::time::Instant;
 use tracing::warn;
 
+use yog_bootstrap::SecretUrl;
 use yog_core::domain::MetadataProvider;
 
 use crate::{
@@ -114,11 +115,14 @@ struct DasTokenInfo {
 #[derive(Clone)]
 pub struct HeliusDasClient {
     http: reqwest::Client,
-    rpc_url: String,
+    /// Stays wrapped for the client's whole life — the provider key sits in
+    /// this URL's query string, and a `String` here would put it back within
+    /// reach of any `Debug` this struct ever gains.
+    rpc_url: SecretUrl,
 }
 
 impl HeliusDasClient {
-    pub fn new(rpc_url: String) -> Self {
+    pub fn new(rpc_url: SecretUrl) -> Self {
         Self {
             http: super::http_client(),
             rpc_url,
@@ -163,7 +167,7 @@ impl HeliusDasClient {
 
         let response = self
             .http
-            .post(&self.rpc_url)
+            .post(self.rpc_url.expose())
             .json(&request)
             .send()
             .await?

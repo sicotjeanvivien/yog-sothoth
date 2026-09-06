@@ -10,11 +10,11 @@ use solana_rpc_client_api::{
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
+use yog_bootstrap::SecretUrl;
 
 use crate::{
     error::SubscriptionWorkerError,
     infra::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
-    utils::redact_api_key,
 };
 
 /// Bounds for the worker's internal retry loop.
@@ -37,13 +37,13 @@ const MAX_BACKOFF_SECS: u64 = 60;
 /// The worker emits `SubscriptionEvent`s on a broadcast channel so the
 /// listener (and any future observer) can track its state.
 pub(crate) struct SubscriptionWorker {
-    ws_url: String,
+    ws_url: SecretUrl,
     target: SubscriptionTarget,
     max_attempts: u32,
 }
 
 impl SubscriptionWorker {
-    pub(crate) fn new(ws_url: String, target: SubscriptionTarget, max_attempts: u32) -> Self {
+    pub(crate) fn new(ws_url: SecretUrl, target: SubscriptionTarget, max_attempts: u32) -> Self {
         Self {
             ws_url,
             target,
@@ -134,13 +134,12 @@ impl SubscriptionWorker {
                     continue;
                 }
                 ConnectOutcome::Failed(err_msg) => {
-                    let redacted = redact_api_key(&err_msg);
                     warn!(
                         protocol = %target.protocol.as_str(),
                         mention = %target.mention,
                         attempt,
                         max = max_attempts,
-                        error = %redacted,
+                        error = %err_msg,
                         "worker attempt failed"
                     );
                     emit(
@@ -149,10 +148,10 @@ impl SubscriptionWorker {
                             protocol: target.protocol,
                             mention: target.mention,
                             attempt,
-                            error: redacted.clone(),
+                            error: err_msg.clone(),
                         },
                     );
-                    last_error = Some(redacted);
+                    last_error = Some(err_msg);
 
                     if attempt >= max_attempts {
                         let msg = last_error.unwrap_or_else(|| "unknown".to_string());
@@ -197,15 +196,15 @@ enum ConnectOutcome {
 }
 
 async fn connect_and_forward(
-    ws_url: &str,
+    ws_url: &SecretUrl,
     target: &SubscriptionTarget,
     dispatcher_tx: &mpsc::Sender<RawLogEvent>,
     events_tx: &broadcast::Sender<SubscriptionEvent>,
     shutdown: &CancellationToken,
 ) -> ConnectOutcome {
-    let pubsub = match PubsubClient::new(ws_url).await {
+    let pubsub = match PubsubClient::new(ws_url.expose()).await {
         Ok(c) => c,
-        Err(e) => return ConnectOutcome::Failed(format!("pubsub connect: {e}")),
+        Err(e) => return ConnectOutcome::Failed(ws_url.scrub(&format!("pubsub connect: {e}"))),
     };
 
     let filter = RpcTransactionLogsFilter::Mentions(vec![target.mention.to_string()]);
@@ -215,7 +214,7 @@ async fn connect_and_forward(
 
     let (stream, unsubscribe) = match pubsub.logs_subscribe(filter, config).await {
         Ok(ok) => ok,
-        Err(e) => return ConnectOutcome::Failed(format!("logs_subscribe: {e}")),
+        Err(e) => return ConnectOutcome::Failed(ws_url.scrub(&format!("logs_subscribe: {e}"))),
     };
 
     info!(

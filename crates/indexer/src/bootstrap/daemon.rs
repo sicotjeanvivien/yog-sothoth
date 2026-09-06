@@ -13,7 +13,6 @@ use crate::{
         DispatcherMetrics, QualifiedSignature, RawLogEvent, RpcListener, SignatureDispatcher,
         TransactionFetcher,
     },
-    utils::redact_api_key,
 };
 use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -21,6 +20,7 @@ use std::sync::Arc;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use yog_bootstrap::SecretUrl;
 use yog_core::application::extraction::ExtractionDispatcher;
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
@@ -62,7 +62,7 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = init_db(config.database_url.expose())
+        let database = init_db(&config.database_url)
             .await
             .context("database initialization failed")?;
         info!("database initialized");
@@ -73,14 +73,22 @@ impl Daemon {
         let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
         info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
 
-        let processor = init_processor(&database, rpc_client.clone())
-            .await
-            .context("indexer service initialization failed")?;
+        let processor = init_processor(
+            &database,
+            rpc_client.clone(),
+            config.solana_rpc_http.clone(),
+        )
+        .await
+        .context("indexer service initialization failed")?;
         info!("indexer service initialized");
 
-        let network_status_reporter = init_network_status_reporter(&database, rpc_client.clone())
-            .await
-            .context("network_status_reporter initialization failed")?;
+        let network_status_reporter = init_network_status_reporter(
+            &database,
+            rpc_client.clone(),
+            config.solana_rpc_http.clone(),
+        )
+        .await
+        .context("network_status_reporter initialization failed")?;
 
         let watched_pool_service = init_watched_pool_service(&database, listener.clone())
             .await
@@ -163,8 +171,8 @@ impl Daemon {
 /// The database URL is held in `Config::database_url` (a redacted secret),
 /// so we never log it directly — `anyhow::Context` is sufficient to surface
 /// the failure at startup without leaking credentials.
-async fn init_db(database_url: &str) -> anyhow::Result<Database> {
-    let db = Database::connect(database_url)
+async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
+    let db = Database::connect(database_url.expose())
         .await
         .context("failed to connect to database")?;
     tracing::info!("connected to database");
@@ -174,7 +182,7 @@ async fn init_db(database_url: &str) -> anyhow::Result<Database> {
 /// Create the RPC WebSocket listener with its watched protocols.
 fn init_listener(config: &Config) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(
-        config.solana_rpc_ws.expose().to_string(),
+        config.solana_rpc_ws.clone(),
         config.worker_max_retries,
         config.scope,
     ))
@@ -240,8 +248,9 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 async fn init_processor(
     database: &Database,
     rpc_client: Arc<RpcClient>,
+    rpc_url: SecretUrl,
 ) -> anyhow::Result<Arc<TransactionProcessor>> {
-    let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone()));
+    let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone(), rpc_url));
     info!("transaction fetcher initialized");
     let extraction_dispatcher = Arc::new(ExtractionDispatcher::new());
     info!("event extractor initialized");
@@ -262,11 +271,13 @@ async fn init_processor(
 async fn init_network_status_reporter(
     database: &Database,
     rpc_client: Arc<RpcClient>,
+    rpc_url: SecretUrl,
 ) -> anyhow::Result<NetworkStatusReporter> {
     let pg_network_status_reporter_repository =
         Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
     Ok(NetworkStatusReporter::new(
         rpc_client,
+        rpc_url,
         pg_network_status_reporter_repository,
     ))
 }
@@ -343,13 +354,11 @@ where
             Ok(())
         }
         Ok(Err(e)) => {
-            let msg = redact_api_key(&e.to_string());
-            tracing::error!(error = %msg, "{task_name} failed");
+            tracing::error!(error = %e, "{task_name} failed");
             Err(anyhow::Error::new(e))
         }
         Err(e) => {
-            let msg = redact_api_key(&e.to_string());
-            tracing::error!(error = %msg, "{task_name} panicked");
+            tracing::error!(error = %e, "{task_name} panicked");
             Err(anyhow::anyhow!("{task_name} panicked: {e}"))
         }
     }

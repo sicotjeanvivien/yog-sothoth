@@ -14,16 +14,24 @@ use solana_rpc_client_api::{config::RpcTransactionConfig, response::transaction:
 use std::sync::Arc;
 use thiserror::Error;
 use tokio_retry::{Retry, strategy::FixedInterval};
+use yog_bootstrap::SecretUrl;
 
 /// Fetches confirmed transactions from a Solana RPC node with a bounded
 /// retry strategy.
 pub(crate) struct TransactionFetcher {
     rpc_client: Arc<RpcClient>,
+    /// The endpoint the client talks to, kept only to scrub it back out of the
+    /// error strings `solana-client` builds — reqwest renders the whole URL,
+    /// credential included, and `FetchError` carries that string onward.
+    rpc_url: SecretUrl,
 }
 
 impl TransactionFetcher {
-    pub(crate) fn new(rpc_client: Arc<RpcClient>) -> Self {
-        Self { rpc_client }
+    pub(crate) fn new(rpc_client: Arc<RpcClient>, rpc_url: SecretUrl) -> Self {
+        Self {
+            rpc_client,
+            rpc_url,
+        }
     }
 
     /// Fetch a confirmed transaction by signature.
@@ -53,7 +61,11 @@ impl TransactionFetcher {
                 .map_err(|e| e.to_string())
         })
         .await
-        .map_err(FetchError::from_rpc_string)
+        // Scrub *here*, where the third party's string is born, rather than at
+        // each site that later logs it: `yog-context` learned that a rule every
+        // present and future log site must remember is a rule that gets
+        // forgotten — nine sites, 38 leaked lines, 2 September 2026.
+        .map_err(|msg| FetchError::from_rpc_string(self.rpc_url.scrub(&msg)))
     }
 }
 

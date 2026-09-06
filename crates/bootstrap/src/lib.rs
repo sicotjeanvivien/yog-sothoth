@@ -4,7 +4,7 @@
 //! This crate hosts what every binary needs at startup, and only that:
 //!
 //! - reading and validating environment variables (`env`)
-//! - wrapping connection strings that contain secrets (`secret`)
+//! - wrapping secrets so they cannot be printed (`secret`)
 //! - the canonical `ConfigError` type returned by every binary's
 //!   `Config::load` (`error`)
 //! - one-shot runtime initialization for crates that don't pick a
@@ -21,9 +21,19 @@ mod error;
 mod runtime;
 mod secret;
 
+/// The guard that keeps `.expose()` on the lines that consume a secret.
+///
+/// It lives here rather than in each crate because the rule belongs to the
+/// type, and the type lives here — one definition instead of seven restatements
+/// of the same convention.
+#[cfg(test)]
+#[path = "exposure_tests.rs"]
+mod exposure_tests;
+
 pub use env::{
     EnvEnum, duration_var, parse_required_bool, parse_required_enum, parse_required_u32, required,
+    required_secret_key, required_secret_url,
 };
 pub use error::ConfigError;
 pub use runtime::{init_rustls, init_tracing};
-pub use secret::SecretUrl;
+pub use secret::{SecretKey, SecretUrl};

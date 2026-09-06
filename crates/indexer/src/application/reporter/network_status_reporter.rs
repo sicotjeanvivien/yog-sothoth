@@ -26,6 +26,7 @@ use std::time::{Duration, Instant};
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
+use yog_bootstrap::SecretUrl;
 
 use yog_core::domain::{NetworkStatus, NetworkStatusRepository};
 
@@ -44,6 +45,9 @@ const TICK_INTERVAL: Duration = Duration::from_secs(15);
 /// the daemon wires the concrete `PgNetworkStatusRepository`.
 pub(crate) struct NetworkStatusReporter {
     rpc_client: Arc<RpcClient>,
+    /// Kept to scrub the endpoint back out of `solana-client` error strings —
+    /// see [`crate::infra::TransactionFetcher`], same reason, same boundary.
+    rpc_url: SecretUrl,
     repository: Arc<dyn NetworkStatusRepository>,
 }
 
@@ -52,10 +56,12 @@ impl NetworkStatusReporter {
     /// network-status repository.
     pub(crate) fn new(
         rpc_client: Arc<RpcClient>,
+        rpc_url: SecretUrl,
         repository: Arc<dyn NetworkStatusRepository>,
     ) -> Self {
         Self {
             rpc_client,
+            rpc_url,
             repository,
         }
     }
@@ -99,7 +105,7 @@ impl NetworkStatusReporter {
             .rpc_client
             .get_slot()
             .await
-            .map_err(|e| NetworkStatusReporterError::Rpc(e.to_string()))?;
+            .map_err(|e| NetworkStatusReporterError::Rpc(self.rpc_url.scrub(&e.to_string())))?;
         let elapsed_ms = started.elapsed().as_millis();
 
         // `as_millis` is u128; the domain model uses u32. A getSlot
