@@ -28,7 +28,7 @@
 
 use std::fmt;
 
-use crate::secret::{REDACTED, SecretKey, SecretUrl, redact};
+use crate::secret::{REDACTED, SecretKey, SecretUrl, redact, redact_fragment, redact_password};
 
 /// The placeholder an operator writes where the credential belongs.
 pub(crate) const KEY_PLACEHOLDER: &str = "{key}";
@@ -92,9 +92,20 @@ impl Endpoint {
     /// [`redact`], which keeps scheme, host and port. The cost is a public URL
     /// printed shorter than it needed to be; the alternative cost is a key in
     /// the logs the first time somebody fills the `.env` the old way.
+    ///
+    /// ⚠️ And a `{key}` is **not** a certificate of safety for the rest of the
+    /// URL, which is what an earlier shape of this function assumed. The
+    /// placeholder accounts for the one credential the operator externalized;
+    /// it says nothing about a second one sitting elsewhere in the same
+    /// address — `https://user:s3cret@host/?api-key={key}` is a real shape, and
+    /// it was printed whole. So the two components a template has **no reason
+    /// to carry** are redacted either way: the userinfo, which no provider here
+    /// authenticates through, and the fragment, which nothing in this workspace
+    /// reads. What stays legible is what the placeholder is actually about —
+    /// scheme, host, port, path and query.
     fn displayed(&self) -> String {
         if self.template.contains(KEY_PLACEHOLDER) {
-            self.template.clone()
+            redact_fragment(&redact_password(&self.template))
         } else {
             redact(&self.template)
         }

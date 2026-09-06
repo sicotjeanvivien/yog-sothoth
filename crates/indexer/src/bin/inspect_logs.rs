@@ -39,10 +39,12 @@ async fn main() -> Result<()> {
     dotenv().ok();
     // Read the stream endpoint from env — same pair, and same type, as the
     // main indexer.
-    let stream = yog_bootstrap::required_endpoint("INGEST_STREAM").context(
-        "INGEST_STREAM_URL must be set (e.g. wss://api.mainnet-beta.solana.com), \
-         with INGEST_STREAM_KEY if it carries a `{key}`",
-    )?;
+    // The wrapper says which endpoint, never which variable: the three ways
+    // this call fails each name their own — a missing URL, a `{key}` without
+    // its key, a key without its `{key}` — and asserting one of them here
+    // would put a wrong variable name above the right one.
+    let stream = yog_bootstrap::required_endpoint("INGEST_STREAM")
+        .context("the INGEST_STREAM endpoint is misconfigured — see .env.example")?;
 
     eprintln!("# Connecting to {stream}");
     let (mut ws, _) = connect_async(stream.url().expose())

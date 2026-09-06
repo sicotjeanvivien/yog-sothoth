@@ -182,3 +182,47 @@ fn a_url_without_a_placeholder_is_redacted() {
         "https://solana-mainnet.g.alchemy.com/***REDACTED***"
     );
 }
+
+/// A `{key}` accounts for the credential the operator moved out — and for
+/// nothing else. The components a template has no business carrying are
+/// redacted whether or not it has a placeholder, because "it has a `{key}`, so
+/// it hides nothing" is an assumption about the *rest* of the URL that nobody
+/// can make. Found in review, 6 September 2026: this line printed whole.
+#[test]
+fn a_second_credential_does_not_ride_the_placeholder_out() {
+    let userinfo = endpoint("https://user:s3cret@host/?api-key={key}", Some("k"));
+    assert_eq!(
+        userinfo.to_string(),
+        "https://user:***REDACTED***@host/?api-key={key}"
+    );
+    assert!(
+        !format!("{userinfo:?}").contains("s3cret"),
+        "Debug leaked it: {userinfo:?}"
+    );
+
+    // A bare-token userinfo — `https://<token>@host` — has no `:` to split on,
+    // so the whole of it goes; the host is what the log needed anyway.
+    let token = endpoint("https://s3cret@host/v2/{key}", Some("k"));
+    assert_eq!(token.to_string(), "https://***REDACTED***@host/v2/{key}");
+
+    let fragment = endpoint("https://host/v2/{key}#s3cret", Some("k"));
+    assert_eq!(fragment.to_string(), "https://host/v2/{key}#***REDACTED***");
+}
+
+/// And the readability the fix must not cost: path and query are exactly where
+/// the placeholder lives, so they stay legible. A redaction that swallowed them
+/// would give back the arbitrage this whole ticket removed.
+#[test]
+fn the_placeholder_and_its_carrier_stay_legible() {
+    let query = endpoint("https://mainnet.helius-rpc.com/?api-key={key}", Some("k"));
+    assert_eq!(
+        query.to_string(),
+        "https://mainnet.helius-rpc.com/?api-key={key}"
+    );
+
+    let path = endpoint("https://solana-mainnet.g.alchemy.com/v2/{key}", Some("k"));
+    assert_eq!(
+        path.to_string(),
+        "https://solana-mainnet.g.alchemy.com/v2/{key}"
+    );
+}
