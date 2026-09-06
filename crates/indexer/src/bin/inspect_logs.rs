@@ -37,12 +37,15 @@ const MAX_NOTIFICATIONS: usize = 100;
 async fn main() -> Result<()> {
     yog_bootstrap::init_rustls();
     dotenv().ok();
-    // Read WS URL from env — same key, and same type, as the main indexer.
-    let ws_url = yog_bootstrap::required_secret_url("SOLANA_RPC_WS")
-        .context("SOLANA_RPC_WS must be set (e.g. wss://api.mainnet-beta.solana.com)")?;
+    // Read the stream endpoint from env — same pair, and same type, as the
+    // main indexer.
+    let stream = yog_bootstrap::required_endpoint("INGEST_STREAM").context(
+        "INGEST_STREAM_URL must be set (e.g. wss://api.mainnet-beta.solana.com), \
+         with INGEST_STREAM_KEY if it carries a `{key}`",
+    )?;
 
-    eprintln!("# Connecting to {ws_url}");
-    let (mut ws, _) = connect_async(ws_url.expose())
+    eprintln!("# Connecting to {stream}");
+    let (mut ws, _) = connect_async(stream.url().expose())
         .await
         .context("failed to connect to RPC WebSocket")?;
     eprintln!("# Connected.");

@@ -206,8 +206,8 @@ emitted. No gauges today — all counters and histograms.
 
 ```env
 DATABASE_URL_INDEXER=postgresql://yog_indexer:...@localhost:5433/yog_sothoth
-SOLANA_RPC_WS=wss://...
-SOLANA_RPC_HTTP=https://...
+INGEST_STREAM_URL=wss://...            # + INGEST_STREAM_KEY if it has a {key}
+INGEST_TRANSACTION_URL=https://...     # + INGEST_TRANSACTION_KEY likewise
 RPC_WORKER_MAX_RETRIES=10
 INGEST_SOURCE=rpc
 INGEST_SCOPE=pools
@@ -216,18 +216,32 @@ INGEST_SCOPE=pools
 All six are required — none has an implicit default, and a missing one fails
 at startup with a `ConfigError`.
 
-The first three carry a secret and are `SecretUrl`s: userinfo, path, query
-string and fragment are redacted in `Display` and `Debug`, while scheme, host
-and port stay legible so a failed startup still names what it could not reach.
-The path is redacted because providers put credentials there — Alchemy's
-`/v2/<key>`, QuickNode's `/<token>/` — and only Postgres URLs keep theirs, it
-being the database name.
+**Two endpoints, four variables.** Each is an `Endpoint`: a `<FUNCTION>_URL`
+carrying `{key}` where the provider expects its credential, plus a
+`<FUNCTION>_KEY` holding it. They are named after what they serve — what the
+ingestion listens to, and where a transaction is fetched back from — never
+after the protocol they speak. The variable they replace, `SOLANA_RPC_HTTP`,
+was named for its transport, so it excluded nothing and had accumulated three
+roles across two crates; one variable cannot hold two addresses, which is the
+wall a provider migration would have hit. A URL with no `{key}` and no key is a
+public endpoint and is used verbatim; the two mismatches — a `{key}` without
+its key, a key without its `{key}` — are refused at startup, naming the
+variable. See `crates/README.md` for the type, and `.env.example` for the
+convention.
 
-`SOLANA_RPC_WS` keeps that type all the way down: `RpcListener` clones it once
-per worker, and `SubscriptionWorker` exposes it only as the argument of
-`PubsubClient::new`. The `inspect_logs` bin reads the same variable through the
-same type. The invariant and the guard that enforces it are documented in
-`crates/README.md`.
+`DATABASE_URL_INDEXER` carries its secret *inside* the URL, because `sqlx`
+wants the string whole, and is a `SecretUrl`: userinfo, path, query string and
+fragment are redacted in `Display` and `Debug`, while scheme, host and port
+stay legible so a failed startup still names what it could not reach. The path
+is redacted because providers put credentials there — Alchemy's `/v2/<key>`,
+QuickNode's `/<token>/` — and only Postgres URLs keep theirs, it being the
+database name.
+
+An assembled endpoint is a `SecretUrl` too, and keeps that type all the way
+down: `Endpoint::url()` builds one, `RpcListener` clones it once per worker,
+and `SubscriptionWorker` exposes it only as the argument of `PubsubClient::new`.
+The `inspect_logs` bin reads the same pair through the same types. The
+invariant and the guard that enforces it are documented in `crates/README.md`.
 
 ### Scrubbing what a third party wrote
 

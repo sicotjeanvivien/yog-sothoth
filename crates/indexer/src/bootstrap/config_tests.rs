@@ -9,7 +9,9 @@ use super::*;
 ///
 /// One test rather than two, walking both couples in sequence: these six
 /// keys are process-global and cargo runs this binary's tests in parallel,
-/// so splitting them would have the two halves race each other.
+/// so splitting them would have the two halves race each other. The two
+/// endpoints are public here, so neither `_KEY` is set — the pair's own
+/// refusals are covered where the pair lives, in `yog-bootstrap`.
 #[test]
 fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
     // SAFETY — and the honest version of it: `set_var` is unsound while any
@@ -24,8 +26,8 @@ fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
     // this test is worth.
     unsafe {
         env::set_var("DATABASE_URL_INDEXER", "postgresql://u:p@localhost:5433/db");
-        env::set_var("SOLANA_RPC_WS", "wss://example.invalid");
-        env::set_var("SOLANA_RPC_HTTP", "https://example.invalid");
+        env::set_var("INGEST_STREAM_URL", "wss://example.invalid");
+        env::set_var("INGEST_TRANSACTION_URL", "https://example.invalid");
         env::set_var("RPC_WORKER_MAX_RETRIES", "10");
         env::set_var("INGEST_SOURCE", "rpc");
         env::set_var("INGEST_SCOPE", "protocols");
@@ -46,4 +48,13 @@ fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
 
     let config = Config::load().expect("rpc + pools is the supported couple");
     assert_eq!(config.scope, IngestScope::Pools);
+
+    // The two endpoints are read from two variables, and each keeps its own
+    // value: this is what `SOLANA_RPC_HTTP` could not express, since one
+    // variable cannot hold two addresses.
+    assert_eq!(config.ingest_stream.url().expose(), "wss://example.invalid");
+    assert_eq!(
+        config.ingest_transaction.url().expose(),
+        "https://example.invalid"
+    );
 }

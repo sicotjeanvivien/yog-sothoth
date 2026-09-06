@@ -50,7 +50,7 @@
 //! # Recapturing
 //!
 //! ```text
-//! curl -s -X POST "$SOLANA_RPC_HTTP" -H 'Content-Type: application/json' \
+//! curl -s -X POST "$POOL_ACCOUNT_URL" -H 'Content-Type: application/json' \
 //!   -d '{"jsonrpc":"2.0","id":1,"method":"getMultipleAccounts",
 //!        "params":[["<pool>", …], {"encoding":"base64"}]}'
 //! ```
