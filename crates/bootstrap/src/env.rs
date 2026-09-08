@@ -132,6 +132,18 @@ fn parse_header(raw: &str, header_var: &str) -> Result<(String, String), ConfigE
     if value.is_empty() {
         return Err(malformed("missing a value after its `:`"));
     }
+    // ⚠️ The placeholder is substituted in the **value** and nowhere else, so a
+    // `{key}` in the name is never replaced. Left accepted it reaches the client
+    // as the literal header name `{key}` — the "401 that nothing connects back
+    // to the configuration" this whole function exists to prevent — and, when
+    // the URL carries a placeholder too, it is accepted in silence. Found in
+    // review, 8 September 2026.
+    if name.contains(KEY_PLACEHOLDER) {
+        return Err(malformed(
+            "carrying the placeholder in its header NAME, where it is never \
+             substituted — it belongs in the value, after the `:`",
+        ));
+    }
 
     Ok((name.to_string(), value.to_string()))
 }
@@ -228,15 +240,18 @@ fn read_endpoint(prefix: &str, header_is_read: bool) -> Result<Endpoint, ConfigE
     let key_var = format!("{prefix}_KEY");
 
     let template = required(&url_var)?;
-    let header = optional(&header_var)
-        .map(|raw| parse_header(&raw, &header_var))
-        .transpose()?;
-    let key = optional(&key_var);
+    let raw_header = optional(&header_var);
 
     // A header nobody sends is a credential nobody sends. See
     // `required_endpoint`'s docs for why this refusal exists rather than a
     // comment asking the operator to be careful.
-    if header.is_some() && !header_is_read {
+    //
+    // ⚠️ It runs **before** `parse_header`, and the order is the message. A
+    // malformed header on a url-only endpoint validated first would tell the
+    // operator to fix its `:`, and then, once fixed, to unset the variable
+    // entirely — two refusals pointing opposite ways. The first refusal an
+    // operator sees has to be the one that ends the matter.
+    if raw_header.is_some() && !header_is_read {
         return Err(ConfigError::UnsupportedCombination {
             detail: format!(
                 "`{header_var}` is set, but the code that calls `{url_var}` sends \
@@ -248,6 +263,11 @@ fn read_endpoint(prefix: &str, header_is_read: bool) -> Result<Endpoint, ConfigE
         });
     }
 
+    let header = raw_header
+        .map(|raw| parse_header(&raw, &header_var))
+        .transpose()?;
+    let key = optional(&key_var);
+
     // One placeholder, two possible carriers — see this function's docs.
     let has_placeholder = template.contains(KEY_PLACEHOLDER)
         || header
@@ -258,13 +278,28 @@ fn read_endpoint(prefix: &str, header_is_read: bool) -> Result<Endpoint, ConfigE
         (true, Some(raw)) => Ok(Endpoint::new(template, header, Some(SecretKey::new(raw)))),
         (true, None) => Err(ConfigError::MissingVariable(key_var)),
         (false, None) => Ok(Endpoint::new(template, header, None)),
+        // ⚠️ The advice is conditioned on `header_is_read`, and that is not
+        // cosmetic: telling an operator to write `{key}` "in the header" on an
+        // endpoint that refuses headers sends them straight into the refusal
+        // above, which then tells them the opposite. A refusal that names a fix
+        // the next refusal undoes is worse than one that names none.
         (false, Some(_)) => Err(ConfigError::UnsupportedCombination {
-            detail: format!(
-                "`{key_var}` is set, but neither `{url_var}` nor `{header_var}` has a \
-                 `{KEY_PLACEHOLDER}` to substitute it into — write `{KEY_PLACEHOLDER}` \
-                 where the provider expects the credential, in the URL or in the \
-                 header, or unset `{key_var}` if the endpoint is public"
-            ),
+            detail: if header_is_read {
+                format!(
+                    "`{key_var}` is set, but neither `{url_var}` nor `{header_var}` \
+                     has a `{KEY_PLACEHOLDER}` to substitute it into — write \
+                     `{KEY_PLACEHOLDER}` where the provider expects the credential, \
+                     in the URL or in the header value, or unset `{key_var}` if the \
+                     endpoint is public"
+                )
+            } else {
+                format!(
+                    "`{key_var}` is set, but `{url_var}` has no `{KEY_PLACEHOLDER}` \
+                     to substitute it into — write `{KEY_PLACEHOLDER}` where the \
+                     provider expects the credential, or unset `{key_var}` if the \
+                     endpoint is public"
+                )
+            },
         }),
     }
 }

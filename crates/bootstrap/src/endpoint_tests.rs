@@ -392,6 +392,11 @@ fn a_malformed_header_is_refused_without_echoing_its_value() {
             "x-token:   ",
             "missing a value after its `:`",
         ),
+        (
+            "KEY_IN_NAME",
+            "{key}: s3cretpasted",
+            "placeholder in its header NAME",
+        ),
     ] {
         let prefix = format!("HDR_BAD_{suffix}");
         unsafe {
@@ -521,5 +526,87 @@ fn a_url_only_endpoint_is_unaffected_by_the_feature() {
     unsafe {
         env::remove_var("HDR_PLAIN_URL");
         env::remove_var("HDR_PLAIN_KEY");
+    }
+}
+
+// ── refusals must not point at each other ───────────────────────────
+
+/// A refusal that names a fix the *next* refusal undoes is worse than one that
+/// names none. Two orderings are checked here, both found in review on
+/// 8 September 2026.
+#[test]
+fn a_refusal_never_advises_what_the_next_refusal_forbids() {
+    // 1. A key with nowhere to go, on a url-only endpoint. The advice must not
+    //    offer the header as a destination — writing one there is refused.
+    unsafe {
+        env::set_var("HDR_ADVICE_URL", "https://host");
+        env::set_var("HDR_ADVICE_KEY", "s3cret");
+    }
+    let ConfigError::UnsupportedCombination { detail } =
+        required_endpoint("HDR_ADVICE").expect_err("the key goes nowhere")
+    else {
+        panic!("expected UnsupportedCombination");
+    };
+    assert!(
+        !detail.contains("HDR_ADVICE_HEADER") && !detail.contains("in the header"),
+        "advised a header on an endpoint that refuses one: {detail}"
+    );
+    // The same endpoint read by a header-aware consumer *may* say it.
+    let ConfigError::UnsupportedCombination { detail } =
+        required_endpoint_with_header("HDR_ADVICE").expect_err("still nowhere to go")
+    else {
+        panic!("expected UnsupportedCombination");
+    };
+    assert!(detail.contains("header"), "{detail}");
+    unsafe {
+        env::remove_var("HDR_ADVICE_URL");
+        env::remove_var("HDR_ADVICE_KEY");
+    }
+
+    // 2. A malformed header on a url-only endpoint. Shape validation must not
+    //    win over "nothing would send it": fixing the colon would only earn a
+    //    second refusal telling them to remove the variable.
+    unsafe {
+        env::set_var("HDR_ORDER_URL", "https://host");
+        env::set_var("HDR_ORDER_HEADER", "x-token {key}");
+    }
+    let ConfigError::UnsupportedCombination { detail } =
+        required_endpoint("HDR_ORDER").expect_err("nothing would send it")
+    else {
+        panic!("expected UnsupportedCombination");
+    };
+    assert!(
+        detail.contains("sends") && detail.contains("only the URL"),
+        "shape validation answered first: {detail}"
+    );
+    unsafe {
+        env::remove_var("HDR_ORDER_URL");
+        env::remove_var("HDR_ORDER_HEADER");
+    }
+}
+
+/// A `{key}` in the header NAME is never substituted — it would reach the
+/// client as the literal name `{key}`. The dangerous half is the second case:
+/// with a placeholder in the URL as well, the config used to be **accepted**.
+#[test]
+fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
+    unsafe {
+        env::set_var("HDR_NAMEKEY_URL", "https://host/?api-key={key}");
+        env::set_var("HDR_NAMEKEY_HEADER", "{key}: jeton");
+        env::set_var("HDR_NAMEKEY_KEY", "s3cret");
+    }
+
+    let ConfigError::UnsupportedCombination { detail } =
+        required_endpoint_with_header("HDR_NAMEKEY").expect_err("the name is not a carrier")
+    else {
+        panic!("expected UnsupportedCombination");
+    };
+    assert!(detail.contains("HDR_NAMEKEY_HEADER"), "{detail}");
+    assert!(detail.contains("NAME"), "{detail}");
+
+    unsafe {
+        env::remove_var("HDR_NAMEKEY_URL");
+        env::remove_var("HDR_NAMEKEY_HEADER");
+        env::remove_var("HDR_NAMEKEY_KEY");
     }
 }
