@@ -87,8 +87,10 @@ pub fn reference_transaction() -> OnChainTransaction {
             timestamp: DateTime::from_timestamp(REFERENCE_BLOCK_TIME, 0)
                 .expect("the reference block time is a constant and must convert"),
             slot: REFERENCE_SLOT,
-            // Absent from this response. Optional in the API, and the provider
-            // in use never returns it — see `EventPosition`.
+            // ⚠️ Not part of the shared expectation — see
+            // [`assert_matches_reference`], which takes it as an argument. The
+            // value here is the JSON-RPC one, and it is only what
+            // `reference_transaction` needs in order to be a whole value.
             transaction_index: None,
         },
         inner_instructions: vec![
@@ -110,7 +112,26 @@ pub fn reference_transaction() -> OnChainTransaction {
 /// several-hundred-byte `Debug` blobs, because the failure this guards against
 /// is a *reordering* — and two orderings of the same bytes look identical until
 /// something points at the index that moved.
-pub fn assert_matches_reference(actual: &OnChainTransaction) {
+///
+/// # Why `transaction_index` is an argument and no other field is
+///
+/// Because it is the one field the two sources legitimately disagree on, and
+/// that disagreement is the reason the second source exists. `getTransaction`
+/// leaves it out — optional in the API, never returned by the provider in
+/// use — so the JSON-RPC adapter yields `None`; a Yellowstone
+/// `SubscribeUpdateTransactionInfo` carries `index` unconditionally, so the
+/// protobuf adapter yields `Some`. Two adapters cannot both match a constant
+/// here.
+///
+/// Making it a parameter keeps the arbiter **total** — the field is still
+/// checked, in one place — while forcing each caller to state what its own
+/// source provides. The alternative, dropping the field from the shared
+/// expectation, would leave the one column this whole migration is about
+/// unasserted by the module whose job is asserting.
+pub fn assert_matches_reference(
+    actual: &OnChainTransaction,
+    expected_transaction_index: Option<u32>,
+) {
     let expected = reference_transaction();
 
     assert_eq!(
@@ -123,8 +144,9 @@ pub fn assert_matches_reference(actual: &OnChainTransaction) {
     );
     assert_eq!(actual.position.slot, expected.position.slot, "slot");
     assert_eq!(
-        actual.position.transaction_index, expected.position.transaction_index,
-        "transaction_index"
+        actual.position.transaction_index, expected_transaction_index,
+        "transaction_index: the caller states what its source provides — see \
+         this function's docs for why this one field is not a constant"
     );
 
     assert_eq!(

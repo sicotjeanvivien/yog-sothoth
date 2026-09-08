@@ -132,5 +132,10 @@ fn the_reference_transaction_is_what_this_adapter_produces() {
 
     let on_chain_tx = from_rpc(&parse(json)).expect("the reference fixture must convert");
 
-    yog_core::application::extraction::conformance::assert_matches_reference(&on_chain_tx);
+    yog_core::application::extraction::conformance::assert_matches_reference(
+        &on_chain_tx,
+        // What this source provides: nothing. `getTransaction` leaves
+        // `transaction_index` out, which is what the gRPC migration is for.
+        None,
+    );
 }

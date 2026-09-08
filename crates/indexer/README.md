@@ -19,6 +19,7 @@ indexer/src/
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
 │                            subscription supervisor
+├── infra/grpc/            ← protobuf adapter (not yet wired)
 ├── infra/rpc/             ← RpcListener (WebSocket), SignatureDispatcher
 │                            filter chain, TransactionFetcher (HTTP + FetchError)
 ├── bootstrap/             ← Config::load(), Daemon (lifecycle, task wiring,
@@ -31,25 +32,62 @@ indexer/src/
 ## The source adapters
 
 `yog-core` extracts from an `OnChainTransaction` and never learns who filled it.
-Filling it is this crate's job, one module per source, under `infra/rpc/`:
+Filling it is this crate's job, one module per source:
 
-- `transaction_adapter.rs` turns a `getTransaction` response into that neutral
-  shape. It sits beside `transaction_fetcher.rs` on purpose — the encoding and
-  the adapter are **one contract** (the fetcher must ask for `JsonParsed`,
-  because the adapter reads the `PartiallyDecoded` inner instructions only that
-  encoding produces), and splitting them across crates is what would let the two
-  drift;
-- a Yellowstone gRPC source becomes a sibling module here, not a second path
-  through extraction.
+- `infra/rpc/transaction_adapter.rs` turns a `getTransaction` response into that
+  neutral shape. It sits beside `transaction_fetcher.rs` on purpose — the
+  encoding and the adapter are **one contract** (the fetcher must ask for
+  `JsonParsed`, because the adapter reads the `PartiallyDecoded` inner
+  instructions only that encoding produces), and splitting them across crates is
+  what would let the two drift;
+- `infra/grpc/transaction_adapter.rs` turns a Yellowstone
+  `SubscribeUpdateTransaction` into the same shape — a sibling module, not a
+  second path through extraction.
+
+  ⚠️ **Nothing calls it yet.** The listener that will is a later slice of the
+  gRPC ticket, and `INGEST_SOURCE=grpc` stays refused at startup until the one
+  after. The module carries a single `#![allow(dead_code)]` with that reason;
+  deleting the line is part of wiring the listener.
+
+  Two differences with its JSON-RPC sibling are worth knowing before reading it.
+  **The timestamp is an argument**, because `SubscribeUpdateTransaction` carries
+  none — `block_time` lives on `SubscribeUpdateBlockMeta`, a separate
+  subscription keyed by slot, and correlating the two is its own slice. And it
+  **filters nothing**: protobuf ships `data` as bytes, so unlike the JSON-RPC
+  adapter it has no shape it cannot represent. The same mainnet transaction
+  therefore yields 2 payloads through one adapter and 14 through the other,
+  which is sanctioned rather than accidental — see *What an adapter owes*.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
 event table. An adapter that reorders does not fail — it renumbers rows already
 stored. `yog_core::application::extraction::conformance` states that expectation
 once, on a reference mainnet transaction, and every adapter asserts against it.
-`transaction_adapter`'s own conformance test is what **pins** that expectation to
-reality, by reaching it from the verbatim fixture; the future protobuf adapter
-will be checked against reality rather than against itself because of it.
+The JSON-RPC adapter's conformance test is what **pins** that expectation to
+reality, by reaching it from the verbatim fixture.
+
+⚠️ **The protobuf adapter is not pinned that way, and cannot be.** There is no
+mainnet protobuf fixture here and no way to make one without a subscription, so
+its inputs are hand-built — the message is constructed with the understanding
+the code uses to read it, and the two can agree on a lie. One consequence is
+concrete: `program_id_index` resolution walks static keys, then loaded writable,
+then loaded readonly, and **no fixture in this repository can witness it** — 25
+of the 92 transaction fixtures use address lookup tables, none carries a
+`loadedAddresses`, and a JSON-RPC response hands `programId` over already
+resolved anyway, so index resolution is structurally a gRPC-only concern. Its
+test is built from the documented rule, not from an observation. First
+confrontation with reality is the live stream.
+
+`transaction_index` is the one field the two adapters legitimately disagree on —
+`getTransaction` omits it, a Yellowstone update always carries it — so
+`assert_matches_reference` takes it as an argument and each adapter states what
+its source provides. It is also the field this whole migration exists for.
+
+Everything else the two adapters may differ on is bounded by
+`InnerInstructionPayload`'s rule: **only ever widen**. Numbering happens after
+the filter on the emitting program, so a payload addressed elsewhere costs
+nothing to keep or to drop, while dropping one addressed *to* that program
+renumbers stored events.
 
 Two suites drive the whole pipeline from the fixtures in `../core/tests/fixtures/`
 — read by path, because their value is being the verbatim RPC response and a

@@ -32,6 +32,10 @@ serde_json = { workspace = true }
 solana-transaction-status-client-types = { workspace = true }
 bs58 = { workspace = true }
 solana-signature = { workspace = true }
+# The protobuf transaction shape, read by `infra::grpc::transaction_adapter`.
+# Same reasoning as the line above, one transport over: `core` names no
+# transport, so both adapters and both schemas live in this crate.
+yellowstone-grpc-proto = { workspace = true }
 
 # Errors / logging / config
 thiserror = { workspace = true }
