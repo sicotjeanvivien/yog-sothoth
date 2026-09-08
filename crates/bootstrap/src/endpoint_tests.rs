@@ -317,7 +317,8 @@ fn the_header_name_is_whatever_the_operator_wrote() {
 fn a_placeholder_in_the_header_alone_accepts_its_key() {
     unsafe {
         env::set_var("HDR_ONLY_URL", "https://host:443");
-        env::set_var("HDR_ONLY_HEADER", "x-token: {key}");
+        env::set_var("HDR_ONLY_HEADER_NAME", "x-token");
+        env::set_var("HDR_ONLY_HEADER_VALUE", "{key}");
         env::set_var("HDR_ONLY_KEY", "s3cret");
     }
 
@@ -328,7 +329,8 @@ fn a_placeholder_in_the_header_alone_accepts_its_key() {
 
     unsafe {
         env::remove_var("HDR_ONLY_URL");
-        env::remove_var("HDR_ONLY_HEADER");
+        env::remove_var("HDR_ONLY_HEADER_NAME");
+        env::remove_var("HDR_ONLY_HEADER_VALUE");
         env::remove_var("HDR_ONLY_KEY");
     }
 }
@@ -340,7 +342,8 @@ fn a_placeholder_in_the_header_alone_accepts_its_key() {
 fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
     unsafe {
         env::set_var("HDR_NOWHERE_URL", "https://host:443");
-        env::set_var("HDR_NOWHERE_HEADER", "x-region: eu-west");
+        env::set_var("HDR_NOWHERE_HEADER_NAME", "x-region");
+        env::set_var("HDR_NOWHERE_HEADER_VALUE", "eu-west");
         env::set_var("HDR_NOWHERE_KEY", "s3cret");
     }
 
@@ -349,7 +352,7 @@ fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
         panic!("expected UnsupportedCombination, got {error:?}");
     };
     assert!(detail.contains("HDR_NOWHERE_URL"), "{detail}");
-    assert!(detail.contains("HDR_NOWHERE_HEADER"), "{detail}");
+    assert!(detail.contains("HDR_NOWHERE_HEADER_VALUE"), "{detail}");
     assert!(detail.contains("HDR_NOWHERE_KEY"), "{detail}");
     assert!(
         !detail.contains("s3cret"),
@@ -358,74 +361,84 @@ fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
 
     unsafe {
         env::remove_var("HDR_NOWHERE_URL");
-        env::remove_var("HDR_NOWHERE_HEADER");
+        env::remove_var("HDR_NOWHERE_HEADER_NAME");
+        env::remove_var("HDR_NOWHERE_HEADER_VALUE");
         env::remove_var("HDR_NOWHERE_KEY");
     }
 }
 
-/// A malformed `_HEADER` stops the process at startup, names its variable, and
-/// — the part that matters — **never repeats its value**, which is what carries
-/// the credential. `ConfigError::InvalidValue` has a `value` field that would
-/// put it in the crash log; this path must never reach that variant.
+/// Half a pair stops the process at startup, names **both** variables, and —
+/// the part that matters — never repeats the value, which is what carries the
+/// credential. `ConfigError::InvalidValue` has a `value` field that would put it
+/// in the crash log; this path must never reach that variant.
 #[test]
-fn a_malformed_header_is_refused_without_echoing_its_value() {
-    // Every malformed value below carries a recognisable credential, so the
-    // assertion can be the real one — "the operator's value is absent" — rather
-    // than a shape check that would pass on an empty message.
-    //
-    // ⚠️ Each case also asserts **which** rule refused it, and that is not
-    // decoration: found by mutation, 8 September 2026, dropping the `:` check
-    // entirely left every case still refused — a colon-less value falls through
-    // to the empty-value rule and is rejected there. Asserting only "it was
-    // refused" therefore tested three rules and never the fourth. The reason is
-    // also the product here: it is what tells the operator what to fix.
-    for (suffix, raw, because) in [
-        ("MISSING_COLON", "x-token s3cretpasted", "missing its `:`"),
-        ("EMPTY_NAME", ": s3cretpasted", "missing a header name"),
+fn half_a_header_pair_is_refused_naming_both_variables() {
+    for (suffix, name, value, because) in [
         (
-            "SPACED_NAME",
-            "x token: s3cretpasted",
-            "whitespace in its header name",
+            "NO_VALUE",
+            Some("x-token"),
+            None,
+            "without `HDR_NO_VALUE_HEADER_VALUE`",
         ),
         (
-            "EMPTY_VALUE",
-            "x-token:   ",
-            "missing a value after its `:`",
-        ),
-        (
-            "KEY_IN_NAME",
-            "{key}: s3cretpasted",
-            "placeholder in its header NAME",
+            "NO_NAME",
+            None,
+            Some("s3cretpasted"),
+            "without `HDR_NO_NAME_HEADER_NAME`",
         ),
     ] {
-        let prefix = format!("HDR_BAD_{suffix}");
+        let prefix = format!("HDR_{suffix}");
         unsafe {
             env::set_var(format!("{prefix}_URL"), "https://host:443");
-            env::set_var(format!("{prefix}_HEADER"), raw);
+            if let Some(name) = name {
+                env::set_var(format!("{prefix}_HEADER_NAME"), name);
+            }
+            if let Some(value) = value {
+                env::set_var(format!("{prefix}_HEADER_VALUE"), value);
+            }
         }
 
-        let error = required_endpoint_with_header(&prefix).expect_err("malformed header");
+        let error = required_endpoint_with_header(&prefix).expect_err("half a pair");
         let ConfigError::UnsupportedCombination { detail } = error else {
             panic!("{suffix}: expected UnsupportedCombination, got {error:?}");
         };
-        assert!(detail.contains(&format!("{prefix}_HEADER")), "{detail}");
         assert!(
             detail.contains(because),
-            "{suffix}: refused for the wrong reason — wanted {because:?}, got: {detail}"
+            "{suffix}: wanted {because:?}, got: {detail}"
         );
         assert!(
             !detail.contains("s3cretpasted"),
-            "{suffix}: the refusal echoed the operator's value: {detail}"
-        );
-        assert!(
-            !detail.contains(raw),
-            "{suffix}: the refusal echoed the operator's value verbatim: {detail}"
+            "{suffix}: the refusal echoed the value: {detail}"
         );
 
         unsafe {
             env::remove_var(format!("{prefix}_URL"));
-            env::remove_var(format!("{prefix}_HEADER"));
+            env::remove_var(format!("{prefix}_HEADER_NAME"));
+            env::remove_var(format!("{prefix}_HEADER_VALUE"));
         }
+    }
+}
+
+/// A blank half is an absent half, and the two must agree on what "set" means —
+/// `optional` decides it once, here it is inherited rather than restated.
+#[test]
+fn a_blank_half_counts_as_absent_not_as_present() {
+    unsafe {
+        env::set_var("HDR_BLANK_URL", "https://host:443");
+        env::set_var("HDR_BLANK_HEADER_NAME", "   ");
+        env::set_var("HDR_BLANK_HEADER_VALUE", "   ");
+    }
+
+    let endpoint = required_endpoint_with_header("HDR_BLANK").expect("both halves are blank");
+    assert!(
+        endpoint.header().is_none(),
+        "a blank pair must read as no header at all"
+    );
+
+    unsafe {
+        env::remove_var("HDR_BLANK_URL");
+        env::remove_var("HDR_BLANK_HEADER_NAME");
+        env::remove_var("HDR_BLANK_HEADER_VALUE");
     }
 }
 
@@ -479,7 +492,8 @@ fn an_endpoint_without_a_header_prints_as_it_always_did() {
 fn a_header_on_a_url_only_consumer_is_refused() {
     unsafe {
         env::set_var("HDR_UNREAD_URL", "wss://api.mainnet-beta.solana.com");
-        env::set_var("HDR_UNREAD_HEADER", "x-token: {key}");
+        env::set_var("HDR_UNREAD_HEADER_NAME", "x-token");
+        env::set_var("HDR_UNREAD_HEADER_VALUE", "{key}");
         env::set_var("HDR_UNREAD_KEY", "s3cret");
     }
 
@@ -487,7 +501,7 @@ fn a_header_on_a_url_only_consumer_is_refused() {
     let ConfigError::UnsupportedCombination { detail } = error else {
         panic!("expected UnsupportedCombination, got {error:?}");
     };
-    assert!(detail.contains("HDR_UNREAD_HEADER"), "{detail}");
+    assert!(detail.contains("HDR_UNREAD_HEADER_NAME"), "{detail}");
     assert!(detail.contains("HDR_UNREAD_URL"), "{detail}");
     assert!(
         !detail.contains("s3cret"),
@@ -504,7 +518,8 @@ fn a_header_on_a_url_only_consumer_is_refused() {
 
     unsafe {
         env::remove_var("HDR_UNREAD_URL");
-        env::remove_var("HDR_UNREAD_HEADER");
+        env::remove_var("HDR_UNREAD_HEADER_NAME");
+        env::remove_var("HDR_UNREAD_HEADER_VALUE");
         env::remove_var("HDR_UNREAD_KEY");
     }
 }
@@ -532,12 +547,13 @@ fn a_url_only_endpoint_is_unaffected_by_the_feature() {
 // ── refusals must not point at each other ───────────────────────────
 
 /// A refusal that names a fix the *next* refusal undoes is worse than one that
-/// names none. Two orderings are checked here, both found in review on
-/// 8 September 2026.
+/// names none. Found in review, 8 September 2026: the advice offered the header
+/// as a destination on an endpoint that refuses headers, so an operator who
+/// followed it earned the opposite refusal on the next start.
 #[test]
 fn a_refusal_never_advises_what_the_next_refusal_forbids() {
-    // 1. A key with nowhere to go, on a url-only endpoint. The advice must not
-    //    offer the header as a destination — writing one there is refused.
+    // A key with nowhere to go, on a url-only endpoint. The advice must not
+    // offer the header as a destination — writing one there is refused.
     unsafe {
         env::set_var("HDR_ADVICE_URL", "https://host");
         env::set_var("HDR_ADVICE_KEY", "s3cret");
@@ -548,7 +564,7 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
         panic!("expected UnsupportedCombination");
     };
     assert!(
-        !detail.contains("HDR_ADVICE_HEADER") && !detail.contains("in the header"),
+        !detail.contains("HDR_ADVICE_HEADER_VALUE") && !detail.contains("in the header"),
         "advised a header on an endpoint that refuses one: {detail}"
     );
     // The same endpoint read by a header-aware consumer *may* say it.
@@ -562,27 +578,6 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
         env::remove_var("HDR_ADVICE_URL");
         env::remove_var("HDR_ADVICE_KEY");
     }
-
-    // 2. A malformed header on a url-only endpoint. Shape validation must not
-    //    win over "nothing would send it": fixing the colon would only earn a
-    //    second refusal telling them to remove the variable.
-    unsafe {
-        env::set_var("HDR_ORDER_URL", "https://host");
-        env::set_var("HDR_ORDER_HEADER", "x-token {key}");
-    }
-    let ConfigError::UnsupportedCombination { detail } =
-        required_endpoint("HDR_ORDER").expect_err("nothing would send it")
-    else {
-        panic!("expected UnsupportedCombination");
-    };
-    assert!(
-        detail.contains("sends") && detail.contains("only the URL"),
-        "shape validation answered first: {detail}"
-    );
-    unsafe {
-        env::remove_var("HDR_ORDER_URL");
-        env::remove_var("HDR_ORDER_HEADER");
-    }
 }
 
 /// A `{key}` in the header NAME is never substituted — it would reach the
@@ -592,7 +587,8 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
 fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
     unsafe {
         env::set_var("HDR_NAMEKEY_URL", "https://host/?api-key={key}");
-        env::set_var("HDR_NAMEKEY_HEADER", "{key}: jeton");
+        env::set_var("HDR_NAMEKEY_HEADER_NAME", "{key}");
+        env::set_var("HDR_NAMEKEY_HEADER_VALUE", "jeton");
         env::set_var("HDR_NAMEKEY_KEY", "s3cret");
     }
 
@@ -601,12 +597,13 @@ fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
     else {
         panic!("expected UnsupportedCombination");
     };
-    assert!(detail.contains("HDR_NAMEKEY_HEADER"), "{detail}");
+    assert!(detail.contains("HDR_NAMEKEY_HEADER_NAME"), "{detail}");
     assert!(detail.contains("NAME"), "{detail}");
 
     unsafe {
         env::remove_var("HDR_NAMEKEY_URL");
-        env::remove_var("HDR_NAMEKEY_HEADER");
+        env::remove_var("HDR_NAMEKEY_HEADER_NAME");
+        env::remove_var("HDR_NAMEKEY_HEADER_VALUE");
         env::remove_var("HDR_NAMEKEY_KEY");
     }
 }
