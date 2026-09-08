@@ -228,16 +228,74 @@ fn evicted_payloads_are_counted() {
     });
 
     let snapshot = snapshotter.snapshot().into_vec();
-    let evicted = snapshot
-        .iter()
-        .find(|(key, _, _, _)| key.key().name() == "yog_indexer_grpc_untimestamped_payloads_total")
-        .map(|(_, _, _, value)| value);
-
     assert_eq!(
-        evicted,
+        counter_for(&snapshot, "slot_bound"),
         Some(&DebugValue::Counter(2)),
         "both payloads of the evicted slot must be counted, not the slot"
     );
+    assert_eq!(
+        counter_for(&snapshot, "payload_bound"),
+        None,
+        "the slot bound is what fired here — a label that never distinguishes \
+         is a label that misleads the ticket reading this counter"
+    );
+}
+
+/// ⚠️ The mirror, and the one that gives the label its point: the payload bound
+/// firing while the slot count is legal. An unlabelled counter reads both of
+/// these the same way, and the two ceilings cross at 32 payloads per slot — so
+/// above that rate the number would be blamed on the wrong bound.
+#[test]
+fn the_bound_that_evicted_is_recorded_with_the_count() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer(); // 3 slots, 5 payloads
+        for payload in 0..4 {
+            buffer.on_payload(10, payload);
+        }
+        for payload in 4..6 {
+            buffer.on_payload(11, payload);
+        }
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+
+    assert_eq!(
+        counter_for(&snapshot, "payload_bound"),
+        Some(&DebugValue::Counter(4)),
+        "slot 10's four payloads, evicted by the payload bound"
+    );
+    assert_eq!(
+        counter_for(&snapshot, "slot_bound"),
+        None,
+        "only two slots were held, so the slot bound never fired"
+    );
+}
+
+/// The counter for one `reason` label, or `None` when it was never touched.
+fn counter_for<'a>(
+    snapshot: &'a [(
+        metrics_util::CompositeKey,
+        Option<metrics::Unit>,
+        Option<metrics::SharedString>,
+        metrics_util::debugging::DebugValue,
+    )],
+    reason: &str,
+) -> Option<&'a metrics_util::debugging::DebugValue> {
+    snapshot
+        .iter()
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_untimestamped_payloads_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "reason" && l.value() == reason)
+        })
+        .map(|(_, _, _, value)| value)
 }
 
 // ── accounting ──────────────────────────────────────────────────────

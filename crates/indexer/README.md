@@ -44,6 +44,14 @@ Filling it is this crate's job, one module per source:
   `SubscribeUpdateTransaction` into the same shape — a sibling module, not a
   second path through extraction.
 
+  Two differences with its JSON-RPC sibling are worth knowing before reading it.
+  **The timestamp is an argument**, because `SubscribeUpdateTransaction` carries
+  none — that seam is what `slot_timestamp_buffer.rs` below fills. And it
+  **filters nothing**: protobuf ships `data` as bytes, so unlike the JSON-RPC
+  adapter it has no shape it cannot represent. The same mainnet transaction
+  therefore yields 2 payloads through one adapter and 14 through the other,
+  which is sanctioned rather than accidental — see *What an adapter owes*.
+
   ⚠️ **Nothing calls it yet.** The listener that will is a later slice of the
   gRPC ticket, and `INGEST_SOURCE=grpc` stays refused at startup until the one
   after. `infra/grpc.rs` carries a single `#![allow(dead_code)]` for the whole
@@ -65,14 +73,6 @@ Filling it is this crate's job, one module per source:
   stream exists, and `yog_indexer_grpc_untimestamped_payloads_total` is what
   will say whether the ceiling was generous.
 
-  Two differences with its JSON-RPC sibling are worth knowing before reading it.
-  **The timestamp is an argument**, because `SubscribeUpdateTransaction` carries
-  none — `block_time` lives on `SubscribeUpdateBlockMeta`, a separate
-  subscription keyed by slot, and correlating the two is its own slice. And it
-  **filters nothing**: protobuf ships `data` as bytes, so unlike the JSON-RPC
-  adapter it has no shape it cannot represent. The same mainnet transaction
-  therefore yields 2 payloads through one adapter and 14 through the other,
-  which is sanctioned rather than accidental — see *What an adapter owes*.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every

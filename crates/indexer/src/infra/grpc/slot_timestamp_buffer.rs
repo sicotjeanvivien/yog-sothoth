@@ -49,7 +49,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use tracing::warn;
 
-use super::metrics::GrpcBufferMetrics;
+use super::metrics::{EvictionReason, GrpcBufferMetrics};
 
 /// How many slots may wait for their block-meta at once.
 ///
@@ -121,8 +121,13 @@ impl<T> SlotTimestampBuffer<T> {
 
     /// Take a payload whose slot is known but whose instant may not be.
     ///
-    /// Returns it resolved when the block-meta has already been seen, and
-    /// nothing when it has to wait.
+    /// `Some` when the block-meta has already been seen. **`None` means "not
+    /// resolved now" and nothing more** — usually buffered, but possibly
+    /// dropped on the spot, since inserting can push a bound over and the
+    /// payload just handed in can be the one evicted. It is dropped counted and
+    /// logged either way, so the caller does the same thing in both cases; what
+    /// it must not do is read `None` as "safely waiting". Narrowed after review
+    /// on 8 September 2026, where it claimed the stronger thing.
     pub(crate) fn on_payload(&mut self, slot: u64, payload: T) -> Option<Resolved<T>> {
         if let Some(at) = self.known.get(&slot) {
             return Some(Resolved { payload, at: *at });
@@ -166,31 +171,49 @@ impl<T> SlotTimestampBuffer<T> {
 
     /// Drop the oldest slots until both pending bounds hold.
     ///
-    /// Oldest by slot number, which on this stream is oldest by arrival:
-    /// `BTreeMap` orders them, so "the one least likely to still be resolved"
-    /// is `first_key_value`.
+    /// Oldest by slot number, `BTreeMap` ordering them, so "the one least
+    /// likely to still be resolved" is `first_key_value`.
+    ///
+    /// ⚠️ **On a steady stream oldest-by-slot is oldest-by-arrival; on a replay
+    /// it is not.** After a reconnect with `from_slot`, older slots arrive
+    /// *last*, so a full buffer evicts each new arrival immediately while newer
+    /// pending slots survive. Kept deliberately — an older slot really is the
+    /// one least likely to still resolve, whenever it turned up — but it means
+    /// **a replay into a full buffer loses its own payloads**, silently except
+    /// for the counter. Whether to clear this buffer on reconnect is a listener
+    /// decision, carried to the ticket rather than guessed at here.
     ///
     /// ⚠️ Evicted payloads are **lost**, and that is not a choice — without an
     /// instant they cannot be written at all. What is a choice is that the loss
     /// is counted and logged rather than silent: the counter is the only thing
     /// that will say the bound was wrong.
     fn enforce_pending_bounds(&mut self) {
-        while self.pending.len() > self.max_pending_slots
-            || self.pending_count > self.max_pending_payloads
-        {
+        loop {
+            // Which bound is binding is recorded, not just that one was: the
+            // two cross at 32 payloads per slot, and an unlabelled count would
+            // be read as the wrong ceiling. See `EvictionReason`.
+            let reason = if self.pending.len() > self.max_pending_slots {
+                EvictionReason::SlotBound
+            } else if self.pending_count > self.max_pending_payloads {
+                EvictionReason::PayloadBound
+            } else {
+                return;
+            };
+
             let Some((&slot, _)) = self.pending.first_key_value() else {
-                // Unreachable while either count is over its bound, but a
-                // `while` that trusts an invariant it does not check is how
-                // loops become infinite.
-                break;
+                // Unreachable while either count is over its bound, but a loop
+                // that trusts an invariant it does not check is how loops
+                // become infinite.
+                return;
             };
             let dropped = self.pending.remove(&slot).unwrap_or_default();
             self.pending_count -= dropped.len();
 
-            GrpcBufferMetrics::record_evicted(dropped.len());
+            GrpcBufferMetrics::record_evicted(dropped.len(), reason);
             warn!(
                 slot,
                 payloads = dropped.len(),
+                bound = reason.as_str(),
                 "evicting a slot that never received its block time — its \
                  payloads cannot be timestamped, so they are dropped"
             );
@@ -202,6 +225,12 @@ impl<T> SlotTimestampBuffer<T> {
     /// No metric and no log: a forgotten time costs nothing by itself. It only
     /// matters if a payload for that slot turns up afterwards, and *that* loss
     /// is the eviction above — counted there, where it happens.
+    ///
+    /// ⚠️ Same replay caveat as [`Self::enforce_pending_bounds`], mirrored: a
+    /// block time for an older slot, arriving into a full table, is inserted and
+    /// evicted in the same call. The payloads already waiting for it are still
+    /// released first — `on_block_time` drains before it trims — so what is lost
+    /// is only the ability to resolve a *later* arrival for that slot.
     fn enforce_known_bound(&mut self) {
         while self.known.len() > self.max_known_slots {
             let Some((&slot, _)) = self.known.first_key_value() else {
