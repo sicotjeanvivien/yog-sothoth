@@ -60,7 +60,7 @@ fn the_two_reference_payloads_are_distinct() {
 fn assert_matches_reference_accepts_the_reference() {
     // The control. Without it, the two tests below could pass because the
     // comparison never looked at anything.
-    assert_matches_reference(&reference_transaction());
+    assert_matches_reference(&reference_transaction(), None);
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn assert_matches_reference_accepts_the_reference() {
 fn a_permuted_transaction_is_rejected() {
     let mut tx = reference_transaction();
     tx.inner_instructions.swap(0, 1);
-    assert_matches_reference(&tx);
+    assert_matches_reference(&tx, None);
 }
 
 #[test]
@@ -76,7 +76,27 @@ fn a_permuted_transaction_is_rejected() {
 fn a_dropped_payload_is_rejected() {
     let mut tx = reference_transaction();
     tx.inner_instructions.pop();
-    assert_matches_reference(&tx);
+    assert_matches_reference(&tx, None);
+}
+
+/// The field the two sources disagree on is still checked — making it an
+/// argument must not turn it into a field nobody asserts, which is the failure
+/// mode of "just pass what the code produced".
+#[test]
+#[should_panic(expected = "transaction_index")]
+fn a_transaction_index_the_caller_did_not_expect_is_rejected() {
+    let mut tx = reference_transaction();
+    tx.position.transaction_index = Some(7);
+    assert_matches_reference(&tx, None);
+}
+
+/// And the mirror: a caller stating `Some` must not be satisfied by a `None`.
+/// Without this, the protobuf adapter could stop filling the one field the
+/// migration exists for and nothing would say so.
+#[test]
+#[should_panic(expected = "transaction_index")]
+fn a_missing_transaction_index_is_rejected_when_the_caller_expects_one() {
+    assert_matches_reference(&reference_transaction(), Some(3));
 }
 
 #[test]

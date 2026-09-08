@@ -1,3 +1,4 @@
+mod grpc;
 mod rpc;
 
 pub(crate) use rpc::{
