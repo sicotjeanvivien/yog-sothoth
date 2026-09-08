@@ -654,6 +654,64 @@ fn a_header_name_is_trimmed_not_refused() {
     }
 }
 
+/// Three refusals can fire on the same input, and **which one fires first is
+/// the message**. Both orderings below were verified by mutation on
+/// 8 September 2026, and the second one was silent until this test existed:
+/// moving the `header_is_read` refusal after the pairing match left all 80
+/// tests green, though its own comment claims the order is load-bearing.
+#[test]
+fn the_first_refusal_is_the_one_that_ends_the_matter() {
+    // 1. A bad name with no value yet. Shape must answer, not pairing: an
+    //    operator told to complete the pair would earn the shape refusal on the
+    //    next start — the defect this whole family of tests exists to catch.
+    unsafe {
+        env::set_var("HDR_SEQ_A_URL", "https://host:443");
+        env::set_var("HDR_SEQ_A_HEADER_NAME", "x-token: s3cretpasted");
+    }
+    let ConfigError::UnsupportedCombination { detail } =
+        required_endpoint_with_header("HDR_SEQ_A").expect_err("not a header name")
+    else {
+        panic!("expected UnsupportedCombination");
+    };
+    assert!(
+        detail.contains("is not a header name"),
+        "pairing answered before shape: {detail}"
+    );
+    assert!(
+        !detail.contains("s3cretpasted"),
+        "the refusal echoed the pasted credential: {detail}"
+    );
+    unsafe {
+        env::remove_var("HDR_SEQ_A_URL");
+        env::remove_var("HDR_SEQ_A_HEADER_NAME");
+    }
+
+    // 2. Half a pair on a url-only consumer. "Nobody would send it" must answer
+    //    before "complete the pair", or the operator completes a pair they are
+    //    then told to delete.
+    unsafe {
+        env::set_var("HDR_SEQ_B_URL", "https://host:443");
+        env::set_var("HDR_SEQ_B_HEADER_NAME", "x-token");
+    }
+    let ConfigError::UnsupportedCombination { detail } =
+        required_endpoint("HDR_SEQ_B").expect_err("nothing would send it")
+    else {
+        panic!("expected UnsupportedCombination");
+    };
+    assert!(
+        detail.contains("sends only the URL"),
+        "pairing answered before the gate: {detail}"
+    );
+    assert!(
+        !detail.contains("Set both"),
+        "advised completing a pair that is then refused: {detail}"
+    );
+    unsafe {
+        env::remove_var("HDR_SEQ_B_URL");
+        env::remove_var("HDR_SEQ_B_HEADER_NAME");
+    }
+}
+
 /// A `{key}` in the header NAME is never substituted — it would reach the
 /// client as the literal name `{key}`. The dangerous half is the second case:
 /// with a placeholder in the URL as well, the config used to be **accepted**.
@@ -672,7 +730,10 @@ fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
         panic!("expected UnsupportedCombination");
     };
     assert!(detail.contains("HDR_NAMEKEY_HEADER_NAME"), "{detail}");
-    assert!(detail.contains("NAME"), "{detail}");
+    // Not `contains("NAME")`, which the line above already satisfies through
+    // the variable name — it asserted nothing. What must be said is *where* the
+    // placeholder belongs, since that is the fix the operator needs.
+    assert!(detail.contains("HDR_NAMEKEY_HEADER_VALUE"), "{detail}");
 
     unsafe {
         env::remove_var("HDR_NAMEKEY_URL");

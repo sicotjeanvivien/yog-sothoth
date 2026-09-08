@@ -239,6 +239,19 @@ impl Endpoint {
     /// carriers: **an address and a header are legible in a log exactly to the
     /// extent that their credentials are in `_KEY`. One left inline is one
     /// printed.**
+    ///
+    /// ⚠️ With one carve-out, raised in review on 8 September 2026 and written
+    /// rather than closed. The sentence promises slightly more than the code
+    /// gives, **per carrier**: legibility is decided by whether *that* carrier
+    /// holds a `{key}`, not by whether the endpoint has one somewhere. So a
+    /// header-borne credential leaves the URL with no placeholder, and
+    /// [`Endpoint::displayed`] redacts it — `https://grpc.provider.io/v1?region=eu`
+    /// prints as `https://grpc.provider.io/***REDACTED***` even though it hides
+    /// nothing. The diagnostic loss is real and the alternative is worse:
+    /// treating a URL as clean *because the header carries the key* is the same
+    /// assumption `0938f60` removed — a placeholder accounts for the credential
+    /// the operator moved out, and says nothing about a second one sitting
+    /// elsewhere. Fail-closed costs a path here; the other way costs a secret.
     fn displayed_header(&self) -> Option<String> {
         self.header.as_ref().map(|(name, value)| {
             if value.contains(KEY_PLACEHOLDER) {

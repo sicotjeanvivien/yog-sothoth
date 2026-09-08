@@ -115,6 +115,13 @@ fn optional(key: &str) -> Option<String> {
 /// - either half set on an endpoint whose consumer sends only the URL → the
 ///   refusal described on [`required_endpoint`].
 ///
+/// ⚠️ The **name** gets a shape check and the **value** gets none, and the
+/// asymmetry is intended. A name is a token whose only job is to be one, so a
+/// space or a `:` in it means the line is broken. A value is opaque by nature —
+/// `Bearer {key}`, a raw token, anything a provider asks for — so there is no
+/// shape to check that would not be charset-guessing. What a client will accept
+/// is the client's affair, and it says so loudly on the first call.
+///
 /// No value is ever repeated in an error: `<PREFIX>_HEADER_VALUE` is what
 /// carries the credential, and the rule binding [`required_secret_url`] binds
 /// here.
@@ -142,36 +149,47 @@ fn read_header(
         });
     }
 
-    match (name, value) {
-        (None, None) => Ok(None),
-        // ⚠️ Shape, not charset — the boundary this module keeps. A space or a
-        // `:` in a header name is not a subtlety of the HTTP token grammar, it
-        // is a line that means nothing, and the second one is the shape of a
-        // specific mistake: pasting `x-token: <secret>` into `_HEADER_NAME`
-        // after this feature moved from one variable to two. Left accepted, that
-        // paste also prints in the clear, since a name is never masked.
+    // ⚠️ The name's shape is checked whenever a name is present **at all**, and
+    // not only when the pair is complete. Found in review, 8 September 2026:
+    // with these checks living in the `(Some, Some)` arms, an operator who
+    // pasted `x-token: <secret>` into `_HEADER_NAME` and had not yet written
+    // `_HEADER_VALUE` was told to complete the pair — and completing it as
+    // advised earned the shape refusal on the next start. That is the very
+    // "a refusal that names a fix the next refusal undoes" defect this module
+    // added a test for, reproduced one level down inside this function.
+    if let Some(name) = name.as_deref() {
+        // Shape, not charset — the boundary this module keeps. A space or a `:`
+        // in a header name is not a subtlety of the HTTP token grammar, it is a
+        // line that means nothing, and the second one is the shape of a specific
+        // mistake: pasting `x-token: <secret>` into `_HEADER_NAME` after this
+        // feature moved from one variable to two. Left accepted, that paste also
+        // prints in the clear, since a name is never masked.
         //
         // The single-variable parser refused whitespace here and the split
         // dropped it; restored 8 September 2026 after review caught the
         // regression. `optional` trims the ends and nothing more.
-        (Some(name), Some(_)) if name.contains(char::is_whitespace) || name.contains(':') => {
-            Err(ConfigError::UnsupportedCombination {
+        if name.contains(char::is_whitespace) || name.contains(':') {
+            return Err(ConfigError::UnsupportedCombination {
                 detail: format!(
                     "`{name_var}` is not a header name — it carries a space or a \
                      `:`. Write the name alone, and its value in `{value_var}`"
                 ),
-            })
+            });
         }
-        (Some(name), Some(_)) if name.contains(KEY_PLACEHOLDER) => {
-            Err(ConfigError::UnsupportedCombination {
+        if name.contains(KEY_PLACEHOLDER) {
+            return Err(ConfigError::UnsupportedCombination {
                 detail: format!(
                     "`{name_var}` carries `{KEY_PLACEHOLDER}`, which is only \
                      substituted in `{value_var}` — the header name would be \
                      sent verbatim. Write the placeholder in `{value_var}` \
                      instead"
                 ),
-            })
+            });
         }
+    }
+
+    match (name, value) {
+        (None, None) => Ok(None),
         (Some(name), Some(value)) => Ok(Some((name, value))),
         (Some(_), None) => Err(ConfigError::UnsupportedCombination {
             detail: format!(
