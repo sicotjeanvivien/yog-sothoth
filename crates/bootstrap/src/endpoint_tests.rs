@@ -9,7 +9,10 @@
 //! and the harness is parallel, so every test here uses **unique key names**.
 
 use super::*;
-use crate::{ConfigError, env::required_endpoint};
+use crate::{
+    ConfigError,
+    env::{required_endpoint, required_endpoint_with_header},
+};
 use std::env;
 
 /// Build one without an environment to read it from.
@@ -318,7 +321,7 @@ fn a_placeholder_in_the_header_alone_accepts_its_key() {
         env::set_var("HDR_ONLY_KEY", "s3cret");
     }
 
-    let endpoint = required_endpoint("HDR_ONLY").expect("a key with somewhere to go");
+    let endpoint = required_endpoint_with_header("HDR_ONLY").expect("a key with somewhere to go");
     let (name, value) = endpoint.header().expect("the header is configured");
     assert_eq!(name, "x-token");
     assert_eq!(value.expose(), "s3cret");
@@ -341,7 +344,7 @@ fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
         env::set_var("HDR_NOWHERE_KEY", "s3cret");
     }
 
-    let error = required_endpoint("HDR_NOWHERE").expect_err("the key goes nowhere");
+    let error = required_endpoint_with_header("HDR_NOWHERE").expect_err("the key goes nowhere");
     let ConfigError::UnsupportedCombination { detail } = error else {
         panic!("expected UnsupportedCombination, got {error:?}");
     };
@@ -396,7 +399,7 @@ fn a_malformed_header_is_refused_without_echoing_its_value() {
             env::set_var(format!("{prefix}_HEADER"), raw);
         }
 
-        let error = required_endpoint(&prefix).expect_err("malformed header");
+        let error = required_endpoint_with_header(&prefix).expect_err("malformed header");
         let ConfigError::UnsupportedCombination { detail } = error else {
             panic!("{suffix}: expected UnsupportedCombination, got {error:?}");
         };
@@ -455,4 +458,68 @@ fn an_endpoint_without_a_header_prints_as_it_always_did() {
         "https://mainnet.helius-rpc.com/?api-key={key}",
         "no header means nothing appended — not an empty bracket"
     );
+}
+
+// ── the header only counts where somebody sends it ──────────────────
+
+/// **The refusal this whole split exists for.** A `_HEADER` set on an endpoint
+/// whose consumer sends only the URL is a credential that goes nowhere — and
+/// unlike a wrong key, it fails *upward*: the process connects anonymously and
+/// any endpoint tolerating anonymous callers answers normally.
+///
+/// Found in review, 8 September 2026. The first shape of this feature accepted
+/// it, and the verification run that was supposed to prove the feature actually
+/// demonstrated the defect — `# Connected.` on a stream carrying no credential.
+#[test]
+fn a_header_on_a_url_only_consumer_is_refused() {
+    unsafe {
+        env::set_var("HDR_UNREAD_URL", "wss://api.mainnet-beta.solana.com");
+        env::set_var("HDR_UNREAD_HEADER", "x-token: {key}");
+        env::set_var("HDR_UNREAD_KEY", "s3cret");
+    }
+
+    let error = required_endpoint("HDR_UNREAD").expect_err("nothing would send this header");
+    let ConfigError::UnsupportedCombination { detail } = error else {
+        panic!("expected UnsupportedCombination, got {error:?}");
+    };
+    assert!(detail.contains("HDR_UNREAD_HEADER"), "{detail}");
+    assert!(detail.contains("HDR_UNREAD_URL"), "{detail}");
+    assert!(
+        !detail.contains("s3cret"),
+        "the refusal repeated the credential: {detail}"
+    );
+
+    // And the same variables, read by a consumer that does send it, are fine —
+    // which is what makes the refusal a statement about the *caller* rather
+    // than a ban on headers.
+    let ok = required_endpoint_with_header("HDR_UNREAD").expect("this consumer sends it");
+    let (name, value) = ok.header().expect("the header is configured");
+    assert_eq!(name, "x-token");
+    assert_eq!(value.expose(), "s3cret");
+
+    unsafe {
+        env::remove_var("HDR_UNREAD_URL");
+        env::remove_var("HDR_UNREAD_HEADER");
+        env::remove_var("HDR_UNREAD_KEY");
+    }
+}
+
+/// The url-only door is not merely stricter — it is the *unchanged* one. Every
+/// endpoint in production reads through it, and none of them may have gained a
+/// refusal from this feature.
+#[test]
+fn a_url_only_endpoint_is_unaffected_by_the_feature() {
+    unsafe {
+        env::set_var("HDR_PLAIN_URL", "https://host/?api-key={key}");
+        env::set_var("HDR_PLAIN_KEY", "s3cret");
+    }
+
+    let endpoint = required_endpoint("HDR_PLAIN").expect("the shape that already worked");
+    assert_eq!(endpoint.url().expose(), "https://host/?api-key=s3cret");
+    assert!(endpoint.header().is_none());
+
+    unsafe {
+        env::remove_var("HDR_PLAIN_URL");
+        env::remove_var("HDR_PLAIN_KEY");
+    }
 }

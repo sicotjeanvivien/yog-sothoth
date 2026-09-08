@@ -35,7 +35,7 @@ mod exposure_tests;
 pub use endpoint::Endpoint;
 pub use env::{
     EnvEnum, duration_var, parse_required_bool, parse_required_enum, parse_required_u32, required,
-    required_endpoint, required_secret_key, required_secret_url,
+    required_endpoint, required_endpoint_with_header, required_secret_key, required_secret_url,
 };
 pub use error::ConfigError;
 pub use runtime::{init_rustls, init_tracing};

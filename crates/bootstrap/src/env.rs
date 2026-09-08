@@ -81,9 +81,20 @@ fn optional(key: &str) -> Option<String> {
 ///
 /// # Why this parses at startup rather than at the call
 ///
-/// So that a malformed header is a refusal naming the variable, instead of a
-/// client error on the first request — the same reason the whole `Endpoint`
-/// pair is validated here.
+/// So that the shape errors an operator actually makes — a missing `:`, a `=`
+/// written instead, a name or value left empty — are a refusal naming the
+/// variable, instead of a client error on the first request.
+///
+/// ⚠️ **It checks the shape, not the charset, and that boundary is drawn on
+/// purpose.** A name carrying `(`, `@`, or a stray quote passes here and fails
+/// later, when `HeaderName` or `AsciiMetadataKey` is built. Closing that would
+/// mean restating the HTTP token grammar in a crate that has no HTTP
+/// dependency and no business knowing one — and it would still not validate
+/// what a given provider accepts. What is worth catching at startup is the
+/// typo that makes the whole line meaningless; what the protocol accepts is
+/// the client's affair, and it says so loudly on the first call. Raised in
+/// review, 8 September 2026, and left open with its reason rather than
+/// half-closed.
 ///
 /// # Why the value never appears in the error
 ///
@@ -125,19 +136,60 @@ fn parse_header(raw: &str, header_var: &str) -> Result<(String, String), ConfigE
     Ok((name.to_string(), value.to_string()))
 }
 
-/// Read an external endpoint as the `<PREFIX>_URL` / `<PREFIX>_HEADER` /
-/// `<PREFIX>_KEY` set it is.
+/// Read an external endpoint whose consumer sends **only the URL**.
 ///
-/// The caller passes the **prefix**, and the variable names are derived from
-/// it — one name, one place. Spelling them at every call site is how a
-/// convention comes to hold at some sites and not others, which is the defect
-/// this whole family of tickets is about.
+/// The default, and what every endpoint in this workspace uses today. The
+/// caller passes the **prefix**, and `<PREFIX>_URL` / `<PREFIX>_KEY` are
+/// derived from it — one name, one place. Spelling them at every call site is
+/// how a convention comes to hold at some sites and not others, which is the
+/// defect this whole family of tickets is about.
 ///
-/// `<PREFIX>_HEADER` is **optional** and holds `<name>: <value>`. It exists
-/// because a credential does not always attach to the URL — see the module docs
-/// of [`crate::Endpoint`] for the four shapes measured across providers. The
-/// `{key}` placeholder is looked for in the URL **and** in the header value,
-/// and substituted wherever the operator put it.
+/// # Why a `<PREFIX>_HEADER` is refused here
+///
+/// Because nothing would send it. A header is only a credential if some code
+/// downstream calls [`Endpoint::header`]; when the consumer passes
+/// [`Endpoint::url`] alone — as `RpcClient`, `PubsubClient` and the two
+/// `reqwest` providers do — a configured header is dropped in silence and the
+/// process authenticates as **nobody**, succeeding against any endpoint that
+/// tolerates anonymous callers.
+///
+/// That is the same silent-anonymous failure the "a key with nowhere to go"
+/// refusal exists to prevent, and it would have been re-opened by treating a
+/// header as a valid carrier everywhere. Found in review, 8 September 2026,
+/// after a verification run that read `# Connected.` as a success when it was
+/// the defect: the stream had connected with no credential at all.
+///
+/// A consumer that *does* read the header calls
+/// [`required_endpoint_with_header`] instead. The distinction is the caller
+/// stating a fact about itself, which is the only place that fact exists.
+pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
+    read_endpoint(prefix, false)
+}
+
+/// Read an external endpoint whose consumer **calls [`Endpoint::header`]**.
+///
+/// Identical to [`required_endpoint`] except that `<PREFIX>_HEADER` is
+/// accepted: `<name>: <value>`, with `{key}` written wherever the provider
+/// expects the credential. The placeholder is then looked for in the URL **and**
+/// in the header value, and substituted wherever the operator put it — see the
+/// module docs of [`crate::Endpoint`] for the four shapes measured across
+/// providers, and why the header's *name* is a provider convention too.
+///
+/// ⚠️ Calling this is a **promise**, not a preference: the code receiving the
+/// `Endpoint` must actually send the header. Nothing here can check that, which
+/// is exactly why the two doors are separate names rather than a boolean an
+/// author sets without reading it.
+pub fn required_endpoint_with_header(prefix: &str) -> Result<Endpoint, ConfigError> {
+    read_endpoint(prefix, true)
+}
+
+/// The shared body of [`required_endpoint`] and
+/// [`required_endpoint_with_header`].
+///
+/// `header_is_read` is what the two doors differ by, and it is the caller
+/// stating a fact about **its own consumer**: whether the code downstream will
+/// actually call [`Endpoint::header`]. `yog-bootstrap` cannot know that, and
+/// guessing it is what produced the defect this parameter exists to close.
 ///
 /// # What it refuses, and why each refusal is loud
 ///
@@ -170,7 +222,7 @@ fn parse_header(raw: &str, header_var: &str) -> Result<(String, String), ConfigE
 /// itself: no value ever reaches [`ConfigError::InvalidValue`], whose `value`
 /// field would put it in the crash log — the rule that binds
 /// [`required_secret_url`] binds here too.
-pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
+fn read_endpoint(prefix: &str, header_is_read: bool) -> Result<Endpoint, ConfigError> {
     let url_var = format!("{prefix}_URL");
     let header_var = format!("{prefix}_HEADER");
     let key_var = format!("{prefix}_KEY");
@@ -180,6 +232,21 @@ pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
         .map(|raw| parse_header(&raw, &header_var))
         .transpose()?;
     let key = optional(&key_var);
+
+    // A header nobody sends is a credential nobody sends. See
+    // `required_endpoint`'s docs for why this refusal exists rather than a
+    // comment asking the operator to be careful.
+    if header.is_some() && !header_is_read {
+        return Err(ConfigError::UnsupportedCombination {
+            detail: format!(
+                "`{header_var}` is set, but the code that calls `{url_var}` sends \
+                 only the URL — it would connect with no credential at all, and \
+                 succeed anonymously against an endpoint that allows it. Unset \
+                 `{header_var}`, or put the credential in `{url_var}` with a \
+                 `{KEY_PLACEHOLDER}`"
+            ),
+        });
+    }
 
     // One placeholder, two possible carriers — see this function's docs.
     let has_placeholder = template.contains(KEY_PLACEHOLDER)

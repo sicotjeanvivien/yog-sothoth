@@ -40,6 +40,17 @@
 //! - Triton's load balancers accept `user:password` basic auth **in the URL**,
 //!   where the password is the token.
 //!
+//! ⚠️ **What the header half does not have, and knowingly:** a counterpart to
+//! [`SecretUrl::scrub`]. That method exists because third parties copy the URL
+//! they were handed into their own error strings, which reach a `warn!` as
+//! plain text that never passed through a secret type. A credential riding in a
+//! header could in principle come back the same way, through a client that
+//! echoes request metadata — but no such client is wired here yet, and no
+//! message of that shape has been observed. Building the scrubber now would be
+//! guessing at the shape of an error nobody has seen, which is the mistake
+//! `redact_api_key` made. It is written here so the day one appears, this is a
+//! known gap rather than a discovery. Raised in review, 8 September 2026.
+//!
 //! So the placeholder is not bound to the URL: it is looked for in the URL
 //! **and** in an optional `<FUNCTION>_HEADER` template, and substituted
 //! wherever the operator put it. This is the same bet as above rather than a
