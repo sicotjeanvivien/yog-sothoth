@@ -25,10 +25,34 @@
 //! knowing a shape in order to *redact* is not. A wrong template gives a frank
 //! 401 on the first call; a wrong redactor writes a secret in the clear and
 //! nobody sees it.
+//!
+//! # Why the credential does not always live in the URL
+//!
+//! The first shape of this module assumed it did. Measured 8 September 2026,
+//! across the providers this workspace may actually reach, it does not:
+//!
+//! - a self-hosted Yellowstone server ships `"x_token": null` and takes no
+//!   credential at all — and carries a pluggable `auth` block beside it, so
+//!   even upstream does not fix one scheme;
+//! - QuickNode, Alchemy, Shyft and Helius authenticate a gRPC stream with a
+//!   **metadata header**, and the header's *name* is itself a provider
+//!   convention (`x-token` for most, but nothing makes that universal);
+//! - Triton's load balancers accept `user:password` basic auth **in the URL**,
+//!   where the password is the token.
+//!
+//! So the placeholder is not bound to the URL: it is looked for in the URL
+//! **and** in an optional `<FUNCTION>_HEADER` template, and substituted
+//! wherever the operator put it. This is the same bet as above rather than a
+//! second mechanism — one placeholder, two possible carriers, and no provider
+//! known to the code. The refusal rule generalises with it: a `_KEY` is
+//! refused when there is no `{key}` **anywhere** to receive it, not merely
+//! none in the URL.
 
 use std::fmt;
 
-use crate::secret::{REDACTED, SecretKey, SecretUrl, redact, redact_fragment, redact_password};
+use crate::secret::{
+    MASKED, REDACTED, SecretKey, SecretUrl, redact, redact_fragment, redact_password,
+};
 
 /// The placeholder an operator writes where the credential belongs.
 pub(crate) const KEY_PLACEHOLDER: &str = "{key}";
@@ -42,14 +66,26 @@ pub(crate) const KEY_PLACEHOLDER: &str = "{key}";
 pub struct Endpoint {
     /// The URL as written, `{key}` included and the credential absent.
     template: String,
+    /// The metadata/HTTP header carrying the credential, split into its name
+    /// and its value template, both as the operator wrote them. `None` when the
+    /// credential rides in the URL, or when there is none.
+    header: Option<(String, String)>,
     /// `None` for a public endpoint — one that has no credential to carry.
     key: Option<SecretKey>,
 }
 
 impl Endpoint {
     /// Not public on purpose — see [`crate::required_endpoint`].
-    pub(crate) fn new(template: String, key: Option<SecretKey>) -> Self {
-        Self { template, key }
+    pub(crate) fn new(
+        template: String,
+        header: Option<(String, String)>,
+        key: Option<SecretKey>,
+    ) -> Self {
+        Self {
+            template,
+            header,
+            key,
+        }
     }
 
     /// The address to actually call, credential substituted in.
@@ -75,7 +111,50 @@ impl Endpoint {
     /// [`SecretKey::for_tests`].
     #[cfg(feature = "test-support")]
     pub fn for_tests(template: impl Into<String>, key: Option<&str>) -> Self {
-        Self::new(template.into(), key.map(SecretKey::new))
+        Self::new(template.into(), None, key.map(SecretKey::new))
+    }
+
+    /// The same, with a header carrying the credential.
+    ///
+    /// Separate from [`Endpoint::for_tests`] rather than a fourth argument on
+    /// it: the header case is the rarer one, and every existing caller would
+    /// otherwise gain a `None` that says nothing.
+    #[cfg(feature = "test-support")]
+    pub fn for_tests_with_header(
+        template: impl Into<String>,
+        header: (&str, &str),
+        key: Option<&str>,
+    ) -> Self {
+        Self::new(
+            template.into(),
+            Some((header.0.to_string(), header.1.to_string())),
+            key.map(SecretKey::new),
+        )
+    }
+
+    /// The header to send, name and value, credential substituted in.
+    ///
+    /// The value is a [`SecretKey`] for the reason [`Endpoint::url`] returns a
+    /// [`SecretUrl`]: once the substitution has run, the value *is* the
+    /// credential — `x-token: <token>` — and must not become a printable
+    /// `String` on the way to the client. `SecretKey` masks unconditionally,
+    /// which is right here: unlike a URL, a header value has no carrier worth
+    /// keeping, so there is nothing to weigh against hiding all of it.
+    ///
+    /// The **name** is returned bare, because it is not a secret and it is the
+    /// diagnostic: a startup log saying which header is being set is what tells
+    /// an operator their provider expects a different one.
+    ///
+    /// `None` when the endpoint carries no header — the credential is in the
+    /// URL, or there is none.
+    pub fn header(&self) -> Option<(&str, SecretKey)> {
+        self.header.as_ref().map(|(name, value)| {
+            let assembled = match &self.key {
+                Some(key) => value.replace(KEY_PLACEHOLDER, key.expose()),
+                None => value.clone(),
+            };
+            (name.as_str(), SecretKey::new(assembled))
+        })
     }
 
     /// What [`fmt::Display`] prints — the whole address, or a redacted one.
@@ -133,11 +212,37 @@ impl Endpoint {
             redact(&self.template)
         }
     }
+
+    /// What the header half prints, under the **same** fail-closed rule.
+    ///
+    /// A value template carrying `{key}` prints as written — `x-token: {key}`
+    /// tells an operator which header is set and that its credential is
+    /// externalized, and hides nothing. A value without a placeholder is a
+    /// credential somebody inlined, or a header that happens to need none, and
+    /// nothing here can tell those apart: it is masked like any [`SecretKey`].
+    ///
+    /// The name is never masked — see [`Endpoint::header`].
+    fn displayed_header(&self) -> Option<String> {
+        self.header.as_ref().map(|(name, value)| {
+            if value.contains(KEY_PLACEHOLDER) {
+                format!("{name}: {value}")
+            } else {
+                format!("{name}: {MASKED}")
+            }
+        })
+    }
 }
 
 impl fmt::Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.displayed())
+        f.write_str(&self.displayed())?;
+        // The header is part of what identifies an endpoint: an operator
+        // reading a startup line needs to see *which* header is being set, or a
+        // provider expecting a different one looks like a network failure.
+        match self.displayed_header() {
+            Some(header) => write!(f, " [{header}]"),
+            None => Ok(()),
+        }
     }
 }
 
@@ -147,8 +252,9 @@ impl fmt::Debug for Endpoint {
         // `Config` reaches for, and `yog-context`'s derives it.
         write!(
             f,
-            "Endpoint({}, key: {})",
+            "Endpoint({}, header: {}, key: {})",
             self.displayed(),
+            self.displayed_header().as_deref().unwrap_or("none"),
             if self.key.is_some() { REDACTED } else { "none" }
         )
     }

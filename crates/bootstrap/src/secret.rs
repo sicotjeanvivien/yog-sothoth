@@ -26,6 +26,17 @@ use std::fmt;
 /// Placeholder substituted for every secret this module hides.
 pub(crate) const REDACTED: &str = "***REDACTED***";
 
+/// What a secret with **no carrier worth showing** renders as.
+///
+/// Distinct from [`REDACTED`], which marks a component removed from something
+/// that still prints — a URL keeps its host either way. This one replaces the
+/// whole value, so it is shorter on purpose.
+///
+/// A constant rather than a literal at each site: it is used by [`SecretKey`]
+/// and by `Endpoint`'s header rendering, and a rule written twice is a rule
+/// that will hold at one site.
+pub(crate) const MASKED: &str = "****";
+
 /// Shortest secret fragment [`SecretUrl::scrub`] will replace on its own.
 ///
 /// Below it, a fragment is more likely to be a coincidence than a credential —
@@ -75,7 +86,7 @@ impl SecretKey {
 
 impl fmt::Display for SecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("****")
+        f.write_str(MASKED)
     }
 }
 
@@ -84,7 +95,7 @@ impl fmt::Debug for SecretKey {
         // Same treatment in Debug — essential because `{:?}` is what
         // `#[derive(Debug)]` on a `Config` reaches for, and two of this
         // workspace's four configs derive it.
-        f.write_str("SecretKey(****)")
+        write!(f, "SecretKey({MASKED})")
     }
 }
 

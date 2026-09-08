@@ -21,7 +21,16 @@ use std::env;
 /// `cargo test -p yog-bootstrap`. Measured on this file, which is the trap
 /// `crates/README.md` warns about, seen from inside.
 fn endpoint(template: &str, key: Option<&str>) -> Endpoint {
-    Endpoint::new(template.to_string(), key.map(SecretKey::new))
+    Endpoint::new(template.to_string(), None, key.map(SecretKey::new))
+}
+
+/// The same, for an endpoint whose credential rides in a header.
+fn with_header(template: &str, header: (&str, &str), key: Option<&str>) -> Endpoint {
+    Endpoint::new(
+        template.to_string(),
+        Some((header.0.to_string(), header.1.to_string())),
+        key.map(SecretKey::new),
+    )
 }
 
 // ── assembly ────────────────────────────────────────────────────────
@@ -224,5 +233,226 @@ fn the_placeholder_and_its_carrier_stay_legible() {
     assert_eq!(
         path.to_string(),
         "https://solana-mainnet.g.alchemy.com/v2/{key}"
+    );
+}
+
+// ── the four shapes, one test each ──────────────────────────────────
+
+/// Shape 1 — the credential rides in a header, the URL carries none.
+/// QuickNode, Alchemy, Shyft and Helius all authenticate a gRPC stream this
+/// way, and it is the shape `Endpoint` could not express before.
+#[test]
+fn a_credential_in_a_header_is_substituted_there() {
+    let endpoint = with_header(
+        "https://example.solana-mainnet.quiknode.pro:443",
+        ("x-token", "{key}"),
+        Some("s3cret"),
+    );
+
+    assert_eq!(
+        endpoint.url().expose(),
+        "https://example.solana-mainnet.quiknode.pro:443",
+        "the URL must come back untouched — it never held the credential"
+    );
+    let (name, value) = endpoint.header().expect("the header is configured");
+    assert_eq!(name, "x-token");
+    assert_eq!(value.expose(), "s3cret");
+}
+
+/// Shape 2 — the credential rides in the URL, as it already did. Kept as a
+/// test of its own so that the header work cannot quietly regress it: Triton's
+/// load balancers take `user:password` basic auth, so this is a live shape and
+/// not merely the legacy one.
+#[test]
+fn a_credential_in_the_url_still_works_with_no_header() {
+    let basic = endpoint("https://token_user:{key}@host:443", Some("s3cret"));
+
+    assert_eq!(basic.url().expose(), "https://token_user:s3cret@host:443");
+    assert!(
+        basic.header().is_none(),
+        "no header was configured, so none must be produced"
+    );
+}
+
+/// Shape 3 — no credential at all. A self-hosted Yellowstone ships
+/// `"x_token": null`, and a public JSON-RPC node wants nothing either.
+#[test]
+fn an_endpoint_with_no_credential_has_neither_key_nor_header() {
+    let public = endpoint("https://api.mainnet-beta.solana.com", None);
+
+    assert_eq!(public.url().expose(), "https://api.mainnet-beta.solana.com");
+    assert!(public.header().is_none());
+}
+
+/// Shape 4 — **the one that proves the header name is not carved in.** If
+/// anything in this crate knew the string `x-token`, this test would be the one
+/// to fail, which is why it is written with a different scheme entirely.
+#[test]
+fn the_header_name_is_whatever_the_operator_wrote() {
+    let bearer = with_header(
+        "https://host",
+        ("authorization", "Bearer {key}"),
+        Some("s3cret"),
+    );
+
+    let (name, value) = bearer.header().expect("the header is configured");
+    assert_eq!(name, "authorization");
+    assert_eq!(
+        value.expose(),
+        "Bearer s3cret",
+        "the placeholder is substituted inside the value, not instead of it"
+    );
+}
+
+// ── the truth table, read on two carriers ───────────────────────────
+
+/// The generalisation itself: a `{key}` living **only** in the header is a
+/// `{key}`, so the `_KEY` beside it is accepted rather than refused as going
+/// nowhere. Restricting the search back to the URL turns this red — which is
+/// the mutation that proves the rule was widened and not duplicated.
+#[test]
+fn a_placeholder_in_the_header_alone_accepts_its_key() {
+    unsafe {
+        env::set_var("HDR_ONLY_URL", "https://host:443");
+        env::set_var("HDR_ONLY_HEADER", "x-token: {key}");
+        env::set_var("HDR_ONLY_KEY", "s3cret");
+    }
+
+    let endpoint = required_endpoint("HDR_ONLY").expect("a key with somewhere to go");
+    let (name, value) = endpoint.header().expect("the header is configured");
+    assert_eq!(name, "x-token");
+    assert_eq!(value.expose(), "s3cret");
+
+    unsafe {
+        env::remove_var("HDR_ONLY_URL");
+        env::remove_var("HDR_ONLY_HEADER");
+        env::remove_var("HDR_ONLY_KEY");
+    }
+}
+
+/// And the other side of the same rule: with a header that carries no
+/// placeholder either, the key really does go nowhere, and the refusal must
+/// name **both** carriers so the operator knows where a `{key}` may go.
+#[test]
+fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
+    unsafe {
+        env::set_var("HDR_NOWHERE_URL", "https://host:443");
+        env::set_var("HDR_NOWHERE_HEADER", "x-region: eu-west");
+        env::set_var("HDR_NOWHERE_KEY", "s3cret");
+    }
+
+    let error = required_endpoint("HDR_NOWHERE").expect_err("the key goes nowhere");
+    let ConfigError::UnsupportedCombination { detail } = error else {
+        panic!("expected UnsupportedCombination, got {error:?}");
+    };
+    assert!(detail.contains("HDR_NOWHERE_URL"), "{detail}");
+    assert!(detail.contains("HDR_NOWHERE_HEADER"), "{detail}");
+    assert!(detail.contains("HDR_NOWHERE_KEY"), "{detail}");
+    assert!(
+        !detail.contains("s3cret"),
+        "the refusal repeated the credential: {detail}"
+    );
+
+    unsafe {
+        env::remove_var("HDR_NOWHERE_URL");
+        env::remove_var("HDR_NOWHERE_HEADER");
+        env::remove_var("HDR_NOWHERE_KEY");
+    }
+}
+
+/// A malformed `_HEADER` stops the process at startup, names its variable, and
+/// — the part that matters — **never repeats its value**, which is what carries
+/// the credential. `ConfigError::InvalidValue` has a `value` field that would
+/// put it in the crash log; this path must never reach that variant.
+#[test]
+fn a_malformed_header_is_refused_without_echoing_its_value() {
+    // Every malformed value below carries a recognisable credential, so the
+    // assertion can be the real one — "the operator's value is absent" — rather
+    // than a shape check that would pass on an empty message.
+    //
+    // ⚠️ Each case also asserts **which** rule refused it, and that is not
+    // decoration: found by mutation, 8 September 2026, dropping the `:` check
+    // entirely left every case still refused — a colon-less value falls through
+    // to the empty-value rule and is rejected there. Asserting only "it was
+    // refused" therefore tested three rules and never the fourth. The reason is
+    // also the product here: it is what tells the operator what to fix.
+    for (suffix, raw, because) in [
+        ("MISSING_COLON", "x-token s3cretpasted", "missing its `:`"),
+        ("EMPTY_NAME", ": s3cretpasted", "missing a header name"),
+        (
+            "SPACED_NAME",
+            "x token: s3cretpasted",
+            "whitespace in its header name",
+        ),
+        (
+            "EMPTY_VALUE",
+            "x-token:   ",
+            "missing a value after its `:`",
+        ),
+    ] {
+        let prefix = format!("HDR_BAD_{suffix}");
+        unsafe {
+            env::set_var(format!("{prefix}_URL"), "https://host:443");
+            env::set_var(format!("{prefix}_HEADER"), raw);
+        }
+
+        let error = required_endpoint(&prefix).expect_err("malformed header");
+        let ConfigError::UnsupportedCombination { detail } = error else {
+            panic!("{suffix}: expected UnsupportedCombination, got {error:?}");
+        };
+        assert!(detail.contains(&format!("{prefix}_HEADER")), "{detail}");
+        assert!(
+            detail.contains(because),
+            "{suffix}: refused for the wrong reason — wanted {because:?}, got: {detail}"
+        );
+        assert!(
+            !detail.contains("s3cretpasted"),
+            "{suffix}: the refusal echoed the operator's value: {detail}"
+        );
+        assert!(
+            !detail.contains(raw),
+            "{suffix}: the refusal echoed the operator's value verbatim: {detail}"
+        );
+
+        unsafe {
+            env::remove_var(format!("{prefix}_URL"));
+            env::remove_var(format!("{prefix}_HEADER"));
+        }
+    }
+}
+
+// ── what the header prints ──────────────────────────────────────────
+
+/// The header half of the fail-closed rule. A value carrying `{key}` prints
+/// whole — that is the diagnostic an operator needs, and it hides nothing. A
+/// value without one is a credential somebody inlined, or a header that needs
+/// none, and nothing here can tell them apart.
+#[test]
+fn a_header_value_is_printed_only_when_its_key_is_outside_it() {
+    let templated = with_header("https://host", ("x-token", "{key}"), Some("s3cret"));
+    assert_eq!(templated.to_string(), "https://host [x-token: {key}]");
+    assert!(
+        !format!("{templated:?}").contains("s3cret"),
+        "Debug leaked the key: {templated:?}"
+    );
+
+    let pasted = with_header("https://host", ("x-token", "s3cret"), None);
+    assert_eq!(pasted.to_string(), "https://host [x-token: ****]");
+    assert!(
+        !format!("{pasted:?}").contains("s3cret"),
+        "Debug leaked the inlined credential: {pasted:?}"
+    );
+}
+
+/// An endpoint with no header prints exactly as it did before this feature
+/// existed. Four endpoints in production have none, and their startup lines
+/// must not have moved a character.
+#[test]
+fn an_endpoint_without_a_header_prints_as_it_always_did() {
+    let plain = endpoint("https://mainnet.helius-rpc.com/?api-key={key}", Some("k"));
+    assert_eq!(
+        plain.to_string(),
+        "https://mainnet.helius-rpc.com/?api-key={key}",
+        "no header means nothing appended — not an empty bracket"
     );
 }

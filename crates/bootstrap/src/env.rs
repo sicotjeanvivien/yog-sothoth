@@ -77,48 +77,126 @@ fn optional(key: &str) -> Option<String> {
     }
 }
 
-/// Read an external endpoint as the `<PREFIX>_URL` / `<PREFIX>_KEY` pair it is.
+/// Split a `<PREFIX>_HEADER` into its name and its value template.
 ///
-/// The caller passes the **prefix**, and the two variable names are derived
-/// from it — one name, one place. Spelling both at every call site is how a
+/// # Why this parses at startup rather than at the call
+///
+/// So that a malformed header is a refusal naming the variable, instead of a
+/// client error on the first request — the same reason the whole `Endpoint`
+/// pair is validated here.
+///
+/// # Why the value never appears in the error
+///
+/// It carries the credential. Every refusal below is an
+/// [`ConfigError::UnsupportedCombination`], whose `detail` this function writes
+/// itself; none is an [`ConfigError::InvalidValue`], which has a `value` field
+/// that would put the secret in the crash log. That is the rule spelled out on
+/// [`required_secret_url`], and it binds here for the same reason.
+///
+/// The split is on the **first** `:` only: a value may legitimately contain
+/// more (`authorization: Bearer a:b`).
+fn parse_header(raw: &str, header_var: &str) -> Result<(String, String), ConfigError> {
+    let malformed = |why: &str| ConfigError::UnsupportedCombination {
+        detail: format!(
+            "`{header_var}` is {why} — write it as `<name>: <value>`, for example \
+             `x-token: {KEY_PLACEHOLDER}`. Its value is not repeated here, since it \
+             is what carries the credential"
+        ),
+    };
+
+    let (name, value) = raw
+        .split_once(':')
+        .ok_or_else(|| malformed("missing its `:`"))?;
+    let (name, value) = (name.trim(), value.trim());
+
+    if name.is_empty() {
+        return Err(malformed("missing a header name before its `:`"));
+    }
+    // A header name is a single token; whitespace in it is a typo the operator
+    // should hear about now — `x token: …`, or a `=` written instead of a `:`,
+    // which lands here as a name carrying a space.
+    if name.contains(char::is_whitespace) {
+        return Err(malformed("carrying whitespace in its header name"));
+    }
+    if value.is_empty() {
+        return Err(malformed("missing a value after its `:`"));
+    }
+
+    Ok((name.to_string(), value.to_string()))
+}
+
+/// Read an external endpoint as the `<PREFIX>_URL` / `<PREFIX>_HEADER` /
+/// `<PREFIX>_KEY` set it is.
+///
+/// The caller passes the **prefix**, and the variable names are derived from
+/// it — one name, one place. Spelling them at every call site is how a
 /// convention comes to hold at some sites and not others, which is the defect
-/// this whole ticket is about.
+/// this whole family of tickets is about.
+///
+/// `<PREFIX>_HEADER` is **optional** and holds `<name>: <value>`. It exists
+/// because a credential does not always attach to the URL — see the module docs
+/// of [`crate::Endpoint`] for the four shapes measured across providers. The
+/// `{key}` placeholder is looked for in the URL **and** in the header value,
+/// and substituted wherever the operator put it.
 ///
 /// # What it refuses, and why each refusal is loud
 ///
-/// - the URL carries `{key}` and `<PREFIX>_KEY` is absent or blank →
+/// - a `{key}` is written **somewhere** and `<PREFIX>_KEY` is absent or blank →
 ///   `MissingVariable`, **naming that variable**. Accepting it would start the
-///   process with a literal `{key}` in its address, and the operator would then
-///   be reading a 401 that nothing connects back to the configuration;
-/// - the URL carries no `{key}` and `<PREFIX>_KEY` is set →
+///   process with a literal `{key}` in its address or its header, and the
+///   operator would then be reading a 401 that nothing connects back to the
+///   configuration;
+/// - `<PREFIX>_KEY` is set and **no** `{key}` exists in either carrier →
 ///   `UnsupportedCombination`. It is the same failure seen from the other side:
 ///   a credential that is configured and goes nowhere. Silence here means the
 ///   process authenticates as anonymous and the operator has no reason to
-///   suspect it.
+///   suspect it;
+/// - `<PREFIX>_HEADER` is not `<name>: <value>` → `UnsupportedCombination`, via
+///   [`parse_header`].
 ///
-/// A URL with no `{key}` and no key is a **public endpoint**, and is accepted
-/// exactly as written — `api.mainnet-beta.solana.com` wants no credential.
+/// ⚠️ The first two are **one rule read on two carriers**, not two rules. The
+/// match below still has four arms, and that is deliberate: a fifth would mean
+/// a second rule sitting beside the first, and a rule written twice is a rule
+/// that holds at one site out of two.
 ///
-/// Fails only with those two variants and with the `MissingVariable` of the URL
+/// No `{key}` anywhere and no key is a **public endpoint**, accepted exactly as
+/// written — `api.mainnet-beta.solana.com` wants no credential.
+///
+/// A `{key}` in **both** carriers substitutes into both. It has no known use,
+/// but it is well defined, and refusing it would add a rule where there is no
+/// defect to correct.
+///
+/// Fails only with those variants and with the `MissingVariable` of the URL
 /// itself: no value ever reaches [`ConfigError::InvalidValue`], whose `value`
 /// field would put it in the crash log — the rule that binds
 /// [`required_secret_url`] binds here too.
 pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
     let url_var = format!("{prefix}_URL");
+    let header_var = format!("{prefix}_HEADER");
     let key_var = format!("{prefix}_KEY");
 
     let template = required(&url_var)?;
+    let header = optional(&header_var)
+        .map(|raw| parse_header(&raw, &header_var))
+        .transpose()?;
     let key = optional(&key_var);
 
-    match (template.contains(KEY_PLACEHOLDER), key) {
-        (true, Some(raw)) => Ok(Endpoint::new(template, Some(SecretKey::new(raw)))),
+    // One placeholder, two possible carriers — see this function's docs.
+    let has_placeholder = template.contains(KEY_PLACEHOLDER)
+        || header
+            .as_ref()
+            .is_some_and(|(_, value)| value.contains(KEY_PLACEHOLDER));
+
+    match (has_placeholder, key) {
+        (true, Some(raw)) => Ok(Endpoint::new(template, header, Some(SecretKey::new(raw)))),
         (true, None) => Err(ConfigError::MissingVariable(key_var)),
-        (false, None) => Ok(Endpoint::new(template, None)),
+        (false, None) => Ok(Endpoint::new(template, header, None)),
         (false, Some(_)) => Err(ConfigError::UnsupportedCombination {
             detail: format!(
-                "`{key_var}` is set, but `{url_var}` has no `{KEY_PLACEHOLDER}` to \
-                 substitute it into — write `{KEY_PLACEHOLDER}` where the provider \
-                 expects the credential, or unset `{key_var}` if the endpoint is public"
+                "`{key_var}` is set, but neither `{url_var}` nor `{header_var}` has a \
+                 `{KEY_PLACEHOLDER}` to substitute it into — write `{KEY_PLACEHOLDER}` \
+                 where the provider expects the credential, in the URL or in the \
+                 header, or unset `{key_var}` if the endpoint is public"
             ),
         }),
     }

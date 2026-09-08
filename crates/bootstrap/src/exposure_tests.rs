@@ -34,9 +34,11 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/bootstrap/src/endpoint.rs",
-        1,
-        "the key's only consumer is its own URL — `Endpoint::url` is where the \
-         two halves meet, and the one place they do",
+        2,
+        "the key's only consumers are its own two carriers — `Endpoint::url` and \
+         `Endpoint::header`, where the halves meet, and the only places they do. \
+         Both hand the result straight back into a secret type, so neither \
+         exposure widens to a printable `String`",
     ),
     (
         "crates/context/src/bootstrap/daemon.rs",
