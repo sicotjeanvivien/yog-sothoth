@@ -14,9 +14,17 @@ use metrics::{counter, describe_counter};
 /// what says the guess was generous, and any movement is what says it was not.
 /// `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` replaces the guess by
 /// reading it.
-const PAYLOADS_EVICTED: &str = "yog_indexer_grpc_untimestamped_payloads_total";
+///
+/// ⚠️ **The unit is a transaction, not an `InnerInstructionPayload`** — hence
+/// the name. This crate already uses "payload" for what `transaction_adapter`
+/// produces, and the README states that one mainnet transaction yields 2 of
+/// those through one adapter and 14 through the other. The buffer holds whole
+/// transactions, so a reading of 100 here is 100 transactions and some larger
+/// number of adapter payloads. Named for the unit after review pointed out that
+/// the measuring ticket had no way to tell which one it was holding.
+const TRANSACTIONS_EVICTED: &str = "yog_indexer_grpc_untimestamped_transactions_total";
 
-/// Which bound forced the eviction, on every increment of [`PAYLOADS_EVICTED`].
+/// Which bound forced the eviction, on every increment of [`TRANSACTIONS_EVICTED`].
 ///
 /// ⚠️ **Not decoration — without it the counter misleads the ticket that reads
 /// it.** Two very different evictions share this metric: a slot that waited
@@ -49,15 +57,23 @@ pub struct GrpcBufferMetrics;
 impl GrpcBufferMetrics {
     /// Call once at startup to register the descriptions with the Prometheus
     /// exporter.
+    ///
+    /// ⚠️ **Not called yet, and that is a wiring item for slice 3.**
+    /// `bootstrap/daemon.rs` registers the crate's three other metric families
+    /// there; without a fourth line the counter above still works but exports
+    /// with no HELP text — unreadable to anyone without the source, which is
+    /// exactly who reads it. Deleting `infra/grpc.rs`'s `allow(dead_code)` will
+    /// surface this as unused under `-D warnings`, but that backstop is
+    /// indirect, so it is said here too.
     pub(crate) fn register_descriptions() {
         describe_counter!(
-            PAYLOADS_EVICTED,
-            "Payloads dropped because their slot never received a block time, \
+            TRANSACTIONS_EVICTED,
+            "Transactions dropped because their slot never received a block time, \
              labelled by the bound that forced it"
         );
     }
 
     pub(crate) fn record_evicted(count: usize, reason: EvictionReason) {
-        counter!(PAYLOADS_EVICTED, "reason" => reason.as_str()).increment(count as u64);
+        counter!(TRANSACTIONS_EVICTED, "reason" => reason.as_str()).increment(count as u64);
     }
 }

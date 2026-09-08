@@ -60,9 +60,17 @@ pub(crate) const MAX_PENDING_SLOTS: usize = 256;
 /// How many payloads may be held across all pending slots.
 ///
 /// ⚠️ Bounding slots does **not** bound memory: 256 slots multiplied by a burst
-/// of transactions per slot is an unbounded product. This second limit is what
-/// makes the pathological case impossible rather than merely unlikely, and it
-/// costs a counter.
+/// of transactions per slot is an unbounded product. This second limit closes
+/// that, and costs a counter.
+///
+/// ⚠️ But it bounds a **count, not bytes**, and the ceiling it sets is not
+/// small. `T` will be a whole `SubscribeUpdateTransactionInfo` — meta, inner
+/// instructions, log messages, pre/post balances — on the order of 5–20 KB for
+/// a Meteora swap, so 8 192 of them is roughly **40–160 MB resident in this
+/// buffer alone**. That is bounded, which is the point, but it is a number
+/// slice 3 has to know when it sizes the process. Raised in review,
+/// 8 September 2026, where this doc claimed to make the pathological case
+/// "impossible" without saying at what price.
 pub(crate) const MAX_PENDING_PAYLOADS: usize = 8_192;
 
 /// How many resolved slot times are remembered, for payloads that arrive
@@ -171,17 +179,37 @@ impl<T> SlotTimestampBuffer<T> {
 
     /// Drop the oldest slots until both pending bounds hold.
     ///
-    /// Oldest by slot number, `BTreeMap` ordering them, so "the one least
-    /// likely to still be resolved" is `first_key_value`.
+    /// # ⚠️ Which slot goes depends on which bound fired, and the two are opposite
+    ///
+    /// Both evictions drop "the slot least likely to still be resolved", but
+    /// that is a **different slot** in each case, and treating them alike loses
+    /// exactly the data that was about to be saved.
+    ///
+    /// Block-metas arrive in slot order, so the *oldest* pending slot is the one
+    /// whose meta is next on the wire.
+    ///
+    /// - **Slot bound** → drop the **oldest**. It is `max_pending_slots` behind
+    ///   the head, so its meta is not merely late, it is not coming.
+    /// - **Payload bound** → drop the **newest**. Nothing here is stale: in
+    ///   steady state one or two slots are pending, and the oldest is due to
+    ///   resolve next. Dropping it to make room for the burst that caused the
+    ///   overflow destroys the resolvable half. Found in review, 8 September
+    ///   2026: a one-payload overage was destroying a whole older slot —
+    ///   200 payloads whose block-meta was the next message — while the burst
+    ///   survived.
+    ///
+    /// ⚠️ **Under sustained overload both ends lose**, and no policy fixes that;
+    /// the counter is what says it is happening. What this rule fixes is the
+    /// transient burst, which is the case that actually occurs.
     ///
     /// ⚠️ **On a steady stream oldest-by-slot is oldest-by-arrival; on a replay
     /// it is not.** After a reconnect with `from_slot`, older slots arrive
-    /// *last*, so a full buffer evicts each new arrival immediately while newer
-    /// pending slots survive. Kept deliberately — an older slot really is the
-    /// one least likely to still resolve, whenever it turned up — but it means
-    /// **a replay into a full buffer loses its own payloads**, silently except
-    /// for the counter. Whether to clear this buffer on reconnect is a listener
-    /// decision, carried to the ticket rather than guessed at here.
+    /// *last*, so a full buffer under the slot bound evicts each new arrival
+    /// immediately. Kept deliberately — an older slot really is the one least
+    /// likely to resolve, whenever it turned up — but it means **a replay into a
+    /// full buffer loses its own payloads**, silently except for the counter.
+    /// Whether to clear this buffer on reconnect is a listener decision, carried
+    /// to the ticket rather than guessed at here.
     ///
     /// ⚠️ Evicted payloads are **lost**, and that is not a choice — without an
     /// instant they cannot be written at all. What is a choice is that the loss
@@ -200,7 +228,14 @@ impl<T> SlotTimestampBuffer<T> {
                 return;
             };
 
-            let Some((&slot, _)) = self.pending.first_key_value() else {
+            // The end depends on the bound — see this function's docs. Getting
+            // this backwards is silent: both branches evict something, both
+            // count it, and only the data tells them apart.
+            let victim = match reason {
+                EvictionReason::SlotBound => self.pending.first_key_value(),
+                EvictionReason::PayloadBound => self.pending.last_key_value(),
+            };
+            let Some((&slot, _)) = victim else {
                 // Unreachable while either count is over its bound, but a loop
                 // that trusts an invariant it does not check is how loops
                 // become infinite.

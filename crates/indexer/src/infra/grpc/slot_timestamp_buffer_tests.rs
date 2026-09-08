@@ -151,8 +151,14 @@ fn past_the_slot_bound_the_oldest_slot_is_dropped() {
 /// ⚠️ The second bound, which exists because bounding slots does **not** bound
 /// memory. Here the slot count stays legal — 2 of 3 — and only the payload
 /// total is exceeded, so this test fails if that limit is dropped.
+///
+/// **And it evicts the other end.** Block-metas arrive in slot order, so the
+/// oldest pending slot is the one due to resolve next; under the payload bound
+/// nothing is stale, and dropping the oldest to make room for the burst would
+/// destroy the resolvable half. Found in review, 8 September 2026 — this test
+/// asserted the opposite until then.
 #[test]
-fn past_the_payload_bound_a_slot_is_dropped_even_when_few_slots_are_held() {
+fn the_payload_bound_evicts_the_newest_slot_not_the_oldest() {
     let mut buffer = buffer(); // 3 slots, 5 payloads
 
     for payload in 0..4 {
@@ -164,14 +170,56 @@ fn past_the_payload_bound_a_slot_is_dropped_even_when_few_slots_are_held() {
 
     assert_eq!(
         buffer.pending_payloads(),
-        2,
-        "slot 10's four payloads were evicted, leaving slot 11's two"
+        4,
+        "slot 11 — the newest, and the one that caused the overflow — is gone; \
+         slot 10, whose block-meta is next on the wire, is kept"
+    );
+    assert_eq!(
+        buffer.on_block_time(10, at(100)).len(),
+        4,
+        "the older slot resolves, which is the whole point of keeping it"
     );
     assert!(
-        buffer.on_block_time(10, at(100)).is_empty(),
-        "the burst slot is gone"
+        buffer.on_block_time(11, at(101)).is_empty(),
+        "the burst slot was the one dropped"
     );
-    assert_eq!(buffer.on_block_time(11, at(101)).len(), 2);
+}
+
+/// ⚠️ **The two bounds evict opposite ends, and nothing else says so.** Both
+/// branches drop a slot and count it, so swapping them is invisible except in
+/// which data survives. This is the test that fails if they are made alike.
+#[test]
+fn the_two_bounds_evict_opposite_ends() {
+    // Slot bound: the oldest goes, because it is beyond the window and its
+    // block-meta is not coming.
+    let mut by_slots = SlotTimestampBuffer::with_bounds(2, 100, 2);
+    for slot in 10..=13 {
+        by_slots.on_payload(slot, slot as Payload);
+    }
+    assert!(
+        by_slots.on_block_time(10, at(100)).is_empty(),
+        "slot bound: the oldest was evicted"
+    );
+    assert_eq!(
+        by_slots.on_block_time(13, at(103)).len(),
+        1,
+        "slot bound: the newest survived"
+    );
+
+    // Payload bound: the newest goes, because the oldest is due to resolve.
+    let mut by_payloads = SlotTimestampBuffer::with_bounds(100, 2, 2);
+    for slot in 10..=13 {
+        by_payloads.on_payload(slot, slot as Payload);
+    }
+    assert_eq!(
+        by_payloads.on_block_time(10, at(100)).len(),
+        1,
+        "payload bound: the oldest survived"
+    );
+    assert!(
+        by_payloads.on_block_time(13, at(103)).is_empty(),
+        "payload bound: the newest was evicted"
+    );
 }
 
 /// ⚠️ The table nobody thinks to bound. Nothing in the pending path touches it,
@@ -266,8 +314,8 @@ fn the_bound_that_evicted_is_recorded_with_the_count() {
 
     assert_eq!(
         counter_for(&snapshot, "payload_bound"),
-        Some(&DebugValue::Counter(4)),
-        "slot 10's four payloads, evicted by the payload bound"
+        Some(&DebugValue::Counter(2)),
+        "slot 11's two payloads — the newest slot, which this bound evicts"
     );
     assert_eq!(
         counter_for(&snapshot, "slot_bound"),
@@ -289,7 +337,7 @@ fn counter_for<'a>(
     snapshot
         .iter()
         .find(|(key, _, _, _)| {
-            key.key().name() == "yog_indexer_grpc_untimestamped_payloads_total"
+            key.key().name() == "yog_indexer_grpc_untimestamped_transactions_total"
                 && key
                     .key()
                     .labels()

@@ -65,7 +65,7 @@ Filling it is this crate's job, one module per source:
   transactions whose block-meta was going to arrive on reconnect. A slot bound
   reads the stream itself — nothing arrives, nothing is evicted. Its default is
   a **ceiling, not an estimate**: the real lag is unmeasured until a live
-  stream exists, and `yog_indexer_grpc_untimestamped_payloads_total` is what
+  stream exists, and `yog_indexer_grpc_untimestamped_transactions_total` is what
   will say whether the ceiling was generous.
 
 ⚠️ **Nothing calls either gRPC module yet**, and that is the state this crate is
