@@ -112,8 +112,14 @@ services:
       target: yog-indexer
     environment:
       DATABASE_URL_INDEXER: ${DATABASE_URL_INDEXER}
-      SOLANA_RPC_WS: ${SOLANA_RPC_WS}
-      SOLANA_RPC_HTTP: ${SOLANA_RPC_HTTP}
+      # Each endpoint is a URL/KEY pair — see `.env.example`. The `:-` on the
+      # keys is deliberate and is not a default: an endpoint with no `{key}`
+      # in its URL has no key to carry, and an empty value reads as absent.
+      # A `{key}` left without its key stops the process, naming the variable.
+      INGEST_STREAM_URL: ${INGEST_STREAM_URL}
+      INGEST_STREAM_KEY: ${INGEST_STREAM_KEY:-}
+      INGEST_TRANSACTION_URL: ${INGEST_TRANSACTION_URL}
+      INGEST_TRANSACTION_KEY: ${INGEST_TRANSACTION_KEY:-}
       RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}
       # No default on purpose, unlike the retry budget above and the log
       # knobs below: a default here picks an ingestion mode nobody chose —
@@ -189,7 +195,12 @@ services:
       target: yog-context
     environment:
       DATABASE_URL_CONTEXT: ${DATABASE_URL_CONTEXT}
-      SOLANA_RPC_HTTP: ${SOLANA_RPC_HTTP}
+      # Two endpoints, not one: DAS is Helius' own API, getMultipleAccounts is
+      # standard JSON-RPC. See the indexer service above for the `:-` on keys.
+      TOKEN_METADATA_URL: ${TOKEN_METADATA_URL}
+      TOKEN_METADATA_KEY: ${TOKEN_METADATA_KEY:-}
+      POOL_ACCOUNT_URL: ${POOL_ACCOUNT_URL}
+      POOL_ACCOUNT_KEY: ${POOL_ACCOUNT_KEY:-}
       JUPITER_URL: ${JUPITER_URL}
       JUPITER_API_KEY: ${JUPITER_API_KEY}
       CONTEXT_METADATA_POLL_SECS: ${CONTEXT_METADATA_POLL_SECS:-10}
@@ -271,7 +282,6 @@ services:
       # The browser talks to localhost:5000; SSR inside the container
       # talks to the api service over the compose network.
       API_INTERNAL_URL: http://yog-api:5000
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     ports:
       - "3000:3000"
     depends_on:

@@ -187,21 +187,35 @@ and that its USD figures will be **absent rather than wrong**.
 
 ```env
 DATABASE_URL_CONTEXT=postgresql://yog_context:...@localhost:5433/yog_sothoth
-SOLANA_RPC_HTTP=https://mainnet.helius-rpc.com/?api-key=...
+TOKEN_METADATA_URL=https://mainnet.helius-rpc.com/?api-key={key}
+TOKEN_METADATA_KEY=...
+POOL_ACCOUNT_URL=https://api.mainnet-beta.solana.com
 JUPITER_URL=https://api.jup.ag
 JUPITER_API_KEY=...
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
 
-Three of those carry a secret, and none of them reaches the daemon as a
-`String`. `DATABASE_URL_CONTEXT` and `SOLANA_RPC_HTTP` are `SecretUrl` — userinfo, path,
-query string and fragment are redacted, the scheme, host and port stay legible,
-and the Postgres URL also keeps its role and database name.
+**Two Solana endpoints, and this crate is why they are two.** The DAS
+(`getAssetBatch`) is Helius' own API; `getMultipleAccounts` is standard Solana
+JSON-RPC that any provider serves. Both used to read one `SOLANA_RPC_HTTP` —
+a name describing a transport, which excluded neither — so a migration moving
+one and not the other could not be *expressed*: one variable, one value. They
+are now two `Endpoint`s, each a `<FUNCTION>_URL` / `<FUNCTION>_KEY` pair; a URL
+with no `{key}` and no key is a public endpoint. `POOL_ACCOUNT_URL` above shows
+that shape, and in local development all four endpoints of the workspace point
+at the same public host.
+
+Nothing carrying a secret reaches the daemon as a `String`.
+`DATABASE_URL_CONTEXT` is a `SecretUrl` — userinfo, path, query string and
+fragment redacted, scheme, host and port legible, and the Postgres URL also
+keeps its role and database name; so is each endpoint once assembled, which is
+what lets `error/source.rs` scrub it back out of a `reqwest` error.
 `JUPITER_API_KEY` is a `SecretKey`, masked whole: a bare key has no carrier
 worth showing, and it is what `SecretUrl` used to return unredacted for want
 of a `?`. `JUPITER_URL` is a plain `String` on purpose — Jupiter authenticates
-by header, so that URL hides nothing.
+by header, so that URL hides nothing, and that is also why it is **not** an
+`Endpoint`: no key ever enters it.
 
 The type reaches the wire: `HeliusDasClient` and `SolanaAccountClient` hold a
 `SecretUrl` until `.post(…)`, `JupiterPriceClient` holds a `SecretKey` until

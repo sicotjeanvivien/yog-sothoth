@@ -68,15 +68,20 @@ impl Daemon {
         info!("database initialized");
 
         let listener = init_listener(&config);
-        info!("RPC listener initialized: {}", config.solana_rpc_ws);
+        info!("RPC listener initialized: {}", config.ingest_stream);
 
-        let rpc_client = Arc::new(RpcClient::new(config.solana_rpc_http.expose().to_string()));
-        info!("RPC HTTP client initialized: {}", config.solana_rpc_http);
+        let rpc_client = Arc::new(RpcClient::new(
+            config.ingest_transaction.url().expose().to_string(),
+        ));
+        info!(
+            "transaction RPC client initialized: {}",
+            config.ingest_transaction
+        );
 
         let processor = init_processor(
             &database,
             rpc_client.clone(),
-            config.solana_rpc_http.clone(),
+            config.ingest_transaction.url(),
         )
         .await
         .context("indexer service initialization failed")?;
@@ -85,7 +90,7 @@ impl Daemon {
         let network_status_reporter = init_network_status_reporter(
             &database,
             rpc_client.clone(),
-            config.solana_rpc_http.clone(),
+            config.ingest_transaction.url(),
         )
         .await
         .context("network_status_reporter initialization failed")?;
@@ -182,7 +187,7 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 /// Create the RPC WebSocket listener with its watched protocols.
 fn init_listener(config: &Config) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(
-        config.solana_rpc_ws.clone(),
+        config.ingest_stream.url(),
         config.worker_max_retries,
         config.scope,
     ))

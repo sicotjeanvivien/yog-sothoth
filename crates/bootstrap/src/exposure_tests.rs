@@ -33,6 +33,12 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "sqlx owns the pool — the URL is the argument of `Database::connect`",
     ),
     (
+        "crates/bootstrap/src/endpoint.rs",
+        1,
+        "the key's only consumer is its own URL — `Endpoint::url` is where the \
+         two halves meet, and the one place they do",
+    ),
+    (
         "crates/context/src/bootstrap/daemon.rs",
         1,
         "`init_db` takes the wrapped URL and exposes it at `Database::connect`",

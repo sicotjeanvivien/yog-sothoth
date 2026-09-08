@@ -89,14 +89,22 @@ impl Daemon {
         // Two independent HTTP clients — one per external source. Each takes
         // the wrapped secret, not the exposed string: the type travels to the
         // request builder, so `.expose()` never happens this far from the wire.
-        let metadata_source = Arc::new(HeliusDasClient::new(config.helius_url.clone()));
+        let metadata_source = Arc::new(HeliusDasClient::new(config.token_metadata.url()));
         let price_source = Arc::new(JupiterPriceClient::new(
             config.jupiter_url.clone(),
             config.jupiter_api_key.clone(),
         ));
-        // Reuses the Solana RPC (getMultipleAccounts) — same provider as DAS.
+        // `getMultipleAccounts`, standard Solana JSON-RPC — its own endpoint,
+        // which may or may not be the provider serving DAS above. Logged
+        // side by side because that is what makes the split visible at
+        // startup rather than in a config file nobody rereads.
         let pool_account_source: Arc<dyn PoolAccountSource> =
-            Arc::new(SolanaAccountClient::new(config.helius_url.clone()));
+            Arc::new(SolanaAccountClient::new(config.pool_account.url()));
+        info!(
+            token_metadata = %config.token_metadata,
+            pool_account = %config.pool_account,
+            "external endpoints initialized"
+        );
 
         MetadataWorkerMetrics::register_descriptions();
         PriceWorkerMetrics::register_descriptions();

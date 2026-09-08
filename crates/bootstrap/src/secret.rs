@@ -24,7 +24,7 @@
 use std::fmt;
 
 /// Placeholder substituted for every secret this module hides.
-const REDACTED: &str = "***REDACTED***";
+pub(crate) const REDACTED: &str = "***REDACTED***";
 
 /// Shortest secret fragment [`SecretUrl::scrub`] will replace on its own.
 ///
@@ -254,7 +254,7 @@ impl fmt::Debug for SecretUrl {
 /// What survives is scheme, userinfo role, host and port: enough to name which
 /// provider or which database a dying process could not reach, which is the
 /// whole reason this is not a blanket `****`.
-fn redact(url: &str) -> String {
+pub(crate) fn redact(url: &str) -> String {
     redact_fragment(&redact_query(&redact_path(&redact_password(url))))
 }
 
@@ -292,7 +292,7 @@ fn is_postgres(url: &str) -> bool {
 ///
 /// The condition is narrow on purpose: it needs a `:` in the authority, so a
 /// URL that could not carry a password at all is never touched by it.
-fn redact_password(url: &str) -> String {
+pub(crate) fn redact_password(url: &str) -> String {
     let Some(scheme_end) = url.find("://") else {
         return url.to_string();
     };
@@ -386,7 +386,7 @@ fn redact_query(url: &str) -> String {
 ///
 /// Runs last: [`redact_query`] truncates at the first `?`, so a URL carrying
 /// both has already lost its fragment by the time this sees it.
-fn redact_fragment(url: &str) -> String {
+pub(crate) fn redact_fragment(url: &str) -> String {
     match url.find('#') {
         Some(idx) => format!("{}#{}", &url[..idx], REDACTED),
         None => url.to_string(),
