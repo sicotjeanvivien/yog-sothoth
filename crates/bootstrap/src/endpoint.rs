@@ -125,24 +125,6 @@ impl Endpoint {
         Self::new(template.into(), None, key.map(SecretKey::new))
     }
 
-    /// The same, with a header carrying the credential.
-    ///
-    /// Separate from [`Endpoint::for_tests`] rather than a fourth argument on
-    /// it: the header case is the rarer one, and every existing caller would
-    /// otherwise gain a `None` that says nothing.
-    #[cfg(feature = "test-support")]
-    pub fn for_tests_with_header(
-        template: impl Into<String>,
-        header: (&str, &str),
-        key: Option<&str>,
-    ) -> Self {
-        Self::new(
-            template.into(),
-            Some((header.0.to_string(), header.1.to_string())),
-            key.map(SecretKey::new),
-        )
-    }
-
     /// The header to send, name and value, credential substituted in.
     ///
     /// The value is a [`SecretKey`] for the reason [`Endpoint::url`] returns a
@@ -233,6 +215,30 @@ impl Endpoint {
     /// nothing here can tell those apart: it is masked like any [`SecretKey`].
     ///
     /// The name is never masked — see [`Endpoint::header`].
+    ///
+    /// # Where this stops, and why it stops there
+    ///
+    /// A `{key}` accounts for the credential the operator **externalized**, and
+    /// for nothing beside it. `HEADER_VALUE=legacy-abc123 {key}` prints whole,
+    /// old key included — the same boundary `displayed` draws, raised in review
+    /// on 8 September 2026 for this carrier too.
+    ///
+    /// It is not closed here, and the reason differs from `displayed`'s. A URL
+    /// has components that have **no business** carrying a credential — the
+    /// userinfo, the fragment — so redacting them costs nothing and they are
+    /// redacted unconditionally. A header value has no such component: it is one
+    /// opaque string, and every part of it is where the placeholder legitimately
+    /// lives. `Bearer {key}` must stay legible, since which scheme a provider
+    /// wants is exactly the diagnostic this line exists to give. Masking unless
+    /// the value *equals* `{key}` would buy the leak back at the price of that,
+    /// and masking "the parts that look like a secret" is shape-recognition —
+    /// the thing this module refuses on the way in and would be absurd to adopt
+    /// on the way out.
+    ///
+    /// So the contract is the one the URL already states, and it now covers both
+    /// carriers: **an address and a header are legible in a log exactly to the
+    /// extent that their credentials are in `_KEY`. One left inline is one
+    /// printed.**
     fn displayed_header(&self) -> Option<String> {
         self.header.as_ref().map(|(name, value)| {
             if value.contains(KEY_PLACEHOLDER) {

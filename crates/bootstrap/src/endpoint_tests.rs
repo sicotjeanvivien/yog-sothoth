@@ -580,6 +580,80 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
     }
 }
 
+/// A name is not a header name if it carries a space or a `:`. That is shape,
+/// not charset — and the `:` case is the migration hazard: this feature shipped
+/// once as a single `<PREFIX>_HEADER=name: value`, so pasting the whole of it
+/// into `_HEADER_NAME` is the mistake an operator actually makes. Left accepted
+/// it would also **print in the clear**, a name never being masked.
+///
+/// The single-variable parser refused whitespace and the split dropped it;
+/// review caught the regression on 8 September 2026.
+#[test]
+fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
+    // ⚠️ `PASTED_TIGHT` has no space, and it is the only case that observes the
+    // `:` rule on its own: found by mutation, 8 September 2026 — with only the
+    // spaced variants, removing the `:` check left every case still refused by
+    // the whitespace rule, so one of the two rules was never tested.
+    for (suffix, name) in [
+        ("SPACED", "x token"),
+        ("PASTED", "x-token: s3cretpasted"),
+        ("PASTED_TIGHT", "x-token:s3cretpasted"),
+    ] {
+        let prefix = format!("HDR_NAME_{suffix}");
+        unsafe {
+            env::set_var(format!("{prefix}_URL"), "https://host:443");
+            env::set_var(format!("{prefix}_HEADER_NAME"), name);
+            env::set_var(format!("{prefix}_HEADER_VALUE"), "{key}");
+            env::set_var(format!("{prefix}_KEY"), "s3cret");
+        }
+
+        let error = required_endpoint_with_header(&prefix).expect_err("not a header name");
+        let ConfigError::UnsupportedCombination { detail } = error else {
+            panic!("{suffix}: expected UnsupportedCombination, got {error:?}");
+        };
+        assert!(
+            detail.contains(&format!("{prefix}_HEADER_NAME")),
+            "{detail}"
+        );
+        assert!(
+            !detail.contains("s3cretpasted"),
+            "{suffix}: the refusal echoed the pasted credential: {detail}"
+        );
+
+        unsafe {
+            env::remove_var(format!("{prefix}_URL"));
+            env::remove_var(format!("{prefix}_HEADER_NAME"));
+            env::remove_var(format!("{prefix}_HEADER_VALUE"));
+            env::remove_var(format!("{prefix}_KEY"));
+        }
+    }
+}
+
+/// And what the check must not cost: a name with surrounding whitespace is
+/// trimmed by `optional` and accepted, since that is a `.env` artefact and not
+/// an operator's meaning.
+#[test]
+fn a_header_name_is_trimmed_not_refused() {
+    unsafe {
+        env::set_var("HDR_TRIM_URL", "https://host:443");
+        env::set_var("HDR_TRIM_HEADER_NAME", "  x-token  ");
+        env::set_var("HDR_TRIM_HEADER_VALUE", "  {key}  ");
+        env::set_var("HDR_TRIM_KEY", "s3cret");
+    }
+
+    let endpoint = required_endpoint_with_header("HDR_TRIM").expect("trimmed, not refused");
+    let (name, value) = endpoint.header().expect("the header is configured");
+    assert_eq!(name, "x-token");
+    assert_eq!(value.expose(), "s3cret");
+
+    unsafe {
+        env::remove_var("HDR_TRIM_URL");
+        env::remove_var("HDR_TRIM_HEADER_NAME");
+        env::remove_var("HDR_TRIM_HEADER_VALUE");
+        env::remove_var("HDR_TRIM_KEY");
+    }
+}
+
 /// A `{key}` in the header NAME is never substituted — it would reach the
 /// client as the literal name `{key}`. The dangerous half is the second case:
 /// with a placeholder in the URL as well, the config used to be **accepted**.

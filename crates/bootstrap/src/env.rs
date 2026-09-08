@@ -96,13 +96,18 @@ fn optional(key: &str) -> Option<String> {
 ///
 /// Read as two, nothing is parsed. [`optional`] already gives the trim and
 /// "blank is absent", so both are inherited rather than restated, and what is
-/// left is two refusals of the kind this module already has.
+/// left is three refusals of the kind this module already has — none of them a
+/// grammar.
 ///
 /// # What it refuses
 ///
 /// - one half without the other → `UnsupportedCombination` naming both. A name
 ///   with no value sends an empty header; a value with no name has nowhere to
 ///   go. Neither is a shape anyone means;
+/// - a name carrying whitespace or a `:` → `UnsupportedCombination`. That is
+///   shape and not charset: such a name means nothing, and a `:` is the
+///   signature of `x-token: <secret>` pasted whole into the name variable,
+///   which would also print in the clear since a name is never masked;
 /// - a `{key}` in the **name** → `UnsupportedCombination`. The placeholder is
 ///   substituted in the value and nowhere else, so a name carrying one reaches
 ///   the client verbatim as `{key}` — the "401 nothing connects back to the
@@ -139,6 +144,24 @@ fn read_header(
 
     match (name, value) {
         (None, None) => Ok(None),
+        // ⚠️ Shape, not charset — the boundary this module keeps. A space or a
+        // `:` in a header name is not a subtlety of the HTTP token grammar, it
+        // is a line that means nothing, and the second one is the shape of a
+        // specific mistake: pasting `x-token: <secret>` into `_HEADER_NAME`
+        // after this feature moved from one variable to two. Left accepted, that
+        // paste also prints in the clear, since a name is never masked.
+        //
+        // The single-variable parser refused whitespace here and the split
+        // dropped it; restored 8 September 2026 after review caught the
+        // regression. `optional` trims the ends and nothing more.
+        (Some(name), Some(_)) if name.contains(char::is_whitespace) || name.contains(':') => {
+            Err(ConfigError::UnsupportedCombination {
+                detail: format!(
+                    "`{name_var}` is not a header name — it carries a space or a \
+                     `:`. Write the name alone, and its value in `{value_var}`"
+                ),
+            })
+        }
         (Some(name), Some(_)) if name.contains(KEY_PLACEHOLDER) => {
             Err(ConfigError::UnsupportedCombination {
                 detail: format!(
