@@ -77,49 +77,265 @@ fn optional(key: &str) -> Option<String> {
     }
 }
 
-/// Read an external endpoint as the `<PREFIX>_URL` / `<PREFIX>_KEY` pair it is.
+/// Read the optional `<PREFIX>_HEADER_NAME` / `<PREFIX>_HEADER_VALUE` pair.
 ///
-/// The caller passes the **prefix**, and the two variable names are derived
-/// from it — one name, one place. Spelling both at every call site is how a
-/// convention comes to hold at some sites and not others, which is the defect
-/// this whole ticket is about.
+/// # Why two variables and not one `<PREFIX>_HEADER=name: value`
+///
+/// That is what this first shipped as, and it was withdrawn. A single variable
+/// holding a name **and** a value needs a separator; a separator needs a
+/// grammar; a grammar needs validating — and that came to 70 lines and five
+/// refusals (missing `:`, empty name, whitespace in name, empty value, a `{key}`
+/// written in the name), three of which review had to find rather than the
+/// design prevent. One of them accepted a literal `{key}` as a header name in
+/// silence.
+///
+/// It also made that variable the only one of the workspace's 45 to carry a
+/// compound value — which is the very defect this family of tickets removes,
+/// reproduced one scale down: `SOLANA_RPC_HTTP` held three roles and was split
+/// into four pairs, and the fix then wrote a variable holding two.
+///
+/// Read as two, nothing is parsed. [`optional`] already gives the trim and
+/// "blank is absent", so both are inherited rather than restated, and what is
+/// left is three refusals of the kind this module already has — none of them a
+/// grammar.
+///
+/// # What it refuses
+///
+/// - one half without the other → `UnsupportedCombination` naming both. A name
+///   with no value sends an empty header; a value with no name has nowhere to
+///   go. Neither is a shape anyone means;
+/// - a name carrying whitespace or a `:` → `UnsupportedCombination`. That is
+///   shape and not charset: such a name means nothing, and a `:` is the
+///   signature of `x-token: <secret>` pasted whole into the name variable,
+///   which would also print in the clear since a name is never masked;
+/// - a `{key}` in the **name** → `UnsupportedCombination`. The placeholder is
+///   substituted in the value and nowhere else, so a name carrying one reaches
+///   the client verbatim as `{key}` — the "401 nothing connects back to the
+///   configuration" this validation exists to prevent;
+/// - either half set on an endpoint whose consumer sends only the URL → the
+///   refusal described on [`required_endpoint`].
+///
+/// ⚠️ The **name** gets a shape check and the **value** gets none, and the
+/// asymmetry is intended. A name is a token whose only job is to be one, so a
+/// space or a `:` in it means the line is broken. A value is opaque by nature —
+/// `Bearer {key}`, a raw token, anything a provider asks for — so there is no
+/// shape to check that would not be charset-guessing. What a client will accept
+/// is the client's affair, and it says so loudly on the first call.
+///
+/// No value is ever repeated in an error: `<PREFIX>_HEADER_VALUE` is what
+/// carries the credential, and the rule binding [`required_secret_url`] binds
+/// here.
+fn read_header(
+    name_var: &str,
+    value_var: &str,
+    url_var: &str,
+    header_is_read: bool,
+) -> Result<Option<(String, String)>, ConfigError> {
+    let name = optional(name_var);
+    let value = optional(value_var);
+
+    // The "nobody would send it" refusal comes first, and the order is the
+    // message: an operator told to complete a pair, and then told to remove it
+    // entirely, has been sent two refusals pointing opposite ways.
+    if (name.is_some() || value.is_some()) && !header_is_read {
+        return Err(ConfigError::UnsupportedCombination {
+            detail: format!(
+                "`{name_var}` / `{value_var}` is set, but the code that calls \
+                 `{url_var}` sends only the URL — it would connect with no \
+                 credential at all, and succeed anonymously against an endpoint \
+                 that allows it. Unset them, or put the credential in \
+                 `{url_var}` with a `{KEY_PLACEHOLDER}`"
+            ),
+        });
+    }
+
+    // ⚠️ The name's shape is checked whenever a name is present **at all**, and
+    // not only when the pair is complete. Found in review, 8 September 2026:
+    // with these checks living in the `(Some, Some)` arms, an operator who
+    // pasted `x-token: <secret>` into `_HEADER_NAME` and had not yet written
+    // `_HEADER_VALUE` was told to complete the pair — and completing it as
+    // advised earned the shape refusal on the next start. That is the very
+    // "a refusal that names a fix the next refusal undoes" defect this module
+    // added a test for, reproduced one level down inside this function.
+    if let Some(name) = name.as_deref() {
+        // Shape, not charset — the boundary this module keeps. A space or a `:`
+        // in a header name is not a subtlety of the HTTP token grammar, it is a
+        // line that means nothing, and the second one is the shape of a specific
+        // mistake: pasting `x-token: <secret>` into `_HEADER_NAME` after this
+        // feature moved from one variable to two. Left accepted, that paste also
+        // prints in the clear, since a name is never masked.
+        //
+        // The single-variable parser refused whitespace here and the split
+        // dropped it; restored 8 September 2026 after review caught the
+        // regression. `optional` trims the ends and nothing more.
+        if name.contains(char::is_whitespace) || name.contains(':') {
+            return Err(ConfigError::UnsupportedCombination {
+                detail: format!(
+                    "`{name_var}` is not a header name — it carries a space or a \
+                     `:`. Write the name alone, and its value in `{value_var}`"
+                ),
+            });
+        }
+        if name.contains(KEY_PLACEHOLDER) {
+            return Err(ConfigError::UnsupportedCombination {
+                detail: format!(
+                    "`{name_var}` carries `{KEY_PLACEHOLDER}`, which is only \
+                     substituted in `{value_var}` — the header name would be \
+                     sent verbatim. Write the placeholder in `{value_var}` \
+                     instead"
+                ),
+            });
+        }
+    }
+
+    match (name, value) {
+        (None, None) => Ok(None),
+        (Some(name), Some(value)) => Ok(Some((name, value))),
+        (Some(_), None) => Err(ConfigError::UnsupportedCombination {
+            detail: format!(
+                "`{name_var}` is set without `{value_var}` — the header would be \
+                 sent empty. Set both, or unset both"
+            ),
+        }),
+        (None, Some(_)) => Err(ConfigError::UnsupportedCombination {
+            detail: format!(
+                "`{value_var}` is set without `{name_var}` — the value has no \
+                 header to travel in. Set both, or unset both"
+            ),
+        }),
+    }
+}
+
+/// Read an external endpoint whose consumer sends **only the URL**.
+///
+/// The default, and what every endpoint in this workspace uses today. The
+/// caller passes the **prefix**, and `<PREFIX>_URL` / `<PREFIX>_KEY` are
+/// derived from it — one name, one place. Spelling them at every call site is
+/// how a convention comes to hold at some sites and not others, which is the
+/// defect this whole family of tickets is about.
+///
+/// # Why a `<PREFIX>_HEADER_NAME` / `_VALUE` is refused here
+///
+/// Because nothing would send it. A header is only a credential if some code
+/// downstream calls [`Endpoint::header`]; when the consumer passes
+/// [`Endpoint::url`] alone — as `RpcClient`, `PubsubClient` and the two
+/// `reqwest` providers do — a configured header is dropped in silence and the
+/// process authenticates as **nobody**, succeeding against any endpoint that
+/// tolerates anonymous callers.
+///
+/// That is the same silent-anonymous failure the "a key with nowhere to go"
+/// refusal exists to prevent, and it would have been re-opened by treating a
+/// header as a valid carrier everywhere. Found in review, 8 September 2026,
+/// after a verification run that read `# Connected.` as a success when it was
+/// the defect: the stream had connected with no credential at all.
+///
+/// A consumer that *does* read the header calls
+/// [`required_endpoint_with_header`] instead. The distinction is the caller
+/// stating a fact about itself, which is the only place that fact exists.
+pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
+    read_endpoint(prefix, false)
+}
+
+/// Read an external endpoint whose consumer **calls [`Endpoint::header`]**.
+///
+/// Identical to [`required_endpoint`] except that the optional
+/// `<PREFIX>_HEADER_NAME` / `<PREFIX>_HEADER_VALUE` pair is accepted, with
+/// `{key}` written in the **value** wherever the provider expects the
+/// credential. The placeholder is then looked for in the URL **and** in the
+/// header value, and substituted wherever the operator put it — see the
+/// module docs of [`crate::Endpoint`] for the four shapes measured across
+/// providers, and why the header's *name* is a provider convention too.
+///
+/// ⚠️ Calling this is a **promise**, not a preference: the code receiving the
+/// `Endpoint` must actually send the header. Nothing here can check that, which
+/// is exactly why the two doors are separate names rather than a boolean an
+/// author sets without reading it.
+pub fn required_endpoint_with_header(prefix: &str) -> Result<Endpoint, ConfigError> {
+    read_endpoint(prefix, true)
+}
+
+/// The shared body of [`required_endpoint`] and
+/// [`required_endpoint_with_header`].
+///
+/// `header_is_read` is what the two doors differ by, and it is the caller
+/// stating a fact about **its own consumer**: whether the code downstream will
+/// actually call [`Endpoint::header`]. `yog-bootstrap` cannot know that, and
+/// guessing it is what produced the defect this parameter exists to close.
 ///
 /// # What it refuses, and why each refusal is loud
 ///
-/// - the URL carries `{key}` and `<PREFIX>_KEY` is absent or blank →
+/// - a `{key}` is written **somewhere** and `<PREFIX>_KEY` is absent or blank →
 ///   `MissingVariable`, **naming that variable**. Accepting it would start the
-///   process with a literal `{key}` in its address, and the operator would then
-///   be reading a 401 that nothing connects back to the configuration;
-/// - the URL carries no `{key}` and `<PREFIX>_KEY` is set →
+///   process with a literal `{key}` in its address or its header, and the
+///   operator would then be reading a 401 that nothing connects back to the
+///   configuration;
+/// - `<PREFIX>_KEY` is set and **no** `{key}` exists in either carrier →
 ///   `UnsupportedCombination`. It is the same failure seen from the other side:
 ///   a credential that is configured and goes nowhere. Silence here means the
 ///   process authenticates as anonymous and the operator has no reason to
-///   suspect it.
+///   suspect it;
+/// - one half of `<PREFIX>_HEADER_NAME` / `<PREFIX>_HEADER_VALUE` without the
+///   other, or a `{key}` written in the name → `UnsupportedCombination`, via
+///   [`read_header`].
 ///
-/// A URL with no `{key}` and no key is a **public endpoint**, and is accepted
-/// exactly as written — `api.mainnet-beta.solana.com` wants no credential.
+/// ⚠️ The first two are **one rule read on two carriers**, not two rules. The
+/// match below still has four arms, and that is deliberate: a fifth would mean
+/// a second rule sitting beside the first, and a rule written twice is a rule
+/// that holds at one site out of two.
 ///
-/// Fails only with those two variants and with the `MissingVariable` of the URL
+/// No `{key}` anywhere and no key is a **public endpoint**, accepted exactly as
+/// written — `api.mainnet-beta.solana.com` wants no credential.
+///
+/// A `{key}` in **both** carriers substitutes into both. It has no known use,
+/// but it is well defined, and refusing it would add a rule where there is no
+/// defect to correct.
+///
+/// Fails only with those variants and with the `MissingVariable` of the URL
 /// itself: no value ever reaches [`ConfigError::InvalidValue`], whose `value`
 /// field would put it in the crash log — the rule that binds
 /// [`required_secret_url`] binds here too.
-pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
+fn read_endpoint(prefix: &str, header_is_read: bool) -> Result<Endpoint, ConfigError> {
     let url_var = format!("{prefix}_URL");
+    let name_var = format!("{prefix}_HEADER_NAME");
+    let value_var = format!("{prefix}_HEADER_VALUE");
     let key_var = format!("{prefix}_KEY");
 
     let template = required(&url_var)?;
+    let header = read_header(&name_var, &value_var, &url_var, header_is_read)?;
     let key = optional(&key_var);
 
-    match (template.contains(KEY_PLACEHOLDER), key) {
-        (true, Some(raw)) => Ok(Endpoint::new(template, Some(SecretKey::new(raw)))),
+    // One placeholder, two possible carriers — see this function's docs.
+    let has_placeholder = template.contains(KEY_PLACEHOLDER)
+        || header
+            .as_ref()
+            .is_some_and(|(_, value)| value.contains(KEY_PLACEHOLDER));
+
+    match (has_placeholder, key) {
+        (true, Some(raw)) => Ok(Endpoint::new(template, header, Some(SecretKey::new(raw)))),
         (true, None) => Err(ConfigError::MissingVariable(key_var)),
-        (false, None) => Ok(Endpoint::new(template, None)),
+        (false, None) => Ok(Endpoint::new(template, header, None)),
+        // ⚠️ The advice is conditioned on `header_is_read`, and that is not
+        // cosmetic: telling an operator to write `{key}` "in the header" on an
+        // endpoint that refuses headers sends them straight into the refusal
+        // above, which then tells them the opposite. A refusal that names a fix
+        // the next refusal undoes is worse than one that names none.
         (false, Some(_)) => Err(ConfigError::UnsupportedCombination {
-            detail: format!(
-                "`{key_var}` is set, but `{url_var}` has no `{KEY_PLACEHOLDER}` to \
-                 substitute it into — write `{KEY_PLACEHOLDER}` where the provider \
-                 expects the credential, or unset `{key_var}` if the endpoint is public"
-            ),
+            detail: if header_is_read {
+                format!(
+                    "`{key_var}` is set, but neither `{url_var}` nor `{value_var}` \
+                     has a `{KEY_PLACEHOLDER}` to substitute it into — write \
+                     `{KEY_PLACEHOLDER}` where the provider expects the credential, \
+                     in the URL or in the header value, or unset `{key_var}` if the \
+                     endpoint is public"
+                )
+            } else {
+                format!(
+                    "`{key_var}` is set, but `{url_var}` has no `{KEY_PLACEHOLDER}` \
+                     to substitute it into — write `{KEY_PLACEHOLDER}` where the \
+                     provider expects the credential, or unset `{key_var}` if the \
+                     endpoint is public"
+                )
+            },
         }),
     }
 }
