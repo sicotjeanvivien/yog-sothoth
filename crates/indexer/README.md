@@ -52,11 +52,6 @@ Filling it is this crate's job, one module per source:
   therefore yields 2 payloads through one adapter and 14 through the other,
   which is sanctioned rather than accidental — see *What an adapter owes*.
 
-  ⚠️ **Nothing calls it yet.** The listener that will is a later slice of the
-  gRPC ticket, and `INGEST_SOURCE=grpc` stays refused at startup until the one
-  after. `infra/grpc.rs` carries a single `#![allow(dead_code)]` for the whole
-  path with that reason; deleting the line is part of wiring the listener.
-
 - `infra/grpc/slot_timestamp_buffer.rs` pairs a transaction with the block time
   its own message does not carry. `block_time` lives on
   `SubscribeUpdateBlockMeta`, a **separate** subscription keyed by slot, while
@@ -73,6 +68,12 @@ Filling it is this crate's job, one module per source:
   stream exists, and `yog_indexer_grpc_untimestamped_payloads_total` is what
   will say whether the ceiling was generous.
 
+⚠️ **Nothing calls either gRPC module yet**, and that is the state this crate is
+deliberately in: the listener that will is a later slice of the gRPC ticket, and
+`INGEST_SOURCE=grpc` stays refused at startup until the one after.
+`infra/grpc.rs` carries a single `#![allow(dead_code)]` for the whole path with
+that reason — deleting that one line is part of wiring the listener, and the
+build says so the moment it is.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
