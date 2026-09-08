@@ -61,7 +61,7 @@
 
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
-use solana_signature::Signature;
+use solana_signature::{SIGNATURE_BYTES, Signature};
 use yellowstone_grpc_proto::prelude::{
     InnerInstruction, SubscribeUpdateTransaction, SubscribeUpdateTransactionInfo,
     TransactionStatusMeta,
@@ -88,11 +88,22 @@ use yog_core::{CoreError, CoreResult};
 ///
 /// # Errors
 ///
-/// Only on a transaction-level malformation: a missing envelope, a signature
-/// that is not one, an index that does not fit, or an inner instruction whose
-/// `program_id_index` points outside the account list. A transaction with no
-/// inner instructions is not a failure — it yields an empty payload list, and
-/// extraction reports "nothing to record".
+/// Only on a transaction-level malformation, and this list is what slice 3's
+/// listener will read to decide what to log, count and retry — so it is kept
+/// complete:
+///
+/// - the `transaction` envelope is absent;
+/// - `signature` is not `SIGNATURE_BYTES` long;
+/// - `index` does not fit in the domain's `u32`;
+/// - `transaction.message` is absent, so there are no static account keys;
+/// - `meta` is absent, or `meta.inner_instructions_none` is set — both mean the
+///   source did not capture the inner instructions, which is **not** the same
+///   as there being none;
+/// - an inner instruction's `program_id_index` points outside the account list.
+///
+/// A transaction that genuinely carries no inner instructions is not a failure:
+/// it yields an empty payload list, and extraction reports "nothing to
+/// record".
 pub(crate) fn from_grpc(
     update: &SubscribeUpdateTransaction,
     timestamp: DateTime<Utc>,
@@ -127,10 +138,12 @@ pub(crate) fn from_grpc(
 fn extract_signature(info: &SubscribeUpdateTransactionInfo) -> CoreResult<Signature> {
     Signature::try_from(info.signature.as_slice()).map_err(|_| CoreError::ParseError {
         signature: String::new(),
+        // `SIGNATURE_BYTES` and not `size_of::<Signature>()`: the two agree
+        // today, but one is a wire constant and the other a layout assumption,
+        // and only the first is what the message promises.
         reason: format!(
-            "signature is {} bytes, expected {}",
+            "signature is {} bytes, expected {SIGNATURE_BYTES}",
             info.signature.len(),
-            std::mem::size_of::<Signature>()
         ),
     })
 }
@@ -170,8 +183,18 @@ fn extract_inner_instructions(
     info: &SubscribeUpdateTransactionInfo,
     signature: &Signature,
 ) -> CoreResult<Vec<InnerInstructionPayload>> {
+    // ⚠️ An absent `meta` is the **same** absence as the flag below, and was
+    // treated as its opposite until review caught it: both say "the source did
+    // not tell us", and returning an empty list records a transaction full of
+    // events as "nothing to record". `meta` is genuinely optional on the wire —
+    // a relay could strip it — and unlike the JSON-RPC sibling, no fixture
+    // corpus here can show what a provider actually sends. Refusing is what
+    // puts it on the skip-and-log path instead of losing it.
     let Some(meta) = info.meta.as_ref() else {
-        return Ok(Vec::new());
+        return Err(CoreError::MissingField {
+            signature: signature.to_string(),
+            field: "meta (not captured by the source)".to_string(),
+        });
     };
 
     // ⚠️ `inner_instructions_none` is not "there were none" — it is "the source
@@ -188,7 +211,7 @@ fn extract_inner_instructions(
         });
     }
 
-    let account_keys = account_key_segments(info, meta)?;
+    let account_keys = account_key_segments(info, meta, signature)?;
 
     let mut groups: Vec<_> = meta.inner_instructions.iter().collect();
     groups.sort_by_key(|g| g.index);
@@ -221,6 +244,7 @@ fn extract_inner_instructions(
 fn account_key_segments<'a>(
     info: &'a SubscribeUpdateTransactionInfo,
     meta: &'a TransactionStatusMeta,
+    signature: &Signature,
 ) -> CoreResult<[&'a [Vec<u8>]; 3]> {
     let static_keys = info
         .transaction
@@ -228,7 +252,10 @@ fn account_key_segments<'a>(
         .and_then(|tx| tx.message.as_ref())
         .map(|message| message.account_keys.as_slice())
         .ok_or_else(|| CoreError::MissingField {
-            signature: String::new(),
+            // Named, not empty: on the skip-and-log path this line is all an
+            // operator gets, and an error that cannot say which transaction it
+            // is about cannot be investigated.
+            signature: signature.to_string(),
             field: "transaction.message".to_string(),
         })?;
 

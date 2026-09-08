@@ -247,10 +247,19 @@ fn an_index_beyond_the_account_list_is_an_error() {
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("index 9 of 3 keys");
     let message = error.to_string();
-    assert!(message.contains('9'), "{message}");
+    // ⚠️ Whole phrases, not the digits `9` and `3`. Those were the first
+    // assertion here, and they verified nothing: the reference base58 signature
+    // is part of every error's Display and already contains both. Proven by
+    // mutation on 8 September 2026 — replacing the entire reason with
+    // "MUTATED" left the test green. A neighbour was answering for the rule.
     assert!(
-        message.contains('3'),
-        "the error should say how many keys there were: {message}"
+        message.contains("program_id_index 9"),
+        "the error must name the index it could not resolve: {message}"
+    );
+    assert!(
+        message.contains("3 account keys"),
+        "and how many keys there were, which is what tells an operator whether \
+         the message or the segments are wrong: {message}"
     );
 }
 
@@ -317,7 +326,13 @@ fn a_missing_transaction_envelope_is_an_error() {
     };
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("no transaction");
-    assert!(error.to_string().contains("transaction"), "{error}");
+    // Backticked: `MissingField`'s Display carries the bare word "transaction"
+    // in its own template, so asserting on it checked the template rather than
+    // the field. Same mutation, same lesson as above.
+    assert!(
+        error.to_string().contains("`transaction`"),
+        "the error must name the field that was missing: {error}"
+    );
 }
 
 #[test]
@@ -358,7 +373,34 @@ fn a_missing_message_is_an_error_not_an_empty_key_list() {
         .transaction = None;
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("no message");
-    assert!(error.to_string().contains("message"), "{error}");
+    let rendered = error.to_string();
+    assert!(
+        rendered.contains("`transaction.message`"),
+        "the error must name the field: {rendered}"
+    );
+    // ⚠️ And name the transaction. Found by mutation on 8 September 2026:
+    // blanking the signature here left the test green, so the one identifier an
+    // operator has on the skip-and-log path was unasserted.
+    assert!(
+        rendered.contains(REFERENCE_SIGNATURE),
+        "the error must say which transaction it is about: {rendered}"
+    );
+}
+
+/// The same absence, one field up: `meta` itself is optional on the wire, and an
+/// absent one used to yield an empty payload list. Two ways of saying "the
+/// source did not tell us" must not have two opposite outcomes.
+#[test]
+fn a_missing_meta_is_an_error_not_an_empty_list() {
+    let program = Protocol::MeteoraDammV2.program_id();
+    let mut update = update_with(vec![program.to_bytes().to_vec()], Vec::new());
+    update.transaction.as_mut().expect("built with one").meta = None;
+
+    let error = from_grpc(&update, reference_timestamp()).expect_err("no meta");
+    assert!(
+        error.to_string().contains("not captured"),
+        "the error must distinguish absence from emptiness: {error}"
+    );
 }
 
 /// ⚠️ `inner_instructions_none` means "the source did not capture them", which
@@ -393,17 +435,6 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
 fn no_inner_instructions_is_an_empty_list_not_an_error() {
     let program = Protocol::MeteoraDammV2.program_id();
     let update = update_with(vec![program.to_bytes().to_vec()], Vec::new());
-
-    let actual = from_grpc(&update, reference_timestamp()).expect("a well-formed update");
-    assert!(actual.inner_instructions.is_empty());
-}
-
-/// And a message with no `meta` at all — the field is optional on the wire.
-#[test]
-fn a_missing_meta_is_an_empty_list_not_an_error() {
-    let program = Protocol::MeteoraDammV2.program_id();
-    let mut update = update_with(vec![program.to_bytes().to_vec()], Vec::new());
-    update.transaction.as_mut().expect("built with one").meta = None;
 
     let actual = from_grpc(&update, reference_timestamp()).expect("a well-formed update");
     assert!(actual.inner_instructions.is_empty());
