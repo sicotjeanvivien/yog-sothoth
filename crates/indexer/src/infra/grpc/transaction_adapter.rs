@@ -24,11 +24,27 @@
 //! 1. that a provider's `SubscribeUpdate` looks like the ones below — how inner
 //!    instructions are grouped, what `data` carries exactly;
 //! 2. that [`resolve_program_id`] walks the account list the way a validator
-//!    does. **No fixture in this repository can witness it**: all 92 carry zero
-//!    loaded addresses, the reference transaction included (version 0, empty
-//!    `addressTableLookups`). The test that covers it is built from the rule as
-//!    documented, not from an observation;
+//!    does. **No fixture in this repository can witness it**, and not by
+//!    accident: 25 of the 92 transaction fixtures *do* use address lookup
+//!    tables, yet **none** carries a `loadedAddresses` in its captured response
+//!    — and it would change nothing if they did, since a JSON-RPC response
+//!    hands `programId` over already resolved as a string. Index resolution is
+//!    structurally a gRPC-only concern, so the corpus could never exercise it.
+//!    The test that covers it is built from the rule as documented, not from an
+//!    observation;
 //! 3. anything temporal — this module sees one message and has no clock.
+//!
+//! # ⚠️ One thing this adapter deliberately does not do, for the listener slice
+//!
+//! It does not look at `meta.err`, so **events from reverted transactions would
+//! be persisted** if nothing upstream filtered them. On the JSON-RPC path that
+//! filtering lives in `infra/rpc/dispatcher/filters/failed_transaction.rs`, and
+//! the corpus keeps `damm_v2/swap_failed.json` for it. The gRPC path has no
+//! counterpart yet: the listener must set `failed: Some(false)` on its
+//! `SubscribeRequestFilterTransactions` — pushing the filter server-side, which
+//! is one of the stated gains — or check `meta.err` here. Written down because
+//! a filter nobody remembers is a filter nobody adds. Raised in review,
+//! 8 September 2026.
 //!
 //! Their first confrontation with reality is
 //! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, which needs an API key.
@@ -158,7 +174,21 @@ fn extract_inner_instructions(
         return Ok(Vec::new());
     };
 
-    let account_keys = account_key_segments(info, meta);
+    // ⚠️ `inner_instructions_none` is not "there were none" — it is "the source
+    // did not capture them", which the proto carries a separate flag for
+    // precisely because the two must not be confused. Reading it as an empty
+    // list would record a transaction full of events as "nothing to record":
+    // no error, no metric, no retry, every event in it lost without a trace.
+    // Refusing sends it down the skip-and-log path, where a per-transaction
+    // failure is counted and stepped over. Found in review, 8 September 2026.
+    if meta.inner_instructions_none {
+        return Err(CoreError::MissingField {
+            signature: signature.to_string(),
+            field: "meta.inner_instructions (not captured by the source)".to_string(),
+        });
+    }
+
+    let account_keys = account_key_segments(info, meta)?;
 
     let mut groups: Vec<_> = meta.inner_instructions.iter().collect();
     groups.sort_by_key(|g| g.index);
@@ -181,21 +211,32 @@ fn extract_inner_instructions(
 /// Written here rather than by depending on `solana-message`: the lock file
 /// already carries two versions of `solana-address` and two of `solana-pubkey`,
 /// and threading a third link through that knot costs more than ten lines.
+/// ⚠️ A missing message is an **error**, not an empty first segment. Found in
+/// review, 8 September 2026: `map_or(&[][..], …)` turned an absent envelope into
+/// zero static keys, which shifts every index one segment along — with a
+/// non-empty `loaded_writable_addresses`, `program_id_index = 0` then resolves
+/// to the first *loaded* key. A valid, wrong `Pubkey`, dropped downstream in
+/// silence. That is precisely what [`resolve_program_id`] says it refuses to
+/// allow, undone one function earlier.
 fn account_key_segments<'a>(
     info: &'a SubscribeUpdateTransactionInfo,
     meta: &'a TransactionStatusMeta,
-) -> [&'a [Vec<u8>]; 3] {
+) -> CoreResult<[&'a [Vec<u8>]; 3]> {
     let static_keys = info
         .transaction
         .as_ref()
         .and_then(|tx| tx.message.as_ref())
-        .map_or(&[][..], |message| message.account_keys.as_slice());
+        .map(|message| message.account_keys.as_slice())
+        .ok_or_else(|| CoreError::MissingField {
+            signature: String::new(),
+            field: "transaction.message".to_string(),
+        })?;
 
-    [
+    Ok([
         static_keys,
         meta.loaded_writable_addresses.as_slice(),
         meta.loaded_readonly_addresses.as_slice(),
-    ]
+    ])
 }
 
 /// Resolve one `program_id_index` against the segments above.

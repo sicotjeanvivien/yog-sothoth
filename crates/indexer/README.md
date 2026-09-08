@@ -71,9 +71,12 @@ mainnet protobuf fixture here and no way to make one without a subscription, so
 its inputs are hand-built — the message is constructed with the understanding
 the code uses to read it, and the two can agree on a lie. One consequence is
 concrete: `program_id_index` resolution walks static keys, then loaded writable,
-then loaded readonly, and **no fixture in this repository can witness it** (all
-92 carry zero loaded addresses). Its test is built from the documented rule, not
-from an observation. First confrontation with reality is the live stream.
+then loaded readonly, and **no fixture in this repository can witness it** — 25
+of the 92 transaction fixtures use address lookup tables, none carries a
+`loadedAddresses`, and a JSON-RPC response hands `programId` over already
+resolved anyway, so index resolution is structurally a gRPC-only concern. Its
+test is built from the documented rule, not from an observation. First
+confrontation with reality is the live stream.
 
 `transaction_index` is the one field the two adapters legitimately disagree on —
 `getTransaction` omits it, a Yellowstone update always carries it — so

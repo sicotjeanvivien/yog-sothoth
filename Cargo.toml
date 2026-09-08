@@ -50,7 +50,17 @@ solana-transaction-status-client-types = "4"
 # any `{:?}` writes the token in the clear. `-proto` is a public schema plus a
 # `prost` build: regenerated here it comes out identical, so there is no
 # "Triton version" of the types to be locked into.
-yellowstone-grpc-proto = { version = "10", default-features = false }
+#
+# ⚠️ Pinned to 12 and not 10, for a build reason found in review: 10.1.1 builds
+# protobuf 21.5 from C++ source via `protobuf-src`/`autotools`, and the backend
+# builder image (`rust:1.95-slim-bookworm` plus pkg-config, libssl-dev,
+# ca-certificates) carries `cc` but **no `g++` and no `make`**. Measured in that
+# exact image: 10.1.1 dies on `ToolNotFound: failed to find tool "c++"`, 12.7.0
+# compiles in 19 s — it replaced `protobuf-src` with `protoc-bin-vendored`,
+# prebuilt binaries needing no toolchain. CI would have stayed green
+# (ubuntu-latest ships g++), so `docker compose --profile backend up --build`
+# would have been the first thing to break — on a machine, not in a pipeline.
+yellowstone-grpc-proto = { version = "12", default-features = false }
 
 # Database
 sqlx = { version = "0.8", default-features = false }

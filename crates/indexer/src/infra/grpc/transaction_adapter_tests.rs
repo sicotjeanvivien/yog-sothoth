@@ -199,9 +199,11 @@ fn the_timestamp_is_the_one_supplied() {
 
 // ── resolving program_id_index ──────────────────────────────────────
 
-/// ⚠️ **The test the reference transaction cannot be.** All 92 fixtures in this
-/// repository carry zero loaded addresses, so the conformance test above passes
-/// even against an implementation that ignores `loaded_*` entirely.
+/// ⚠️ **The test the reference transaction cannot be.** No transaction fixture
+/// in this repository carries a `loadedAddresses` — 25 of the 92 use address
+/// lookup tables, but the captured responses resolve nothing — so the
+/// conformance test above passes even against an implementation that ignores
+/// `loaded_*` entirely.
 ///
 /// The program sits in `loaded_readonly_addresses`, behind a **non-empty**
 /// `loaded_writable_addresses` — the only arrangement that tells the right order
@@ -330,6 +332,57 @@ fn a_signature_of_the_wrong_length_is_an_error() {
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("31-byte signature");
     assert!(error.to_string().contains("31"), "{error}");
+}
+
+/// ⚠️ A message that is absent must **refuse**, not resolve against zero static
+/// keys. Found in review, 8 September 2026: an empty first segment shifts every
+/// index one segment along, so `program_id_index = 0` lands on the first
+/// *loaded* key — a valid, wrong `Pubkey` the downstream filter drops in
+/// silence. The loaded segments below are non-empty precisely so that a
+/// regression resolves to something instead of failing on its own.
+#[test]
+fn a_missing_message_is_an_error_not_an_empty_key_list() {
+    let (leg_a, _) = reference_payloads();
+    let program = Protocol::MeteoraDammV2.program_id();
+
+    let mut update = update_with_loaded(
+        vec![filler_key(1)],
+        vec![program.to_bytes().to_vec()],
+        vec![filler_key(3)],
+        vec![group(0, vec![instruction(0, leg_a)])],
+    );
+    update
+        .transaction
+        .as_mut()
+        .expect("built with one")
+        .transaction = None;
+
+    let error = from_grpc(&update, reference_timestamp()).expect_err("no message");
+    assert!(error.to_string().contains("message"), "{error}");
+}
+
+/// ⚠️ `inner_instructions_none` means "the source did not capture them", which
+/// is not "there were none". Reading it as an empty list records a transaction
+/// full of events as "nothing to record" — silently, for ever. Refusing puts it
+/// on the skip-and-log path, where it is counted.
+#[test]
+fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
+    let program = Protocol::MeteoraDammV2.program_id();
+    let mut update = update_with(vec![program.to_bytes().to_vec()], Vec::new());
+    update
+        .transaction
+        .as_mut()
+        .expect("built with one")
+        .meta
+        .as_mut()
+        .expect("built with one")
+        .inner_instructions_none = true;
+
+    let error = from_grpc(&update, reference_timestamp()).expect_err("not captured");
+    assert!(
+        error.to_string().contains("not captured"),
+        "the error must distinguish absence from emptiness: {error}"
+    );
 }
 
 // ── absences that are not failures ──────────────────────────────────
