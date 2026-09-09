@@ -155,15 +155,19 @@ impl<T> SlotTimestampBuffer<T> {
     /// # ⚠️ For the caller: `block_time` is optional on the wire
     ///
     /// `SubscribeUpdateBlockMeta::block_time` is an `Option<UnixTimestamp>`, so
-    /// a block-meta can arrive carrying no instant at all. It resolves nothing,
-    /// and the slot must stay pending — **do not substitute a default, a
-    /// receive time, or a neighbouring slot's**. Any of those writes a wrong
-    /// value into the partitioning column, where nothing will ever question it.
+    /// a block-meta can arrive carrying no instant at all. It resolves nothing —
+    /// **do not substitute a default, a receive time, or a neighbouring
+    /// slot's**. Any of those writes a wrong value into the partitioning
+    /// column, where nothing will ever question it.
     ///
     /// This signature takes a `DateTime<Utc>` and not an `Option` precisely so
     /// the decision cannot be deferred to here: a caller with no instant has
     /// nothing to call this with. Slice 1 had to learn the same lesson twice —
     /// "the source did not tell us" is not a value.
+    ///
+    /// What such a caller has instead is [`Self::on_slot_unresolvable`]: the
+    /// slot's one chance to be named has come and gone empty, so leaving it
+    /// pending would only spend the window on it and mislabel its exit.
     pub(crate) fn on_block_time(&mut self, slot: u64, at: DateTime<Utc>) -> Vec<Resolved<T>> {
         let released = self.pending.remove(&slot).unwrap_or_default();
         self.pending_count -= released.len();
@@ -175,6 +179,54 @@ impl<T> SlotTimestampBuffer<T> {
             .into_iter()
             .map(|payload| Resolved { payload, at })
             .collect()
+    }
+
+    /// Give up on a slot: nothing will ever name its instant.
+    ///
+    /// # ⚠️ Why this exists rather than letting the bound handle it
+    ///
+    /// Both roads end in the same eviction, so the difference is only what the
+    /// counter says — which is the whole difference, since that counter is the
+    /// one `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` reads to size the
+    /// window. A slot nobody can resolve, left to the slot bound, waits out the
+    /// full window and leaves labelled `slot_bound`; the ticket reads "the
+    /// window is too small", raises `MAX_PENDING_SLOTS`, and the number does not
+    /// move. Worse, while it waits it occupies one of the window's places
+    /// against slots that *would* have resolved.
+    ///
+    /// Two callers on the listener's side, both meaning "this slot has no
+    /// instant to give":
+    ///
+    /// - a `SubscribeUpdateBlockMeta` arrived for the slot and its `block_time`
+    ///   was `None` — the case [`Self::on_block_time`] refuses to take, because
+    ///   a signature that accepted an `Option` would invite a default;
+    /// - a slot the listener knows was abandoned (a fork), if it ever learns so.
+    ///
+    /// Calling it for a slot that is not pending is a no-op, and counts nothing.
+    pub(crate) fn on_slot_unresolvable(&mut self, slot: u64) {
+        self.evict(slot, EvictionReason::Unresolvable);
+    }
+
+    /// Forget everything — both tables.
+    ///
+    /// # ⚠️ For the listener: this belongs on reconnect, and only there
+    ///
+    /// The eviction policy is written for a stream that delivers slots in
+    /// order. A `from_slot` replay is the case where that is false: older slots
+    /// arrive *last*, so a buffer still full of the pre-cut backlog would evict
+    /// each replayed arrival at the moment it enters — a reconnection losing
+    /// precisely the data it reconnected to recover, silently but for the
+    /// counter.
+    ///
+    /// What is dropped here is not lost twice over: a payload pending at the
+    /// moment of the cut is either re-delivered by the replay, or was already
+    /// beyond saving. The counter is deliberately **not** touched — this is not
+    /// an eviction that says the bounds are wrong, and mixing it into the same
+    /// number would make every reconnection look like one.
+    pub(crate) fn clear(&mut self) {
+        self.pending.clear();
+        self.pending_count = 0;
+        self.known.clear();
     }
 
     /// Drop the oldest slots until both pending bounds hold.
@@ -234,6 +286,10 @@ impl<T> SlotTimestampBuffer<T> {
             let victim = match reason {
                 EvictionReason::SlotBound => self.pending.first_key_value(),
                 EvictionReason::PayloadBound => self.pending.last_key_value(),
+                // Not a bound: it is a fact about one named slot, and it comes
+                // in through `on_slot_unresolvable`. Reaching it here would
+                // mean a bound was raised without an end to evict from.
+                EvictionReason::Unresolvable => None,
             };
             let Some((&slot, _)) = victim else {
                 // Unreachable while either count is over its bound, but a loop
@@ -241,18 +297,32 @@ impl<T> SlotTimestampBuffer<T> {
                 // become infinite.
                 return;
             };
-            let dropped = self.pending.remove(&slot).unwrap_or_default();
-            self.pending_count -= dropped.len();
-
-            GrpcBufferMetrics::record_evicted(dropped.len(), reason);
-            warn!(
-                slot,
-                payloads = dropped.len(),
-                bound = reason.as_str(),
-                "evicting a slot that never received its block time — its \
-                 payloads cannot be timestamped, so they are dropped"
-            );
+            self.evict(slot, reason);
         }
+    }
+
+    /// Drop one named slot's payloads, counted and logged under `reason`.
+    ///
+    /// The single place a pending slot is destroyed, so the counter cannot be
+    /// forgotten on one path out of two — which is the shape of defect the
+    /// eviction rule above has already produced once.
+    fn evict(&mut self, slot: u64, reason: EvictionReason) {
+        let dropped = self.pending.remove(&slot).unwrap_or_default();
+        if dropped.is_empty() {
+            // Nothing was waiting: there is no loss to count, and counting a
+            // zero would make the metric say a slot was destroyed.
+            return;
+        }
+        self.pending_count -= dropped.len();
+
+        GrpcBufferMetrics::record_evicted(dropped.len(), reason);
+        warn!(
+            slot,
+            payloads = dropped.len(),
+            bound = reason.as_str(),
+            "evicting a slot that never received its block time — its \
+             payloads cannot be timestamped, so they are dropped"
+        );
     }
 
     /// Forget the oldest resolved times once too many are remembered.

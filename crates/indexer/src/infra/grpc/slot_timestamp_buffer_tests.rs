@@ -324,6 +324,118 @@ fn the_bound_that_evicted_is_recorded_with_the_count() {
     );
 }
 
+/// ⚠️ **The label is the whole reason this method exists.** Giving up on a slot
+/// and letting the slot bound expel it destroy the same payloads; only the
+/// counter tells the measuring ticket which of the two happened, and only one of
+/// the two is fixed by raising `MAX_PENDING_SLOTS`.
+#[test]
+fn a_slot_given_up_on_is_counted_under_its_own_reason() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer();
+        buffer.on_payload(10, 1);
+        buffer.on_payload(10, 2);
+        // The block-meta came, and carried no instant.
+        buffer.on_slot_unresolvable(10);
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        counter_for(&snapshot, "unresolvable"),
+        Some(&DebugValue::Counter(2)),
+        "both payloads, under the reason that says raising the window would \
+         change nothing"
+    );
+    assert_eq!(
+        counter_for(&snapshot, "slot_bound"),
+        None,
+        "no bound was reached — three slots fit"
+    );
+}
+
+/// Giving up frees the window it occupied, which is the other half of the point:
+/// a slot nobody can resolve must not spend one of the places meant for slots
+/// that will.
+#[test]
+fn giving_up_on_a_slot_releases_its_place_in_the_window() {
+    let mut buffer = buffer(); // 3 slots
+
+    buffer.on_payload(10, 1);
+    buffer.on_payload(11, 2);
+    buffer.on_payload(12, 3);
+    buffer.on_slot_unresolvable(10);
+
+    // A fourth slot now fits without evicting anything.
+    buffer.on_payload(13, 4);
+
+    assert_eq!(buffer.pending_payloads(), 3);
+    assert_eq!(
+        buffer.on_block_time(11, at(101)).len(),
+        1,
+        "slot 11 survived — it was not pushed out to make room for 13"
+    );
+    assert_eq!(buffer.on_block_time(13, at(103)).len(), 1);
+    assert!(
+        buffer.on_block_time(10, at(100)).is_empty(),
+        "the abandoned slot is gone for good"
+    );
+}
+
+/// ⚠️ A slot that was never pending must count **nothing**. The listener calls
+/// this on every block-meta with no instant, most of which have no payload
+/// waiting; counting those would turn the metric the measuring ticket reads into
+/// a count of empty blocks.
+#[test]
+fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer();
+        buffer.on_slot_unresolvable(42);
+    });
+
+    assert_eq!(
+        counter_for(&snapshotter.snapshot().into_vec(), "unresolvable"),
+        None,
+        "no payload was lost, so nothing may be reported as lost"
+    );
+}
+
+/// ⚠️ **The test that carries the reconnection decision.** After a `from_slot`
+/// replay the old slots arrive last, so a buffer still holding the pre-cut
+/// backlog evicts each replayed arrival as it enters. Clearing is what makes the
+/// replay able to resolve; this asserts both tables go, since a stale `known`
+/// would resolve a replayed payload against a time it no longer has any reason
+/// to trust.
+#[test]
+fn clearing_empties_both_tables() {
+    let mut buffer = buffer();
+
+    buffer.on_payload(10, 1);
+    buffer.on_block_time(11, at(101));
+    assert_eq!(buffer.pending_payloads(), 1);
+    assert_eq!(buffer.known_slots(), 1);
+
+    buffer.clear();
+
+    assert_eq!(buffer.pending_payloads(), 0);
+    assert_eq!(buffer.known_slots(), 0);
+    // And the running total went with it: a count left behind would make the
+    // payload bound evict against a number that no longer describes anything.
+    assert!(
+        buffer.on_payload(11, 2).is_none(),
+        "slot 11's time was forgotten with the rest"
+    );
+    assert_eq!(buffer.pending_payloads(), 1);
+}
+
 /// The counter for one `reason` label, or `None` when it was never touched.
 fn counter_for<'a>(
     snapshot: &'a [(

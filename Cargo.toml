@@ -17,6 +17,10 @@ tokio = { version = "1", features = ["full"] }
 futures-util = "0.3"
 tokio-retry = "0.3"
 tokio-util = "0.7"
+# `ReceiverStream` — the outbound half of the Yellowstone bidirectional stream:
+# the subscription goes out on it, and so does every pong. Already in
+# `Cargo.lock` through tonic, so declaring it directly costs no new crate.
+tokio-stream = "0.1"
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 
 # Solana
@@ -61,6 +65,21 @@ solana-transaction-status-client-types = "4"
 # (ubuntu-latest ships g++), so `docker compose --profile backend up --build`
 # would have been the first thing to break — on a machine, not in a pipeline.
 yellowstone-grpc-proto = { version = "12", default-features = false }
+
+# The gRPC transport under that schema. Declared here only to add TLS: the
+# proto crate already pulls `tonic` with its default features (`router`,
+# `server`, `codegen`), which cannot be turned off from a dependent, and none
+# of those defaults includes TLS.
+#
+# `tls-ring` over `tls-aws-lc`: `ring` is already compiled in this tree
+# (rustls ← reqwest, hyper-rustls), while `aws-lc-sys` builds C with cmake.
+# `tls-webpki-roots` over `tls-native-roots` for the same reason the WebSocket
+# path already uses it — the trust anchors ship with the binary instead of
+# depending on what the runtime image installed.
+tonic = { version = "0.14", default-features = false, features = [
+    "tls-ring",
+    "tls-webpki-roots",
+] }
 
 # Database
 sqlx = { version = "0.8", default-features = false }
