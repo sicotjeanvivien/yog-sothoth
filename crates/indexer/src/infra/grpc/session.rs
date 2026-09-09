@@ -27,7 +27,7 @@
 //! pending at the moment of the cut is either re-delivered by the replay, or
 //! was already beyond saving.
 
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 use yellowstone_grpc_proto::prelude::{
@@ -200,11 +200,7 @@ impl StreamSession {
     }
 
     /// Translate one transaction and hand it downstream.
-    async fn emit(
-        &mut self,
-        pending: PendingTransaction,
-        at: chrono::DateTime<chrono::Utc>,
-    ) -> SessionState {
+    async fn emit(&mut self, pending: PendingTransaction, at: DateTime<Utc>) -> SessionState {
         let transaction = match from_grpc(&pending.update, at) {
             Ok(transaction) => transaction,
             Err(error) => {

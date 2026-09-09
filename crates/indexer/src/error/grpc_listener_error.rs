@@ -12,6 +12,15 @@ use thiserror::Error;
 /// [`yog_bootstrap::SecretUrl::scrub`] — third-party transport errors quote the
 /// URI they were handed, and that URI holds the key whenever the operator put
 /// it there.
+///
+/// ⚠️ **And `scrub` covers one carrier of the two.** A credential riding in a
+/// metadata header has no equivalent, which `yog_bootstrap::Endpoint`'s module
+/// docs state as a known gap rather than an oversight: it would mean guessing
+/// at the shape of an error no client here has been seen to produce, and
+/// guessing at shapes is what the redactor this workspace deleted did. What is
+/// done instead is upstream — the value is marked sensitive, so the layers that
+/// dump request metadata skip it. Written here because this is where somebody
+/// would look for it.
 #[derive(Debug, Error)]
 pub(crate) enum GrpcListenerError {
     #[error(
