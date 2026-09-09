@@ -95,8 +95,18 @@ pub(crate) struct SlotTimestampBuffer<T> {
     /// Running total of `pending`'s values, so the payload bound is a
     /// comparison and not a walk.
     pending_count: usize,
-    /// Times already seen, for the payload that arrives after its block-meta.
-    known: BTreeMap<u64, DateTime<Utc>>,
+    /// What is already settled about a slot, for the payload that arrives
+    /// **after** its block-meta: `Some(at)` when the meta named an instant,
+    /// `None` when it came empty and the slot was given up.
+    ///
+    /// ⚠️ Holding the dead slots in the *same* table is what keeps the reverse
+    /// order honest in both directions. Found in review on 9 September 2026:
+    /// with only the resolved times here, a transaction arriving after its
+    /// slot's empty block-meta was buffered again — it took a place in the
+    /// window and left counted `slot_bound`, which is exactly the mislabel
+    /// [`EvictionReason::Unresolvable`] was added to prevent. One table also
+    /// means one bound and one eviction rule, rather than a third of each.
+    known: BTreeMap<u64, Option<DateTime<Utc>>>,
     max_pending_slots: usize,
     max_pending_payloads: usize,
     max_known_slots: usize,
@@ -137,8 +147,21 @@ impl<T> SlotTimestampBuffer<T> {
     /// it must not do is read `None` as "safely waiting". Narrowed after review
     /// on 8 September 2026, where it claimed the stronger thing.
     pub(crate) fn on_payload(&mut self, slot: u64, payload: T) -> Option<Resolved<T>> {
-        if let Some(at) = self.known.get(&slot) {
-            return Some(Resolved { payload, at: *at });
+        match self.known.get(&slot) {
+            Some(Some(at)) => return Some(Resolved { payload, at: *at }),
+            // The slot's one chance to be named came and went empty. Waiting
+            // for a second block-meta that will not come would spend a place in
+            // the window and end in an eviction blamed on the window's size.
+            Some(None) => {
+                GrpcBufferMetrics::record_evicted(1, EvictionReason::Unresolvable);
+                warn!(
+                    slot,
+                    "a payload arrived for a slot already given up — its block \
+                     time will never come, so it is dropped"
+                );
+                return None;
+            }
+            None => {}
         }
 
         self.pending.entry(slot).or_default().push(payload);
@@ -172,7 +195,7 @@ impl<T> SlotTimestampBuffer<T> {
         let released = self.pending.remove(&slot).unwrap_or_default();
         self.pending_count -= released.len();
 
-        self.known.insert(slot, at);
+        self.known.insert(slot, Some(at));
         self.enforce_known_bound();
 
         released
@@ -205,6 +228,11 @@ impl<T> SlotTimestampBuffer<T> {
     /// Calling it for a slot that is not pending is a no-op, and counts nothing.
     pub(crate) fn on_slot_unresolvable(&mut self, slot: u64) {
         self.evict(slot, EvictionReason::Unresolvable);
+        // Remembered as dead, not merely emptied: a payload for this slot can
+        // still arrive — that is the whole reason `known` exists — and it must
+        // meet the answer straight away rather than wait out the window.
+        self.known.insert(slot, None);
+        self.enforce_known_bound();
     }
 
     /// Drop the oldest slots until both pending bounds hold.
@@ -331,9 +359,19 @@ impl<T> SlotTimestampBuffer<T> {
         self.pending_count
     }
 
-    /// How many slot times are remembered.
+    /// How many slot outcomes are remembered — instants and given-up slots
+    /// alike, since they share the table and its bound.
     pub(crate) fn known_slots(&self) -> usize {
         self.known.len()
+    }
+
+    /// The oldest slot still waiting for an instant, if any.
+    ///
+    /// For the caller that has to say **where to resume** after a break: these
+    /// payloads die with the buffer, so this is the oldest slot the connection
+    /// did not finish. See `session::StreamSession::resume_from`.
+    pub(crate) fn oldest_pending_slot(&self) -> Option<u64> {
+        self.pending.first_key_value().map(|(slot, _)| *slot)
     }
 }
 

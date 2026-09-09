@@ -23,12 +23,19 @@
 //! but for the counter. A buffer that cannot outlive its subscription cannot
 //! have that bug.
 //!
-//! What is dropped with the old session is not lost twice over: a payload
-//! pending at the moment of the cut is either re-delivered by the replay, or
-//! was already beyond saving.
+//! What is dropped with the old session is not lost twice over — **but only
+//! because [`StreamSession::resume_from`] is written to make that true.** A
+//! payload pending at the moment of the cut is re-delivered by the replay
+//! precisely because the resume point is the oldest slot this session did not
+//! finish, and *that* is the half the first version got wrong: it resumed one
+//! past the highest slot it had seen, which on any mid-block break skipped
+//! exactly the pending payloads this paragraph promises are safe. The
+//! sentence was true of the design and false of the code, which is the worst
+//! of the three possibilities.
 
 use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use yellowstone_grpc_proto::prelude::{
     SubscribeRequest, SubscribeRequestPing, SubscribeUpdate, SubscribeUpdateBlockMeta,
@@ -43,6 +50,19 @@ use super::{
     subscription::protocol_of,
     transaction_adapter::from_grpc,
 };
+
+/// How many slots a reconnection asks for again, on top of what this session
+/// did not finish.
+///
+/// ⚠️ A **deliberate overlap**, not a margin of error. A block-meta closing slot
+/// *N* does not promise that all of *N*'s transactions have arrived — the
+/// reverse order is a case the buffer exists to handle — so the closed mark can
+/// itself be one short. Re-asking is cheap and exact: the unique key of every
+/// event table is `(signature, event_index, timestamp)`, so a row that comes
+/// twice is skipped and counted, while a row that never comes leaves a hole
+/// nothing will notice. Two is what the reference client uses, for the reason
+/// its own comment gives.
+const REWIND_SLOTS: u64 = 2;
 
 /// A transaction waiting for its slot's block time.
 ///
@@ -63,6 +83,15 @@ pub(super) enum SessionState {
     /// retrying either, which is why the listener treats this as a clean stop
     /// rather than a failure.
     DownstreamClosed,
+    /// Shutdown was requested **while waiting** for a full consumer.
+    ///
+    /// ⚠️ This variant exists because the wait happens inside `handle`, which
+    /// the listener drives from the *body* of a `select!` arm and not as a
+    /// branch: while it is parked, `shutdown.cancelled()` is not being polled.
+    /// A consumer that stalls without dropping its receiver would otherwise
+    /// make the listener ignore graceful shutdown for as long as the stall
+    /// lasts. Found in review, 9 September 2026.
+    ShutdownRequested,
 }
 
 /// The state one subscription accumulates.
@@ -74,9 +103,16 @@ pub(super) struct StreamSession {
     /// The request this session is subscribed with — resent, unchanged, as the
     /// body of a ping answer. See [`Self::answer_ping`].
     request: SubscribeRequest,
-    /// The highest slot any update has mentioned, which is where a
-    /// reconnection asks to resume from.
-    highest_slot: Option<u64>,
+    /// The highest slot whose block-meta has arrived — the only slots this
+    /// session can claim to have finished. Advanced by block-metas alone: a
+    /// transaction update names a slot that is still in flight.
+    highest_meta_slot: Option<u64>,
+    /// Whether anything at all came off the stream. Not a slot: a session that
+    /// received only a ping delivered nothing, and the difference decides
+    /// whether a reconnection counts against the retry budget.
+    received_anything: bool,
+    /// The cancellation token, so a wait on a full consumer is interruptible.
+    shutdown: CancellationToken,
 }
 
 impl StreamSession {
@@ -84,19 +120,64 @@ impl StreamSession {
         downstream: mpsc::Sender<IngestedTransaction>,
         outbound: mpsc::Sender<SubscribeRequest>,
         request: SubscribeRequest,
+        shutdown: CancellationToken,
     ) -> Self {
         Self {
             buffer: SlotTimestampBuffer::new(),
             downstream,
             outbound,
             request,
-            highest_slot: None,
+            highest_meta_slot: None,
+            received_anything: false,
+            shutdown,
         }
     }
 
-    /// Where a reconnection should resume from, or `None` if nothing arrived.
-    pub(super) fn highest_slot(&self) -> Option<u64> {
-        self.highest_slot
+    /// Whether this session got anything off the stream at all.
+    ///
+    /// What the listener does with it: a connection that opened and closed
+    /// having delivered nothing is a **failing attempt**, not the churn of a
+    /// long-lived stream, so it counts against the retry budget. Without this
+    /// distinction a server that accepts `subscribe` and closes at once — an
+    /// exhausted quota, a token refused at stream level — is retried for ever
+    /// at one attempt per second, and the budget never fires.
+    pub(super) fn received_anything(&self) -> bool {
+        self.received_anything
+    }
+
+    /// Where a reconnection should resume from, or `None` when nothing arrived.
+    ///
+    /// # ⚠️ Not "the highest slot seen", which is what this was and which lost data
+    ///
+    /// A transaction update names a slot that is **still in flight**: its
+    /// block-meta has not arrived, its payloads are sitting in the buffer, and
+    /// the buffer dies with this session. Resuming one past that slot therefore
+    /// dropped, on every mid-block break, precisely the transactions the break
+    /// destroyed — while the module doc above claimed a replay would bring them
+    /// back. Found in review, 9 September 2026.
+    ///
+    /// So the mark is the oldest slot this session did **not finish**: the
+    /// oldest one still waiting in the buffer if there is one, and otherwise the
+    /// last slot a block-meta closed.
+    ///
+    /// # ⚠️ And it is rewound, because "closed" is not "complete"
+    ///
+    /// A block-meta does not promise that its slot's transactions have all
+    /// arrived — the reverse order is a case this buffer exists to handle. So
+    /// even the closed mark can be one short. [`REWIND_SLOTS`] buys that back at
+    /// the only price available, which is duplicates: every event table's unique
+    /// key is `(signature, event_index, timestamp)` and a re-inserted row is
+    /// skipped and counted. **Overlapping costs a counter; a gap costs rows that
+    /// nothing will ever notice are missing.** The reference client makes the
+    /// same trade with the same constant, for the reason its own comment gives:
+    /// "block_meta can arrive late and events within a slot arrive in random
+    /// order".
+    pub(super) fn resume_from(&self) -> Option<u64> {
+        let unfinished = self
+            .buffer
+            .oldest_pending_slot()
+            .or(self.highest_meta_slot)?;
+        Some(unfinished.saturating_sub(REWIND_SLOTS))
     }
 
     /// Take one update off the stream.
@@ -104,6 +185,7 @@ impl StreamSession {
     /// Every failure below is per-update: counted, logged, stepped over. The
     /// one thing that ends a session is the consumer disappearing.
     pub(super) async fn handle(&mut self, update: SubscribeUpdate) -> SessionState {
+        self.received_anything = true;
         let protocol = protocol_of(&update.filters);
 
         match update.update_oneof {
@@ -141,7 +223,6 @@ impl StreamSession {
         update: SubscribeUpdateTransaction,
     ) -> SessionState {
         let slot = update.slot;
-        self.see_slot(slot);
 
         // A transaction that matched no protocol filter cannot be routed: the
         // pipeline is per-protocol all the way down. Dropped and counted, since
@@ -170,7 +251,7 @@ impl StreamSession {
 
     async fn on_block_meta(&mut self, meta: SubscribeUpdateBlockMeta) -> SessionState {
         let slot = meta.slot;
-        self.see_slot(slot);
+        self.see_meta_slot(slot);
 
         // ⚠️ `block_time` is optional on the wire, and there is **no** substitute
         // for it: not the receive time, not the neighbouring slot's, not
@@ -192,8 +273,12 @@ impl StreamSession {
         };
 
         for resolved in self.buffer.on_block_time(slot, at) {
-            if self.emit(resolved.payload, resolved.at).await == SessionState::DownstreamClosed {
-                return SessionState::DownstreamClosed;
+            match self.emit(resolved.payload, resolved.at).await {
+                SessionState::Open => {}
+                // Either end of the session: whatever is still in this batch
+                // dies with the buffer, and `resume_from` is what asks for it
+                // again.
+                ended => return ended,
             }
         }
         SessionState::Open
@@ -232,12 +317,18 @@ impl StreamSession {
             Err(mpsc::error::TrySendError::Full(ingested)) => {
                 GrpcListenerMetrics::record_downstream_full();
                 debug!("downstream is full — slowing the stream to its speed");
-                match self.downstream.send(ingested).await {
-                    Ok(()) => {
-                        GrpcListenerMetrics::record_emitted();
-                        SessionState::Open
-                    }
-                    Err(_) => SessionState::DownstreamClosed,
+                // The wait is bounded by the shutdown token and by nothing else:
+                // back-pressure must survive a slow consumer, not a stop
+                // request.
+                tokio::select! {
+                    sent = self.downstream.send(ingested) => match sent {
+                        Ok(()) => {
+                            GrpcListenerMetrics::record_emitted();
+                            SessionState::Open
+                        }
+                        Err(_) => SessionState::DownstreamClosed,
+                    },
+                    _ = self.shutdown.cancelled() => SessionState::ShutdownRequested,
                 }
             }
             Err(mpsc::error::TrySendError::Closed(_)) => SessionState::DownstreamClosed,
@@ -264,14 +355,26 @@ impl StreamSession {
     async fn answer_ping(&mut self) {
         let mut request = self.request.clone();
         request.ping = Some(SubscribeRequestPing { id: 1 });
+        // ⚠️ **Without `from_slot`**, and this is the half the first version
+        // missed. Under the reading where a request replaces the subscription,
+        // resending one that still carries `from_slot: Some(n)` re-issues the
+        // replay on **every** ping — a fixed-interval message — so the same
+        // slots would be streamed round and round, over a connection billed by
+        // the byte. Dropping it is right under both readings: the subscription
+        // in force is already past that point. Found in review, 9 September 2026.
+        request.from_slot = None;
 
         if self.outbound.send(request).await.is_err() {
             debug!("could not answer a ping — the outbound stream is gone");
         }
     }
 
-    fn see_slot(&mut self, slot: u64) {
-        self.highest_slot = Some(self.highest_slot.map_or(slot, |seen| seen.max(slot)));
+    /// Record that a block-meta closed a slot.
+    ///
+    /// Only block-metas move this mark — see [`Self::resume_from`] for why a
+    /// transaction's slot is not evidence that the slot is finished.
+    fn see_meta_slot(&mut self, slot: u64) {
+        self.highest_meta_slot = Some(self.highest_meta_slot.map_or(slot, |seen| seen.max(slot)));
     }
 }
 

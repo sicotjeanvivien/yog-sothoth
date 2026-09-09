@@ -408,6 +408,60 @@ fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
     );
 }
 
+/// ⚠️ **A slot given up must stay given up, including for a payload that has
+/// not arrived yet.** The reverse order is the case `known` exists for, and it
+/// applies to a dead slot exactly as it does to a resolved one: without this,
+/// a transaction arriving after its empty block-meta is buffered again, takes a
+/// place in the window, and leaves counted `slot_bound` — the mislabel the
+/// `Unresolvable` reason was introduced to prevent, reappearing one path over.
+/// Found in review, 9 September 2026.
+#[test]
+fn a_payload_arriving_after_its_slot_was_given_up_is_dropped_at_once() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let mut buffer = buffer();
+    metrics::with_local_recorder(&recorder, || {
+        // The block-meta came empty before any payload for the slot.
+        buffer.on_slot_unresolvable(10);
+        assert!(buffer.on_payload(10, 1).is_none(), "there is no instant");
+    });
+
+    assert_eq!(
+        buffer.pending_payloads(),
+        0,
+        "it must not be buffered — it would wait out the window and then be \
+         blamed on the window"
+    );
+    assert_eq!(
+        counter_for(&snapshotter.snapshot().into_vec(), "unresolvable"),
+        Some(&DebugValue::Counter(1)),
+        "and the loss is counted under the reason that names its cause"
+    );
+}
+
+/// Where a break should resume from, seen from the buffer: the oldest slot
+/// whose payloads are still waiting, because those die with it.
+#[test]
+fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
+    let mut buffer = buffer();
+
+    assert_eq!(buffer.oldest_pending_slot(), None, "nothing is waiting");
+
+    buffer.on_payload(12, 1);
+    buffer.on_payload(11, 2);
+    assert_eq!(
+        buffer.oldest_pending_slot(),
+        Some(11),
+        "oldest by slot, not by arrival — the replay has to cover both"
+    );
+
+    buffer.on_block_time(11, at(100));
+    assert_eq!(buffer.oldest_pending_slot(), Some(12));
+}
+
 /// The counter for one `reason` label, or `None` when it was never touched.
 fn counter_for<'a>(
     snapshot: &'a [(

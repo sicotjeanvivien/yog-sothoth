@@ -23,6 +23,12 @@
 //! unproven**. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they
 //! meet a server. What *is* testable was deliberately moved out: the request
 //! into `subscription`, the meaning of each update into `session`.
+//!
+//! That split is also why the two facts the retry rules turn on —
+//! `StreamSession::received_anything` and `StreamSession::resume_from` — are
+//! computed and tested next door. What stays here and is read rather than
+//! exercised is the rule itself: which of them resets the budget, and which
+//! charges it.
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
@@ -174,19 +180,56 @@ impl GrpcListener {
                     info!("downstream channel closed — gRPC listener stopping");
                     return Ok(());
                 }
-                Attempt::StreamClosed { highest_slot } => {
+                Attempt::StreamClosed {
+                    delivered: true,
+                    resume_from: mark,
+                } => {
                     // The connection lived long enough to deliver. That is churn,
                     // not a failing provider, so the budget starts over — the
                     // same reading `SubscriptionWorker` makes of a closed stream.
                     warn!(attempt, "gRPC stream closed — resubscribing");
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
-                    resume_from = highest_slot.map(|slot| slot + 1);
+                    resume_from = mark;
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
                 }
+
+                // ⚠️ **A stream that opened and closed having delivered nothing
+                // is a failing attempt, not churn**, and the difference is the
+                // whole retry budget. `subscribe` succeeding says very little:
+                // an exhausted quota, a `from_slot` past the server's retention
+                // or a token refused at stream level rather than at the
+                // handshake all land here. Resetting the counter on them
+                // redials a bandwidth-billed provider once a second for ever —
+                // `max_attempts` never reached, no shutdown, one `warn!` per
+                // second as the only trace. Found in review, 9 September 2026.
+                // `SubscriptionWorker` resets unconditionally because it has no
+                // such signal; this path has one.
+                Attempt::StreamClosed {
+                    delivered: false,
+                    resume_from: mark,
+                } => {
+                    resume_from = mark;
+                    warn!(
+                        attempt,
+                        max = self.max_attempts,
+                        "gRPC stream closed without delivering anything"
+                    );
+
+                    if attempt >= self.max_attempts {
+                        return Err(GrpcListenerError::RetriesExhausted {
+                            attempts: attempt,
+                            last_error: "stream closed without delivering anything".to_string(),
+                        });
+                    }
+
+                    sleep_or_cancel(Duration::from_secs(backoff), &shutdown).await;
+                    backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
+                }
+
                 Attempt::Failed {
                     error,
-                    highest_slot,
+                    resume_from: mark,
                 } => {
                     warn!(
                         attempt,
@@ -216,7 +259,7 @@ impl GrpcListener {
                     // the same reason: it is right until a provider rewords its
                     // message. Kept as is, and it is the first thing a real
                     // stream should be watched for.
-                    resume_from = highest_slot.map(|slot| slot + 1);
+                    resume_from = mark;
 
                     if attempt >= self.max_attempts {
                         return Err(GrpcListenerError::RetriesExhausted {
@@ -291,7 +334,7 @@ impl GrpcListener {
             Err(e) => {
                 return Attempt::Failed {
                     error: url.scrub(&format!("connect: {e}")),
-                    highest_slot: None,
+                    resume_from: None,
                 };
             }
         };
@@ -307,7 +350,7 @@ impl GrpcListener {
         if outbound_tx.send(request.clone()).await.is_err() {
             return Attempt::Failed {
                 error: "outbound stream closed before the subscription was sent".to_string(),
-                highest_slot: None,
+                resume_from: None,
             };
         }
 
@@ -318,7 +361,7 @@ impl GrpcListener {
                     // A `Status` carries the server's message, which can quote
                     // the request — scrubbed like every other third-party string.
                     error: url.scrub(&format!("subscribe: {status}")),
-                    highest_slot: None,
+                    resume_from: None,
                 };
             }
         };
@@ -328,7 +371,8 @@ impl GrpcListener {
             "subscribed to the Yellowstone stream"
         );
 
-        let mut session = StreamSession::new(downstream.clone(), outbound_tx, request);
+        let mut session =
+            StreamSession::new(downstream.clone(), outbound_tx, request, shutdown.clone());
 
         loop {
             tokio::select! {
@@ -337,17 +381,23 @@ impl GrpcListener {
                 _ = shutdown.cancelled() => return Attempt::ShutdownRequested,
 
                 message = stream.message() => match message {
-                    Ok(Some(update)) => {
-                        if session.handle(update).await == SessionState::DownstreamClosed {
-                            return Attempt::DownstreamClosed;
-                        }
-                    }
+                    Ok(Some(update)) => match session.handle(update).await {
+                        SessionState::Open => {}
+                        SessionState::DownstreamClosed => return Attempt::DownstreamClosed,
+                        // The session was parked on a full consumer when the
+                        // token fired. This arm is what makes that wait
+                        // interruptible: `handle` runs in the *body* of this
+                        // arm, not as a `select!` branch, so nothing here polls
+                        // the token while it is inside.
+                        SessionState::ShutdownRequested => return Attempt::ShutdownRequested,
+                    },
                     Ok(None) => return Attempt::StreamClosed {
-                        highest_slot: session.highest_slot(),
+                        delivered: session.received_anything(),
+                        resume_from: session.resume_from(),
                     },
                     Err(status) => return Attempt::Failed {
                         error: url.scrub(&format!("stream: {status}")),
-                        highest_slot: session.highest_slot(),
+                        resume_from: session.resume_from(),
                     },
                 },
             }
@@ -357,18 +407,21 @@ impl GrpcListener {
 
 /// How one connection ended.
 ///
-/// `highest_slot` is what a resubscription resumes from, and it is `None`
-/// exactly when the attempt produced nothing — which is also what tells the
-/// caller a replay was refused rather than exhausted.
+/// Both ending variants carry the same two facts, and the listener needs both:
+/// `resume_from` is where to pick up (see `StreamSession::resume_from`), and
+/// `delivered` says whether this attempt got anything off the stream at all —
+/// which is what separates the churn of a long-lived connection from a server
+/// that accepts a subscription and closes it at once.
 enum Attempt {
     ShutdownRequested,
     DownstreamClosed,
     StreamClosed {
-        highest_slot: Option<u64>,
+        delivered: bool,
+        resume_from: Option<u64>,
     },
     Failed {
         error: String,
-        highest_slot: Option<u64>,
+        resume_from: Option<u64>,
     },
 }
 

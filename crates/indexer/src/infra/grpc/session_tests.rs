@@ -11,6 +11,7 @@
 use super::*;
 
 use chrono::{DateTime, Utc};
+use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::{
     Message, SubscribeUpdatePing, SubscribeUpdatePong, SubscribeUpdateTransactionInfo, Transaction,
     TransactionStatusMeta, UnixTimestamp,
@@ -84,14 +85,33 @@ fn session(
     mpsc::Receiver<IngestedTransaction>,
     mpsc::Receiver<SubscribeRequest>,
 ) {
+    session_with(capacity, CancellationToken::new())
+}
+
+/// The same, with a token the test can fire — for the one case where the
+/// session is parked and shutdown has to reach it.
+fn session_with(
+    capacity: usize,
+    shutdown: CancellationToken,
+) -> (
+    StreamSession,
+    mpsc::Receiver<IngestedTransaction>,
+    mpsc::Receiver<SubscribeRequest>,
+) {
     let (downstream_tx, downstream_rx) = mpsc::channel(capacity);
     let (outbound_tx, outbound_rx) = mpsc::channel(4);
+    // A request with both halves that matter to the ping answer: a filter,
+    // which must survive it, and a `from_slot`, which must not.
     let request = SubscribeRequest {
         from_slot: Some(99),
+        transactions: std::collections::HashMap::from([(
+            PROTOCOL.as_str().to_string(),
+            Default::default(),
+        )]),
         ..Default::default()
     };
     (
-        StreamSession::new(downstream_tx, outbound_tx, request),
+        StreamSession::new(downstream_tx, outbound_tx, request, shutdown),
         downstream_rx,
         outbound_rx,
     )
@@ -324,7 +344,12 @@ async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
         .expect("the second waited for room; dropping it here is the defect");
     assert_eq!(second.transaction.position.slot, 10);
 
-    assert_eq!(handling.await.expect("no panic").highest_slot(), Some(10));
+    assert_eq!(
+        handling.await.expect("no panic").resume_from(),
+        Some(10 - 2),
+        "the slot was never closed by a block-meta, so it is where a \
+         reconnection picks up — rewound"
+    );
 }
 
 /// Receive with a deadline: the point of the test above is that a transaction
@@ -353,14 +378,23 @@ async fn a_closed_downstream_ends_the_session() {
 
 // ── keep-alive ──────────────────────────────────────────────────────
 
-/// ⚠️ **A ping is answered with the subscription itself, not with a bare ping.**
-/// The proto allows a request to carry a `ping`, and a request is also what
-/// describes the subscription — so a ping-only request is either a keep-alive or
-/// an unsubscribe-everything, and no reachable endpoint can say which. Resending
-/// the request already in force is correct under both readings, and this test is
-/// what keeps it that way.
+/// ⚠️ **A ping is answered with the subscription itself, minus its replay.**
+///
+/// Two decisions in one message, and each is invisible when wrong.
+///
+/// **The filters are resent** because the proto allows a request to carry a
+/// `ping` and a request is also what describes the subscription — so a
+/// ping-only request is a keep-alive under one reading and an
+/// unsubscribe-everything under the other, and no reachable endpoint can say
+/// which. Resending what is already in force is correct under both.
+///
+/// **`from_slot` is not**, and that half was missing until review on
+/// 9 September 2026. Under the same reading that makes resending the filters
+/// necessary, a request still carrying `from_slot: Some(n)` re-issues the
+/// replay — on every ping, a fixed-interval message — so the same slots would
+/// stream round and round over a connection billed by the byte.
 #[tokio::test]
-async fn a_ping_is_answered_with_the_subscription_unchanged() {
+async fn a_ping_is_answered_with_the_subscription_minus_its_replay() {
     let (mut session, _downstream, mut outbound) = session(4);
 
     session
@@ -369,11 +403,15 @@ async fn a_ping_is_answered_with_the_subscription_unchanged() {
 
     let answer = outbound.try_recv().expect("a ping is answered");
     assert!(answer.ping.is_some(), "it must be recognisable as a ping");
+    assert!(
+        answer.transactions.contains_key(PROTOCOL.as_str()),
+        "the subscription in force must be carried — an emptied request could \
+         be read as unsubscribing from everything"
+    );
     assert_eq!(
-        answer.from_slot,
-        Some(99),
-        "and it must carry the same subscription — an emptied request could be \
-         read as unsubscribing from everything"
+        answer.from_slot, None,
+        "and the replay must not ride along: repeated every ping, it would \
+         stream the same slots for the life of the connection"
     );
 }
 
@@ -401,24 +439,96 @@ async fn a_pong_changes_nothing() {
 
 // ── resuming ────────────────────────────────────────────────────────
 
-/// ⚠️ Where a reconnection resumes from is the **highest** slot seen, from
-/// either half of the stream — not the last one to arrive. Updates are not
-/// globally ordered between the two subscriptions, so taking the latest arrival
-/// would hand `from_slot` a slot already passed, and re-ask for data that was
-/// already written.
+/// ⚠️ **Where a reconnection resumes from is the oldest slot this session did
+/// not finish — not the highest slot it saw.** The first version took the
+/// highest slot of *any* update, transaction updates included, and that lost
+/// data on every mid-block break: a transaction names a slot still in flight,
+/// its payloads sit in the buffer, and the buffer dies with the session. Asking
+/// for `M+1` then skipped exactly what the break destroyed. Found in review,
+/// 9 September 2026, and this test is the shape of that defect.
 #[tokio::test]
-async fn the_resume_point_is_the_highest_slot_seen_from_either_half() {
+async fn the_resume_point_is_the_oldest_slot_the_session_did_not_finish() {
     let (mut session, _downstream, _outbound) = session(4);
 
-    assert_eq!(session.highest_slot(), None, "nothing arrived yet");
+    assert_eq!(session.resume_from(), None, "nothing arrived yet");
 
+    // Slot 10 is closed by its block-meta: finished.
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+    assert_eq!(
+        session.resume_from(),
+        Some(10 - REWIND_SLOTS),
+        "the last closed slot, rewound — a block-meta does not promise its \
+         slot's transactions have all arrived"
+    );
+
+    // Slot 12 arrives and is still in flight when the break comes.
     session.handle(transaction(12, &[PROTOCOL.as_str()])).await;
-    assert_eq!(session.highest_slot(), Some(12));
+    assert_eq!(
+        session.resume_from(),
+        Some(12 - REWIND_SLOTS),
+        "slot 12's payloads die with this session, so the replay must cover \
+         them — asking for 13 would drop them silently"
+    );
+}
 
-    // A block-meta for an earlier slot must not move the mark backwards.
-    session.handle(block_meta(11, Some(1_700_000_000))).await;
-    assert_eq!(session.highest_slot(), Some(12));
+/// The rewind must not underflow near genesis, which is only reachable in a
+/// test but is the kind of arithmetic that panics in release-mode debug builds
+/// and wraps in release.
+#[tokio::test]
+async fn the_rewind_saturates_instead_of_wrapping() {
+    let (mut session, _downstream, _outbound) = session(4);
 
-    session.handle(block_meta(13, Some(1_700_000_001))).await;
-    assert_eq!(session.highest_slot(), Some(13));
+    session.handle(transaction(1, &[PROTOCOL.as_str()])).await;
+
+    assert_eq!(session.resume_from(), Some(0));
+}
+
+/// ⚠️ **What separates churn from a provider refusing us.** A stream that opens
+/// and closes having delivered nothing must count against the retry budget; one
+/// that delivered must not. The listener reads this flag to decide, and without
+/// it a server that accepts `subscribe` and closes at once is redialled once a
+/// second for ever.
+#[tokio::test]
+async fn a_session_says_whether_anything_arrived_at_all() {
+    let (mut session, _downstream, _outbound) = session(4);
+
+    assert!(!session.received_anything(), "nothing came off the stream");
+
+    // Even a ping counts: the server spoke, so the connection is not the
+    // problem — this is the churn case, not the refusal case.
+    session
+        .handle(update(&[], UpdateOneof::Ping(SubscribeUpdatePing {})))
+        .await;
+
+    assert!(session.received_anything());
+}
+
+/// ⚠️ **The back-pressure wait must not swallow a shutdown.** `handle` is driven
+/// from the body of the listener's `select!` arm, so while it is parked on a
+/// full consumer nothing else polls the cancellation token. A consumer that
+/// stalls without dropping its receiver would otherwise make the process ignore
+/// a stop request for as long as the stall lasts.
+#[tokio::test]
+async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
+    let shutdown = CancellationToken::new();
+    // Room for one, two payloads in the slot: the second parks.
+    let (mut session, _downstream, _outbound) = session_with(1, shutdown.clone());
+
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+
+    let handling =
+        tokio::spawn(async move { session.handle(block_meta(10, Some(1_700_000_000))).await });
+
+    // Nobody consumes; the stop request is what has to get through.
+    shutdown.cancel();
+
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), handling)
+            .await
+            .expect("the wait must end when the token fires")
+            .expect("no panic"),
+        SessionState::ShutdownRequested
+    );
 }
