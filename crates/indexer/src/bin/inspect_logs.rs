@@ -39,22 +39,22 @@ async fn main() -> Result<()> {
     dotenv().ok();
     // Read the stream endpoint from env — same pair, and same type, as the
     // main indexer.
-    //
-    // ⚠️ But **not** the same door, and the difference is a limitation worth
-    // naming rather than a choice: the indexer reads this endpoint through
-    // `required_endpoint_with_header`, because both of its listeners send the
-    // header (`infra::credential`). This helper cannot — a `src/bin/*.rs` is
-    // its own crate root and cannot reach that module — and duplicating the ten
-    // lines here would be the second copy of a rule the workspace keeps in one
-    // place. So it stays on `required_endpoint`, and an `INGEST_STREAM`
-    // configured with a header pair makes **this binary** refuse to start while
-    // the indexer runs fine. In practice that pair means a gRPC endpoint, which
-    // `logsSubscribe` could not have talked to anyway; the refusal names the
-    // variables.
     // The wrapper says which endpoint, never which variable: the three ways
     // this call fails each name their own — a missing URL, a `{key}` without
     // its key, a key without its `{key}` — and asserting one of them here
     // would put a wrong variable name above the right one.
+    //
+    // ⚠️ But **not the same door**, and that is a limitation worth naming
+    // rather than a choice. The indexer reads this endpoint through
+    // `required_endpoint_with_header`, because both of its listeners send the
+    // header it may carry (`infra::credential`). This helper cannot reach that
+    // module — a `src/bin/*.rs` is its own crate root — and copying its ten
+    // lines here would be the second definition of a rule the workspace keeps
+    // in one place. So it stays on `required_endpoint`, which **refuses** a
+    // header pair: with one configured, this binary will not start while the
+    // indexer runs fine. In practice that pair means a gRPC endpoint, which
+    // `logsSubscribe` could not have talked to anyway, and the refusal names
+    // the variables rather than connecting without the credential.
     let stream = yog_bootstrap::required_endpoint("INGEST_STREAM")
         .context("the INGEST_STREAM endpoint is misconfigured — see .env.example")?;
 
