@@ -45,11 +45,14 @@ use yog_core::domain::Protocol;
 use crate::{
     bootstrap::IngestScope,
     error::GrpcListenerError,
-    infra::grpc::{
-        ingested_transaction::IngestedTransaction,
-        interceptor::CredentialInterceptor,
-        session::{SessionState, StreamSession},
-        subscription::build_request,
+    infra::{
+        Credential,
+        grpc::{
+            ingested_transaction::IngestedTransaction,
+            interceptor::CredentialInterceptor,
+            session::{SessionState, StreamSession},
+            subscription::build_request,
+        },
     },
 };
 
@@ -139,13 +142,14 @@ impl GrpcListener {
         downstream: mpsc::Sender<IngestedTransaction>,
         shutdown: CancellationToken,
     ) -> Result<(), GrpcListenerError> {
-        let interceptor = CredentialInterceptor::new(self.endpoint.header())?;
+        let credential = Credential::new(self.endpoint.header())?;
+        let interceptor = CredentialInterceptor::new(&credential)?;
         let channel = self.channel_endpoint()?;
         let request = self.subscribe_request(None).await?;
 
         info!(
             endpoint = %self.endpoint,
-            header = interceptor.header_name().unwrap_or("none"),
+            header = credential.name().unwrap_or("none"),
             filters = request.transactions.len(),
             accounts = request
                 .transactions

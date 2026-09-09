@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::error::CredentialError;
+
 /// What can stop the Yellowstone listener.
 ///
 /// Only loop-level failures are here, per the crate's skip-and-log rule: a
@@ -23,19 +25,10 @@ use thiserror::Error;
 /// would look for it.
 #[derive(Debug, Error)]
 pub(crate) enum GrpcListenerError {
-    #[error(
-        "`INGEST_STREAM_HEADER_NAME` is not a valid header name: `{name}` — \
-         it must be a token, e.g. `x-token`"
-    )]
-    InvalidHeaderName { name: String },
-
-    /// The value is **not** quoted: it is the credential.
-    #[error(
-        "the value assembled for header `{name}` is not a valid header value — \
-         check `INGEST_STREAM_HEADER_VALUE` and `INGEST_STREAM_KEY` (neither is \
-         printed here)"
-    )]
-    InvalidHeaderValue { name: String },
+    /// The configured header could not be validated — one rule, one type, see
+    /// [`CredentialError`].
+    #[error(transparent)]
+    Credential(#[from] CredentialError),
 
     /// The same refusal `RpcListenerError::NoSubscriptionTargets` makes, for
     /// the same reason: a stream that subscribes to nothing opens, succeeds,

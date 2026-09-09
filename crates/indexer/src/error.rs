@@ -1,3 +1,4 @@
+mod credential_error;
 mod database_error;
 mod dispatcher_error;
 mod grpc_listener_error;
@@ -5,6 +6,7 @@ mod indexer_worker_errors;
 mod rpc_listener_error;
 mod subscription_worker_error;
 
+pub(crate) use credential_error::CredentialError;
 pub(crate) use database_error::DatabaseError;
 pub(crate) use dispatcher_error::DispatcherError;
 pub(crate) use grpc_listener_error::GrpcListenerError;

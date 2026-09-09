@@ -196,7 +196,7 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 /// Create the RPC WebSocket listener with its watched protocols.
 fn init_listener(config: &Config) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(
-        config.ingest_stream.url(),
+        config.ingest_stream.clone(),
         config.worker_max_retries,
         config.scope,
     ))

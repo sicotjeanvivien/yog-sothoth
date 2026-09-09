@@ -19,6 +19,7 @@ indexer/src/
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
 │                            subscription supervisor
+├── infra/credential.rs    ← the endpoint's header, validated once, for both paths
 ├── infra/grpc/            ← Yellowstone: listener, subscription, session,
 │                            credential interceptor, protobuf adapter,
 │                            slot/time buffer (nothing selects it yet)
@@ -69,6 +70,14 @@ Filling it is this crate's job, one module per source:
   a **ceiling, not an estimate**: the real lag is unmeasured until a live
   stream exists, and `yog_indexer_grpc_untimestamped_transactions_total` is what
   will say whether the ceiling was generous.
+
+- `infra/credential.rs` is **shared by both paths**: it validates the header an
+  endpoint declares, once, and hands it to whichever client will carry it — gRPC
+  request metadata, or a WebSocket handshake. What decides whether there is a
+  header is `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE` and nothing else; a
+  version that decided on `INGEST_SOURCE` was removed on review, since a
+  transport has no business answering a credential question and the belief it
+  rested on — that `PubsubClient` cannot send a header — is false.
 
 - `infra/grpc/listener.rs` opens the stream and keeps it open, with
   `subscription.rs` (what is asked for) and `session.rs` (what an update means)

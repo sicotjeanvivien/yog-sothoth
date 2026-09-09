@@ -27,13 +27,19 @@
 //! and why.
 //!
 //! **Why `Config` carries a scope but no source.** The scope travels into the
-//! runtime: the listener dispatches on it. The source does not travel that
-//! far — but it no longer stops at validation either, and that changed on
-//! 9 September 2026: it now also decides **which door reads
-//! `INGEST_STREAM`**, since only one of the two consumers sends a metadata
-//! header (see [`read_ingest_stream`]). What it still does not do is reach the
-//! runtime, because `init_listener` has one arm; it becomes a field on
-//! `Config` the day it has two, which is the gRPC ticket's last slice.
+//! runtime: the listener dispatches on it. The source does not travel
+//! anywhere — it is read, validated, and dropped. It becomes a field the day
+//! `init_listener` has two arms, which is the gRPC ticket's last slice.
+//!
+//! ⚠️ It briefly decided something else, and that was wrong: for a day it chose
+//! **which door read `INGEST_STREAM`**, on the belief that only the gRPC path
+//! could send a metadata header. Raised in review of PR #138 on 10 September
+//! 2026: whether there is a header is said by
+//! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE` and by nothing else, and a
+//! transport has no business deciding a credential question — the same
+//! inversion `04 - release/une-variable-nomme-un-transport.md` removed from
+//! variable *names*. Both listeners now send what the operator declares
+//! (`infra::credential`), so there is one door for one variable.
 
 use yog_bootstrap::{
     ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,
@@ -64,56 +70,16 @@ impl Config {
 
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_INDEXER")?,
-            ingest_stream: read_ingest_stream(source)?,
+            // ⚠️ `_with_header` is a **promise** that whoever holds this
+            // `Endpoint` sends the header it carries, and `yog-bootstrap`
+            // cannot check it. Both listeners keep it — `infra::credential` is
+            // the one place that turns the pair into something a client sends,
+            // and both go through it.
+            ingest_stream: required_endpoint_with_header("INGEST_STREAM")?,
             ingest_transaction: required_endpoint("INGEST_TRANSACTION")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,
         })
-    }
-}
-
-/// Read `INGEST_STREAM` through the door that matches what will consume it.
-///
-/// # ⚠️ Why the door depends on the source
-///
-/// `required_endpoint_with_header` is a **promise** that the code holding the
-/// `Endpoint` calls [`Endpoint::header`] and sends what it returns;
-/// `yog-bootstrap` cannot check that, which is why the two doors are separate
-/// names rather than a flag. `INGEST_STREAM` is read by *both* sources, and
-/// only one of them keeps that promise today: `infra::grpc::interceptor` puts
-/// the header on every request, and the WebSocket path passes the URL alone to
-/// `PubsubClient` (`application::workers::subscription`).
-///
-/// Walking through the `_with_header` door unconditionally would therefore
-/// re-create, one level up, exactly the defect that door was added to prevent:
-/// an operator on `INGEST_SOURCE=rpc` writing `INGEST_STREAM_HEADER_NAME` /
-/// `_HEADER_VALUE`, having it accepted, and connecting anonymously — which
-/// succeeds against any endpoint that allows it. Under this `match` that
-/// configuration is refused, and it deserves to be: nothing would send it.
-///
-/// # ⚠️ Two things this `match` does **not** say, both asked in review on 10 September 2026
-///
-/// **It does not say the gRPC path requires a header.** It does not: the pair
-/// is optional on both sides of the door, and three of the four authentication
-/// shapes measured across providers use no header at all — a self-hosted
-/// Yellowstone takes no credential, Triton's load balancers put the token in
-/// the URL as basic auth, and an IP allowlist takes nothing. What the door
-/// grants is the *ability* to carry one, not an obligation;
-/// `CredentialInterceptor::new(None)` is the no-op that path takes.
-///
-/// **And it does not say the WebSocket client is incapable of one** — an
-/// earlier version of this comment claimed exactly that, and it is false.
-/// `PubsubClient::new` takes `R: IntoClientRequest`, so a caller handing it a
-/// built `http::Request` instead of a `&str` could set any header it likes.
-/// The asymmetry is a property of **our** code, not of the client: the worker
-/// passes `ws_url.expose()`, a `&str`, which carries none. That matters,
-/// because it means this arm is not a law — the day a WebSocket provider
-/// authenticates by header, the fix is to build the request in the worker and
-/// move this arm, not to work around it in the configuration.
-fn read_ingest_stream(source: IngestSource) -> Result<Endpoint, ConfigError> {
-    match source {
-        IngestSource::Grpc => required_endpoint_with_header("INGEST_STREAM"),
-        IngestSource::Rpc => required_endpoint("INGEST_STREAM"),
     }
 }
 
