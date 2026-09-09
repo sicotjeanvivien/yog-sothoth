@@ -23,7 +23,7 @@
 //! takes what `Endpoint::header()` hands over, or nothing at all, and puts it
 //! on the wire.
 //!
-//! # ⚠️ Calling `required_endpoint_with_header` is a promise, and this is where it is kept
+//! # ⚠️ Calling `required_endpoint_allowing_header` is a promise, and this is where it is kept
 //!
 //! `yog-bootstrap` cannot check that the code holding an `Endpoint` actually
 //! sends its header; the two doors are separate function names precisely

@@ -19,7 +19,7 @@ fn interceptor(name: &str) -> CredentialInterceptor {
 }
 
 /// ⚠️ **The half `yog-bootstrap` cannot check.**
-/// `required_endpoint_with_header` is a promise that the consumer sends the
+/// `required_endpoint_allowing_header` is a promise that the consumer sends the
 /// header, and this is the test that the promise is kept on this path. Without
 /// it the process authenticates as anonymous and succeeds against any endpoint
 /// that allows it — silence, and a stream that looks fine until it is refused.

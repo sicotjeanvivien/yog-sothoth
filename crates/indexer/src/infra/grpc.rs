@@ -20,7 +20,7 @@
 //! Two things here are live already, and deliberately: the metric families
 //! below, registered by `bootstrap/daemon.rs` whichever source runs, and
 //! `bootstrap/config.rs` reading `INGEST_STREAM` through the
-//! `required_endpoint_with_header` door under `grpc` — a door that must not be
+//! `required_endpoint_allowing_header` door under `grpc` — a door that must not be
 //! opened one slice before the code that keeps its promise.
 //!
 //! Being unreachable, the rest would trip `dead_code` under `-D warnings`.

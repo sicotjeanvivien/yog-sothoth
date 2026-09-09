@@ -217,7 +217,7 @@ fn read_header(
 /// others, which is the defect this whole family of tickets is about.
 ///
 /// ⚠️ **The choice of door is about the consumer, never about the endpoint.**
-/// `INGEST_STREAM_*` goes through [`required_endpoint_with_header`] because
+/// `INGEST_STREAM_*` goes through [`required_endpoint_allowing_header`] because
 /// both of its listeners send a header when one is configured — not because a
 /// stream needs one. With no pair configured the two doors are
 /// indistinguishable, which is what makes the wider one safe for a variable
@@ -240,32 +240,51 @@ fn read_header(
 /// the defect: the stream had connected with no credential at all.
 ///
 /// A consumer that *does* read the header calls
-/// [`required_endpoint_with_header`] instead. The distinction is the caller
+/// [`required_endpoint_allowing_header`] instead. The distinction is the caller
 /// stating a fact about itself, which is the only place that fact exists.
 pub fn required_endpoint(prefix: &str) -> Result<Endpoint, ConfigError> {
     read_endpoint(prefix, false)
 }
 
-/// Read an external endpoint whose consumer **calls [`Endpoint::header`]**.
+/// Read an external endpoint whose consumer **calls [`Endpoint::header`]** and
+/// sends what it returns.
 ///
-/// Identical to [`required_endpoint`] except that the optional
-/// `<PREFIX>_HEADER_NAME` / `<PREFIX>_HEADER_VALUE` pair is accepted, with
-/// `{key}` written in the **value** wherever the provider expects the
-/// credential. The placeholder is then looked for in the URL **and** in the
-/// header value, and substituted wherever the operator put it — see the
-/// module docs of [`crate::Endpoint`] for the four shapes measured across
-/// providers, and why the header's *name* is a provider convention too.
+/// # ⚠️ Why not `_with_header`, which is what this was called
+///
+/// Because that name described the **endpoint** while the distinction is about
+/// the **consumer**, and it therefore promised something this function does not
+/// do: it does not require a header. An endpoint read through this door with no
+/// `<PREFIX>_HEADER_NAME` / `_HEADER_VALUE` set is accepted, and comes back
+/// identical to what [`required_endpoint`] would have returned — pinned by
+/// `without_a_header_the_two_doors_produce_the_same_endpoint`. Renamed on
+/// 10 September 2026, when a reviewer read the old name as a requirement, which
+/// is exactly what it said.
+///
+/// `allowing` is what actually changes: the optional pair becomes **acceptable**
+/// here, and stays refused on the other door.
+///
+/// # What it accepts
+///
+/// The `<PREFIX>_HEADER_NAME` / `<PREFIX>_HEADER_VALUE` pair, with `{key}`
+/// written in the **value** wherever the provider expects the credential. The
+/// placeholder is then looked for in the URL **and** in the header value, and
+/// substituted wherever the operator put it — see the module docs of
+/// [`crate::Endpoint`] for the four shapes measured across providers, and why
+/// the header's *name* is a provider convention too.
 ///
 /// ⚠️ Calling this is a **promise**, not a preference: the code receiving the
-/// `Endpoint` must actually send the header. Nothing here can check that, which
-/// is exactly why the two doors are separate names rather than a boolean an
-/// author sets without reading it.
-pub fn required_endpoint_with_header(prefix: &str) -> Result<Endpoint, ConfigError> {
+/// `Endpoint` must actually send the header when there is one. Nothing here can
+/// check that, which is exactly why the two doors are separate names rather
+/// than a boolean an author sets without reading it. What the promise buys is
+/// on [`required_endpoint`]: the other door **refuses** the pair, so a
+/// credential configured for a consumer that would drop it fails at startup
+/// instead of authenticating as nobody.
+pub fn required_endpoint_allowing_header(prefix: &str) -> Result<Endpoint, ConfigError> {
     read_endpoint(prefix, true)
 }
 
 /// The shared body of [`required_endpoint`] and
-/// [`required_endpoint_with_header`].
+/// [`required_endpoint_allowing_header`].
 ///
 /// `header_is_read` is what the two doors differ by, and it is the caller
 /// stating a fact about **its own consumer**: whether the code downstream will

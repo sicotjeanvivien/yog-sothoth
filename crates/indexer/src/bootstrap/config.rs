@@ -43,7 +43,7 @@
 
 use yog_bootstrap::{
     ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,
-    required_endpoint_with_header, required_secret_url,
+    required_endpoint_allowing_header, required_secret_url,
 };
 
 mod types;
@@ -75,7 +75,7 @@ impl Config {
             // cannot check it. Both listeners keep it — `infra::credential` is
             // the one place that turns the pair into something a client sends,
             // and both go through it.
-            ingest_stream: required_endpoint_with_header("INGEST_STREAM")?,
+            ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,
             ingest_transaction: required_endpoint("INGEST_TRANSACTION")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,
