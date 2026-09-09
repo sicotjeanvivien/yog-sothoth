@@ -344,11 +344,15 @@ async fn a_full_downstream_slows_the_stream_instead_of_dropping() {
         .expect("the second waited for room; dropping it here is the defect");
     assert_eq!(second.transaction.position.slot, 10);
 
+    // Slot 10 *was* closed by its block-meta above, so this is the
+    // `highest_meta_slot` branch of `resume_from`, rewound. The pending branch
+    // is the business of
+    // `the_resume_point_is_the_oldest_slot_the_session_did_not_finish` — said
+    // here because an earlier version of this comment claimed the wrong branch,
+    // and both happen to yield 8.
     assert_eq!(
         handling.await.expect("no panic").resume_from(),
-        Some(10 - 2),
-        "the slot was never closed by a block-meta, so it is where a \
-         reconnection picks up — rewound"
+        Some(10 - REWIND_SLOTS)
     );
 }
 
@@ -484,24 +488,41 @@ async fn the_rewind_saturates_instead_of_wrapping() {
     assert_eq!(session.resume_from(), Some(0));
 }
 
-/// ⚠️ **What separates churn from a provider refusing us.** A stream that opens
-/// and closes having delivered nothing must count against the retry budget; one
-/// that delivered must not. The listener reads this flag to decide, and without
-/// it a server that accepts `subscribe` and closes at once is redialled once a
-/// second for ever.
+/// ⚠️ **What separates churn from a provider refusing us — and a ping is not
+/// it.** A stream that opens and closes having delivered no data must count
+/// against the retry budget; one that delivered must not. Yellowstone servers
+/// ping shortly after `subscribe`, so counting "any message" would put a stream
+/// that pings once and closes in the churn arm: counter reset, redialled once a
+/// second, for ever. Found in review, 9 September 2026 — the day after the rule
+/// this test was first written for.
 #[tokio::test]
-async fn a_session_says_whether_anything_arrived_at_all() {
+async fn only_data_counts_as_delivered_not_a_keep_alive() {
     let (mut session, _downstream, _outbound) = session(4);
 
-    assert!(!session.received_anything(), "nothing came off the stream");
+    assert!(!session.received_data(), "nothing came off the stream");
 
-    // Even a ping counts: the server spoke, so the connection is not the
-    // problem — this is the churn case, not the refusal case.
     session
         .handle(update(&[], UpdateOneof::Ping(SubscribeUpdatePing {})))
         .await;
+    assert!(
+        !session.received_data(),
+        "a keep-alive is not delivery — it is what a refusing server sends \
+         before closing"
+    );
 
-    assert!(session.received_anything());
+    session
+        .handle(update(
+            &[],
+            UpdateOneof::Pong(SubscribeUpdatePong { id: 1 }),
+        ))
+        .await;
+    assert!(
+        !session.received_data(),
+        "nor is the answer to our own ping"
+    );
+
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+    assert!(session.received_data(), "a block-meta is data");
 }
 
 /// ⚠️ **The back-pressure wait must not swallow a shutdown.** `handle` is driven

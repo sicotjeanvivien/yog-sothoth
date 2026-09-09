@@ -28,17 +28,20 @@ const TRANSACTIONS_EVICTED: &str = "yog_indexer_grpc_untimestamped_transactions_
 /// Which bound forced the eviction, on every increment of [`TRANSACTIONS_EVICTED`].
 ///
 /// ⚠️ **Not decoration — without it the counter misleads the ticket that reads
-/// it.** Two very different evictions share this metric: a slot that waited
-/// past `MAX_PENDING_SLOTS`, and a burst that hit `MAX_PENDING_PAYLOADS` while
-/// the slot may have been one message from resolving. The two ceilings cross at
+/// it.** Three very different evictions share this metric: a slot the stream
+/// left more than `MAX_PENDING_SLOTS` behind, a burst that hit
+/// `MAX_PENDING_PAYLOADS` while the slot may have been one message from
+/// resolving, and a slot whose block-meta came empty. The first two cross at
 /// **32 payloads per slot** (8 192 / 256), so above that rate the payload bound
-/// is the binding one: at ~100 payloads per slot it fires at ~81 slots, not the
-/// 256 the docs advertise as the wait window. An unlabelled counter would be
-/// read as "the slot ceiling was too small", and raising it would change
-/// nothing. Found in review, 8 September 2026.
+/// is the binding one: at ~100 payloads per slot it fires ~81 slots behind the
+/// head, not the 256 the docs advertise as the wait window. An unlabelled
+/// counter would be read as "the slot ceiling was too small", and raising it
+/// would change nothing. Found in review, 8 September 2026.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EvictionReason {
-    /// Too many slots waiting: this one is the oldest.
+    /// The stream moved on without it: this slot is more than
+    /// `MAX_PENDING_SLOTS` behind the head, so its block-meta is not late, it
+    /// is not coming.
     SlotBound,
     /// Too many payloads held across all pending slots.
     PayloadBound,
@@ -206,7 +209,8 @@ impl GrpcListenerMetrics {
         );
         describe_counter!(
             DOWNSTREAM_FULL,
-            "Times the downstream channel was full and the stream was slowed              to the consumer's speed"
+            "Times the downstream channel was full and the stream was slowed \
+             to the consumer's speed"
         );
     }
 

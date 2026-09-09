@@ -51,11 +51,22 @@ use tracing::warn;
 
 use super::metrics::{EvictionReason, GrpcBufferMetrics};
 
-/// How many slots may wait for their block-meta at once.
+/// How far behind the stream a slot may still be waiting for its block-meta.
 ///
 /// 256 slots is ≈ 100 s at Solana's ~400 ms per slot — see the module docs for
 /// why this is a ceiling rather than an estimate, and what its counter is for.
-pub(crate) const MAX_PENDING_SLOTS: usize = 256;
+///
+/// ⚠️ **A distance, not a population, and it was written as a population.**
+/// Until 9 September 2026 this bound fired on "257 slots pending at once",
+/// which in steady state — one or two pending — never happens. A single slot
+/// whose block-meta never came (a fork, at `confirmed`) therefore sat in the
+/// map for the life of the session: it was never evicted, so it stayed the
+/// oldest pending slot for ever, and `session::StreamSession::resume_from`
+/// answered with it at every reconnection — asking a bandwidth-billed provider
+/// to replay from a slot hours behind, or burning the retry budget on a request
+/// past its retention. Found in review, 9 September 2026. The docs already
+/// described a distance ("≈ 100 s"); the code now agrees with them.
+pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 
 /// How many payloads may be held across all pending slots.
 ///
@@ -107,7 +118,11 @@ pub(crate) struct SlotTimestampBuffer<T> {
     /// [`EvictionReason::Unresolvable`] was added to prevent. One table also
     /// means one bound and one eviction rule, rather than a third of each.
     known: BTreeMap<u64, Option<DateTime<Utc>>>,
-    max_pending_slots: usize,
+    /// The furthest the stream has got, from either half. What the slot bound
+    /// measures against — and the reason this buffer still needs no clock: the
+    /// window advances with the stream, so a stalled stream evicts nothing.
+    head_slot: Option<u64>,
+    max_pending_slots: u64,
     max_pending_payloads: usize,
     max_known_slots: usize,
 }
@@ -123,7 +138,7 @@ impl<T> SlotTimestampBuffer<T> {
     /// pushing 257 of them would say nothing the three-slot version does not,
     /// and would say it slowly.
     pub(crate) fn with_bounds(
-        max_pending_slots: usize,
+        max_pending_slots: u64,
         max_pending_payloads: usize,
         max_known_slots: usize,
     ) -> Self {
@@ -131,6 +146,7 @@ impl<T> SlotTimestampBuffer<T> {
             pending: BTreeMap::new(),
             pending_count: 0,
             known: BTreeMap::new(),
+            head_slot: None,
             max_pending_slots,
             max_pending_payloads,
             max_known_slots,
@@ -147,6 +163,8 @@ impl<T> SlotTimestampBuffer<T> {
     /// it must not do is read `None` as "safely waiting". Narrowed after review
     /// on 8 September 2026, where it claimed the stronger thing.
     pub(crate) fn on_payload(&mut self, slot: u64, payload: T) -> Option<Resolved<T>> {
+        self.see(slot);
+
         match self.known.get(&slot) {
             Some(Some(at)) => return Some(Resolved { payload, at: *at }),
             // The slot's one chance to be named came and went empty. Waiting
@@ -192,6 +210,8 @@ impl<T> SlotTimestampBuffer<T> {
     /// slot's one chance to be named has come and gone empty, so leaving it
     /// pending would only spend the window on it and mislabel its exit.
     pub(crate) fn on_block_time(&mut self, slot: u64, at: DateTime<Utc>) -> Vec<Resolved<T>> {
+        self.see(slot);
+
         let released = self.pending.remove(&slot).unwrap_or_default();
         self.pending_count -= released.len();
 
@@ -231,7 +251,15 @@ impl<T> SlotTimestampBuffer<T> {
         // Remembered as dead, not merely emptied: a payload for this slot can
         // still arrive — that is the whole reason `known` exists — and it must
         // meet the answer straight away rather than wait out the window.
-        self.known.insert(slot, None);
+        //
+        // ⚠️ But never *over* an instant already found. A second block-meta for
+        // the same slot can arrive carrying nothing — a duplicate, a
+        // re-emission after a fork — and letting it overwrite `Some(at)` would
+        // throw away a timestamp that was known, then drop every late payload
+        // for the slot as unresolvable while its instant sat one branch away.
+        // Found in review, 9 September 2026; the opposite direction
+        // (`None` → `Some`) is fine and is what a real correction looks like.
+        self.known.entry(slot).or_insert(None);
         self.enforce_known_bound();
     }
 
@@ -277,10 +305,10 @@ impl<T> SlotTimestampBuffer<T> {
     /// that will say the bound was wrong.
     fn enforce_pending_bounds(&mut self) {
         loop {
-            // Which bound is binding is recorded, not just that one was: the
-            // two cross at 32 payloads per slot, and an unlabelled count would
-            // be read as the wrong ceiling. See `EvictionReason`.
-            let reason = if self.pending.len() > self.max_pending_slots {
+            // Which bound is binding is recorded, not just that one was: an
+            // unlabelled count would be read as the wrong ceiling, and the two
+            // answer different questions. See `EvictionReason`.
+            let reason = if self.oldest_is_out_of_window() {
                 EvictionReason::SlotBound
             } else if self.pending_count > self.max_pending_payloads {
                 EvictionReason::PayloadBound
@@ -307,6 +335,25 @@ impl<T> SlotTimestampBuffer<T> {
             };
             self.evict(slot, reason);
         }
+    }
+
+    /// Whether the oldest pending slot has fallen out of the window.
+    ///
+    /// The comparison is against the head *the stream* has reached, so no time
+    /// passes here on its own — decision n° 3 of the ticket, unchanged: nothing
+    /// arrives, nothing is evicted.
+    fn oldest_is_out_of_window(&self) -> bool {
+        match (self.pending.first_key_value(), self.head_slot) {
+            (Some((&oldest, _)), Some(head)) => {
+                head.saturating_sub(oldest) > self.max_pending_slots
+            }
+            _ => false,
+        }
+    }
+
+    /// Record how far the stream has got.
+    fn see(&mut self, slot: u64) {
+        self.head_slot = Some(self.head_slot.map_or(slot, |head| head.max(slot)));
     }
 
     /// Drop one named slot's payloads, counted and logged under `reason`.

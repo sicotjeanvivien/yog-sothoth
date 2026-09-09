@@ -107,10 +107,9 @@ pub(super) struct StreamSession {
     /// session can claim to have finished. Advanced by block-metas alone: a
     /// transaction update names a slot that is still in flight.
     highest_meta_slot: Option<u64>,
-    /// Whether anything at all came off the stream. Not a slot: a session that
-    /// received only a ping delivered nothing, and the difference decides
-    /// whether a reconnection counts against the retry budget.
-    received_anything: bool,
+    /// Whether any **data** came off the stream — a transaction or a
+    /// block-meta. Not "any message": see [`Self::received_data`].
+    received_data: bool,
     /// The cancellation token, so a wait on a full consumer is interruptible.
     shutdown: CancellationToken,
 }
@@ -128,21 +127,29 @@ impl StreamSession {
             outbound,
             request,
             highest_meta_slot: None,
-            received_anything: false,
+            received_data: false,
             shutdown,
         }
     }
 
-    /// Whether this session got anything off the stream at all.
+    /// Whether this session received any **data** — a transaction or a
+    /// block-meta.
     ///
     /// What the listener does with it: a connection that opened and closed
-    /// having delivered nothing is a **failing attempt**, not the churn of a
-    /// long-lived stream, so it counts against the retry budget. Without this
+    /// having delivered no data is a **failing attempt**, not the churn of a
+    /// long-lived stream, so it counts against the retry budget. Without that
     /// distinction a server that accepts `subscribe` and closes at once — an
     /// exhausted quota, a token refused at stream level — is retried for ever
     /// at one attempt per second, and the budget never fires.
-    pub(super) fn received_anything(&self) -> bool {
-        self.received_anything
+    ///
+    /// ⚠️ **A ping does not count**, and reading "any message" here would undo
+    /// the whole rule: Yellowstone servers ping shortly after `subscribe`, so a
+    /// stream that pings once and closes would land in the churn arm, reset the
+    /// counter, and be redialled once a second for ever — exactly the failure
+    /// the distinction was introduced to stop. Found in review, 9 September
+    /// 2026, one day after the rule itself.
+    pub(super) fn received_data(&self) -> bool {
+        self.received_data
     }
 
     /// Where a reconnection should resume from, or `None` when nothing arrived.
@@ -185,16 +192,17 @@ impl StreamSession {
     /// Every failure below is per-update: counted, logged, stepped over. The
     /// one thing that ends a session is the consumer disappearing.
     pub(super) async fn handle(&mut self, update: SubscribeUpdate) -> SessionState {
-        self.received_anything = true;
         let protocol = protocol_of(&update.filters);
 
         match update.update_oneof {
             Some(UpdateOneof::Transaction(transaction)) => {
                 GrpcListenerMetrics::record_update(UpdateKind::Transaction);
+                self.received_data = true;
                 self.on_transaction(protocol, transaction).await
             }
             Some(UpdateOneof::BlockMeta(meta)) => {
                 GrpcListenerMetrics::record_update(UpdateKind::BlockMeta);
+                self.received_data = true;
                 self.on_block_meta(meta).await
             }
             Some(UpdateOneof::Ping(_)) => {
@@ -352,6 +360,16 @@ impl StreamSession {
     /// A failure to send is not an error here. It means the outbound half is
     /// gone, which the inbound half is about to report on its own — and
     /// answering a keep-alive is not worth a second way of ending a session.
+    ///
+    /// ⚠️ **And it is `try_send`, not an await.** This runs inside `handle`,
+    /// which the listener drives from the *body* of a `select!` arm, so nothing
+    /// polls the cancellation token while it is here — the same trap
+    /// [`Self::emit`] guards against with a `select!`. If the server stops
+    /// reading, the outbound channel fills after [`OUTBOUND_CAPACITY`] pings and
+    /// an await would park with no token and no timeout, hanging a graceful
+    /// shutdown for as long as the connection stays open. A dropped keep-alive
+    /// is already treated as harmless two lines down, so refusing to wait for
+    /// one costs nothing. Found in review, 9 September 2026.
     async fn answer_ping(&mut self) {
         let mut request = self.request.clone();
         request.ping = Some(SubscribeRequestPing { id: 1 });
@@ -364,8 +382,8 @@ impl StreamSession {
         // in force is already past that point. Found in review, 9 September 2026.
         request.from_slot = None;
 
-        if self.outbound.send(request).await.is_err() {
-            debug!("could not answer a ping — the outbound stream is gone");
+        if self.outbound.try_send(request).is_err() {
+            debug!("could not answer a ping — the outbound stream is gone or full");
         }
     }
 

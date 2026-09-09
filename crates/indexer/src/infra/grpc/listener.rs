@@ -392,7 +392,7 @@ impl GrpcListener {
                         SessionState::ShutdownRequested => return Attempt::ShutdownRequested,
                     },
                     Ok(None) => return Attempt::StreamClosed {
-                        delivered: session.received_anything(),
+                        delivered: session.received_data(),
                         resume_from: session.resume_from(),
                     },
                     Err(status) => return Attempt::Failed {
