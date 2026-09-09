@@ -208,11 +208,21 @@ fn read_header(
 
 /// Read an external endpoint whose consumer sends **only the URL**.
 ///
-/// The default, and what every endpoint in this workspace uses today. The
-/// caller passes the **prefix**, and `<PREFIX>_URL` / `<PREFIX>_KEY` are
-/// derived from it — one name, one place. Spelling them at every call site is
-/// how a convention comes to hold at some sites and not others, which is the
-/// defect this whole family of tickets is about.
+/// The default, and what three of the workspace's four endpoints use:
+/// `TOKEN_METADATA_*`, `POOL_ACCOUNT_*` and `INGEST_TRANSACTION_*`, whose
+/// consumers hand [`Endpoint::url`] to `reqwest` or `RpcClient` and nothing
+/// else. The caller passes the **prefix**, and `<PREFIX>_URL` /
+/// `<PREFIX>_KEY` are derived from it — one name, one place. Spelling them at
+/// every call site is how a convention comes to hold at some sites and not
+/// others, which is the defect this whole family of tickets is about.
+///
+/// ⚠️ **The choice of door is about the consumer, never about the endpoint.**
+/// `INGEST_STREAM_*` goes through [`required_endpoint_with_header`] because
+/// both of its listeners send a header when one is configured — not because a
+/// stream needs one. With no pair configured the two doors are
+/// indistinguishable, which is what makes the wider one safe for a variable
+/// that *may* carry a header; pinned by
+/// `without_a_header_the_two_doors_produce_the_same_endpoint`.
 ///
 /// # Why a `<PREFIX>_HEADER_NAME` / `_VALUE` is refused here
 ///

@@ -419,6 +419,53 @@ fn half_a_header_pair_is_refused_naming_both_variables() {
     }
 }
 
+/// ⚠️ **With no header configured, the two doors produce the same endpoint** —
+/// which is what makes `_with_header` safe for a variable that *may* carry one
+/// rather than one that must.
+///
+/// Raised as a doubt in review of PR #138 on 10 September 2026: `yog-indexer`
+/// reads `INGEST_STREAM` through `_with_header` unconditionally, and the
+/// question was whether that imposes a header on an endpoint that has none. It
+/// does not. The door decides which **configurations are refused**, never what
+/// a header-less one yields: same URL, same absence of header, same printed
+/// form. Only when a pair is actually set do the two part ways, and that is
+/// [`a_header_on_a_url_only_consumer_is_refused`].
+#[test]
+fn without_a_header_the_two_doors_produce_the_same_endpoint() {
+    // A credentialed endpoint, key in the URL.
+    unsafe {
+        env::set_var("HDR_NONE_URL", "https://host:443/v2/{key}");
+        env::set_var("HDR_NONE_KEY", "s3cret");
+    }
+
+    let plain = required_endpoint("HDR_NONE").expect("a key with somewhere to go");
+    let with_door = required_endpoint_with_header("HDR_NONE").expect("the same, other door");
+
+    assert_eq!(plain.url().expose(), with_door.url().expose());
+    assert!(plain.header().is_none() && with_door.header().is_none());
+    assert_eq!(
+        format!("{plain}"),
+        format!("{with_door}"),
+        "even what they print is the same — the door is not part of the endpoint"
+    );
+
+    // And a public one, where there is no credential at all.
+    unsafe {
+        env::remove_var("HDR_NONE_KEY");
+        env::set_var("HDR_NONE_URL", "https://api.mainnet-beta.solana.com");
+    }
+
+    let plain = required_endpoint("HDR_NONE").expect("a public endpoint");
+    let with_door = required_endpoint_with_header("HDR_NONE").expect("still public");
+
+    assert_eq!(plain.url().expose(), with_door.url().expose());
+    assert!(plain.header().is_none() && with_door.header().is_none());
+
+    unsafe {
+        env::remove_var("HDR_NONE_URL");
+    }
+}
+
 /// A blank half is an absent half, and the two must agree on what "set" means —
 /// `optional` decides it once, here it is inherited rather than restated.
 #[test]
