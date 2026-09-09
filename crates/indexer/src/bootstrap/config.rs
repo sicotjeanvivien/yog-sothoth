@@ -70,7 +70,7 @@ impl Config {
 
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_INDEXER")?,
-            // ⚠️ `_with_header` is a **promise** that whoever holds this
+            // ⚠️ The wide door is a **promise** that whoever holds this
             // `Endpoint` sends the header it carries, and `yog-bootstrap`
             // cannot check it. Both listeners keep it — `infra::credential` is
             // the one place that turns the pair into something a client sends,

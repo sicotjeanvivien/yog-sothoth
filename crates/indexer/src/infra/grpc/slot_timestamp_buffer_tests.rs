@@ -562,10 +562,43 @@ fn the_pending_count_tracks_every_way_in_and_out() {
     assert_eq!(buffer.pending_payloads(), 1, "released two");
 
     // A time for a slot that was never pending must not disturb the count.
-    buffer.on_block_time(99, at(200));
+    //
+    // ⚠️ The slot number is part of the test now, and was not before: this used
+    // to say 99, which with a three-slot window puts the head 88 ahead of the
+    // pending slot 11 and evicts it — correctly, since `on_block_time` began
+    // applying the window on 10 September 2026. Reaching for a far-away slot to
+    // mean "some other slot" is what made this test say the opposite of what it
+    // meant.
+    buffer.on_block_time(12, at(200));
     assert_eq!(buffer.pending_payloads(), 1);
 
     // Resolving straight through `known` never touches pending either.
-    buffer.on_payload(99, 4);
+    buffer.on_payload(12, 4);
     assert_eq!(buffer.pending_payloads(), 1);
+}
+
+/// ⚠️ **The window is applied on every path that moves the head, not only when
+/// a payload arrives.** The case that exposed it: a slot whose block-meta never
+/// comes, on a stream that then goes quiet for the watched protocol while
+/// block-metas keep flowing. No payload arrives to trigger enforcement, so the
+/// stale slot survives however far the head runs — and it is what
+/// `resume_from` would then answer with.
+#[test]
+fn a_stale_slot_is_evicted_by_block_metas_alone() {
+    let mut buffer = buffer(); // window of 3 slots
+
+    buffer.on_payload(10, 1); // its block-meta will never come
+
+    // Nothing else is watched; only block-metas arrive.
+    for slot in 11..=20 {
+        buffer.on_block_time(slot, at(100 + slot as i64));
+    }
+
+    assert_eq!(
+        buffer.oldest_pending_slot(),
+        None,
+        "the head ran ten slots past a three-slot window — the stale slot must \
+         not survive it just because no payload arrived"
+    );
+    assert_eq!(buffer.pending_payloads(), 0);
 }

@@ -15,21 +15,22 @@
 //! What is left in this file is the one thing only gRPC does: turning a
 //! validated header into request metadata.
 //!
-//! Nothing here decides *whether* there is a header. That is the operator's,
-//! through `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE`, and
+//! Whether there is one at all is the operator's, through
+//! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE`, and
 //! `yog_bootstrap::Endpoint` is what assembles the two with the key — see its
 //! module docs for the four authentication shapes measured across providers,
 //! and why the header's **name** is a provider convention too. This module
 //! takes what `Endpoint::header()` hands over, or nothing at all, and puts it
 //! on the wire.
 //!
-//! # ⚠️ Calling `required_endpoint_allowing_header` is a promise, and this is where it is kept
+//! # ⚠️ Calling `required_endpoint_allowing_header` is a promise, and this is one of the two places it is kept
 //!
 //! `yog-bootstrap` cannot check that the code holding an `Endpoint` actually
 //! sends its header; the two doors are separate function names precisely
-//! because only the caller knows. `bootstrap/config.rs` walks through the
-//! `_with_header` door for `INGEST_SOURCE=grpc`, and this is the code that
-//! makes that true.
+//! because only the caller knows. `bootstrap/config.rs` walks through the wide
+//! door for `INGEST_STREAM` **whatever the source**, because both listeners
+//! keep the promise: this module for gRPC, `Credential::ws_request` for the
+//! WebSocket handshake.
 
 use tonic::{
     Status,

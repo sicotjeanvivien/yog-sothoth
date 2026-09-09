@@ -421,11 +421,11 @@ fn half_a_header_pair_is_refused_naming_both_variables() {
 }
 
 /// ⚠️ **With no header configured, the two doors produce the same endpoint** —
-/// which is what makes `_with_header` safe for a variable that *may* carry one
+/// which is what makes the wide door safe for a variable that *may* carry one
 /// rather than one that must.
 ///
 /// Raised as a doubt in review of PR #138 on 10 September 2026: `yog-indexer`
-/// reads `INGEST_STREAM` through `_with_header` unconditionally, and the
+/// reads `INGEST_STREAM` through the wide door unconditionally, and the
 /// question was whether that imposes a header on an endpoint that has none. It
 /// does not. The door decides which **configurations are refused**, never what
 /// a header-less one yields: same URL, same absence of header, same printed

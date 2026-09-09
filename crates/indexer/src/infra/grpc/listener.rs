@@ -231,8 +231,39 @@ impl GrpcListener {
                     backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
                 }
 
+                // ⚠️ **A session that delivered and then errored is churn too**,
+                // and this arm forgot it until 10 September 2026. `Err(Status)`
+                // is not the exotic ending: a GOAWAY, an h2 RST_STREAM, a TCP
+                // reset or a nightly provider restart all land here, which is
+                // the ordinary way a long-lived stream breaks. With the budget
+                // charged and never reset, `attempt` climbed across sessions —
+                // 1, 2, 3 … — and the tenth nightly restart shut the indexer
+                // down having lost nothing and met no failing provider. The
+                // JSON-RPC path never had this hole: `ConnectOutcome::Failed`
+                // there is only produced *before* the stream is established, so
+                // every ending of a live stream resets.
+                //
+                // ⚠️ What it costs, and it is the same cost the clean-EOF arm
+                // pays: a provider that delivers one transaction and then errors
+                // every second is retried for ever. `received_data` is what
+                // narrows that — a ping does not count — but nothing bounds a
+                // server that really does send data before failing. The counter
+                // is what would say it.
                 Attempt::Failed {
                     error,
+                    delivered: true,
+                    resume_from: mark,
+                } => {
+                    warn!(attempt, error = %error, "gRPC stream broke — resubscribing");
+                    attempt = 0;
+                    backoff = INITIAL_BACKOFF_SECS;
+                    resume_from = mark;
+                    sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
+                }
+
+                Attempt::Failed {
+                    error,
+                    delivered: false,
                     resume_from: mark,
                 } => {
                     warn!(
@@ -338,6 +369,7 @@ impl GrpcListener {
             Err(e) => {
                 return Attempt::Failed {
                     error: url.scrub(&format!("connect: {e}")),
+                    delivered: false,
                     resume_from: None,
                 };
             }
@@ -354,6 +386,7 @@ impl GrpcListener {
         if outbound_tx.send(request.clone()).await.is_err() {
             return Attempt::Failed {
                 error: "outbound stream closed before the subscription was sent".to_string(),
+                delivered: false,
                 resume_from: None,
             };
         }
@@ -365,6 +398,7 @@ impl GrpcListener {
                     // A `Status` carries the server's message, which can quote
                     // the request — scrubbed like every other third-party string.
                     error: url.scrub(&format!("subscribe: {status}")),
+                    delivered: false,
                     resume_from: None,
                 };
             }
@@ -401,6 +435,7 @@ impl GrpcListener {
                     },
                     Err(status) => return Attempt::Failed {
                         error: url.scrub(&format!("stream: {status}")),
+                        delivered: session.received_data(),
                         resume_from: session.resume_from(),
                     },
                 },
@@ -411,7 +446,9 @@ impl GrpcListener {
 
 /// How one connection ended.
 ///
-/// Both ending variants carry the same two facts, and the listener needs both:
+/// Both ending variants carry the same two facts, and the listener needs both
+/// **on both variants** — dropping `delivered` from this one was a defect of
+/// its own, see the `Failed` arm:
 /// `resume_from` is where to pick up (see `StreamSession::resume_from`), and
 /// `delivered` says whether this attempt got anything off the stream at all —
 /// which is what separates the churn of a long-lived connection from a server
@@ -425,6 +462,7 @@ enum Attempt {
     },
     Failed {
         error: String,
+        delivered: bool,
         resume_from: Option<u64>,
     },
 }

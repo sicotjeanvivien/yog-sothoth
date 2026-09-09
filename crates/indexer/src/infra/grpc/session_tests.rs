@@ -382,40 +382,27 @@ async fn a_closed_downstream_ends_the_session() {
 
 // ── keep-alive ──────────────────────────────────────────────────────
 
-/// ⚠️ **A ping is answered with the subscription itself, minus its replay.**
-///
-/// Two decisions in one message, and each is invisible when wrong.
-///
-/// **The filters are resent** because the proto allows a request to carry a
-/// `ping` and a request is also what describes the subscription — so a
-/// ping-only request is a keep-alive under one reading and an
-/// unsubscribe-everything under the other, and no reachable endpoint can say
-/// which. Resending what is already in force is correct under both.
-///
-/// **`from_slot` is not**, and that half was missing until review on
-/// 9 September 2026. Under the same reading that makes resending the filters
-/// necessary, a request still carrying `from_slot: Some(n)` re-issues the
-/// replay — on every ping, a fixed-interval message — so the same slots would
-/// stream round and round over a connection billed by the byte.
+/// ⚠️ **A ping is counted and not answered**, and every alternative is unsafe
+/// under one of the two readings of the proto — see the note on
+/// `StreamSession`. This test is what keeps an "obvious improvement" from
+/// quietly re-introducing one: answering with the request re-issues the replay
+/// every ping, answering without it truncates a replay in flight, and answering
+/// with a bare ping may unsubscribe everything.
 #[tokio::test]
-async fn a_ping_is_answered_with_the_subscription_minus_its_replay() {
+async fn a_ping_is_counted_and_nothing_is_sent_back() {
     let (mut session, _downstream, mut outbound) = session(4);
 
-    session
-        .handle(update(&[], UpdateOneof::Ping(SubscribeUpdatePing {})))
-        .await;
-
-    let answer = outbound.try_recv().expect("a ping is answered");
-    assert!(answer.ping.is_some(), "it must be recognisable as a ping");
-    assert!(
-        answer.transactions.contains_key(PROTOCOL.as_str()),
-        "the subscription in force must be carried — an emptied request could \
-         be read as unsubscribing from everything"
-    );
     assert_eq!(
-        answer.from_slot, None,
-        "and the replay must not ride along: repeated every ping, it would \
-         stream the same slots for the life of the connection"
+        session
+            .handle(update(&[], UpdateOneof::Ping(SubscribeUpdatePing {})))
+            .await,
+        SessionState::Open
+    );
+
+    assert!(
+        outbound.try_recv().is_err(),
+        "nothing goes back on the outbound half — the connection is kept alive \
+         one layer down, by HTTP/2 keep-alive"
     );
 }
 
@@ -437,7 +424,7 @@ async fn a_pong_changes_nothing() {
     assert!(downstream.try_recv().is_err());
     assert!(
         outbound.try_recv().is_err(),
-        "answering a pong would be a loop"
+        "nothing is sent back for a pong either"
     );
 }
 

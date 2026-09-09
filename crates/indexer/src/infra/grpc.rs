@@ -20,8 +20,8 @@
 //! Two things here are live already, and deliberately: the metric families
 //! below, registered by `bootstrap/daemon.rs` whichever source runs, and
 //! `bootstrap/config.rs` reading `INGEST_STREAM` through the
-//! `required_endpoint_allowing_header` door under `grpc` — a door that must not be
-//! opened one slice before the code that keeps its promise.
+//! `required_endpoint_allowing_header` door — whatever the source, since both
+//! listeners send the header the operator declares (`infra::credential`).
 //!
 //! Being unreachable, the rest would trip `dead_code` under `-D warnings`.
 //! Hence the single `allow` below — one for the whole path rather than one per

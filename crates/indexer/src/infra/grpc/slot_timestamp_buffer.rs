@@ -217,6 +217,15 @@ impl<T> SlotTimestampBuffer<T> {
 
         self.known.insert(slot, Some(at));
         self.enforce_known_bound();
+        // ⚠️ **The window advances here too, so it has to be applied here too.**
+        // Until 10 September 2026 this was called from `on_payload` alone, and
+        // the hole it left is the exact case the window was introduced for: a
+        // slot whose meta never comes, on a stream that goes quiet. Block-metas
+        // keep arriving every ~400 ms and push the head thousands of slots
+        // ahead, but with no payload to trigger enforcement the stale slot
+        // stays — and `session::StreamSession::resume_from` then answers with
+        // it, asking a bandwidth-billed provider to replay hours.
+        self.enforce_pending_bounds();
 
         released
             .into_iter()
@@ -247,6 +256,8 @@ impl<T> SlotTimestampBuffer<T> {
     ///
     /// Calling it for a slot that is not pending is a no-op, and counts nothing.
     pub(crate) fn on_slot_unresolvable(&mut self, slot: u64) {
+        // An empty block-meta is still the stream telling us where it is.
+        self.see(slot);
         self.evict(slot, EvictionReason::Unresolvable);
         // Remembered as dead, not merely emptied: a payload for this slot can
         // still arrive — that is the whole reason `known` exists — and it must
@@ -261,6 +272,7 @@ impl<T> SlotTimestampBuffer<T> {
         // (`None` → `Some`) is fine and is what a real correction looks like.
         self.known.entry(slot).or_insert(None);
         self.enforce_known_bound();
+        self.enforce_pending_bounds();
     }
 
     /// Drop the oldest slots until both pending bounds hold.
