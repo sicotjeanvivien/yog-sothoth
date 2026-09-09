@@ -38,7 +38,7 @@ use yog_core::{CoreError, domain::Protocol};
 
 use super::{
     ingested_transaction::IngestedTransaction,
-    metrics::{GrpcListenerMetrics, UpdateKind},
+    metrics::{DropReason, GrpcListenerMetrics, UpdateKind},
     slot_timestamp_buffer::SlotTimestampBuffer,
     subscription::protocol_of,
     transaction_adapter::from_grpc,
@@ -148,7 +148,7 @@ impl StreamSession {
         // it means the request and this reader disagree — and re-deriving the
         // protocol from the account keys here would paper over exactly that.
         let Some(protocol) = protocol else {
-            GrpcListenerMetrics::record_adapter_failure("unroutable");
+            GrpcListenerMetrics::record_dropped(DropReason::Unroutable);
             warn!(
                 slot,
                 "transaction update matched no protocol filter — dropping it"
@@ -207,7 +207,7 @@ impl StreamSession {
                 // Skip-and-log, per transaction: a malformed message must not
                 // stop the stream. `from_grpc`'s doc-comment lists what can
                 // appear here.
-                GrpcListenerMetrics::record_adapter_failure(adapter_failure_kind(&error));
+                GrpcListenerMetrics::record_dropped(drop_reason(&error));
                 warn!(slot = pending.update.slot, %error, "could not translate a transaction");
                 return SessionState::Open;
             }
@@ -275,19 +275,19 @@ impl StreamSession {
     }
 }
 
-/// The metric label for a translation failure.
+/// The reason label for a translation failure.
 ///
 /// Mirrors `TransactionProcessor`'s `failure_kind`: a bounded set of labels, so
 /// the counter stays a counter and does not become a cardinality problem the
 /// day an error message contains a signature.
-fn adapter_failure_kind(error: &CoreError) -> &'static str {
+fn drop_reason(error: &CoreError) -> DropReason {
     match error {
-        CoreError::MissingField { .. } => "missing_field",
-        CoreError::ParseError { .. } => "parse_error",
+        CoreError::MissingField { .. } => DropReason::MissingField,
+        CoreError::ParseError { .. } => DropReason::ParseError,
         // `from_grpc` returns only the two above — its doc-comment lists them —
         // but a catch-all label is what keeps a future variant countable instead
         // of unrepresentable.
-        _ => "other",
+        _ => DropReason::OtherMalformation,
     }
 }
 

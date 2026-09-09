@@ -100,11 +100,19 @@ impl GrpcBufferMetrics {
 /// not.
 const UPDATES_RECEIVED: &str = "yog_indexer_grpc_updates_total";
 
-/// Transactions that failed to translate into an `OnChainTransaction`.
+/// Transactions dropped before reaching the pipeline, by reason.
 ///
-/// Skip-and-log, per transaction: the stream keeps running. The label is the
-/// error's kind, and `from_grpc`'s doc-comment lists what can appear.
-const ADAPTER_FAILURES: &str = "yog_indexer_grpc_adapter_failures_total";
+/// Skip-and-log, per transaction: the stream keeps running.
+///
+/// ⚠️ **Named for what it holds and not for its first reason**, which it was
+/// not: it started as `adapter_failures_total` and then took a second, quite
+/// different reason — a transaction whose update matched no protocol filter,
+/// where nothing is malformed and the *subscription* and the reader disagree.
+/// One asks "is the translation wrong", the other "is the request wrong", and
+/// they are fixed in different files. Under the old name the second was
+/// invisible: a reader would have gone looking at `from_grpc`. Same defect the
+/// buffer's `EvictionReason` was given a label to avoid.
+const DROPPED_TRANSACTIONS: &str = "yog_indexer_grpc_dropped_transactions_total";
 
 /// Transactions handed downstream, timestamped.
 const TRANSACTIONS_EMITTED: &str = "yog_indexer_grpc_transactions_emitted_total";
@@ -147,6 +155,35 @@ impl UpdateKind {
     }
 }
 
+/// Why a transaction was dropped, for [`DROPPED_TRANSACTIONS`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DropReason {
+    /// The protobuf did not carry something the neutral shape requires — the
+    /// two `CoreError` kinds `from_grpc` returns, kept separate because one is
+    /// an absent field and the other a value that will not parse.
+    MissingField,
+    ParseError,
+    /// A `from_grpc` failure of a kind its doc-comment does not list. Zero
+    /// today; a label rather than an `unreachable!` so a future variant stays
+    /// countable instead of fatal.
+    OtherMalformation,
+    /// The update matched no protocol filter, so there is no per-protocol
+    /// pipeline to send it down. Nothing is malformed: the request and this
+    /// reader disagree, which is fixed in `subscription`, not in the adapter.
+    Unroutable,
+}
+
+impl DropReason {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::MissingField => "missing_field",
+            Self::ParseError => "parse_error",
+            Self::OtherMalformation => "other_malformation",
+            Self::Unroutable => "unroutable",
+        }
+    }
+}
+
 pub struct GrpcListenerMetrics;
 
 impl GrpcListenerMetrics {
@@ -157,8 +194,9 @@ impl GrpcListenerMetrics {
             "Yellowstone updates received, labelled by kind"
         );
         describe_counter!(
-            ADAPTER_FAILURES,
-            "Transactions that could not be translated into the neutral shape,              labelled by the kind of malformation"
+            DROPPED_TRANSACTIONS,
+            "Transactions dropped before reaching the pipeline: malformed for \
+             the adapter, or matching no protocol filter"
         );
         describe_counter!(
             TRANSACTIONS_EMITTED,
@@ -174,8 +212,8 @@ impl GrpcListenerMetrics {
         counter!(UPDATES_RECEIVED, "kind" => kind.as_str()).increment(1);
     }
 
-    pub(crate) fn record_adapter_failure(kind: &'static str) {
-        counter!(ADAPTER_FAILURES, "kind" => kind).increment(1);
+    pub(crate) fn record_dropped(reason: DropReason) {
+        counter!(DROPPED_TRANSACTIONS, "reason" => reason.as_str()).increment(1);
     }
 
     pub(crate) fn record_emitted() {

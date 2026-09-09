@@ -210,6 +210,84 @@ async fn a_transaction_that_cannot_be_translated_does_not_stop_the_stream() {
     );
 }
 
+/// ⚠️ **The two drops are counted apart, and that is the whole point of the
+/// counter's shape.** A malformed message is fixed in the adapter; a
+/// transaction matching no protocol filter is fixed in the subscription —
+/// nothing about it is malformed, the request and this reader simply disagree.
+/// One label for both would send whoever reads the metric to the wrong file,
+/// which is the defect `EvictionReason` was added to the buffer to avoid.
+///
+/// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
+/// *current thread* for the duration of a closure, so the future is driven
+/// inside it — the recipe the persistor tests use.
+#[test]
+fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(async {
+                let (mut session, _downstream, _outbound) = session(4);
+
+                // Malformed: a 63-byte signature, which the adapter refuses.
+                session
+                    .handle(update(
+                        &[PROTOCOL.as_str()],
+                        UpdateOneof::Transaction(transaction_update_with_signature(
+                            10,
+                            vec![7; 63],
+                        )),
+                    ))
+                    .await;
+                session.handle(block_meta(10, Some(1_700_000_000))).await;
+
+                // Unroutable: perfectly well-formed, matching no protocol.
+                session.handle(transaction(11, &["something_else"])).await;
+            });
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        dropped_for(&snapshot, "parse_error"),
+        Some(&DebugValue::Counter(1)),
+        "the malformed one is an adapter problem"
+    );
+    assert_eq!(
+        dropped_for(&snapshot, "unroutable"),
+        Some(&DebugValue::Counter(1)),
+        "the unroutable one is a subscription problem, and must not hide under \
+         the adapter's label"
+    );
+}
+
+/// The drop counter for one `reason` label, or `None` when it was never
+/// touched.
+fn dropped_for<'a>(
+    snapshot: &'a [(
+        metrics_util::CompositeKey,
+        Option<metrics::Unit>,
+        Option<metrics::SharedString>,
+        metrics_util::debugging::DebugValue,
+    )],
+    reason: &str,
+) -> Option<&'a metrics_util::debugging::DebugValue> {
+    snapshot
+        .iter()
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_dropped_transactions_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "reason" && l.value() == reason)
+        })
+        .map(|(_, _, _, value)| value)
+}
+
 // ── back-pressure ───────────────────────────────────────────────────
 
 /// ⚠️ **The stream is slowed, never drained into the void** — the opposite of
