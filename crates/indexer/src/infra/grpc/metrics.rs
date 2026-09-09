@@ -134,7 +134,9 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
-    /// A server keep-alive. Answered, not merely counted — see the listener.
+    /// A server keep-alive. Answered, not merely counted — see
+    /// `session::StreamSession::answer_ping`, and why the answer is the whole
+    /// subscription.
     Ping,
     /// The answer to one of ours.
     Pong,
