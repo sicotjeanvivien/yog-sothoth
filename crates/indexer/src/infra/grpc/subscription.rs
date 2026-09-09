@@ -119,15 +119,10 @@ pub(crate) fn build_request(
 
 /// One filter per watched protocol, including its program id.
 fn protocol_includes(watched: &HashSet<Protocol>) -> Vec<(Protocol, Vec<String>)> {
-    let mut includes: Vec<_> = watched
+    watched
         .iter()
         .map(|protocol| (*protocol, vec![protocol.program_id().to_string()]))
-        .collect();
-    // A `HashSet` iterates in an arbitrary order, and the request is compared
-    // in tests and printed in logs. Sorting costs nothing at startup and makes
-    // both reproducible.
-    includes.sort_by_key(|(protocol, _)| protocol.as_str());
-    includes
+        .collect()
 }
 
 /// One filter per protocol, listing that protocol's watched pools.
@@ -153,11 +148,17 @@ fn pool_includes(watched: &HashSet<(Protocol, Pubkey)>) -> Vec<(Protocol, Vec<St
             .push(pool.to_string());
     }
 
+    // ⚠️ The pools inside a filter are sorted; the filters themselves are not.
+    // The difference is not taste: `account_include` is a repeated field, so its
+    // order survives into the request and a test can assert on it, while the
+    // filters end up in a protobuf **map** — unordered by definition, and
+    // collected into a `HashMap` here. Sorting them would be work whose result
+    // is discarded one line later, and a comment claiming it made the request
+    // reproducible would be false.
     let mut includes: Vec<_> = by_protocol.into_iter().collect();
     for (_, pools) in includes.iter_mut() {
         pools.sort();
     }
-    includes.sort_by_key(|(protocol, _)| protocol.as_str());
     includes
 }
 

@@ -109,11 +109,16 @@ fn the_pool_scope_includes_the_watched_pools_grouped_by_protocol() {
          identifies the protocol on the way back, and a filter per pool would \
          multiply the account quota that is already the tight one"
     );
-    let mut damm = request.transactions["meteora_damm_v2"]
-        .account_include
-        .clone();
-    damm.sort();
-    assert_eq!(damm, vec![pool(1).to_string(), pool(2).to_string()]);
+    // The expectation is sorted, not the result: `account_include` is a
+    // repeated field whose order reaches the wire, and `pool_includes` sorts it
+    // so this comparison is against a defined order rather than a `HashSet`
+    // iteration.
+    let mut expected = vec![pool(1).to_string(), pool(2).to_string()];
+    expected.sort();
+    assert_eq!(
+        request.transactions["meteora_damm_v2"].account_include,
+        expected
+    );
     assert_eq!(
         request.transactions["meteora_dlmm"].account_include,
         vec![pool(3).to_string()]
