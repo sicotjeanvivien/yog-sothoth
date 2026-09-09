@@ -28,15 +28,22 @@
 //!
 //! **Why `Config` carries a scope but no source.** The scope travels into the
 //! runtime: the listener dispatches on it. The source does not travel
-//! anywhere yet — it picks *which listener to build*, and there is one, so
-//! the dispatch that would read it has nowhere to branch. It is still **read
-//! and validated** here, because refusing an unimplemented source at config
-//! load is the whole point; it becomes a field the day `init_listener` has
-//! two arms, which is the gRPC ticket's job, not this module's.
+//! anywhere — it is read, validated, and dropped. It becomes a field the day
+//! `init_listener` has two arms, which is the gRPC ticket's last slice.
+//!
+//! ⚠️ It briefly decided something else, and that was wrong: for a day it chose
+//! **which door read `INGEST_STREAM`**, on the belief that only the gRPC path
+//! could send a metadata header. Raised in review of PR #138 on 10 September
+//! 2026: whether there is a header is said by
+//! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE` and by nothing else, and a
+//! transport has no business deciding a credential question — the same
+//! inversion `04 - release/une-variable-nomme-un-transport.md` removed from
+//! variable *names*. Both listeners now send what the operator declares
+//! (`infra::credential`), so there is one door for one variable.
 
 use yog_bootstrap::{
     ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,
-    required_secret_url,
+    required_endpoint_allowing_header, required_secret_url,
 };
 
 mod types;
@@ -63,7 +70,12 @@ impl Config {
 
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_INDEXER")?,
-            ingest_stream: required_endpoint("INGEST_STREAM")?,
+            // ⚠️ The wide door is a **promise** that whoever holds this
+            // `Endpoint` sends the header it carries, and `yog-bootstrap`
+            // cannot check it. Both listeners keep it — `infra::credential` is
+            // the one place that turns the pair into something a client sends,
+            // and both go through it.
+            ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,
             ingest_transaction: required_endpoint("INGEST_TRANSACTION")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,

@@ -61,14 +61,27 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "reqwest owns the request — the URL is the argument of `.post`",
     ),
     (
-        "crates/indexer/src/application/workers/subscription.rs",
-        1,
-        "solana-pubsub-client owns the socket — argument of `PubsubClient::new`",
-    ),
-    (
         "crates/indexer/src/bin/inspect_logs.rs",
         1,
         "tokio-tungstenite owns the socket — argument of `connect_async`",
+    ),
+    (
+        "crates/indexer/src/infra/credential.rs",
+        2,
+        "the two lines where a credential meets the client that will carry it, \
+         and they are two because there are two carriers: the key becomes the \
+         value of a header, and the URL becomes a WebSocket handshake request. \
+         Both paths' listeners go through here rather than exposing their own — \
+         which is why `subscription.rs` and `grpc/interceptor.rs` left this list \
+         on 10 September 2026, and why the count is two rather than four",
+    ),
+    (
+        "crates/indexer/src/infra/grpc/listener.rs",
+        1,
+        "tonic owns the channel — the URL is the argument of \
+         `Endpoint::from_shared`. Every error built from it on that path goes \
+         back through `SecretUrl::scrub`, since tonic quotes the URI it was \
+         handed",
     ),
     (
         "crates/indexer/src/bootstrap/daemon.rs",

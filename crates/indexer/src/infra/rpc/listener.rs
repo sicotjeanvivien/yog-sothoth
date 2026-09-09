@@ -7,14 +7,17 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use yog_bootstrap::SecretUrl;
+use yog_bootstrap::{Endpoint, SecretUrl};
 use yog_core::domain::Protocol;
 
 use crate::{
     application::workers::SubscriptionWorker,
     bootstrap::IngestScope,
     error::{RpcListenerError, SubscriptionWorkerError},
-    infra::rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+    infra::{
+        Credential,
+        rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+    },
 };
 
 /// Default size of the broadcast channel carrying `SubscriptionEvent`s.
@@ -36,10 +39,11 @@ const EVENTS_CHANNEL_CAPACITY: usize = 256;
 /// - force a global reconnect when one worker dies (siblings keep running)
 /// - respawn dead workers (future work — see roadmap)
 pub(crate) struct RpcListener {
-    /// Stays wrapped all the way down to `PubsubClient::new` — provider
-    /// endpoints carry their key in this URL's query string, and the fleet
-    /// clones it once per worker.
-    ws_url: SecretUrl,
+    /// The whole endpoint, not just its URL: a provider may carry its key in
+    /// the query string **or** in a metadata header, and which one is the
+    /// operator's business — see `infra::credential`. The fleet clones the
+    /// assembled URL and the validated header once per worker.
+    endpoint: Endpoint,
     watched_protocols: Mutex<HashSet<Protocol>>,
     watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
@@ -51,9 +55,9 @@ pub(crate) struct RpcListener {
 }
 
 impl RpcListener {
-    pub(crate) fn new(ws_url: SecretUrl, worker_max_retries: u32, scope: IngestScope) -> Self {
+    pub(crate) fn new(endpoint: Endpoint, worker_max_retries: u32, scope: IngestScope) -> Self {
         Self {
-            ws_url,
+            endpoint,
             watched_protocols: Mutex::new(HashSet::new()),
             watched_pools: Mutex::new(HashSet::new()),
             worker_max_retries,
@@ -86,6 +90,16 @@ impl RpcListener {
         dispatcher_tx: mpsc::Sender<RawLogEvent>,
         shutdown: CancellationToken,
     ) -> Result<(), RpcListenerError> {
+        // Validated once, before a single worker is spawned: a malformed header
+        // is a configuration failure, and letting each worker rediscover it
+        // would spend a retry budget on something that cannot get better.
+        let credential = Credential::new(self.endpoint.header())?;
+        info!(
+            endpoint = %self.endpoint,
+            header = credential.name().unwrap_or("none"),
+            "RPC listener starting"
+        );
+
         let targets = self.build_subscription_targets().await?;
         let total = targets.len();
 
@@ -98,7 +112,8 @@ impl RpcListener {
             .into_iter()
             .map(|target| {
                 spawn_worker(
-                    self.ws_url.clone(),
+                    self.endpoint.url(),
+                    credential.clone(),
                     target,
                     self.worker_max_retries,
                     dispatcher_tx.clone(),
@@ -246,13 +261,14 @@ struct WorkerHandle {
 
 fn spawn_worker(
     ws_url: SecretUrl,
+    credential: Credential,
     target: SubscriptionTarget,
     max_retries: u32,
     dispatcher_tx: mpsc::Sender<RawLogEvent>,
     events_tx: broadcast::Sender<SubscriptionEvent>,
     shutdown: CancellationToken,
 ) -> WorkerHandle {
-    let worker = SubscriptionWorker::new(ws_url, target.clone(), max_retries);
+    let worker = SubscriptionWorker::new(ws_url, credential, target.clone(), max_retries);
     let handle = tokio::spawn(async move { worker.run(dispatcher_tx, events_tx, shutdown).await });
     WorkerHandle { target, handle }
 }

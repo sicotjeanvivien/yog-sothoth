@@ -10,8 +10,8 @@ use crate::{
     bootstrap::Config,
     error::{DispatcherError, IndexerWorkerError, RpcListenerError},
     infra::{
-        DispatcherMetrics, QualifiedSignature, RawLogEvent, RpcListener, SignatureDispatcher,
-        TransactionFetcher,
+        DispatcherMetrics, GrpcBufferMetrics, GrpcListenerMetrics, QualifiedSignature, RawLogEvent,
+        RpcListener, SignatureDispatcher, TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -107,6 +107,15 @@ impl Daemon {
         DispatcherMetrics::register_descriptions();
         TransactionProcessorMetrics::register_descriptions();
         EventPersistorMetrics::register_descriptions();
+        // The gRPC path's two families are registered whichever source is
+        // running. Descriptions are only HELP text — registering them costs a
+        // string and exports nothing until a counter is touched — and the
+        // alternative, registering them where the gRPC listener is built, is a
+        // line that only ever runs on the path whose reader has the least
+        // context. A counter exported without its HELP text is unreadable to
+        // exactly the person who goes looking for it.
+        GrpcBufferMetrics::register_descriptions();
+        GrpcListenerMetrics::register_descriptions();
         info!("Metrics initialized");
 
         info!("daemon initialized");
@@ -187,7 +196,7 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 /// Create the RPC WebSocket listener with its watched protocols.
 fn init_listener(config: &Config) -> Arc<RpcListener> {
     Arc::new(RpcListener::new(
-        config.ingest_stream.url(),
+        config.ingest_stream.clone(),
         config.worker_max_retries,
         config.scope,
     ))

@@ -14,7 +14,7 @@ use yog_bootstrap::SecretUrl;
 
 use crate::{
     error::SubscriptionWorkerError,
-    infra::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+    infra::{Credential, RawLogEvent, SubscriptionEvent, SubscriptionTarget},
 };
 
 /// Bounds for the worker's internal retry loop.
@@ -38,14 +38,24 @@ const MAX_BACKOFF_SECS: u64 = 60;
 /// listener (and any future observer) can track its state.
 pub(crate) struct SubscriptionWorker {
     ws_url: SecretUrl,
+    /// The header this endpoint authenticates with, if it has one. Validated by
+    /// the listener before any worker exists — see `infra::credential`, and
+    /// why the answer is the operator's configuration and not the transport.
+    credential: Credential,
     target: SubscriptionTarget,
     max_attempts: u32,
 }
 
 impl SubscriptionWorker {
-    pub(crate) fn new(ws_url: SecretUrl, target: SubscriptionTarget, max_attempts: u32) -> Self {
+    pub(crate) fn new(
+        ws_url: SecretUrl,
+        credential: Credential,
+        target: SubscriptionTarget,
+        max_attempts: u32,
+    ) -> Self {
         Self {
             ws_url,
+            credential,
             target,
             max_attempts,
         }
@@ -63,6 +73,7 @@ impl SubscriptionWorker {
     ) -> Result<(), SubscriptionWorkerError> {
         let SubscriptionWorker {
             ws_url,
+            credential,
             target,
             max_attempts,
         } = self;
@@ -86,7 +97,15 @@ impl SubscriptionWorker {
 
             attempt += 1;
 
-            match connect_and_forward(&ws_url, &target, &dispatcher_tx, &events_tx, &shutdown).await
+            match connect_and_forward(
+                &ws_url,
+                &credential,
+                &target,
+                &dispatcher_tx,
+                &events_tx,
+                &shutdown,
+            )
+            .await
             {
                 ConnectOutcome::ShutdownRequested => {
                     emit(
@@ -197,12 +216,23 @@ enum ConnectOutcome {
 
 async fn connect_and_forward(
     ws_url: &SecretUrl,
+    credential: &Credential,
     target: &SubscriptionTarget,
     dispatcher_tx: &mpsc::Sender<RawLogEvent>,
     events_tx: &broadcast::Sender<SubscriptionEvent>,
     shutdown: &CancellationToken,
 ) -> ConnectOutcome {
-    let pubsub = match PubsubClient::new(ws_url.expose()).await {
+    // The handshake request rather than the bare URL, because the credential
+    // does not always live in the URL: `PubsubClient::new` takes an
+    // `IntoClientRequest`, and an `http::Request` is what carries a header. What
+    // decides whether there is one is `INGEST_STREAM_HEADER_NAME` /
+    // `_HEADER_VALUE` and nothing else — see `infra::credential`.
+    let request = match credential.ws_request(ws_url) {
+        Ok(request) => request,
+        Err(scrubbed) => return ConnectOutcome::Failed(scrubbed),
+    };
+
+    let pubsub = match PubsubClient::new(request).await {
         Ok(c) => c,
         Err(e) => return ConnectOutcome::Failed(ws_url.scrub(&format!("pubsub connect: {e}"))),
     };

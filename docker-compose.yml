@@ -118,6 +118,16 @@ services:
       # A `{key}` left without its key stops the process, naming the variable.
       INGEST_STREAM_URL: ${INGEST_STREAM_URL}
       INGEST_STREAM_KEY: ${INGEST_STREAM_KEY:-}
+      # The other place a credential can sit — where most gRPC providers want
+      # it. Optional like the keys above, and for the same reason: absent is a
+      # shape, not a mistake (a self-hosted Yellowstone takes no credential at
+      # all). Passed through even though `INGEST_SOURCE=grpc` is still refused
+      # at startup, because the alternative is an operator who switches source
+      # and finds their header silently missing from the container's
+      # environment — a credential nobody sends, which is the failure the whole
+      # header design exists to prevent.
+      INGEST_STREAM_HEADER_NAME: ${INGEST_STREAM_HEADER_NAME:-}
+      INGEST_STREAM_HEADER_VALUE: ${INGEST_STREAM_HEADER_VALUE:-}
       INGEST_TRANSACTION_URL: ${INGEST_TRANSACTION_URL}
       INGEST_TRANSACTION_KEY: ${INGEST_TRANSACTION_KEY:-}
       RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}

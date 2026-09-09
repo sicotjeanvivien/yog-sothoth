@@ -11,7 +11,7 @@
 use super::*;
 use crate::{
     ConfigError,
-    env::{required_endpoint, required_endpoint_with_header},
+    env::{required_endpoint, required_endpoint_allowing_header},
 };
 use std::env;
 
@@ -322,7 +322,8 @@ fn a_placeholder_in_the_header_alone_accepts_its_key() {
         env::set_var("HDR_ONLY_KEY", "s3cret");
     }
 
-    let endpoint = required_endpoint_with_header("HDR_ONLY").expect("a key with somewhere to go");
+    let endpoint =
+        required_endpoint_allowing_header("HDR_ONLY").expect("a key with somewhere to go");
     let (name, value) = endpoint.header().expect("the header is configured");
     assert_eq!(name, "x-token");
     assert_eq!(value.expose(), "s3cret");
@@ -347,7 +348,7 @@ fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
         env::set_var("HDR_NOWHERE_KEY", "s3cret");
     }
 
-    let error = required_endpoint_with_header("HDR_NOWHERE").expect_err("the key goes nowhere");
+    let error = required_endpoint_allowing_header("HDR_NOWHERE").expect_err("the key goes nowhere");
     let ConfigError::UnsupportedCombination { detail } = error else {
         panic!("expected UnsupportedCombination, got {error:?}");
     };
@@ -398,7 +399,7 @@ fn half_a_header_pair_is_refused_naming_both_variables() {
             }
         }
 
-        let error = required_endpoint_with_header(&prefix).expect_err("half a pair");
+        let error = required_endpoint_allowing_header(&prefix).expect_err("half a pair");
         let ConfigError::UnsupportedCombination { detail } = error else {
             panic!("{suffix}: expected UnsupportedCombination, got {error:?}");
         };
@@ -419,6 +420,53 @@ fn half_a_header_pair_is_refused_naming_both_variables() {
     }
 }
 
+/// ⚠️ **With no header configured, the two doors produce the same endpoint** —
+/// which is what makes the wide door safe for a variable that *may* carry one
+/// rather than one that must.
+///
+/// Raised as a doubt in review of PR #138 on 10 September 2026: `yog-indexer`
+/// reads `INGEST_STREAM` through the wide door unconditionally, and the
+/// question was whether that imposes a header on an endpoint that has none. It
+/// does not. The door decides which **configurations are refused**, never what
+/// a header-less one yields: same URL, same absence of header, same printed
+/// form. Only when a pair is actually set do the two part ways, and that is
+/// [`a_header_on_a_url_only_consumer_is_refused`].
+#[test]
+fn without_a_header_the_two_doors_produce_the_same_endpoint() {
+    // A credentialed endpoint, key in the URL.
+    unsafe {
+        env::set_var("HDR_NONE_URL", "https://host:443/v2/{key}");
+        env::set_var("HDR_NONE_KEY", "s3cret");
+    }
+
+    let plain = required_endpoint("HDR_NONE").expect("a key with somewhere to go");
+    let with_door = required_endpoint_allowing_header("HDR_NONE").expect("the same, other door");
+
+    assert_eq!(plain.url().expose(), with_door.url().expose());
+    assert!(plain.header().is_none() && with_door.header().is_none());
+    assert_eq!(
+        format!("{plain}"),
+        format!("{with_door}"),
+        "even what they print is the same — the door is not part of the endpoint"
+    );
+
+    // And a public one, where there is no credential at all.
+    unsafe {
+        env::remove_var("HDR_NONE_KEY");
+        env::set_var("HDR_NONE_URL", "https://api.mainnet-beta.solana.com");
+    }
+
+    let plain = required_endpoint("HDR_NONE").expect("a public endpoint");
+    let with_door = required_endpoint_allowing_header("HDR_NONE").expect("still public");
+
+    assert_eq!(plain.url().expose(), with_door.url().expose());
+    assert!(plain.header().is_none() && with_door.header().is_none());
+
+    unsafe {
+        env::remove_var("HDR_NONE_URL");
+    }
+}
+
 /// A blank half is an absent half, and the two must agree on what "set" means —
 /// `optional` decides it once, here it is inherited rather than restated.
 #[test]
@@ -429,7 +477,7 @@ fn a_blank_half_counts_as_absent_not_as_present() {
         env::set_var("HDR_BLANK_HEADER_VALUE", "   ");
     }
 
-    let endpoint = required_endpoint_with_header("HDR_BLANK").expect("both halves are blank");
+    let endpoint = required_endpoint_allowing_header("HDR_BLANK").expect("both halves are blank");
     assert!(
         endpoint.header().is_none(),
         "a blank pair must read as no header at all"
@@ -511,7 +559,7 @@ fn a_header_on_a_url_only_consumer_is_refused() {
     // And the same variables, read by a consumer that does send it, are fine —
     // which is what makes the refusal a statement about the *caller* rather
     // than a ban on headers.
-    let ok = required_endpoint_with_header("HDR_UNREAD").expect("this consumer sends it");
+    let ok = required_endpoint_allowing_header("HDR_UNREAD").expect("this consumer sends it");
     let (name, value) = ok.header().expect("the header is configured");
     assert_eq!(name, "x-token");
     assert_eq!(value.expose(), "s3cret");
@@ -569,7 +617,7 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
     );
     // The same endpoint read by a header-aware consumer *may* say it.
     let ConfigError::UnsupportedCombination { detail } =
-        required_endpoint_with_header("HDR_ADVICE").expect_err("still nowhere to go")
+        required_endpoint_allowing_header("HDR_ADVICE").expect_err("still nowhere to go")
     else {
         panic!("expected UnsupportedCombination");
     };
@@ -607,7 +655,7 @@ fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
             env::set_var(format!("{prefix}_KEY"), "s3cret");
         }
 
-        let error = required_endpoint_with_header(&prefix).expect_err("not a header name");
+        let error = required_endpoint_allowing_header(&prefix).expect_err("not a header name");
         let ConfigError::UnsupportedCombination { detail } = error else {
             panic!("{suffix}: expected UnsupportedCombination, got {error:?}");
         };
@@ -641,7 +689,7 @@ fn a_header_name_is_trimmed_not_refused() {
         env::set_var("HDR_TRIM_KEY", "s3cret");
     }
 
-    let endpoint = required_endpoint_with_header("HDR_TRIM").expect("trimmed, not refused");
+    let endpoint = required_endpoint_allowing_header("HDR_TRIM").expect("trimmed, not refused");
     let (name, value) = endpoint.header().expect("the header is configured");
     assert_eq!(name, "x-token");
     assert_eq!(value.expose(), "s3cret");
@@ -669,7 +717,7 @@ fn the_first_refusal_is_the_one_that_ends_the_matter() {
         env::set_var("HDR_SEQ_A_HEADER_NAME", "x-token: s3cretpasted");
     }
     let ConfigError::UnsupportedCombination { detail } =
-        required_endpoint_with_header("HDR_SEQ_A").expect_err("not a header name")
+        required_endpoint_allowing_header("HDR_SEQ_A").expect_err("not a header name")
     else {
         panic!("expected UnsupportedCombination");
     };
@@ -725,7 +773,7 @@ fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
     }
 
     let ConfigError::UnsupportedCombination { detail } =
-        required_endpoint_with_header("HDR_NAMEKEY").expect_err("the name is not a carrier")
+        required_endpoint_allowing_header("HDR_NAMEKEY").expect_err("the name is not a carrier")
     else {
         panic!("expected UnsupportedCombination");
     };

@@ -12,6 +12,8 @@ yog-bootstrap = { path = "../bootstrap" }
 # Async runtime
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+# `ReceiverStream`: the outbound half of the Yellowstone stream.
+tokio-stream = { workspace = true }
 tokio-retry = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
@@ -35,7 +37,17 @@ solana-signature = { workspace = true }
 # The protobuf transaction shape, read by `infra::grpc::transaction_adapter`.
 # Same reasoning as the line above, one transport over: `core` names no
 # transport, so both adapters and both schemas live in this crate.
-yellowstone-grpc-proto = { workspace = true }
+#
+# `tonic` un-gates the generated `geyser_client::GeyserClient` — the schema's
+# own client stubs, generated here by `prost`/`tonic-prost` from the public
+# `.proto`. That is not the `yellowstone-grpc-client` crate the root
+# `Cargo.toml` refuses: no connection policy, no authentication, no
+# reconnection, and nothing that prints a token. Slices 1 and 2 needed the
+# types only; `infra::grpc::listener` needs the stub.
+yellowstone-grpc-proto = { workspace = true, features = ["tonic"] }
+# The channel under that stub, plus TLS — see the root `Cargo.toml` for why
+# these two TLS features and not the other two.
+tonic = { workspace = true }
 
 # Errors / logging / config
 thiserror = { workspace = true }
@@ -63,3 +75,7 @@ metrics-util = { workspace = true, features = ["debugging"] }
 # `conformance::reference_transaction` — the expectation every source adapter
 # must satisfy, which `transaction_adapter`'s tests pin to the mainnet fixture.
 yog-core = { path = "../core", features = ["test-support"] }
+# `SecretKey::for_tests` — the credential the gRPC interceptor tests put on a
+# request and then look for in every printed form. A dev-dependency, so the
+# constructor stays unreachable from production code.
+yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }

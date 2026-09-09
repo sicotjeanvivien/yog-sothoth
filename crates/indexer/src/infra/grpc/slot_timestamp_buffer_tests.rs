@@ -126,26 +126,62 @@ fn a_stalled_stream_evicts_nothing() {
     assert_eq!(buffer.pending_payloads(), 0);
 }
 
-/// Past the slot bound, the oldest slot goes — oldest by slot number, which on
-/// this stream is oldest by arrival.
+/// Past the slot bound, the oldest slot goes — and the bound is a **distance**:
+/// what evicts a slot is the stream moving on without it, not the number of
+/// slots being held.
 #[test]
-fn past_the_slot_bound_the_oldest_slot_is_dropped() {
-    let mut buffer = buffer(); // 3 slots
+fn a_slot_left_behind_by_the_stream_is_dropped() {
+    let mut buffer = buffer(); // window of 3 slots
 
-    for slot in 10..=13 {
-        buffer.on_payload(slot, slot as Payload);
-    }
+    buffer.on_payload(10, 1);
+    buffer.on_payload(11, 2);
+    buffer.on_payload(12, 3);
+    buffer.on_payload(13, 4);
 
-    assert_eq!(buffer.pending_payloads(), 3, "one slot was evicted");
-    // Slot 10 is gone: its time arriving now releases nothing.
+    assert_eq!(
+        buffer.pending_payloads(),
+        4,
+        "13 − 10 = 3 is still inside the window: holding four slots is not by \
+         itself a reason to drop one"
+    );
+
+    // The stream moves on, and slot 10 falls out of the window.
+    buffer.on_payload(14, 5);
+
     assert!(
         buffer.on_block_time(10, at(100)).is_empty(),
-        "the evicted slot must not come back"
+        "slot 10 is 4 behind the head and its meta is not coming"
     );
-    // The three that remain do resolve.
     assert_eq!(buffer.on_block_time(11, at(101)).len(), 1);
-    assert_eq!(buffer.on_block_time(12, at(102)).len(), 1);
-    assert_eq!(buffer.on_block_time(13, at(103)).len(), 1);
+    assert_eq!(buffer.on_block_time(14, at(104)).len(), 1);
+}
+
+/// ⚠️ **The case the count-based bound could not see, and the one that cost a
+/// reconnection its resume point.** A single slot whose block-meta never comes
+/// — a fork at `confirmed` — is not accompanied by 256 others: in steady state
+/// one or two slots are pending, so a population bound never fires and that
+/// slot stays for the life of the session. It then stays the oldest pending
+/// slot for ever, and `resume_from` answers with it at every reconnection.
+/// Measuring against the head is what ends it, on the stream's own clock.
+#[test]
+fn an_orphan_slot_does_not_pin_the_buffer_for_ever() {
+    let mut buffer = buffer(); // window of 3 slots
+
+    buffer.on_payload(10, 1); // its block-meta will never come
+
+    // The stream carries on normally, one or two slots pending at a time —
+    // never near any population ceiling.
+    for slot in 11..=14 {
+        buffer.on_payload(slot, slot as Payload);
+        buffer.on_block_time(slot, at(100 + slot as i64));
+    }
+
+    assert_eq!(
+        buffer.oldest_pending_slot(),
+        None,
+        "the orphan was let go when the stream left it behind — otherwise every \
+         reconnection would ask to replay from it"
+    );
 }
 
 /// ⚠️ The second bound, which exists because bounding slots does **not** bound
@@ -266,11 +302,11 @@ fn evicted_payloads_are_counted() {
     let snapshotter = recorder.snapshotter();
 
     metrics::with_local_recorder(&recorder, || {
-        let mut buffer = buffer(); // 3 slots
-        // Slot 10 holds two payloads; four slots then force it out.
+        let mut buffer = buffer(); // window of 3 slots
+        // Slot 10 holds two payloads; the stream then moves four slots past it.
         buffer.on_payload(10, 1);
         buffer.on_payload(10, 2);
-        for slot in 11..=13 {
+        for slot in 11..=14 {
             buffer.on_payload(slot, slot as Payload);
         }
     });
@@ -324,6 +360,168 @@ fn the_bound_that_evicted_is_recorded_with_the_count() {
     );
 }
 
+/// ⚠️ **The label is the whole reason this method exists.** Giving up on a slot
+/// and letting the slot bound expel it destroy the same payloads; only the
+/// counter tells the measuring ticket which of the two happened, and only one of
+/// the two is fixed by raising `MAX_PENDING_SLOTS`.
+#[test]
+fn a_slot_given_up_on_is_counted_under_its_own_reason() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer();
+        buffer.on_payload(10, 1);
+        buffer.on_payload(10, 2);
+        // The block-meta came, and carried no instant.
+        buffer.on_slot_unresolvable(10);
+    });
+
+    let snapshot = snapshotter.snapshot().into_vec();
+    assert_eq!(
+        counter_for(&snapshot, "unresolvable"),
+        Some(&DebugValue::Counter(2)),
+        "both payloads, under the reason that says raising the window would \
+         change nothing"
+    );
+    assert_eq!(
+        counter_for(&snapshot, "slot_bound"),
+        None,
+        "no bound was reached — three slots fit"
+    );
+}
+
+/// Giving up frees the window it occupied, which is the other half of the point:
+/// a slot nobody can resolve must not spend one of the places meant for slots
+/// that will.
+#[test]
+fn giving_up_on_a_slot_releases_its_place_in_the_window() {
+    let mut buffer = buffer(); // 3 slots
+
+    buffer.on_payload(10, 1);
+    buffer.on_payload(11, 2);
+    buffer.on_payload(12, 3);
+    buffer.on_slot_unresolvable(10);
+
+    // A fourth slot now fits without evicting anything.
+    buffer.on_payload(13, 4);
+
+    assert_eq!(buffer.pending_payloads(), 3);
+    assert_eq!(
+        buffer.on_block_time(11, at(101)).len(),
+        1,
+        "slot 11 survived — it was not pushed out to make room for 13"
+    );
+    assert_eq!(buffer.on_block_time(13, at(103)).len(), 1);
+    assert!(
+        buffer.on_block_time(10, at(100)).is_empty(),
+        "the abandoned slot is gone for good"
+    );
+}
+
+/// ⚠️ A slot that was never pending must count **nothing**. The listener calls
+/// this on every block-meta with no instant, most of which have no payload
+/// waiting; counting those would turn the metric the measuring ticket reads into
+/// a count of empty blocks.
+#[test]
+fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
+    use metrics_util::debugging::DebuggingRecorder;
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    metrics::with_local_recorder(&recorder, || {
+        let mut buffer = buffer();
+        buffer.on_slot_unresolvable(42);
+    });
+
+    assert_eq!(
+        counter_for(&snapshotter.snapshot().into_vec(), "unresolvable"),
+        None,
+        "no payload was lost, so nothing may be reported as lost"
+    );
+}
+
+/// ⚠️ **A slot given up must stay given up, including for a payload that has
+/// not arrived yet.** The reverse order is the case `known` exists for, and it
+/// applies to a dead slot exactly as it does to a resolved one: without this,
+/// a transaction arriving after its empty block-meta is buffered again, takes a
+/// place in the window, and leaves counted `slot_bound` — the mislabel the
+/// `Unresolvable` reason was introduced to prevent, reappearing one path over.
+/// Found in review, 9 September 2026.
+#[test]
+fn a_payload_arriving_after_its_slot_was_given_up_is_dropped_at_once() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let mut buffer = buffer();
+    metrics::with_local_recorder(&recorder, || {
+        // The block-meta came empty before any payload for the slot.
+        buffer.on_slot_unresolvable(10);
+        assert!(buffer.on_payload(10, 1).is_none(), "there is no instant");
+    });
+
+    assert_eq!(
+        buffer.pending_payloads(),
+        0,
+        "it must not be buffered — it would wait out the window and then be \
+         blamed on the window"
+    );
+    assert_eq!(
+        counter_for(&snapshotter.snapshot().into_vec(), "unresolvable"),
+        Some(&DebugValue::Counter(1)),
+        "and the loss is counted under the reason that names its cause"
+    );
+}
+
+/// ⚠️ **A slot given up must not un-know an instant that was found.** A second
+/// block-meta for the same slot can arrive carrying nothing — a duplicate, a
+/// re-emission after a fork — and letting the tombstone overwrite `Some(at)`
+/// would throw away a timestamp already in hand, then drop every late payload
+/// for that slot as unresolvable while its instant sat one branch away. The
+/// opposite direction is fine and is what a real correction looks like; only
+/// this one is a loss. Found in review, 9 September 2026.
+#[test]
+fn giving_up_on_a_slot_never_overwrites_a_time_already_known() {
+    let mut buffer = buffer();
+
+    buffer.on_block_time(10, at(100));
+    buffer.on_slot_unresolvable(10);
+
+    assert_eq!(
+        buffer.on_payload(10, 1),
+        Some(Resolved {
+            payload: 1,
+            at: at(100)
+        }),
+        "the instant was known and stays known"
+    );
+}
+
+/// Where a break should resume from, seen from the buffer: the oldest slot
+/// whose payloads are still waiting, because those die with it.
+#[test]
+fn the_oldest_pending_slot_is_the_one_that_was_not_finished() {
+    let mut buffer = buffer();
+
+    assert_eq!(buffer.oldest_pending_slot(), None, "nothing is waiting");
+
+    buffer.on_payload(12, 1);
+    buffer.on_payload(11, 2);
+    assert_eq!(
+        buffer.oldest_pending_slot(),
+        Some(11),
+        "oldest by slot, not by arrival — the replay has to cover both"
+    );
+
+    buffer.on_block_time(11, at(100));
+    assert_eq!(buffer.oldest_pending_slot(), Some(12));
+}
+
 /// The counter for one `reason` label, or `None` when it was never touched.
 fn counter_for<'a>(
     snapshot: &'a [(
@@ -364,10 +562,43 @@ fn the_pending_count_tracks_every_way_in_and_out() {
     assert_eq!(buffer.pending_payloads(), 1, "released two");
 
     // A time for a slot that was never pending must not disturb the count.
-    buffer.on_block_time(99, at(200));
+    //
+    // ⚠️ The slot number is part of the test now, and was not before: this used
+    // to say 99, which with a three-slot window puts the head 88 ahead of the
+    // pending slot 11 and evicts it — correctly, since `on_block_time` began
+    // applying the window on 10 September 2026. Reaching for a far-away slot to
+    // mean "some other slot" is what made this test say the opposite of what it
+    // meant.
+    buffer.on_block_time(12, at(200));
     assert_eq!(buffer.pending_payloads(), 1);
 
     // Resolving straight through `known` never touches pending either.
-    buffer.on_payload(99, 4);
+    buffer.on_payload(12, 4);
     assert_eq!(buffer.pending_payloads(), 1);
+}
+
+/// ⚠️ **The window is applied on every path that moves the head, not only when
+/// a payload arrives.** The case that exposed it: a slot whose block-meta never
+/// comes, on a stream that then goes quiet for the watched protocol while
+/// block-metas keep flowing. No payload arrives to trigger enforcement, so the
+/// stale slot survives however far the head runs — and it is what
+/// `resume_from` would then answer with.
+#[test]
+fn a_stale_slot_is_evicted_by_block_metas_alone() {
+    let mut buffer = buffer(); // window of 3 slots
+
+    buffer.on_payload(10, 1); // its block-meta will never come
+
+    // Nothing else is watched; only block-metas arrive.
+    for slot in 11..=20 {
+        buffer.on_block_time(slot, at(100 + slot as i64));
+    }
+
+    assert_eq!(
+        buffer.oldest_pending_slot(),
+        None,
+        "the head ran ten slots past a three-slot window — the stale slot must \
+         not survive it just because no payload arrived"
+    );
+    assert_eq!(buffer.pending_payloads(), 0);
 }
