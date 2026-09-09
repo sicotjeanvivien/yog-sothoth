@@ -60,14 +60,6 @@
 //! Until then, read this suite as "the translation is self-consistent", never
 //! as "the translation is right".
 
-// ⚠️ The whole module is unreachable until the listener lands — slice 3 of
-// `03 - active/listener-grpc-yellowstone.md`. `RpcListener::_watch`'s `_`
-// convention covers a single item whose neighbours are live; here every helper
-// is dead because the entry point is, so one marker carrying the reason beats
-// seven prefixes to strip later. Removing this line is part of wiring the
-// listener, and the build says so the moment it is.
-#![allow(dead_code)]
-
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::{SIGNATURE_BYTES, Signature};

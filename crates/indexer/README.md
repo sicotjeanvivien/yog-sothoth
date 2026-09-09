@@ -19,7 +19,7 @@ indexer/src/
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
 │                            subscription supervisor
-├── infra/grpc/            ← protobuf adapter (not yet wired)
+├── infra/grpc/            ← protobuf adapter + slot/time buffer (not yet wired)
 ├── infra/rpc/             ← RpcListener (WebSocket), SignatureDispatcher
 │                            filter chain, TransactionFetcher (HTTP + FetchError)
 ├── bootstrap/             ← Config::load(), Daemon (lifecycle, task wiring,
@@ -44,19 +44,36 @@ Filling it is this crate's job, one module per source:
   `SubscribeUpdateTransaction` into the same shape — a sibling module, not a
   second path through extraction.
 
-  ⚠️ **Nothing calls it yet.** The listener that will is a later slice of the
-  gRPC ticket, and `INGEST_SOURCE=grpc` stays refused at startup until the one
-  after. The module carries a single `#![allow(dead_code)]` with that reason;
-  deleting the line is part of wiring the listener.
-
   Two differences with its JSON-RPC sibling are worth knowing before reading it.
   **The timestamp is an argument**, because `SubscribeUpdateTransaction` carries
-  none — `block_time` lives on `SubscribeUpdateBlockMeta`, a separate
-  subscription keyed by slot, and correlating the two is its own slice. And it
+  none — that seam is what `slot_timestamp_buffer.rs` below fills. And it
   **filters nothing**: protobuf ships `data` as bytes, so unlike the JSON-RPC
   adapter it has no shape it cannot represent. The same mainnet transaction
   therefore yields 2 payloads through one adapter and 14 through the other,
   which is sanctioned rather than accidental — see *What an adapter owes*.
+
+- `infra/grpc/slot_timestamp_buffer.rs` pairs a transaction with the block time
+  its own message does not carry. `block_time` lives on
+  `SubscribeUpdateBlockMeta`, a **separate** subscription keyed by slot, while
+  `TransactionPosition::timestamp` may not be optional — it is in every event
+  table's unique key *and* the partitioning column. So the two streams have to
+  be joined, and the wait bounded.
+
+  The bound **counts slots, not seconds**, and the reason is what each choice
+  does when things break: a wall clock keeps running while the stream is down,
+  so a time bound would empty the buffer during an outage and destroy
+  transactions whose block-meta was going to arrive on reconnect. A slot bound
+  reads the stream itself — nothing arrives, nothing is evicted. Its default is
+  a **ceiling, not an estimate**: the real lag is unmeasured until a live
+  stream exists, and `yog_indexer_grpc_untimestamped_transactions_total` is what
+  will say whether the ceiling was generous.
+
+⚠️ **Nothing calls either gRPC module yet**, and that is the state this crate is
+deliberately in: the listener that will is a later slice of the gRPC ticket, and
+`INGEST_SOURCE=grpc` stays refused at startup until the one after.
+`infra/grpc.rs` carries a single `#![allow(dead_code)]` for the whole path with
+that reason — deleting that one line is part of wiring the listener, and the
+build says so the moment it is.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
