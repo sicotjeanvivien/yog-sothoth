@@ -207,28 +207,6 @@ impl<T> SlotTimestampBuffer<T> {
         self.evict(slot, EvictionReason::Unresolvable);
     }
 
-    /// Forget everything — both tables.
-    ///
-    /// # ⚠️ For the listener: this belongs on reconnect, and only there
-    ///
-    /// The eviction policy is written for a stream that delivers slots in
-    /// order. A `from_slot` replay is the case where that is false: older slots
-    /// arrive *last*, so a buffer still full of the pre-cut backlog would evict
-    /// each replayed arrival at the moment it enters — a reconnection losing
-    /// precisely the data it reconnected to recover, silently but for the
-    /// counter.
-    ///
-    /// What is dropped here is not lost twice over: a payload pending at the
-    /// moment of the cut is either re-delivered by the replay, or was already
-    /// beyond saving. The counter is deliberately **not** touched — this is not
-    /// an eviction that says the bounds are wrong, and mixing it into the same
-    /// number would make every reconnection look like one.
-    pub(crate) fn clear(&mut self) {
-        self.pending.clear();
-        self.pending_count = 0;
-        self.known.clear();
-    }
-
     /// Drop the oldest slots until both pending bounds hold.
     ///
     /// # ⚠️ Which slot goes depends on which bound fired, and the two are opposite
@@ -260,8 +238,10 @@ impl<T> SlotTimestampBuffer<T> {
     /// immediately. Kept deliberately — an older slot really is the one least
     /// likely to resolve, whenever it turned up — but it means **a replay into a
     /// full buffer loses its own payloads**, silently except for the counter.
-    /// Whether to clear this buffer on reconnect is a listener decision, carried
-    /// to the ticket rather than guessed at here.
+    /// That is decided, and decided by ownership rather than by a rule this
+    /// buffer would have to follow: a buffer belongs to one subscription
+    /// (`session::StreamSession`) and cannot outlive it, so a replay never
+    /// arrives into the previous connection's backlog.
     ///
     /// ⚠️ Evicted payloads are **lost**, and that is not a choice — without an
     /// instant they cannot be written at all. What is a choice is that the loss

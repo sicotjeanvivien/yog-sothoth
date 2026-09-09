@@ -36,7 +36,7 @@
 
 use yog_bootstrap::{
     ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,
-    required_secret_url,
+    required_endpoint_with_header, required_secret_url,
 };
 
 mod types;
@@ -63,11 +63,36 @@ impl Config {
 
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_INDEXER")?,
-            ingest_stream: required_endpoint("INGEST_STREAM")?,
+            ingest_stream: read_ingest_stream(source)?,
             ingest_transaction: required_endpoint("INGEST_TRANSACTION")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,
         })
+    }
+}
+
+/// Read `INGEST_STREAM` through the door that matches what will consume it.
+///
+/// # ⚠️ Why the door depends on the source
+///
+/// `required_endpoint_with_header` is a **promise** that the code holding the
+/// `Endpoint` calls [`Endpoint::header`] and sends what it returns;
+/// `yog-bootstrap` cannot check that, which is why the two doors are separate
+/// names rather than a flag. And `INGEST_STREAM` is read by *both* sources,
+/// only one of which keeps that promise: the gRPC listener sets the metadata
+/// header (`infra::grpc::interceptor`), while the WebSocket path hands the URL
+/// to `PubsubClient`, which has nowhere to put one.
+///
+/// Walking through the `_with_header` door unconditionally would therefore
+/// re-create, one level up, exactly the defect that door was added to prevent:
+/// an operator on `INGEST_SOURCE=rpc` writing `INGEST_STREAM_HEADER_NAME` /
+/// `_HEADER_VALUE`, having it accepted, and connecting anonymously — which
+/// succeeds against any endpoint that allows it. Under this `match` that
+/// configuration is refused, and it deserves to be: nothing would send it.
+fn read_ingest_stream(source: IngestSource) -> Result<Endpoint, ConfigError> {
+    match source {
+        IngestSource::Grpc => required_endpoint_with_header("INGEST_STREAM"),
+        IngestSource::Rpc => required_endpoint("INGEST_STREAM"),
     }
 }
 

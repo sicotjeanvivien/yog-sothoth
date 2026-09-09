@@ -28,6 +28,13 @@ pub(crate) enum GrpcListenerError {
     )]
     InvalidHeaderValue { name: String },
 
+    /// The same refusal `RpcListenerError::NoSubscriptionTargets` makes, for
+    /// the same reason: a stream that subscribes to nothing opens, succeeds,
+    /// and stays silent, which reads as a network problem and is a
+    /// configuration one.
+    #[error("no subscription targets configured")]
+    NoSubscriptionTargets,
+
     #[error("`INGEST_STREAM_URL` is not a usable gRPC endpoint: {reason}")]
     InvalidEndpoint { reason: String },
 

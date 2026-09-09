@@ -126,7 +126,10 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
+    /// A server keep-alive. Answered, not merely counted — see the listener.
     Ping,
+    /// The answer to one of ours.
+    Pong,
     /// Anything the subscription did not ask for. Non-zero here means the
     /// request and the reader disagree about what was subscribed to.
     Other,
@@ -138,6 +141,7 @@ impl UpdateKind {
             Self::Transaction => "transaction",
             Self::BlockMeta => "block_meta",
             Self::Ping => "ping",
+            Self::Pong => "pong",
             Self::Other => "other",
         }
     }

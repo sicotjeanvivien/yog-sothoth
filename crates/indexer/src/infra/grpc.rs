@@ -20,7 +20,13 @@
 
 #![allow(dead_code)]
 
+mod ingested_transaction;
 mod interceptor;
+mod listener;
 mod metrics;
+mod session;
 mod slot_timestamp_buffer;
+mod subscription;
 mod transaction_adapter;
+
+pub(crate) use metrics::{GrpcBufferMetrics, GrpcListenerMetrics};

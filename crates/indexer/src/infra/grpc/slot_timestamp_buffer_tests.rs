@@ -408,34 +408,6 @@ fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {
     );
 }
 
-/// ⚠️ **The test that carries the reconnection decision.** After a `from_slot`
-/// replay the old slots arrive last, so a buffer still holding the pre-cut
-/// backlog evicts each replayed arrival as it enters. Clearing is what makes the
-/// replay able to resolve; this asserts both tables go, since a stale `known`
-/// would resolve a replayed payload against a time it no longer has any reason
-/// to trust.
-#[test]
-fn clearing_empties_both_tables() {
-    let mut buffer = buffer();
-
-    buffer.on_payload(10, 1);
-    buffer.on_block_time(11, at(101));
-    assert_eq!(buffer.pending_payloads(), 1);
-    assert_eq!(buffer.known_slots(), 1);
-
-    buffer.clear();
-
-    assert_eq!(buffer.pending_payloads(), 0);
-    assert_eq!(buffer.known_slots(), 0);
-    // And the running total went with it: a count left behind would make the
-    // payload bound evict against a number that no longer describes anything.
-    assert!(
-        buffer.on_payload(11, 2).is_none(),
-        "slot 11's time was forgotten with the rest"
-    );
-    assert_eq!(buffer.pending_payloads(), 1);
-}
-
 /// The counter for one `reason` label, or `None` when it was never touched.
 fn counter_for<'a>(
     snapshot: &'a [(
