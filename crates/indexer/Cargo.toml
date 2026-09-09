@@ -75,3 +75,7 @@ metrics-util = { workspace = true, features = ["debugging"] }
 # `conformance::reference_transaction` — the expectation every source adapter
 # must satisfy, which `transaction_adapter`'s tests pin to the mainnet fixture.
 yog-core = { path = "../core", features = ["test-support"] }
+# `SecretKey::for_tests` — the credential the gRPC interceptor tests put on a
+# request and then look for in every printed form. A dev-dependency, so the
+# constructor stays unreachable from production code.
+yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }

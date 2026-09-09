@@ -20,6 +20,7 @@
 
 #![allow(dead_code)]
 
+mod interceptor;
 mod metrics;
 mod slot_timestamp_buffer;
 mod transaction_adapter;
