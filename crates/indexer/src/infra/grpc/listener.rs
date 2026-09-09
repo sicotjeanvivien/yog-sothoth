@@ -204,6 +204,18 @@ impl GrpcListener {
                     // gap rather than looping on a request that cannot succeed.
                     // No error string is read to decide this; only whether the
                     // stream produced anything.
+                    //
+                    // ⚠️ **And that rule pays a price it is worth naming**:
+                    // "produced nothing" also describes a failure that never
+                    // reached the server at all — a DNS blip, a refused
+                    // connection. Such an attempt drops a resume point that was
+                    // still valid, and the gap is lost to a fault that had
+                    // nothing to do with retention. Telling the two apart means
+                    // reading a provider's error text, which is the
+                    // shape-recognition this workspace refuses elsewhere for
+                    // the same reason: it is right until a provider rewords its
+                    // message. Kept as is, and it is the first thing a real
+                    // stream should be watched for.
                     resume_from = highest_slot.map(|slot| slot + 1);
 
                     if attempt >= self.max_attempts {

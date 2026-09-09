@@ -71,6 +71,21 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "tokio-tungstenite owns the socket — argument of `connect_async`",
     ),
     (
+        "crates/indexer/src/infra/grpc/interceptor.rs",
+        1,
+        "the key is the value of the metadata header, built on this line — and \
+         it goes straight into a `MetadataValue` marked sensitive, never into a \
+         `String`",
+    ),
+    (
+        "crates/indexer/src/infra/grpc/listener.rs",
+        1,
+        "tonic owns the channel — the URL is the argument of \
+         `Endpoint::from_shared`. Every error built from it on that path goes \
+         back through `SecretUrl::scrub`, since tonic quotes the URI it was \
+         handed",
+    ),
+    (
         "crates/indexer/src/bootstrap/daemon.rs",
         2,
         "`init_db` at `Database::connect`, and `RpcClient::new`, whose type \

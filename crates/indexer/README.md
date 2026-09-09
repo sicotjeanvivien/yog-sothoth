@@ -19,7 +19,9 @@ indexer/src/
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
 │                            subscription supervisor
-├── infra/grpc/            ← protobuf adapter + slot/time buffer (not yet wired)
+├── infra/grpc/            ← Yellowstone: listener, subscription, session,
+│                            credential interceptor, protobuf adapter,
+│                            slot/time buffer (nothing selects it yet)
 ├── infra/rpc/             ← RpcListener (WebSocket), SignatureDispatcher
 │                            filter chain, TransactionFetcher (HTTP + FetchError)
 ├── bootstrap/             ← Config::load(), Daemon (lifecycle, task wiring,
@@ -68,12 +70,24 @@ Filling it is this crate's job, one module per source:
   stream exists, and `yog_indexer_grpc_untimestamped_transactions_total` is what
   will say whether the ceiling was generous.
 
-⚠️ **Nothing calls either gRPC module yet**, and that is the state this crate is
-deliberately in: the listener that will is a later slice of the gRPC ticket, and
-`INGEST_SOURCE=grpc` stays refused at startup until the one after.
-`infra/grpc.rs` carries a single `#![allow(dead_code)]` for the whole path with
-that reason — deleting that one line is part of wiring the listener, and the
-build says so the moment it is.
+- `infra/grpc/listener.rs` opens the stream and keeps it open, with
+  `subscription.rs` (what is asked for) and `session.rs` (what an update means)
+  beside it, and `interceptor.rs` putting the credential on every request. The
+  split is by what can be proven without a server: the request and the meaning
+  of an update are pure and tested, the connection is neither.
+
+⚠️ **Nothing selects the gRPC path yet.** The listener exists and is complete;
+what is missing is a consumer for what it emits and the switch that builds it —
+`INGEST_SOURCE=grpc` is still refused at startup by `check_supported`. So
+`infra/grpc.rs` still carries a single `#![allow(dead_code)]` for the whole
+path, and deleting that one line is part of the switch: the build then names
+whatever is still unreachable.
+
+⚠️ And **none of it has met a server.** Every local test is either pure state or
+a message this repository built itself, so the connection, TLS, keep-alive, the
+retry budget and the exact semantics of `from_slot` are written and reviewed and
+unproven. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet
+one, and it needs an API key.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
@@ -340,8 +354,9 @@ and all four couples mean something:
 `check_supported` in `bootstrap/config/validator.rs`, which `Config::load`
 calls **before anything else is read**:
 
-- `grpc`, under either scope, has no listener yet — the RPC path is the only
-  implemented source;
+- `grpc`, under either scope, has a listener but nothing that selects it: what
+  it emits has no consumer, and `init_listener` has one arm. Its refusal is
+  therefore narrower than it was, and it still holds;
 - `protocols` builds its targets from `RpcListener::_watch`, which nothing
   calls: the listener would start with zero targets. It gets wired with the
   gRPC migration.
