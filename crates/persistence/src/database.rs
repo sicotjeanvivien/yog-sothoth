@@ -17,12 +17,31 @@ pub struct Database {
 }
 
 impl Database {
+    /// How many connections [`Database::connect`] opens.
+    ///
+    /// Public because it is a **ceiling other components have to respect**, not
+    /// a private tuning knob. A caller that runs *n* concurrent writers against
+    /// a pool of this size gains nothing above it: the extra tasks queue for a
+    /// connection and fail at [`Database::DEFAULT_ACQUIRE_TIMEOUT`]. The
+    /// indexer's bounded-concurrency worker is sized from this constant rather
+    /// than from a `10` of its own — the same number written twice is the same
+    /// number until the day one of them moves.
+    pub const DEFAULT_MAX_CONNECTIONS: u32 = 10;
+
+    /// How long [`Database::connect`] waits for a free connection.
+    ///
+    /// Exposed for the same reason as its neighbour: it is what a caller
+    /// exceeding the pool actually hits.
+    pub const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
+
     /// Connect to Postgres using the provided URL.
     ///
     /// Pool sizing defaults are chosen for a small-to-medium workload:
-    ///   - `max_connections = 10`: enough for the indexer's concurrent task
-    ///     processing or the api's request fan-out at v0.1 traffic levels.
-    ///   - `acquire_timeout = 5s`: fail fast rather than queue indefinitely.
+    ///   - [`Database::DEFAULT_MAX_CONNECTIONS`]: enough for the indexer's
+    ///     concurrent task processing or the api's request fan-out at v0.1
+    ///     traffic levels.
+    ///   - [`Database::DEFAULT_ACQUIRE_TIMEOUT`]: fail fast rather than queue
+    ///     indefinitely.
     ///
     /// Callers needing different sizing should use `connect_with_options`.
     ///
@@ -30,7 +49,12 @@ impl Database {
     /// best surfaced with their original context (configuration, IO, TLS,
     /// authentication…) rather than wrapped behind a generic error type.
     pub async fn connect(url: &str) -> Result<Self, sqlx::Error> {
-        Self::connect_with_options(url, 10, Duration::from_secs(5)).await
+        Self::connect_with_options(
+            url,
+            Self::DEFAULT_MAX_CONNECTIONS,
+            Self::DEFAULT_ACQUIRE_TIMEOUT,
+        )
+        .await
     }
 
     /// Connect with explicit pool sizing. The api may want a higher
