@@ -53,6 +53,14 @@ impl WatchedPoolService {
     /// The skip is a `warn!` and not a silent filter: the row was put there on
     /// purpose, and a pool that is watched in the database but not on the wire
     /// is its own trap.
+    ///
+    /// ⚠️ **`count` changed meaning here, and the old one was wrong.** It used
+    /// to be `pools.len()` — every row, *including the inactive ones* — under a
+    /// message that says "subscriptions restored". It now counts what was
+    /// actually subscribed to, with `skipped` beside it. Anyone comparing this
+    /// line across the 10 September 2026 release will see the number drop
+    /// without the allowlist changing; that is the log becoming true, not the
+    /// indexer losing pools.
     pub(crate) async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
         let pools = self.repository.find_all().await?;
         let mut count = 0usize;

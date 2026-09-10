@@ -336,13 +336,25 @@ impl GrpcListener {
         // `wss://` `INGEST_STREAM_URL`, and an operator flipping only
         // `INGEST_SOURCE=grpc` keeps it. Failing here is what this function's
         // doc-comment already promised for "an unusable URL".
-        let scheme = endpoint.uri().scheme_str().unwrap_or_default();
-        if !matches!(scheme, "http" | "https") {
-            return Err(GrpcListenerError::InvalidEndpoint {
-                reason: format!(
-                    "`INGEST_STREAM_URL` carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
-                ),
-            });
+        // ⚠️ Two failures, not one: a scheme this path cannot speak, and no
+        // scheme at all. `from_shared` accepts both — `mainnet.example.com:443`
+        // is a valid URI — and telling an operator that their endpoint "carries
+        // the `` scheme" is a message that reads like a bug in the message.
+        match endpoint.uri().scheme_str() {
+            Some("http" | "https") => {}
+            Some(scheme) => {
+                return Err(GrpcListenerError::InvalidEndpoint {
+                    reason: format!(
+                        "`INGEST_STREAM_URL` carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
+                    ),
+                });
+            }
+            None => {
+                return Err(GrpcListenerError::InvalidEndpoint {
+                    reason: "`INGEST_STREAM_URL` has no scheme. Yellowstone speaks HTTP/2: write `https://host:port`, or `http://` for a self-hosted plaintext endpoint."
+                        .to_string(),
+                });
+            }
         }
 
         endpoint
