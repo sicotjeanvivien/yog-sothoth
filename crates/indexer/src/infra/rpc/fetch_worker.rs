@@ -65,18 +65,26 @@ impl FetchWorker {
 
         loop {
             tokio::select! {
+                // `biased`: the cancellation arm is checked first, so a
+                // `dispatch_one` that returned *because* the token fired cannot
+                // be followed by another message being taken instead of the
+                // stop. Without it the loop would race a ready `recv` against a
+                // ready token on every iteration.
+                biased;
+
+                _ = shutdown.cancelled() => {
+                    info!("shutdown requested — fetch worker stopping");
+                    return Ok(());
+                }
+
                 maybe_msg = rx.recv() => {
                     match maybe_msg {
-                        Some(qs) => self.dispatch_one(qs, &downstream, rx.len()).await?,
+                        Some(qs) => self.dispatch_one(qs, &downstream, rx.len(), &shutdown).await?,
                         None => {
                             info!("upstream channel closed — fetch worker stopping");
                             return Ok(());
                         }
                     }
-                }
-                _ = shutdown.cancelled() => {
-                    info!("shutdown requested — fetch worker stopping");
-                    return Ok(());
                 }
             }
         }
@@ -86,16 +94,27 @@ impl FetchWorker {
     ///
     /// Blocks only on permit acquisition — the fetch itself runs detached so
     /// the receive loop keeps draining the dispatcher.
+    ///
+    /// ⚠️ **The wait is interruptible**, which the port requires of every
+    /// implementation: `run`'s cancellation arm is not polled while this future
+    /// is pending, so waiting here on a bare `acquire_owned` would make a
+    /// saturated stage unstoppable for as long as the permits stay held.
     async fn dispatch_one(
         &self,
         qs: QualifiedSignature,
         downstream: &mpsc::Sender<IngestedTransaction>,
         queue_depth: usize,
+        shutdown: &CancellationToken,
     ) -> Result<(), SourceError> {
-        let permit = Arc::clone(&self.semaphore)
-            .acquire_owned()
-            .await
-            .map_err(|_| SourceError::SemaphoreClosed { stage: "fetch" })?;
+        let permit = tokio::select! {
+            biased;
+
+            _ = shutdown.cancelled() => return Ok(()),
+
+            permit = Arc::clone(&self.semaphore).acquire_owned() => {
+                permit.map_err(|_| SourceError::SemaphoreClosed { stage: "fetch" })?
+            }
+        };
 
         debug!(
             queue_depth,
@@ -107,8 +126,9 @@ impl FetchWorker {
 
         let fetcher = Arc::clone(&self.fetcher);
         let downstream = downstream.clone();
+        let shutdown = shutdown.clone();
         tokio::spawn(async move {
-            fetch_one(fetcher, qs, downstream).await;
+            fetch_one(fetcher, qs, downstream, shutdown).await;
             drop(permit);
         });
 
@@ -123,6 +143,7 @@ async fn fetch_one(
     fetcher: Arc<TransactionFetcher>,
     qs: QualifiedSignature,
     downstream: mpsc::Sender<IngestedTransaction>,
+    shutdown: CancellationToken,
 ) {
     let QualifiedSignature {
         protocol,
@@ -168,18 +189,30 @@ async fn fetch_one(
         }
     };
 
-    // ⚠️ A closed channel is the consumer being gone, which is a shutdown in
-    // progress and not this signature's problem. It is logged once here and
-    // read by the source, whose `downstream` sender closing is what ends the
-    // run — see `RpcTransactionSource::run`.
-    if downstream
-        .send(IngestedTransaction {
-            protocol,
-            transaction,
-        })
-        .await
-        .is_err()
-    {
-        debug!(%signature, "downstream closed — dropping fetched transaction");
+    // Waiting on a full consumer is correct — it is the database being the
+    // bottleneck, and dropping here would lose a transaction nothing would
+    // re-request.
+    //
+    // ⚠️ **But the wait is interruptible**, and not by accident. It does
+    // resolve on its own today, because `IndexerWorker` drops its receiver when
+    // the token fires and the send then fails at once — which makes shutdown
+    // depend on what the *consumer* happens to do. The port asks each source to
+    // honour the token itself, so this one does.
+    let ingested = IngestedTransaction {
+        protocol,
+        transaction,
+    };
+    tokio::select! {
+        biased;
+
+        _ = shutdown.cancelled() => {
+            debug!(%signature, "shutdown while handing over — dropping fetched transaction");
+        }
+
+        result = downstream.send(ingested) => {
+            if result.is_err() {
+                debug!(%signature, "downstream closed — dropping fetched transaction");
+            }
+        }
     }
 }

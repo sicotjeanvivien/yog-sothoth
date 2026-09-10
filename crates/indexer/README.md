@@ -165,7 +165,10 @@ converge — on a translated transaction — and a source owns its whole
 sub-graph, however many tasks that takes.
 
 `bootstrap/daemon.rs::init_source` is the only place in the crate that names a
-concrete source, and `INGEST_SOURCE` is read nowhere else.
+concrete source — nothing downstream of the port learns which one runs.
+`INGEST_SOURCE` itself is read in `bootstrap/config.rs` and validated by
+`check_supported`; `init_source` does **not** consume it yet, because it has one
+arm. Giving it the second arm, and the `match` on the setting, is the next slice.
 
 ### The JSON-RPC source (`infra/rpc/source.rs`)
 
@@ -202,6 +205,18 @@ response into the neutral `OnChainTransaction`, and hands it out through the
 port. Its cap is `MAX_CONCURRENT_FETCHES = 15`, sized against the Helius free
 tier with headroom — **an RPC quota, not a general concurrency setting**, which
 is why it lives beside the fetch rather than beside the consumer.
+
+### The consumer's bound, and how an operator changes it
+
+`IndexerWorker`'s cap is **not** a constant: it is the database pool's size
+minus the connections this process needs elsewhere (one, for the
+`NetworkStatusReporter`), computed at startup by
+`bootstrap/daemon.rs::index_concurrency` and logged there. Every task in flight
+holds a connection while it persists, so the pool *is* the ceiling — and a pool
+too small to reserve from is refused at startup rather than clamped.
+
+So the way to give the indexer more write concurrency is to open a bigger pool,
+not to edit a constant. With today's default of 10 the bound is 9.
 
 ### What the two paths cost
 

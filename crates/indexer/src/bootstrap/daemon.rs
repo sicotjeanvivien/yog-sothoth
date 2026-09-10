@@ -119,7 +119,7 @@ impl Daemon {
 
         info!("daemon initialized");
 
-        let index_concurrency = index_concurrency(&database);
+        let index_concurrency = index_concurrency(&database)?;
         info!(index_concurrency, "index concurrency derived from the pool");
 
         Ok(Self {
@@ -364,11 +364,26 @@ const CONNECTIONS_RESERVED: u32 = 1;
 /// Read from the pool that was opened rather than from
 /// [`Database::DEFAULT_MAX_CONNECTIONS`], so that sizing the pool differently
 /// resizes this too instead of silently parting ways with it.
-fn index_concurrency(database: &Database) -> usize {
-    database
-        .max_connections()
-        .saturating_sub(CONNECTIONS_RESERVED)
-        .max(1) as usize
+///
+/// # Errors
+///
+/// ⚠️ **Refuses a pool too small to reserve from, rather than clamping to one.**
+/// The first version returned `.max(1)`, which defeated the reservation in the
+/// exact case this function exists to prevent: a pool of one hands its only
+/// connection to an index task while the reporter waits out `acquire_timeout`
+/// and kills the process. Clamping cannot be right here — `Semaphore::new(0)`
+/// would deadlock instead — so the only honest answers are "refuse" or "open a
+/// bigger pool", and a configuration that cannot work should say so at startup
+/// rather than five seconds into a busy minute.
+fn index_concurrency(database: &Database) -> anyhow::Result<usize> {
+    let max_connections = database.max_connections();
+    anyhow::ensure!(
+        max_connections > CONNECTIONS_RESERVED,
+        "database pool holds {max_connections} connection(s), and {CONNECTIONS_RESERVED} must \
+         stay free for the network status reporter — the indexer would have none left to \
+         persist with. Open the pool with more connections."
+    );
+    Ok((max_connections - CONNECTIONS_RESERVED) as usize)
 }
 
 /// Spawn the indexer worker task.
