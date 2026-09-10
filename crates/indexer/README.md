@@ -20,9 +20,9 @@ indexer/src/
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer)
 ├── infra/credential.rs    ← the endpoint's header, validated once, for both paths
-├── infra/grpc/            ← Yellowstone: listener, subscription, session,
-│                            credential interceptor, protobuf adapter,
-│                            slot/time buffer (no source built on it yet)
+├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
+│                            it: listener, subscription, session, credential
+│                            interceptor, protobuf adapter, slot/time buffer
 ├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),
 │                            SignatureDispatcher filter chain, FetchWorker +
@@ -87,12 +87,13 @@ Filling it is this crate's job, one module per source:
   split is by what can be proven without a server: the request and the meaning
   of an update are pure and tested, the connection is neither.
 
-⚠️ **Nothing selects the gRPC path yet.** The listener exists and is complete;
-what is missing is a consumer for what it emits and the switch that builds it —
-`INGEST_SOURCE=grpc` is still refused at startup by `check_supported`. So
-`infra/grpc.rs` still carries a single `#![allow(dead_code)]` for the whole
-path, and deleting that one line is part of the switch: the build then names
-whatever is still unreachable.
+⚠️ **The gRPC path is selected but unproven.** `INGEST_SOURCE=grpc` builds it,
+and `infra/grpc.rs` no longer carries the blanket `#![allow(dead_code)]` it held
+while nothing reached it — deleting that line was the test that the wiring was
+complete, and it named three things that were genuinely unreachable. What
+remains untested is everything that needs a server: the connection, TLS, the
+retry budget, keep-alive, and the exact semantics of `from_slot`.
+`02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet one.
 
 ⚠️ And **none of it has met a server.** Every local test is either pure state or
 a message this repository built itself, so the connection, TLS, keep-alive, the
@@ -165,10 +166,10 @@ converge — on a translated transaction — and a source owns its whole
 sub-graph, however many tasks that takes.
 
 `bootstrap/daemon.rs::init_source` is the only place in the crate that names a
-concrete source — nothing downstream of the port learns which one runs.
-`INGEST_SOURCE` itself is read in `bootstrap/config.rs` and validated by
-`check_supported`; `init_source` does **not** consume it yet, because it has one
-arm. Giving it the second arm, and the `match` on the setting, is the next slice.
+concrete source, and the only one that reads `INGEST_SOURCE` — nothing
+downstream of the port learns which one runs. The guard is mechanical:
+`grep IngestSource crates/indexer/src` should find it in `bootstrap/` and
+nowhere else.
 
 ### The JSON-RPC source (`infra/rpc/source.rs`)
 
@@ -236,9 +237,21 @@ that can reach it.
 | price today | free tier | a subscription, deferred |
 
 The JSON-RPC path stays for that last line: it is the development path with no
-monthly cost. ⚠️ **No source is built on the gRPC listener yet** —
-`INGEST_SOURCE=grpc` is refused at load time by `check_supported`; the fifth
-slice of `03 - active/listener-grpc-yellowstone.md` is what lifts it.
+monthly cost, and switching between the two is a restart, not a rebuild.
+
+### The Yellowstone source (`infra/grpc/source.rs`)
+
+One stage, because the model delivers: `GrpcListener::run` already produces the
+port's `IngestedTransaction` — translation, slot/time pairing and reconnection
+all inside — so the source is the delegation and nothing else. Where the
+JSON-RPC source assembles three stages and two channels, this one has a
+connection.
+
+It also meets the port's three obligations by construction rather than by
+correction: per-update failures are counted and stepped over in `session`,
+`Attempt::{ShutdownRequested, DownstreamClosed}` are both exits of `run`, and
+`SessionState::ShutdownRequested` is what keeps a wait on a full consumer
+interruptible.
 
 ## `TransactionProcessor` and its collaborators
 
@@ -368,12 +381,14 @@ DATABASE_URL_INDEXER=postgresql://yog_indexer:...@localhost:5433/yog_sothoth
 INGEST_STREAM_URL=wss://...            # + INGEST_STREAM_KEY if it has a {key}
 INGEST_TRANSACTION_URL=https://...     # + INGEST_TRANSACTION_KEY likewise
 RPC_WORKER_MAX_RETRIES=10
-INGEST_SOURCE=rpc
-INGEST_SCOPE=pools
+INGEST_SOURCE=rpc                      # or grpc — see "The two ingestion axes"
+INGEST_SCOPE=pools                     # or protocols
 ```
 
 All six are required — none has an implicit default, and a missing one fails
-at startup with a `ConfigError`.
+at startup with a `ConfigError`. The two `INGEST_*` axes are the only ones that
+change what the process *is*, and the first line of its log names the couple it
+loaded.
 
 **Two endpoints, four variables.** Each is an `Endpoint`: a `<FUNCTION>_URL`
 carrying `{key}` where the provider expects its credential, plus a
@@ -437,25 +452,30 @@ and all four couples mean something:
 
 | | `INGEST_SCOPE=pools` | `INGEST_SCOPE=protocols` |
 |---|---|---|
-| **`INGEST_SOURCE=rpc`** | what runs today — the only couple that starts | target mode of the RPC path — **refused** |
-| **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter — **refused** | production target — **refused** |
+| **`INGEST_SOURCE=rpc`** | what runs today — the allowlist enforced at the subscription | one `logsSubscribe` on the program id: the full firehose, one `getTransaction` each |
+| **`INGEST_SOURCE=grpc`** | pool addresses in the subscription filter | the production target — one stream, `transaction_index` included |
 
-**Three of the four are refused today**, for two causes, both raised by
-`check_supported` in `bootstrap/config/validator.rs`, which `Config::load`
-calls **before anything else is read**:
+**All four start.** Three of them were refused at load time until 10 September
+2026 by a `bootstrap/config/validator.rs` that no longer exists: its two arms
+shared one precondition — nothing populated a subscription set — and the gRPC
+slice filled it on both halves. The daemon now registers, at start-up, the
+protocols whose extraction is written; the pool set was already restored from
+the database. What replaced the refusals is a met precondition, not a looser
+check.
 
-- `grpc`, under either scope, has a listener but nothing that selects it: what
-  it emits has no consumer, and `init_source` has one arm. Its refusal is
-  therefore narrower than it was, and it still holds;
-- `protocols` builds its targets from `RpcListener::_watch`, which nothing
-  calls: the listener would start with zero targets. It gets wired with the
-  gRPC migration.
+⚠️ **`(rpc, protocols)` starts and will saturate.** `logsSubscribe` on a program
+id delivers everything that program does, and the JSON-RPC path then fetches
+each one against a rate-limited quota. That was never why the couple was
+refused — the refusal was about an empty target set — which is why it is no
+longer refused. A couple that costs a lot is not a couple that cannot start.
 
-Each refusal is a state of this repository, not a law about the axes: all four
-couples are meaningful, and the two `Err` arms disappear together the day that
-migration lands. Until then, refusing early is what keeps a configuration
-mistake from surfacing as `NoSubscriptionTargets`, which reads like a network
-fault and is not one.
+⚠️ **What `protocols` subscribes to is not every `Protocol`.** It is
+`ExtractionDispatcher::implemented_protocols()` — the ones whose extraction is
+actually written. `Protocol::MeteoraDlmm` is a stub returning an empty outcome
+with no `DomainEvent` variant behind it, so subscribing to its program id would
+buy a firehose to decode and discard. Each extractor answers
+`EventExtractor::is_implemented` for itself, so the exclusion disappears with
+the stub rather than living in a second list somebody has to remember.
 
 Connects to Postgres as `yog_indexer` — RW on event/pool tables, RO on
 `watched_pools`.
