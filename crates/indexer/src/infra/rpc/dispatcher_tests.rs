@@ -53,7 +53,7 @@ async fn rejected_event_does_not_reach_downstream() {
     tx_in.send(make_event(vec![], None)).await.unwrap();
     drop(tx_in); // close upstream → dispatcher exits
 
-    dispatcher.run(rx_in, tx_out, shutdown).await.unwrap();
+    dispatcher.run(rx_in, tx_out, shutdown).await;
 
     assert!(rx_out.try_recv().is_err(), "no signature should be emitted");
 }
@@ -70,7 +70,7 @@ async fn accepted_event_with_invalid_signature_is_dropped() {
     tx_in.send(event).await.unwrap();
     drop(tx_in);
 
-    dispatcher.run(rx_in, tx_out, shutdown).await.unwrap();
+    dispatcher.run(rx_in, tx_out, shutdown).await;
 
     assert!(rx_out.try_recv().is_err());
 }

@@ -139,11 +139,11 @@ fn spawn_dispatcher(
     sig_tx: mpsc::Sender<QualifiedSignature>,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), SourceError>> {
+    // The dispatcher cannot fail once built — see its `run`. `Ok(())` here is
+    // not a swallowed error: there is none to swallow.
     tokio::spawn(async move {
-        dispatcher
-            .run(raw_rx, sig_tx, shutdown)
-            .await
-            .map_err(SourceError::from)
+        dispatcher.run(raw_rx, sig_tx, shutdown).await;
+        Ok(())
     })
 }
 

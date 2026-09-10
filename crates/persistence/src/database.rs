@@ -98,6 +98,17 @@ impl Database {
         Ok(Self { pool })
     }
 
+    /// How many connections this pool was actually opened with.
+    ///
+    /// ⚠️ **Read this, do not assume [`Database::DEFAULT_MAX_CONNECTIONS`].**
+    /// A caller sizing itself against the pool — the indexer's bounded worker
+    /// does — must ask the pool it was handed, or the two silently part ways
+    /// the day someone calls `connect_with_options`. The constant is the
+    /// default; this is the fact.
+    pub fn max_connections(&self) -> u32 {
+        self.pool.options().get_max_connections()
+    }
+
     /// Borrow the underlying pool. Repositories that need to own a pool
     /// (the common case) should call `db.pool().clone()` — `PgPool` is an
     /// `Arc` internally, so cloning is cheap.

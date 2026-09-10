@@ -57,6 +57,9 @@ pub(crate) struct Daemon {
     watched_pool_service: Arc<WatchedPoolService>,
     source: Arc<dyn TransactionSource>,
     network_status_reporter: NetworkStatusReporter,
+    /// How many transactions may be persisted at once — computed from the pool
+    /// that was actually opened, see [`index_concurrency`].
+    index_concurrency: usize,
     _database: Database,
 }
 
@@ -116,11 +119,15 @@ impl Daemon {
 
         info!("daemon initialized");
 
+        let index_concurrency = index_concurrency(&database);
+        info!(index_concurrency, "index concurrency derived from the pool");
+
         Ok(Self {
             processor,
             watched_pool_service,
             source,
             network_status_reporter,
+            index_concurrency,
             _database: database,
         })
     }
@@ -146,7 +153,12 @@ impl Daemon {
         let (tx, rx) = mpsc::channel::<IngestedTransaction>(INGESTED_CHANNEL_CAPACITY);
 
         let source_task = spawn_source_task(Arc::clone(&self.source), tx, shutdown.clone());
-        let indexer_task = spawn_indexer_task(Arc::clone(&self.processor), rx, shutdown.clone());
+        let indexer_task = spawn_indexer_task(
+            Arc::clone(&self.processor),
+            rx,
+            self.index_concurrency,
+            shutdown.clone(),
+        );
         let reporter_task =
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
 
@@ -331,21 +343,46 @@ fn spawn_source_task(
     tokio::spawn(async move { source.run(tx, shutdown).await })
 }
 
+/// How many connections the pool's *other* in-process users may need while the
+/// indexer worker is running.
+///
+/// One today: [`NetworkStatusReporter`] upserts a snapshot on every tick.
+/// `WatchedPoolService` is not counted — it restores subscriptions once, before
+/// the worker is spawned, and never touches the pool again.
+const CONNECTIONS_RESERVED: u32 = 1;
+
+/// How many transactions may be persisted concurrently.
+///
+/// Every task in flight holds a connection while it writes, so the ceiling is
+/// the pool — but **not the whole pool**, and that distinction is the point.
+/// Handing the worker all of it starves the reporter, whose `record_snapshot`
+/// propagates with `?`: one `acquire_timeout` there returns `Err`,
+/// `Daemon::run` takes the reporter branch, cancels the shared token, and the
+/// process exits. A saturated database would stop the indexer by way of a
+/// health probe, which is the least legible failure available.
+///
+/// Read from the pool that was opened rather than from
+/// [`Database::DEFAULT_MAX_CONNECTIONS`], so that sizing the pool differently
+/// resizes this too instead of silently parting ways with it.
+fn index_concurrency(database: &Database) -> usize {
+    database
+        .max_connections()
+        .saturating_sub(CONNECTIONS_RESERVED)
+        .max(1) as usize
+}
+
 /// Spawn the indexer worker task.
 ///
 /// Per-transaction failures stay inside the worker (logged, counted, not
 /// propagated). Only loop-level failures reach the returned `JoinHandle`
 /// and bubble up to `Daemon::run`.
-///
-/// ⚠️ The concurrency bound is the database pool's size and is read from it:
-/// every task in flight holds a connection while it persists, so a bound above
-/// the pool buys queueing and `acquire_timeout` failures, not throughput.
 fn spawn_indexer_task(
     processor: Arc<TransactionProcessor>,
     rx: mpsc::Receiver<IngestedTransaction>,
+    max_concurrent: usize,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), IndexerWorkerError>> {
-    let worker = IndexerWorker::new(processor, Database::DEFAULT_MAX_CONNECTIONS as usize);
+    let worker = IndexerWorker::new(processor, max_concurrent);
     tokio::spawn(async move { worker.run(rx, shutdown).await })
 }
 

@@ -38,13 +38,14 @@ impl IndexerWorker {
     /// ⚠️ It used to be a `15` written here, sized against the RPC quota — and
     /// that number belonged to the fetch, which is now the business of the one
     /// source that has to fetch. What bounds *this* stage is the database: every
-    /// task in flight holds a connection while it persists, so beyond
-    /// [`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`] an extra task adds
-    /// no throughput, it queues and then fails on `acquire_timeout`.
+    /// task in flight holds a connection while it persists, so beyond what the
+    /// pool holds an extra task adds no throughput — it queues and then fails
+    /// on `acquire_timeout`.
     ///
-    /// It is passed in rather than read here so that the pool size and the
-    /// bound derived from it are decided in the same place — the composition
-    /// root, which is where the pool is opened.
+    /// It is passed in rather than computed here because the bound is not the
+    /// pool's size but the pool's size *minus its other users in this process*,
+    /// and only the composition root knows who those are — see
+    /// `bootstrap::daemon::index_concurrency`.
     pub(crate) fn new(processor: Arc<TransactionProcessor>, max_concurrent: usize) -> Self {
         Self {
             processor,

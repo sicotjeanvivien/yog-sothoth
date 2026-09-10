@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::error::{DispatcherError, GrpcListenerError, RpcListenerError};
+use crate::error::{GrpcListenerError, RpcListenerError};
 
 /// What can stop a [`TransactionSource`].
 ///
@@ -21,11 +21,6 @@ pub(crate) enum SourceError {
     /// The JSON-RPC fleet gave up, or could not be built.
     #[error(transparent)]
     RpcListener(#[from] RpcListenerError),
-
-    /// The filter chain the JSON-RPC path runs between its listener and its
-    /// fetcher — a configuration failure, raised before anything flows.
-    #[error(transparent)]
-    Dispatcher(#[from] DispatcherError),
 
     /// The Yellowstone stream gave up, or its configuration cannot produce a
     /// subscription.
