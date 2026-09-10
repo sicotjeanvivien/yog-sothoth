@@ -85,9 +85,14 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/indexer/src/bootstrap/daemon.rs",
-        2,
-        "`init_db` at `Database::connect`, and `RpcClient::new`, whose type \
-         belongs to solana-rpc-client",
+        3,
+        "`init_db` at `Database::connect`, and `RpcClient::new` **twice**, whose \
+         type belongs to solana-rpc-client. The second one arrived on \
+         10 September 2026 and is a widening this list should show rather than \
+         hide: the ingestion source and the health reporter each open their own \
+         client instead of sharing one, so the same URL is exposed at two \
+         construction sites. The alternative was the composition root holding a \
+         client on behalf of one of the two ingestion paths",
     ),
     (
         "crates/persistence/src/bin/migrate.rs",

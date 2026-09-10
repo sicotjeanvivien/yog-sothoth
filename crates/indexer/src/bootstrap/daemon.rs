@@ -82,28 +82,15 @@ impl Daemon {
         let index_concurrency = index_concurrency(database.max_connections())?;
         info!(index_concurrency, "index concurrency derived from the pool");
 
-        let rpc_client = Arc::new(RpcClient::new(
-            config.ingest_transaction.url().expose().to_string(),
-        ));
-        info!(
-            "transaction RPC client initialized: {}",
-            config.ingest_transaction
-        );
-
-        let source = init_source(&config, rpc_client.clone())
-            .context("transaction source initialization failed")?;
+        let source = init_source(&config).context("transaction source initialization failed")?;
         info!("transaction source initialized: {}", config.ingest_stream);
 
         let processor = init_processor(&database);
         info!("indexer service initialized");
 
-        let network_status_reporter = init_network_status_reporter(
-            &database,
-            rpc_client.clone(),
-            config.ingest_transaction.url(),
-        )
-        .await
-        .context("network_status_reporter initialization failed")?;
+        let network_status_reporter = init_network_status_reporter(&database, &config)
+            .await
+            .context("network_status_reporter initialization failed")?;
 
         let watched_pool_service = init_watched_pool_service(&database, Arc::clone(&source))
             .await
@@ -220,10 +207,7 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 /// slice of `03 - active/listener-grpc-yellowstone.md`. This function is the
 /// single place that will grow the second arm, and the only place in the crate
 /// that will ever name a concrete source.
-fn init_source(
-    config: &Config,
-    rpc_client: Arc<RpcClient>,
-) -> anyhow::Result<Arc<dyn TransactionSource>> {
+fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
@@ -231,6 +215,20 @@ fn init_source(
     ));
     let dispatcher =
         Arc::new(SignatureDispatcher::new_default().context("dispatcher initialization failed")?);
+    // ⚠️ **The RPC client is built here, inside the arm that needs one.** It
+    // used to be built by `Daemon::new` and handed in, because the reporter
+    // wanted one too — which made the composition root assemble an ingredient
+    // belonging to exactly one of the two sources, and gave this function a
+    // parameter the gRPC arm could only ignore. Raised in review of PR #139.
+    // The price of not sharing is a second connection pool against the same
+    // host, for a caller that makes one request every fifteen seconds.
+    let rpc_client = Arc::new(RpcClient::new(
+        config.ingest_transaction.url().expose().to_string(),
+    ));
+    info!(
+        "transaction RPC client initialized: {}",
+        config.ingest_transaction
+    );
     let fetcher = Arc::new(TransactionFetcher::new(
         rpc_client,
         config.ingest_transaction.url(),
@@ -310,17 +308,29 @@ fn init_processor(database: &Database) -> Arc<TransactionProcessor> {
     ))
 }
 
-/// Initialise the NetworkStautsReporter and its repository dependency
+/// Initialise the NetworkStautsReporter and its repository dependency.
+///
+/// ⚠️ **It opens its own RPC client**, rather than borrowing the ingestion's.
+/// Sharing one made the reporter's health probe and the fetcher's transport the
+/// same object, which is a coincidence of endpoint and not a shared concern —
+/// and it is why the client used to be built one storey up, where neither of
+/// them lives.
+///
+/// ⚠️ **And what it should measure is an open question**, tracked by
+/// `01 - inbox/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
+/// this probe reads `INGEST_TRANSACTION`, which the gRPC source will not use.
 async fn init_network_status_reporter(
     database: &Database,
-    rpc_client: Arc<RpcClient>,
-    rpc_url: SecretUrl,
+    config: &Config,
 ) -> anyhow::Result<NetworkStatusReporter> {
     let pg_network_status_reporter_repository =
         Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
+    let rpc_client = Arc::new(RpcClient::new(
+        config.ingest_transaction.url().expose().to_string(),
+    ));
     Ok(NetworkStatusReporter::new(
         rpc_client,
-        rpc_url,
+        config.ingest_transaction.url(),
         pg_network_status_reporter_repository,
     ))
 }
