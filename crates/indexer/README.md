@@ -426,7 +426,7 @@ and all four couples mean something:
 calls **before anything else is read**:
 
 - `grpc`, under either scope, has a listener but nothing that selects it: what
-  it emits has no consumer, and `init_listener` has one arm. Its refusal is
+  it emits has no consumer, and `init_source` has one arm. Its refusal is
   therefore narrower than it was, and it still holds;
 - `protocols` builds its targets from `RpcListener::_watch`, which nothing
   calls: the listener would start with zero targets. It gets wired with the

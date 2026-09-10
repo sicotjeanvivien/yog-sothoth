@@ -29,7 +29,7 @@
 //! **Why `Config` carries a scope but no source.** The scope travels into the
 //! runtime: the listener dispatches on it. The source does not travel
 //! anywhere — it is read, validated, and dropped. It becomes a field the day
-//! `init_listener` has two arms, which is the gRPC ticket's last slice.
+//! `init_source` has two arms, which is the gRPC ticket's last slice.
 //!
 //! ⚠️ It briefly decided something else, and that was wrong: for a day it chose
 //! **which door read `INGEST_STREAM`**, on the belief that only the gRPC path

@@ -19,19 +19,22 @@ pub struct Database {
 impl Database {
     /// How many connections [`Database::connect`] opens.
     ///
-    /// Public because it is a **ceiling other components have to respect**, not
-    /// a private tuning knob. A caller that runs *n* concurrent writers against
-    /// a pool of this size gains nothing above it: the extra tasks queue for a
-    /// connection and fail at [`Database::DEFAULT_ACQUIRE_TIMEOUT`]. The
-    /// indexer's bounded-concurrency worker is sized from this constant rather
-    /// than from a `10` of its own — the same number written twice is the same
-    /// number until the day one of them moves.
+    /// It is only the **default**: a caller sizing itself against the pool must
+    /// ask [`Database::max_connections`], which is the pool that was actually
+    /// opened. This constant says what `connect` uses when nobody chose;
+    /// reading it as "the pool size" is wrong the moment someone calls
+    /// `connect_with_options`.
+    ///
+    /// Public so that the two can be compared and so that a caller can size a
+    /// pool deliberately — not as a number for other components to copy.
     pub const DEFAULT_MAX_CONNECTIONS: u32 = 10;
 
-    /// How long [`Database::connect`] waits for a free connection.
+    /// How long [`Database::connect`] waits for a free connection before
+    /// giving up — what a caller whose statements out-number the pool hits.
     ///
-    /// Exposed for the same reason as its neighbour: it is what a caller
-    /// exceeding the pool actually hits.
+    /// Named rather than inlined because it is the deadline that turns pool
+    /// contention into an error, and a component reasoning about that
+    /// contention should be able to name the number it is racing.
     pub const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
 
     /// Connect to Postgres using the provided URL.

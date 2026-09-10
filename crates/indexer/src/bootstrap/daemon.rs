@@ -74,6 +74,12 @@ impl Daemon {
             .context("database initialization failed")?;
         info!("database initialized");
 
+        // Before anything else is built: a pool too small to reserve from
+        // cannot run this process, and saying so here means the refusal is not
+        // preceded by a line announcing a successful initialisation.
+        let index_concurrency = index_concurrency(database.max_connections())?;
+        info!(index_concurrency, "index concurrency derived from the pool");
+
         let rpc_client = Arc::new(RpcClient::new(
             config.ingest_transaction.url().expose().to_string(),
         ));
@@ -118,9 +124,6 @@ impl Daemon {
         info!("Metrics initialized");
 
         info!("daemon initialized");
-
-        let index_concurrency = index_concurrency(&database)?;
-        info!(index_concurrency, "index concurrency derived from the pool");
 
         Ok(Self {
             processor,
@@ -353,30 +356,41 @@ const CONNECTIONS_RESERVED: u32 = 1;
 
 /// How many transactions may be persisted concurrently.
 ///
-/// Every task in flight holds a connection while it writes, so the ceiling is
-/// the pool — but **not the whole pool**, and that distinction is the point.
-/// Handing the worker all of it starves the reporter, whose `record_snapshot`
-/// propagates with `?`: one `acquire_timeout` there returns `Err`,
-/// `Daemon::run` takes the reporter branch, cancels the shared token, and the
-/// process exits. A saturated database would stop the indexer by way of a
-/// health probe, which is the least legible failure available.
+/// # ⚠️ The mechanism, stated correctly
 ///
-/// Read from the pool that was opened rather than from
+/// A task does **not** hold a connection for its lifetime. Every repository
+/// call executes against `&PgPool`, so sqlx takes a connection per *statement*
+/// and returns it — nothing in `crates/persistence` opens a transaction or
+/// calls `acquire`. What makes a task-count bound a connection bound is
+/// something else: **an index task issues one statement at a time**. Its
+/// events are persisted in a sequential loop, so *n* tasks put at most *n*
+/// statements in flight, and capping tasks at `pool − 1` leaves the pool one
+/// slot for the reporter.
+///
+/// ⚠️ **And that invariant is not enforced anywhere.** The first sub-persistor
+/// that runs two repository calls under `tokio::join!` doubles a task's
+/// concurrent statements and silently reinstates the failure this bound exists
+/// to prevent: the reporter's `record_snapshot` propagates with `?`, so one
+/// `acquire_timeout` returns `Err`, `Daemon::run` takes the reporter branch,
+/// cancels the shared token, and the process exits — a saturated database
+/// stopping the indexer by way of its health probe, the least legible failure
+/// available. Whoever parallelises a persist owes this line a second look.
+///
+/// Read from the pool that was opened, not from
 /// [`Database::DEFAULT_MAX_CONNECTIONS`], so that sizing the pool differently
-/// resizes this too instead of silently parting ways with it.
+/// resizes this too instead of silently parting ways with it. It takes the
+/// number rather than the `Database` so the boundary is a plain unit test.
 ///
 /// # Errors
 ///
 /// ⚠️ **Refuses a pool too small to reserve from, rather than clamping to one.**
-/// The first version returned `.max(1)`, which defeated the reservation in the
+/// An earlier version returned `.max(1)`, which defeated the reservation in the
 /// exact case this function exists to prevent: a pool of one hands its only
-/// connection to an index task while the reporter waits out `acquire_timeout`
-/// and kills the process. Clamping cannot be right here — `Semaphore::new(0)`
-/// would deadlock instead — so the only honest answers are "refuse" or "open a
-/// bigger pool", and a configuration that cannot work should say so at startup
-/// rather than five seconds into a busy minute.
-fn index_concurrency(database: &Database) -> anyhow::Result<usize> {
-    let max_connections = database.max_connections();
+/// connection to an index task. Clamping cannot be right here —
+/// `Semaphore::new(0)` would deadlock instead — so the only honest answers are
+/// "refuse" or "open a bigger pool", and a configuration that cannot work
+/// should say so at startup rather than five seconds into a busy minute.
+fn index_concurrency(max_connections: u32) -> anyhow::Result<usize> {
     anyhow::ensure!(
         max_connections > CONNECTIONS_RESERVED,
         "database pool holds {max_connections} connection(s), and {CONNECTIONS_RESERVED} must \
