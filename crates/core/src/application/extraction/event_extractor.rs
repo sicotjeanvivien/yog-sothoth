@@ -43,13 +43,22 @@ pub trait EventExtractor: Send + Sync {
     /// that returns an empty outcome is paying a firehose to decode and
     /// discard.
     ///
-    /// The default is `true` — an extractor extracts. A stub overrides it, and
-    /// **the override disappears with the stub**: nobody has to remember a
-    /// second list when the protocol is finally written, which is the failure
-    /// this repository keeps paying for.
+    /// ⚠️ **No default, deliberately.** It had one — `true` — for the length of
+    /// a review, and a default here points the wrong way: the expensive answer
+    /// would be the one a new extractor gives by saying nothing. A protocol
+    /// added by following the `add-protocol` recipe with a stub body, which is
+    /// exactly how `MeteoraDlmm` exists today, would compile, keep every test
+    /// green, and subscribe the indexer to a program id on the next restart.
+    ///
+    /// Required, the compiler asks the question at the one moment somebody can
+    /// answer it — while writing the extractor and knowing whether it extracts.
+    /// It costs each implementation one line and it is a spending decision, not
+    /// a formality.
+    ///
+    /// **The answer disappears with the stub**: nobody has to remember a second
+    /// list when the protocol is finally written, which is the failure this
+    /// repository keeps paying for.
     ///
     /// [`ExtractionDispatcher::implemented_protocols`]: crate::application::extraction::ExtractionDispatcher::implemented_protocols
-    fn is_implemented(&self) -> bool {
-        true
-    }
+    fn is_implemented(&self) -> bool;
 }

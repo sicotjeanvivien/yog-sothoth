@@ -57,10 +57,16 @@ impl WatchedPoolService {
     /// ⚠️ **`count` changed meaning here, and the old one was wrong.** It used
     /// to be `pools.len()` — every row, *including the inactive ones* — under a
     /// message that says "subscriptions restored". It now counts what was
-    /// actually subscribed to, with `skipped` beside it. Anyone comparing this
+    /// handed to the source, with `skipped` beside it. Anyone comparing this
     /// line across the 10 September 2026 release will see the number drop
     /// without the allowlist changing; that is the log becoming true, not the
     /// indexer losing pools.
+    ///
+    /// The message lost the word "subscriptions" in the same pass. Under
+    /// `INGEST_SCOPE=protocols` this set is populated and never read, so
+    /// promising subscriptions would be a second false claim on the same
+    /// line — and one nobody could check, since only the daemon knows the
+    /// scope.
     pub(crate) async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
         let pools = self.repository.find_all().await?;
         let mut count = 0usize;
@@ -85,7 +91,17 @@ impl WatchedPoolService {
             count += 1;
         }
 
-        info!(count, skipped, "subscriptions restored from database");
+        // ⚠️ "registered", not "restored": under `INGEST_SCOPE=protocols` this
+        // set is populated and never read — the subscription is built from the
+        // protocol set instead — so a message promising subscriptions would be
+        // believed for work that does not happen. The daemon populates both
+        // sets whichever scope runs, and the `ingestion mode` line it logs
+        // first is what says which one is in force.
+        info!(count, skipped, "watched pools registered");
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "watched_pool_service_tests.rs"]
+mod tests;

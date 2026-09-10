@@ -28,11 +28,15 @@ and `ExtractionDispatcher` only routes DAMM v2 to a real extractor. So "adding a
 usually means: add the `DomainEvent` outer variant + wire the dispatcher/persistor, and (if
 it's a brand-new protocol not yet in the enum) add the `Protocol` variant + program ID.
 
-## The three dispatch points (everything else is isolated per-protocol code)
+## The dispatch points (everything else is isolated per-protocol code)
 
-1. `ExtrationDispacher::extract` — `crates/core/src/application/extraction/extraction_dispatcher.rs`
-   (note the struct is spelled `ExtrationDispacher`). One new `match` branch + one field +
-   one `::new()` in the constructor.
+1. `ExtractionDispatcher::extract` **and** `::implemented_protocols` —
+   `crates/core/src/application/extraction/extraction_dispatcher.rs`. One new `match` branch
+   in **each** + one field + one `::new()` in the constructor.
+   ⚠️ `implemented_protocols` decides whether the ingestion **subscribes to the program id**.
+   Its answer comes from `EventExtractor::is_implemented`, which has no default: say `false`
+   while the extractor is a stub, or the indexer pays a firehose — every transaction of the
+   program fetched or streamed, decoded and discarded — for zero rows.
 2. `EventPersistor::persist` — `crates/indexer/src/application/services/event_persistor.rs`.
    One new `DomainEvent::<NewProtocol>(e) => …` branch + one field.
 3. `init_event_persistor` — `crates/indexer/src/bootstrap/daemon.rs`. One instantiation block
@@ -48,9 +52,10 @@ If you find yourself touching a fourth central registry, stop — you've left th
   - `extractor.rs` — walk inner instructions
   - `translator.rs` — wire → domain translation
 - Create a top-level struct (e.g. `MeteoraDlmm`) implementing `EventExtractor`
-  (`extract_events`). Register the module in `application/extraction/meteora.rs`.
-- **Dispatch point 1**: add the branch in `ExtrationDispacher::extract` + the field + the
-  `::new()` call.
+  (`extract_events` **and** `is_implemented` — the compiler asks, since it has no default).
+  Register the module in `application/extraction/meteora.rs`.
+- **Dispatch point 1**: add the branch in `ExtractionDispatcher::extract`, the branch in
+  `::implemented_protocols`, the field, and the `::new()` call.
 
 **Domain side** — template: `crates/core/src/domain/meteora/damm_v2/`
 - Per event kind, create `domain/<platform>/<product>/<event_kind>/` with `model.rs` and

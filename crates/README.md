@@ -207,7 +207,8 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - Create a module under `application/extraction/<platform>/<product>/` (e.g. `extraction/meteora/dlmm/`). Split responsibilities following the DAMM v2 pattern: `events.rs` for wire events (borsh mirrors), `extractor.rs` for walking inner instructions, `translator.rs` for wire → domain translation.
 - Create a top-level struct (e.g. `MeteoraDlmm`) and implement `EventExtractor`. Its input is a `OnChainTransaction` — the neutral shape every source adapter fills — so no protocol handler ever names a transport.
-- Add a new branch to `ExtractionDispatcher::extract` that routes the new `Protocol` variant to the new struct.
+- ⚠️ **Answer `EventExtractor::is_implemented` honestly.** It has no default, so the compiler asks: `false` while the body is a stub, `true` when it really extracts. It decides whether the ingestion *subscribes to the program id*, so a `true` on a stub buys a firehose — every transaction of the program fetched or streamed, decoded, and discarded — for zero rows. Flip it in the same change that fills the extractor.
+- Add a new branch to `ExtractionDispatcher::extract` that routes the new `Protocol` variant to the new struct, and one to `ExtractionDispatcher::implemented_protocols` beside it.
 
 **Domain side**:
 
@@ -260,6 +261,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | Dispatch point | Crate | Concern |
 |---|---|---|
 | `ExtractionDispatcher::extract` | `core` | transaction → events |
+| `ExtractionDispatcher::implemented_protocols` | `core` | whether the ingestion subscribes to it at all |
 | `decode_pool_account` | `core` | account bytes → properties |
 | `EventPersistor::persist` | `indexer` | event → sub-persistor |
 | `init_event_persistor` (`bootstrap/daemon.rs`) | `indexer` | sub-persistor instantiation |

@@ -100,6 +100,7 @@ impl RpcListener {
         // is a configuration failure, and letting each worker rediscover it
         // would spend a retry budget on something that cannot get better.
         let credential = Credential::new(self.endpoint.header())?;
+        self.check_scheme()?;
         info!(
             endpoint = %self.endpoint,
             header = credential.name().unwrap_or("none"),
@@ -204,6 +205,35 @@ impl RpcListener {
         }
 
         Ok(())
+    }
+
+    /// Refuse an endpoint this path cannot speak, before any worker exists.
+    ///
+    /// ⚠️ **The mirror of the gRPC path's check, and it is not symmetry for its
+    /// own sake.** `INGEST_STREAM_URL` is read by both sources: an operator who
+    /// tried Yellowstone, set `https://grpc.provider/`, then went back to
+    /// `INGEST_SOURCE=rpc` keeps that URL. `PubsubClient::new` does not refuse
+    /// it — it just fails to connect — so the failure would arrive as
+    /// `RPC_WORKER_MAX_RETRIES` attempts with backoff **per watched pool**, and
+    /// then `AllWorkersGaveUp`: a configuration fault wearing the costume of an
+    /// unreachable provider, multiplied by the fleet.
+    fn check_scheme(&self) -> Result<(), RpcListenerError> {
+        // `SecretUrl::scheme` rather than `expose`: this function consumes
+        // nothing, it only asks a question, and the rest of the URL carries the
+        // key whenever the operator put it there. The exposure guard in
+        // `yog-bootstrap` refused the first version of this line for that
+        // reason.
+        match self.endpoint.url().scheme().as_deref() {
+            Some("ws" | "wss") => Ok(()),
+            Some(other) => Err(RpcListenerError::InvalidEndpoint {
+                reason: format!(
+                    "`INGEST_STREAM_URL` carries the `{other}` scheme. `logsSubscribe` is a WebSocket: use `wss://`, or `ws://` for a local validator. An `https://` address is what a Yellowstone gRPC endpoint looks like — `INGEST_SOURCE=grpc` is what reads it."
+                ),
+            }),
+            None => Err(RpcListenerError::InvalidEndpoint {
+                reason: "`INGEST_STREAM_URL` has no scheme. `logsSubscribe` is a WebSocket: write `wss://host`, or `ws://` for a local validator.".to_string(),
+            }),
+        }
     }
 
     async fn build_subscription_targets(

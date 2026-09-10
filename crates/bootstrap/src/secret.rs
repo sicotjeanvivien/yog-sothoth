@@ -158,6 +158,25 @@ impl SecretUrl {
         &self.0
     }
 
+    /// The URL's scheme, lowercased, without handing out the rest.
+    ///
+    /// ⚠️ **A question answered by the type, instead of a call to
+    /// [`SecretUrl::expose`] at a site that consumes nothing.** Both listeners
+    /// have to refuse an endpoint whose scheme belongs to the other path —
+    /// `INGEST_STREAM_URL` is read by both sources, so switching one and
+    /// forgetting the other is the ordinary mistake — and doing that through
+    /// `expose` would widen the whole URL to a `&str` inside a function whose
+    /// only other job is building an error message. `exposure_tests` refused
+    /// exactly that on 10 September 2026, and it was right to.
+    ///
+    /// `None` when there is no `://` at all, which is its own misconfiguration
+    /// and worth telling apart from a wrong scheme.
+    pub fn scheme(&self) -> Option<String> {
+        self.0
+            .split_once("://")
+            .map(|(scheme, _)| scheme.to_ascii_lowercase())
+    }
+
     /// Build one directly, for a test in another crate. Behind `test-support`
     /// for the reason spelled out on [`SecretKey::for_tests`].
     #[cfg(feature = "test-support")]
