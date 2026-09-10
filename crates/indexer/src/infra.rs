@@ -7,5 +7,5 @@ pub(crate) use grpc::{GrpcBufferMetrics, GrpcListenerMetrics};
 
 pub(crate) use rpc::{
     DispatcherMetrics, FetchError, QualifiedSignature, RawLogEvent, RpcListener,
-    SignatureDispatcher, SubscriptionEvent, SubscriptionTarget, TransactionFetcher, from_rpc,
+    SignatureDispatcher, TransactionFetcher, from_rpc,
 };

@@ -1,11 +1,13 @@
 mod dispatcher;
 mod listener;
+mod subscription_worker;
 mod transaction_adapter;
 mod transaction_fetcher;
 mod types;
 
 pub(crate) use dispatcher::{DispatcherMetrics, SignatureDispatcher};
 pub(crate) use listener::RpcListener;
+pub(crate) use subscription_worker::SubscriptionWorker;
 pub(crate) use transaction_adapter::from_rpc;
 pub(crate) use transaction_fetcher::{FetchError, TransactionFetcher};
 pub(crate) use types::{QualifiedSignature, RawLogEvent, SubscriptionEvent, SubscriptionTarget};
