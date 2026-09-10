@@ -4,86 +4,60 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 use yog_core::{
     application::extraction::{
-        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, discriminator_hex,
+        ExtractionDispatcher, ExtractionFailure, ExtractionOutcome, OnChainTransaction,
+        discriminator_hex,
     },
     domain::Protocol,
 };
 
-use crate::{
-    application::services::{EventPersistor, TransactionProcessorMetrics},
-    infra::{FetchError, TransactionFetcher, from_rpc},
-};
+use crate::application::services::{EventPersistor, TransactionProcessorMetrics};
 
-/// Core pipeline — receives a signature, fetches the full transaction via
-/// the TransactionFetcher, dispatches to the appropriate protocol handler,
-/// hands each extracted domain event to the EventPersistor.
+/// Core pipeline — receives a transaction a source has already delivered,
+/// dispatches it to the appropriate protocol handler, and hands each extracted
+/// domain event to the EventPersistor.
+///
+/// # Why it does not fetch
+///
+/// It used to, and that was the JSON-RPC acquisition model leaking into the
+/// shared half of the pipeline. Fetching is what `logsSubscribe` forces —
+/// Yellowstone delivers the transaction whole — so it belongs to the source
+/// that needs it, `infra::rpc`, and what arrives here is the same
+/// `OnChainTransaction` whichever source produced it.
 pub(crate) struct TransactionProcessor {
-    fetcher: Arc<TransactionFetcher>,
     extractor: Arc<ExtractionDispatcher>,
     persistor: Arc<EventPersistor>,
 }
 
 impl TransactionProcessor {
     pub(crate) fn new(
-        fetcher: Arc<TransactionFetcher>,
         extractor: Arc<ExtractionDispatcher>,
         persistor: Arc<EventPersistor>,
     ) -> Self {
         Self {
-            fetcher,
             extractor,
             persistor,
         }
     }
 
-    /// Handle a transaction signature received from the WebSocket.
+    /// Handle one transaction delivered by a source.
     ///
     /// Pipeline:
-    ///   1. Fetch the full transaction via the TransactionFetcher.
-    ///   2. Adapt the RPC response into the neutral `OnChainTransaction`, then
-    ///      delegate event extraction to the protocol-specific handler.
-    ///   3. Hand each extracted event to the EventPersistor — failures
+    ///   1. Delegate event extraction to the protocol-specific handler.
+    ///   2. Hand each extracted event to the EventPersistor — failures
     ///      on one event never abort the others.
-    ///   4. Surface unknown discriminators and extraction failures as
+    ///   3. Surface unknown discriminators and extraction failures as
     ///      metrics + structured logs.
-    pub(crate) async fn process(
+    pub(crate) async fn process_transaction(
         &self,
         protocol: Protocol,
-        signature: Signature,
+        transaction: &OnChainTransaction,
     ) -> anyhow::Result<()> {
         let mut guard = ExitGuard::new(protocol);
+        let signature = transaction.position.signature;
 
-        info!(%signature, protocol = %protocol.as_str(), "received signature");
+        info!(%signature, protocol = %protocol.as_str(), "processing transaction");
 
-        let start = Instant::now();
-        let result = self.fetcher.fetch(signature).await;
-        TransactionProcessorMetrics::record_fetch_duration(
-            &protocol,
-            start.elapsed().as_secs_f64(),
-        );
-
-        let tx = match result {
-            Ok(tx) => tx,
-            Err(FetchError::NotFound) => {
-                TransactionProcessorMetrics::record_fetch_not_found(&protocol);
-                guard.set("fetch_not_found");
-                return Ok(());
-            }
-            Err(e) => {
-                TransactionProcessorMetrics::record_fetch_failure(&protocol, e.metric_label());
-                guard.set("fetch_failure");
-                return Err(e.into());
-            }
-        };
-
-        // The RPC response becomes the neutral transaction before extraction sees
-        // it — `core` names no transport. A malformation caught here (no
-        // signature, no `blockTime`) is the very same transaction-level
-        // failure extraction used to raise on its own, so it takes the same
-        // exit: one log, one metric label, no partial persistence.
-        let outcome = match from_rpc(&tx)
-            .and_then(|on_chain_tx| self.extractor.extract(protocol, &on_chain_tx))
-        {
+        let outcome = match self.extractor.extract(protocol, transaction) {
             Ok(o) => o,
             Err(e) => {
                 error!(%signature, error = %e, "extraction failed at transaction level");
@@ -160,6 +134,12 @@ fn failure_kind(f: &ExtractionFailure) -> &'static str {
 // ---------------------------------------------------------------------------
 
 /// RAII guard that records the outcome and duration of `index_transaction`.
+///
+/// ⚠️ **It no longer spans the fetch**, because the fetch is no longer here.
+/// `yog_indexer_index_transaction_duration_seconds` therefore measures
+/// extract-and-persist alone — which is what makes it the same measurement on
+/// both acquisition paths, and so worth comparing. Fetch latency has its own
+/// histogram on the one path that has a fetch.
 struct ExitGuard {
     protocol: Protocol,
     outcome: Option<&'static str>,

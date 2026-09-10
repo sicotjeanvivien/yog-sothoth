@@ -11,12 +11,11 @@ use yog_bootstrap::{Endpoint, SecretUrl};
 use yog_core::domain::Protocol;
 
 use crate::{
-    application::workers::SubscriptionWorker,
     bootstrap::IngestScope,
     error::{RpcListenerError, SubscriptionWorkerError},
     infra::{
         Credential,
-        rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+        rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},
     },
 };
 

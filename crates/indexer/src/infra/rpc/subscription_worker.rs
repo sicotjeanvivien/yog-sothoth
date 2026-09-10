@@ -14,7 +14,10 @@ use yog_bootstrap::SecretUrl;
 
 use crate::{
     error::SubscriptionWorkerError,
-    infra::{Credential, RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+    infra::{
+        Credential,
+        rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget},
+    },
 };
 
 /// Bounds for the worker's internal retry loop.
@@ -24,6 +27,20 @@ const INITIAL_BACKOFF_SECS: u64 = 1;
 const MAX_BACKOFF_SECS: u64 = 60;
 
 /// A self-contained subscription task.
+///
+/// # Why it lives in `infra/rpc/` and not in `application/workers/`
+///
+/// It was next to `IndexerWorker` because both are called workers, which is a
+/// resemblance of vocabulary and not of subject. This one speaks WebSocket,
+/// holds a [`Credential`] and a `SubscriptionTarget`, and exists only because
+/// `logsSubscribe` accepts one pubkey per subscription — every line of it is
+/// about a transport. `IndexerWorker` is a use case: it consumes what a source
+/// delivered and knows no transport at all.
+///
+/// Keeping it under `application` made the dependency run the wrong way twice
+/// over — `application` reaching into `infra` for the types it needs, and
+/// `infra::rpc::listener` reaching back into `application` to spawn it. Moving
+/// the file removes both, and it is the only thing that had to move for that.
 ///
 /// Each worker owns its own `PubsubClient` (one WebSocket connection per
 /// worker). This wastes a connection per subscription but keeps the worker

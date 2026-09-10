@@ -1,17 +1,19 @@
-//! Indexer worker — consumes qualified signatures from the dispatcher and
-//! drives `TransactionProcessor::index_transaction` with bounded concurrency.
+//! Indexer worker — consumes what a [`TransactionSource`] delivered and drives
+//! `TransactionProcessor::process_transaction` with bounded concurrency.
 //!
 //! Responsibility split:
 //! - `run` owns the receive loop and the shutdown semantics.
-//! - `dispatch_one` handles a single qualified signature (permit + spawn).
-//! - `index_one` runs inside the spawned task and owns per-signature logging.
+//! - `dispatch_one` handles a single transaction (permit + spawn).
+//! - `index_one` runs inside the spawned task and owns per-transaction logging.
 //!
 //! Error semantics:
-//! - Per-signature failures are logged and counted, never propagated.
+//! - Per-transaction failures are logged and counted, never propagated.
 //!   A single failing transaction must not stop the pipeline.
 //! - Loop-level failures (closed semaphore, closed channel in an
 //!   unexpected state) are propagated as `IndexerWorkerError` and bubble
 //!   up to `Daemon::run`.
+//!
+//! [`TransactionSource`]: crate::application::source::TransactionSource
 
 use std::sync::Arc;
 use tokio::sync::{Semaphore, mpsc};
@@ -19,16 +21,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::{
-    application::services::TransactionProcessor, error::IndexerWorkerError,
-    infra::QualifiedSignature,
+    application::{
+        services::TransactionProcessor, source::IngestedTransaction,
+        workers::indexer_metrics::IndexerWorkerMetrics,
+    },
+    error::IndexerWorkerError,
 };
 
-/// Maximum number of `index_transaction` calls running concurrently.
-///
-/// Sized against the Helius free tier (10 req/s) with headroom.
-const MAX_CONCURRENT_INDEX_TASKS: usize = 15;
-
-/// Worker that consumes qualified signatures and indexes them with
+/// Worker that consumes delivered transactions and indexes them with
 /// bounded concurrency.
 pub(crate) struct IndexerWorker {
     processor: Arc<TransactionProcessor>,
@@ -36,10 +36,23 @@ pub(crate) struct IndexerWorker {
 }
 
 impl IndexerWorker {
-    pub(crate) fn new(processor: Arc<TransactionProcessor>) -> Self {
+    /// # The concurrency bound is an argument, not a constant
+    ///
+    /// ⚠️ It used to be a `15` written here, sized against the RPC quota — and
+    /// that number belonged to the fetch, which is now the business of the one
+    /// source that has to fetch. What bounds *this* stage is the database: every
+    /// task in flight holds a connection while it persists, so beyond what the
+    /// pool holds an extra task adds no throughput — it queues and then fails
+    /// on `acquire_timeout`.
+    ///
+    /// It is passed in rather than computed here because the bound is not the
+    /// pool's size but the pool's size *minus its other users in this process*,
+    /// and only the composition root knows who those are — see
+    /// `bootstrap::daemon::index_concurrency`.
+    pub(crate) fn new(processor: Arc<TransactionProcessor>, max_concurrent: usize) -> Self {
         Self {
             processor,
-            semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_INDEX_TASKS)),
+            semaphore: Arc::new(Semaphore::new(max_concurrent)),
         }
     }
 
@@ -47,25 +60,44 @@ impl IndexerWorker {
     /// the shutdown token is triggered.
     pub(crate) async fn run(
         self,
-        mut rx: mpsc::Receiver<QualifiedSignature>,
+        mut rx: mpsc::Receiver<IngestedTransaction>,
         shutdown: CancellationToken,
     ) -> Result<(), IndexerWorkerError> {
-        info!("IndexerWorker started");
+        info!(
+            max_concurrent = self.semaphore.available_permits(),
+            "IndexerWorker started"
+        );
 
         loop {
             tokio::select! {
+                // `biased`: a `dispatch_one` that returned because the token
+                // fired must not be followed by another message being taken
+                // instead of the stop.
+                biased;
+
+                _ = shutdown.cancelled() => {
+                    info!("shutdown requested — indexer worker stopping");
+                    // What is still queued dies with the receiver. Counted
+                    // rather than merely lost: these transactions were paid for
+                    // by a source — a request on one path, bandwidth on the
+                    // other — and nothing re-requests them.
+                    let dropped = drain_and_count(&mut rx);
+                    if dropped > 0 {
+                        info!(dropped, "queued transactions dropped at shutdown");
+                    }
+                    return Ok(());
+                }
+
                 maybe_msg = rx.recv() => {
                     match maybe_msg {
-                        Some(qs) => self.dispatch_one(qs, rx.len()).await?,
+                        Some(ingested) => {
+                            self.dispatch_one(ingested, rx.len(), &shutdown).await?
+                        }
                         None => {
                             info!("upstream channel closed — indexer worker stopping");
                             return Ok(());
                         }
                     }
-                }
-                _ = shutdown.cancelled() => {
-                    info!("shutdown requested — indexer worker stopping");
-                    return Ok(());
                 }
             }
         }
@@ -75,27 +107,45 @@ impl IndexerWorker {
     ///
     /// Blocks only on permit acquisition — indexing itself runs in a
     /// detached task so the receive loop can keep draining the channel.
+    ///
+    /// ⚠️ **The wait is interruptible**, for the same reason the source's is:
+    /// `run`'s cancellation arm is not polled while this future is pending, so
+    /// a bare `acquire_owned` would keep the worker alive as long as the
+    /// permits stay held. sqlx bounds how long a *connection* takes to acquire
+    /// and nothing bounds how long a statement runs, so "the permits come back
+    /// shortly" is an assumption, not a guarantee. The rule is written on
+    /// `TransactionSource`; applying it to the producer and not to the consumer
+    /// of the same channel would be applying it to one site in two.
     async fn dispatch_one(
         &self,
-        qs: QualifiedSignature,
+        ingested: IngestedTransaction,
         queue_depth: usize,
+        shutdown: &CancellationToken,
     ) -> Result<(), IndexerWorkerError> {
-        let permit = Arc::clone(&self.semaphore)
-            .acquire_owned()
-            .await
-            .map_err(|_| IndexerWorkerError::SemaphoreClosed)?;
+        let permit = tokio::select! {
+            biased;
+
+            _ = shutdown.cancelled() => {
+                IndexerWorkerMetrics::record_dropped(&ingested.protocol, "shutdown");
+                return Ok(());
+            }
+
+            permit = Arc::clone(&self.semaphore).acquire_owned() => {
+                permit.map_err(|_| IndexerWorkerError::SemaphoreClosed)?
+            }
+        };
 
         debug!(
             queue_depth,
             permits_available = self.semaphore.available_permits(),
-            protocol = %qs.protocol.as_str(),
-            signature = %qs.signature,
-            "dispatching signature to indexer service"
+            protocol = %ingested.protocol.as_str(),
+            signature = %ingested.transaction.position.signature,
+            "dispatching transaction to indexer service"
         );
 
         let processor = Arc::clone(&self.processor);
         tokio::spawn(async move {
-            index_one(processor, qs).await;
+            index_one(processor, ingested).await;
             drop(permit);
         });
 
@@ -103,15 +153,39 @@ impl IndexerWorker {
     }
 }
 
-/// Index a single signature. Per-signature errors are logged and counted,
-/// never propagated — they must not stop the pipeline.
-async fn index_one(processor: Arc<TransactionProcessor>, qs: QualifiedSignature) {
-    let QualifiedSignature {
-        protocol,
-        signature,
-    } = qs;
+/// Count what is still in the channel when the worker stops.
+///
+/// ⚠️ **A snapshot, and it says so.** A source may still be sending while this
+/// runs, so the figure is what was queued at the moment the loop gave up, not a
+/// total of everything the shutdown will cost. It is the number that exists;
+/// the alternative was no number at all.
+///
+/// Returns the count so the caller can log it **and so a test can assert it** —
+/// the metric it increments is invisible to a test, and a drain that silently
+/// stopped draining would look exactly like a shutdown with an empty channel.
+fn drain_and_count(rx: &mut mpsc::Receiver<IngestedTransaction>) -> usize {
+    let mut dropped = 0usize;
+    while let Ok(ingested) = rx.try_recv() {
+        IndexerWorkerMetrics::record_dropped(&ingested.protocol, "shutdown_queued");
+        dropped += 1;
+    }
+    dropped
+}
 
-    match processor.process(protocol, signature).await {
+#[cfg(test)]
+#[path = "indexer_tests.rs"]
+mod tests;
+
+/// Index a single transaction. Per-transaction errors are logged and counted,
+/// never propagated — they must not stop the pipeline.
+async fn index_one(processor: Arc<TransactionProcessor>, ingested: IngestedTransaction) {
+    let IngestedTransaction {
+        protocol,
+        transaction,
+    } = ingested;
+    let signature = transaction.position.signature;
+
+    match processor.process_transaction(protocol, &transaction).await {
         Ok(()) => {
             debug!(%signature, "process ok");
         }

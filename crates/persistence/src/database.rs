@@ -17,12 +17,34 @@ pub struct Database {
 }
 
 impl Database {
+    /// How many connections [`Database::connect`] opens.
+    ///
+    /// It is only the **default**: a caller sizing itself against the pool must
+    /// ask [`Database::max_connections`], which is the pool that was actually
+    /// opened. This constant says what `connect` uses when nobody chose;
+    /// reading it as "the pool size" is wrong the moment someone calls
+    /// `connect_with_options`.
+    ///
+    /// Public so that the two can be compared and so that a caller can size a
+    /// pool deliberately — not as a number for other components to copy.
+    pub const DEFAULT_MAX_CONNECTIONS: u32 = 10;
+
+    /// How long [`Database::connect`] waits for a free connection before
+    /// giving up — what a caller whose statements out-number the pool hits.
+    ///
+    /// Named rather than inlined because it is the deadline that turns pool
+    /// contention into an error, and a component reasoning about that
+    /// contention should be able to name the number it is racing.
+    pub const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
+
     /// Connect to Postgres using the provided URL.
     ///
     /// Pool sizing defaults are chosen for a small-to-medium workload:
-    ///   - `max_connections = 10`: enough for the indexer's concurrent task
-    ///     processing or the api's request fan-out at v0.1 traffic levels.
-    ///   - `acquire_timeout = 5s`: fail fast rather than queue indefinitely.
+    ///   - [`Database::DEFAULT_MAX_CONNECTIONS`]: enough for the indexer's
+    ///     concurrent task processing or the api's request fan-out at v0.1
+    ///     traffic levels.
+    ///   - [`Database::DEFAULT_ACQUIRE_TIMEOUT`]: fail fast rather than queue
+    ///     indefinitely.
     ///
     /// Callers needing different sizing should use `connect_with_options`.
     ///
@@ -30,7 +52,12 @@ impl Database {
     /// best surfaced with their original context (configuration, IO, TLS,
     /// authentication…) rather than wrapped behind a generic error type.
     pub async fn connect(url: &str) -> Result<Self, sqlx::Error> {
-        Self::connect_with_options(url, 10, Duration::from_secs(5)).await
+        Self::connect_with_options(
+            url,
+            Self::DEFAULT_MAX_CONNECTIONS,
+            Self::DEFAULT_ACQUIRE_TIMEOUT,
+        )
+        .await
     }
 
     /// Connect with explicit pool sizing. The api may want a higher
@@ -72,6 +99,17 @@ impl Database {
             .await?;
 
         Ok(Self { pool })
+    }
+
+    /// How many connections this pool was actually opened with.
+    ///
+    /// ⚠️ **Read this, do not assume [`Database::DEFAULT_MAX_CONNECTIONS`].**
+    /// A caller sizing itself against the pool — the indexer's bounded worker
+    /// does — must ask the pool it was handed, or the two silently part ways
+    /// the day someone calls `connect_with_options`. The constant is the
+    /// default; this is the fact.
+    pub fn max_connections(&self) -> u32 {
+        self.pool.options().get_max_connections()
     }
 
     /// Borrow the underlying pool. Repositories that need to own a pool

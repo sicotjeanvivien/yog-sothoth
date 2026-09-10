@@ -42,12 +42,25 @@ impl SignatureDispatcher {
 
     /// Main loop: consumes raw events until shutdown
     /// or upstream channel closure.
+    ///
+    /// Takes `&self` rather than `self`: it only ever reads its filter chain,
+    /// and the source that owns it holds it in an `Arc` for the life of the
+    /// process rather than handing it to one task.
+    ///
+    /// ⚠️ **Returns nothing, because it cannot fail.** [`DispatcherError`] is a
+    /// *construction* error — the empty filter chain — raised by
+    /// [`SignatureDispatcher::new_with_filters`] before a single event flows.
+    /// Once built, every per-event outcome is a metric: a signature that will
+    /// not parse is counted and dropped, a saturated consumer is counted and
+    /// dropped. Returning a `Result` here promised a runtime failure that has
+    /// no way of happening, and the promise was visible: the `SourceError`
+    /// variant carrying it could not be constructed by any path.
     pub(crate) async fn run(
-        self,
+        &self,
         mut rx: mpsc::Receiver<RawLogEvent>,
         tx: mpsc::Sender<QualifiedSignature>,
         shutdown: CancellationToken,
-    ) -> Result<(), DispatcherError> {
+    ) {
         info!(filters = self.filters.len(), "SignatureDispatcher started");
 
         loop {
@@ -57,13 +70,13 @@ impl SignatureDispatcher {
                         Some(event) => self.handle(event, &tx),
                         None => {
                             info!("upstream channel closed — dispatcher stopping");
-                            return Ok(());
+                            return;
                         }
                     }
                 }
                 _ = shutdown.cancelled() => {
                     info!("shutdown requested — dispatcher stopping");
-                    return Ok(());
+                    return;
                 }
             }
         }

@@ -73,7 +73,8 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
     /// `ON CONFLICT DO UPDATE … WHERE` clause is re-evaluated by Postgres
     /// against the latest committed version (EvalPlanQual); `previous` reads
     /// the statement snapshot. Under concurrent writers on one pool — the
-    /// indexer runs up to `MAX_CONCURRENT_INDEX_TASKS` signatures at once — a
+    /// indexer persists several transactions at once, bounded by this pool's
+    /// own size (`bootstrap::daemon::index_concurrency`) — a
     /// task can be rejected by a row another task has just committed while its
     /// own snapshot never saw that slot, and it then reports
     /// `same_slot_ambiguity: false`.

@@ -43,12 +43,12 @@ use yog_bootstrap::Endpoint;
 use yog_core::domain::Protocol;
 
 use crate::{
+    application::source::IngestedTransaction,
     bootstrap::IngestScope,
     error::GrpcListenerError,
     infra::{
         Credential,
         grpc::{
-            ingested_transaction::IngestedTransaction,
             interceptor::CredentialInterceptor,
             session::{SessionState, StreamSession},
             subscription::build_request,

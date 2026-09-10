@@ -1,5 +1,5 @@
 mod indexer;
-mod subscription;
+mod indexer_metrics;
 
 pub(crate) use indexer::IndexerWorker;
-pub(crate) use subscription::SubscriptionWorker;
+pub(crate) use indexer_metrics::IndexerWorkerMetrics;

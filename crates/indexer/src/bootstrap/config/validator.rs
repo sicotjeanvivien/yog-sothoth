@@ -23,7 +23,7 @@ use super::types::{IngestScope, IngestSource};
 ///
 /// **The two arms have different preconditions, and do not lift together.**
 /// The `grpc` arm goes when what `GrpcListener` emits has a consumer and
-/// `init_listener` has two arms — the listener itself landed on
+/// `init_source` has two arms — the listener itself landed on
 /// 9 September 2026 and did not lift it. The `(rpc, protocols)`
 /// arm goes when `RpcListener::_watch` has a caller — expected of the gRPC
 /// migration, but a separate fact: lifting it merely because gRPC landed
@@ -57,7 +57,7 @@ pub(super) fn check_supported(source: IngestSource, scope: IngestScope) -> Resul
             detail: format!(
                 "INGEST_SOURCE={} (with INGEST_SCOPE={}): the gRPC listener exists but \
                  nothing selects it — what it emits has no consumer yet, and \
-                 `init_listener` has one arm. Use INGEST_SOURCE=rpc.",
+                 `init_source` has one arm. Use INGEST_SOURCE=rpc.",
                 source.as_str(),
                 scope.as_str(),
             ),

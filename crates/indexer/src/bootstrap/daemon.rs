@@ -5,13 +5,14 @@ use crate::{
             DammV2Repos, EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor,
             PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
         },
-        workers::IndexerWorker,
+        source::{IngestedTransaction, TransactionSource},
+        workers::{IndexerWorker, IndexerWorkerMetrics},
     },
     bootstrap::Config,
-    error::{DispatcherError, IndexerWorkerError, RpcListenerError},
+    error::{IndexerWorkerError, SourceError},
     infra::{
-        DispatcherMetrics, GrpcBufferMetrics, GrpcListenerMetrics, QualifiedSignature, RawLogEvent,
-        RpcListener, SignatureDispatcher, TransactionFetcher,
+        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListenerMetrics, RpcListener,
+        RpcTransactionSource, SignatureDispatcher, TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -45,14 +46,20 @@ use yog_persistence::{
 /// Responsibilities:
 /// - initialise all dependencies (database, RPC client, services)
 /// - register the observed protocols at startup
-/// - run the WebSocket listener, the dispatcher and the indexer worker
+/// - run the transaction source and the indexer worker
 /// - handle graceful shutdown on SIGTERM / Ctrl-C
+///
+/// It is the **composition root**, and the only place that knows which
+/// acquisition model is running: it builds one [`TransactionSource`] and
+/// everything downstream sees the trait.
 pub(crate) struct Daemon {
     processor: Arc<TransactionProcessor>,
     watched_pool_service: Arc<WatchedPoolService>,
-    listener: Arc<RpcListener>,
-    dispatcher: SignatureDispatcher,
+    source: Arc<dyn TransactionSource>,
     network_status_reporter: NetworkStatusReporter,
+    /// How many transactions may be persisted at once — computed from the pool
+    /// that was actually opened, see [`index_concurrency`].
+    index_concurrency: usize,
     _database: Database,
 }
 
@@ -67,44 +74,32 @@ impl Daemon {
             .context("database initialization failed")?;
         info!("database initialized");
 
-        let listener = init_listener(&config);
-        info!("RPC listener initialized: {}", config.ingest_stream);
+        // As early as the pool allows: a pool too small to reserve from cannot
+        // run this process, so nothing further — the RPC client, the source,
+        // the processor — is worth building. It cannot come before
+        // `database initialized` above, since that is the line that creates the
+        // pool it reads.
+        let index_concurrency = index_concurrency(database.max_connections())?;
+        info!(index_concurrency, "index concurrency derived from the pool");
 
-        let rpc_client = Arc::new(RpcClient::new(
-            config.ingest_transaction.url().expose().to_string(),
-        ));
-        info!(
-            "transaction RPC client initialized: {}",
-            config.ingest_transaction
-        );
+        let source = init_source(&config).context("transaction source initialization failed")?;
+        info!("transaction source initialized: {}", config.ingest_stream);
 
-        let processor = init_processor(
-            &database,
-            rpc_client.clone(),
-            config.ingest_transaction.url(),
-        )
-        .await
-        .context("indexer service initialization failed")?;
+        let processor = init_processor(&database);
         info!("indexer service initialized");
 
-        let network_status_reporter = init_network_status_reporter(
-            &database,
-            rpc_client.clone(),
-            config.ingest_transaction.url(),
-        )
-        .await
-        .context("network_status_reporter initialization failed")?;
+        let network_status_reporter = init_network_status_reporter(&database, &config)
+            .await
+            .context("network_status_reporter initialization failed")?;
 
-        let watched_pool_service = init_watched_pool_service(&database, listener.clone())
+        let watched_pool_service = init_watched_pool_service(&database, Arc::clone(&source))
             .await
             .context("watched pool service initialization failed")?;
         info!("watched pool service initialized");
 
-        let dispatcher =
-            SignatureDispatcher::new_default().context("dispatcher initialization failed")?;
-        info!("dispatcher initialized");
-
         DispatcherMetrics::register_descriptions();
+        FetchMetrics::register_descriptions();
+        IndexerWorkerMetrics::register_descriptions();
         TransactionProcessorMetrics::register_descriptions();
         EventPersistorMetrics::register_descriptions();
         // The gRPC path's two families are registered whichever source is
@@ -123,46 +118,47 @@ impl Daemon {
         Ok(Self {
             processor,
             watched_pool_service,
-            listener,
-            dispatcher,
+            source,
             network_status_reporter,
+            index_concurrency,
             _database: database,
         })
     }
 
     /// Start the daemon. Consumes `self` — cannot be called twice.
     ///
-    /// Spawns three tasks connected by bounded channels:
+    /// Spawns three tasks, and the ingestion half of the graph is **one edge**:
     ///
     /// ```text
-    /// listener → (RawLogEvent) → dispatcher → (QualifiedSignature) → indexer worker
+    /// source → (IngestedTransaction) → indexer worker
     /// ```
+    ///
+    /// Whatever a source needs to produce that — a fleet of WebSockets, a
+    /// filter chain and a fetch stage on one path, a single stream on the
+    /// other — it owns and supervises itself. This graph does not change when
+    /// the source does, which is the point of the port.
     ///
     /// Returns as soon as any task fails or the shutdown token is
     /// triggered. All remaining tasks are cancelled via the shared
     /// token.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         self.watched_pool_service.restore_subscriptions().await?;
-        let (raw_tx, raw_rx) = mpsc::channel::<RawLogEvent>(10_000);
-        let (sig_tx, sig_rx) = mpsc::channel::<QualifiedSignature>(10_000);
+        let (tx, rx) = mpsc::channel::<IngestedTransaction>(INGESTED_CHANNEL_CAPACITY);
 
-        let ws_task = spawn_websocket_task(Arc::clone(&self.listener), raw_tx, shutdown.clone());
-        let dispatcher_task =
-            spawn_dispatcher_task(self.dispatcher, raw_rx, sig_tx, shutdown.clone());
-        let indexer_task =
-            spawn_indexer_task(Arc::clone(&self.processor), sig_rx, shutdown.clone());
-
+        let source_task = spawn_source_task(Arc::clone(&self.source), tx, shutdown.clone());
+        let indexer_task = spawn_indexer_task(
+            Arc::clone(&self.processor),
+            rx,
+            self.index_concurrency,
+            shutdown.clone(),
+        );
         let reporter_task =
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
 
         tokio::select! {
-            result = ws_task => {
+            result = source_task => {
                 shutdown.cancel();
-                handle_task_result(result, "WebSocket listener")?
-            }
-            result = dispatcher_task => {
-                shutdown.cancel();
-                handle_task_result(result, "dispatcher")?
+                handle_task_result(result, "transaction source")?
             }
             result = indexer_task => {
                 shutdown.cancel();
@@ -177,6 +173,17 @@ impl Daemon {
         Ok(())
     }
 }
+
+/// How many delivered transactions may queue before the source is made to wait.
+///
+/// ⚠️ **Ten times smaller than the channels it replaces, and on purpose.** What
+/// queued between the old stages was a signature and a little text, so 10 000
+/// of them cost nothing. What queues here is a whole transaction — 5–20 kB
+/// each — so the same figure would be 50–200 MB in this channel alone, on top
+/// of the gRPC path's own pending buffer. 1 000 is 5–20 MB and still leaves two
+/// orders of magnitude more room than the worker's concurrency bound, which is
+/// what actually drains it.
+const INGESTED_CHANNEL_CAPACITY: usize = 1_000;
 
 // ── Initialisation helpers ───────────────────────────────────────────────────
 
@@ -193,13 +200,44 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     Ok(db)
 }
 
-/// Create the RPC WebSocket listener with its watched protocols.
-fn init_listener(config: &Config) -> Arc<RpcListener> {
-    Arc::new(RpcListener::new(
+/// Build the transaction source the configuration selects.
+///
+/// ⚠️ **One arm today, and `INGEST_SOURCE` is still not read here.** The gRPC
+/// source is written and reachable by nothing — `check_supported` refuses
+/// `INGEST_SOURCE=grpc` at load time, and lifting that refusal is the next
+/// slice of `03 - active/listener-grpc-yellowstone.md`. This function is the
+/// single place that will grow the second arm, and the only place in the crate
+/// that will ever name a concrete source.
+fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
         config.scope,
-    ))
+    ));
+    let dispatcher =
+        Arc::new(SignatureDispatcher::new_default().context("dispatcher initialization failed")?);
+    // ⚠️ **The RPC client is built here, inside the arm that needs one.** It
+    // used to be built by `Daemon::new` and handed in, because the reporter
+    // wanted one too — which made the composition root assemble an ingredient
+    // belonging to exactly one of the two sources, and gave this function a
+    // parameter the gRPC arm could only ignore. Raised in review of PR #139.
+    // The price of not sharing is a second connection pool against the same
+    // host, for a caller that makes one request every fifteen seconds.
+    let rpc_client = Arc::new(RpcClient::new(
+        config.ingest_transaction.url().expose().to_string(),
+    ));
+    info!(
+        "transaction RPC client initialized: {}",
+        config.ingest_transaction
+    );
+    let fetcher = Arc::new(TransactionFetcher::new(
+        rpc_client,
+        config.ingest_transaction.url(),
+    ));
+
+    Ok(Arc::new(RpcTransactionSource::new(
+        listener, dispatcher, fetcher,
+    )))
 }
 
 /// Build the EventPersistor: shared pool maintenance plus the per-protocol
@@ -259,39 +297,41 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 }
 
 /// Initialise the indexer service and its repository dependencies.
-async fn init_processor(
-    database: &Database,
-    rpc_client: Arc<RpcClient>,
-    rpc_url: SecretUrl,
-) -> anyhow::Result<Arc<TransactionProcessor>> {
-    let transaction_fetcher = Arc::new(TransactionFetcher::new(rpc_client.clone(), rpc_url));
-    info!("transaction fetcher initialized");
+fn init_processor(database: &Database) -> Arc<TransactionProcessor> {
     let extraction_dispatcher = Arc::new(ExtractionDispatcher::new());
     info!("event extractor initialized");
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
 
-    let processor = Arc::new(TransactionProcessor::new(
-        Arc::clone(&transaction_fetcher),
-        Arc::clone(&extraction_dispatcher),
-        Arc::clone(&event_persistor),
-    ));
-    info!("indexer service initialized");
-
-    Ok(processor)
+    Arc::new(TransactionProcessor::new(
+        extraction_dispatcher,
+        event_persistor,
+    ))
 }
 
-/// Initialise the NetworkStautsReporter and its repository dependency
+/// Initialise the NetworkStautsReporter and its repository dependency.
+///
+/// ⚠️ **It opens its own RPC client**, rather than borrowing the ingestion's.
+/// Sharing one made the reporter's health probe and the fetcher's transport the
+/// same object, which is a coincidence of endpoint and not a shared concern —
+/// and it is why the client used to be built one storey up, where neither of
+/// them lives.
+///
+/// ⚠️ **And what it should measure is an open question**, tracked by
+/// `01 - inbox/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
+/// this probe reads `INGEST_TRANSACTION`, which the gRPC source will not use.
 async fn init_network_status_reporter(
     database: &Database,
-    rpc_client: Arc<RpcClient>,
-    rpc_url: SecretUrl,
+    config: &Config,
 ) -> anyhow::Result<NetworkStatusReporter> {
     let pg_network_status_reporter_repository =
         Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
+    let rpc_client = Arc::new(RpcClient::new(
+        config.ingest_transaction.url().expose().to_string(),
+    ));
     Ok(NetworkStatusReporter::new(
         rpc_client,
-        rpc_url,
+        config.ingest_transaction.url(),
         pg_network_status_reporter_repository,
     ))
 }
@@ -299,47 +339,92 @@ async fn init_network_status_reporter(
 // Initialise the WatchedPoolService and its repository dependency.
 async fn init_watched_pool_service(
     database: &Database,
-    listener: Arc<RpcListener>,
+    source: Arc<dyn TransactionSource>,
 ) -> anyhow::Result<Arc<WatchedPoolService>> {
     let pg_watched_pool_repository =
         Arc::new(PgWatchedPoolRepository::new(database.pool().clone()));
     Ok(Arc::new(WatchedPoolService::new(
-        listener,
+        source,
         pg_watched_pool_repository,
     )))
 }
 // ── Task spawners ────────────────────────────────────────────────────────────
 
-/// Spawn the WebSocket listener task.
-fn spawn_websocket_task(
-    listener: Arc<RpcListener>,
-    tx: mpsc::Sender<RawLogEvent>,
+/// Spawn the ingestion task — whatever shape the source's own graph has.
+fn spawn_source_task(
+    source: Arc<dyn TransactionSource>,
+    tx: mpsc::Sender<IngestedTransaction>,
     shutdown: CancellationToken,
-) -> JoinHandle<Result<(), RpcListenerError>> {
-    tokio::spawn(async move { listener.run(tx, shutdown).await })
+) -> JoinHandle<Result<(), SourceError>> {
+    tokio::spawn(async move { source.run(tx, shutdown).await })
 }
 
-/// Spawn the dispatcher task.
-fn spawn_dispatcher_task(
-    dispatcher: SignatureDispatcher,
-    raw_rx: mpsc::Receiver<RawLogEvent>,
-    sig_tx: mpsc::Sender<QualifiedSignature>,
-    shutdown: CancellationToken,
-) -> JoinHandle<Result<(), DispatcherError>> {
-    tokio::spawn(async move { dispatcher.run(raw_rx, sig_tx, shutdown).await })
+/// How many connections the pool's *other* in-process users may need while the
+/// indexer worker is running.
+///
+/// One today: [`NetworkStatusReporter`] upserts a snapshot on every tick.
+/// `WatchedPoolService` is not counted — it restores subscriptions once, before
+/// the worker is spawned, and never touches the pool again.
+const CONNECTIONS_RESERVED: u32 = 1;
+
+/// How many transactions may be persisted concurrently.
+///
+/// # ⚠️ The mechanism, stated correctly
+///
+/// A task does **not** hold a connection for its lifetime. Every repository
+/// call executes against `&PgPool`, so sqlx takes a connection per *statement*
+/// and returns it — nothing in `crates/persistence` opens a transaction or
+/// calls `acquire`. What makes a task-count bound a connection bound is
+/// something else: **an index task issues one statement at a time**. Its
+/// events are persisted in a sequential loop, so *n* tasks put at most *n*
+/// statements in flight, and capping tasks at `pool − 1` leaves the pool one
+/// slot for the reporter.
+///
+/// ⚠️ **And that invariant is not enforced anywhere.** The first sub-persistor
+/// that runs two repository calls under `tokio::join!` doubles a task's
+/// concurrent statements and silently reinstates the failure this bound exists
+/// to prevent: the reporter's `record_snapshot` propagates with `?`, so one
+/// `acquire_timeout` returns `Err`, `Daemon::run` takes the reporter branch,
+/// cancels the shared token, and the process exits — a saturated database
+/// stopping the indexer by way of its health probe, the least legible failure
+/// available. Whoever parallelises a persist owes this line a second look.
+///
+/// Read from the pool that was opened, not from
+/// [`Database::DEFAULT_MAX_CONNECTIONS`], so that sizing the pool differently
+/// resizes this too instead of silently parting ways with it. It takes the
+/// number rather than the `Database` so the boundary is a plain unit test.
+///
+/// # Errors
+///
+/// ⚠️ **Refuses a pool too small to reserve from, rather than clamping to one.**
+/// An earlier version returned `.max(1)`, which defeated the reservation in the
+/// exact case this function exists to prevent: a pool of one hands its only
+/// connection to an index task. Clamping cannot be right here —
+/// `Semaphore::new(0)` would deadlock instead — so the only honest answers are
+/// "refuse" or "open a bigger pool", and a configuration that cannot work
+/// should say so at startup rather than five seconds into a busy minute.
+fn index_concurrency(max_connections: u32) -> anyhow::Result<usize> {
+    anyhow::ensure!(
+        max_connections > CONNECTIONS_RESERVED,
+        "database pool holds {max_connections} connection(s), and {CONNECTIONS_RESERVED} must \
+         stay free for the network status reporter — the indexer would have none left to \
+         persist with. Open the pool with more connections."
+    );
+    Ok((max_connections - CONNECTIONS_RESERVED) as usize)
 }
 
 /// Spawn the indexer worker task.
 ///
-/// Per-signature failures stay inside the worker (logged, counted, not
+/// Per-transaction failures stay inside the worker (logged, counted, not
 /// propagated). Only loop-level failures reach the returned `JoinHandle`
 /// and bubble up to `Daemon::run`.
 fn spawn_indexer_task(
     processor: Arc<TransactionProcessor>,
-    rx: mpsc::Receiver<QualifiedSignature>,
+    rx: mpsc::Receiver<IngestedTransaction>,
+    max_concurrent: usize,
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), IndexerWorkerError>> {
-    let worker = IndexerWorker::new(processor);
+    let worker = IndexerWorker::new(processor, max_concurrent);
     tokio::spawn(async move { worker.run(rx, shutdown).await })
 }
 

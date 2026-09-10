@@ -13,20 +13,22 @@ roles, the add-a-protocol recipe), see [`crates/README.md`](../README.md).
 ```
 indexer/src/
 ├── application/
+│   ├── source.rs          ← the port: TransactionSource + IngestedTransaction
 │   ├── services/          ← TransactionProcessor, EventPersistor + the
 │   │                        per-protocol sub-persistors (meteora/damm_v2/),
 │   │                        PoolMaintenance, WatchedPoolService, metrics
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
-│   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
-│                            subscription supervisor
+│   └── workers/           ← IndexerWorker (bounded-concurrency consumer)
 ├── infra/credential.rs    ← the endpoint's header, validated once, for both paths
 ├── infra/grpc/            ← Yellowstone: listener, subscription, session,
 │                            credential interceptor, protobuf adapter,
-│                            slot/time buffer (nothing selects it yet)
-├── infra/rpc/             ← RpcListener (WebSocket), SignatureDispatcher
-│                            filter chain, TransactionFetcher (HTTP + FetchError)
-├── bootstrap/             ← Config::load(), Daemon (lifecycle, task wiring,
-│                            shutdown, init_event_persistor)
+│                            slot/time buffer (no source built on it yet)
+├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:
+│                            RpcListener + SubscriptionWorker (WebSocket fleet),
+│                            SignatureDispatcher filter chain, FetchWorker +
+│                            TransactionFetcher (HTTP + FetchError)
+├── bootstrap/             ← Config::load(), Daemon (composition root: builds
+│                            the source, wires the tasks, owns shutdown)
 ├── error/                 ← typed error per layer
 ├── bin/inspect_logs.rs    ← ad-hoc debugging helper for raw log streams
 └── main.rs
@@ -137,36 +139,51 @@ because this crate is a binary: an integration target could not reach a
 witness lives in `testdata/golden/`, not `tests/`, so nothing sits in the
 directory Cargo reserves for the targets this crate deliberately does not have.
 
-## Three-stage pipeline
+## One port, and what each source does behind it
 
-The indexer is structured as three Tokio tasks connected by bounded mpsc
-channels. Each stage has a single responsibility, its own typed error channel,
-and its own metrics:
+The daemon's ingestion graph is **one edge**, whichever acquisition model runs:
 
 ```
-┌──────────────┐    raw    ┌──────────────────┐  qualified  ┌────────────────┐
-│ RpcListener  │──────────▶│ SignatureDispat. │────────────▶│ IndexerWorker  │
-│              │  RawLog   │                  │  Signature  │                │
-│ logsSubscribe│  Events   │ filter chain:    │  + protocol │ ↓ semaphore-   │
-│ + reconnect  │           │ failed / invoc.  │             │   bounded      │
-│              │           │                  │             │   spawn        │
-└──────────────┘           └──────────────────┘             └────────┬───────┘
-                                                                     │
-                                                                     ▼
-                                                            ┌─────────────────────┐
-                                                            │ TransactionProcessor│
-                                                            │ fetch (Fetcher) →   │
-                                                            │ extract (Dispatcher)│
-                                                            │ → persist (Persistor)│
-                                                            └─────────────────────┘
+┌────────────────────────┐  IngestedTransaction  ┌────────────────┐
+│ dyn TransactionSource  │──────────────────────▶│ IndexerWorker  │
+│  (application/source)  │   bounded, cap 1 000  │ ↓ semaphore-   │
+└────────────────────────┘                       │   bounded      │
+                                                 └────────┬───────┘
+                                                          ▼
+                                                 ┌─────────────────────┐
+                                                 │ TransactionProcessor│
+                                                 │ extract → persist   │
+                                                 └─────────────────────┘
 ```
 
-**`RpcListener`** owns the WebSocket connection, handles reconnection with
-exponential backoff, and forwards raw log events downstream. It is itself an
-orchestrator of a fleet of `SubscriptionWorker` instances — one per
-`SubscriptionTarget`, each with its own retry budget
-(`RPC_WORKER_MAX_RETRIES`). Solana's `logsSubscribe` accepts exactly one
-pubkey per `mentions` filter, so **what a target is depends on the mode**:
+**Why a port and not a `match`.** The two acquisition models do not differ in
+their transport alone: the JSON-RPC path notifies and then *asks*, so it needs
+a filter chain and a fetch stage and a concurrency bound set by the RPC quota;
+Yellowstone *delivers*, so it needs none of the three. What is identical is
+everything below the transaction. The seam therefore belongs where the two
+converge — on a translated transaction — and a source owns its whole
+sub-graph, however many tasks that takes.
+
+`bootstrap/daemon.rs::init_source` is the only place in the crate that names a
+concrete source — nothing downstream of the port learns which one runs.
+`INGEST_SOURCE` itself is read in `bootstrap/config.rs` and validated by
+`check_supported`; `init_source` does **not** consume it yet, because it has one
+arm. Giving it the second arm, and the `match` on the setting, is the next slice.
+
+### The JSON-RPC source (`infra/rpc/source.rs`)
+
+Three stages and two channels, none of which leave the module:
+
+```
+RpcListener ──RawLogEvent──▶ SignatureDispatcher ──QualifiedSignature──▶ FetchWorker
+ (fleet of WebSockets)        (failed / invocation)                       (getTransaction)
+```
+
+**`RpcListener`** owns the WebSocket connections and handles reconnection with
+exponential backoff. It is an orchestrator of a fleet of `SubscriptionWorker`
+instances — one per `SubscriptionTarget`, each with its own retry budget
+(`RPC_WORKER_MAX_RETRIES`). Solana's `logsSubscribe` accepts exactly one pubkey
+per `mentions` filter, so **what a target is depends on the mode**:
 
 - `INGEST_SCOPE=protocols` — one target per watched protocol, the
   subscription pubkey being the program id. The target mode; it needs an RPC
@@ -183,20 +200,53 @@ the program without invoking it — an address-lookup-table reference
 (`InvocationFilter`). Signatures that fail to parse are counted separately and
 dropped.
 
-**`IndexerWorker`** consumes qualified signatures and drives
-`TransactionProcessor` with bounded concurrency. The cap is
-`MAX_CONCURRENT_INDEX_TASKS = 15`, calibrated against the Helius free tier
-with headroom.
+**`FetchWorker`** fetches each surviving signature over HTTP, adapts the
+response into the neutral `OnChainTransaction`, and hands it out through the
+port. Its cap is `MAX_CONCURRENT_FETCHES = 15`, sized against the Helius free
+tier with headroom — **an RPC quota, not a general concurrency setting**, which
+is why it lives beside the fetch rather than beside the consumer.
+
+### The consumer's bound, and how an operator changes it
+
+`IndexerWorker`'s cap is **not** a constant: it is the database pool's size
+minus the connections this process needs elsewhere (one, for the
+`NetworkStatusReporter`), computed at startup by
+`bootstrap/daemon.rs::index_concurrency` and logged there. Every task in flight
+holds a connection while it persists, so the pool *is* the ceiling — and a pool
+too small to reserve from is refused at startup rather than clamped.
+
+With today's pool of 10 the bound is 9. ⚠️ **And it is not configurable**:
+`init_db` calls `Database::connect`, whose size is fixed, and no environment
+variable reaches `connect_with_options`. Raising the write concurrency therefore
+still takes a code change today — what changed is *which* change: sizing the
+pool rather than editing a worker constant, with the reservation following
+automatically. `index_concurrency`'s startup refusal exists for the pool sizes
+that edit could produce, and is covered by tests rather than by a configuration
+that can reach it.
+
+### What the two paths cost
+
+| | JSON-RPC | Yellowstone gRPC |
+|---|---|---|
+| connections | one WebSocket **per target** | one stream |
+| per transaction | a second call (`getTransaction`) | nothing — it is delivered |
+| the ceiling | requests per second | bandwidth: what you receive and drop is paid for |
+| `transaction_index` | absent, so same-slot events cannot be ranked | present |
+| filtering | client-side chain | `failed`/`vote` server-side; no invocation equivalent |
+| price today | free tier | a subscription, deferred |
+
+The JSON-RPC path stays for that last line: it is the development path with no
+monthly cost. ⚠️ **No source is built on the gRPC listener yet** —
+`INGEST_SOURCE=grpc` is refused at load time by `check_supported`; the fifth
+slice of `03 - active/listener-grpc-yellowstone.md` is what lifts it.
 
 ## `TransactionProcessor` and its collaborators
 
-`TransactionProcessor::process(protocol, signature)` composes three
-collaborators, each with one responsibility:
+`TransactionProcessor::process_transaction(protocol, &OnChainTransaction)`
+composes two collaborators, each with one responsibility. It does **not**
+fetch: fetching is what one acquisition model forces on itself, so it belongs
+to that source and not to the half of the pipeline both paths share.
 
-- **`TransactionFetcher`** (`infra/rpc/`) — domain-agnostic: knows about RPC
-  and retries, not about `Protocol` or event kinds. Classified `FetchError`
-  variants; the caller instruments fetch duration with the right `protocol`
-  label.
 - **`ExtractionDispatcher`** (`yog-core`) — centralises the
   `Protocol → handler` mapping. The indexer never imports concrete extractors;
   adding a protocol updates `yog-core` only.
@@ -241,16 +291,28 @@ two dispatch points a new protocol touches in this crate, the other being
   one that wrongly rejects. The label on the duration histogram is
   `pool_current_state_rejected`, not `stale`: the old name asserted healthy
   concurrency for what was mostly the guard's own second-granularity.
-- **Per-signature failures don't stop the worker** — `IndexerWorker` catches
-  errors from `process`, logs and counts them, and keeps draining the channel.
+- **Per-transaction failures don't stop the worker** — `IndexerWorker` catches
+  errors from `process_transaction`, logs and counts them, and keeps draining
+  the channel. The same rule applies one stage earlier inside the JSON-RPC
+  source: a signature the RPC will not return, or a response that will not
+  adapt, is counted and stepped over by `FetchWorker`.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
   panics in spawned tasks reach `Daemon::run` via typed errors and trigger
   graceful shutdown of all tasks via the shared `CancellationToken`.
 
-An `ExitGuard` RAII helper ensures every entry into `process` produces an exit
-counter and duration sample — constructed at the top of the function, mutated
-with `guard.set(outcome)` at each exit point; its `Drop` records the metrics,
-covering every early return including `?`-propagated errors.
+An `ExitGuard` RAII helper ensures every entry into `process_transaction`
+produces an exit counter and duration sample — constructed at the top of the
+function, mutated with `guard.set(outcome)` at each exit point; its `Drop`
+records the metrics, covering every early return including `?`-propagated
+errors.
+
+⚠️ **It does not span the fetch, and used to.** The consequence is that
+`yog_indexer_index_transaction_duration_seconds` measures extract-and-persist
+only, and that `..._exited_total` no longer carries `outcome="fetch_not_found"`
+or `"fetch_failure"` — those exits happen before a transaction exists and are
+counted where they happen, under the unchanged `yog_indexer_fetch_*` names. It
+is a deliberate trade: the histogram now measures the same thing on both
+acquisition paths, which is what makes comparing them meaningful.
 
 ## Observability
 
@@ -263,12 +325,29 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_raw_log_events_malformed_total` (unparsable signature),
   `yog_indexer_qualified_signatures_total`,
   `yog_indexer_downstream_saturated_total`
+- **Fetch counters** (JSON-RPC source only — there is nothing to fetch on the
+  gRPC path, so a series that stops advancing after a source switch is saying
+  exactly that) — `yog_indexer_fetch_failures_total{reason}`,
+  `yog_indexer_fetch_not_found_total`,
+  `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
+  a response that arrived and could not be turned into an
+  `OnChainTransaction`; the *dropped* family is different in kind — work
+  discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
+  two losses and the total conflates them**: `shutdown` and `downstream_closed`
+  cost a request that was made and billed, `shutdown_before_fetch` is a
+  signature dropped while queueing for a permit and cost nothing. A non-zero
+  `downstream_closed` outside a shutdown means the consumer died first.
+- **Worker counter** — `yog_indexer_ingested_dropped_total{reason}`: delivered
+  transactions the consumer never processed, `shutdown` for the one in hand and
+  `shutdown_queued` for what was still in the channel. It mirrors the fetch
+  family one stage down, and exists because the producer was counting its
+  shutdown losses while the consumer of the same channel dropped up to a
+  thousand more in silence.
 - **Processor counters** —
   `yog_indexer_index_transaction_entered_total`,
-  `yog_indexer_index_transaction_exited_total{outcome}`,
+  `yog_indexer_index_transaction_exited_total{outcome}` — `ok`, `no_events`,
+  `extract_failure`, `unknown_exit`,
   `yog_indexer_transactions_no_match_total`,
-  `yog_indexer_fetch_failures_total{reason}`,
-  `yog_indexer_fetch_not_found_total`,
   `yog_indexer_unknown_event_total{discriminator}`,
   `yog_indexer_extraction_failure_total{kind}`
 - **Persistor counters** —
@@ -276,9 +355,11 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_persist_failure_total{event_kind}`,
   `yog_indexer_event_insert_skipped_total{event_kind}`,
   `yog_indexer_pool_current_state_same_slot_total`
-- **Histograms** — `yog_indexer_fetch_duration_seconds`,
+- **Histograms** — `yog_indexer_fetch_duration_seconds` (JSON-RPC source only),
   `yog_indexer_persist_duration_seconds{kind}`,
-  `yog_indexer_index_transaction_duration_seconds{outcome}`
+  `yog_indexer_index_transaction_duration_seconds{outcome}` — extract and
+  persist, **not** the fetch, so the two acquisition paths measure the same
+  thing
 
 ## Configuration
 
@@ -364,7 +445,7 @@ and all four couples mean something:
 calls **before anything else is read**:
 
 - `grpc`, under either scope, has a listener but nothing that selects it: what
-  it emits has no consumer, and `init_listener` has one arm. Its refusal is
+  it emits has no consumer, and `init_source` has one arm. Its refusal is
   therefore narrower than it was, and it still holds;
 - `protocols` builds its targets from `RpcListener::_watch`, which nothing
   calls: the listener would start with zero targets. It gets wired with the
