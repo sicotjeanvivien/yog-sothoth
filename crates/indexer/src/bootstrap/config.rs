@@ -21,15 +21,19 @@
 //! and `Endpoint` sit in `yog-bootstrap` for the same reason, and are likewise
 //! consumed by the infrastructure layer.
 //!
-//! The two axes are orthogonal on purpose: all four couples mean something,
-//! and the three that cannot run today are refused by `validator`, which
-//! `load` calls before anything else is read — see that module for which,
-//! and why.
+//! The two axes are orthogonal on purpose, and **all four couples now run**.
+//! Three of them were refused until 10 September 2026 by a `validator` module
+//! that no longer exists: its two arms shared one precondition — a subscription
+//! set nothing populated — and both were lifted together when the daemon
+//! started registering what it watches. What replaced the refusal is not a
+//! looser check but a filled precondition.
 //!
-//! **Why `Config` carries a scope but no source.** The scope travels into the
-//! runtime: the listener dispatches on it. The source does not travel
-//! anywhere — it is read, validated, and dropped. It becomes a field the day
-//! `init_source` has two arms, which is the gRPC ticket's last slice.
+//! **Why `Config` carries both axes.** The scope travels into the runtime: the
+//! listener dispatches on it. The source travels exactly one storey — into
+//! `init_source`, which builds one of the two implementations and hands back
+//! the port. Nothing downstream learns which. It became a field the day that
+//! function grew its second arm, which is what the doc above said would
+//! happen.
 //!
 //! ⚠️ It briefly decided something else, and that was wrong: for a day it chose
 //! **which door read `INGEST_STREAM`**, on the belief that only the gRPC path
@@ -47,10 +51,8 @@ use yog_bootstrap::{
 };
 
 mod types;
-mod validator;
 
 pub(crate) use types::{IngestScope, IngestSource};
-use validator::check_supported;
 
 pub(crate) struct Config {
     pub(crate) database_url: SecretUrl,
@@ -59,6 +61,9 @@ pub(crate) struct Config {
     /// Where a transaction is fetched back from, once a notification names it.
     pub(crate) ingest_transaction: Endpoint,
     pub(crate) worker_max_retries: u32,
+    /// Which acquisition model to build. Read by `init_source` and by nothing
+    /// else — `grep IngestSource` outside `bootstrap/` should stay empty.
+    pub(crate) source: IngestSource,
     pub(crate) scope: IngestScope,
 }
 
@@ -66,7 +71,6 @@ impl Config {
     pub(crate) fn load() -> Result<Self, ConfigError> {
         let source = parse_required_enum::<IngestSource>("INGEST_SOURCE")?;
         let scope = parse_required_enum::<IngestScope>("INGEST_SCOPE")?;
-        check_supported(source, scope)?;
 
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_INDEXER")?,
@@ -78,6 +82,7 @@ impl Config {
             ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,
             ingest_transaction: required_endpoint("INGEST_TRANSACTION")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
+            source,
             scope,
         })
     }

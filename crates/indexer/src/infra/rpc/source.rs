@@ -71,6 +71,10 @@ impl RpcTransactionSource {
 
 #[async_trait]
 impl TransactionSource for RpcTransactionSource {
+    async fn watch_protocol(&self, protocol: Protocol) {
+        self.listener.watch(protocol).await;
+    }
+
     async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey) {
         self.listener.watch_pool(protocol, pool_address).await;
     }

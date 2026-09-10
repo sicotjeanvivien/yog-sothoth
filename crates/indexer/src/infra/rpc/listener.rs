@@ -64,7 +64,14 @@ impl RpcListener {
         }
     }
 
-    pub(crate) async fn _watch(&self, protocol: Protocol) {
+    /// Add a protocol to the subscription set.
+    ///
+    /// It carried a `_` prefix from the day it was written until 10 September
+    /// 2026, because nothing called it — `watched_protocols` was fed by nobody
+    /// and `INGEST_SCOPE=protocols` was refused at load time for exactly that
+    /// reason. The gRPC slice gave it a caller: the source's `watch_protocol`,
+    /// driven from the daemon at start-up.
+    pub(crate) async fn watch(&self, protocol: Protocol) {
         self.watched_protocols.lock().await.insert(protocol);
     }
 

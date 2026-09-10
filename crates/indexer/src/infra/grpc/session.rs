@@ -101,17 +101,18 @@ pub(super) struct StreamSession {
     downstream: mpsc::Sender<IngestedTransaction>,
     /// The outbound half of the bidirectional stream.
     ///
-    /// ⚠️ **Held, not used.** Nothing is sent after the subscription — see the
-    /// note on server pings below. What keeping this sender alive buys is that
-    /// the request stream is never *half-closed*: dropping it ends the outbound
-    /// direction, which is legal HTTP/2 and which a server is free to read as
-    /// the end of the exchange. Cheaper to hold a sender than to find out which
-    /// servers do.
-    outbound: mpsc::Sender<SubscribeRequest>,
-    /// The request this session is subscribed with. Kept for diagnostics and
-    /// for whatever a future filter update would rebuild from — **not** resent:
-    /// see the note on server pings.
-    request: SubscribeRequest,
+    /// ⚠️ **Held, never read, and the underscore says so on purpose.** Nothing
+    /// is sent after the subscription — see the note on server pings below.
+    /// What keeping this sender alive buys is that the request stream is never
+    /// *half-closed*: dropping it ends the outbound direction, which is legal
+    /// HTTP/2 and which a server is free to read as the end of the exchange.
+    /// Cheaper to hold a sender than to find out which servers do.
+    ///
+    /// The `_` prefix is this crate's convention for a field whose value is its
+    /// liveness rather than its content — `Daemon::_database` is the other one.
+    /// It arrived when `infra/grpc`'s blanket `allow(dead_code)` came off and
+    /// the build asked, correctly, why a field was never read.
+    _outbound: mpsc::Sender<SubscribeRequest>,
     /// The highest slot whose block-meta has arrived — the only slots this
     /// session can claim to have finished. Advanced by block-metas alone: a
     /// transaction update names a slot that is still in flight.
@@ -127,14 +128,12 @@ impl StreamSession {
     pub(super) fn new(
         downstream: mpsc::Sender<IngestedTransaction>,
         outbound: mpsc::Sender<SubscribeRequest>,
-        request: SubscribeRequest,
         shutdown: CancellationToken,
     ) -> Self {
         Self {
             buffer: SlotTimestampBuffer::new(),
             downstream,
-            outbound,
-            request,
+            _outbound: outbound,
             highest_meta_slot: None,
             received_data: false,
             shutdown,

@@ -8,11 +8,12 @@ use crate::{
         source::{IngestedTransaction, TransactionSource},
         workers::{IndexerWorker, IndexerWorkerMetrics},
     },
-    bootstrap::Config,
+    bootstrap::{Config, IngestSource},
     error::{IndexerWorkerError, SourceError},
     infra::{
-        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListenerMetrics, RpcListener,
-        RpcTransactionSource, SignatureDispatcher, TransactionFetcher,
+        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
+        GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
+        TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -22,7 +23,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_bootstrap::SecretUrl;
-use yog_core::application::extraction::ExtractionDispatcher;
+use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
     PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
@@ -56,6 +57,10 @@ pub(crate) struct Daemon {
     processor: Arc<TransactionProcessor>,
     watched_pool_service: Arc<WatchedPoolService>,
     source: Arc<dyn TransactionSource>,
+    /// What the source is told to watch at start-up, under
+    /// `INGEST_SCOPE=protocols`. **Not every `Protocol`** — see
+    /// `ExtractionDispatcher::implemented_protocols`.
+    watched_protocols: Vec<Protocol>,
     network_status_reporter: NetworkStatusReporter,
     /// How many transactions may be persisted at once — computed from the pool
     /// that was actually opened, see [`index_concurrency`].
@@ -69,6 +74,19 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
+        // ⚠️ **The first line the process writes, because it is the first
+        // question a reader has.** Two acquisition models exist and one is
+        // running; from here on nothing else in the crate names which. These
+        // two `as_str` were written for the refusals of a validator that no
+        // longer exists — their remaining reader is this line, and it is a
+        // better one: a refusal is read once, a running mode every time
+        // something looks wrong.
+        info!(
+            source = config.source.as_str(),
+            scope = config.scope.as_str(),
+            "ingestion mode"
+        );
+
         let database = init_db(&config.database_url)
             .await
             .context("database initialization failed")?;
@@ -85,7 +103,17 @@ impl Daemon {
         let source = init_source(&config).context("transaction source initialization failed")?;
         info!("transaction source initialized: {}", config.ingest_stream);
 
-        let processor = init_processor(&database);
+        // Built here rather than inside `init_processor` because two callers
+        // need it: the processor extracts with it, and the start-up
+        // registration below asks it which protocols are worth subscribing to.
+        let extractor = Arc::new(ExtractionDispatcher::new());
+        let watched_protocols = extractor.implemented_protocols();
+        info!(
+            protocols = ?watched_protocols,
+            "protocols with a working extractor"
+        );
+
+        let processor = init_processor(&database, Arc::clone(&extractor));
         info!("indexer service initialized");
 
         let network_status_reporter = init_network_status_reporter(&database, &config)
@@ -119,6 +147,7 @@ impl Daemon {
             processor,
             watched_pool_service,
             source,
+            watched_protocols,
             network_status_reporter,
             index_concurrency,
             _database: database,
@@ -142,6 +171,14 @@ impl Daemon {
     /// triggered. All remaining tasks are cancelled via the shared
     /// token.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        // The two halves of "what do we subscribe to", side by side because
+        // that is the one question they answer. `INGEST_SCOPE` decides which of
+        // the two the source actually builds its subscription from; both are
+        // populated regardless, so switching scope is a restart and not a code
+        // change.
+        for protocol in &self.watched_protocols {
+            self.source.watch_protocol(*protocol).await;
+        }
         self.watched_pool_service.restore_subscriptions().await?;
         let (tx, rx) = mpsc::channel::<IngestedTransaction>(INGESTED_CHANNEL_CAPACITY);
 
@@ -202,13 +239,31 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 
 /// Build the transaction source the configuration selects.
 ///
-/// ⚠️ **One arm today, and `INGEST_SOURCE` is still not read here.** The gRPC
-/// source is written and reachable by nothing — `check_supported` refuses
-/// `INGEST_SOURCE=grpc` at load time, and lifting that refusal is the next
-/// slice of `03 - active/listener-grpc-yellowstone.md`. This function is the
-/// single place that will grow the second arm, and the only place in the crate
-/// that will ever name a concrete source.
+/// **The only place in the crate that names a concrete source.** Everything
+/// downstream holds `Arc<dyn TransactionSource>` and never learns which model
+/// is running — which is why `INGEST_SOURCE` is read here and nowhere else.
+///
+/// The two arms are not the same size, and that asymmetry is the subject of
+/// the whole change: `logsSubscribe` notifies, so its source has to assemble a
+/// fleet, a filter chain and a fetch stage; Yellowstone delivers, so its source
+/// is the listener.
 fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    match config.source {
+        IngestSource::Rpc => init_rpc_source(config),
+        // The delivering model needs no fetch, no filter chain and no fleet, so
+        // there is nothing to assemble: the listener is the source.
+        IngestSource::Grpc => Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
+            GrpcListener::new(
+                config.ingest_stream.clone(),
+                config.worker_max_retries,
+                config.scope,
+            ),
+        )))),
+    }
+}
+
+/// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
+fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
@@ -297,16 +352,14 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 }
 
 /// Initialise the indexer service and its repository dependencies.
-fn init_processor(database: &Database) -> Arc<TransactionProcessor> {
-    let extraction_dispatcher = Arc::new(ExtractionDispatcher::new());
-    info!("event extractor initialized");
+fn init_processor(
+    database: &Database,
+    extractor: Arc<ExtractionDispatcher>,
+) -> Arc<TransactionProcessor> {
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
 
-    Arc::new(TransactionProcessor::new(
-        extraction_dispatcher,
-        event_persistor,
-    ))
+    Arc::new(TransactionProcessor::new(extractor, event_persistor))
 }
 
 /// Initialise the NetworkStautsReporter and its repository dependency.

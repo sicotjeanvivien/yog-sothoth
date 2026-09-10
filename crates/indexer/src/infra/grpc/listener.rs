@@ -409,8 +409,7 @@ impl GrpcListener {
             "subscribed to the Yellowstone stream"
         );
 
-        let mut session =
-            StreamSession::new(downstream.clone(), outbound_tx, request, shutdown.clone());
+        let mut session = StreamSession::new(downstream.clone(), outbound_tx, shutdown.clone());
 
         loop {
             tokio::select! {
