@@ -331,11 +331,18 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_fetch_not_found_total`,
   `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
   a response that arrived and could not be turned into an
-  `OnChainTransaction`; the *dropped* family is different in kind — the RPC
-  answered and the quota was spent, but the result was thrown away because the
-  process is stopping (`shutdown`, `shutdown_before_fetch`) or the consumer is
-  gone (`downstream_closed`). A non-zero count outside a shutdown means the
-  consumer died first.
+  `OnChainTransaction`; the *dropped* family is different in kind — work
+  discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
+  two losses and the total conflates them**: `shutdown` and `downstream_closed`
+  cost a request that was made and billed, `shutdown_before_fetch` is a
+  signature dropped while queueing for a permit and cost nothing. A non-zero
+  `downstream_closed` outside a shutdown means the consumer died first.
+- **Worker counter** — `yog_indexer_ingested_dropped_total{reason}`: delivered
+  transactions the consumer never processed, `shutdown` for the one in hand and
+  `shutdown_queued` for what was still in the channel. It mirrors the fetch
+  family one stage down, and exists because the producer was counting its
+  shutdown losses while the consumer of the same channel dropped up to a
+  thousand more in silence.
 - **Processor counters** —
   `yog_indexer_index_transaction_entered_total`,
   `yog_indexer_index_transaction_exited_total{outcome}` — `ok`, `no_events`,

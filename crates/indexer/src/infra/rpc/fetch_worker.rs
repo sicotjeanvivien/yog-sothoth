@@ -95,6 +95,20 @@ impl FetchWorker {
                     return Ok(());
                 }
 
+                // ⚠️ **The consumer going away stops this stage**, which is the
+                // port's second exit clause and was a promise nothing kept: the
+                // send failure happens inside a detached task, so `run` never
+                // learned of it and kept pulling signatures and paying for
+                // `getTransaction` calls whose results had nowhere to go. Short
+                // today, because the daemon cancels the token as soon as any
+                // task returns — but "another task will stop us shortly" is not
+                // what the contract says, and the gRPC source will be written
+                // against the contract.
+                _ = downstream.closed() => {
+                    info!("downstream gone — fetch worker stopping");
+                    return Ok(());
+                }
+
                 maybe_msg = rx.recv() => {
                     match maybe_msg {
                         Some(qs) => self.dispatch_one(qs, &downstream, rx.len(), &shutdown).await?,

@@ -6,7 +6,7 @@ use crate::{
             PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
         },
         source::{IngestedTransaction, TransactionSource},
-        workers::IndexerWorker,
+        workers::{IndexerWorker, IndexerWorkerMetrics},
     },
     bootstrap::Config,
     error::{IndexerWorkerError, SourceError},
@@ -99,6 +99,7 @@ impl Daemon {
 
         DispatcherMetrics::register_descriptions();
         FetchMetrics::register_descriptions();
+        IndexerWorkerMetrics::register_descriptions();
         TransactionProcessorMetrics::register_descriptions();
         EventPersistorMetrics::register_descriptions();
         // The gRPC path's two families are registered whichever source is

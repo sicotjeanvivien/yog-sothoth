@@ -37,7 +37,7 @@ impl FetchMetrics {
         );
         describe_counter!(
             FETCH_DROPPED,
-            "Transactions fetched but never handed downstream (label: reason)"
+            "Work the fetch stage discarded without reaching the consumer              (label: reason — `shutdown` and `downstream_closed` cost a request,              `shutdown_before_fetch` did not)"
         );
     }
 
@@ -53,14 +53,21 @@ impl FetchMetrics {
         histogram!(FETCH_DURATION, "protocol" => protocol.as_str()).record(seconds);
     }
 
-    /// A transaction that was paid for and thrown away.
+    /// Work this stage discarded without handing it on.
     ///
     /// ⚠️ **Separate from a fetch failure, and it has to be.** These are not
-    /// requests that went wrong: the RPC answered, the quota was spent, and the
-    /// work is discarded because the process is stopping or the consumer is
-    /// gone. Left uncounted they are the one loss in this stage with no trace
-    /// at all — the crate's rule is *counted* and stepped over, not merely
-    /// stepped over.
+    /// requests that went wrong; they are results thrown away because the
+    /// process is stopping or the consumer is gone. Left uncounted they would
+    /// be the one loss in this stage with no trace at all — the crate's rule is
+    /// *counted* and stepped over, not merely stepped over.
+    ///
+    /// ⚠️ **The `reason` label separates two different losses, and summing the
+    /// family conflates them.** `shutdown` and `downstream_closed` are
+    /// transactions the RPC answered: the request was made and the quota spent,
+    /// and only the result is wasted. `shutdown_before_fetch` is a signature
+    /// dropped while waiting for a permit — nothing was requested and nothing
+    /// was billed. Reading the total as "quota wasted" over-counts by exactly
+    /// the queued backlog at shutdown; that reading needs the label.
     pub(crate) fn record_dropped(protocol: &Protocol, reason: &'static str) {
         counter!(FETCH_DROPPED, "protocol" => protocol.as_str(), "reason" => reason).increment(1);
     }

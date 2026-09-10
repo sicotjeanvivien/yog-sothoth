@@ -21,7 +21,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::{
-    application::{services::TransactionProcessor, source::IngestedTransaction},
+    application::{
+        services::TransactionProcessor, source::IngestedTransaction,
+        workers::indexer_metrics::IndexerWorkerMetrics,
+    },
     error::IndexerWorkerError,
 };
 
@@ -74,6 +77,14 @@ impl IndexerWorker {
 
                 _ = shutdown.cancelled() => {
                     info!("shutdown requested — indexer worker stopping");
+                    // What is still queued dies with the receiver. Counted
+                    // rather than merely lost: these transactions were paid for
+                    // by a source — a request on one path, bandwidth on the
+                    // other — and nothing re-requests them.
+                    let dropped = drain_and_count(&mut rx);
+                    if dropped > 0 {
+                        info!(dropped, "queued transactions dropped at shutdown");
+                    }
                     return Ok(());
                 }
 
@@ -114,7 +125,10 @@ impl IndexerWorker {
         let permit = tokio::select! {
             biased;
 
-            _ = shutdown.cancelled() => return Ok(()),
+            _ = shutdown.cancelled() => {
+                IndexerWorkerMetrics::record_dropped(&ingested.protocol, "shutdown");
+                return Ok(());
+            }
 
             permit = Arc::clone(&self.semaphore).acquire_owned() => {
                 permit.map_err(|_| IndexerWorkerError::SemaphoreClosed)?
@@ -138,6 +152,29 @@ impl IndexerWorker {
         Ok(())
     }
 }
+
+/// Count what is still in the channel when the worker stops.
+///
+/// ⚠️ **A snapshot, and it says so.** A source may still be sending while this
+/// runs, so the figure is what was queued at the moment the loop gave up, not a
+/// total of everything the shutdown will cost. It is the number that exists;
+/// the alternative was no number at all.
+///
+/// Returns the count so the caller can log it **and so a test can assert it** —
+/// the metric it increments is invisible to a test, and a drain that silently
+/// stopped draining would look exactly like a shutdown with an empty channel.
+fn drain_and_count(rx: &mut mpsc::Receiver<IngestedTransaction>) -> usize {
+    let mut dropped = 0usize;
+    while let Ok(ingested) = rx.try_recv() {
+        IndexerWorkerMetrics::record_dropped(&ingested.protocol, "shutdown_queued");
+        dropped += 1;
+    }
+    dropped
+}
+
+#[cfg(test)]
+#[path = "indexer_tests.rs"]
+mod tests;
 
 /// Index a single transaction. Per-transaction errors are logged and counted,
 /// never propagated — they must not stop the pipeline.
