@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use yog_core::domain::{Protocol, WatchedPoolRepository};
 
 use crate::{application::source::TransactionSource, error::DatabaseError};
@@ -97,6 +97,20 @@ impl WatchedPoolService {
         // believed for work that does not happen. The daemon populates both
         // sets whichever scope runs, and the `ingestion mode` line it logs
         // first is what says which one is in force.
+        // ⚠️ **Every row skipped is not "nothing to do", it is a dead end**, and
+        // it deserves to be named here rather than three lines later. The
+        // listener will refuse with `NoSubscriptionTargets` — the "reads like a
+        // network fault, is a configuration one" message this slice argues
+        // against everywhere else — and that refusal knows nothing of the skip.
+        // An `error!` at the moment the cause is still in hand is what connects
+        // the two.
+        if count == 0 && skipped > 0 {
+            error!(
+                skipped,
+                "every active watched pool names a protocol with no working extractor — the                  listener has nothing to subscribe to and will refuse to start"
+            );
+        }
+
         info!(count, skipped, "watched pools registered");
         Ok(())
     }

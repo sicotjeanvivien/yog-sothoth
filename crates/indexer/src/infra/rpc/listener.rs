@@ -227,11 +227,11 @@ impl RpcListener {
             Some("ws" | "wss") => Ok(()),
             Some(other) => Err(RpcListenerError::InvalidEndpoint {
                 reason: format!(
-                    "`INGEST_STREAM_URL` carries the `{other}` scheme. `logsSubscribe` is a WebSocket: use `wss://`, or `ws://` for a local validator. An `https://` address is what a Yellowstone gRPC endpoint looks like — `INGEST_SOURCE=grpc` is what reads it."
+                    "it carries the `{other}` scheme. `logsSubscribe` is a WebSocket: use `wss://`, or `ws://` for a local validator. An `https://` address is what a Yellowstone gRPC endpoint looks like — `INGEST_SOURCE=grpc` is what reads it."
                 ),
             }),
             None => Err(RpcListenerError::InvalidEndpoint {
-                reason: "`INGEST_STREAM_URL` has no scheme. `logsSubscribe` is a WebSocket: write `wss://host`, or `ws://` for a local validator.".to_string(),
+                reason: "it has no scheme. `logsSubscribe` is a WebSocket: write `wss://host`, or `ws://` for a local validator.".to_string(),
             }),
         }
     }

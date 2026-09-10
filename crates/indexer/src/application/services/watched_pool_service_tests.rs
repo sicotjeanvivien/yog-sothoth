@@ -167,3 +167,31 @@ async fn every_active_pool_of_an_implemented_protocol_is_subscribed_to() {
 
     assert_eq!(watched(&source).len(), 2);
 }
+
+/// ⚠️ The dead end, which is not the same as an empty allowlist.
+///
+/// Rows exist, all name a protocol nothing can extract, and the source is
+/// handed nothing — so the listener refuses to start with
+/// `NoSubscriptionTargets`, a message about subscriptions that says nothing
+/// about protocols. This asserts the shape that lets the daemon say so while
+/// the cause is still in hand.
+#[tokio::test]
+async fn an_allowlist_of_only_unimplemented_protocols_subscribes_to_nothing() {
+    let (service, source) = service(
+        vec![
+            pool(6, Protocol::MeteoraDlmm, true),
+            pool(7, Protocol::MeteoraDlmm, true),
+        ],
+        vec![Protocol::MeteoraDammV2],
+    );
+
+    service
+        .restore_subscriptions()
+        .await
+        .expect("skipping every row is not a repository failure");
+
+    assert!(
+        watched(&source).is_empty(),
+        "nothing may reach the source, which is what makes this a dead end"
+    );
+}

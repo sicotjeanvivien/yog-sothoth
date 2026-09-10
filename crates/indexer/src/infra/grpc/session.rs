@@ -214,6 +214,38 @@ impl StreamSession {
                 self.on_block_meta(meta).await
             }
             Some(UpdateOneof::Ping(_)) => {
+                // A server ping is **counted and not answered**, and that is a decision.
+                //
+                // # ⚠️ Why nothing is sent back
+                //
+                // Because every answer is unsafe under one of the two readings of the
+                // proto, and this file cannot tell which is right without a server.
+                //
+                // A `SubscribeRequest` may carry a `ping`; a `SubscribeRequest` is also
+                // what *describes the subscription*. So a ping-only request is a keep-alive
+                // under the first reading and an unsubscribe-everything under the second.
+                // Resending the whole request avoids that — but then `from_slot` rides
+                // along, and under the second reading every ping re-issues the replay, on a
+                // message that arrives at a fixed interval. Clearing `from_slot` avoids
+                // *that* — and truncates a replay still in flight, since a reconnection
+                // rewinds up to `MAX_PENDING_SLOTS` and a ping arrives long before the
+                // replay drains. That was this module's answer for a day, under a
+                // doc-comment claiming it was "right under both readings"; it was right
+                // under one. Found in review, 10 September 2026.
+                //
+                // Not answering is the only action that is safe under both, and it costs
+                // less than it looks:
+                //
+                // - the connection is kept alive **below** this layer, by HTTP/2 PING
+                //   frames — `listener`'s `http2_keep_alive_interval` with
+                //   `keep_alive_while_idle`, which is what an idle-timing middlebox
+                //   actually watches;
+                // - the reference client does the same: `yellowstone-grpc-client` matches
+                //   `UpdateOneof::Ping(_)` and yields nothing.
+                //
+                // The outbound half of the stream is still held open — see the `_outbound`
+                // field — because half-closing it is a different question from answering a
+                // ping.
                 GrpcListenerMetrics::record_update(UpdateKind::Ping);
                 SessionState::Open
             }
@@ -350,38 +382,6 @@ impl StreamSession {
         }
     }
 
-    /// A server ping is **counted and not answered**, and that is a decision.
-    ///
-    /// # ⚠️ Why nothing is sent back
-    ///
-    /// Because every answer is unsafe under one of the two readings of the
-    /// proto, and this file cannot tell which is right without a server.
-    ///
-    /// A `SubscribeRequest` may carry a `ping`; a `SubscribeRequest` is also
-    /// what *describes the subscription*. So a ping-only request is a keep-alive
-    /// under the first reading and an unsubscribe-everything under the second.
-    /// Resending the whole request avoids that — but then `from_slot` rides
-    /// along, and under the second reading every ping re-issues the replay, on a
-    /// message that arrives at a fixed interval. Clearing `from_slot` avoids
-    /// *that* — and truncates a replay still in flight, since a reconnection
-    /// rewinds up to `MAX_PENDING_SLOTS` and a ping arrives long before the
-    /// replay drains. That was this module's answer for a day, under a
-    /// doc-comment claiming it was "right under both readings"; it was right
-    /// under one. Found in review, 10 September 2026.
-    ///
-    /// Not answering is the only action that is safe under both, and it costs
-    /// less than it looks:
-    ///
-    /// - the connection is kept alive **below** this layer, by HTTP/2 PING
-    ///   frames — `listener`'s `http2_keep_alive_interval` with
-    ///   `keep_alive_while_idle`, which is what an idle-timing middlebox
-    ///   actually watches;
-    /// - the reference client does the same: `yellowstone-grpc-client` matches
-    ///   `UpdateOneof::Ping(_)` and yields nothing.
-    ///
-    /// The outbound half of the stream is still held open — see the `outbound`
-    /// field — because half-closing it is a different question from answering a
-    /// ping.
     /// Record that a block-meta closed a slot.
     ///
     /// Only block-metas move this mark — see [`Self::resume_from`] for why a

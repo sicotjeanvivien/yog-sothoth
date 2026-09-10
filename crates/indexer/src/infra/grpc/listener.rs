@@ -345,13 +345,13 @@ impl GrpcListener {
             Some(scheme) => {
                 return Err(GrpcListenerError::InvalidEndpoint {
                     reason: format!(
-                        "`INGEST_STREAM_URL` carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
+                        "it carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
                     ),
                 });
             }
             None => {
                 return Err(GrpcListenerError::InvalidEndpoint {
-                    reason: "`INGEST_STREAM_URL` has no scheme. Yellowstone speaks HTTP/2: write `https://host:port`, or `http://` for a self-hosted plaintext endpoint."
+                    reason: "it has no scheme. Yellowstone speaks HTTP/2: write `https://host:port`, or `http://` for a self-hosted plaintext endpoint."
                         .to_string(),
                 });
             }
