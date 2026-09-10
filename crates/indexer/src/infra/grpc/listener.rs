@@ -503,3 +503,7 @@ async fn sleep_or_cancel(duration: Duration, shutdown: &CancellationToken) {
         _ = shutdown.cancelled() => {}
     }
 }
+
+#[cfg(test)]
+#[path = "listener_tests.rs"]
+mod tests;

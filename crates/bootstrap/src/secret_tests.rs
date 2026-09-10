@@ -471,3 +471,55 @@ fn scrub_of_an_ambiguous_url_leaves_nothing_of_it() {
     }
     assert!(scrubbed.starts_with("error sending request for url (postgresql://"));
 }
+
+// ── SecretUrl::scheme ────────────────────────────────────────────────────────
+//
+// It exists so a caller can refuse an endpoint that belongs to the other
+// ingestion path without calling `expose` — `exposure_tests` refused that
+// first version, and rightly: reading a scheme consumes nothing.
+
+#[test]
+fn the_scheme_comes_back_lowercased() {
+    assert_eq!(
+        SecretUrl::new("WSS://api.example.com/?k=abc").scheme(),
+        Some("wss".to_string())
+    );
+    assert_eq!(
+        SecretUrl::new("https://grpc.example.com:443").scheme(),
+        Some("https".to_string())
+    );
+}
+
+#[test]
+fn a_url_without_a_scheme_has_none() {
+    assert_eq!(SecretUrl::new("api.example.com:443").scheme(), None);
+    assert_eq!(SecretUrl::new("").scheme(), None);
+}
+
+/// ⚠️ The case the naive version got wrong, and the reason this is not just
+/// `split_once("://")`.
+///
+/// A `://` appearing later in a schemeless URL would be read as the separator,
+/// and the part before it as a scheme — so a caller refusing the endpoint would
+/// tell the operator it "carries the `host/a` scheme", a message that reads as
+/// a bug in the message. A scheme is shaped like a scheme or there is none.
+#[test]
+fn a_double_slash_further_along_is_not_a_scheme() {
+    assert_eq!(SecretUrl::new("host/a://b").scheme(), None);
+    assert_eq!(SecretUrl::new("/path://x").scheme(), None);
+    assert_eq!(SecretUrl::new("1nvalid://x").scheme(), None);
+}
+
+/// And the shapes RFC 3986 does allow, so the guard above cannot be tightened
+/// into refusing a legitimate endpoint.
+#[test]
+fn a_scheme_may_carry_digits_and_punctuation() {
+    assert_eq!(
+        SecretUrl::new("ws+unix://socket").scheme(),
+        Some("ws+unix".to_string())
+    );
+    assert_eq!(
+        SecretUrl::new("h2c://host").scheme(),
+        Some("h2c".to_string())
+    );
+}

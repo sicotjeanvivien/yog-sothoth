@@ -389,3 +389,7 @@ fn push_failure(gave_up: &mut Vec<WorkerFailure>, err: &SubscriptionWorkerError)
         }
     }
 }
+
+#[cfg(test)]
+#[path = "listener_tests.rs"]
+mod tests;

@@ -169,12 +169,25 @@ impl SecretUrl {
     /// only other job is building an error message. `exposure_tests` refused
     /// exactly that on 10 September 2026, and it was right to.
     ///
-    /// `None` when there is no `://` at all, which is its own misconfiguration
-    /// and worth telling apart from a wrong scheme.
+    /// `None` when there is no scheme, which is its own misconfiguration and
+    /// worth telling apart from a wrong one.
+    ///
+    /// ⚠️ **A `://` is not enough to call something a scheme.** `split_once`
+    /// finds the first one anywhere in the string, so `host/a://b` — a URL with
+    /// no scheme at all — would otherwise report `host/a` as its scheme, and a
+    /// caller would print that back at an operator. What comes back is `Some`
+    /// only for something shaped like a scheme: a letter, then letters, digits,
+    /// `+`, `-` or `.`, per RFC 3986. Anything else is `None`, which is the
+    /// branch that says "you wrote no scheme".
     pub fn scheme(&self) -> Option<String> {
-        self.0
-            .split_once("://")
-            .map(|(scheme, _)| scheme.to_ascii_lowercase())
+        let (candidate, _) = self.0.split_once("://")?;
+
+        let mut chars = candidate.chars();
+        let starts_with_letter = chars.next().is_some_and(|c| c.is_ascii_alphabetic());
+        let rest_is_scheme =
+            chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+
+        (starts_with_letter && rest_is_scheme).then(|| candidate.to_ascii_lowercase())
     }
 
     /// Build one directly, for a test in another crate. Behind `test-support`

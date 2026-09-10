@@ -8,7 +8,7 @@ use crate::{
         source::{IngestedTransaction, TransactionSource},
         workers::{IndexerWorker, IndexerWorkerMetrics},
     },
-    bootstrap::{Config, IngestSource},
+    bootstrap::{Config, IngestScope, IngestSource},
     error::{IndexerWorkerError, SourceError},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
@@ -86,6 +86,26 @@ impl Daemon {
             scope = config.scope.as_str(),
             "ingestion mode"
         );
+
+        // ⚠️ **The one couple that boots and cannot keep up.** `logsSubscribe`
+        // on a program id delivers everything that program does, and this path
+        // then fetches each transaction back — measured at ~200 in 30 s against
+        // a ~10 req/s tier. Nothing stops: fetch failures are skip-and-logged
+        // per transaction, so the process stays up and the metrics stay
+        // plausible while most of what it sees is dropped.
+        //
+        // A `check_supported` used to refuse this couple, for a different
+        // reason — an empty target set — and that reason is genuinely fixed.
+        // What went with the refusal was the only loud signal an operator got,
+        // and this line puts it back at the cost of one branch.
+        if matches!(
+            (config.source, config.scope),
+            (IngestSource::Rpc, IngestScope::Protocols)
+        ) {
+            tracing::warn!(
+                "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
+            );
+        }
 
         let database = init_db(&config.database_url)
             .await
