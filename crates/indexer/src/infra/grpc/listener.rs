@@ -327,6 +327,24 @@ impl GrpcListener {
             }
         })?;
 
+        // ⚠️ **The scheme is checked here, and `from_shared` will not do it.**
+        // A `wss://` URL is a syntactically valid URI, so tonic accepts it and
+        // fails much later, inside the retry loop, on an h2 handshake against
+        // something that speaks WebSocket — ten backoffs and a `RetriesExhausted`
+        // that reads like an unreachable provider. This is the likeliest
+        // misconfiguration the second source creates: `.env.example` ships a
+        // `wss://` `INGEST_STREAM_URL`, and an operator flipping only
+        // `INGEST_SOURCE=grpc` keeps it. Failing here is what this function's
+        // doc-comment already promised for "an unusable URL".
+        let scheme = endpoint.uri().scheme_str().unwrap_or_default();
+        if !matches!(scheme, "http" | "https") {
+            return Err(GrpcListenerError::InvalidEndpoint {
+                reason: format!(
+                    "`INGEST_STREAM_URL` carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
+                ),
+            });
+        }
+
         endpoint
             .tls_config(ClientTlsConfig::new().with_webpki_roots())
             .map(|endpoint| {

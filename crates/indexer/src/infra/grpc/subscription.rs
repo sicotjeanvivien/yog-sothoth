@@ -65,8 +65,12 @@ pub(crate) const BLOCK_META_FILTER: &str = "block_meta";
 ///
 /// [`GrpcListenerError::NoSubscriptionTargets`] when nothing is watched. That
 /// is a configuration failure that *names itself* — the alternative is a stream
-/// that opens, subscribes to nothing, and stays silent for ever, which is the
-/// exact failure `check_supported` was written to stop the RPC path producing.
+/// that opens, subscribes to nothing, and stays silent for ever, which reads as
+/// a network fault and is not one. A `check_supported` in `bootstrap/config`
+/// used to refuse that couple before it got here; it was deleted on
+/// 10 September 2026 once the daemon started populating both watch sets, and
+/// this refusal is what remains — the last line of defence rather than the
+/// first.
 pub(crate) fn build_request(
     scope: IngestScope,
     watched_protocols: &HashSet<Protocol>,

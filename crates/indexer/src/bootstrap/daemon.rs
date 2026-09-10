@@ -120,9 +120,10 @@ impl Daemon {
             .await
             .context("network_status_reporter initialization failed")?;
 
-        let watched_pool_service = init_watched_pool_service(&database, Arc::clone(&source))
-            .await
-            .context("watched pool service initialization failed")?;
+        let watched_pool_service =
+            init_watched_pool_service(&database, Arc::clone(&source), watched_protocols.clone())
+                .await
+                .context("watched pool service initialization failed")?;
         info!("watched pool service initialized");
 
         DispatcherMetrics::register_descriptions();
@@ -393,12 +394,14 @@ async fn init_network_status_reporter(
 async fn init_watched_pool_service(
     database: &Database,
     source: Arc<dyn TransactionSource>,
+    implemented_protocols: Vec<Protocol>,
 ) -> anyhow::Result<Arc<WatchedPoolService>> {
     let pg_watched_pool_repository =
         Arc::new(PgWatchedPoolRepository::new(database.pool().clone()));
     Ok(Arc::new(WatchedPoolService::new(
         source,
         pg_watched_pool_repository,
+        implemented_protocols,
     )))
 }
 // ── Task spawners ────────────────────────────────────────────────────────────

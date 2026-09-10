@@ -146,9 +146,11 @@ fn the_scope_decides_what_is_included_and_the_two_differ() {
 }
 
 /// ⚠️ Nothing watched is a refusal, not an empty subscription. A stream that
-/// subscribes to nothing connects, succeeds, and goes quiet — the failure
-/// `check_supported` exists to keep the RPC path from producing, and it would
-/// be reproduced here by returning an empty request.
+/// subscribes to nothing connects, succeeds, and goes quiet — a failure that
+/// reads as a network fault and is a configuration one, and that returning an
+/// empty request here would reproduce. The config-time `check_supported` that
+/// used to catch the same shape earlier is gone since 10 September 2026; this
+/// refusal is now the only one.
 #[test]
 fn nothing_watched_is_refused_rather_than_subscribed_empty() {
     let empty = build_request(
