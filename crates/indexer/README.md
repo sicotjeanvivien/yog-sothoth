@@ -215,8 +215,14 @@ minus the connections this process needs elsewhere (one, for the
 holds a connection while it persists, so the pool *is* the ceiling — and a pool
 too small to reserve from is refused at startup rather than clamped.
 
-So the way to give the indexer more write concurrency is to open a bigger pool,
-not to edit a constant. With today's default of 10 the bound is 9.
+With today's pool of 10 the bound is 9. ⚠️ **And it is not configurable**:
+`init_db` calls `Database::connect`, whose size is fixed, and no environment
+variable reaches `connect_with_options`. Raising the write concurrency therefore
+still takes a code change today — what changed is *which* change: sizing the
+pool rather than editing a worker constant, with the reservation following
+automatically. `index_concurrency`'s startup refusal exists for the pool sizes
+that edit could produce, and is covered by tests rather than by a configuration
+that can reach it.
 
 ### What the two paths cost
 
@@ -322,8 +328,14 @@ emitted. No gauges today — all counters and histograms.
 - **Fetch counters** (JSON-RPC source only — there is nothing to fetch on the
   gRPC path, so a series that stops advancing after a source switch is saying
   exactly that) — `yog_indexer_fetch_failures_total{reason}`,
-  `yog_indexer_fetch_not_found_total`. `reason="adapt"` is a response that
-  arrived and could not be turned into an `OnChainTransaction`.
+  `yog_indexer_fetch_not_found_total`,
+  `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
+  a response that arrived and could not be turned into an
+  `OnChainTransaction`; the *dropped* family is different in kind — the RPC
+  answered and the quota was spent, but the result was thrown away because the
+  process is stopping (`shutdown`, `shutdown_before_fetch`) or the consumer is
+  gone (`downstream_closed`). A non-zero count outside a shutdown means the
+  consumer died first.
 - **Processor counters** —
   `yog_indexer_index_transaction_entered_total`,
   `yog_indexer_index_transaction_exited_total{outcome}` — `ok`, `no_events`,

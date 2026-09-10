@@ -15,6 +15,7 @@ use yog_core::domain::Protocol;
 
 const FETCH_FAILURES: &str = "yog_indexer_fetch_failures_total";
 const FETCH_NOT_FOUND: &str = "yog_indexer_fetch_not_found_total";
+const FETCH_DROPPED: &str = "yog_indexer_fetch_dropped_total";
 
 const FETCH_DURATION: &str = "yog_indexer_fetch_duration_seconds";
 
@@ -34,6 +35,10 @@ impl FetchMetrics {
             FETCH_DURATION,
             "Duration of fetch_transaction in seconds (includes retries)"
         );
+        describe_counter!(
+            FETCH_DROPPED,
+            "Transactions fetched but never handed downstream (label: reason)"
+        );
     }
 
     pub(crate) fn record_failure(protocol: &Protocol, reason: &'static str) {
@@ -46,5 +51,17 @@ impl FetchMetrics {
 
     pub(crate) fn record_duration(protocol: &Protocol, seconds: f64) {
         histogram!(FETCH_DURATION, "protocol" => protocol.as_str()).record(seconds);
+    }
+
+    /// A transaction that was paid for and thrown away.
+    ///
+    /// ⚠️ **Separate from a fetch failure, and it has to be.** These are not
+    /// requests that went wrong: the RPC answered, the quota was spent, and the
+    /// work is discarded because the process is stopping or the consumer is
+    /// gone. Left uncounted they are the one loss in this stage with no trace
+    /// at all — the crate's rule is *counted* and stepped over, not merely
+    /// stepped over.
+    pub(crate) fn record_dropped(protocol: &Protocol, reason: &'static str) {
+        counter!(FETCH_DROPPED, "protocol" => protocol.as_str(), "reason" => reason).increment(1);
     }
 }

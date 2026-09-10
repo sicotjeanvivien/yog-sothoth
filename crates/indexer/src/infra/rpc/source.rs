@@ -108,7 +108,18 @@ impl TransactionSource for RpcTransactionSource {
 
         info!("RPC transaction source started");
 
+        // ⚠️ `biased`, and the order is the pipeline's own. These three fail in
+        // a cascade: the listener returning `Err(AllWorkersGaveUp)` drops
+        // `raw_tx`, which makes the dispatcher exit `Ok(())`, which drops
+        // `sig_tx`, which stops the fetch stage — so by the next poll two or
+        // three handles are ready at once. An unbiased `select!` picks among
+        // them at random, and reporting "dispatcher stopped, `Ok(())`" for a
+        // provider that exhausted every retry budget is a success exit code for
+        // a dead ingestion. Polling in pipeline order makes the *cause* win the
+        // race against the consequences it just created.
         tokio::select! {
+            biased;
+
             result = listener_task => join("listener", result)?,
             result = dispatcher_task => join("dispatcher", result)?,
             result = fetch_task => join("fetch worker", result)?,

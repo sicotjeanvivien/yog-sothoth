@@ -74,9 +74,11 @@ impl Daemon {
             .context("database initialization failed")?;
         info!("database initialized");
 
-        // Before anything else is built: a pool too small to reserve from
-        // cannot run this process, and saying so here means the refusal is not
-        // preceded by a line announcing a successful initialisation.
+        // As early as the pool allows: a pool too small to reserve from cannot
+        // run this process, so nothing further — the RPC client, the source,
+        // the processor — is worth building. It cannot come before
+        // `database initialized` above, since that is the line that creates the
+        // pool it reads.
         let index_concurrency = index_concurrency(database.max_connections())?;
         info!(index_concurrency, "index concurrency derived from the pool");
 

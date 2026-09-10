@@ -34,6 +34,24 @@ use crate::{
 /// had come to look like a general concurrency setting; it never was one. The
 /// consumer downstream is bounded by the database connection pool instead,
 /// which is a different resource and therefore a different number.
+///
+/// # ⚠️ What splitting the stages changed, and it is not nothing
+///
+/// A permit used to cover the fetch **and** the persist, because one worker did
+/// both. The sustained request rate was therefore `15 / (fetch + persist)`, and
+/// a slow database throttled the RPC as a side effect. A permit now covers the
+/// fetch alone: the transaction goes into a 1 000-deep channel and the slot
+/// frees at once, so the rate is `15 / fetch`.
+///
+/// In normal operation that is a few percent — a persist is short next to a
+/// round-trip — and it is the *correct* shape: two resources, two bounds, each
+/// beside the thing it protects. But when the database degrades the two
+/// diverge, and this stage will keep asking at full rate while the queue fills,
+/// which is when a rate-limited provider is least forgiving. The channel's
+/// depth is what delays back-pressure reaching here; it is sized for memory
+/// (see `INGESTED_CHANNEL_CAPACITY`), not for this. Nothing has measured which
+/// of the two should give way, and until something has, this note is the whole
+/// of what is known.
 const MAX_CONCURRENT_FETCHES: usize = 15;
 
 /// Fetches transactions for qualified signatures, with bounded concurrency.
@@ -109,7 +127,14 @@ impl FetchWorker {
         let permit = tokio::select! {
             biased;
 
-            _ = shutdown.cancelled() => return Ok(()),
+            _ = shutdown.cancelled() => {
+                // The signature is discarded, and that is a loss: it named a
+                // transaction nothing will ask for again. Counted for the same
+                // reason as the two in `fetch_one` — this stage's rule is
+                // *counted* and stepped over.
+                FetchMetrics::record_dropped(&qs.protocol, "shutdown_before_fetch");
+                return Ok(());
+            }
 
             permit = Arc::clone(&self.semaphore).acquire_owned() => {
                 permit.map_err(|_| SourceError::SemaphoreClosed { stage: "fetch" })?
@@ -206,11 +231,13 @@ async fn fetch_one(
         biased;
 
         _ = shutdown.cancelled() => {
+            FetchMetrics::record_dropped(&protocol, "shutdown");
             debug!(%signature, "shutdown while handing over — dropping fetched transaction");
         }
 
         result = downstream.send(ingested) => {
             if result.is_err() {
+                FetchMetrics::record_dropped(&protocol, "downstream_closed");
                 debug!(%signature, "downstream closed — dropping fetched transaction");
             }
         }

@@ -67,18 +67,26 @@ impl IndexerWorker {
 
         loop {
             tokio::select! {
+                // `biased`: a `dispatch_one` that returned because the token
+                // fired must not be followed by another message being taken
+                // instead of the stop.
+                biased;
+
+                _ = shutdown.cancelled() => {
+                    info!("shutdown requested — indexer worker stopping");
+                    return Ok(());
+                }
+
                 maybe_msg = rx.recv() => {
                     match maybe_msg {
-                        Some(ingested) => self.dispatch_one(ingested, rx.len()).await?,
+                        Some(ingested) => {
+                            self.dispatch_one(ingested, rx.len(), &shutdown).await?
+                        }
                         None => {
                             info!("upstream channel closed — indexer worker stopping");
                             return Ok(());
                         }
                     }
-                }
-                _ = shutdown.cancelled() => {
-                    info!("shutdown requested — indexer worker stopping");
-                    return Ok(());
                 }
             }
         }
@@ -88,15 +96,30 @@ impl IndexerWorker {
     ///
     /// Blocks only on permit acquisition — indexing itself runs in a
     /// detached task so the receive loop can keep draining the channel.
+    ///
+    /// ⚠️ **The wait is interruptible**, for the same reason the source's is:
+    /// `run`'s cancellation arm is not polled while this future is pending, so
+    /// a bare `acquire_owned` would keep the worker alive as long as the
+    /// permits stay held. sqlx bounds how long a *connection* takes to acquire
+    /// and nothing bounds how long a statement runs, so "the permits come back
+    /// shortly" is an assumption, not a guarantee. The rule is written on
+    /// `TransactionSource`; applying it to the producer and not to the consumer
+    /// of the same channel would be applying it to one site in two.
     async fn dispatch_one(
         &self,
         ingested: IngestedTransaction,
         queue_depth: usize,
+        shutdown: &CancellationToken,
     ) -> Result<(), IndexerWorkerError> {
-        let permit = Arc::clone(&self.semaphore)
-            .acquire_owned()
-            .await
-            .map_err(|_| IndexerWorkerError::SemaphoreClosed)?;
+        let permit = tokio::select! {
+            biased;
+
+            _ = shutdown.cancelled() => return Ok(()),
+
+            permit = Arc::clone(&self.semaphore).acquire_owned() => {
+                permit.map_err(|_| IndexerWorkerError::SemaphoreClosed)?
+            }
+        };
 
         debug!(
             queue_depth,
