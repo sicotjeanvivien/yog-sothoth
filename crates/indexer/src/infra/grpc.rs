@@ -11,8 +11,11 @@
 //! - `interceptor` — the credential, on every request, printed by nothing;
 //! - `transaction_adapter` — the protobuf shape into the neutral transaction;
 //! - `slot_timestamp_buffer` — the pairing itself, since `block_time` lives on
-//!   a separate subscription keyed by slot;
-//! - `ingested_transaction` — what leaves.
+//!   a separate subscription keyed by slot.
+//!
+//! What leaves is `application::source::IngestedTransaction`, which is not this
+//! path's type: it is the port's, and this path was merely the first to need
+//! it.
 //!
 //! ⚠️ **Nothing selects this path.** What the listener emits has no consumer,
 //! and `INGEST_SOURCE=grpc` is still refused by `check_supported` — the fourth
@@ -32,7 +35,6 @@
 
 #![allow(dead_code)]
 
-mod ingested_transaction;
 mod interceptor;
 mod listener;
 mod metrics;

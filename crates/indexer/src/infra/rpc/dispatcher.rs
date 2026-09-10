@@ -42,8 +42,12 @@ impl SignatureDispatcher {
 
     /// Main loop: consumes raw events until shutdown
     /// or upstream channel closure.
+    ///
+    /// Takes `&self` rather than `self`: it only ever reads its filter chain,
+    /// and the source that owns it holds it in an `Arc` for the life of the
+    /// process rather than handing it to one task.
     pub(crate) async fn run(
-        self,
+        &self,
         mut rx: mpsc::Receiver<RawLogEvent>,
         tx: mpsc::Sender<QualifiedSignature>,
         shutdown: CancellationToken,

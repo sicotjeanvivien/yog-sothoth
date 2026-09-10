@@ -6,6 +6,6 @@ pub(crate) use credential::Credential;
 pub(crate) use grpc::{GrpcBufferMetrics, GrpcListenerMetrics};
 
 pub(crate) use rpc::{
-    DispatcherMetrics, FetchError, QualifiedSignature, RawLogEvent, RpcListener,
-    SignatureDispatcher, TransactionFetcher, from_rpc,
+    DispatcherMetrics, FetchMetrics, RpcListener, RpcTransactionSource, SignatureDispatcher,
+    TransactionFetcher,
 };

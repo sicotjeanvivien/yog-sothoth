@@ -43,8 +43,9 @@ use yellowstone_grpc_proto::prelude::{
 };
 use yog_core::{CoreError, domain::Protocol};
 
+use crate::application::source::IngestedTransaction;
+
 use super::{
-    ingested_transaction::IngestedTransaction,
     metrics::{DropReason, GrpcListenerMetrics, UpdateKind},
     slot_timestamp_buffer::SlotTimestampBuffer,
     subscription::protocol_of,
