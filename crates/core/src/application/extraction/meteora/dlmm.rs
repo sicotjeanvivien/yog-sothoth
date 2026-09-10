@@ -38,4 +38,19 @@ impl EventExtractor for MeteoraDlmm {
         // Phase 2 stub — no events extracted yet.
         Ok(ExtractionOutcome::default())
     }
+
+    /// ⚠️ **False, and it keeps the ingestion off this program id.**
+    ///
+    /// `extract_events` above returns an empty outcome, and there is no
+    /// `DomainEvent::MeteoraDlmm` for it to return anything *into* — so a
+    /// subscription to this protocol would decode and discard every
+    /// transaction of one of Solana's busiest programs, paying an RPC quota or
+    /// a bandwidth bill for zero rows.
+    ///
+    /// **Delete this override when the extraction lands**, in the same change
+    /// that deletes the stub. Nothing else has to be edited for the ingestion
+    /// to pick the protocol up.
+    fn is_implemented(&self) -> bool {
+        false
+    }
 }
