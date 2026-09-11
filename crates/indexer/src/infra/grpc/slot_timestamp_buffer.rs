@@ -19,7 +19,7 @@
 //!
 //! # ⚠️ Why the bound counts slots and not seconds
 //!
-//! This is decision n° 3 of `03 - active/listener-grpc-yellowstone.md`, and the
+//! This is decision n° 3 of `04 - release/listener-grpc-yellowstone.md`, and the
 //! argument is not comfort — it is what each choice does **when things break**.
 //!
 //! A time bound reads a wall clock, and a wall clock keeps running while the
