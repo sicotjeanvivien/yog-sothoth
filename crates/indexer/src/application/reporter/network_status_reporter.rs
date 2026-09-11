@@ -7,30 +7,38 @@
 //! - `record_snapshot` performs one tick: time the RPC call, persist.
 //!
 //! Error semantics:
-//! - This reporter is supervised like a pipeline stage. A failed tick
-//!   (RPC call failed, persistence failed) is propagated as
-//!   `NetworkStatusReporterError` and bubbles up to `Daemon::run` via
-//!   `handle_task_result`, which stops the daemon.
-//! - This is a deliberate choice: the reporter does not self-heal.
-//!   Resilience (retry / respawn) is expected to come from the same
-//!   future respawn logic planned for the subscription workers.
+//! - **A failed tick is logged, counted and skipped** — `tick` swallows it,
+//!   `yog_indexer_network_status_tick_failures_total{reason}` counts it, and
+//!   the next tick tries again. `run` cannot fail: it returns
+//!   `Result<(), Infallible>`, so propagating a tick error does not compile.
+//! - **The decision to stop the daemon belongs to the data path alone.** This
+//!   probe reads the same endpoint over the same network as ingestion, so when
+//!   the link drops it fails by construction — usually before the subscription
+//!   worker has spent its first backoff. Until 11 September 2026 it propagated
+//!   that first failure, `Daemon::run` stopped everything, and every restart
+//!   reset the worker's retry budget to 1: nine restarts in two minutes, and a
+//!   budget of ~5 minutes never consumed.
+//! - What is left of that noise: a `warn!` per failed tick, the counter, and a
+//!   `network_status.observed_at` that stops advancing. A panic still stops the
+//!   daemon — that is a bug, not a network.
 //!
 //! Placement rationale:
 //! - This lives in the indexer, not in a separate daemon, because it
 //!   measures the health of the indexer's own RPC link. The indexer
 //!   already owns an `RpcClient`; no new dependency is introduced.
 
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use yog_bootstrap::SecretUrl;
 
 use yog_core::domain::{NetworkStatus, NetworkStatusRepository};
 
-use crate::application::reporter::NetworkStatusReporterError;
+use crate::application::reporter::{NetworkStatusReporterError, NetworkStatusReporterMetrics};
 
 /// How often the reporter records a snapshot.
 ///
@@ -66,25 +74,24 @@ impl NetworkStatusReporter {
         }
     }
 
-    /// Drive the tick loop until a tick fails or the shutdown token is
-    /// triggered.
+    /// Drive the tick loop until the shutdown token is triggered.
     ///
     /// The first tick fires immediately (tokio's `interval` yields at
     /// once on the first `tick()`), so the singleton is refreshed as
     /// soon as the daemon starts rather than after the first delay.
-    pub(crate) async fn run(
-        self,
-        shutdown: CancellationToken,
-    ) -> Result<(), NetworkStatusReporterError> {
+    ///
+    /// ⚠️ **`Infallible` is the guard, not a formality.** A `?` on a tick is the
+    /// defect this signature exists to forbid, and a test could only notice it
+    /// once it was back; the type refuses to compile it. The `Result` is kept so
+    /// the task joins through `handle_task_result` like every other one.
+    pub(crate) async fn run(self, shutdown: CancellationToken) -> Result<(), Infallible> {
         info!("NetworkStatusReporter started");
 
         let mut ticker = tokio::time::interval(TICK_INTERVAL);
 
         loop {
             tokio::select! {
-                _ = ticker.tick() => {
-                    self.record_snapshot().await?;
-                }
+                _ = ticker.tick() => self.tick().await,
                 _ = shutdown.cancelled() => {
                     info!("shutdown requested — network status reporter stopping");
                     return Ok(());
@@ -93,10 +100,21 @@ impl NetworkStatusReporter {
         }
     }
 
+    /// One tick of the loop: record a snapshot, and absorb its failure.
+    ///
+    /// Returns nothing, deliberately — there is nothing a caller could do with
+    /// the error that the next tick does not already do.
+    async fn tick(&self) {
+        if let Err(error) = self.record_snapshot().await {
+            NetworkStatusReporterMetrics::record_tick_failure(error.reason());
+            warn!(%error, "network status tick failed — skipped, the next tick retries");
+        }
+    }
+
     /// Perform one tick: time the `getSlot` call, then persist the
     /// resulting snapshot.
     ///
-    /// Any failure is returned typed; `run` propagates it.
+    /// Any failure is returned typed; `tick` counts it.
     async fn record_snapshot(&self) -> Result<(), NetworkStatusReporterError> {
         // Time the RPC round-trip — this elapsed value IS the
         // reported latency.
@@ -127,3 +145,7 @@ impl NetworkStatusReporter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "network_status_reporter_tests.rs"]
+mod tests;
