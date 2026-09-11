@@ -53,7 +53,7 @@ use crate::{
             session::{SessionState, StreamSession},
             subscription::build_request,
         },
-        scheme::{self, SchemeRefusal},
+        scheme,
     },
 };
 
@@ -328,10 +328,11 @@ impl GrpcListener {
             }
         })?;
 
-        // After `from_shared`, so that a URI tonic cannot read keeps tonic's own
-        // reason — and checked at all because `from_shared` does not look at
-        // the scheme. See `check_scheme`.
-        self.check_scheme()?;
+        // ⚠️ `from_shared` does not look at the scheme, so a `wss://` URL would
+        // otherwise fail inside the retry loop — see `scheme::GRPC`. Checked
+        // after it, so that a URI tonic cannot read keeps tonic's own reason.
+        scheme::check(&url, &scheme::GRPC)
+            .map_err(|reason| GrpcListenerError::InvalidEndpoint { reason })?;
 
         endpoint
             .tls_config(ClientTlsConfig::new().with_webpki_roots())
@@ -344,31 +345,6 @@ impl GrpcListener {
             .map_err(|e| GrpcListenerError::InvalidEndpoint {
                 reason: url.scrub(&e.to_string()),
             })
-    }
-
-    /// Refuse an endpoint this path cannot speak, before the loop.
-    ///
-    /// ⚠️ **`from_shared` will not do it.** A `wss://` URL is a syntactically
-    /// valid URI, so tonic accepts it and fails much later, inside the retry
-    /// loop, on an h2 handshake against something that speaks WebSocket — ten
-    /// backoffs and a `RetriesExhausted` that reads like an unreachable
-    /// provider. This is the likeliest misconfiguration the second source
-    /// creates: `.env.example` ships a `wss://` `INGEST_STREAM_URL`, and an
-    /// operator flipping only `INGEST_SOURCE=grpc` keeps it. Failing here is
-    /// what [`Self::run`] promises for "an unusable URL".
-    ///
-    /// The sort is `infra::scheme`'s, shared with the JSON-RPC path; the
-    /// messages are this path's.
-    fn check_scheme(&self) -> Result<(), GrpcListenerError> {
-        scheme::check(&self.endpoint.url(), &["http", "https"]).map_err(|refusal| {
-            let reason = match refusal {
-                SchemeRefusal::Foreign(scheme) => format!(
-                    "it carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
-                ),
-                SchemeRefusal::Missing => "it has no scheme. Yellowstone speaks HTTP/2: write `https://host:port`, or `http://` for a self-hosted plaintext endpoint.".to_string(),
-            };
-            GrpcListenerError::InvalidEndpoint { reason }
-        })
     }
 
     /// Build the subscription from what is watched right now.

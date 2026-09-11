@@ -16,7 +16,7 @@ use crate::{
     infra::{
         Credential,
         rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},
-        scheme::{self, SchemeRefusal},
+        scheme,
     },
 };
 
@@ -101,7 +101,10 @@ impl RpcListener {
         // is a configuration failure, and letting each worker rediscover it
         // would spend a retry budget on something that cannot get better.
         let credential = Credential::new(self.endpoint.header())?;
-        self.check_scheme()?;
+        // Same reason, same place: a URL this path cannot speak would otherwise
+        // cost a retry budget per worker — see `scheme::WEBSOCKET`.
+        scheme::check(&self.endpoint.url(), &scheme::WEBSOCKET)
+            .map_err(|reason| RpcListenerError::InvalidEndpoint { reason })?;
         info!(
             endpoint = %self.endpoint,
             header = credential.name().unwrap_or("none"),
@@ -206,31 +209,6 @@ impl RpcListener {
         }
 
         Ok(())
-    }
-
-    /// Refuse an endpoint this path cannot speak, before any worker exists.
-    ///
-    /// ⚠️ **The mirror of the gRPC path's check, and it is not symmetry for its
-    /// own sake.** `INGEST_STREAM_URL` is read by both sources: an operator who
-    /// tried Yellowstone, set `https://grpc.provider/`, then went back to
-    /// `INGEST_SOURCE=rpc` keeps that URL. `PubsubClient::new` does not refuse
-    /// it — it just fails to connect — so the failure would arrive as
-    /// `RPC_WORKER_MAX_RETRIES` attempts with backoff **per watched pool**, and
-    /// then `AllWorkersGaveUp`: a configuration fault wearing the costume of an
-    /// unreachable provider, multiplied by the fleet.
-    ///
-    /// The sort is `infra::scheme`'s, shared with the gRPC path; the messages
-    /// are this path's.
-    fn check_scheme(&self) -> Result<(), RpcListenerError> {
-        scheme::check(&self.endpoint.url(), &["ws", "wss"]).map_err(|refusal| {
-            let reason = match refusal {
-                SchemeRefusal::Foreign(other) => format!(
-                    "it carries the `{other}` scheme. `logsSubscribe` is a WebSocket: use `wss://`, or `ws://` for a local validator. An `https://` address is what a Yellowstone gRPC endpoint looks like — `INGEST_SOURCE=grpc` is what reads it."
-                ),
-                SchemeRefusal::Missing => "it has no scheme. `logsSubscribe` is a WebSocket: write `wss://host`, or `ws://` for a local validator.".to_string(),
-            };
-            RpcListenerError::InvalidEndpoint { reason }
-        })
     }
 
     async fn build_subscription_targets(

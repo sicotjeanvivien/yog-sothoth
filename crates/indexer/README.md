@@ -86,9 +86,10 @@ Filling it is this crate's job, one module per source:
   scheme into accepted, foreign or missing, so each listener refuses the other
   path's URL at start-up instead of spending its retry budget on it.
   `INGEST_STREAM_URL` is read by both sources, which makes switching one and
-  forgetting the other the ordinary mistake. The sort is shared; the messages
-  are not — each says what its own path expects and which source reads the
-  URL it was handed.
+  forgetting the other the ordinary mistake. What differs between the two
+  paths is only text — which schemes each takes, what to write, which source
+  reads the other kind of URL — so each path is a `Transport` constant, side by
+  side with the other, and the check is one function.
 
 - `infra/grpc/listener.rs` opens the stream and keeps it open, with
   `subscription.rs` (what is asked for) and `session.rs` (what an update means)
