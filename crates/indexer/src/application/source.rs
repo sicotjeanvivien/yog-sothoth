@@ -92,10 +92,11 @@ pub(crate) trait TransactionSource: Send + Sync {
     ///
     /// Called before [`TransactionSource::run`], by
     /// [`WatchedPoolService::restore_subscriptions`], once per active row of
-    /// `watched_pools` — only under `INGEST_SCOPE=pools`. Both watch methods are on this trait rather than on a
-    /// `PoolWatcher` of their own because what a source subscribes to and what
-    /// it delivers are one subject — and because splitting them would buy a
-    /// second trait for two methods with one caller each.
+    /// `watched_pools` — only under `INGEST_SCOPE=pools`. Both watch methods
+    /// are on this trait rather than on a `PoolWatcher` of their own because
+    /// what a source subscribes to and what it delivers are one subject — and
+    /// because splitting them would buy a second trait for two methods with one
+    /// caller each.
     ///
     /// [`WatchedPoolService::restore_subscriptions`]: crate::application::services::WatchedPoolService::restore_subscriptions
     async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey);

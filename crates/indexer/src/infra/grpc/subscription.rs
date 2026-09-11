@@ -162,11 +162,13 @@ fn account_includes(watched: &HashSet<(Protocol, Pubkey)>) -> Vec<(Protocol, Vec
 /// updates, and anything a provider sends that was not asked for. The caller
 /// decides what that means; here it is simply not a protocol.
 ///
-/// ⚠️ An update can match **several** filters, and the first match wins. Today
-/// that cannot happen: the filters are disjoint by construction, one per
-/// protocol. It would the day two watched protocols shared an account — and taking
-/// the first is then still the only defensible answer, since the transaction is
-/// genuinely both and the pipeline handles one protocol at a time.
+/// ⚠️ An update can match **several** filters, and the first match wins. One
+/// filter per protocol makes the *names* distinct, not the transactions: one
+/// that touches watched addresses of two protocols matches both. Today that
+/// cannot happen only because a single protocol has a working extractor, so
+/// only its addresses are watched. The day a second one is written, taking the
+/// first is still the only defensible answer — the transaction is genuinely
+/// both, and the pipeline handles one protocol at a time.
 pub(crate) fn protocol_of(filters: &[String]) -> Option<Protocol> {
     filters.iter().find_map(|name| name.parse().ok())
 }

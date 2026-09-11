@@ -38,14 +38,29 @@ fn an_http_endpoint_is_accepted() {
 /// `channel_endpoint` turns this red; `scheme_tests` would stay green.
 #[test]
 fn a_websocket_endpoint_is_refused_before_the_loop() {
-    let error = listener("wss://api.example.com")
+    let detail = listener("wss://api.example.com")
         .channel_endpoint()
-        .expect_err("a WebSocket URL is not a gRPC endpoint");
+        .expect_err("a WebSocket URL is not a gRPC endpoint")
+        .to_string();
 
-    assert!(
-        matches!(error, GrpcListenerError::InvalidEndpoint { .. }),
-        "got {error:?}"
-    );
+    // The scheme check's own wording, and not merely `InvalidEndpoint`:
+    // `from_shared` and `tls_config` raise that variant too, so a tonic that
+    // one day refused `wss://` itself would keep a variant-only assertion green
+    // while operators lost the message that says what to write.
+    assert!(detail.contains("`wss` scheme"), "{detail}");
+}
+
+/// ⚠️ **A URL with no scheme gets past `from_shared`** — `grpc.example.com:443`
+/// is a valid URI — so it is the scheme check, and only it, that has to name the
+/// mistake. `scheme_tests` pins the wording; this pins that the URL gets there.
+#[test]
+fn a_url_without_a_scheme_reaches_the_scheme_check() {
+    let detail = listener("grpc.example.com:443")
+        .channel_endpoint()
+        .expect_err("a schemeless URL is not a gRPC endpoint")
+        .to_string();
+
+    assert!(detail.contains("no scheme"), "{detail}");
 }
 
 /// ⚠️ **A watched protocol is its program id, and this is the only place that

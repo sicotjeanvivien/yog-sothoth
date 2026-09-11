@@ -95,7 +95,7 @@ impl WatchedPoolService {
         if count == 0 && skipped > 0 {
             error!(
                 skipped,
-                "every active watched pool names a protocol with no working extractor — the                  listener has nothing to subscribe to and will refuse to start"
+                "every active watched pool names a protocol with no working extractor — the listener has nothing to subscribe to and will refuse to start"
             );
         }
 
