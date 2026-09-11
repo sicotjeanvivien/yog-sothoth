@@ -277,7 +277,7 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     match config.source {
         IngestSource::Rpc => init_rpc_source(config),
-        IngestSource::Grpc => Ok(init_grpc_source(config)),
+        IngestSource::Grpc => init_grpc_source(config),
     }
 }
 
@@ -317,13 +317,16 @@ fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>
 /// The delivering model: no fetch, no filter chain, no fleet — the listener is
 /// the source.
 ///
-/// Infallible, unlike its sibling, and the signature says so: nothing here can
-/// be refused before `run`, which is where the endpoint is checked.
-fn init_grpc_source(config: &Config) -> Arc<dyn TransactionSource> {
-    Arc::new(GrpcTransactionSource::new(Arc::new(GrpcListener::new(
-        config.ingest_stream.clone(),
-        config.worker_max_retries,
-        config.scope,
+/// Nothing here can fail today — the endpoint is checked in `run` — and the
+/// `Result` is the shape of its sibling, so `init_source` reads as two arms of
+/// one kind.
+fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
+        GrpcListener::new(
+            config.ingest_stream.clone(),
+            config.worker_max_retries,
+            config.scope,
+        ),
     ))))
 }
 
