@@ -74,38 +74,7 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        // ⚠️ **The first line the process writes, because it is the first
-        // question a reader has.** Two acquisition models exist and one is
-        // running; from here on nothing else in the crate names which. These
-        // two `as_str` were written for the refusals of a validator that no
-        // longer exists — their remaining reader is this line, and it is a
-        // better one: a refusal is read once, a running mode every time
-        // something looks wrong.
-        info!(
-            source = config.source.as_str(),
-            scope = config.scope.as_str(),
-            "ingestion mode"
-        );
-
-        // ⚠️ **The one couple that boots and cannot keep up.** `logsSubscribe`
-        // on a program id delivers everything that program does, and this path
-        // then fetches each transaction back — measured at ~200 in 30 s against
-        // a ~10 req/s tier. Nothing stops: fetch failures are skip-and-logged
-        // per transaction, so the process stays up and the metrics stay
-        // plausible while most of what it sees is dropped.
-        //
-        // A `check_supported` used to refuse this couple, for a different
-        // reason — an empty target set — and that reason is genuinely fixed.
-        // What went with the refusal was the only loud signal an operator got,
-        // and this line puts it back at the cost of one branch.
-        if matches!(
-            (config.source, config.scope),
-            (IngestSource::Rpc, IngestScope::Protocols)
-        ) {
-            tracing::warn!(
-                "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
-            );
-        }
+        log_ingestion_mode(&config);
 
         let database = init_db(&config.database_url)
             .await
@@ -245,6 +214,43 @@ const INGESTED_CHANNEL_CAPACITY: usize = 1_000;
 
 // ── Initialisation helpers ───────────────────────────────────────────────────
 
+/// Say which acquisition model is running, and warn when it cannot keep up.
+///
+/// ⚠️ **The first lines the process writes, because it is the first question a
+/// reader has.** Two acquisition models exist and one is running; from here on
+/// nothing else in the crate names which. The two `as_str` were written for the
+/// refusals of a validator that no longer exists — their remaining reader is
+/// this line, and it is a better one: a refusal is read once, a running mode
+/// every time something looks wrong.
+///
+/// ⚠️ **And the one couple that boots and cannot keep up.** `logsSubscribe` on
+/// a program id delivers everything that program does, and the RPC path then
+/// fetches each transaction back — measured at ~200 in 30 s against a ~10 req/s
+/// tier. Nothing stops: fetch failures are skip-and-logged per transaction, so
+/// the process stays up and the metrics stay plausible while most of what it
+/// sees is dropped.
+///
+/// A `check_supported` used to refuse that couple, for a different reason — an
+/// empty target set — and that reason is genuinely fixed. What went with the
+/// refusal was the only loud signal an operator got, and the warning puts it
+/// back at the cost of one branch.
+fn log_ingestion_mode(config: &Config) {
+    info!(
+        source = config.source.as_str(),
+        scope = config.scope.as_str(),
+        "ingestion mode"
+    );
+
+    if matches!(
+        (config.source, config.scope),
+        (IngestSource::Rpc, IngestScope::Protocols)
+    ) {
+        tracing::warn!(
+            "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
+        );
+    }
+}
+
 /// Connect to the database.
 ///
 /// The database URL is held in `Config::database_url` (a redacted secret),
@@ -264,22 +270,14 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 /// downstream holds `Arc<dyn TransactionSource>` and never learns which model
 /// is running — which is why `INGEST_SOURCE` is read here and nowhere else.
 ///
-/// The two arms are not the same size, and that asymmetry is the subject of
-/// the whole change: `logsSubscribe` notifies, so its source has to assemble a
-/// fleet, a filter chain and a fetch stage; Yellowstone delivers, so its source
-/// is the listener.
+/// The two builders below are not the same size, and that asymmetry is the
+/// subject of the whole port: `logsSubscribe` notifies, so its source has to
+/// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
+/// its source is the listener.
 fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     match config.source {
         IngestSource::Rpc => init_rpc_source(config),
-        // The delivering model needs no fetch, no filter chain and no fleet, so
-        // there is nothing to assemble: the listener is the source.
-        IngestSource::Grpc => Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
-            GrpcListener::new(
-                config.ingest_stream.clone(),
-                config.worker_max_retries,
-                config.scope,
-            ),
-        )))),
+        IngestSource::Grpc => Ok(init_grpc_source(config)),
     }
 }
 
@@ -314,6 +312,19 @@ fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>
     Ok(Arc::new(RpcTransactionSource::new(
         listener, dispatcher, fetcher,
     )))
+}
+
+/// The delivering model: no fetch, no filter chain, no fleet — the listener is
+/// the source.
+///
+/// Infallible, unlike its sibling, and the signature says so: nothing here can
+/// be refused before `run`, which is where the endpoint is checked.
+fn init_grpc_source(config: &Config) -> Arc<dyn TransactionSource> {
+    Arc::new(GrpcTransactionSource::new(Arc::new(GrpcListener::new(
+        config.ingest_stream.clone(),
+        config.worker_max_retries,
+        config.scope,
+    ))))
 }
 
 /// Build the EventPersistor: shared pool maintenance plus the per-protocol
