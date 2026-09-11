@@ -28,10 +28,11 @@
 //! started registering what it watches. What replaced the refusal is not a
 //! looser check but a filled precondition.
 //!
-//! **Why `Config` carries both axes.** The scope travels into the runtime: the
-//! listener dispatches on it. The source travels exactly one storey — into
+//! **Why `Config` carries both axes.** Each travels exactly one storey, into
+//! the daemon. The scope decides what is registered with the source — the
+//! protocols or the pools — and no listener reads it. The source goes into
 //! `init_source`, which builds one of the two implementations and hands back
-//! the port. Nothing downstream learns which. It became a field the day that
+//! the port. Nothing downstream learns either. It became a field the day that
 //! function grew its second arm, which is what the doc above said would
 //! happen.
 //!

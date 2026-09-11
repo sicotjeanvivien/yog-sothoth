@@ -1,6 +1,9 @@
 use yog_bootstrap::EnvEnum;
 
-/// What the listener subscribes to.
+/// What the daemon registers with the source, and so what is subscribed to.
+///
+/// Read once, by the daemon's `Registration`; no listener sees it — they hold
+/// addresses, and a program id and a pool are both an address.
 ///
 /// `Protocols` is one subscription per watched protocol, keyed on its
 /// program id — full coverage, and the throughput the free tier cannot

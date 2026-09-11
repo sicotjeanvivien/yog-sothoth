@@ -307,7 +307,6 @@ fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>
     let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
-        config.scope,
     ));
     let dispatcher =
         Arc::new(SignatureDispatcher::new_default().context("dispatcher initialization failed")?);
@@ -343,11 +342,7 @@ fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>
 /// one kind.
 fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
-        GrpcListener::new(
-            config.ingest_stream.clone(),
-            config.worker_max_retries,
-            config.scope,
-        ),
+        GrpcListener::new(config.ingest_stream.clone(), config.worker_max_retries),
     ))))
 }
 

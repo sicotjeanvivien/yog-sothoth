@@ -44,7 +44,6 @@ use yog_core::domain::Protocol;
 
 use crate::{
     application::source::IngestedTransaction,
-    bootstrap::IngestScope,
     error::GrpcListenerError,
     infra::{
         Credential,
@@ -90,40 +89,40 @@ const OUTBOUND_CAPACITY: usize = 8;
 /// Subscribes to a Yellowstone stream and turns it into timestamped
 /// transactions.
 ///
-/// Holds the same two watch sets as `RpcListener`, for the same reason: what is
-/// subscribed to is decided by `INGEST_SCOPE`, and the pool set is restored
-/// from the database at startup.
+/// Holds the same watch set as `RpcListener`, for the same reason: an address
+/// is an address, a program id or a pool, and which ones go in is decided
+/// upstream by the daemon's registration.
 pub(crate) struct GrpcListener {
     /// The whole endpoint and not just its URL: on this path the credential can
     /// ride in a metadata header, which is `Endpoint::header`'s half of the
     /// question — see `interceptor`.
     endpoint: Endpoint,
-    watched_protocols: Mutex<HashSet<Protocol>>,
-    watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
+    /// Every address to subscribe to, with its protocol — see
+    /// `subscription::build_request`, which groups them into one filter per
+    /// protocol.
+    watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
-    scope: IngestScope,
 }
 
 impl GrpcListener {
-    pub(crate) fn new(endpoint: Endpoint, max_attempts: u32, scope: IngestScope) -> Self {
+    pub(crate) fn new(endpoint: Endpoint, max_attempts: u32) -> Self {
         Self {
             endpoint,
-            watched_protocols: Mutex::new(HashSet::new()),
-            watched_pools: Mutex::new(HashSet::new()),
+            watched: Mutex::new(HashSet::new()),
             max_attempts,
-            scope,
         }
     }
 
+    /// Watch a whole protocol: its program id goes into the filter.
     pub(crate) async fn watch(&self, protocol: Protocol) {
-        self.watched_protocols.lock().await.insert(protocol);
+        self.watched
+            .lock()
+            .await
+            .insert((protocol, protocol.program_id()));
     }
 
     pub(crate) async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey) {
-        self.watched_pools
-            .lock()
-            .await
-            .insert((protocol, pool_address));
+        self.watched.lock().await.insert((protocol, pool_address));
     }
 
     /// Open the stream, keep it open, and return when it is over.
@@ -352,12 +351,7 @@ impl GrpcListener {
         &self,
         from_slot: Option<u64>,
     ) -> Result<SubscribeRequest, GrpcListenerError> {
-        build_request(
-            self.scope,
-            &*self.watched_protocols.lock().await,
-            &*self.watched_pools.lock().await,
-            from_slot,
-        )
+        build_request(&*self.watched.lock().await, from_slot)
     }
 
     /// One connection, from dial to close.

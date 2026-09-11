@@ -194,7 +194,9 @@ RpcListener ──RawLogEvent──▶ SignatureDispatcher ──QualifiedSignat
 exponential backoff. It is an orchestrator of a fleet of `SubscriptionWorker`
 instances — one per `SubscriptionTarget`, each with its own retry budget
 (`RPC_WORKER_MAX_RETRIES`). Solana's `logsSubscribe` accepts exactly one pubkey
-per `mentions` filter, so **what a target is depends on the mode**:
+per `mentions` filter, so a target is one address — and **which addresses
+depends on the scope**, applied by the daemon when it registers them (the
+listener itself never reads `INGEST_SCOPE`):
 
 - `INGEST_SCOPE=protocols` — one target per watched protocol, the
   subscription pubkey being the program id. The target mode; it needs an RPC

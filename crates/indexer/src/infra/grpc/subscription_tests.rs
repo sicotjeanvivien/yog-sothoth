@@ -11,22 +11,19 @@
 
 use super::*;
 
-fn protocols(list: &[Protocol]) -> HashSet<Protocol> {
-    list.iter().copied().collect()
-}
-
 fn pool(byte: u8) -> Pubkey {
     Pubkey::new_from_array([byte; 32])
 }
 
-fn request(scope: IngestScope, pools: &[(Protocol, Pubkey)]) -> SubscribeRequest {
-    build_request(
-        scope,
-        &protocols(&[Protocol::MeteoraDammV2]),
-        &pools.iter().copied().collect(),
-        None,
+fn damm_v2_program() -> (Protocol, Pubkey) {
+    (
+        Protocol::MeteoraDammV2,
+        Protocol::MeteoraDammV2.program_id(),
     )
-    .expect("something is watched")
+}
+
+fn request(watched: &[(Protocol, Pubkey)]) -> SubscribeRequest {
+    build_request(&watched.iter().copied().collect(), None).expect("something is watched")
 }
 
 // ── the two flags the ticket says nothing will remind us of ─────────
@@ -41,7 +38,7 @@ fn request(scope: IngestScope, pools: &[(Protocol, Pubkey)]) -> SubscribeRequest
 /// becomes a counted failure: an error metric that reads as a dead pipeline.
 #[test]
 fn the_transaction_filter_refuses_votes_and_failures() {
-    let request = request(IngestScope::Protocols, &[]);
+    let request = request(&[damm_v2_program()]);
 
     let filter = request
         .transactions
@@ -61,7 +58,7 @@ fn the_transaction_filter_refuses_votes_and_failures() {
 /// never comes and leaves through the buffer's eviction counter.
 #[test]
 fn the_request_also_subscribes_to_block_metas() {
-    let request = request(IngestScope::Protocols, &[]);
+    let request = request(&[damm_v2_program()]);
 
     assert!(
         request.blocks_meta.contains_key(BLOCK_META_FILTER),
@@ -74,14 +71,14 @@ fn the_request_also_subscribes_to_block_metas() {
     );
 }
 
-// ── what each scope asks for ────────────────────────────────────────
+// ── what is asked for ───────────────────────────────────────────
 
-/// `INGEST_SCOPE=protocols`: the program id, which is what makes the firehose
+/// A watched protocol is its program id, which is what makes the firehose
 /// mode a single filter here where the RPC path needs a subscription per
 /// address.
 #[test]
-fn the_protocol_scope_includes_the_program_id() {
-    let request = request(IngestScope::Protocols, &[]);
+fn a_watched_program_id_is_included_as_is() {
+    let request = request(&[damm_v2_program()]);
 
     assert_eq!(
         request.transactions["meteora_damm_v2"].account_include,
@@ -89,18 +86,15 @@ fn the_protocol_scope_includes_the_program_id() {
     );
 }
 
-/// `INGEST_SCOPE=pools`: the allowlist is enforced **at the subscription**, as
-/// it is on the RPC path — not by a filter downstream.
+/// Watched pools: the allowlist is enforced **at the subscription**, as it is
+/// on the RPC path — not by a filter downstream.
 #[test]
-fn the_pool_scope_includes_the_watched_pools_grouped_by_protocol() {
-    let request = request(
-        IngestScope::Pools,
-        &[
-            (Protocol::MeteoraDammV2, pool(1)),
-            (Protocol::MeteoraDammV2, pool(2)),
-            (Protocol::MeteoraDlmm, pool(3)),
-        ],
-    );
+fn watched_pools_are_grouped_by_protocol() {
+    let request = request(&[
+        (Protocol::MeteoraDammV2, pool(1)),
+        (Protocol::MeteoraDammV2, pool(2)),
+        (Protocol::MeteoraDlmm, pool(3)),
+    ]);
 
     assert_eq!(
         request.transactions.len(),
@@ -110,8 +104,8 @@ fn the_pool_scope_includes_the_watched_pools_grouped_by_protocol() {
          multiply the account quota that is already the tight one"
     );
     // The expectation is sorted, not the result: `account_include` is a
-    // repeated field whose order reaches the wire, and `pool_includes` sorts it
-    // so this comparison is against a defined order rather than a `HashSet`
+    // repeated field whose order reaches the wire, and `account_includes` sorts
+    // it so this comparison is against a defined order rather than a `HashSet`
     // iteration.
     let mut expected = vec![pool(1).to_string(), pool(2).to_string()];
     expected.sort();
@@ -125,26 +119,6 @@ fn the_pool_scope_includes_the_watched_pools_grouped_by_protocol() {
     );
 }
 
-/// The two scopes are not interchangeable, and reading the wrong one is silent:
-/// the subscription opens either way, and only what arrives differs.
-#[test]
-fn the_scope_decides_what_is_included_and_the_two_differ() {
-    let watched = [(Protocol::MeteoraDammV2, pool(1))];
-
-    let by_pools = request(IngestScope::Pools, &watched);
-    let by_protocols = request(IngestScope::Protocols, &watched);
-
-    assert_eq!(
-        by_pools.transactions["meteora_damm_v2"].account_include,
-        vec![pool(1).to_string()]
-    );
-    assert_eq!(
-        by_protocols.transactions["meteora_damm_v2"].account_include,
-        vec![Protocol::MeteoraDammV2.program_id().to_string()],
-        "the protocol scope ignores the pool list entirely"
-    );
-}
-
 /// ⚠️ Nothing watched is a refusal, not an empty subscription. A stream that
 /// subscribes to nothing connects, succeeds, and goes quiet — a failure that
 /// reads as a network fault and is a configuration one, and that returning an
@@ -153,31 +127,10 @@ fn the_scope_decides_what_is_included_and_the_two_differ() {
 /// refusal is now the only one.
 #[test]
 fn nothing_watched_is_refused_rather_than_subscribed_empty() {
-    let empty = build_request(
-        IngestScope::Protocols,
-        &HashSet::new(),
-        &HashSet::new(),
-        None,
-    );
-
     assert!(matches!(
-        empty,
+        build_request(&HashSet::new(), None),
         Err(GrpcListenerError::NoSubscriptionTargets)
     ));
-
-    // And the same for the other scope, which reads a different collection —
-    // one arm can be right while the other silently subscribes to nothing.
-    let empty_pools = build_request(
-        IngestScope::Pools,
-        &protocols(&[Protocol::MeteoraDammV2]),
-        &HashSet::new(),
-        None,
-    );
-
-    assert!(
-        matches!(empty_pools, Err(GrpcListenerError::NoSubscriptionTargets)),
-        "the pool scope must not fall back on the protocols it was not asked for"
-    );
 }
 
 /// `from_slot` is what a reconnection asks for, and its absence is what a first
@@ -185,15 +138,10 @@ fn nothing_watched_is_refused_rather_than_subscribed_empty() {
 /// server, and the listener's fallback for a refused replay is at its own level.
 #[test]
 fn from_slot_is_carried_only_when_given() {
-    assert_eq!(request(IngestScope::Protocols, &[]).from_slot, None);
+    assert_eq!(request(&[damm_v2_program()]).from_slot, None);
 
-    let resumed = build_request(
-        IngestScope::Protocols,
-        &protocols(&[Protocol::MeteoraDammV2]),
-        &HashSet::new(),
-        Some(1_234),
-    )
-    .expect("something is watched");
+    let resumed = build_request(&HashSet::from([damm_v2_program()]), Some(1_234))
+        .expect("something is watched");
 
     assert_eq!(resumed.from_slot, Some(1_234));
 }

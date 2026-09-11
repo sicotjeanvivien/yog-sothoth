@@ -12,7 +12,7 @@ use super::*;
 use yog_bootstrap::Endpoint;
 
 fn listener(url: &str) -> GrpcListener {
-    GrpcListener::new(Endpoint::for_tests(url, None), 1, IngestScope::Pools)
+    GrpcListener::new(Endpoint::for_tests(url, None), 1)
 }
 
 /// Accepted means built: TLS and keep-alive are configured on the way out, so
@@ -45,5 +45,34 @@ fn a_websocket_endpoint_is_refused_before_the_loop() {
     assert!(
         matches!(error, GrpcListenerError::InvalidEndpoint { .. }),
         "got {error:?}"
+    );
+}
+
+/// ⚠️ **A watched protocol is its program id, and this is the only place that
+/// says so** on this path. The listener holds one set of addresses and no
+/// scope, so the translation lives in `watch` — and a `watch` that inserted
+/// anything else would open a stream that matches nothing. A pool is taken as
+/// given, grouped into the same protocol's filter.
+#[tokio::test]
+async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
+    let listener = listener("https://grpc.example.com:443");
+    let pool = Pubkey::new_from_array([7; 32]);
+
+    listener.watch(Protocol::MeteoraDammV2).await;
+    listener.watch_pool(Protocol::MeteoraDammV2, pool).await;
+
+    let request = listener
+        .subscribe_request(None)
+        .await
+        .expect("two addresses are watched");
+
+    let mut expected = vec![
+        Protocol::MeteoraDammV2.program_id().to_string(),
+        pool.to_string(),
+    ];
+    expected.sort();
+    assert_eq!(
+        request.transactions["meteora_damm_v2"].account_include,
+        expected
     );
 }
