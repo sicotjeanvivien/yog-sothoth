@@ -32,6 +32,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use yog_bootstrap::SecretUrl;
@@ -88,6 +89,15 @@ impl NetworkStatusReporter {
         info!("NetworkStatusReporter started");
 
         let mut ticker = tokio::time::interval(TICK_INTERVAL);
+        // ⚠️ **Not the default `Burst`.** A failed tick is now survived, and on a
+        // link that times out rather than refuses, one `getSlot` blocks for the
+        // client's 30 s — twice the interval. Under `Burst` every tick missed
+        // meanwhile fires back to back when the link returns: seen on 11
+        // September 2026, three failures logged in the same millisecond after a
+        // two-minute cut, and ~60 calls for a 30-minute outage, all on the
+        // endpoint the subscription worker is resubscribing to. `Delay` fires
+        // one and resumes the cadence from there.
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         loop {
             tokio::select! {
@@ -137,9 +147,10 @@ impl NetworkStatusReporter {
             observed_at: chrono::Utc::now(),
         };
 
-        // `?` converts RepositoryError into the reporter error via the
-        // `#[from]` on the Persistence variant.
-        self.repository.upsert(&status).await?;
+        self.repository
+            .upsert(&status)
+            .await
+            .map_err(NetworkStatusReporterError::Persistence)?;
 
         debug!(slot, rpc_latency_ms, "network status snapshot recorded");
         Ok(())

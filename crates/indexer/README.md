@@ -324,6 +324,12 @@ two dispatch points a new protocol touches in this crate, the other being
   the channel. The same rule applies one stage earlier inside the JSON-RPC
   source: a signature the RPC will not return, or a response that will not
   adapt, is counted and stepped over by `FetchWorker`.
+- **An observer never stops the pipeline** — a `NetworkStatusReporter` tick
+  that fails is logged, counted and skipped; its `run` returns
+  `Result<(), Infallible>`. It probes the same endpoint over the same network as
+  ingestion, so it fails whenever the link does, and until 11 September 2026 it
+  stopped the daemon first — resetting the subscription workers' retry budget
+  on every restart.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
   panics in spawned tasks reach `Daemon::run` via typed errors and trigger
   graceful shutdown of all tasks via the shared `CancellationToken`.

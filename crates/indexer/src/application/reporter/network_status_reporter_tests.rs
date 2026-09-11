@@ -189,3 +189,90 @@ async fn run_returns_when_cancelled() {
         "a cancelled reporter returns promptly"
     );
 }
+
+/// ⚠️ **The loop, not one tick.** The two tests above call `tick` by hand, so a
+/// `run` that returned `Ok` after its first failure would pass them — and
+/// `Daemon::run` cancels everything when the reporter's task ends, `Ok` or not:
+/// the defect of 9 September with a clean exit code instead of a loud one.
+/// `Infallible` forbids the `?`, not the early return; this test forbids that.
+#[tokio::test(start_paused = true)]
+async fn run_keeps_ticking_after_a_failed_tick() {
+    let repository = Arc::new(ScriptedRepository::default());
+    let reporter = reporter(&[Value::Null, json!(42)], Arc::clone(&repository));
+    let shutdown = CancellationToken::new();
+    let task = tokio::spawn(reporter.run(shutdown.clone()));
+
+    // The first tick fires at once and fails; the second is due one interval
+    // later. The paused clock jumps there as soon as the runtime is idle.
+    tokio::time::sleep(TICK_INTERVAL + Duration::from_secs(1)).await;
+
+    assert_eq!(
+        repository.slots(),
+        vec![42],
+        "the tick after the failed one ran, and recorded"
+    );
+    assert!(
+        !task.is_finished(),
+        "a failed tick must not end the reporter's task"
+    );
+
+    shutdown.cancel();
+    assert!(matches!(task.await, Ok(Ok(()))));
+}
+
+/// A repository whose first write takes `first_write`, counting every call.
+struct SlowFirstWrite {
+    first_write: Duration,
+    calls: Mutex<usize>,
+}
+
+#[async_trait]
+impl NetworkStatusRepository for SlowFirstWrite {
+    async fn upsert(&self, _status: &NetworkStatus) -> RepositoryResult<()> {
+        let first = {
+            let mut calls = self.calls.lock().expect("lock");
+            *calls += 1;
+            *calls == 1
+        };
+        if first {
+            tokio::time::sleep(self.first_write).await;
+        }
+        Ok(())
+    }
+}
+
+/// ⚠️ **Ticks missed during a slow one are not replayed in a burst.** Seen on
+/// 11 September 2026 under tokio's default: three failed ticks logged in the
+/// same millisecond when a two-minute cut ended.
+///
+/// A first tick that takes 40 s misses the ticks due at 15 s and 30 s. `Burst`
+/// fires both the moment it returns — three calls by 41 s; `Delay` fires one and
+/// waits a full interval before the next — two.
+#[tokio::test(start_paused = true)]
+async fn ticks_missed_during_a_slow_tick_are_not_replayed_in_a_burst() {
+    let repository = Arc::new(SlowFirstWrite {
+        first_write: Duration::from_secs(40),
+        calls: Mutex::new(0),
+    });
+    let reporter = NetworkStatusReporter::new(
+        Arc::new(RpcClient::new_mock_with_mocks_map(
+            "succeeds",
+            MocksMap::default(),
+        )),
+        SecretUrl::for_tests("succeeds"),
+        Arc::clone(&repository) as Arc<dyn NetworkStatusRepository>,
+    );
+    let shutdown = CancellationToken::new();
+    let task = tokio::spawn(reporter.run(shutdown.clone()));
+
+    tokio::time::sleep(Duration::from_secs(41)).await;
+
+    assert_eq!(
+        *repository.calls.lock().expect("lock"),
+        2,
+        "the slow tick, then one catch-up tick — not one per missed interval"
+    );
+
+    shutdown.cancel();
+    assert!(matches!(task.await, Ok(Ok(()))));
+}

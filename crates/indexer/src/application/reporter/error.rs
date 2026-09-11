@@ -15,11 +15,13 @@ pub(crate) enum NetworkStatusReporterError {
 
     /// Persisting the snapshot failed. Wraps the repository error.
     ///
-    /// The cause is in the message, not only in `source()`: the error now ends
-    /// in a `warn!` that prints `Display`, and "failed to persist" without the
-    /// why is a line nobody can act on.
+    /// The cause is in the message, and **only** there: the error ends in a
+    /// `warn!` that prints `Display`, where "failed to persist" without the why
+    /// is a line nobody can act on. No `#[from]`, which would also make it the
+    /// `source()` and print it twice under any chain-walking formatter — the
+    /// one call site maps explicitly instead.
     #[error("network status reporter: failed to persist snapshot: {0}")]
-    Persistence(#[from] yog_core::RepositoryError),
+    Persistence(yog_core::RepositoryError),
 }
 
 impl NetworkStatusReporterError {
