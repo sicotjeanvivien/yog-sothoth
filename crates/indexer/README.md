@@ -20,6 +20,7 @@ indexer/src/
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer)
 ├── infra/credential.rs    ← the endpoint's header, validated once, for both paths
+├── infra/scheme.rs        ← the endpoint's scheme, sorted once, for both paths
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer
@@ -80,6 +81,14 @@ Filling it is this crate's job, one module per source:
   version that decided on `INGEST_SOURCE` was removed on review, since a
   transport has no business answering a credential question and the belief it
   rested on — that `PubsubClient` cannot send a header — is false.
+
+- `infra/scheme.rs` is **shared by both paths** too: it sorts the endpoint's
+  scheme into accepted, foreign or missing, so each listener refuses the other
+  path's URL at start-up instead of spending its retry budget on it.
+  `INGEST_STREAM_URL` is read by both sources, which makes switching one and
+  forgetting the other the ordinary mistake. The sort is shared; the messages
+  are not — each says what its own path expects and which source reads the
+  URL it was handed.
 
 - `infra/grpc/listener.rs` opens the stream and keeps it open, with
   `subscription.rs` (what is asked for) and `session.rs` (what an update means)

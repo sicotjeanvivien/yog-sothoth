@@ -53,6 +53,7 @@ use crate::{
             session::{SessionState, StreamSession},
             subscription::build_request,
         },
+        scheme::{self, SchemeRefusal},
     },
 };
 
@@ -327,35 +328,10 @@ impl GrpcListener {
             }
         })?;
 
-        // ⚠️ **The scheme is checked here, and `from_shared` will not do it.**
-        // A `wss://` URL is a syntactically valid URI, so tonic accepts it and
-        // fails much later, inside the retry loop, on an h2 handshake against
-        // something that speaks WebSocket — ten backoffs and a `RetriesExhausted`
-        // that reads like an unreachable provider. This is the likeliest
-        // misconfiguration the second source creates: `.env.example` ships a
-        // `wss://` `INGEST_STREAM_URL`, and an operator flipping only
-        // `INGEST_SOURCE=grpc` keeps it. Failing here is what this function's
-        // doc-comment already promised for "an unusable URL".
-        // ⚠️ Two failures, not one: a scheme this path cannot speak, and no
-        // scheme at all. `from_shared` accepts both — `mainnet.example.com:443`
-        // is a valid URI — and telling an operator that their endpoint "carries
-        // the `` scheme" is a message that reads like a bug in the message.
-        match endpoint.uri().scheme_str() {
-            Some("http" | "https") => {}
-            Some(scheme) => {
-                return Err(GrpcListenerError::InvalidEndpoint {
-                    reason: format!(
-                        "it carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
-                    ),
-                });
-            }
-            None => {
-                return Err(GrpcListenerError::InvalidEndpoint {
-                    reason: "it has no scheme. Yellowstone speaks HTTP/2: write `https://host:port`, or `http://` for a self-hosted plaintext endpoint."
-                        .to_string(),
-                });
-            }
-        }
+        // After `from_shared`, so that a URI tonic cannot read keeps tonic's own
+        // reason — and checked at all because `from_shared` does not look at
+        // the scheme. See `check_scheme`.
+        self.check_scheme()?;
 
         endpoint
             .tls_config(ClientTlsConfig::new().with_webpki_roots())
@@ -368,6 +344,31 @@ impl GrpcListener {
             .map_err(|e| GrpcListenerError::InvalidEndpoint {
                 reason: url.scrub(&e.to_string()),
             })
+    }
+
+    /// Refuse an endpoint this path cannot speak, before the loop.
+    ///
+    /// ⚠️ **`from_shared` will not do it.** A `wss://` URL is a syntactically
+    /// valid URI, so tonic accepts it and fails much later, inside the retry
+    /// loop, on an h2 handshake against something that speaks WebSocket — ten
+    /// backoffs and a `RetriesExhausted` that reads like an unreachable
+    /// provider. This is the likeliest misconfiguration the second source
+    /// creates: `.env.example` ships a `wss://` `INGEST_STREAM_URL`, and an
+    /// operator flipping only `INGEST_SOURCE=grpc` keeps it. Failing here is
+    /// what [`Self::run`] promises for "an unusable URL".
+    ///
+    /// The sort is `infra::scheme`'s, shared with the JSON-RPC path; the
+    /// messages are this path's.
+    fn check_scheme(&self) -> Result<(), GrpcListenerError> {
+        scheme::check(&self.endpoint.url(), &["http", "https"]).map_err(|refusal| {
+            let reason = match refusal {
+                SchemeRefusal::Foreign(scheme) => format!(
+                    "it carries the `{scheme}` scheme, which is not gRPC. Yellowstone speaks HTTP/2: use `https://`, or `http://` for a self-hosted plaintext endpoint. A `wss://` address is the WebSocket endpoint of the JSON-RPC path — `INGEST_SOURCE=rpc` is what reads it."
+                ),
+                SchemeRefusal::Missing => "it has no scheme. Yellowstone speaks HTTP/2: write `https://host:port`, or `http://` for a self-hosted plaintext endpoint.".to_string(),
+            };
+            GrpcListenerError::InvalidEndpoint { reason }
+        })
     }
 
     /// Build the subscription from what is watched right now.

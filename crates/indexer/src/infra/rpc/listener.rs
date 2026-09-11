@@ -16,6 +16,7 @@ use crate::{
     infra::{
         Credential,
         rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},
+        scheme::{self, SchemeRefusal},
     },
 };
 
@@ -217,23 +218,19 @@ impl RpcListener {
     /// `RPC_WORKER_MAX_RETRIES` attempts with backoff **per watched pool**, and
     /// then `AllWorkersGaveUp`: a configuration fault wearing the costume of an
     /// unreachable provider, multiplied by the fleet.
+    ///
+    /// The sort is `infra::scheme`'s, shared with the gRPC path; the messages
+    /// are this path's.
     fn check_scheme(&self) -> Result<(), RpcListenerError> {
-        // `SecretUrl::scheme` rather than `expose`: this function consumes
-        // nothing, it only asks a question, and the rest of the URL carries the
-        // key whenever the operator put it there. The exposure guard in
-        // `yog-bootstrap` refused the first version of this line for that
-        // reason.
-        match self.endpoint.url().scheme().as_deref() {
-            Some("ws" | "wss") => Ok(()),
-            Some(other) => Err(RpcListenerError::InvalidEndpoint {
-                reason: format!(
+        scheme::check(&self.endpoint.url(), &["ws", "wss"]).map_err(|refusal| {
+            let reason = match refusal {
+                SchemeRefusal::Foreign(other) => format!(
                     "it carries the `{other}` scheme. `logsSubscribe` is a WebSocket: use `wss://`, or `ws://` for a local validator. An `https://` address is what a Yellowstone gRPC endpoint looks like — `INGEST_SOURCE=grpc` is what reads it."
                 ),
-            }),
-            None => Err(RpcListenerError::InvalidEndpoint {
-                reason: "it has no scheme. `logsSubscribe` is a WebSocket: write `wss://host`, or `ws://` for a local validator.".to_string(),
-            }),
-        }
+                SchemeRefusal::Missing => "it has no scheme. `logsSubscribe` is a WebSocket: write `wss://host`, or `ws://` for a local validator.".to_string(),
+            };
+            RpcListenerError::InvalidEndpoint { reason }
+        })
     }
 
     async fn build_subscription_targets(
