@@ -55,12 +55,8 @@ use yog_persistence::{
 /// everything downstream sees the trait.
 pub(crate) struct Daemon {
     processor: Arc<TransactionProcessor>,
-    watched_pool_service: Arc<WatchedPoolService>,
     source: Arc<dyn TransactionSource>,
-    /// What the source is told to watch at start-up, under
-    /// `INGEST_SCOPE=protocols`. **Not every `Protocol`** — see
-    /// `ExtractionDispatcher::implemented_protocols`.
-    watched_protocols: Vec<Protocol>,
+    registration: Registration,
     network_status_reporter: NetworkStatusReporter,
     /// How many transactions may be persisted at once — computed from the pool
     /// that was actually opened, see [`index_concurrency`].
@@ -96,9 +92,9 @@ impl Daemon {
         // need it: the processor extracts with it, and the start-up
         // registration below asks it which protocols are worth subscribing to.
         let extractor = Arc::new(ExtractionDispatcher::new());
-        let watched_protocols = extractor.implemented_protocols();
+        let implemented_protocols = extractor.implemented_protocols();
         info!(
-            protocols = ?watched_protocols,
+            protocols = ?implemented_protocols,
             "protocols with a working extractor"
         );
 
@@ -109,11 +105,20 @@ impl Daemon {
             .await
             .context("network_status_reporter initialization failed")?;
 
-        let watched_pool_service =
-            init_watched_pool_service(&database, Arc::clone(&source), watched_protocols.clone())
+        let registration = match config.scope {
+            IngestScope::Protocols => Registration::Protocols(implemented_protocols),
+            IngestScope::Pools => {
+                let service = init_watched_pool_service(
+                    &database,
+                    Arc::clone(&source),
+                    implemented_protocols,
+                )
                 .await
                 .context("watched pool service initialization failed")?;
-        info!("watched pool service initialized");
+                info!("watched pool service initialized");
+                Registration::Pools(service)
+            }
+        };
 
         DispatcherMetrics::register_descriptions();
         FetchMetrics::register_descriptions();
@@ -135,9 +140,8 @@ impl Daemon {
 
         Ok(Self {
             processor,
-            watched_pool_service,
             source,
-            watched_protocols,
+            registration,
             network_status_reporter,
             index_concurrency,
             _database: database,
@@ -161,15 +165,14 @@ impl Daemon {
     /// triggered. All remaining tasks are cancelled via the shared
     /// token.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        // The two halves of "what do we subscribe to", side by side because
-        // that is the one question they answer. `INGEST_SCOPE` decides which of
-        // the two the source actually builds its subscription from; both are
-        // populated regardless, so switching scope is a restart and not a code
-        // change.
-        for protocol in &self.watched_protocols {
-            self.source.watch_protocol(*protocol).await;
+        match &self.registration {
+            Registration::Protocols(protocols) => {
+                for protocol in protocols {
+                    self.source.watch_protocol(*protocol).await;
+                }
+            }
+            Registration::Pools(service) => service.restore_subscriptions().await?,
         }
-        self.watched_pool_service.restore_subscriptions().await?;
         let (tx, rx) = mpsc::channel::<IngestedTransaction>(INGESTED_CHANNEL_CAPACITY);
 
         let source_task = spawn_source_task(Arc::clone(&self.source), tx, shutdown.clone());
@@ -199,6 +202,24 @@ impl Daemon {
         }
         Ok(())
     }
+}
+
+/// What the source is told to watch before it runs — **one of the two, never
+/// both**, and `INGEST_SCOPE` is read once to decide which.
+///
+/// ⚠️ An earlier shape of this PR populated both at start-up and let each
+/// listener pick one by scope. `WatchedPoolService` then ran under
+/// `INGEST_SCOPE=protocols` for a set nobody read, and its own log lines — the
+/// count, the "listener will refuse to start" error — described work that did
+/// not happen. Raised in review of PR #140. The type is what keeps that from
+/// coming back: a value holds one registration or the other.
+enum Registration {
+    /// The protocols whose extraction is written — **not every `Protocol`**,
+    /// see `ExtractionDispatcher::implemented_protocols`.
+    Protocols(Vec<Protocol>),
+    /// The allowlist in `watched_pools`, restored through the service that
+    /// filters it by the same list.
+    Pools(Arc<WatchedPoolService>),
 }
 
 /// How many delivered transactions may queue before the source is made to wait.

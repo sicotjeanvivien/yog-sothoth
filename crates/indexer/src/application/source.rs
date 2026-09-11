@@ -84,16 +84,15 @@ pub(crate) trait TransactionSource: Send + Sync {
     /// to its program id would buy a firehose to decode and discard. The list
     /// comes from `ExtractionDispatcher::implemented_protocols`.
     ///
-    /// Read only under `INGEST_SCOPE=protocols`; the pool set is what the other
-    /// scope reads. Both are populated at start-up regardless, and the scope
-    /// decides which one the subscription is built from.
+    /// Called only under `INGEST_SCOPE=protocols`: the daemon registers
+    /// protocols **or** pools, never both.
     async fn watch_protocol(&self, protocol: Protocol);
 
     /// Subscribe to one pool's transactions.
     ///
     /// Called before [`TransactionSource::run`], by
     /// [`WatchedPoolService::restore_subscriptions`], once per active row of
-    /// `watched_pools`. Both watch methods are on this trait rather than on a
+    /// `watched_pools` — only under `INGEST_SCOPE=pools`. Both watch methods are on this trait rather than on a
     /// `PoolWatcher` of their own because what a source subscribes to and what
     /// it delivers are one subject — and because splitting them would buy a
     /// second trait for two methods with one caller each.

@@ -38,17 +38,17 @@ impl WatchedPoolService {
     /// On daemon startup, resubscribe to all pools persisted in the database.
     /// Ensures no subscription is lost across restarts.
     ///
-    /// ⚠️ **A pool whose protocol has no working extractor is skipped**, and
-    /// this guard exists because the same one on the other scope did not cover
-    /// it. `INGEST_SCOPE=protocols` filters through
-    /// `ExtractionDispatcher::implemented_protocols`; `pools` — the scope that
-    /// actually runs today — subscribed to every active row regardless.
+    /// Called only under `INGEST_SCOPE=pools` — the daemon's `Registration`
+    /// builds this service for that scope and no other.
+    ///
+    /// ⚠️ **A pool whose protocol has no working extractor is skipped.**
     /// `watched_pools.protocol` is plain `TEXT` with no `CHECK`, the allowlist
     /// is populated by hand, and `Protocol::from_str` accepts
-    /// `"meteora_dlmm"` — so one INSERT was enough to have the indexer fetch
-    /// every transaction of that pool and hand each to a stub that returns
-    /// nothing. Exactly the spend the flag was added to prevent, on the half
-    /// it did not reach.
+    /// `"meteora_dlmm"` — so without this guard one INSERT is enough to have
+    /// the indexer fetch every transaction of that pool and hand each to a stub
+    /// that returns nothing. The list it checks against is
+    /// `ExtractionDispatcher::implemented_protocols`, the same one the other
+    /// scope subscribes from.
     ///
     /// The skip is a `warn!` and not a silent filter: the row was put there on
     /// purpose, and a pool that is watched in the database but not on the wire
@@ -61,12 +61,6 @@ impl WatchedPoolService {
     /// line across the 10 September 2026 release will see the number drop
     /// without the allowlist changing; that is the log becoming true, not the
     /// indexer losing pools.
-    ///
-    /// The message lost the word "subscriptions" in the same pass. Under
-    /// `INGEST_SCOPE=protocols` this set is populated and never read, so
-    /// promising subscriptions would be a second false claim on the same
-    /// line — and one nobody could check, since only the daemon knows the
-    /// scope.
     pub(crate) async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
         let pools = self.repository.find_all().await?;
         let mut count = 0usize;
@@ -91,12 +85,6 @@ impl WatchedPoolService {
             count += 1;
         }
 
-        // ⚠️ "registered", not "restored": under `INGEST_SCOPE=protocols` this
-        // set is populated and never read — the subscription is built from the
-        // protocol set instead — so a message promising subscriptions would be
-        // believed for work that does not happen. The daemon populates both
-        // sets whichever scope runs, and the `ingestion mode` line it logs
-        // first is what says which one is in force.
         // ⚠️ **Every row skipped is not "nothing to do", it is a dead end**, and
         // it deserves to be named here rather than three lines later. The
         // listener will refuse with `NoSubscriptionTargets` — the "reads like a

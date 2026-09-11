@@ -7,8 +7,8 @@ use yog_bootstrap::EnvEnum;
 /// Until 10 September 2026 three of the four `(source, scope)` couples were
 /// rejected at load time by a `validator` module, for one shared reason:
 /// nothing populated a subscription set. The gRPC slice filled that
-/// precondition — the daemon registers the protocols whose extraction is
-/// written, and the pool set was already restored from the database — so the
+/// precondition — the daemon registers, as the scope says, the protocols whose
+/// extraction is written or the pools restored from the database — so the
 /// module and its refusals are gone. What replaced them is not a looser check
 /// but a met precondition, which is why the assertion flips rather than
 /// disappearing.

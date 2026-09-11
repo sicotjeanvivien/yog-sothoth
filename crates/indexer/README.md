@@ -468,10 +468,10 @@ and all four couples mean something:
 **All four start.** Three of them were refused at load time until 10 September
 2026 by a `bootstrap/config/validator.rs` that no longer exists: its two arms
 shared one precondition — nothing populated a subscription set — and the gRPC
-slice filled it on both halves. The daemon now registers, at start-up, the
-protocols whose extraction is written; the pool set was already restored from
-the database. What replaced the refusals is a met precondition, not a looser
-check.
+slice filled it on both halves. The daemon now registers, at start-up, **one or
+the other** as `INGEST_SCOPE` says: the protocols whose extraction is written,
+or the pools restored from the database. What replaced the refusals is a met
+precondition, not a looser check.
 
 ⚠️ **`(rpc, protocols)` starts and will saturate.** `logsSubscribe` on a program
 id delivers everything that program does, and the JSON-RPC path then fetches
