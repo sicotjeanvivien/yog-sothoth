@@ -412,32 +412,6 @@ impl<T> SlotTimestampBuffer<T> {
         }
     }
 
-    /// How many payloads are waiting.
-    ///
-    /// ⚠️ **Test-only, and it used to claim otherwise.** Its doc said "for the
-    /// tests *and for the listener's own gauge*" — there is no gauge, and there
-    /// never was; the `allow(dead_code)` over this path was what let the
-    /// promise stand unread. The `cfg` is what keeps it honest now: production
-    /// code cannot call this without the compiler saying so.
-    ///
-    /// The gauge itself is worth having — this buffer can hold 40–160 MB — and
-    /// belongs to `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, which is
-    /// the ticket that will read the number. Not posted here in advance: an API
-    /// with no caller is what slice 1 already had to undo once.
-    #[cfg(test)]
-    pub(crate) fn pending_payloads(&self) -> usize {
-        self.pending_count
-    }
-
-    /// How many slot outcomes are remembered — instants and given-up slots
-    /// alike, since they share the table and its bound.
-    ///
-    /// Test-only, for the same reason as its neighbour.
-    #[cfg(test)]
-    pub(crate) fn known_slots(&self) -> usize {
-        self.known.len()
-    }
-
     /// The oldest slot still waiting for an instant, if any.
     ///
     /// For the caller that has to say **where to resume** after a break: these
