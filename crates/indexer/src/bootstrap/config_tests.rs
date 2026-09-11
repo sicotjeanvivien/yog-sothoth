@@ -1,15 +1,21 @@
 use std::env;
 
 use super::*;
+use yog_bootstrap::EnvEnum;
 
-/// `validator` exercises `check_supported` as a function. This one
-/// exercises the thing that actually protects the process: that `load`
-/// **calls** it. Without it, deleting the call from `load` leaves every
-/// other test in this file green — verified by mutation, 2 September 2026.
+/// ⚠️ **This test used to assert a refusal, and now asserts its opposite.**
+/// Until 10 September 2026 three of the four `(source, scope)` couples were
+/// rejected at load time by a `validator` module, for one shared reason:
+/// nothing populated a subscription set. The gRPC slice filled that
+/// precondition — the daemon registers, as the scope says, the protocols whose
+/// extraction is written or the pools restored from the database — so the
+/// module and its refusals are gone. What replaced them is not a looser check
+/// but a met precondition, which is why the assertion flips rather than
+/// disappearing.
 ///
-/// One test rather than two, walking both couples in sequence: these eight
-/// keys are process-global and cargo runs this binary's tests in parallel,
-/// so splitting them would have the two halves race each other.
+/// One test rather than four, walking the couples in sequence: these eight
+/// keys are process-global and cargo runs this binary's tests in parallel, so
+/// splitting them would have the halves race each other.
 ///
 /// ⚠️ A test **owns both halves of every pair it reads** — sets them, or
 /// removes them on purpose as `yog-context`'s sibling does for its public
@@ -20,7 +26,7 @@ use super::*;
 /// refuses. Measured: `INGEST_STREAM_KEY=abc cargo test -p yog-indexer` turned
 /// this test red before the halves were set here.
 #[test]
-fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
+fn every_couple_of_the_two_axes_loads() {
     // SAFETY — and the honest version of it: `set_var` is unsound while any
     // other thread touches the environment *at all*, not merely the same
     // keys, and cargo runs this binary's tests multi-threaded. There is one
@@ -42,20 +48,31 @@ fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
         env::set_var("INGEST_SCOPE", "protocols");
     }
 
-    match Config::load() {
-        Err(ConfigError::UnsupportedCombination { detail }) => {
-            assert!(detail.contains("INGEST_SCOPE=protocols"), "{detail}");
-        }
-        Err(other) => panic!("expected UnsupportedCombination, got {other:?}"),
-        Ok(_) => panic!("`load` accepted a couple `check_supported` refuses"),
+    let config = Config::load().expect("rpc + protocols no longer needs a refusal");
+    assert_eq!(config.source, IngestSource::Rpc);
+    assert_eq!(config.scope, IngestScope::Protocols);
+
+    // SAFETY: same keys, same reasoning.
+    unsafe {
+        env::set_var("INGEST_SOURCE", "grpc");
     }
+    let config = Config::load().expect("grpc + protocols loads");
+    assert_eq!(config.source, IngestSource::Grpc);
 
     // SAFETY: same keys, same reasoning.
     unsafe {
         env::set_var("INGEST_SCOPE", "pools");
     }
+    let config = Config::load().expect("grpc + pools loads");
+    assert_eq!(config.scope, IngestScope::Pools);
 
-    let config = Config::load().expect("rpc + pools is the supported couple");
+    // SAFETY: same keys, same reasoning.
+    unsafe {
+        env::set_var("INGEST_SOURCE", "rpc");
+    }
+
+    let config = Config::load().expect("rpc + pools is the couple that runs today");
+    assert_eq!(config.source, IngestSource::Rpc);
     assert_eq!(config.scope, IngestScope::Pools);
 
     // The two endpoints are read from two variables, and each keeps its own
@@ -69,4 +86,21 @@ fn load_refuses_an_unsupported_couple_and_accepts_the_supported_one() {
         config.ingest_transaction.url().expose(),
         "https://example.invalid/?k=transaction-key"
     );
+}
+
+/// ⚠️ **Rescued from `validator_tests.rs` when that module was deleted**, and
+/// it matters more now than it did there. `as_str` fed the validator's refusal
+/// messages; its reader today is the `ingestion mode` line the daemon writes at
+/// start-up, which is what an operator reads to answer "which model is
+/// running". A drift between it and the parser used to advise a value that
+/// would be rejected; it would now *misname the running mode*, which is worse:
+/// a wrong refusal is noticed, a wrong log line is believed.
+#[test]
+fn env_names_round_trip_through_as_str() {
+    for source in [IngestSource::Rpc, IngestSource::Grpc] {
+        assert_eq!(IngestSource::from_env_value(source.as_str()), Some(source));
+    }
+    for scope in [IngestScope::Protocols, IngestScope::Pools] {
+        assert_eq!(IngestScope::from_env_value(scope.as_str()), Some(scope));
+    }
 }

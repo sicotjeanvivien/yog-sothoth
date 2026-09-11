@@ -39,6 +39,13 @@ impl EventExtractor for MeteoraDammV2 {
         self.program_id
     }
 
+    /// Yes: `extract_events` below decodes nineteen event kinds into
+    /// `DomainEvent::MeteoraDammV2`, and the ingestion may subscribe to this
+    /// program id knowing the transactions it pays for produce rows.
+    fn is_implemented(&self) -> bool {
+        true
+    }
+
     fn extract_events(&self, tx: &OnChainTransaction) -> CoreResult<ExtractionOutcome> {
         // Step 1: extract wire events from the inner-instruction payloads.
         let wire_outcome = extract_wire_events(tx, &self.program_id);

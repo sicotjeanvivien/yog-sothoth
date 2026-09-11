@@ -100,18 +100,12 @@ fn session_with(
 ) {
     let (downstream_tx, downstream_rx) = mpsc::channel(capacity);
     let (outbound_tx, outbound_rx) = mpsc::channel(4);
-    // A request with both halves that matter to the ping answer: a filter,
-    // which must survive it, and a `from_slot`, which must not.
-    let request = SubscribeRequest {
-        from_slot: Some(99),
-        transactions: std::collections::HashMap::from([(
-            PROTOCOL.as_str().to_string(),
-            Default::default(),
-        )]),
-        ..Default::default()
-    };
+    // The session no longer keeps the request it subscribed with: it never
+    // resent it, and the copy was held "for a future filter update". The
+    // outbound receiver is still handed back, because what the tests assert
+    // about a ping is that **nothing** is written to it.
     (
-        StreamSession::new(downstream_tx, outbound_tx, request, shutdown),
+        StreamSession::new(downstream_tx, outbound_tx, shutdown),
         downstream_rx,
         outbound_rx,
     )

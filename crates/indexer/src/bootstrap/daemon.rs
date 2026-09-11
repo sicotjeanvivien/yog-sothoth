@@ -8,11 +8,12 @@ use crate::{
         source::{IngestedTransaction, TransactionSource},
         workers::{IndexerWorker, IndexerWorkerMetrics},
     },
-    bootstrap::Config,
+    bootstrap::{Config, IngestScope, IngestSource},
     error::{IndexerWorkerError, SourceError},
     infra::{
-        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListenerMetrics, RpcListener,
-        RpcTransactionSource, SignatureDispatcher, TransactionFetcher,
+        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
+        GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
+        TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -22,7 +23,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_bootstrap::SecretUrl;
-use yog_core::application::extraction::ExtractionDispatcher;
+use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
     PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
@@ -54,8 +55,8 @@ use yog_persistence::{
 /// everything downstream sees the trait.
 pub(crate) struct Daemon {
     processor: Arc<TransactionProcessor>,
-    watched_pool_service: Arc<WatchedPoolService>,
     source: Arc<dyn TransactionSource>,
+    registration: Registration,
     network_status_reporter: NetworkStatusReporter,
     /// How many transactions may be persisted at once — computed from the pool
     /// that was actually opened, see [`index_concurrency`].
@@ -69,6 +70,8 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
+        log_ingestion_mode(&config);
+
         let database = init_db(&config.database_url)
             .await
             .context("database initialization failed")?;
@@ -85,17 +88,37 @@ impl Daemon {
         let source = init_source(&config).context("transaction source initialization failed")?;
         info!("transaction source initialized: {}", config.ingest_stream);
 
-        let processor = init_processor(&database);
+        // Built here rather than inside `init_processor` because two callers
+        // need it: the processor extracts with it, and the start-up
+        // registration below asks it which protocols are worth subscribing to.
+        let extractor = Arc::new(ExtractionDispatcher::new());
+        let implemented_protocols = extractor.implemented_protocols();
+        info!(
+            protocols = ?implemented_protocols,
+            "protocols with a working extractor"
+        );
+
+        let processor = init_processor(&database, Arc::clone(&extractor));
         info!("indexer service initialized");
 
         let network_status_reporter = init_network_status_reporter(&database, &config)
             .await
             .context("network_status_reporter initialization failed")?;
 
-        let watched_pool_service = init_watched_pool_service(&database, Arc::clone(&source))
-            .await
-            .context("watched pool service initialization failed")?;
-        info!("watched pool service initialized");
+        let registration = match config.scope {
+            IngestScope::Protocols => Registration::Protocols(implemented_protocols),
+            IngestScope::Pools => {
+                let service = init_watched_pool_service(
+                    &database,
+                    Arc::clone(&source),
+                    implemented_protocols,
+                )
+                .await
+                .context("watched pool service initialization failed")?;
+                info!("watched pool service initialized");
+                Registration::Pools(service)
+            }
+        };
 
         DispatcherMetrics::register_descriptions();
         FetchMetrics::register_descriptions();
@@ -117,8 +140,8 @@ impl Daemon {
 
         Ok(Self {
             processor,
-            watched_pool_service,
             source,
+            registration,
             network_status_reporter,
             index_concurrency,
             _database: database,
@@ -142,7 +165,14 @@ impl Daemon {
     /// triggered. All remaining tasks are cancelled via the shared
     /// token.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
-        self.watched_pool_service.restore_subscriptions().await?;
+        match &self.registration {
+            Registration::Protocols(protocols) => {
+                for protocol in protocols {
+                    self.source.watch_protocol(*protocol).await;
+                }
+            }
+            Registration::Pools(service) => service.restore_subscriptions().await?,
+        }
         let (tx, rx) = mpsc::channel::<IngestedTransaction>(INGESTED_CHANNEL_CAPACITY);
 
         let source_task = spawn_source_task(Arc::clone(&self.source), tx, shutdown.clone());
@@ -174,6 +204,24 @@ impl Daemon {
     }
 }
 
+/// What the source is told to watch before it runs — **one of the two, never
+/// both**, and `INGEST_SCOPE` is read once to decide which.
+///
+/// ⚠️ An earlier shape of this PR populated both at start-up and let each
+/// listener pick one by scope. `WatchedPoolService` then ran under
+/// `INGEST_SCOPE=protocols` for a set nobody read, and its own log lines — the
+/// count, the "listener will refuse to start" error — described work that did
+/// not happen. Raised in review of PR #140. The type is what keeps that from
+/// coming back: a value holds one registration or the other.
+enum Registration {
+    /// The protocols whose extraction is written — **not every `Protocol`**,
+    /// see `ExtractionDispatcher::implemented_protocols`.
+    Protocols(Vec<Protocol>),
+    /// The allowlist in `watched_pools`, restored through the service that
+    /// filters it by the same list.
+    Pools(Arc<WatchedPoolService>),
+}
+
 /// How many delivered transactions may queue before the source is made to wait.
 ///
 /// ⚠️ **Ten times smaller than the channels it replaces, and on purpose.** What
@@ -186,6 +234,43 @@ impl Daemon {
 const INGESTED_CHANNEL_CAPACITY: usize = 1_000;
 
 // ── Initialisation helpers ───────────────────────────────────────────────────
+
+/// Say which acquisition model is running, and warn when it cannot keep up.
+///
+/// ⚠️ **The first lines the process writes, because it is the first question a
+/// reader has.** Two acquisition models exist and one is running; from here on
+/// nothing else in the crate names which. The two `as_str` were written for the
+/// refusals of a validator that no longer exists — their remaining reader is
+/// this line, and it is a better one: a refusal is read once, a running mode
+/// every time something looks wrong.
+///
+/// ⚠️ **And the one couple that boots and cannot keep up.** `logsSubscribe` on
+/// a program id delivers everything that program does, and the RPC path then
+/// fetches each transaction back — measured at ~200 in 30 s against a ~10 req/s
+/// tier. Nothing stops: fetch failures are skip-and-logged per transaction, so
+/// the process stays up and the metrics stay plausible while most of what it
+/// sees is dropped.
+///
+/// A `check_supported` used to refuse that couple, for a different reason — an
+/// empty target set — and that reason is genuinely fixed. What went with the
+/// refusal was the only loud signal an operator got, and the warning puts it
+/// back at the cost of one branch.
+fn log_ingestion_mode(config: &Config) {
+    info!(
+        source = config.source.as_str(),
+        scope = config.scope.as_str(),
+        "ingestion mode"
+    );
+
+    if matches!(
+        (config.source, config.scope),
+        (IngestSource::Rpc, IngestScope::Protocols)
+    ) {
+        tracing::warn!(
+            "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
+        );
+    }
+}
 
 /// Connect to the database.
 ///
@@ -202,17 +287,26 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
 
 /// Build the transaction source the configuration selects.
 ///
-/// ⚠️ **One arm today, and `INGEST_SOURCE` is still not read here.** The gRPC
-/// source is written and reachable by nothing — `check_supported` refuses
-/// `INGEST_SOURCE=grpc` at load time, and lifting that refusal is the next
-/// slice of `03 - active/listener-grpc-yellowstone.md`. This function is the
-/// single place that will grow the second arm, and the only place in the crate
-/// that will ever name a concrete source.
+/// **The only place in the crate that names a concrete source.** Everything
+/// downstream holds `Arc<dyn TransactionSource>` and never learns which model
+/// is running — which is why `INGEST_SOURCE` is read here and nowhere else.
+///
+/// The two builders below are not the same size, and that asymmetry is the
+/// subject of the whole port: `logsSubscribe` notifies, so its source has to
+/// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
+/// its source is the listener.
 fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    match config.source {
+        IngestSource::Rpc => init_rpc_source(config),
+        IngestSource::Grpc => init_grpc_source(config),
+    }
+}
+
+/// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
+fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
-        config.scope,
     ));
     let dispatcher =
         Arc::new(SignatureDispatcher::new_default().context("dispatcher initialization failed")?);
@@ -238,6 +332,18 @@ fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     Ok(Arc::new(RpcTransactionSource::new(
         listener, dispatcher, fetcher,
     )))
+}
+
+/// The delivering model: no fetch, no filter chain, no fleet — the listener is
+/// the source.
+///
+/// Nothing here can fail today — the endpoint is checked in `run` — and the
+/// `Result` is the shape of its sibling, so `init_source` reads as two arms of
+/// one kind.
+fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
+        GrpcListener::new(config.ingest_stream.clone(), config.worker_max_retries),
+    ))))
 }
 
 /// Build the EventPersistor: shared pool maintenance plus the per-protocol
@@ -297,16 +403,14 @@ fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
 }
 
 /// Initialise the indexer service and its repository dependencies.
-fn init_processor(database: &Database) -> Arc<TransactionProcessor> {
-    let extraction_dispatcher = Arc::new(ExtractionDispatcher::new());
-    info!("event extractor initialized");
+fn init_processor(
+    database: &Database,
+    extractor: Arc<ExtractionDispatcher>,
+) -> Arc<TransactionProcessor> {
     let event_persistor = init_event_persistor(database);
     info!("event persistor initialized");
 
-    Arc::new(TransactionProcessor::new(
-        extraction_dispatcher,
-        event_persistor,
-    ))
+    Arc::new(TransactionProcessor::new(extractor, event_persistor))
 }
 
 /// Initialise the NetworkStautsReporter and its repository dependency.
@@ -340,12 +444,14 @@ async fn init_network_status_reporter(
 async fn init_watched_pool_service(
     database: &Database,
     source: Arc<dyn TransactionSource>,
+    implemented_protocols: Vec<Protocol>,
 ) -> anyhow::Result<Arc<WatchedPoolService>> {
     let pg_watched_pool_repository =
         Arc::new(PgWatchedPoolRepository::new(database.pool().clone()));
     Ok(Arc::new(WatchedPoolService::new(
         source,
         pg_watched_pool_repository,
+        implemented_protocols,
     )))
 }
 // ── Task spawners ────────────────────────────────────────────────────────────

@@ -412,18 +412,6 @@ impl<T> SlotTimestampBuffer<T> {
         }
     }
 
-    /// How many payloads are waiting. For the tests and for the listener's own
-    /// gauge, not for logic.
-    pub(crate) fn pending_payloads(&self) -> usize {
-        self.pending_count
-    }
-
-    /// How many slot outcomes are remembered — instants and given-up slots
-    /// alike, since they share the table and its bound.
-    pub(crate) fn known_slots(&self) -> usize {
-        self.known.len()
-    }
-
     /// The oldest slot still waiting for an instant, if any.
     ///
     /// For the caller that has to say **where to resume** after a break: these

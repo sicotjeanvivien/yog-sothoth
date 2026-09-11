@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use tracing::info;
-use yog_core::domain::WatchedPoolRepository;
+use tracing::{error, info, warn};
+use yog_core::domain::{Protocol, WatchedPoolRepository};
 
 use crate::{application::source::TransactionSource, error::DatabaseError};
 
@@ -16,29 +16,94 @@ use crate::{application::source::TransactionSource, error::DatabaseError};
 pub(crate) struct WatchedPoolService {
     source: Arc<dyn TransactionSource>,
     repository: Arc<dyn WatchedPoolRepository>,
+    /// The protocols whose extraction is written — see
+    /// `ExtractionDispatcher::implemented_protocols`. A watched pool of any
+    /// other protocol is skipped; the reason is on `restore_subscriptions`.
+    implemented_protocols: Vec<Protocol>,
 }
 
 impl WatchedPoolService {
     pub(crate) fn new(
         source: Arc<dyn TransactionSource>,
         repository: Arc<dyn WatchedPoolRepository>,
+        implemented_protocols: Vec<Protocol>,
     ) -> Self {
-        Self { source, repository }
+        Self {
+            source,
+            repository,
+            implemented_protocols,
+        }
     }
 
     /// On daemon startup, resubscribe to all pools persisted in the database.
     /// Ensures no subscription is lost across restarts.
+    ///
+    /// Called only under `INGEST_SCOPE=pools` — the daemon's `Registration`
+    /// builds this service for that scope and no other.
+    ///
+    /// ⚠️ **A pool whose protocol has no working extractor is skipped.**
+    /// `watched_pools.protocol` is plain `TEXT` with no `CHECK`, the allowlist
+    /// is populated by hand, and `Protocol::from_str` accepts
+    /// `"meteora_dlmm"` — so without this guard one INSERT is enough to have
+    /// the indexer fetch every transaction of that pool and hand each to a stub
+    /// that returns nothing. The list it checks against is
+    /// `ExtractionDispatcher::implemented_protocols`, the same one the other
+    /// scope subscribes from.
+    ///
+    /// The skip is a `warn!` and not a silent filter: the row was put there on
+    /// purpose, and a pool that is watched in the database but not on the wire
+    /// is its own trap.
+    ///
+    /// ⚠️ **`count` changed meaning here, and the old one was wrong.** It used
+    /// to be `pools.len()` — every row, *including the inactive ones* — under a
+    /// message that says "subscriptions restored". It now counts what was
+    /// handed to the source, with `skipped` beside it. Anyone comparing this
+    /// line across the 10 September 2026 release will see the number drop
+    /// without the allowlist changing; that is the log becoming true, not the
+    /// indexer losing pools.
     pub(crate) async fn restore_subscriptions(&self) -> Result<(), DatabaseError> {
         let pools = self.repository.find_all().await?;
-        let count = pools.len();
+        let mut count = 0usize;
+        let mut skipped = 0usize;
+
         for pool in pools {
-            if pool.active {
-                self.source
-                    .watch_pool(pool.protocol, pool.pool_address)
-                    .await;
+            if !pool.active {
+                continue;
             }
+            if !self.implemented_protocols.contains(&pool.protocol) {
+                warn!(
+                    pool = %pool.pool_address,
+                    protocol = %pool.protocol.as_str(),
+                    "watched pool skipped — no working extractor for its protocol, so subscribing would fetch transactions nothing can decode"
+                );
+                skipped += 1;
+                continue;
+            }
+            self.source
+                .watch_pool(pool.protocol, pool.pool_address)
+                .await;
+            count += 1;
         }
-        info!(count, "subscriptions restored from database");
+
+        // ⚠️ **Every row skipped is not "nothing to do", it is a dead end**, and
+        // it deserves to be named here rather than three lines later. The
+        // listener will refuse with `NoSubscriptionTargets` — the "reads like a
+        // network fault, is a configuration one" message this slice argues
+        // against everywhere else — and that refusal knows nothing of the skip.
+        // An `error!` at the moment the cause is still in hand is what connects
+        // the two.
+        if count == 0 && skipped > 0 {
+            error!(
+                skipped,
+                "every active watched pool names a protocol with no working extractor — the listener has nothing to subscribe to and will refuse to start"
+            );
+        }
+
+        info!(count, skipped, "watched pools registered");
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "watched_pool_service_tests.rs"]
+mod tests;

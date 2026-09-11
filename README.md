@@ -56,7 +56,7 @@ Five processes share a single Postgres database — no direct calls between them
                  (Helius)     Jupiter Price V3
 ```
 
-- **`indexer`** subscribes to Meteora programs, decodes Anchor events, persists the reconstructed state. A `TransactionSource` port feeding a bounded-concurrency worker, with Prometheus metrics.
+- **`indexer`** subscribes to Meteora programs, decodes Anchor events, persists the reconstructed state. A `TransactionSource` port — JSON-RPC or Yellowstone gRPC, chosen by `INGEST_SOURCE` — feeding a bounded-concurrency worker, with Prometheus metrics.
 - **`context`** enriches the raw mint addresses recorded by the indexer with token metadata (Helius DAS) and USD prices (Jupiter Price V3), and resolves pool properties (mints, fee config) from on-chain accounts. Independent worker loops with configurable intervals.
 - **`signals`** is a batch detector engine: each detector polls the accumulated data at its own cadence, stateless between ticks — the database carries the state — and emits typed signals with a severity into the `signals` table. A per-`(detector, pool)` cooldown prevents re-alerting, except on severity escalation.
 - **`api`** exposes the indexed, enriched, and detected data over HTTP. Cursor-based pagination, RFC 9457 errors, security headers as router-level middleware. It is also the single egress for signals: a paginated collection endpoint plus an SSE stream fed by an internal poller that broadcasts new signals to connected clients.
@@ -159,7 +159,7 @@ Originally two releases, merged in June 2026: an on-chain analytics tool without
 **v0.1.0 — Analyzer** ✅ *(complete — internal POC, no public release)*
 
 - [x] Rust workspace — `core` / `persistence` / `bootstrap` / `indexer` / `api` / `context` / `wasm`
-- [x] Ingestion behind a `TransactionSource` port (the JSON-RPC source owning `RpcListener` → `SignatureDispatcher` → `FetchWorker`) feeding `IndexerWorker`, with Prometheus instrumentation
+- [x] Ingestion behind a `TransactionSource` port, with two implementations — JSON-RPC (`RpcListener` → `SignatureDispatcher` → `FetchWorker`) and Yellowstone gRPC — feeding `IndexerWorker`, with Prometheus instrumentation
 - [x] DAMM v2 decoding — Anchor `event_cpi`, 19 event kinds end-to-end (swap/liquidity/claims, position lifecycle, pool config & admin, farm admin)
 - [x] Token enrichment daemon — metadata via Helius DAS, USD prices via Jupiter Price V3, pool account resolution (mints, fee config)
 - [x] HTTP API on axum — pools (list, detail, top-N, history), tokens, global stats

@@ -9,6 +9,26 @@
 
 use super::*;
 
+/// What the assertions below read, and nothing in production does — which is
+/// why these live here, where a child module still sees the private fields.
+///
+/// The reader production would have is an occupancy gauge — this buffer can
+/// hold 40–160 MB — and it is a criterion of
+/// `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, the ticket that will read
+/// the number.
+impl<T> SlotTimestampBuffer<T> {
+    /// How many payloads are waiting.
+    fn pending_payloads(&self) -> usize {
+        self.pending_count
+    }
+
+    /// How many slot outcomes are remembered — instants and given-up slots
+    /// alike, since they share the table and its bound.
+    fn known_slots(&self) -> usize {
+        self.known.len()
+    }
+}
+
 /// A payload standing in for whatever the listener will carry. A `u32` rather
 /// than a protobuf message on purpose: the buffer is generic, and a test that
 /// needed the real type would be testing the wrong thing.

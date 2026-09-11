@@ -11,11 +11,11 @@ use yog_bootstrap::{Endpoint, SecretUrl};
 use yog_core::domain::Protocol;
 
 use crate::{
-    bootstrap::IngestScope,
     error::{RpcListenerError, SubscriptionWorkerError},
     infra::{
         Credential,
         rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},
+        scheme,
     },
 };
 
@@ -28,7 +28,7 @@ const EVENTS_CHANNEL_CAPACITY: usize = 256;
 /// Orchestrator for a pool of `SubscriptionWorker`s.
 ///
 /// Responsibilities kept deliberately minimal:
-/// - build the list of `SubscriptionTarget`s from watched protocols and pools
+/// - build the list of `SubscriptionTarget`s from what is watched
 /// - spawn one `SubscriptionWorker` per target
 /// - consume their `SubscriptionEvent`s (log, metrics, tracking)
 /// - escalate to the Daemon when *all* workers have given up
@@ -43,40 +43,38 @@ pub(crate) struct RpcListener {
     /// operator's business — see `infra::credential`. The fleet clones the
     /// assembled URL and the validated header once per worker.
     endpoint: Endpoint,
-    watched_protocols: Mutex<HashSet<Protocol>>,
-    watched_pools: Mutex<HashSet<(Protocol, Pubkey)>>,
+    /// Every address to subscribe to, with the protocol it belongs to — a
+    /// program id or a pool. **One set, and no scope**: a `logsSubscribe`
+    /// target is one `mentions` pubkey whichever it is, and what goes in here
+    /// is decided upstream, by the daemon's registration.
+    watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     worker_max_retries: u32,
-    /// Which of the two target shapes to build — see `IngestScope`, which
-    /// owns what the two mean and why both stay. Read here, decided at
-    /// config load; this listener never sees the other axis, `INGEST_SOURCE`,
-    /// having been built because of it.
-    scope: IngestScope,
 }
 
 impl RpcListener {
-    pub(crate) fn new(endpoint: Endpoint, worker_max_retries: u32, scope: IngestScope) -> Self {
+    pub(crate) fn new(endpoint: Endpoint, worker_max_retries: u32) -> Self {
         Self {
             endpoint,
-            watched_protocols: Mutex::new(HashSet::new()),
-            watched_pools: Mutex::new(HashSet::new()),
+            watched: Mutex::new(HashSet::new()),
             worker_max_retries,
-            scope,
         }
     }
 
-    pub(crate) async fn _watch(&self, protocol: Protocol) {
-        self.watched_protocols.lock().await.insert(protocol);
-    }
-
-    pub(crate) async fn _unwatch(&self, protocol: &Protocol) {
-        self.watched_protocols.lock().await.remove(protocol);
+    /// Watch a whole protocol: its program id becomes a target.
+    ///
+    /// It carried a `_` prefix from the day it was written until 10 September
+    /// 2026, because nothing called it and `INGEST_SCOPE=protocols` was refused
+    /// at load time for exactly that reason. The gRPC slice gave it a caller:
+    /// the source's `watch_protocol`, driven from the daemon at start-up.
+    pub(crate) async fn watch(&self, protocol: Protocol) {
+        self.watched
+            .lock()
+            .await
+            .insert((protocol, protocol.program_id()));
     }
 
     pub(crate) async fn watch_pool(&self, protocol: Protocol, pool_address: Pubkey) {
-        self.watched_pools
-            .lock()
-            .await
-            .insert((protocol, pool_address));
+        self.watched.lock().await.insert((protocol, pool_address));
     }
 
     /// Spawn workers, supervise them, and return when they're all done.
@@ -93,6 +91,10 @@ impl RpcListener {
         // is a configuration failure, and letting each worker rediscover it
         // would spend a retry budget on something that cannot get better.
         let credential = Credential::new(self.endpoint.header())?;
+        // Same reason, same place: a URL this path cannot speak would otherwise
+        // cost a retry budget per worker — see `scheme::WEBSOCKET`.
+        scheme::check(&self.endpoint.url(), &scheme::WEBSOCKET)
+            .map_err(|reason| RpcListenerError::InvalidEndpoint { reason })?;
         info!(
             endpoint = %self.endpoint,
             header = credential.name().unwrap_or("none"),
@@ -202,38 +204,18 @@ impl RpcListener {
     async fn build_subscription_targets(
         &self,
     ) -> Result<Vec<SubscriptionTarget>, RpcListenerError> {
-        let targets = match self.scope {
-            IngestScope::Protocols => self.target_protocols().await,
-            IngestScope::Pools => self.target_pools().await,
-        };
+        let targets: Vec<_> = self
+            .watched
+            .lock()
+            .await
+            .iter()
+            .map(|&(protocol, mention)| SubscriptionTarget::new(protocol, mention))
+            .collect();
 
         if targets.is_empty() {
             return Err(RpcListenerError::NoSubscriptionTargets);
         }
         Ok(targets)
-    }
-
-    async fn target_protocols(&self) -> Vec<SubscriptionTarget> {
-        self.watched_protocols
-            .lock()
-            .await
-            .iter()
-            .cloned()
-            .map(|protocol| {
-                let program_id = protocol.program_id();
-                SubscriptionTarget::new(protocol, program_id)
-            })
-            .collect()
-    }
-
-    async fn target_pools(&self) -> Vec<SubscriptionTarget> {
-        self.watched_pools
-            .lock()
-            .await
-            .iter()
-            .cloned()
-            .map(|(protocol, pool)| SubscriptionTarget::new(protocol, pool))
-            .collect()
     }
 }
 
@@ -352,3 +334,7 @@ fn push_failure(gave_up: &mut Vec<WorkerFailure>, err: &SubscriptionWorkerError)
         }
     }
 }
+
+#[cfg(test)]
+#[path = "listener_tests.rs"]
+mod tests;

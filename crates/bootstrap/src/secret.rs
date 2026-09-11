@@ -158,6 +158,38 @@ impl SecretUrl {
         &self.0
     }
 
+    /// The URL's scheme, lowercased, without handing out the rest.
+    ///
+    /// ⚠️ **A question answered by the type, instead of a call to
+    /// [`SecretUrl::expose`] at a site that consumes nothing.** Both listeners
+    /// have to refuse an endpoint whose scheme belongs to the other path —
+    /// `INGEST_STREAM_URL` is read by both sources, so switching one and
+    /// forgetting the other is the ordinary mistake — and doing that through
+    /// `expose` would widen the whole URL to a `&str` inside a function whose
+    /// only other job is building an error message. `exposure_tests` refused
+    /// exactly that on 10 September 2026, and it was right to.
+    ///
+    /// `None` when there is no scheme, which is its own misconfiguration and
+    /// worth telling apart from a wrong one.
+    ///
+    /// ⚠️ **A `://` is not enough to call something a scheme.** `split_once`
+    /// finds the first one anywhere in the string, so `host/a://b` — a URL with
+    /// no scheme at all — would otherwise report `host/a` as its scheme, and a
+    /// caller would print that back at an operator. What comes back is `Some`
+    /// only for something shaped like a scheme: a letter, then letters, digits,
+    /// `+`, `-` or `.`, per RFC 3986. Anything else is `None`, which is the
+    /// branch that says "you wrote no scheme".
+    pub fn scheme(&self) -> Option<String> {
+        let (candidate, _) = self.0.split_once("://")?;
+
+        let mut chars = candidate.chars();
+        let starts_with_letter = chars.next().is_some_and(|c| c.is_ascii_alphabetic());
+        let rest_is_scheme =
+            chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+
+        (starts_with_letter && rest_is_scheme).then(|| candidate.to_ascii_lowercase())
+    }
+
     /// Build one directly, for a test in another crate. Behind `test-support`
     /// for the reason spelled out on [`SecretKey::for_tests`].
     #[cfg(feature = "test-support")]

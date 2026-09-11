@@ -1,7 +1,7 @@
 //! The Yellowstone gRPC ingestion path.
 //!
-//! Sibling of [`super::rpc`], and complete except for being chosen. Reading
-//! order, which is also the order the data travels:
+//! Sibling of [`super::rpc`]. Reading order, which is also the order the data
+//! travels:
 //!
 //! - `listener` — the connection, the subscription, and what to do when the
 //!   stream breaks;
@@ -11,36 +11,40 @@
 //! - `interceptor` — the credential, on every request, printed by nothing;
 //! - `transaction_adapter` — the protobuf shape into the neutral transaction;
 //! - `slot_timestamp_buffer` — the pairing itself, since `block_time` lives on
-//!   a separate subscription keyed by slot.
+//!   a separate subscription keyed by slot;
+//! - `source` — the port's face on all of it, and the only public item.
 //!
 //! What leaves is `application::source::IngestedTransaction`, which is not this
 //! path's type: it is the port's, and this path was merely the first to need
 //! it.
 //!
-//! ⚠️ **Nothing selects this path.** What the listener emits has no consumer,
-//! and `INGEST_SOURCE=grpc` is still refused by `check_supported` — the fourth
-//! slice of `03 - active/listener-grpc-yellowstone.md` is what lifts both.
-//! Two things here are live already, and deliberately: the metric families
-//! below, registered by `bootstrap/daemon.rs` whichever source runs, and
-//! `bootstrap/config.rs` reading `INGEST_STREAM` through the
-//! `required_endpoint_allowing_header` door — whatever the source, since both
-//! listeners send the header the operator declares (`infra::credential`).
+//! Selected by `INGEST_SOURCE=grpc`, through `bootstrap/daemon.rs::init_source`
+//! — the only place in the crate that names a concrete source. Everything
+//! downstream of `source` sees the port and never learns which model is
+//! running.
 //!
-//! Being unreachable, the rest would trip `dead_code` under `-D warnings`.
-//! Hence the single `allow` below — one for the whole path rather than one per
-//! module, and one line to delete when the switch lands, at which point the
-//! build names whatever is still unreachable. Not the `_`-prefix convention
-//! `RpcListener::_watch` uses: that one marks a lone item among live
-//! neighbours.
-
-#![allow(dead_code)]
+//! ⚠️ **Nothing here is exercised against a real server.** The connection, TLS,
+//! the retry budget, keep-alive and the exact semantics of `from_slot` are
+//! written, reviewed and unproven; `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
+//! is where they meet one. What *is* testable was deliberately kept out of
+//! `listener`: the request in `subscription`, the meaning of each update in
+//! `session`, the pairing in `slot_timestamp_buffer`, the shape in
+//! `transaction_adapter`.
+//!
+//! The `#![allow(dead_code)]` this module carried until 10 September 2026 is
+//! gone with the wiring it was waiting for. It had covered the whole path
+//! rather than each module, precisely so that deleting it would make the build
+//! name whatever was still unreachable — which it did.
 
 mod interceptor;
 mod listener;
 mod metrics;
 mod session;
 mod slot_timestamp_buffer;
+mod source;
 mod subscription;
 mod transaction_adapter;
 
+pub(crate) use listener::GrpcListener;
 pub(crate) use metrics::{GrpcBufferMetrics, GrpcListenerMetrics};
+pub(crate) use source::GrpcTransactionSource;
