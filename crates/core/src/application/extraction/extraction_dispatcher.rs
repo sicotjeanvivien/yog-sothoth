@@ -49,8 +49,8 @@ impl ExtractionDispatcher {
     /// whose extractor is a stub returns an empty outcome, so subscribing to
     /// its program id buys a firehose to decode and discard — see
     /// [`EventExtractor::is_implemented`], which each extractor answers for
-    /// itself so that the answer disappears with the stub rather than living
-    /// in a second list somebody has to remember.
+    /// itself so that the answer lives beside the stub, and is flipped with it,
+    /// rather than in a second list somebody has to remember.
     ///
     /// Written as a `match` over `all()` rather than a hand-kept list: a new
     /// protocol can neither be omitted from the iteration nor escape the

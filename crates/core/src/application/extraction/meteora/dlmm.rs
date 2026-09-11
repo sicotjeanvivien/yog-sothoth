@@ -47,8 +47,9 @@ impl EventExtractor for MeteoraDlmm {
     /// transaction of one of Solana's busiest programs, paying an RPC quota or
     /// a bandwidth bill for zero rows.
     ///
-    /// **Delete this override when the extraction lands**, in the same change
-    /// that deletes the stub. Nothing else has to be edited for the ingestion
+    /// **Flip this to `true` when the extraction lands**, in the same change
+    /// that replaces the stub. The method has no default, so it stays — only
+    /// its answer changes — and nothing else has to be edited for the ingestion
     /// to pick the protocol up.
     fn is_implemented(&self) -> bool {
         false

@@ -8,9 +8,9 @@ use super::*;
 /// every one of those transactions would be decoded and discarded.
 ///
 /// Put in failure before being trusted: making `MeteoraDlmm::is_implemented`
-/// return `true` turns this red. Without that, the day someone deletes the
-/// override because "DLMM is nearly done", nothing says the ingestion started
-/// paying for a firehose.
+/// return `true` turns this red. Without that, the day someone flips it
+/// because "DLMM is nearly done", nothing says the ingestion started paying for
+/// a firehose.
 #[test]
 fn a_stubbed_protocol_is_not_something_to_subscribe_to() {
     let dispatcher = ExtractionDispatcher::new();
@@ -33,6 +33,6 @@ fn the_domain_names_more_protocols_than_extraction_handles() {
 
     assert!(
         dispatcher.implemented_protocols().len() < Protocol::all().len(),
-        "if this fails because DLMM landed, delete it with the stub's override"
+        "if this fails because DLMM landed, delete this test in the change that flips its `is_implemented`"
     );
 }

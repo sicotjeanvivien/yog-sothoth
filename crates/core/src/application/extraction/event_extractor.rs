@@ -55,9 +55,9 @@ pub trait EventExtractor: Send + Sync {
     /// It costs each implementation one line and it is a spending decision, not
     /// a formality.
     ///
-    /// **The answer disappears with the stub**: nobody has to remember a second
-    /// list when the protocol is finally written, which is the failure this
-    /// repository keeps paying for.
+    /// **The answer lives beside the stub**, and is flipped in the change that
+    /// replaces it: nobody has to remember a second list when the protocol is
+    /// finally written, which is the failure this repository keeps paying for.
     ///
     /// [`ExtractionDispatcher::implemented_protocols`]: crate::application::extraction::ExtractionDispatcher::implemented_protocols
     fn is_implemented(&self) -> bool;
