@@ -27,7 +27,8 @@ The same principles guide every crate. They are not aspirational — the code is
 crates/
 ├── core/          ← shared library: domain types, AMM math, protocol extraction
 ├── persistence/   ← Postgres adapter: repository impls, migrations, yog-migrate
-├── bootstrap/     ← shared startup utilities: env helpers, secret types, init_rustls/tracing
+├── bootstrap/     ← shared startup utilities: env helpers, secret types,
+│                   init_rustls/tracing — and the shared stop (shutdown.rs)
 ├── indexer/       ← binary: Solana RPC ingestion → DB
 ├── api/           ← binary: axum HTTP server + SSE over the indexed data
 ├── context/       ← binary: token/pool enrichment (Helius DAS, Jupiter, cp-amm accounts)
@@ -67,7 +68,9 @@ The dependency graph is strict and one-directional:
 
 - **[`core` (`yog-core`)](./core/README.md)** — pure logic and domain types. Domain entities and every repository trait, the two-level `DomainEvent`, the Anchor `event_cpi` extraction pipeline, the `SignalDetector` contract, AMM math, pagination primitives. No I/O.
 - **[`persistence` (`yog-persistence`)](./persistence/README.md)** — the Postgres adapter. `Pg*` repository implementations, the forward-only migration suite, the `yog-migrate` binary, the SQLx offline cache, the query-shape policy (inline `query!` / VIEW / `QueryBuilder`), and the `watched_pools` operational reference.
-- **`bootstrap` (`yog-bootstrap`)** — shared startup utilities, deliberately tiny: env parsing primitives, the two secret types and the `Endpoint` that holds an address apart from its credential, `ConfigError`, `init_rustls()`, `init_tracing()`. The decision rule for adding anything: *does this run identically in every binary's `main()`?* If it varies even slightly, it stays in the binary. (Small enough that this paragraph is its documentation.)
+- **`bootstrap` (`yog-bootstrap`)** — shared startup utilities, deliberately tiny: env parsing primitives, the two secret types and the `Endpoint` that holds an address apart from its credential, `ConfigError`, `init_rustls()`, `init_tracing()` — and the other end of the same lifecycle, `shutdown.rs`: `shutdown_signal()` (SIGINT **and** SIGTERM), `TaskEnd` (what a `JoinError` actually says), `handle_task_result`, and `Stop` with its `SHUTDOWN_GRACE`. The decision rule for adding anything: *does this run identically in every binary's `main()`?* If it varies even slightly, it stays in the binary. (Small enough that this paragraph is its documentation.)
+
+  ⚠️ The stop moved here on 14 September 2026 and **not before**: `yog-indexer` had it first, `yog-context` had grown its own copy of `handle_task_result` whose doc-comment claimed it covered the same cases — and which had since diverged. Two real users is what settled the shape. One consequence to know: every line of a graceful stop now carries the log target `yog_bootstrap`, so a `RUST_LOG` made only of per-crate directives prints none of them, the `warn!` naming an overrun included.
 
   **Secrets — one invariant, two types.** *The secret part is never printable; only the non-secret carrier is.* `SecretKey` masks its value as `****` unconditionally, for a bare key or token. `SecretUrl` redacts every component a URL can carry a credential in — userinfo, path, query string, fragment — and keeps scheme, host and port, so a daemon that dies on startup still says which provider it could not reach. Postgres alone also keeps its role name and its database name: both are ours, and both are the diagnostic.
 

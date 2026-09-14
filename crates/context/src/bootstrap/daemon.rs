@@ -137,10 +137,17 @@ impl Daemon {
     ///
     /// The grace is what keeps the wait from becoming a hang: a worker that
     /// will not end is named in the logs and left to the runtime. The same
-    /// measurement says that will happen: a price tick takes 10.7–19.9 s
+    /// measurement says that will happen — a price tick takes 10.7–19.9 s
     /// against a rate-limiting Jupiter, far past
-    /// [`yog_bootstrap::SHUTDOWN_GRACE`] — bounding a tick is a question for
-    /// the provider clients' timeouts, not for this one.
+    /// [`yog_bootstrap::SHUTDOWN_GRACE`], and 10 stops out of 10 taken inside
+    /// one lost it.
+    ///
+    /// ⚠️ **That is not a missing timeout.** Every provider request is already
+    /// bounded (15 s total, 5 s connect — `providers::http_client`). The tick
+    /// is long because it is ~19 chunks sent back to back plus the capped
+    /// backoff the rate-limited ones earn, and **nothing between two chunks
+    /// looks at the token**. Shortening it is a question for the worker and
+    /// its client, not for the grace.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),
