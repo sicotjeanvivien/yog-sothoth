@@ -334,6 +334,18 @@ two dispatch points a new protocol touches in this crate, the other being
   panics in spawned tasks reach `Daemon::run` via typed errors and trigger
   graceful shutdown of all tasks via the shared `CancellationToken`.
 
+**The stop waits, under one grace.** Cancelling the token is where a shutdown
+starts, not where it ends: `Daemon::run` then waits for its three tasks, and
+each stage waits for what it detached (the listener joins its fleet, the
+indexer worker waits for its permits to come back). The bound is a single
+`SHUTDOWN_GRACE` held by `Daemon::run` — a stage that overruns it is named in a
+`warn!` and destroyed with the runtime, which is the only way an orderly stop
+can still cost work. ⚠️ Until 14 September 2026 there was no waiting at all:
+`run` returned on the token and `main` dropped the runtime ~7 ms later, tearing
+through unsubscribes and in-flight `INSERT`s — and the `JoinError` that came of
+it was read as a panic, so the most ordinary path in the system logged two
+`ERROR` lines per stop, one run in five.
+
 An `ExitGuard` RAII helper ensures every entry into `process_transaction`
 produces an exit counter and duration sample — constructed at the top of the
 function, mutated with `guard.set(outcome)` at each exit point; its `Drop`
