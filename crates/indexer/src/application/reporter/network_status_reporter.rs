@@ -18,9 +18,13 @@
 //!   that first failure, `Daemon::run` stopped everything, and every restart
 //!   reset the worker's retry budget to 1: nine restarts in two minutes, and a
 //!   budget of ~5 minutes never consumed.
-//! - What is left of that noise: a `warn!` per failed tick, the counter, and a
-//!   `network_status.observed_at` that stops advancing. A panic still stops the
-//!   daemon — that is a bug, not a network.
+//! - What is left of that noise: a `warn!` per failed tick and the counter —
+//!   and **nothing a reader of the dashboard can see**, which is not what this
+//!   module claimed until the review of PR #141. The stale `observed_at` it
+//!   leaves behind has no reader; see
+//!   [`NetworkStatusReporterMetrics::record_tick_failure`] for why, and for
+//!   what would close it. A panic still stops the daemon — that is a bug, not
+//!   a network.
 //!
 //! Placement rationale:
 //! - This lives in the indexer, not in a separate daemon, because it

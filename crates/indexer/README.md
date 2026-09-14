@@ -392,10 +392,14 @@ emitted. No gauges today — all counters and histograms.
 - **Reporter counter** — `yog_indexer_network_status_tick_failures_total{reason}`
   (`rpc` or `persistence`, and **no** `protocol` label — the probe observes the
   link, not a protocol): ticks of `NetworkStatusReporter` that recorded nothing.
-  A failed tick is counted and skipped, never propagated, so this series and a
-  `network_status.observed_at` that stops advancing are all an operator sees of
-  a failing probe. It stopped the daemon until 11 September 2026, and every
-  restart reset the subscription worker's retry budget.
+  A failed tick is counted and skipped, never propagated, so **this series is
+  all an operator sees of a failing probe**: the stale `network_status.observed_at`
+  it leaves behind has no reader, and the dashboard's freshness dot is computed
+  from the last indexed event, which keeps advancing when the probe alone is
+  down. `NetworkStatusReporterMetrics::record_tick_failure` documents that trap
+  and what would close it (raised in review of PR #141). The probe stopped the
+  daemon until 11 September 2026, and every restart reset the subscription
+  worker's retry budget.
 - **Histograms** — `yog_indexer_fetch_duration_seconds` (JSON-RPC source only),
   `yog_indexer_persist_duration_seconds{kind}`,
   `yog_indexer_index_transaction_duration_seconds{outcome}` — extract and
