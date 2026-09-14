@@ -6,6 +6,38 @@ fn ends_with<E: std::error::Error + Send + Sync + 'static>(
     tokio::spawn(async move { result })
 }
 
+// ── TaskEnd ──────────────────────────────────────────────────────────────────
+//
+// Read directly by callers that join without `handle_task_result` — the RPC
+// fleet's join loop and `yog-signals`' `JoinSet` drain — so the classification
+// is exercised on its own and not only through the helper.
+
+/// One case per reason, and each exercises only its own: the fixture is
+/// checked with `tokio`'s own predicate before the assertion, so a test that
+/// produced the *other* kind of `JoinError` fails on the fixture rather than
+/// quietly asserting nothing.
+#[tokio::test]
+async fn an_aborted_task_reads_as_cancelled() {
+    let handle = tokio::spawn(std::future::pending::<()>());
+    handle.abort();
+    let error = handle
+        .await
+        .expect_err("an aborted task must not join cleanly");
+    assert!(error.is_cancelled(), "the fixture must be a cancellation");
+
+    assert_eq!(TaskEnd::from(&error), TaskEnd::Cancelled);
+}
+
+#[tokio::test]
+async fn a_panicking_task_reads_as_panicked() {
+    let error = tokio::spawn(async { panic!("boom") })
+        .await
+        .expect_err("a panicking task must not join cleanly");
+    assert!(error.is_panic(), "the fixture must be a panic");
+
+    assert_eq!(TaskEnd::from(&error), TaskEnd::Panicked);
+}
+
 // ── handle_task_result ───────────────────────────────────────────────────────
 
 #[test]

@@ -18,7 +18,8 @@ use solana_pubkey::Pubkey;
 use thiserror::Error;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
+use yog_bootstrap::TaskEnd;
 
 use yog_core::domain::{EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 
@@ -75,12 +76,30 @@ impl SignalEngine {
         while let Some(joined) = set.join_next().await {
             match joined {
                 Ok(name) => info!(detector = name, "detector loop stopped"),
-                Err(e) => {
-                    error!(error = %e, "detector task panicked — stopping engine");
-                    shutdown.cancel();
-                    set.shutdown().await;
-                    return Err(EngineError::DetectorPanicked(e.to_string()));
-                }
+                // ⚠️ **`tokio` bundles two outcomes in this one error and only
+                // one of them is a failure** (see [`TaskEnd`]). Reading every
+                // `JoinError` as a panic is what made an ordinary stop shout in
+                // the indexer's logs, and it was still written that way here.
+                //
+                // The cancelled arm is **not reachable through this module
+                // today**: nothing aborts these tasks but `set.shutdown()`
+                // below, which drains its own aborts, and the engine is gone
+                // before the runtime tears the rest down. It is written anyway
+                // because the alternative is to restate, at a third site, a
+                // rule the other two already share — and the day an abort or a
+                // deadline is added here, the default reading must not be
+                // "panic".
+                Err(e) => match TaskEnd::from(&e) {
+                    TaskEnd::Panicked => {
+                        error!(error = %e, "detector task panicked — stopping engine");
+                        shutdown.cancel();
+                        set.shutdown().await;
+                        return Err(EngineError::DetectorPanicked(e.to_string()));
+                    }
+                    TaskEnd::Cancelled => {
+                        debug!(error = %e, "detector task was cancelled before it could stop");
+                    }
+                },
             }
         }
 
