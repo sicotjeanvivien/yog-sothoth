@@ -36,7 +36,7 @@
 //! the daemon observes it, stops accepting new work, and waits for
 //! in-flight tasks (listener, dispatcher, indexer) to finish before
 //! returning — but for no longer than the grace it holds
-//! (`bootstrap::daemon::SHUTDOWN_GRACE`).
+//! (`bootstrap::daemon::stop::SHUTDOWN_GRACE`).
 //!
 //! ⚠️ **Returning from `main` is what destroys the work.** `#[tokio::main]`
 //! drops the runtime here, and a dropped runtime cancels every task still

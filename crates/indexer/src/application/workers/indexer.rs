@@ -52,7 +52,7 @@ impl IndexerWorker {
     /// It is passed in rather than computed here because the bound is not the
     /// pool's size but the pool's size *minus its other users in this process*,
     /// and only the composition root knows who those are — see
-    /// `bootstrap::daemon::index_concurrency`.
+    /// `bootstrap::daemon::tasks::index_concurrency`.
     pub(crate) fn new(processor: Arc<TransactionProcessor>, max_concurrent: usize) -> Self {
         Self {
             processor,

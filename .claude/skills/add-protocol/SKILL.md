@@ -39,7 +39,7 @@ it's a brand-new protocol not yet in the enum) add the `Protocol` variant + prog
    program fetched or streamed, decoded and discarded — for zero rows.
 2. `EventPersistor::persist` — `crates/indexer/src/application/services/event_persistor.rs`.
    One new `DomainEvent::<NewProtocol>(e) => …` branch + one field.
-3. `init_event_persistor` — `crates/indexer/src/bootstrap/daemon.rs`. One instantiation block
+3. `init_event_persistor` — `crates/indexer/src/bootstrap/daemon/init.rs`. One instantiation block
    wiring the new sub-persistor's repos + the shared `Arc<PoolMaintenance>`.
 
 If you find yourself touching a fourth central registry, stop — you've left the pattern.
@@ -100,7 +100,7 @@ prices. Lossless `u128` becomes `BigDecimal` **only** at the persistence boundar
   matches the protocol's sub-enum and dispatches to `persist_<kind>` methods.
 - **Dispatch point 2**: add the `DomainEvent::<NewProtocol>(e)` branch in
   `EventPersistor::persist` + the field.
-- **Dispatch point 3**: in `init_event_persistor` (`bootstrap/daemon.rs`) instantiate the
+- **Dispatch point 3**: in `init_event_persistor` (`bootstrap/daemon/init.rs`) instantiate the
   repos bundle + the sub-persistor (reusing the shared `pool_maintenance`) and pass it to
   `EventPersistor::new`.
 

@@ -1,0 +1,282 @@
+//! The wiring: every dependency [`super::Daemon::new`] builds before it owns
+//! one, and the metric families it declares.
+
+use crate::{
+    application::{
+        reporter::{NetworkStatusReporter, NetworkStatusReporterMetrics},
+        services::{
+            DammV2Repos, EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor,
+            PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
+        },
+        source::TransactionSource,
+        workers::IndexerWorkerMetrics,
+    },
+    bootstrap::{Config, IngestScope, IngestSource},
+    infra::{
+        DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
+        GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
+        TransactionFetcher,
+    },
+};
+use anyhow::Context;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use std::sync::Arc;
+use tracing::info;
+use yog_bootstrap::SecretUrl;
+use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
+use yog_persistence::{
+    Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
+    PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
+    PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
+    PgMeteoraDammV2FundRewardEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
+    PgMeteoraDammV2InitializeRewardEventRepository, PgMeteoraDammV2LiquidityEventRepository,
+    PgMeteoraDammV2LockPositionEventRepository,
+    PgMeteoraDammV2PermanentLockPositionEventRepository,
+    PgMeteoraDammV2SetPoolStatusEventRepository, PgMeteoraDammV2SplitPositionEventRepository,
+    PgMeteoraDammV2SwapEventRepository, PgMeteoraDammV2UpdatePoolFeesEventRepository,
+    PgMeteoraDammV2UpdateRewardDurationEventRepository,
+    PgMeteoraDammV2UpdateRewardFunderEventRepository,
+    PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
+    PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository,
+};
+
+/// Say which acquisition model is running, and warn when it cannot keep up.
+///
+/// ⚠️ **The first lines the process writes, because it is the first question a
+/// reader has.** Two acquisition models exist and one is running; from here on
+/// nothing else in the crate names which. The two `as_str` were written for the
+/// refusals of a validator that no longer exists — their remaining reader is
+/// this line, and it is a better one: a refusal is read once, a running mode
+/// every time something looks wrong.
+///
+/// ⚠️ **And the one couple that boots and cannot keep up.** `logsSubscribe` on
+/// a program id delivers everything that program does, and the RPC path then
+/// fetches each transaction back — measured at ~200 in 30 s against a ~10 req/s
+/// tier. Nothing stops: fetch failures are skip-and-logged per transaction, so
+/// the process stays up and the metrics stay plausible while most of what it
+/// sees is dropped.
+///
+/// A `check_supported` used to refuse that couple, for a different reason — an
+/// empty target set — and that reason is genuinely fixed. What went with the
+/// refusal was the only loud signal an operator got, and the warning puts it
+/// back at the cost of one branch.
+pub(super) fn log_ingestion_mode(config: &Config) {
+    info!(
+        source = config.source.as_str(),
+        scope = config.scope.as_str(),
+        "ingestion mode"
+    );
+
+    if matches!(
+        (config.source, config.scope),
+        (IngestSource::Rpc, IngestScope::Protocols)
+    ) {
+        tracing::warn!(
+            "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
+        );
+    }
+}
+
+/// Connect to the database.
+///
+/// The database URL is held in `Config::database_url` (a redacted secret),
+/// so we never log it directly — `anyhow::Context` is sufficient to surface
+/// the failure at startup without leaking credentials.
+pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
+    let db = Database::connect(database_url.expose())
+        .await
+        .context("failed to connect to database")?;
+    tracing::info!("connected to database");
+    Ok(db)
+}
+
+/// Build the transaction source the configuration selects.
+///
+/// **The only place in the crate that names a concrete source.** Everything
+/// downstream holds `Arc<dyn TransactionSource>` and never learns which model
+/// is running — which is why `INGEST_SOURCE` is read here and nowhere else.
+///
+/// The two builders below are not the same size, and that asymmetry is the
+/// subject of the whole port: `logsSubscribe` notifies, so its source has to
+/// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
+/// its source is the listener.
+pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    match config.source {
+        IngestSource::Rpc => init_rpc_source(config),
+        IngestSource::Grpc => init_grpc_source(config),
+    }
+}
+
+/// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
+fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    let listener = Arc::new(RpcListener::new(
+        config.ingest_stream.clone(),
+        config.worker_max_retries,
+    ));
+    let dispatcher =
+        Arc::new(SignatureDispatcher::new_default().context("dispatcher initialization failed")?);
+    // ⚠️ **The RPC client is built here, inside the arm that needs one.** It
+    // used to be built by `Daemon::new` and handed in, because the reporter
+    // wanted one too — which made the composition root assemble an ingredient
+    // belonging to exactly one of the two sources, and gave this function a
+    // parameter the gRPC arm could only ignore. Raised in review of PR #139.
+    // The price of not sharing is a second connection pool against the same
+    // host, for a caller that makes one request every fifteen seconds.
+    let rpc_client = Arc::new(RpcClient::new(
+        config.ingest_transaction.url().expose().to_string(),
+    ));
+    info!(
+        "transaction RPC client initialized: {}",
+        config.ingest_transaction
+    );
+    let fetcher = Arc::new(TransactionFetcher::new(
+        rpc_client,
+        config.ingest_transaction.url(),
+    ));
+
+    Ok(Arc::new(RpcTransactionSource::new(
+        listener, dispatcher, fetcher,
+    )))
+}
+
+/// The delivering model: no fetch, no filter chain, no fleet — the listener is
+/// the source.
+///
+/// Nothing here can fail today — the endpoint is checked in `run` — and the
+/// `Result` is the shape of its sibling, so `init_source` reads as two arms of
+/// one kind.
+fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+    Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
+        GrpcListener::new(config.ingest_stream.clone(), config.worker_max_retries),
+    ))))
+}
+
+/// Build the EventPersistor: shared pool maintenance plus the per-protocol
+/// sub-persistor and its bundle of per-event-kind repositories.
+fn init_event_persistor(database: &Database) -> Arc<EventPersistor> {
+    // Cross-protocol repositories
+    let pg_pool_repo = Arc::new(PgPoolRepository::new(database.pool().clone()));
+    let pg_pool_current_state_repo =
+        Arc::new(PgPoolCurrentStateRepository::new(database.pool().clone()));
+
+    // Shared pool maintenance helper — reused by every per-protocol sub-persistor.
+    let pool_maintenance = Arc::new(PoolMaintenance::new(
+        pg_pool_repo,
+        pg_pool_current_state_repo,
+    ));
+
+    // Meteora DAMM v2 sub-persistor and its per-event-kind repositories.
+    let pool = || database.pool().clone();
+    let damm_v2_repos = DammV2Repos {
+        swap_event: Arc::new(PgMeteoraDammV2SwapEventRepository::new(pool())),
+        liquidity_event: Arc::new(PgMeteoraDammV2LiquidityEventRepository::new(pool())),
+        claim_position_fee: Arc::new(PgMeteoraDammV2ClaimPositionFeeEventRepository::new(pool())),
+        claim_protocol_fee: Arc::new(PgMeteoraDammV2ClaimProtocolFeeEventRepository::new(pool())),
+        claim_reward: Arc::new(PgMeteoraDammV2ClaimRewardEventRepository::new(pool())),
+        initialize_reward: Arc::new(PgMeteoraDammV2InitializeRewardEventRepository::new(pool())),
+        fund_reward: Arc::new(PgMeteoraDammV2FundRewardEventRepository::new(pool())),
+        withdraw_ineligible_reward: Arc::new(
+            PgMeteoraDammV2WithdrawIneligibleRewardEventRepository::new(pool()),
+        ),
+        update_reward_duration: Arc::new(PgMeteoraDammV2UpdateRewardDurationEventRepository::new(
+            pool(),
+        )),
+        update_reward_funder: Arc::new(PgMeteoraDammV2UpdateRewardFunderEventRepository::new(
+            pool(),
+        )),
+        withdraw_dead_liquidity_reward: Arc::new(
+            PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository::new(pool()),
+        ),
+        create_position: Arc::new(PgMeteoraDammV2CreatePositionEventRepository::new(pool())),
+        close_position: Arc::new(PgMeteoraDammV2ClosePositionEventRepository::new(pool())),
+        lock_position: Arc::new(PgMeteoraDammV2LockPositionEventRepository::new(pool())),
+        permanent_lock_position: Arc::new(
+            PgMeteoraDammV2PermanentLockPositionEventRepository::new(pool()),
+        ),
+        initialize_pool: Arc::new(PgMeteoraDammV2InitializePoolEventRepository::new(pool())),
+        set_pool_status: Arc::new(PgMeteoraDammV2SetPoolStatusEventRepository::new(pool())),
+        split_position: Arc::new(PgMeteoraDammV2SplitPositionEventRepository::new(pool())),
+        update_pool_fees: Arc::new(PgMeteoraDammV2UpdatePoolFeesEventRepository::new(pool())),
+    };
+
+    let meteora_damm_v2 = Arc::new(MeteoraDammV2EventPersistor::new(
+        damm_v2_repos,
+        Arc::clone(&pool_maintenance),
+    ));
+
+    Arc::new(EventPersistor::new(meteora_damm_v2))
+}
+
+/// Initialise the indexer service and its repository dependencies.
+pub(super) fn init_processor(
+    database: &Database,
+    extractor: Arc<ExtractionDispatcher>,
+) -> Arc<TransactionProcessor> {
+    let event_persistor = init_event_persistor(database);
+    info!("event persistor initialized");
+
+    Arc::new(TransactionProcessor::new(extractor, event_persistor))
+}
+
+/// Initialise the NetworkStatusReporter and its repository dependency.
+///
+/// ⚠️ **It opens its own RPC client**, rather than borrowing the ingestion's.
+/// Sharing one made the reporter's health probe and the fetcher's transport the
+/// same object, which is a coincidence of endpoint and not a shared concern —
+/// and it is why the client used to be built one storey up, where neither of
+/// them lives.
+///
+/// ⚠️ **And what it should measure is an open question**, tracked by
+/// `02 - backlog/pre-v02/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
+/// this probe reads `INGEST_TRANSACTION`, which the gRPC source will not use.
+pub(super) async fn init_network_status_reporter(
+    database: &Database,
+    config: &Config,
+) -> anyhow::Result<NetworkStatusReporter> {
+    let pg_network_status_reporter_repository =
+        Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
+    let rpc_client = Arc::new(RpcClient::new(
+        config.ingest_transaction.url().expose().to_string(),
+    ));
+    Ok(NetworkStatusReporter::new(
+        rpc_client,
+        config.ingest_transaction.url(),
+        pg_network_status_reporter_repository,
+    ))
+}
+
+// Initialise the WatchedPoolService and its repository dependency.
+pub(super) async fn init_watched_pool_service(
+    database: &Database,
+    source: Arc<dyn TransactionSource>,
+    implemented_protocols: Vec<Protocol>,
+) -> anyhow::Result<Arc<WatchedPoolService>> {
+    let pg_watched_pool_repository =
+        Arc::new(PgWatchedPoolRepository::new(database.pool().clone()));
+    Ok(Arc::new(WatchedPoolService::new(
+        source,
+        pg_watched_pool_repository,
+        implemented_protocols,
+    )))
+}
+
+/// Declare the HELP text of every metric family the process exports.
+pub(super) fn register_metric_descriptions() {
+    DispatcherMetrics::register_descriptions();
+    FetchMetrics::register_descriptions();
+    IndexerWorkerMetrics::register_descriptions();
+    TransactionProcessorMetrics::register_descriptions();
+    EventPersistorMetrics::register_descriptions();
+    // The gRPC path's two families are registered whichever source is
+    // running. Descriptions are only HELP text — registering them costs a
+    // string and exports nothing until a counter is touched — and the
+    // alternative, registering them where the gRPC listener is built, is a
+    // line that only ever runs on the path whose reader has the least
+    // context. A counter exported without its HELP text is unreadable to
+    // exactly the person who goes looking for it.
+    GrpcBufferMetrics::register_descriptions();
+    GrpcListenerMetrics::register_descriptions();
+    NetworkStatusReporterMetrics::register_descriptions();
+    info!("Metrics initialized");
+}

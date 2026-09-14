@@ -74,7 +74,7 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
     /// against the latest committed version (EvalPlanQual); `previous` reads
     /// the statement snapshot. Under concurrent writers on one pool — the
     /// indexer persists several transactions at once, bounded by this pool's
-    /// own size (`bootstrap::daemon::index_concurrency`) — a
+    /// own size (`bootstrap::daemon::tasks::index_concurrency`) — a
     /// task can be rejected by a row another task has just committed while its
     /// own snapshot never saw that slot, and it then reports
     /// `same_slot_ambiguity: false`.
