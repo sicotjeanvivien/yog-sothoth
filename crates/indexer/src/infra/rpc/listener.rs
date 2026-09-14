@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, fmt, sync::Arc};
 
 use solana_pubkey::Pubkey;
 use tokio::{
@@ -201,14 +201,31 @@ impl RpcListener {
 // ---------------------------------------------------------------------------
 
 /// Per-worker failure detail — bubbled up in `AllWorkersGaveUp`.
+///
+/// ⚠️ **It was not, until 14 September 2026.** The three fields were collected
+/// and then dropped: `AllWorkersGaveUp` was built with the literal `"gave_up"`,
+/// so a dead ingestion told its operator `All Workers GaveUp failure: gave_up`
+/// and named neither the target nor the reason — while `reason` held
+/// `retries_exhausted after 7: connection refused`. Three
+/// `#[allow(dead_code)]`, one per field, were the tombstone: correct, and
+/// marking exactly what had been thrown away.
 #[derive(Debug, Clone)]
 pub(crate) struct WorkerFailure {
-    #[allow(dead_code)]
     pub protocol: Protocol,
-    #[allow(dead_code)]
     pub mention: Pubkey,
-    #[allow(dead_code)]
     pub reason: String,
+}
+
+impl fmt::Display for WorkerFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}/{}: {}",
+            self.protocol.as_str(),
+            self.mention,
+            self.reason
+        )
+    }
 }
 
 /// Bundle that keeps a worker handle associated with its target for logging.
@@ -339,10 +356,17 @@ async fn join_fleet(
 
 /// What the fleet's outcome means for the listener: every worker out of
 /// retries is a dead ingestion, anything less is not.
+///
+/// The error carries what each worker reported, because this message is the
+/// last thing the process says before it exits — see [`WorkerFailure`].
 fn fleet_outcome(gave_up: &[WorkerFailure], total: usize) -> Result<(), RpcListenerError> {
     if gave_up.len() == total && total > 0 {
         return Err(RpcListenerError::AllWorkersGaveUp {
-            failures: "gave_up".to_string(),
+            failures: gave_up
+                .iter()
+                .map(WorkerFailure::to_string)
+                .collect::<Vec<_>>()
+                .join("; "),
         });
     }
     Ok(())

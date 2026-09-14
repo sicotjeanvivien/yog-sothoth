@@ -112,21 +112,43 @@ fn a_fleet_that_gave_up_on_nothing_is_not_a_dead_ingestion() {
 
 /// And the reason `AllWorkersGaveUp` exists at all, so the test above cannot
 /// pass by the verdict having become unreachable.
+///
+/// ⚠️ **What it says is the point, not that it says something.** This error is
+/// the last line the process writes before exiting: `main` logs it as
+/// `fatal error in indexing loop`. Until 14 September 2026 it was built from
+/// the literal `"gave_up"` — every target and every reason collected, then
+/// dropped, with an `#[allow(dead_code)]` per field to keep the compiler quiet
+/// about it. An operator woken by a dead ingestion learned nothing.
 #[test]
-fn a_fleet_that_gave_up_on_every_target_is_a_dead_ingestion() {
+fn a_fleet_that_gave_up_on_every_target_names_every_one_of_them() {
     let failures: Vec<_> = [1, 2]
         .map(|n| WorkerFailure {
             protocol: Protocol::MeteoraDammV2,
             mention: target(n).mention,
-            reason: "retries_exhausted".to_string(),
+            reason: format!("retries_exhausted after 7: refused {n}"),
         })
         .into_iter()
         .collect();
 
-    assert!(matches!(
-        fleet_outcome(&failures, 2),
-        Err(RpcListenerError::AllWorkersGaveUp { .. })
-    ));
+    let Err(RpcListenerError::AllWorkersGaveUp { failures: said }) = fleet_outcome(&failures, 2)
+    else {
+        panic!("a fleet entirely out of retries is a dead ingestion");
+    };
+
+    for n in [1, 2] {
+        assert!(
+            said.contains(&target(n).mention.to_string()),
+            "the message must name the target that died, got: {said}"
+        );
+        assert!(
+            said.contains(&format!("refused {n}")),
+            "the message must carry each worker's own reason, got: {said}"
+        );
+    }
+    assert!(
+        said.contains("meteora_damm_v2"),
+        "the message must name the protocol, got: {said}"
+    );
 }
 
 /// A worker whose future panicked is the one `JoinError` that *is* a failure,
