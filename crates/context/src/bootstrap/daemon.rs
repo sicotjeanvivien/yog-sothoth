@@ -11,7 +11,7 @@ use anyhow::Context;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_bootstrap::SecretUrl;
+use yog_bootstrap::{SecretUrl, Stop, handle_task_result};
 use yog_core::domain::{
     PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
 };
@@ -123,16 +123,32 @@ impl Daemon {
         })
     }
 
-    pub(crate) async fn run(self) -> anyhow::Result<()> {
-        let shutdown = CancellationToken::new();
-
-        let metadata_task = spawn_metadata_worker(
+    /// Run the three workers until one of them ends or the stop is asked for,
+    /// then **wait for the others** before returning.
+    ///
+    /// ⚠️ **The waiting is the point.** `main` drops the runtime the moment
+    /// this returns, and a dropped runtime destroys whatever is still in
+    /// flight. Until 14 September 2026 the `ctrl_c` arm of the `select!` below
+    /// returned `Ok(())` on its own and the process was gone 5–7 ms later:
+    /// measured over 20 stops on `main`, **none** saw the three workers hand
+    /// back, and the ten that fell inside a price tick destroyed it ten times
+    /// out of ten — 645–747 `token_prices` rows, timestamped, that the next
+    /// cycle does not redo.
+    ///
+    /// The grace is what keeps the wait from becoming a hang: a worker that
+    /// will not end is named in the logs and left to the runtime. The same
+    /// measurement says that will happen: a price tick takes 10.7–19.9 s
+    /// against a rate-limiting Jupiter, far past
+    /// [`yog_bootstrap::SHUTDOWN_GRACE`] — bounding a tick is a question for
+    /// the provider clients' timeouts, not for this one.
+    pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),
             self.metadata_source.clone(),
             self.poll_interval,
             shutdown.clone(),
         );
-        let price_task = spawn_price_worker(
+        let mut price_task = spawn_price_worker(
             Arc::clone(&self.token_metadata_repository),
             Arc::clone(&self.token_price_repository),
             self.price_source.clone(),
@@ -141,7 +157,7 @@ impl Daemon {
         );
         // Resolver runs at the metadata cadence — it must fill mints + fee before
         // metadata/price enrichment has anything to key off.
-        let pool_account_task = spawn_pool_account_worker(
+        let mut pool_account_task = spawn_pool_account_worker(
             self.pool_account_resolvers.clone(),
             self.pool_repository.clone(),
             self.pool_account_source.clone(),
@@ -149,28 +165,64 @@ impl Daemon {
             shutdown.clone(),
         );
 
-        tokio::select! {
-            result = metadata_task => {
+        // Which worker ended here, if it is one of them. Its handle must not be
+        // polled again — `tokio` panics on a `JoinHandle` polled after
+        // completion — so the drain below steps over it.
+        let mut ended: Option<&'static str> = None;
+
+        // ⚠️ **The cancellation arm carries no verdict.** It says the stop was
+        // asked for, not what happened, and a worker that failed can still be
+        // in the middle of stopping when it fires — so its error arrives
+        // afterwards, through the drain. `Stop` is what collects it.
+        let mut stop = Stop::new(tokio::select! {
+            result = &mut metadata_task => {
+                ended = Some(METADATA);
                 shutdown.cancel();
-                handle_task_result(result, "metadata worker")?
+                handle_task_result(result, METADATA)
             }
-            result = price_task => {
+            result = &mut price_task => {
+                ended = Some(PRICE);
                 shutdown.cancel();
-                handle_task_result(result, "price worker")?
+                handle_task_result(result, PRICE)
             }
-            result = pool_account_task => {
+            result = &mut pool_account_task => {
+                ended = Some(POOL_ACCOUNT);
                 shutdown.cancel();
-                handle_task_result(result, "pool-account worker")?
+                handle_task_result(result, POOL_ACCOUNT)
             }
-            _ = tokio::signal::ctrl_c() => {
-                info!("ctrl-c received — stopping");
-                shutdown.cancel();
+            _ = shutdown.cancelled() => {
+                info!("cancellation received — stopping");
+                Ok(())
             }
+        });
+
+        // ⚠️ **The price worker is waited on first, and the order is a
+        // decision.** `Stop` spends one grace across the three, so the first
+        // one waited on can eat all of it — and the price worker is the only
+        // one whose interrupted work is *lost* rather than merely *abandoned*.
+        // Its tick ends in a single `INSERT` of prices stamped at one instant;
+        // destroy it and that instant is gone. The other two re-list what they
+        // did not finish on their next tick (`list_missing_mints`,
+        // `list_unresolved`), so interrupting them costs time, not rows.
+        if ended != Some(PRICE) {
+            stop.settle(PRICE, &mut price_task).await;
+        }
+        if ended != Some(METADATA) {
+            stop.settle(METADATA, &mut metadata_task).await;
+        }
+        if ended != Some(POOL_ACCOUNT) {
+            stop.settle(POOL_ACCOUNT, &mut pool_account_task).await;
         }
 
-        Ok(())
+        stop.finish()
     }
 }
+
+/// The names the three workers answer to — in the logs, and in the list of
+/// what outlived the grace. Named once because each is written at two sites.
+const METADATA: &str = "metadata worker";
+const PRICE: &str = "price worker";
+const POOL_ACCOUNT: &str = "pool-account worker";
 
 /// Connect to the database.
 ///
@@ -223,28 +275,4 @@ fn spawn_pool_account_worker(
 ) -> JoinHandle<Result<(), WorkerError>> {
     let worker = PoolAccountWorker::new(resolvers, pool_repository, source, poll_interval);
     tokio::spawn(async move { worker.run(shutdown).await })
-}
-
-/// Normalise a finished task into a loggable `anyhow::Result`.
-///
-/// Distinguishes a clean stop, a worker error, and a task panic —
-/// same three cases the indexer's `handle_task_result` covers.
-fn handle_task_result(
-    result: Result<Result<(), WorkerError>, tokio::task::JoinError>,
-    task_name: &str,
-) -> anyhow::Result<()> {
-    match result {
-        Ok(Ok(())) => {
-            info!("{task_name} stopped");
-            Ok(())
-        }
-        Ok(Err(e)) => {
-            tracing::error!(error = %e, "{task_name} failed");
-            Err(anyhow::Error::new(e))
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "{task_name} panicked");
-            Err(anyhow::anyhow!("{task_name} panicked: {e}"))
-        }
-    }
 }

@@ -10,6 +10,15 @@
 //! - what the stop is worth once every stage has answered — or has failed to,
 //!   inside [`SHUTDOWN_GRACE`] ([`Stop`]).
 //!
+//! ⚠️ **These lines come from `yog_bootstrap`, and a `RUST_LOG` of per-target
+//! directives will not print them.** Moving the rule here moved its log target
+//! with it: `"… stopped"`, `"… panicked"` and the `warn!` naming a stage that
+//! outlived the grace are no longer emitted under the binary's own name. A
+//! filter like `RUST_LOG=yog_context=debug` — no bare level — drops the whole
+//! account of a stop, and a torn stop then reads exactly like a clean one.
+//! Found on 14 September 2026 while measuring, against this repository's own
+//! `.env`; see `.env.example`.
+//!
 //! ⚠️ **The divergence this module exists to prevent already happened.** The
 //! indexer's daemon and `yog-context`'s each carried their own
 //! `handle_task_result`, and the context one's doc-comment said in so many

@@ -12,6 +12,15 @@
 //! Bootstrap follows the same shape as the other crates:
 //! `init_rustls -> dotenv -> init_tracing -> Config -> AppState ->
 //! run`.
+//!
+//! ## Graceful shutdown
+//!
+//! The process listens for SIGTERM (production) and SIGINT / Ctrl-C (dev). On
+//! signal reception a [`CancellationToken`] is triggered: the daemon observes
+//! it and waits for its three workers to finish their current tick before
+//! returning — but for no longer than [`yog_bootstrap::SHUTDOWN_GRACE`], past
+//! which the workers still running are named in the logs and destroyed with the
+//! runtime.
 
 mod bootstrap;
 mod error;
@@ -20,6 +29,7 @@ mod source;
 mod workers;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -39,7 +49,27 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to initialize daemon"))?;
     info!("daemon state initialized");
 
-    daemon.run().await
+    // ── Graceful shutdown ─────────────────────────────────────────────────────
+    // Spawn a task that waits for SIGTERM / Ctrl-C, then cancels the shared
+    // token. `Daemon::run` observes it, stops accepting new work, and waits for
+    // its three workers before returning.
+    //
+    // ⚠️ **SIGTERM is the signal that matters, and it was not listened for.**
+    // The daemon selected on `tokio::signal::ctrl_c()` alone, which is SIGINT:
+    // under `docker compose stop` — the way this process is actually stopped —
+    // the default handler killed it outright, without so much as cancelling the
+    // token. `shutdown_signal` covers both.
+    let token = CancellationToken::new();
+    let shutdown_token = token.clone();
+    tokio::spawn(async move {
+        yog_bootstrap::shutdown_signal().await;
+        shutdown_token.cancel();
+    });
+
+    daemon
+        .run(token)
+        .await
+        .inspect_err(|e| error!(error = %e, "fatal error in the context daemon"))
 }
 
 /// Install the Prometheus exporter as the global `metrics` recorder.
