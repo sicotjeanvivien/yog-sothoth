@@ -27,9 +27,17 @@
 //!   a network.
 //!
 //! Placement rationale:
-//! - This lives in the indexer, not in a separate daemon, because it
-//!   measures the health of the indexer's own RPC link. The indexer
-//!   already owns an `RpcClient`; no new dependency is introduced.
+//! - This lives in the indexer, not in a separate daemon, because it reports on
+//!   the chain the indexer is reading. It is **not** the indexer's own link: it
+//!   opens its own `RpcClient` (since PR #139) on `INGEST_TRANSACTION`, and
+//!   under `INGEST_SOURCE=grpc` there is no `getTransaction` at all — the
+//!   transaction arrives on the stream, and this probe is then the process's
+//!   only HTTP client, measuring an endpoint ingestion never touches.
+//! - **What it should measure is undecided**, and the question is parked behind
+//!   a real Geyser provider:
+//!   `02 - backlog/pre-v02/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`.
+//!   Until then, read the numbers it publishes as an external reference on the
+//!   chain, not as the health of ingestion.
 
 use std::convert::Infallible;
 use std::sync::Arc;
