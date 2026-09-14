@@ -11,7 +11,7 @@ use yog_bootstrap::{Endpoint, SecretUrl};
 use yog_core::domain::Protocol;
 
 use crate::{
-    error::{RpcListenerError, SubscriptionWorkerError},
+    error::{RpcListenerError, SubscriptionWorkerError, TaskEnd},
     infra::{
         Credential,
         rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},
@@ -160,45 +160,22 @@ impl RpcListener {
             }
         }
 
-        // Join all handles — drives them to completion and collects outcomes.
-        for h in handles.drain(..) {
-            match h.handle.await {
-                Ok(Ok(())) => {
-                    debug!(
-                        protocol = %h.target.protocol.as_str(),
-                        mention = %h.target.mention,
-                        "worker exited cleanly"
-                    );
-                }
-                Ok(Err(e)) => push_failure(&mut gave_up, &e),
-                Err(e) => {
-                    error!(
-                        protocol = %h.target.protocol.as_str(),
-                        mention = %h.target.mention,
-                        error = %e,
-                        "worker task panicked"
-                    );
-                    gave_up.push(WorkerFailure {
-                        protocol: h.target.protocol,
-                        mention: h.target.mention,
-                        reason: format!("panic: {e}"),
-                    });
-                }
-            }
-        }
+        join_fleet(handles.drain(..), &mut gave_up).await;
 
+        // ⚠️ **Kept, and no longer load-bearing.** It covers a stop that lands
+        // while workers are already out of retries, which `join_fleet` cannot
+        // tell from any other exhausted budget. Until 14 September 2026 it
+        // covered far more than that: every worker cancelled by the runtime
+        // shutting down went into `gave_up`, so an ordinary Ctrl-C filled it to
+        // the brim and this line was the only thing standing between a normal
+        // stop and `AllWorkersGaveUp`. `join_fleet` holds that now — see its
+        // tests, which never reach this branch.
         if shutdown.is_cancelled() {
             info!("RPC listener stopped cleanly");
             return Ok(());
         }
 
-        if gave_up.len() == total && total > 0 {
-            return Err(RpcListenerError::AllWorkersGaveUp {
-                failures: "gave_up".to_string(),
-            });
-        }
-
-        Ok(())
+        fleet_outcome(&gave_up, total)
     }
 
     async fn build_subscription_targets(
@@ -309,6 +286,66 @@ fn handle_event(event: &SubscriptionEvent) {
             );
         }
     }
+}
+
+/// Drive every worker to completion and record the ones that gave up.
+///
+/// ⚠️ **A cancelled worker is not one of them.** A `JoinError` says one of two
+/// things (see [`TaskEnd`]) and only one is a failure: the fleet is never
+/// aborted here, so a cancellation means the runtime was torn down around it —
+/// the work was cut short, nothing gave up. Counting it as an abandonment is
+/// what made an ordinary Ctrl-C look like a fleet-wide collapse, and made a
+/// real panic indistinguishable from the noise of stopping.
+async fn join_fleet(
+    handles: impl IntoIterator<Item = WorkerHandle>,
+    gave_up: &mut Vec<WorkerFailure>,
+) {
+    for h in handles {
+        match h.handle.await {
+            Ok(Ok(())) => {
+                debug!(
+                    protocol = %h.target.protocol.as_str(),
+                    mention = %h.target.mention,
+                    "worker exited cleanly"
+                );
+            }
+            Ok(Err(e)) => push_failure(gave_up, &e),
+            Err(e) => match TaskEnd::from(&e) {
+                TaskEnd::Panicked => {
+                    error!(
+                        protocol = %h.target.protocol.as_str(),
+                        mention = %h.target.mention,
+                        error = %e,
+                        "worker task panicked"
+                    );
+                    gave_up.push(WorkerFailure {
+                        protocol: h.target.protocol,
+                        mention: h.target.mention,
+                        reason: format!("panic: {e}"),
+                    });
+                }
+                TaskEnd::Cancelled => {
+                    debug!(
+                        protocol = %h.target.protocol.as_str(),
+                        mention = %h.target.mention,
+                        error = %e,
+                        "worker destroyed before it could finish stopping"
+                    );
+                }
+            },
+        }
+    }
+}
+
+/// What the fleet's outcome means for the listener: every worker out of
+/// retries is a dead ingestion, anything less is not.
+fn fleet_outcome(gave_up: &[WorkerFailure], total: usize) -> Result<(), RpcListenerError> {
+    if gave_up.len() == total && total > 0 {
+        return Err(RpcListenerError::AllWorkersGaveUp {
+            failures: "gave_up".to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn push_failure(gave_up: &mut Vec<WorkerFailure>, err: &SubscriptionWorkerError) {

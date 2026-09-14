@@ -6,6 +6,7 @@ mod indexer_worker_errors;
 mod rpc_listener_error;
 mod source_error;
 mod subscription_worker_error;
+mod task_end;
 
 pub(crate) use credential_error::CredentialError;
 pub(crate) use database_error::DatabaseError;
@@ -15,3 +16,4 @@ pub(crate) use indexer_worker_errors::IndexerWorkerError;
 pub(crate) use rpc_listener_error::RpcListenerError;
 pub(crate) use source_error::SourceError;
 pub(crate) use subscription_worker_error::SubscriptionWorkerError;
+pub(crate) use task_end::TaskEnd;
