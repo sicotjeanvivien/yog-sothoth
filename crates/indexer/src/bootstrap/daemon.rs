@@ -9,7 +9,7 @@ use crate::{
         workers::{IndexerWorker, IndexerWorkerMetrics},
     },
     bootstrap::{Config, IngestScope, IngestSource},
-    error::{IndexerWorkerError, SourceError},
+    error::{IndexerWorkerError, SourceError, TaskEnd},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
         GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
@@ -18,8 +18,8 @@ use crate::{
 };
 use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use std::{convert::Infallible, sync::Arc};
-use tokio::{sync::mpsc, task::JoinHandle};
+use std::{convert::Infallible, sync::Arc, time::Duration};
+use tokio::{sync::mpsc, task::JoinHandle, time::Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_bootstrap::SecretUrl;
@@ -162,9 +162,21 @@ impl Daemon {
     /// other — it owns and supervises itself. This graph does not change when
     /// the source does, which is the point of the port.
     ///
-    /// Returns as soon as any task fails or the shutdown token is
-    /// triggered. All remaining tasks are cancelled via the shared
-    /// token.
+    /// Returns when any task fails or the shutdown token is triggered — and
+    /// **not before every other task has returned too**, or [`SHUTDOWN_GRACE`]
+    /// has passed.
+    ///
+    /// ⚠️ **The waiting is the point.** `main` drops the runtime the moment
+    /// this returns, and a dropped runtime destroys whatever is still in
+    /// flight: a worker inside its `logsUnsubscribe`, an index task inside its
+    /// `INSERT`. Until 14 September 2026 the cancellation arm below rendered
+    /// its verdict alone and `run` returned ~7 ms after the signal, so the
+    /// stop tore through all three stages — with a `JoinError` that
+    /// `listener.rs` read as a panic, on the most ordinary path there is.
+    ///
+    /// The grace is what keeps that from becoming a hang: a stage that will
+    /// not end is named in the logs and left to the runtime, which is the only
+    /// way an orderly stop can still cost work.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         match &self.registration {
             Registration::Protocols(protocols) => {
@@ -176,32 +188,65 @@ impl Daemon {
         }
         let (tx, rx) = mpsc::channel::<IngestedTransaction>(INGESTED_CHANNEL_CAPACITY);
 
-        let source_task = spawn_source_task(Arc::clone(&self.source), tx, shutdown.clone());
-        let indexer_task = spawn_indexer_task(
+        let mut source_task = spawn_source_task(Arc::clone(&self.source), tx, shutdown.clone());
+        let mut indexer_task = spawn_indexer_task(
             Arc::clone(&self.processor),
             rx,
             self.index_concurrency,
             shutdown.clone(),
         );
-        let reporter_task =
+        let mut reporter_task =
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
 
-        tokio::select! {
-            result = source_task => {
+        // Which task ended here, if it is one of them. Its handle must not be
+        // polled again — `tokio` panics on a `JoinHandle` polled after
+        // completion — so the drain below steps over it.
+        let mut ended: Option<&'static str> = None;
+
+        let first = tokio::select! {
+            result = &mut source_task => {
+                ended = Some(SOURCE);
                 shutdown.cancel();
-                handle_task_result(result, "transaction source")?
+                handle_task_result(result, SOURCE)
             }
-            result = indexer_task => {
+            result = &mut indexer_task => {
+                ended = Some(INDEXER);
                 shutdown.cancel();
-                handle_task_result(result, "indexer worker")?
+                handle_task_result(result, INDEXER)
             }
-            result = reporter_task => {
+            result = &mut reporter_task => {
+                ended = Some(REPORTER);
                 shutdown.cancel();
-                handle_task_result(result, "network status reporter")?
+                handle_task_result(result, REPORTER)
             }
-            _ = shutdown.cancelled() => tracing::info!("cancellation received — stopping"),
+            _ = shutdown.cancelled() => {
+                tracing::info!("cancellation received — stopping");
+                Ok(())
+            }
+        };
+
+        // One absolute deadline for all three, so waiting on them in turn is
+        // still bounded by `SHUTDOWN_GRACE` in total.
+        let deadline = Instant::now() + SHUTDOWN_GRACE;
+        let mut still_running: Vec<&'static str> = Vec::new();
+        if ended != Some(SOURCE) {
+            still_running.extend(settle(SOURCE, &mut source_task, deadline).await);
         }
-        Ok(())
+        if ended != Some(INDEXER) {
+            still_running.extend(settle(INDEXER, &mut indexer_task, deadline).await);
+        }
+        if ended != Some(REPORTER) {
+            still_running.extend(settle(REPORTER, &mut reporter_task, deadline).await);
+        }
+        if !still_running.is_empty() {
+            tracing::warn!(
+                tasks = ?still_running,
+                grace_secs = SHUTDOWN_GRACE.as_secs(),
+                "shutdown grace expired — these tasks are destroyed mid-flight with the runtime"
+            );
+        }
+
+        first
     }
 }
 
@@ -233,6 +278,52 @@ enum Registration {
 /// orders of magnitude more room than the worker's concurrency bound, which is
 /// what actually drains it.
 const INGESTED_CHANNEL_CAPACITY: usize = 1_000;
+
+// ── Shutdown ─────────────────────────────────────────────────────────────────
+
+/// The names the three tasks answer to — in the logs, and in the list of what
+/// outlived the grace. Named once because each is written at two sites.
+const SOURCE: &str = "transaction source";
+const INDEXER: &str = "indexer worker";
+const REPORTER: &str = "network status reporter";
+
+/// How long `Daemon::run` waits for its tasks once the token has fired.
+///
+/// ⚠️ **Under Docker's ten seconds, not at them.** `docker-compose.yml` sets no
+/// `stop_grace_period`, so the default applies: SIGKILL ten seconds after the
+/// SIGTERM. A grace of ten would expire exactly when the process is killed, and
+/// the log line saying which stage overran would never be written — the one
+/// case where the timeout has something to say is the one where it stays
+/// silent.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
+
+/// Wait for `handle`, but no longer than `deadline`.
+///
+/// Returns `Some(name)` when the deadline passed first: that task is still
+/// running, and it will be destroyed mid-flight when `main` drops the runtime.
+/// Returning the name it was given — rather than only logging it — is what
+/// makes "the overrun names its task" something a test can falsify.
+///
+/// A task that ends in time has its result logged and **not** propagated: the
+/// outcome `run` returns is the one that won the `select!`, and what the other
+/// stages report afterwards is the consequence of that first one — the same
+/// reasoning as the `biased` in `RpcTransactionSource::run`.
+async fn settle<E>(
+    name: &'static str,
+    handle: &mut JoinHandle<Result<(), E>>,
+    deadline: Instant,
+) -> Option<&'static str>
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    match tokio::time::timeout_at(deadline, handle).await {
+        Ok(result) => {
+            let _ = handle_task_result(result, name);
+            None
+        }
+        Err(_elapsed) => Some(name),
+    }
+}
 
 // ── Initialisation helpers ───────────────────────────────────────────────────
 
@@ -555,7 +646,9 @@ fn spawn_network_status_reporter_task(
 
 /// Normalise the result of a spawned task into a loggable anyhow::Result.
 ///
-/// Distinguishes three cases: clean stop, task error, and task panic.
+/// Distinguishes four cases: clean stop, task error, task panic, and a task
+/// destroyed before it could answer — see [`TaskEnd`] for why the last two are
+/// one type in `tokio` and must not be one here.
 fn handle_task_result<E>(
     result: Result<Result<(), E>, tokio::task::JoinError>,
     task_name: &str,
@@ -572,10 +665,16 @@ where
             tracing::error!(error = %e, "{task_name} failed");
             Err(anyhow::Error::new(e))
         }
-        Err(e) => {
-            tracing::error!(error = %e, "{task_name} panicked");
-            Err(anyhow::anyhow!("{task_name} panicked: {e}"))
-        }
+        Err(e) => match TaskEnd::from(&e) {
+            TaskEnd::Panicked => {
+                tracing::error!(error = %e, "{task_name} panicked");
+                Err(anyhow::anyhow!("{task_name} panicked: {e}"))
+            }
+            TaskEnd::Cancelled => {
+                tracing::debug!(error = %e, "{task_name} was cancelled before it could stop");
+                Ok(())
+            }
+        },
     }
 }
 

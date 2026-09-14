@@ -28,12 +28,12 @@ use async_trait::async_trait;
 use solana_pubkey::Pubkey;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{debug, info};
 use yog_core::domain::Protocol;
 
 use crate::{
     application::source::{IngestedTransaction, TransactionSource},
-    error::SourceError,
+    error::{SourceError, TaskEnd},
     infra::rpc::{
         FetchWorker, QualifiedSignature, RawLogEvent, RpcListener, SignatureDispatcher,
         TransactionFetcher,
@@ -46,6 +46,12 @@ use crate::{
 /// unlike the port's channel, which carries whole transactions. Unchanged from
 /// when these two channels were wired by the daemon.
 const STAGE_CHANNEL_CAPACITY: usize = 10_000;
+
+/// The names the three stages answer to — in the logs, and in the wait that
+/// follows the `select!`. Named once because each is now written at two sites.
+const LISTENER: &str = "listener";
+const DISPATCHER: &str = "dispatcher";
+const FETCH: &str = "fetch worker";
 
 /// The notify-then-ask source: a fleet of `logsSubscribe` subscriptions, a
 /// filter chain, and one `getTransaction` per surviving signature.
@@ -79,15 +85,25 @@ impl TransactionSource for RpcTransactionSource {
         self.listener.watch_pool(protocol, pool_address).await;
     }
 
-    /// Run the three stages until the first of them returns.
+    /// Run the three stages until the first of them returns — then cancel the
+    /// token and wait for the other two.
     ///
     /// ⚠️ **Any stage ending ends the source**, including a clean `Ok(())`.
     /// That is not pessimism: these three are one pipeline, so a dispatcher
     /// that stopped leaves a listener filling a channel nobody drains, and a
     /// fetch stage that stopped leaves a source holding subscriptions and
-    /// delivering nothing. Returning is what lets `Daemon::run` cancel the
-    /// shared token and stop the process, rather than leave it running and
-    /// silent — the failure mode that is hardest to notice.
+    /// delivering nothing. Returning is what stops the process, rather than
+    /// leave it running and silent — the failure mode that is hardest to
+    /// notice.
+    ///
+    /// ⚠️ **But returning on the first one alone was a lie, and it was measured
+    /// on 14 September 2026**: on a Ctrl-C the dispatcher stops in microseconds
+    /// while the fleet is still unsubscribing, so `biased` or not, this
+    /// returned "dispatcher stopped" and the daemon wrote "transaction source
+    /// stopped" 7 ms after the signal — with two WebSocket sessions still open
+    /// and about to be destroyed with the runtime. The outcome reported is
+    /// still the first stage's, because it is still the cause; what changed is
+    /// that the source no longer claims to be done before it is.
     async fn run(
         &self,
         downstream: mpsc::Sender<IngestedTransaction>,
@@ -96,14 +112,15 @@ impl TransactionSource for RpcTransactionSource {
         let (raw_tx, raw_rx) = mpsc::channel::<RawLogEvent>(STAGE_CHANNEL_CAPACITY);
         let (sig_tx, sig_rx) = mpsc::channel::<QualifiedSignature>(STAGE_CHANNEL_CAPACITY);
 
-        let listener_task = spawn_listener(Arc::clone(&self.listener), raw_tx, shutdown.clone());
-        let dispatcher_task = spawn_dispatcher(
+        let mut listener_task =
+            spawn_listener(Arc::clone(&self.listener), raw_tx, shutdown.clone());
+        let mut dispatcher_task = spawn_dispatcher(
             Arc::clone(&self.dispatcher),
             raw_rx,
             sig_tx,
             shutdown.clone(),
         );
-        let fetch_task = spawn_fetch(
+        let mut fetch_task = spawn_fetch(
             Arc::clone(&self.fetcher),
             sig_rx,
             downstream,
@@ -121,15 +138,44 @@ impl TransactionSource for RpcTransactionSource {
         // provider that exhausted every retry budget is a success exit code for
         // a dead ingestion. Polling in pipeline order makes the *cause* win the
         // race against the consequences it just created.
-        tokio::select! {
+        //
+        // Which stage it was comes back with its outcome: its handle has been
+        // polled to completion, and `tokio` panics on one polled again, so the
+        // wait below has to step over it.
+        let (ended, first) = tokio::select! {
             biased;
 
-            result = listener_task => join("listener", result)?,
-            result = dispatcher_task => join("dispatcher", result)?,
-            result = fetch_task => join("fetch worker", result)?,
+            result = &mut listener_task => (LISTENER, join(LISTENER, result)),
+            result = &mut dispatcher_task => (DISPATCHER, join(DISPATCHER, result)),
+            result = &mut fetch_task => (FETCH, join(FETCH, result)),
+        };
+
+        // ⚠️ **Cancelled here, not left to `Daemon::run`.** One stage returning
+        // ends the pipeline, and the cascade that used to carry that news only
+        // runs downstream: a fetch stage that stopped on its own drops nothing
+        // the listener is waiting for, so without this the wait below would sit
+        // on a fleet nobody has told to stop.
+        shutdown.cancel();
+
+        // Then wait for the other two. A source that reports "stopped" while
+        // its workers are still unsubscribing tells `Daemon::run` the stage is
+        // done, and the daemon's grace — the only clock in the stop — starts
+        // running out on stages it believes have already finished.
+        //
+        // Unbounded on purpose: the bound belongs to `Daemon::run`, which holds
+        // one grace for the whole process. A second timeout here would be a
+        // second answer to the same question.
+        for (name, handle) in [
+            (LISTENER, &mut listener_task),
+            (DISPATCHER, &mut dispatcher_task),
+            (FETCH, &mut fetch_task),
+        ] {
+            if ended != name {
+                let _ = join(name, handle.await);
+            }
         }
 
-        Ok(())
+        first
     }
 }
 
@@ -172,7 +218,13 @@ fn spawn_fetch(
     tokio::spawn(async move { worker.run(sig_rx, downstream, shutdown).await })
 }
 
-/// Normalise a joined stage: its own error, or the panic that ate it.
+/// Normalise a joined stage: its own error, the panic that ate it, or the
+/// shutdown that destroyed it before it could answer.
+///
+/// ⚠️ **The last two are one type in `tokio` and must not be one here** — see
+/// [`TaskEnd`]. Nothing aborts these three, so a cancellation means the runtime
+/// was torn down around the stage: the work was cut short, it did not fail, and
+/// `TaskPanicked` would name a crash that never happened.
 fn join(
     task: &'static str,
     result: Result<Result<(), SourceError>, tokio::task::JoinError>,
@@ -183,9 +235,15 @@ fn join(
             Ok(())
         }
         Ok(Err(e)) => Err(e),
-        Err(e) => Err(SourceError::TaskPanicked {
-            task,
-            reason: e.to_string(),
-        }),
+        Err(e) => match TaskEnd::from(&e) {
+            TaskEnd::Panicked => Err(SourceError::TaskPanicked {
+                task,
+                reason: e.to_string(),
+            }),
+            TaskEnd::Cancelled => {
+                debug!(task, "stage destroyed before it could finish stopping");
+                Ok(())
+            }
+        },
     }
 }

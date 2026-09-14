@@ -51,3 +51,78 @@ fn the_bound_never_reaches_zero() {
         );
     }
 }
+
+/// ⚠️ **A cancellation is not a panic, and this is the daemon's half of that
+/// statement** — `infra::rpc::listener` holds the other. Nothing aborts these
+/// three tasks, so a cancelled `JoinError` here means the runtime was torn down
+/// around one: the work was cut short, it did not fail, and reporting it as a
+/// panic on every ordinary stop is what buried the real ones.
+#[tokio::test]
+async fn a_cancelled_task_is_not_reported_as_a_panic() {
+    let handle = tokio::spawn(std::future::pending::<Result<(), std::io::Error>>());
+    handle.abort();
+    let cancelled = handle.await;
+    assert!(
+        cancelled
+            .as_ref()
+            .is_err_and(tokio::task::JoinError::is_cancelled),
+        "the fixture must produce a cancelled JoinError, not something else"
+    );
+
+    assert!(
+        handle_task_result(cancelled, "test task").is_ok(),
+        "a task destroyed before it could answer has not failed"
+    );
+}
+
+/// The other reason, exercised on its own: a task whose future panicked is a
+/// failure, and stays one.
+#[tokio::test]
+async fn a_panicking_task_is_still_an_error() {
+    let handle = tokio::spawn(async { panic!("boom") });
+    let panicked: Result<Result<(), std::io::Error>, _> = handle.await;
+    assert!(
+        panicked.as_ref().is_err_and(|e| e.is_panic()),
+        "the fixture must produce a panic, not a cancellation"
+    );
+
+    assert!(handle_task_result(panicked, "test task").is_err());
+}
+
+// ── settle ───────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn a_task_that_ends_in_time_is_not_reported_as_still_running() {
+    let mut handle = tokio::spawn(async { Ok::<(), std::io::Error>(()) });
+
+    let still_running = settle(
+        "test task",
+        &mut handle,
+        Instant::now() + Duration::from_secs(30),
+    )
+    .await;
+
+    assert_eq!(still_running, None);
+}
+
+/// ⚠️ **This is the test the grace exists for, and the one that proves it is
+/// wired.** `settle` must come back from a task that never will, and say which
+/// one — the name it returns is what the `warn!` prints, so a stage that
+/// overran can be read in the logs instead of guessed at.
+///
+/// Verified by mutation: replace the `timeout_at` in `settle` with a bare
+/// `handle.await` and this test **hangs** rather than failing — there is no
+/// assertion that could catch a missing bound, only the clock.
+#[tokio::test(start_paused = true)]
+async fn a_task_that_outlives_the_grace_is_named() {
+    let mut handle = tokio::spawn(std::future::pending::<Result<(), std::io::Error>>());
+
+    let still_running = settle(
+        "test task",
+        &mut handle,
+        Instant::now() + Duration::from_secs(30),
+    )
+    .await;
+
+    assert_eq!(still_running, Some("test task"));
+}
