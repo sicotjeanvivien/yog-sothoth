@@ -22,8 +22,8 @@ use std::{fs, path::Path};
 ///
 /// The count is per file, so a *net-new* exposure is caught even in a file that
 /// already had one. ⚠️ What it does **not** catch is a *relocated* one: moving
-/// the `RpcClient::new` exposure of `indexer/bootstrap/daemon.rs` into a
-/// `warn!` in the same file keeps the count at two and passes. This guard
+/// the `RpcClient::new` exposure of `indexer/bootstrap/daemon/init.rs` into
+/// a `warn!` in the same file keeps the count at three and passes. This guard
 /// bounds where secrets may escape, file by file; it is not a substitute for
 /// reading the line.
 const ALLOWED: &[(&str, usize, &str)] = &[
@@ -84,7 +84,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          handed",
     ),
     (
-        "crates/indexer/src/bootstrap/daemon.rs",
+        "crates/indexer/src/bootstrap/daemon/init.rs",
         3,
         "`init_db` at `Database::connect`, and `RpcClient::new` **twice**, whose \
          type belongs to solana-rpc-client. The second one arrived on \
