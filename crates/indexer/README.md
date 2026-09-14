@@ -335,16 +335,28 @@ two dispatch points a new protocol touches in this crate, the other being
   graceful shutdown of all tasks via the shared `CancellationToken`.
 
 **The stop waits, under one grace.** Cancelling the token is where a shutdown
-starts, not where it ends: `Daemon::run` then waits for its three tasks, and
-each stage waits for what it detached (the listener joins its fleet, the
-indexer worker waits for its permits to come back). The bound is a single
-`SHUTDOWN_GRACE` held by `Daemon::run` — a stage that overruns it is named in a
-`warn!` and destroyed with the runtime, which is the only way an orderly stop
-can still cost work. ⚠️ Until 14 September 2026 there was no waiting at all:
-`run` returned on the token and `main` dropped the runtime ~7 ms later, tearing
-through unsubscribes and in-flight `INSERT`s — and the `JoinError` that came of
-it was read as a panic, so the most ordinary path in the system logged two
-`ERROR` lines per stop, one run in five.
+starts, not where it ends: `Daemon::run` waits for its three tasks,
+`RpcTransactionSource::run` waits for its three stages, the listener joins its
+fleet, and the indexer worker waits for its detached writes by asking for every
+permit back. The bound is a single `SHUTDOWN_GRACE` held by `Daemon::run` — a
+stage that overruns it is named in a `warn!` and destroyed with the runtime,
+which is the only way an orderly stop can still cost work. The indexer is
+waited on **first**, because one deadline spent in order can otherwise be eaten
+whole by a stage above it.
+
+⚠️ **The fetch stage is the exception, and it is a real loss.** `FetchWorker`
+returns as soon as the token fires, with up to `MAX_CONCURRENT_FETCHES`
+detached fetches outstanding, and `fetch_one` prefers the cancellation over its
+own `downstream.send` — so a transaction already fetched and paid for is
+counted (`shutdown`, `downstream_closed`) and dropped, while the indexer one
+stage below is still finishing its writes. Making it deliver what it has is not
+in this rule yet.
+
+⚠️ Until 14 September 2026 there was no waiting at all: `Daemon::run` returned
+on the token and `main` dropped the runtime ~7 ms later, tearing through
+unsubscribes and in-flight `INSERT`s — and the `JoinError` that came of it was
+read as a panic, so the most ordinary path in the system logged two `ERROR`
+lines per stop, one run in five.
 
 An `ExitGuard` RAII helper ensures every entry into `process_transaction`
 produces an exit counter and duration sample — constructed at the top of the

@@ -203,7 +203,16 @@ impl Daemon {
         // completion — so the drain below steps over it.
         let mut ended: Option<&'static str> = None;
 
-        let first = tokio::select! {
+        // ⚠️ **The cancellation arm carries no verdict.** It says the stop was
+        // asked for, not what happened — and it now wins races it used not to:
+        // `RpcTransactionSource::run` cancels the token *before* returning, so
+        // on a dead ingestion this arm fires while the source is still joining
+        // its stages, and its `AllWorkersGaveUp` arrives later, through the
+        // drain. Treating that `Ok(())` as final made the process exit 0 on
+        // every fleet that had exhausted its retry budget — measured on 14
+        // September 2026, and the reason `Stop` collects a verdict instead of
+        // the `select!` deciding one alone.
+        let mut stop = Stop::new(tokio::select! {
             result = &mut source_task => {
                 ended = Some(SOURCE);
                 shutdown.cancel();
@@ -223,30 +232,32 @@ impl Daemon {
                 tracing::info!("cancellation received — stopping");
                 Ok(())
             }
-        };
+        });
 
         // One absolute deadline for all three, so waiting on them in turn is
         // still bounded by `SHUTDOWN_GRACE` in total.
+        //
+        // ⚠️ **The indexer is waited on first, and the order is the whole
+        // point.** One deadline spent in order means the first stage waited on
+        // can eat all of it: the source's own wait is unbounded by design, and
+        // an `unsubscribe()` on a stalled link has nothing to cut it short. Ask
+        // for the source first and the indexer gets `timeout_at` on a deadline
+        // already past — one poll, no wait, and the in-flight `INSERT`s this
+        // whole change exists to protect are destroyed anyway. The indexer is
+        // the only stage holding work that is *lost* rather than merely
+        // abandoned, so it is served first.
         let deadline = Instant::now() + SHUTDOWN_GRACE;
-        let mut still_running: Vec<&'static str> = Vec::new();
-        if ended != Some(SOURCE) {
-            still_running.extend(settle(SOURCE, &mut source_task, deadline).await);
-        }
         if ended != Some(INDEXER) {
-            still_running.extend(settle(INDEXER, &mut indexer_task, deadline).await);
+            stop.settle(INDEXER, &mut indexer_task, deadline).await;
+        }
+        if ended != Some(SOURCE) {
+            stop.settle(SOURCE, &mut source_task, deadline).await;
         }
         if ended != Some(REPORTER) {
-            still_running.extend(settle(REPORTER, &mut reporter_task, deadline).await);
-        }
-        if !still_running.is_empty() {
-            tracing::warn!(
-                tasks = ?still_running,
-                grace_secs = SHUTDOWN_GRACE.as_secs(),
-                "shutdown grace expired — these tasks are destroyed mid-flight with the runtime"
-            );
+            stop.settle(REPORTER, &mut reporter_task, deadline).await;
         }
 
-        first
+        stop.finish()
     }
 }
 
@@ -297,31 +308,64 @@ const REPORTER: &str = "network status reporter";
 /// silent.
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
-/// Wait for `handle`, but no longer than `deadline`.
+/// What the stop has learned so far: the verdict to return, and who never
+/// answered.
 ///
-/// Returns `Some(name)` when the deadline passed first: that task is still
-/// running, and it will be destroyed mid-flight when `main` drops the runtime.
-/// Returning the name it was given — rather than only logging it — is what
-/// makes "the overrun names its task" something a test can falsify.
-///
-/// A task that ends in time has its result logged and **not** propagated: the
-/// outcome `run` returns is the one that won the `select!`, and what the other
-/// stages report afterwards is the consequence of that first one — the same
-/// reasoning as the `biased` in `RpcTransactionSource::run`.
-async fn settle<E>(
-    name: &'static str,
-    handle: &mut JoinHandle<Result<(), E>>,
-    deadline: Instant,
-) -> Option<&'static str>
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    match tokio::time::timeout_at(deadline, handle).await {
-        Ok(result) => {
-            let _ = handle_task_result(result, name);
-            None
+/// It exists because the verdict is **not** whatever the `select!` produced.
+/// Its cancellation arm reports that a stop was asked for, which is not an
+/// outcome, and a stage that failed can still be in the middle of stopping when
+/// that arm fires — so the error arrives afterwards, through the drain. First
+/// error wins; a stage stopping cleanly after one never erases it.
+struct Stop {
+    outcome: anyhow::Result<()>,
+    still_running: Vec<&'static str>,
+}
+
+impl Stop {
+    fn new(first: anyhow::Result<()>) -> Self {
+        Self {
+            outcome: first,
+            still_running: Vec::new(),
         }
-        Err(_elapsed) => Some(name),
+    }
+
+    /// Wait for `handle`, but no longer than `deadline`.
+    ///
+    /// A task that ends in time has its result logged, and adopted as the
+    /// verdict if nothing has failed yet. A task that does not is recorded by
+    /// name: it is still running, and it will be destroyed mid-flight when
+    /// `main` drops the runtime. Keeping the name — rather than only logging it
+    /// — is what makes "the overrun names its task" something a test can
+    /// falsify.
+    async fn settle<E>(
+        &mut self,
+        name: &'static str,
+        handle: &mut JoinHandle<Result<(), E>>,
+        deadline: Instant,
+    ) where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        match tokio::time::timeout_at(deadline, handle).await {
+            Ok(result) => {
+                let reported = handle_task_result(result, name);
+                if self.outcome.is_ok() {
+                    self.outcome = reported;
+                }
+            }
+            Err(_elapsed) => self.still_running.push(name),
+        }
+    }
+
+    /// Say who outlived the grace, then hand back the verdict.
+    fn finish(self) -> anyhow::Result<()> {
+        if !self.still_running.is_empty() {
+            tracing::warn!(
+                tasks = ?self.still_running,
+                grace_secs = SHUTDOWN_GRACE.as_secs(),
+                "shutdown grace expired — these tasks are destroyed mid-flight with the runtime"
+            );
+        }
+        self.outcome
     }
 }
 
