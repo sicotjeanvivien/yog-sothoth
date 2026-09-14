@@ -33,6 +33,10 @@ use crate::{
 pub(crate) struct IndexerWorker {
     processor: Arc<TransactionProcessor>,
     semaphore: Arc<Semaphore>,
+    /// The semaphore's full count, kept because `available_permits()` no
+    /// longer answers the question once tasks are in flight — and the stop
+    /// needs to ask for *all* of them back.
+    max_concurrent: u32,
 }
 
 impl IndexerWorker {
@@ -53,6 +57,8 @@ impl IndexerWorker {
         Self {
             processor,
             semaphore: Arc::new(Semaphore::new(max_concurrent)),
+            max_concurrent: u32::try_from(max_concurrent)
+                .expect("the bound is derived from a connection pool, which is far below u32::MAX"),
         }
     }
 
@@ -85,6 +91,7 @@ impl IndexerWorker {
                     if dropped > 0 {
                         info!(dropped, "queued transactions dropped at shutdown");
                     }
+                    await_in_flight(&self.semaphore, self.max_concurrent).await;
                     return Ok(());
                 }
 
@@ -95,6 +102,7 @@ impl IndexerWorker {
                         }
                         None => {
                             info!("upstream channel closed — indexer worker stopping");
+                            await_in_flight(&self.semaphore, self.max_concurrent).await;
                             return Ok(());
                         }
                     }
@@ -151,6 +159,29 @@ impl IndexerWorker {
 
         Ok(())
     }
+}
+
+/// Return once every detached indexing task has finished.
+///
+/// ⚠️ **Returning without this is how a stop destroys an `INSERT`.**
+/// `dispatch_one` detaches the indexing so the receive loop keeps draining,
+/// which means `run` reaches its exit while transactions are still being
+/// written. Nothing joins those tasks — their handles are dropped on the spot —
+/// so the only thing that says they are done is their permits coming back.
+/// Asking for all of them at once is asking to be last.
+///
+/// Unbounded on purpose: the bound belongs to the caller that owns the whole
+/// stop, `Daemon::run`, which gives every stage one shared grace. A second
+/// timeout here would be a second answer to the same question, and the two
+/// would drift.
+async fn await_in_flight(semaphore: &Semaphore, max_concurrent: u32) {
+    let in_flight = max_concurrent as usize - semaphore.available_permits();
+    if in_flight > 0 {
+        info!(in_flight, "waiting for in-flight indexing to finish");
+    }
+    // Permits are only ever returned, never taken away, so this cannot fail
+    // unless the semaphore is closed — and nothing closes it.
+    let _ = semaphore.acquire_many(max_concurrent).await;
 }
 
 /// Count what is still in the channel when the worker stops.

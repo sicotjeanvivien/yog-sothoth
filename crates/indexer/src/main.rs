@@ -35,7 +35,15 @@
 //! (dev). On signal reception, a [`CancellationToken`] is triggered:
 //! the daemon observes it, stops accepting new work, and waits for
 //! in-flight tasks (listener, dispatcher, indexer) to finish before
-//! returning.
+//! returning — but for no longer than the grace it holds
+//! (`bootstrap::daemon::SHUTDOWN_GRACE`).
+//!
+//! ⚠️ **Returning from `main` is what destroys the work.** `#[tokio::main]`
+//! drops the runtime here, and a dropped runtime cancels every task still
+//! alive wherever it stands — mid-`logsUnsubscribe`, mid-`INSERT`. So the wait
+//! above is not politeness, it is the only thing between an orderly stop and a
+//! torn one; a stage that outlives the grace is named in the logs and then
+//! torn anyway.
 
 // `application` — core business logic for the indexer.
 mod application;
