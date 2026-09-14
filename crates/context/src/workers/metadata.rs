@@ -67,12 +67,23 @@ impl MetadataWorker {
 
         loop {
             tokio::select! {
-                _ = ticker.tick() => {
-                    self.run_one_cycle().await;
-                }
+            // ⚠️ **`biased`: the stop must win a tie, and ties happen.** The
+            // ticker keeps tokio's default `MissedTickBehavior::Burst`, so a
+            // cycle that outruns the cadence leaves `tick()` **already ready**
+            // when the loop comes back round. An unbiased `select!` then picks
+            // pseudo-randomly between a tick and a stop that has already been
+            // asked for — about one stop in two would start a whole new cycle,
+            // burn the shutdown grace and be destroyed mid-write, which is the
+            // outcome joining these workers exists to prevent. Same reason the
+            // indexer's own loops are biased.
+            biased;
+
                 _ = shutdown.cancelled() => {
                     info!("shutdown requested — metadata worker stopping");
                     return Ok(());
+                }
+                _ = ticker.tick() => {
+                    self.run_one_cycle().await;
                 }
             }
         }

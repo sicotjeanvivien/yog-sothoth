@@ -130,6 +130,12 @@ async fn a_task_that_outlives_the_grace_is_named() {
 /// Verified by mutation: recompute the deadline inside `settle`
 /// (`Instant::now() + SHUTDOWN_GRACE`) and the elapsed assertion fails at twice
 /// the grace, while the `still_running` one stays green.
+///
+/// ⚠️ **The equality is the assertion, not `< 2 ×`.** Under `start_paused` the
+/// clock is driven by the timers alone, so a shared deadline costs *exactly*
+/// one grace and nothing else is a rounding error. A bound of twice the grace
+/// would have accepted every wrong answer strictly below it — one and a half
+/// graces, say — and only caught the one the mutation above happens to produce.
 #[tokio::test(start_paused = true)]
 async fn two_stages_that_never_end_share_one_grace() {
     let started = Instant::now();
@@ -144,10 +150,10 @@ async fn two_stages_that_never_end_share_one_grace() {
     }
 
     assert_eq!(stop.still_running, vec!["first stage", "second stage"]);
-    assert!(
-        started.elapsed() < SHUTDOWN_GRACE * 2,
-        "the stages must share one deadline, waited {:?}",
-        started.elapsed()
+    assert_eq!(
+        started.elapsed(),
+        SHUTDOWN_GRACE,
+        "two stages that never end must cost exactly one grace"
     );
 }
 

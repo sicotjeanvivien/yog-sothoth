@@ -71,8 +71,43 @@ pub fn init_tracing() {
 fn build_filter(raw: Option<&str>) -> EnvFilter {
     raw.map(str::trim)
         .filter(|raw| !raw.is_empty())
+        .map(keep_shutdown_audible)
         .and_then(|raw| EnvFilter::try_new(raw).ok())
         .unwrap_or_else(|| EnvFilter::new("info"))
+}
+
+/// The target every daemon's stop speaks under.
+///
+/// `shutdown.rs` holds the stop for all of them, so its lines carry this
+/// target rather than the binary's own — see that module's header.
+const SHUTDOWN_TARGET: &str = "yog_bootstrap";
+
+/// Ensure a `RUST_LOG` of per-target directives cannot silence the stop.
+///
+/// ⚠️ **The loss this closes is silent, which is why documenting it was not
+/// enough.** `EnvFilter` has no implicit global level: a value made only of
+/// directives prints *nothing* for a target it does not name. On 14 September
+/// 2026 the stop moved to `yog_bootstrap::shutdown`, and this repository's own
+/// `RUST_LOG` — six per-crate directives, no bare level — stopped printing
+/// every line of it, the `warn!` naming a stage destroyed mid-write included. A
+/// torn stop then reads exactly like a clean one, and ten measured cycles said
+/// so before the filter was suspected.
+///
+/// It only ever *adds*, and only when the operator has said nothing that
+/// covers the target: a bare level anywhere in the value already covers it, and
+/// so does naming `yog_bootstrap` — at any level, silencing it included, which
+/// stays possible on purpose.
+fn keep_shutdown_audible(raw: &str) -> String {
+    let already_covered = raw
+        .split(',')
+        .map(str::trim)
+        .any(|directive| !directive.contains('=') || directive.starts_with(SHUTDOWN_TARGET));
+
+    if already_covered {
+        raw.to_owned()
+    } else {
+        format!("{SHUTDOWN_TARGET}=info,{raw}")
+    }
 }
 
 #[cfg(test)]
