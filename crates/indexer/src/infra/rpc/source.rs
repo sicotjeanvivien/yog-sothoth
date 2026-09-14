@@ -34,11 +34,12 @@ use solana_pubkey::Pubkey;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
+use yog_bootstrap::TaskEnd;
 use yog_core::domain::Protocol;
 
 use crate::{
     application::source::{IngestedTransaction, TransactionSource},
-    error::{SourceError, TaskEnd},
+    error::SourceError,
     infra::rpc::{
         FetchWorker, QualifiedSignature, RawLogEvent, RpcListener, SignatureDispatcher,
         TransactionFetcher,

@@ -6323,8 +6323,10 @@ dependencies = [
 name = "yog-bootstrap"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "rustls",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]

@@ -35,8 +35,8 @@
 //! (dev). On signal reception, a [`CancellationToken`] is triggered:
 //! the daemon observes it, stops accepting new work, and waits for
 //! in-flight tasks (listener, dispatcher, indexer) to finish before
-//! returning — but for no longer than the grace it holds
-//! (`bootstrap::daemon::stop::SHUTDOWN_GRACE`).
+//! returning — but for no longer than the grace every daemon here holds
+//! ([`yog_bootstrap::SHUTDOWN_GRACE`]).
 //!
 //! ⚠️ **Returning from `main` is what destroys the work.** `#[tokio::main]`
 //! drops the runtime here, and a dropped runtime cancels every task still
@@ -87,37 +87,6 @@ fn init_metrics() -> anyhow::Result<()> {
         .with_http_listener(([0, 0, 0, 0], 9000))
         .install()
         .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))
-}
-
-// ── Shutdown signal ──────────────────────────────────────────────────────────
-
-/// Resolve when SIGTERM **or** SIGINT (Ctrl-C) is received.
-///
-/// `tokio::select!` makes whichever signal arrives first win — no
-/// double-handling, no extra state.
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl-C handler");
-    };
-
-    #[cfg(unix)]
-    let sigterm = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler")
-            .recv()
-            .await;
-    };
-
-    // On non-Unix targets (e.g. Windows CI), only Ctrl-C is available.
-    #[cfg(not(unix))]
-    let sigterm = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c  => tracing::info!("received Ctrl-C — shutting down"),
-        _ = sigterm => tracing::info!("received SIGTERM — shutting down"),
-    }
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -181,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
     let token = CancellationToken::new();
     let shutdown_token = token.clone();
     tokio::spawn(async move {
-        shutdown_signal().await;
+        yog_bootstrap::shutdown_signal().await;
         shutdown_token.cancel();
     });
 
