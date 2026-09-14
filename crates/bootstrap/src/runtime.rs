@@ -1,4 +1,6 @@
+use std::str::FromStr;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::filter::LevelFilter;
 
 /// Install the rustls crypto provider.
 ///
@@ -101,13 +103,42 @@ fn keep_shutdown_audible(raw: &str) -> String {
     let already_covered = raw
         .split(',')
         .map(str::trim)
-        .any(|directive| !directive.contains('=') || directive.starts_with(SHUTDOWN_TARGET));
+        .any(|directive| is_bare_level(directive) || targets_shutdown(directive));
 
     if already_covered {
         raw.to_owned()
     } else {
         format!("{SHUTDOWN_TARGET}=info,{raw}")
     }
+}
+
+/// Does this directive set the level for *everything*?
+///
+/// ⚠️ **"Has no `=`" is not the test, and reading it that way reopened the
+/// hole this guard closes.** `EnvFilter` accepts a bare **target** too, and it
+/// means TRACE: `yog_indexer,yog_context` parses to
+/// `yog_indexer=trace,yog_context=trace` — a per-target filter with no global
+/// level, precisely the shape the guard exists for, which an `=`-based test
+/// waves through as though it were a level. Asking `LevelFilter` tells the two
+/// apart.
+///
+/// ⚠️ **And an empty segment is not a level either**, though `LevelFilter`
+/// says it is — `"".parse()` yields `error`. A trailing comma
+/// (`RUST_LOG=yog_indexer=debug,`) leaves one, and it would otherwise pass for
+/// a global level nobody wrote.
+fn is_bare_level(directive: &str) -> bool {
+    !directive.is_empty() && LevelFilter::from_str(directive).is_ok()
+}
+
+/// Does this directive name the target the stop speaks under?
+///
+/// Compares the target itself rather than a prefix, so a crate merely starting
+/// with the same letters cannot stand in for it.
+fn targets_shutdown(directive: &str) -> bool {
+    directive
+        .split(['=', '['])
+        .next()
+        .is_some_and(|target| target.trim() == SHUTDOWN_TARGET)
 }
 
 #[cfg(test)]

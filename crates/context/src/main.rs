@@ -55,10 +55,12 @@ async fn main() -> anyhow::Result<()> {
     // its three workers before returning.
     //
     // ⚠️ **SIGTERM is the signal that matters, and it was not listened for.**
-    // The daemon selected on `tokio::signal::ctrl_c()` alone, which is SIGINT:
-    // under `docker compose stop` — the way this process is actually stopped —
-    // the default handler killed it outright, without so much as cancelling the
-    // token. `shutdown_signal` covers both.
+    // The daemon selected on `tokio::signal::ctrl_c()` alone, which is SIGINT.
+    // Under `docker compose stop` — the way this process is actually stopped —
+    // nothing happened at all: the compose service `exec`s the binary, so it is
+    // PID 1, and the kernel does not deliver a signal's default action to
+    // PID 1. The SIGTERM was simply ignored, and Docker waited its ten seconds
+    // before SIGKILL. `shutdown_signal` covers both signals.
     let token = CancellationToken::new();
     let shutdown_token = token.clone();
     tokio::spawn(async move {

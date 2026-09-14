@@ -119,11 +119,23 @@ async fn detector_loop(
 
     loop {
         tokio::select! {
-            _ = ticker.tick() => run_tick(detector.as_ref(), repository.as_ref(), name).await,
+            // ⚠️ **`biased`: the stop must win a tie.** The ticker keeps
+            // tokio's default `MissedTickBehavior::Burst`, so a `run_tick` that
+            // outruns the detector's interval leaves `tick()` **already ready**
+            // at the next turn — both arms ready, and an unbiased `select!`
+            // picks pseudo-randomly. About one stop in two would start a fresh
+            // round of reads and `signals` inserts *after* the stop was asked
+            // for, and `SignalEngine::run` joins this task with no deadline at
+            // all, so that extra tick delays the process exit until Docker's
+            // SIGKILL. Same reason the indexer's loops and `yog-context`'s
+            // three workers are biased.
+            biased;
+
             _ = shutdown.cancelled() => {
                 info!(detector = name, "shutdown requested — detector stopping");
                 return;
             }
+            _ = ticker.tick() => run_tick(detector.as_ref(), repository.as_ref(), name).await,
         }
     }
 }

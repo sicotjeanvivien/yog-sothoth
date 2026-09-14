@@ -350,9 +350,11 @@ spent in order can otherwise be eaten whole by a stage above it.
 `Stop`, `TaskEnd`, `handle_task_result` and `shutdown_signal` live in
 `yog-bootstrap` since 14 September 2026, because `yog-context` needed the same
 four and had grown its own diverging copy of one of them. ⚠️ Their log lines
-therefore carry the target `yog_bootstrap`, not `yog_indexer`: a `RUST_LOG`
-made only of per-crate directives prints none of them, the `warn!` naming an
-overrun included.
+therefore carry the target `yog_bootstrap`, not `yog_indexer` — which very
+nearly made every stop unreadable under a `RUST_LOG` of per-crate directives.
+`yog_bootstrap::runtime::build_filter` now keeps that target audible unless the
+operator has said something that covers it; the rule lives there and nowhere
+else.
 
 ⚠️ **The fetch stage is the exception, and it is a real loss.** `FetchWorker`
 returns as soon as the token fires, with up to `MAX_CONCURRENT_FETCHES`

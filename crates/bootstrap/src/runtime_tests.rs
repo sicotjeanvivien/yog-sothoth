@@ -56,6 +56,42 @@ fn a_directive_only_filter_cannot_silence_the_stop() {
     );
 }
 
+/// ⚠️ **Les deux formes que le premier garde laissait passer**, et il les
+/// laissait passer pour la même raison : il testait « pas de `=` » au lieu de
+/// « c'est un niveau ». Relevé en revue de la PR #145, après que le garde a été
+/// écrit pour ce défaut exact.
+///
+/// - `yog_indexer,yog_context` — une cible nue **est** une directive, et elle
+///   vaut TRACE : `EnvFilter` la rend `yog_indexer=trace,yog_context=trace`.
+///   Aucun niveau global là-dedans, et c'est la forme même que le garde existe
+///   pour rattraper ;
+/// - `yog_api=debug,` — la virgule finale laisse un segment vide, et
+///   `"".parse::<LevelFilter>()` répond `error`, donc un niveau global que
+///   personne n'a écrit.
+#[test]
+fn neither_a_bare_target_nor_an_empty_segment_counts_as_a_global_level() {
+    for raw in ["yog_indexer,yog_context", "yog_api=debug,"] {
+        let filter = build_filter(Some(raw)).to_string();
+        assert!(
+            filter.contains("yog_bootstrap=info"),
+            "{raw:?} ne porte aucun niveau global — le stop doit rester audible, obtenu : {filter}"
+        );
+    }
+}
+
+/// Et l'inverse, pour que le test ci-dessus ne soit pas vrai par accident : une
+/// cible nue qui est `yog_bootstrap` couvre bien la cible, à TRACE.
+#[test]
+fn a_bare_shutdown_target_covers_itself() {
+    let filter = build_filter(Some("yog_bootstrap,yog_api=debug")).to_string();
+
+    assert!(
+        !filter.contains("yog_bootstrap=info"),
+        "une cible nommée, même sans niveau, a déjà tranché : {filter}"
+    );
+    assert!(filter.contains("yog_bootstrap=trace"), "{filter}");
+}
+
 /// The two ways an operator has already said what they want, and neither is
 /// second-guessed. A bare level anywhere covers every target; naming
 /// `yog_bootstrap` covers it explicitly.

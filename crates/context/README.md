@@ -169,9 +169,10 @@ destroyed. That is not a missing timeout — every request is bounded by
 with nothing between two chunks looking at the token.
 
 ⚠️ Until 14 September 2026 the daemon selected on `ctrl_c()` and returned on it:
-20 stops measured, **none** saw the three workers hand back, the process was
-gone in 5–7 ms, and SIGTERM — what `docker compose stop` sends — was not
-listened for at all.
+20 stops measured, **none** saw the three workers hand back, and the process was
+gone in 5–7 ms. Under `docker compose stop` it was worse still — SIGTERM was not
+listened for, and as PID 1 the process does not die on it either, so the stop
+never started and Docker's SIGKILL arrived ten seconds later mid-tick.
 
 There is deliberately no in-process respawn logic: a worker never returns
 `Err` from its loop, and a panic exits the whole process, which the container

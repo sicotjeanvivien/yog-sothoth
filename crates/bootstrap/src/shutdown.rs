@@ -10,14 +10,16 @@
 //! - what the stop is worth once every stage has answered — or has failed to,
 //!   inside [`SHUTDOWN_GRACE`] ([`Stop`]).
 //!
-//! ⚠️ **These lines come from `yog_bootstrap`, and a `RUST_LOG` of per-target
-//! directives will not print them.** Moving the rule here moved its log target
-//! with it: `"… stopped"`, `"… panicked"` and the `warn!` naming a stage that
-//! outlived the grace are no longer emitted under the binary's own name. A
-//! filter like `RUST_LOG=yog_context=debug` — no bare level — drops the whole
-//! account of a stop, and a torn stop then reads exactly like a clean one.
-//! Found on 14 September 2026 while measuring, against this repository's own
-//! `.env`; see `.env.example`.
+//! ⚠️ **These lines come from `yog_bootstrap`, not from the binary**, and that
+//! nearly made a stop unreadable. `EnvFilter` has no implicit global level, so
+//! a `RUST_LOG` made only of per-crate directives — this repository's own —
+//! printed none of `"… stopped"`, `"… panicked"` or the `warn!` naming a stage
+//! destroyed mid-write, and a torn stop read exactly like a clean one. Found on
+//! 14 September 2026 while measuring, by ten cycles that came back silent.
+//!
+//! It is a constraint now, not a warning to remember: `runtime::build_filter`
+//! keeps this target audible unless the operator has said something that covers
+//! it. That function owns the rule; do not restate it.
 //!
 //! ⚠️ **The divergence this module exists to prevent already happened.** The
 //! indexer's daemon and `yog-context`'s each carried their own
@@ -184,11 +186,16 @@ impl Stop {
 ///
 /// ⚠️ **Both signals, and the second one is the one production sends.**
 /// Ctrl-C (SIGINT) is what a developer types; `docker compose stop`, a
-/// Kubernetes eviction and `systemctl stop` all send **SIGTERM**. A daemon
-/// listening on `tokio::signal::ctrl_c()` alone dies on the default handler
-/// under every one of them — no token cancelled, no stage joined, nothing
-/// logged. That was `yog-context` and `yog-signals` until 14 September 2026,
-/// which is why this lives here instead of in one binary's `main`.
+/// Kubernetes eviction and `systemctl stop` all send **SIGTERM**. That was
+/// `yog-context` and `yog-signals` until 14 September 2026, which is why this
+/// lives here instead of in one binary's `main`.
+///
+/// ⚠️ **And in a container it is worse than dying.** Every compose service
+/// `exec`s its binary, so the daemon is **PID 1** — and the kernel does not
+/// deliver a signal's default action to PID 1. A process with no SIGTERM
+/// handler therefore *ignores* it: nothing stops, nothing is logged, and Docker
+/// waits its ten seconds before SIGKILL. The stop did not tear, it never
+/// started.
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
