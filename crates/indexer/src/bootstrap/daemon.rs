@@ -246,6 +246,17 @@ impl Daemon {
         // whole change exists to protect are destroyed anyway. The indexer is
         // the only stage holding work that is *lost* rather than merely
         // abandoned, so it is served first.
+        //
+        // ⚠️ **What that order costs, said plainly.** A stage reached after the
+        // deadline has passed still gets one poll — `timeout_at` polls the task
+        // before the clock, so an answer already given is collected — but no
+        // wait for one that has not come. An indexer that eats the whole grace
+        // can therefore leave a source that is *still stopping* with its
+        // verdict unsaid, and the process exits 0 with `transaction source`
+        // named in the `warn!`. That is the grace doing its job rather than
+        // hiding a failure: the same stage was going to be destroyed by the
+        // runtime moments later whatever the order, and what the ticket asks of
+        // an overrun is to be named, not to become an exit code.
         let deadline = Instant::now() + SHUTDOWN_GRACE;
         if ended != Some(INDEXER) {
             stop.settle(INDEXER, &mut indexer_task, deadline).await;

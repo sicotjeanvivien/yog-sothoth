@@ -14,13 +14,18 @@
 //! WebSockets is precisely what the port hides: the gRPC source has one
 //! connection and no fetch, and the daemon has to know neither.
 //!
-//! # ⚠️ Untested, and for the same reason as its sibling
+//! # ⚠️ Almost untested, and for the same reason as its sibling
 //!
-//! Nothing here can be exercised without a Solana endpoint. What *is* testable
-//! was already elsewhere before this module existed — the filter chain in
-//! `dispatcher`, the adapter in `transaction_adapter` with its 92 fixtures —
-//! and this file adds no logic of its own beyond wiring and the reading of how
-//! a stage ending should end the whole source.
+//! `run` cannot be exercised without a Solana endpoint, and most of what *is*
+//! testable was already elsewhere before this module existed — the filter chain
+//! in `dispatcher`, the adapter in `transaction_adapter` with its 92 fixtures.
+//!
+//! One piece is neither: `drain_stages` decides what the source *reports* once
+//! a stage has ended, and that is logic, not wiring. It was written as a loop
+//! inside `run` first, where nothing could reach it — and the same rule written
+//! the same way one level up had already let a dead ingestion exit 0. It takes
+//! its handles as an argument so a test can hand it three that ended on
+//! purpose.
 
 use std::sync::Arc;
 
@@ -165,17 +170,25 @@ impl TransactionSource for RpcTransactionSource {
         // Unbounded on purpose: the bound belongs to `Daemon::run`, which holds
         // one grace for the whole process. A second timeout here would be a
         // second answer to the same question.
-        for (name, handle) in [
-            (LISTENER, &mut listener_task),
-            (DISPATCHER, &mut dispatcher_task),
-            (FETCH, &mut fetch_task),
-        ] {
-            if ended != name {
-                let _ = join(name, handle.await);
-            }
-        }
-
-        first
+        //
+        // ⚠️ **And what they report counts.** A stage can fail *while* the
+        // pipeline winds down — a panic in the unsubscribe path, say — long
+        // after another stage returned `Ok(())`. Dropping those outcomes would
+        // leave the failure with no error, no log line and no exit code, which
+        // is the defect `Daemon::run`'s `Stop` exists to prevent one level up.
+        // Same rule here, first failure wins: not shared with it because the
+        // daemon's accumulator also carries a grace and a list of stages that
+        // outlived it, and neither has any meaning at this level.
+        drain_stages(
+            ended,
+            first,
+            [
+                (LISTENER, &mut listener_task),
+                (DISPATCHER, &mut dispatcher_task),
+                (FETCH, &mut fetch_task),
+            ],
+        )
+        .await
     }
 }
 
@@ -218,6 +231,27 @@ fn spawn_fetch(
     tokio::spawn(async move { worker.run(sig_rx, downstream, shutdown).await })
 }
 
+/// Wait for the stages that have not ended yet, and keep the first failure.
+///
+/// `first` is what the stage named by `ended` reported; the others are joined
+/// in order and their outcome adopted only if nothing has failed yet.
+async fn drain_stages(
+    ended: &str,
+    first: Result<(), SourceError>,
+    stages: [(&'static str, &mut JoinHandle<Result<(), SourceError>>); 3],
+) -> Result<(), SourceError> {
+    let mut outcome = first;
+    for (name, handle) in stages {
+        if ended != name {
+            let reported = join(name, handle.await);
+            if outcome.is_ok() {
+                outcome = reported;
+            }
+        }
+    }
+    outcome
+}
+
 /// Normalise a joined stage: its own error, the panic that ate it, or the
 /// shutdown that destroyed it before it could answer.
 ///
@@ -247,3 +281,7 @@ fn join(
         },
     }
 }
+
+#[cfg(test)]
+#[path = "source_tests.rs"]
+mod tests;
