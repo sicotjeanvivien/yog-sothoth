@@ -18,8 +18,9 @@
 //! path's type: it is the port's, and this path was merely the first to need
 //! it.
 //!
-//! Selected by `INGEST_SOURCE=grpc`, through `bootstrap/daemon.rs::init_source`
-//! — the only place in the crate that names a concrete source. Everything
+//! Selected by `INGEST_SOURCE=grpc`, through
+//! `bootstrap/daemon/init.rs::init_source` — the only place in the crate that
+//! names a concrete source. Everything
 //! downstream of `source` sees the port and never learns which model is
 //! running.
 //!

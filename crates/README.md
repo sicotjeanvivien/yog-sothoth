@@ -238,7 +238,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - Create a sub-persistor `<Platform><Product>EventPersistor` under `application/services/<platform>/<product>/event_persistor.rs`. It owns the per-protocol repos plus an `Arc<PoolMaintenance>`. Its `persist` method matches on the protocol's sub-enum and dispatches to per-variant `persist_<kind>` methods.
 - Add a new branch in `EventPersistor::persist` that delegates `DomainEvent::<NewProtocol>(e)` to the new sub-persistor.
-- In `bootstrap/daemon.rs::init_event_persistor`, instantiate the new sub-persistor with its repos plus the shared `PoolMaintenance`, and wire it into the top-level `EventPersistor`.
+- In `bootstrap/daemon/init.rs::init_event_persistor`, instantiate the new sub-persistor with its repos plus the shared `PoolMaintenance`, and wire it into the top-level `EventPersistor`.
 
 ### 4. In `context`
 
@@ -264,7 +264,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `ExtractionDispatcher::implemented_protocols` | `core` | whether the ingestion subscribes to it at all |
 | `decode_pool_account` | `core` | account bytes → properties |
 | `EventPersistor::persist` | `indexer` | event → sub-persistor |
-| `init_event_persistor` (`bootstrap/daemon.rs`) | `indexer` | sub-persistor instantiation |
+| `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
 | `PoolProperties` match in `http/dto/response/pool.rs` | `api` | detail wire shape |
 

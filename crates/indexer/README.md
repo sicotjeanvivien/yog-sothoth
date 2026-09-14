@@ -28,8 +28,10 @@ indexer/src/
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),
 │                            SignatureDispatcher filter chain, FetchWorker +
 │                            TransactionFetcher (HTTP + FetchError)
-├── bootstrap/             ← Config::load(), Daemon (composition root: builds
-│                            the source, wires the tasks, owns shutdown)
+├── bootstrap/             ← Config::load(), and Daemon (composition root) split
+│                            by subject: daemon.rs holds the lifecycle, and
+│                            daemon/ the wiring (init.rs), the tasks and the
+│                            concurrency bound (tasks.rs), the stop (stop.rs)
 ├── error/                 ← typed error per layer
 ├── bin/inspect_logs.rs    ← ad-hoc debugging helper for raw log streams
 └── main.rs
@@ -175,8 +177,8 @@ everything below the transaction. The seam therefore belongs where the two
 converge — on a translated transaction — and a source owns its whole
 sub-graph, however many tasks that takes.
 
-`bootstrap/daemon.rs::init_source` is the only place in the crate that names a
-concrete source, and the only one that reads `INGEST_SOURCE` — nothing
+`bootstrap/daemon/init.rs::init_source` is the only place in the crate that names
+a concrete source, and the only one that reads `INGEST_SOURCE` — nothing
 downstream of the port learns which one runs. The guard is mechanical:
 `grep IngestSource crates/indexer/src` should find it in `bootstrap/` and
 nowhere else.
@@ -224,8 +226,8 @@ is why it lives beside the fetch rather than beside the consumer.
 `IndexerWorker`'s cap is **not** a constant: it is the database pool's size
 minus the connections this process needs elsewhere (one, for the
 `NetworkStatusReporter`), computed at startup by
-`bootstrap/daemon.rs::index_concurrency` and logged there. A task does not hold
-a connection while it persists — sqlx takes one per statement — but it issues
+`bootstrap/daemon/tasks.rs::index_concurrency` and logged there. A task does not
+hold a connection while it persists — sqlx takes one per statement — but it issues
 one statement at a time, so *n* tasks put at most *n* in flight and the pool
 *is* the ceiling. That invariant is enforced nowhere; the function's doc says
 what breaks it. A pool too small to reserve from is refused at startup rather
@@ -288,8 +290,8 @@ to that source and not to the half of the pipeline both paths share.
   (`PoolCurrentStateRepository`). When a second protocol lands, it reuses the
   same instance.
 
-The wiring happens in `bootstrap/daemon.rs::init_event_persistor` — one of the
-two dispatch points a new protocol touches in this crate, the other being
+The wiring happens in `bootstrap/daemon/init.rs::init_event_persistor` — one of
+the two dispatch points a new protocol touches in this crate, the other being
 `EventPersistor::persist` above (see the
 [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
 

@@ -72,7 +72,8 @@ pub struct GrpcBufferMetrics;
 
 impl GrpcBufferMetrics {
     /// Call once at startup to register the descriptions with the Prometheus
-    /// exporter — `bootstrap/daemon.rs`, beside the crate's other families.
+    /// exporter — `bootstrap/daemon/init.rs::register_metric_descriptions`,
+    /// beside the crate's other families.
     ///
     /// Without that call the counter still works and exports with no HELP
     /// text, which is unreadable to anyone without the source — that is,
