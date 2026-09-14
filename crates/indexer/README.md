@@ -224,9 +224,12 @@ is why it lives beside the fetch rather than beside the consumer.
 `IndexerWorker`'s cap is **not** a constant: it is the database pool's size
 minus the connections this process needs elsewhere (one, for the
 `NetworkStatusReporter`), computed at startup by
-`bootstrap/daemon.rs::index_concurrency` and logged there. Every task in flight
-holds a connection while it persists, so the pool *is* the ceiling — and a pool
-too small to reserve from is refused at startup rather than clamped.
+`bootstrap/daemon.rs::index_concurrency` and logged there. A task does not hold
+a connection while it persists — sqlx takes one per statement — but it issues
+one statement at a time, so *n* tasks put at most *n* in flight and the pool
+*is* the ceiling. That invariant is enforced nowhere; the function's doc says
+what breaks it. A pool too small to reserve from is refused at startup rather
+than clamped.
 
 With today's pool of 10 the bound is 9. ⚠️ **And it is not configurable**:
 `init_db` calls `Database::connect`, whose size is fixed, and no environment
@@ -321,6 +324,12 @@ two dispatch points a new protocol touches in this crate, the other being
   the channel. The same rule applies one stage earlier inside the JSON-RPC
   source: a signature the RPC will not return, or a response that will not
   adapt, is counted and stepped over by `FetchWorker`.
+- **An observer never stops the pipeline** — a `NetworkStatusReporter` tick
+  that fails is logged, counted and skipped; its `run` returns
+  `Result<(), Infallible>`. It probes the same endpoint over the same network as
+  ingestion, so it fails whenever the link does, and until 11 September 2026 it
+  stopped the daemon first — resetting the subscription workers' retry budget
+  on every restart.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
   panics in spawned tasks reach `Daemon::run` via typed errors and trigger
   graceful shutdown of all tasks via the shared `CancellationToken`.
@@ -380,6 +389,17 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_persist_failure_total{event_kind}`,
   `yog_indexer_event_insert_skipped_total{event_kind}`,
   `yog_indexer_pool_current_state_same_slot_total`
+- **Reporter counter** — `yog_indexer_network_status_tick_failures_total{reason}`
+  (`rpc` or `persistence`, and **no** `protocol` label — the probe observes the
+  link, not a protocol): ticks of `NetworkStatusReporter` that recorded nothing.
+  A failed tick is counted and skipped, never propagated, so **this series is
+  all an operator sees of a failing probe**: the stale `network_status.observed_at`
+  it leaves behind has no reader, and the dashboard's freshness dot is computed
+  from the last indexed event, which keeps advancing when the probe alone is
+  down. `NetworkStatusReporterMetrics::record_tick_failure` documents that trap
+  and what would close it (raised in review of PR #141). The probe stopped the
+  daemon until 11 September 2026, and every restart reset the subscription
+  worker's retry budget.
 - **Histograms** — `yog_indexer_fetch_duration_seconds` (JSON-RPC source only),
   `yog_indexer_persist_duration_seconds{kind}`,
   `yog_indexer_index_transaction_duration_seconds{outcome}` — extract and

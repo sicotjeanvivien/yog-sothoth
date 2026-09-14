@@ -72,6 +72,10 @@ rust_decimal = { workspace = true }
 # pulls `endian-type`, `nibble_vec`, `ordered-float` and `radix_trie` into
 # Cargo.lock. Dev-only, so none of it reaches a binary.
 metrics-util = { workspace = true, features = ["debugging"] }
+# `start_paused`: drives `NetworkStatusReporter::run` past `TICK_INTERVAL`
+# without waiting for it, so the loop itself is tested and not only one tick.
+# A feature of a crate already in the tree, dev-only.
+tokio = { workspace = true, features = ["test-util"] }
 # `conformance::reference_transaction` — the expectation every source adapter
 # must satisfy, which `transaction_adapter`'s tests pin to the mainnet fixture.
 yog-core = { path = "../core", features = ["test-support"] }

@@ -1,6 +1,6 @@
 use crate::{
     application::{
-        reporter::{NetworkStatusReporter, NetworkStatusReporterError},
+        reporter::{NetworkStatusReporter, NetworkStatusReporterMetrics},
         services::{
             DammV2Repos, EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor,
             PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
@@ -18,7 +18,7 @@ use crate::{
 };
 use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use std::sync::Arc;
+use std::{convert::Infallible, sync::Arc};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -134,6 +134,7 @@ impl Daemon {
         // exactly the person who goes looking for it.
         GrpcBufferMetrics::register_descriptions();
         GrpcListenerMetrics::register_descriptions();
+        NetworkStatusReporterMetrics::register_descriptions();
         info!("Metrics initialized");
 
         info!("daemon initialized");
@@ -413,7 +414,7 @@ fn init_processor(
     Arc::new(TransactionProcessor::new(extractor, event_persistor))
 }
 
-/// Initialise the NetworkStautsReporter and its repository dependency.
+/// Initialise the NetworkStatusReporter and its repository dependency.
 ///
 /// ⚠️ **It opens its own RPC client**, rather than borrowing the ingestion's.
 /// Sharing one made the reporter's health probe and the fetcher's transport the
@@ -422,7 +423,7 @@ fn init_processor(
 /// them lives.
 ///
 /// ⚠️ **And what it should measure is an open question**, tracked by
-/// `01 - inbox/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
+/// `03 - active/[07]le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
 /// this probe reads `INGEST_TRANSACTION`, which the gRPC source will not use.
 async fn init_network_status_reporter(
     database: &Database,
@@ -488,12 +489,16 @@ const CONNECTIONS_RESERVED: u32 = 1;
 ///
 /// ⚠️ **And that invariant is not enforced anywhere.** The first sub-persistor
 /// that runs two repository calls under `tokio::join!` doubles a task's
-/// concurrent statements and silently reinstates the failure this bound exists
-/// to prevent: the reporter's `record_snapshot` propagates with `?`, so one
-/// `acquire_timeout` returns `Err`, `Daemon::run` takes the reporter branch,
-/// cancels the shared token, and the process exits — a saturated database
-/// stopping the indexer by way of its health probe, the least legible failure
-/// available. Whoever parallelises a persist owes this line a second look.
+/// concurrent statements and silently reinstates the starvation this bound
+/// exists to prevent. What that starvation costs has changed: until 11
+/// September 2026 the reporter propagated its tick errors, so one
+/// `acquire_timeout` stopped the process by way of its health probe. A failed
+/// tick is now counted and skipped, so the reporter only goes quiet — its
+/// `network_status.observed_at` freezes and
+/// `yog_indexer_network_status_tick_failures_total{reason="persistence"}`
+/// climbs — while the index tasks queue on the same pool, and *their*
+/// `acquire_timeout`s are what lose rows. Whoever parallelises a persist owes
+/// this line a second look.
 ///
 /// Read from the pool that was opened, not from
 /// [`Database::DEFAULT_MAX_CONNECTIONS`], so that sizing the pool differently
@@ -534,10 +539,15 @@ fn spawn_indexer_task(
     tokio::spawn(async move { worker.run(rx, shutdown).await })
 }
 
+/// Spawn the network status reporter task.
+///
+/// It cannot return an error — a failed tick is counted and skipped inside —
+/// so the only way this handle ends the daemon from `run`'s `select!` is a
+/// panic, which is a bug and should stop things.
 fn spawn_network_status_reporter_task(
     reporter: NetworkStatusReporter,
     shutdown: CancellationToken,
-) -> JoinHandle<Result<(), NetworkStatusReporterError>> {
+) -> JoinHandle<Result<(), Infallible>> {
     tokio::spawn(async move { reporter.run(shutdown).await })
 }
 
