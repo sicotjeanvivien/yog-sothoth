@@ -61,6 +61,17 @@ Filling it is this crate's job, one module per source:
   therefore yields 2 payloads through one adapter and 14 through the other,
   which is sanctioned rather than accidental — see *What an adapter owes*.
 
+- `infra/not_captured.rs` holds the one thing the two adapters must say
+  **identically**: the wording of the two absences they both refuse, `meta` and
+  `meta.inner_instructions`, when a source reports "I did not capture this"
+  rather than "there was none". Which of the two it was is what an operator acts
+  on, and the only place it is told apart is a log line — the counters fold both
+  into `reason="missing_field"` (gRPC) and `reason="adapt"` (JSON-RPC) to bound
+  cardinality. Written once per adapter, the two could be reworded apart with
+  both suites green, so they are written once for both. Its sibling suite pins
+  the text at that one site, which is the only guard a single definition cannot
+  give itself.
+
 - `infra/grpc/slot_timestamp_buffer.rs` pairs a transaction with the block time
   its own message does not carry. `block_time` lives on
   `SubscribeUpdateBlockMeta`, a **separate** subscription keyed by slot, while
