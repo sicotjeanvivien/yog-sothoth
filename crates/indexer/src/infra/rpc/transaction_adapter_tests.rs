@@ -1,10 +1,19 @@
-//! The two transaction-level refusals of the RPC adapter.
+//! The transaction-level refusals of the RPC adapter — and the one absence
+//! that is not a refusal.
 //!
 //! The happy path is covered by the whole fixture corpus (the two sibling
-//! suites: `fixture_pipeline_tests` and `extraction_oracle_tests`). What no fixture exercises is what the adapter
-//! *rejects* — and both refusals matter: `timestamp` is a partitioning column
-//! and part of every event's unique key, so a transaction without one must not
-//! reach extraction at all.
+//! suites: `fixture_pipeline_tests` and `extraction_oracle_tests`). What no
+//! fixture exercises is what the adapter *rejects*, and each refusal matters
+//! for its own reason: `timestamp` is a partitioning column and part of every
+//! event's unique key, so a transaction without one must not reach extraction
+//! at all; an uncaptured `meta` or `innerInstructions` would otherwise pass for
+//! a transaction with nothing in it.
+//!
+//! ⚠️ **The refusals are only half of that last pair.** `no_inner_instructions_…`
+//! pins the case that must keep flowing, and without it a refusal that also
+//! swallowed a genuine `[]` would pass every other test here. Whether the
+//! distinction holds is what these three assert together — never one of them
+//! alone.
 //!
 //! Built by taking a real mainnet fixture and removing exactly one thing, so
 //! the test cannot pass because the transaction was malformed some other way.
@@ -69,6 +78,71 @@ fn a_transaction_in_another_encoding_is_refused() {
     assert!(
         matches!(&err, CoreError::ParseError { reason, .. } if reason.contains("encoding")),
         "expected a ParseError about the encoding, got {err:?}"
+    );
+}
+
+// ── absence is not emptiness ────────────────────────────────────────
+
+/// ⚠️ An absent `meta` says "the response does not carry the inner
+/// instructions", never "there were none". Reading it as an empty list records
+/// a transaction full of events as "nothing to record" — silently, for ever, on
+/// the one ingestion path that runs today. Refusing puts it on the skip-and-log
+/// path, where it is counted.
+///
+/// It is quieter than the other refusals of this module: serde's flatten on the
+/// enclosing type makes the missing key deserialize to `None` rather than fail,
+/// so nothing upstream raises either.
+#[test]
+fn meta_not_captured_is_an_error_not_an_empty_list() {
+    let mut json = fixture_json();
+    json.as_object_mut().unwrap().remove("meta");
+
+    let err = from_rpc(&parse(json)).expect_err("an absent meta must be refused");
+
+    assert!(
+        matches!(&err, CoreError::MissingField { field, .. } if field.contains("not captured")),
+        "the error must distinguish absence from emptiness: {err:?}"
+    );
+}
+
+/// The same absence one level down, and it must be answered the same way.
+///
+/// `null` rather than a removed key on purpose: both deserialize to
+/// `OptionSerializer::None` — the field carries
+/// `default = "OptionSerializer::none"` — so this case covers the removed key
+/// too, and `OptionSerializer::Skip` is not reachable from the wire at all.
+#[test]
+fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
+    let mut json = fixture_json();
+    json["meta"]["innerInstructions"] = serde_json::Value::Null;
+
+    let err = from_rpc(&parse(json)).expect_err("absent innerInstructions must be refused");
+
+    assert!(
+        matches!(&err, CoreError::MissingField { field, .. } if field.contains("not captured")),
+        "the error must distinguish absence from emptiness: {err:?}"
+    );
+}
+
+/// A transaction that genuinely carries no inner instructions is ordinary. It
+/// yields an empty payload list, and extraction reports "nothing to record".
+///
+/// ⚠️ **This is the half that makes the two above mean something.** A refusal
+/// that also swallowed `[]` would not have distinguished anything — it would
+/// have moved the confusion, not removed it. Measured 15 September 2026 against
+/// the provider in use: `[]` is what a transaction that does not *invoke* the
+/// program looks like, which is real traffic the `InvocationFilter` drops one
+/// stage earlier.
+#[test]
+fn no_inner_instructions_is_an_empty_list_not_an_error() {
+    let mut json = fixture_json();
+    json["meta"]["innerInstructions"] = serde_json::Value::Array(Vec::new());
+
+    let on_chain_tx = from_rpc(&parse(json)).expect("an empty group list is not a failure");
+
+    assert!(
+        on_chain_tx.inner_instructions.is_empty(),
+        "an empty group list must yield an empty payload list"
     );
 }
 

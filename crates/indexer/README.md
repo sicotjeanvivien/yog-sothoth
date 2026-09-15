@@ -401,7 +401,15 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_fetch_not_found_total`,
   `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
   a response that arrived and could not be turned into an
-  `OnChainTransaction`; the *dropped* family is different in kind — work
+  `OnChainTransaction` — a missing signature or `blockTime`, **and a response
+  that carries no `meta` or no `innerInstructions`**, which says the source did
+  not capture them and is not the same as there being none. Both adapters refuse
+  that absence, so the label is where it lands whichever source runs; a genuine
+  empty group list is not a failure and flows on. ⚠️ **This counter is
+  structurally zero** (0 over the 1 046 transactions of a 2 h 20 run, 15
+  September 2026), so any sustained non-zero value is the signal, not noise —
+  the failure it guards against is a step on provider configuration, absent
+  until it is everything. The *dropped* family is different in kind — work
   discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
   two losses and the total conflates them**: `shutdown` and `downstream_closed`
   cost a request that was made and billed, `shutdown_before_fetch` is a
@@ -419,7 +427,14 @@ emitted. No gauges today — all counters and histograms.
   `extract_failure`, `unknown_exit`,
   `yog_indexer_transactions_no_match_total`,
   `yog_indexer_unknown_event_total{discriminator}`,
-  `yog_indexer_extraction_failure_total{kind}`
+  `yog_indexer_extraction_failure_total{kind}`.
+  ⚠️ **`outcome="no_events"` and `no_match` are the same transaction counted
+  twice**, once on each family, and both are structurally zero on the qualified
+  stream: a transaction only reaches here after the `InvocationFilter`, and one
+  that invokes the program carries at least one inner instruction — 198 of 198
+  sampled, 15 September 2026. They read as "nothing matched", so a sustained
+  non-zero value means something upstream stopped looking rather than that the
+  traffic was dull.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,
