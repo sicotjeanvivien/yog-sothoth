@@ -1,5 +1,6 @@
 mod credential;
 mod grpc;
+mod refusal;
 mod rpc;
 mod scheme;
 

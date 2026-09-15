@@ -397,9 +397,22 @@ fn a_missing_meta_is_an_error_not_an_empty_list() {
     update.transaction.as_mut().expect("built with one").meta = None;
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("no meta");
+
+    // ⚠️ The exact field, not `contains("not captured")`. That fragment is true
+    // of **both** refusals of this pair, so it asserted "a reason was named" and
+    // never "which one" — the two labels could be swapped in the adapter with
+    // all 153 tests green, checked by mutation on 15 September 2026.
+    //
+    // Which one it is, is the whole of what an operator acts on: a source that
+    // dropped `meta` wholesale and one that stopped recording inner
+    // instructions are two different fixes. The counter cannot tell them apart —
+    // `drop_reason` folds both into `reason="missing_field"` on purpose, to
+    // bound cardinality — so `session.rs`'s `warn!(%error, …)` is the only place
+    // they are told apart, and this `field` is what it prints.
     assert!(
-        error.to_string().contains("not captured"),
-        "the error must distinguish absence from emptiness: {error}"
+        matches!(&error, CoreError::MissingField { field, .. }
+            if field == Gap::Meta.field()),
+        "the error must distinguish absence from emptiness, and name which: {error:?}"
     );
 }
 
@@ -421,9 +434,11 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
         .inner_instructions_none = true;
 
     let error = from_grpc(&update, reference_timestamp()).expect_err("not captured");
+
     assert!(
-        error.to_string().contains("not captured"),
-        "the error must distinguish absence from emptiness: {error}"
+        matches!(&error, CoreError::MissingField { field, .. }
+            if field == Gap::InnerInstructions.field()),
+        "the error must distinguish absence from emptiness, and name which: {error:?}"
     );
 }
 
