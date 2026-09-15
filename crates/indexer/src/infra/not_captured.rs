@@ -28,8 +28,8 @@
 //!
 //! Swapping the two **values** below moves every adapter and every test
 //! together, so nothing downstream can notice — an exposure the four separate
-//! literals did not have. [`tests`] closes it by pinning the text of both
-//! constants at this one site: a change-detector on purpose, because rewording
+//! literals did not have. `not_captured_tests.rs` closes it by pinning the text
+//! of both constants at this one site: a change-detector on purpose, because rewording
 //! the contract an operator greps for is a decision, not the by-product of a
 //! refactor.
 
