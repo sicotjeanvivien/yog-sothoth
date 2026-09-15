@@ -139,13 +139,14 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
 /// that also swallowed `[]` would not have distinguished anything — it would
 /// have moved the confusion, not removed it.
 ///
-/// And `[]` is ordinary mainnet traffic, from two unrelated causes: a
-/// transaction that only references the program through an address lookup table
-/// (measured 15 September 2026 on the provider in use — 2 of 200, and the only
-/// 2 of those 200 with an empty list), and an invocation that simply makes no
-/// CPI, which the corpus witnesses directly — six of the 74 `dlmm` fixtures,
-/// `close_bin_array.json` among them with six invocations and no inner
-/// instruction at all.
+/// And `[]` is ordinary mainnet traffic on this very path: an invocation that
+/// simply makes no CPI. The corpus witnesses it directly — six of the 74 `dlmm`
+/// fixtures, `close_bin_array.json` among them with six invocations and no
+/// inner instruction at all.
+///
+/// (An ALT-only reference produces an empty list too, but never *here*: with no
+/// `Program … invoke` line it is rejected by `InvocationFilter` before the
+/// fetch. That cause belongs to the gRPC path, which has no such filter.)
 #[test]
 fn no_inner_instructions_is_an_empty_list_not_an_error() {
     let mut json = fixture_json();

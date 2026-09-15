@@ -208,9 +208,14 @@ async fn fetch_one(
     };
 
     // The RPC response becomes the neutral transaction here, on the side that
-    // knows what a `getTransaction` response looks like. A malformation — no
-    // signature, no `blockTime` — is a transaction-level failure and takes the
-    // same exit as a fetch failure: one log, one count, nothing sent on.
+    // knows what a `getTransaction` response looks like. A malformation is a
+    // transaction-level failure and takes the same exit as a fetch failure: one
+    // log, one count, nothing sent on.
+    //
+    // *Which* malformations is deliberately not re-listed here: `from_rpc`'s
+    // `# Errors` holds the list, and this site collapses every variant into the
+    // same two lines anyway. A copy here is a copy that goes stale — it already
+    // had, naming two of the refusals when there were five.
     //
     // ⚠️ It is counted under the fetch family with `reason="adapt"` rather than
     // under a name of its own. What the family answers is "this signature

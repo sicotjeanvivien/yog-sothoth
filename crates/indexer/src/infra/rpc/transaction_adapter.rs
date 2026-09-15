@@ -37,8 +37,11 @@ use yog_core::{CoreError, CoreResult};
 ///
 /// # Errors
 ///
-/// Only on a transaction-level malformation. The list is kept complete, because
-/// it is what `FetchWorker` reads to decide what to log and count:
+/// Only on a transaction-level malformation. The list is kept complete
+/// **because nothing downstream reconstructs it**: `FetchWorker` matches
+/// `Ok`/`Err` and collapses every variant into one `error!` and one
+/// `record_failure(…, "adapt")`, so this is where a reader learns what that
+/// single label covers:
 ///
 /// - the encoding carries no signature, or the signature will not parse;
 /// - the encoding is not `Json` at all;

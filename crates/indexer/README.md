@@ -436,24 +436,26 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_unknown_event_total{discriminator}`,
   `yog_indexer_extraction_failure_total{kind}`.
   ⚠️ **`outcome="no_events"` and `no_match` are the same transaction counted
-  twice**, once on each family. On the JSON-RPC path, with DAMM v2 as the only
-  subscribed protocol, both are structurally zero — a transaction only reaches
-  here past the `InvocationFilter`, and a cp-amm invocation carries at least one
-  inner instruction (198 of 198 sampled, 15 September 2026) — so a sustained
-  non-zero value there means something upstream stopped looking rather than that
-  the traffic was dull. **Both halves of that sentence are load-bearing**, and
-  each expires on its own:
-  - **on the gRPC path it is already false.** `InvocationFilter` has no
-    counterpart there — `account_include` matches account keys, so a transaction
-    that only references the program through an address lookup table still
-    arrives and decodes to nothing (`grpc/subscription.rs`, measured at a
-    handful per thousand). Alerting on zero after an `INGEST_SOURCE` switch
-    pages on normal traffic;
-  - **and it ends the day a stub protocol is subscribed.** `MeteoraDlmm`
-    returns `ExtractionOutcome::default()`, so every DLMM transaction would exit
-    `no_events` by design (`../core/README.md`, *The dispatcher*). Nor is "an
-    invocation always has an inner instruction" a law: it is a DAMM v2
-    observation, and six of the 74 `dlmm` fixtures are invocations with no CPI.
+  twice**, once on each family — so they move together, and their sum is not a
+  quantity. Both read *nil* over a 2 h 20 JSON-RPC run on DAMM v2 (1 046
+  transactions, 15 September 2026), which makes a change in them worth a look.
+  ⚠️ **But do not read them as a fault detector.** "Nothing to record" is an
+  ordinary outcome for at least three reasons that are not faults:
+  - **an invocation that emits nothing.** `zap_protocol_fee` mutates pool state
+    without an `event_cpi` at all — the documented blind spot of this pipeline
+    (`fixture_pipeline_tests::zap_protocol_fee_emits_no_event_of_its_own`). A
+    standalone fee harvest is operator traffic that lands here by construction;
+  - **a stub protocol.** `MeteoraDlmm` returns `ExtractionOutcome::default()`,
+    so every DLMM transaction would exit `no_events` the day it is subscribed
+    (`../core/README.md`, *The dispatcher*);
+  - **no `InvocationFilter` on the gRPC path.** `account_include` matches
+    account keys, so a transaction referencing the program only through an
+    address lookup table arrives and decodes to nothing
+    (`grpc/subscription.rs`, a handful per thousand).
+
+  What *would* be a fault — a source that stopped carrying inner instructions —
+  no longer arrives here at all: both adapters refuse it upstream, which is the
+  point of that refusal. These two counters were the place it used to hide.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,
