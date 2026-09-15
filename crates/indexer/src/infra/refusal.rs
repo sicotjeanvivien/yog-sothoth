@@ -1,11 +1,16 @@
-//! The absence both adapters refuse, worded once for both.
+//! Refuse a transaction the source did not describe — in the words both
+//! adapters use.
 //!
-//! # Why the words live here and not at the two refusals
+//! This is where `infra/rpc/transaction_adapter.rs` and
+//! `infra/grpc/transaction_adapter.rs` come to say no, so that the two say it
+//! identically. Each reads its own wire format and finds the same two gaps;
+//! what they must not do is name them differently.
+//!
+//! # Why the wording is the point, and not an implementation detail
 //!
 //! `meta` and `meta.inner_instructions` can each arrive saying "the source did
 //! not capture this", which is **not** "there was none" — the distinction both
-//! `infra/rpc/transaction_adapter.rs` and `infra/grpc/transaction_adapter.rs`
-//! exist to keep, each on its own wire format.
+//! adapters exist to keep.
 //!
 //! What an operator does about it differs by *which* of the two it was: a
 //! provider that dropped `meta` wholesale and one that stopped recording inner
@@ -19,7 +24,7 @@
 //! So the wording *is* the operator-facing contract, and it was written four
 //! times — twice per adapter — with nothing checking that the two agreed.
 //! Rewording one side and not the other would have left both suites green while
-//! the same absence printed two different strings depending on which source had
+//! the same gap printed two different strings depending on which source had
 //! ingested the transaction, and an operator grepping for one of them would have
 //! seen half their traffic. One definition removes the possibility rather than
 //! guarding against it.
@@ -28,10 +33,10 @@
 //!
 //! Swapping the two **values** below moves every adapter and every test
 //! together, so nothing downstream can notice — an exposure the four separate
-//! literals did not have. `not_captured_tests.rs` closes it by pinning the text
-//! of both constants at this one site: a change-detector on purpose, because rewording
-//! the contract an operator greps for is a decision, not the by-product of a
-//! refactor.
+//! literals did not have. `refusal_tests.rs` closes it by pinning the text of
+//! both constants at this one site: a change-detector on purpose, because
+//! rewording the contract an operator greps for is a decision, not the
+//! by-product of a refactor.
 
 use solana_signature::Signature;
 use yog_core::CoreError;
@@ -50,9 +55,14 @@ pub(crate) const INNER_INSTRUCTIONS: &str = "meta.inner_instructions (not captur
 ///
 /// `field` is one of the two constants above, and taking `&'static str` rather
 /// than an enum is deliberate: the caller reads
-/// `not_captured::refuse(META, signature)`, which says at the call site which
-/// absence it is answering — the one thing a reader needs there, and the one
-/// thing the mutation check exercises.
+/// `refusal::refuse(META, signature)`, which says at the call site both what it
+/// is doing and which of the two gaps it is answering — the two things a reader
+/// needs there, and what the mutation check exercises.
+///
+/// The `refusal::refuse` repetition is kept rather than avoided. Importing
+/// `refuse` bare would read a shade better and drop the one word that tells the
+/// next author this text is shared: the module has to stay visible at the call
+/// site, or the literal comes back.
 pub(crate) fn refuse(field: &'static str, signature: &Signature) -> CoreError {
     CoreError::MissingField {
         signature: signature.to_string(),
@@ -61,5 +71,5 @@ pub(crate) fn refuse(field: &'static str, signature: &Signature) -> CoreError {
 }
 
 #[cfg(test)]
-#[path = "not_captured_tests.rs"]
+#[path = "refusal_tests.rs"]
 mod tests;

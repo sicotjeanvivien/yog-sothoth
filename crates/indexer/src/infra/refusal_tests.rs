@@ -2,10 +2,10 @@
 //!
 //! Every other test of these two labels — four of them, two per adapter —
 //! compares what an adapter produced against the constants below. That catches
-//! an adapter naming the wrong absence, and it makes the two adapters agree by
+//! an adapter naming the wrong gap, and it makes the two adapters agree by
 //! construction. What it cannot catch is the constants themselves being
 //! swapped: adapters and tests would move together and stay green, with both
-//! absences reported under each other's name everywhere at once.
+//! gaps reported under each other's name everywhere at once.
 //!
 //! So this suite pins the text at the one site that defines it. It is a
 //! change-detector, knowingly: these strings are what an operator greps for
