@@ -401,12 +401,12 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_fetch_not_found_total`,
   `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
   a response that arrived and could not be turned into an
-  `OnChainTransaction` — **every** refusal of `from_rpc`, whose doc-comment
-  holds the complete list: no signature, an unparsable signature, an encoding
-  that is not `Json`, no `blockTime`, and a response carrying no `meta` or no
-  `innerInstructions`. That last pair says the source did not capture them,
-  which is not the same as there being none; a genuine empty group list is not a
-  failure and flows on. ⚠️ **`reason="adapt"` specifically is structurally
+  `OnChainTransaction` — **every** refusal of `from_rpc`, whose `# Errors`
+  doc-comment holds the list and is the one place it is written; restating it
+  here is how the two drift. The pair worth knowing about from outside is a
+  response carrying no `meta` or no `innerInstructions`: that says the source
+  did not capture them, which is not the same as there being none, and a genuine
+  empty group list is not a failure and flows on. ⚠️ **`reason="adapt"` specifically is structurally
   zero** (0 over the 1 046 transactions of a 2 h 20 run, 15 September 2026), so
   a sustained non-zero value on *that* label is signal — the absence it guards
   against is a step on provider configuration, absent until it is everything.
@@ -436,15 +436,24 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_unknown_event_total{discriminator}`,
   `yog_indexer_extraction_failure_total{kind}`.
   ⚠️ **`outcome="no_events"` and `no_match` are the same transaction counted
-  twice**, once on each family, and **while DAMM v2 is the only subscribed
-  protocol** both are structurally zero: a transaction only reaches here after
-  the `InvocationFilter`, and one that invokes the program carries at least one
-  inner instruction — 198 of 198 sampled, 15 September 2026. So a sustained
-  non-zero value means something upstream stopped looking rather than that the
-  traffic was dull. ⚠️ **That reading expires the day a stub protocol is
-  subscribed**: `MeteoraDlmm` returns `ExtractionOutcome::default()`, so every
-  DLMM transaction exits `no_events` by design (`../core/README.md`, *The
-  dispatcher*) — the counter would then be measuring the stub, not a fault.
+  twice**, once on each family. On the JSON-RPC path, with DAMM v2 as the only
+  subscribed protocol, both are structurally zero — a transaction only reaches
+  here past the `InvocationFilter`, and a cp-amm invocation carries at least one
+  inner instruction (198 of 198 sampled, 15 September 2026) — so a sustained
+  non-zero value there means something upstream stopped looking rather than that
+  the traffic was dull. **Both halves of that sentence are load-bearing**, and
+  each expires on its own:
+  - **on the gRPC path it is already false.** `InvocationFilter` has no
+    counterpart there — `account_include` matches account keys, so a transaction
+    that only references the program through an address lookup table still
+    arrives and decodes to nothing (`grpc/subscription.rs`, measured at a
+    handful per thousand). Alerting on zero after an `INGEST_SOURCE` switch
+    pages on normal traffic;
+  - **and it ends the day a stub protocol is subscribed.** `MeteoraDlmm`
+    returns `ExtractionOutcome::default()`, so every DLMM transaction would exit
+    `no_events` by design (`../core/README.md`, *The dispatcher*). Nor is "an
+    invocation always has an inner instruction" a law: it is a DAMM v2
+    observation, and six of the 74 `dlmm` fixtures are invocations with no CPI.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,

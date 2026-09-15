@@ -41,20 +41,32 @@ use yog_core::{CoreError, CoreResult};
 /// it is what `FetchWorker` reads to decide what to log and count:
 ///
 /// - the encoding carries no signature, or the signature will not parse;
-/// - `blockTime` is absent;
+/// - the encoding is not `Json` at all;
+/// - `blockTime` is absent, **or present and outside the range
+///   `DateTime::from_timestamp` accepts** — two different refusals, and the
+///   second one was missing from this list until review found it, in a sentence
+///   that claims to be complete. Its gRPC sibling carries the same scar;
 /// - `meta` is absent, or `meta.innerInstructions` is not carried by the
 ///   response — both mean the source did not capture the inner instructions,
 ///   which is **not** the same as there being none.
 ///
 /// A transaction that genuinely carries no inner instructions is not a failure:
 /// it yields an empty payload list, and extraction reports "nothing to record".
+/// That is ordinary traffic, not a corner case — six of the 74 mainnet `dlmm`
+/// fixtures are invocations with no CPI at all.
 pub(crate) fn from_rpc(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
 ) -> CoreResult<OnChainTransaction> {
     // Hoisted out of the literal below — unchanged in evaluation order, since
-    // struct fields are evaluated in the order they are written — so the two
-    // refusals in `extract_inner_instructions` can name the transaction they
-    // are refusing, as the gRPC sibling does.
+    // struct fields are evaluated in the order they are written — because
+    // `extract_inner_instructions` takes it as a parameter, the shape its gRPC
+    // sibling already has.
+    //
+    // The `signature` it then puts on its errors is a convenience, not the
+    // thing that identifies them: `FetchWorker` logs `%signature` beside the
+    // error anyway, and the two refusals above still carry `String::new()`
+    // because one of them *is* the signature extraction. Nothing asserts the
+    // field, and nothing should be read as promising it.
     let signature = extract_signature(tx)?;
 
     Ok(OnChainTransaction {
