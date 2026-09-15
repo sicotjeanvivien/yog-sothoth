@@ -1,10 +1,9 @@
-mod credential;
+mod endpoint;
 mod grpc;
 mod refusal;
 mod rpc;
-mod scheme;
 
-pub(crate) use credential::Credential;
+pub(crate) use endpoint::Credential;
 pub(crate) use grpc::{
     GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics, GrpcTransactionSource,
 };

@@ -14,8 +14,8 @@ use crate::{
     error::{RpcListenerError, SubscriptionWorkerError},
     infra::{
         Credential,
+        endpoint::scheme,
         rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},
-        scheme,
     },
 };
 

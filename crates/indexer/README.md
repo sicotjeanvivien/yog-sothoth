@@ -19,8 +19,9 @@ indexer/src/
 │   │                        PoolMaintenance, WatchedPoolService, metrics
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
 │   └── workers/           ← IndexerWorker (bounded-concurrency consumer)
-├── infra/credential.rs    ← the endpoint's header, validated once, for both paths
-├── infra/scheme.rs        ← the endpoint's scheme, sorted once, for both paths
+├── infra/endpoint/        ← the endpoint's configuration, refused at start-up
+│                            before anything is dialled: scheme.rs, credential.rs
+├── infra/refusal.rs       ← the wording both adapters refuse a source's gap with
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer
@@ -94,7 +95,18 @@ Filling it is this crate's job, one module per source:
   stream exists, and `yog_indexer_grpc_untimestamped_transactions_total` is what
   will say whether the ceiling was generous.
 
-- `infra/credential.rs` is **shared by both paths**: it validates the header an
+- `infra/endpoint/` is the endpoint's **configuration, verified once at
+  start-up** — the subset, and the reason the two modules below sit together.
+  Neither fault they catch is caught by the client that will use the endpoint:
+  `PubsubClient::new` takes an `https://` URL and just fails to connect, tonic
+  takes a `wss://` one, a header name that is not a token is rejected only when
+  a request is built. Unchecked, each arrives *inside* the retry loop, multiplied
+  by the fleet, reading like an unreachable provider. ⚠️ **`infra/refusal.rs` is
+  deliberately not here**, though both sources use it too: it is consumed at
+  translation, on what a provider sent. Admission is the paragraph above, not the
+  number of callers — otherwise the folder becomes a drawer named "shared".
+
+- `infra/endpoint/credential.rs` is **shared by both paths**: it validates the header an
   endpoint declares, once, and hands it to whichever client will carry it — gRPC
   request metadata, or a WebSocket handshake. What decides whether there is a
   header is `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE` and nothing else; a
@@ -102,7 +114,7 @@ Filling it is this crate's job, one module per source:
   transport has no business answering a credential question and the belief it
   rested on — that `PubsubClient` cannot send a header — is false.
 
-- `infra/scheme.rs` is **shared by both paths** too: it sorts the endpoint's
+- `infra/endpoint/scheme.rs` is **shared by both paths** too: it sorts the endpoint's
   scheme into accepted, foreign or missing, so each listener refuses the other
   path's URL at start-up instead of spending its retry budget on it.
   `INGEST_STREAM_URL` is read by both sources, which makes switching one and
