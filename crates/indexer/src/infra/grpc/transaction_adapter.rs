@@ -60,6 +60,7 @@
 //! Until then, read this suite as "the translation is self-consistent", never
 //! as "the translation is right".
 
+use crate::infra::not_captured::{self, INNER_INSTRUCTIONS, META};
 use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::{SIGNATURE_BYTES, Signature};
@@ -197,10 +198,7 @@ fn extract_inner_instructions(
     // corpus here can show what a provider actually sends. Refusing is what
     // puts it on the skip-and-log path instead of losing it.
     let Some(meta) = info.meta.as_ref() else {
-        return Err(CoreError::MissingField {
-            signature: signature.to_string(),
-            field: "meta (not captured by the source)".to_string(),
-        });
+        return Err(not_captured::refuse(META, signature));
     };
 
     // ⚠️ `inner_instructions_none` is not "there were none" — it is "the source
@@ -211,10 +209,7 @@ fn extract_inner_instructions(
     // Refusing sends it down the skip-and-log path, where a per-transaction
     // failure is counted and stepped over. Found in review, 8 September 2026.
     if meta.inner_instructions_none {
-        return Err(CoreError::MissingField {
-            signature: signature.to_string(),
-            field: "meta.inner_instructions (not captured by the source)".to_string(),
-        });
+        return Err(not_captured::refuse(INNER_INSTRUCTIONS, signature));
     }
 
     let account_keys = account_key_segments(info, meta, signature)?;

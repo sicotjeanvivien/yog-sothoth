@@ -1,5 +1,6 @@
 mod credential;
 mod grpc;
+mod not_captured;
 mod rpc;
 mod scheme;
 

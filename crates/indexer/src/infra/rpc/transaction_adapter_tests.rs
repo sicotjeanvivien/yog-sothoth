@@ -107,7 +107,7 @@ fn meta_not_captured_is_an_error_not_an_empty_list() {
     // tests green; checked by mutation, 15 September 2026.
     assert!(
         matches!(&err, CoreError::MissingField { field, .. }
-            if field == "meta (not captured by the source)"),
+            if field == META),
         "the error must distinguish absence from emptiness, and name which: {err:?}"
     );
 }
@@ -127,7 +127,7 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
 
     assert!(
         matches!(&err, CoreError::MissingField { field, .. }
-            if field == "meta.inner_instructions (not captured by the source)"),
+            if field == INNER_INSTRUCTIONS),
         "the error must distinguish absence from emptiness, and name which: {err:?}"
     );
 }
