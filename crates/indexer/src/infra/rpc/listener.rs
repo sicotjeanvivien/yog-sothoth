@@ -7,11 +7,11 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use yog_bootstrap::{Endpoint, SecretUrl};
+use yog_bootstrap::{Endpoint, SecretUrl, TaskEnd};
 use yog_core::domain::Protocol;
 
 use crate::{
-    error::{RpcListenerError, SubscriptionWorkerError, TaskEnd},
+    error::{RpcListenerError, SubscriptionWorkerError},
     infra::{
         Credential,
         rpc::{RawLogEvent, SubscriptionEvent, SubscriptionTarget, SubscriptionWorker},

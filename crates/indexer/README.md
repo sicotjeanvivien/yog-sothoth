@@ -31,7 +31,8 @@ indexer/src/
 ├── bootstrap/             ← Config::load(), and Daemon (composition root) split
 │                            by subject: daemon.rs holds the lifecycle, and
 │                            daemon/ the wiring (init.rs), the tasks and the
-│                            concurrency bound (tasks.rs), the stop (stop.rs)
+│                            concurrency bound (tasks.rs). The stop's mechanics
+│                            are shared — `yog_bootstrap::shutdown`
 ├── error/                 ← typed error per layer
 ├── bin/inspect_logs.rs    ← ad-hoc debugging helper for raw log streams
 └── main.rs
@@ -340,11 +341,20 @@ the two dispatch points a new protocol touches in this crate, the other being
 starts, not where it ends: `Daemon::run` waits for its three tasks,
 `RpcTransactionSource::run` waits for its three stages, the listener joins its
 fleet, and the indexer worker waits for its detached writes by asking for every
-permit back. The bound is a single `SHUTDOWN_GRACE` held by `Daemon::run` — a
-stage that overruns it is named in a `warn!` and destroyed with the runtime,
-which is the only way an orderly stop can still cost work. The indexer is
-waited on **first**, because one deadline spent in order can otherwise be eaten
-whole by a stage above it.
+permit back. The bound is a single `yog_bootstrap::SHUTDOWN_GRACE`, spent
+across the three by the shared `Stop` — a stage that overruns it is named in a
+`warn!` and destroyed with the runtime, which is the only way an orderly stop
+can still cost work. The indexer is waited on **first**, because one deadline
+spent in order can otherwise be eaten whole by a stage above it.
+
+`Stop`, `TaskEnd`, `handle_task_result` and `shutdown_signal` live in
+`yog-bootstrap` since 14 September 2026, because `yog-context` needed the same
+four and had grown its own diverging copy of one of them. ⚠️ Their log lines
+therefore carry the target `yog_bootstrap`, not `yog_indexer` — which very
+nearly made every stop unreadable under a `RUST_LOG` of per-crate directives.
+`yog_bootstrap::runtime::build_filter` now keeps that target audible unless the
+operator has said something that covers it; the rule lives there and nowhere
+else.
 
 ⚠️ **The fetch stage is the exception, and it is a real loss.** `FetchWorker`
 returns as soon as the token fires, with up to `MAX_CONCURRENT_FETCHES`

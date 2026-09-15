@@ -65,12 +65,25 @@ impl PriceWorker {
 
         loop {
             tokio::select! {
-                _ = ticker.tick() => {
-                    self.run_one_cycle().await;
-                }
+                // ⚠️ **`biased`: the stop must win a tie, and here it is the
+                // tie that is measured.** The ticker keeps tokio's default
+                // `MissedTickBehavior::Burst`, so a cycle that outruns the
+                // cadence leaves `tick()` **already ready** when the loop comes
+                // back round — and this worker's cycle took 10.7–19.9 s against
+                // a rate-limiting Jupiter on 14 September 2026, for a 30 s
+                // cadence. An unbiased `select!` would then pick pseudo-randomly
+                // between a new tick and a stop already asked for: about one
+                // stop in two starting a fresh 900-mint fetch, burning the
+                // shutdown grace and dying mid-`INSERT`. Same reason the
+                // indexer's own loops are biased.
+                biased;
+
                 _ = shutdown.cancelled() => {
                     info!("shutdown requested — price worker stopping");
                     return Ok(());
+                }
+                _ = ticker.tick() => {
+                    self.run_one_cycle().await;
                 }
             }
         }

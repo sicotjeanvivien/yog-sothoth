@@ -13,8 +13,22 @@ test-support = []
 [dependencies]
 # Errors
 thiserror = { workspace = true }
+# `shutdown`: the verdict a stop hands back, once every stage has answered.
+anyhow = { workspace = true }
+
+# `shutdown`: the signals that mean "stop", and joining what is still in flight
+# under a bounded grace. This crate is the shared startup plumbing, and a stop
+# is the other end of the same lifecycle.
+tokio = { workspace = true }
 
 # Logging / TLS runtime init
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 rustls = { workspace = true }
+
+[dev-dependencies]
+# `start_paused`: lets the grace expire without waiting five real seconds, and
+# lets the "two stages share one deadline" test read the clock instead of
+# trusting the code that sets it. A feature of a crate already in the tree,
+# dev-only.
+tokio = { workspace = true, features = ["test-util"] }

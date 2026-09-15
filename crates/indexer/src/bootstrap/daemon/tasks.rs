@@ -1,5 +1,8 @@
-//! What a task of the daemon is, how many transactions one may persist at
-//! once, and what its result means once it has ended.
+//! What a task of the daemon is, and how many transactions one may persist at
+//! once.
+//!
+//! What a task's *result* means once it has ended is not here: that rule is
+//! shared with every other daemon and lives in `yog_bootstrap::shutdown`.
 
 use crate::{
     application::{
@@ -8,7 +11,7 @@ use crate::{
         source::{IngestedTransaction, TransactionSource},
         workers::IndexerWorker,
     },
-    error::{IndexerWorkerError, SourceError, TaskEnd},
+    error::{IndexerWorkerError, SourceError},
 };
 use std::{convert::Infallible, sync::Arc};
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -107,42 +110,6 @@ pub(super) fn spawn_network_status_reporter_task(
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), Infallible>> {
     tokio::spawn(async move { reporter.run(shutdown).await })
-}
-
-// ── Task result handling ─────────────────────────────────────────────────────
-
-/// Normalise the result of a spawned task into a loggable anyhow::Result.
-///
-/// Distinguishes four cases: clean stop, task error, task panic, and a task
-/// destroyed before it could answer — see [`TaskEnd`] for why the last two are
-/// one type in `tokio` and must not be one here.
-pub(super) fn handle_task_result<E>(
-    result: Result<Result<(), E>, tokio::task::JoinError>,
-    task_name: &str,
-) -> anyhow::Result<()>
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    match result {
-        Ok(Ok(())) => {
-            tracing::info!("{task_name} stopped");
-            Ok(())
-        }
-        Ok(Err(e)) => {
-            tracing::error!(error = %e, "{task_name} failed");
-            Err(anyhow::Error::new(e))
-        }
-        Err(e) => match TaskEnd::from(&e) {
-            TaskEnd::Panicked => {
-                tracing::error!(error = %e, "{task_name} panicked");
-                Err(anyhow::anyhow!("{task_name} panicked: {e}"))
-            }
-            TaskEnd::Cancelled => {
-                tracing::debug!(error = %e, "{task_name} was cancelled before it could stop");
-                Ok(())
-            }
-        },
-    }
 }
 
 #[cfg(test)]

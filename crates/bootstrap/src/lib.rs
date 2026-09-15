@@ -10,6 +10,9 @@
 //!   `Config::load` (`error`)
 //! - one-shot runtime initialization for crates that don't pick a
 //!   default (rustls), and the shared tracing subscriber (`runtime`)
+//! - the other end of that lifecycle: which signals mean "stop", what a
+//!   finished task's result says, and how long a daemon waits for its stages
+//!   before the runtime destroys them (`shutdown`)
 //!
 //! Each binary keeps its own `Config` struct describing the variables
 //! it cares about — only the building blocks live here. The `Config`
@@ -22,6 +25,7 @@ mod env;
 mod error;
 mod runtime;
 mod secret;
+mod shutdown;
 
 /// The guard that keeps `.expose()` on the lines that consume a secret.
 ///
@@ -40,3 +44,4 @@ pub use env::{
 pub use error::ConfigError;
 pub use runtime::{init_rustls, init_tracing};
 pub use secret::{SecretKey, SecretUrl};
+pub use shutdown::{SHUTDOWN_GRACE, Stop, TaskEnd, handle_task_result, shutdown_signal};

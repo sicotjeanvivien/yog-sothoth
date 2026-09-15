@@ -99,16 +99,28 @@ impl Daemon {
         Ok(Self { engine })
     }
 
-    /// Run the engine until Ctrl-C, then stop every detector loop gracefully.
+    /// Run the engine until the process is asked to stop, then let every
+    /// detector loop finish its tick.
+    ///
+    /// ⚠️ **SIGTERM, not only Ctrl-C.** This waited on `tokio::signal::ctrl_c()`
+    /// alone — SIGINT — while `docker compose stop` sends SIGTERM. As PID 1 in
+    /// its container the process did not even die on it: the kernel withholds a
+    /// signal's default action from PID 1, so the SIGTERM was ignored and
+    /// Docker's SIGKILL ended things ten seconds later, mid-tick.
+    /// `shutdown_signal` covers both, and it is the one the other daemons use.
+    ///
+    /// ⚠️ **The other half is still missing here**, and it is written down
+    /// rather than half-done: `engine.run` joins its detectors with no deadline,
+    /// so a detector stuck in a slow query still holds the stop open without
+    /// naming itself. See
+    /// `.project/02 - backlog/others/l-arret-de-yog-signals-n-a-aucun-plafond.md`.
     pub(crate) async fn run(self) -> anyhow::Result<()> {
         let shutdown = CancellationToken::new();
 
         let signal = shutdown.clone();
         tokio::spawn(async move {
-            if tokio::signal::ctrl_c().await.is_ok() {
-                info!("ctrl-c received — shutting down");
-                signal.cancel();
-            }
+            yog_bootstrap::shutdown_signal().await;
+            signal.cancel();
         });
 
         self.engine.run(shutdown).await.map_err(anyhow::Error::new)

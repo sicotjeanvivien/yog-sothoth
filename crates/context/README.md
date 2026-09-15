@@ -18,7 +18,8 @@ context/src/
 │                   SolanaAccountClient (+ provider metrics)
 ├── workers/      ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
 │                   (+ per-worker metrics)
-├── bootstrap/    ← Config::load(), Daemon::new — composition root
+├── bootstrap/    ← Config::load(), Daemon::new — composition root, and the
+│                   stop: run() joins its three workers under the shared grace
 ├── error/        ← SourceError, WorkerError
 └── main.rs
 ```
@@ -145,6 +146,33 @@ the indexer now scrubs at its own boundaries through `SecretUrl::scrub`.) The
 conversion also appends the error's cause chain, because
 stripping the URL from reqwest's `Display` otherwise leaves the same four
 words for a refused connection, a DNS failure and a timeout alike.
+
+### The stop joins its three workers
+
+`main` owns the `CancellationToken` and cancels it on **SIGINT or SIGTERM**
+(`yog_bootstrap::shutdown_signal`); `Daemon::run` then waits for the three
+workers under `yog_bootstrap::SHUTDOWN_GRACE`, spent across them by the shared
+`Stop`. A worker's tick body runs *outside* its `select!`, so a tick already
+started always finishes — if it is given the time.
+
+The **price worker is waited on first**, because it is the only one whose
+interrupted work is *lost* rather than merely *abandoned*: its tick ends in a
+single `INSERT` of prices stamped at one instant, and that instant does not come
+back. The other two re-list their remainder next tick.
+
+⚠️ **A price tick routinely outlives the grace, and the stop says so rather
+than hiding it.** Measured 14 September 2026: a tick takes 10.7–19.9 s against
+a rate-limiting Jupiter, so a stop taken inside one ends with
+`shutdown grace expired … tasks=["price worker"]` and the tick is still
+destroyed. That is not a missing timeout — every request is bounded by
+`providers::http_client` — it is ~19 chunks sent back to back plus backoff,
+with nothing between two chunks looking at the token.
+
+⚠️ Until 14 September 2026 the daemon selected on `ctrl_c()` and returned on it:
+20 stops measured, **none** saw the three workers hand back, and the process was
+gone in 5–7 ms. Under `docker compose stop` it was worse still — SIGTERM was not
+listened for, and as PID 1 the process does not die on it either, so the stop
+never started and Docker's SIGKILL arrived ten seconds later mid-tick.
 
 There is deliberately no in-process respawn logic: a worker never returns
 `Err` from its loop, and a panic exits the whole process, which the container
