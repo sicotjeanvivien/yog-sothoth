@@ -56,7 +56,7 @@ const MAX_BACKOFF_SECS: u64 = 60;
 pub(crate) struct SubscriptionWorker {
     ws_url: SecretUrl,
     /// The header this endpoint authenticates with, if it has one. Validated by
-    /// the listener before any worker exists — see `infra::credential`, and
+    /// the listener before any worker exists — see `infra::endpoint::credential`, and
     /// why the answer is the operator's configuration and not the transport.
     credential: Credential,
     target: SubscriptionTarget,
@@ -243,7 +243,7 @@ async fn connect_and_forward(
     // does not always live in the URL: `PubsubClient::new` takes an
     // `IntoClientRequest`, and an `http::Request` is what carries a header. What
     // decides whether there is one is `INGEST_STREAM_HEADER_NAME` /
-    // `_HEADER_VALUE` and nothing else — see `infra::credential`.
+    // `_HEADER_VALUE` and nothing else — see `infra::endpoint::credential`.
     let request = match credential.ws_request(ws_url) {
         Ok(request) => request,
         Err(scrubbed) => return ConnectOutcome::Failed(scrubbed),

@@ -44,7 +44,7 @@
 //! transport has no business deciding a credential question — the same
 //! inversion `04 - release/une-variable-nomme-un-transport.md` removed from
 //! variable *names*. Both listeners now send what the operator declares
-//! (`infra::credential`), so there is one door for one variable.
+//! (`infra::endpoint::credential`), so there is one door for one variable.
 
 use yog_bootstrap::{
     ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,
@@ -77,7 +77,7 @@ impl Config {
             database_url: required_secret_url("DATABASE_URL_INDEXER")?,
             // ⚠️ The wide door is a **promise** that whoever holds this
             // `Endpoint` sends the header it carries, and `yog-bootstrap`
-            // cannot check it. Both listeners keep it — `infra::credential` is
+            // cannot check it. Both listeners keep it — `infra::endpoint::credential` is
             // the one place that turns the pair into something a client sends,
             // and both go through it.
             ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,

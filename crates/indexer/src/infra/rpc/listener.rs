@@ -40,7 +40,7 @@ const EVENTS_CHANNEL_CAPACITY: usize = 256;
 pub(crate) struct RpcListener {
     /// The whole endpoint, not just its URL: a provider may carry its key in
     /// the query string **or** in a metadata header, and which one is the
-    /// operator's business — see `infra::credential`. The fleet clones the
+    /// operator's business — see `infra::endpoint::credential`. The fleet clones the
     /// assembled URL and the validated header once per worker.
     endpoint: Endpoint,
     /// Every address to subscribe to, with the protocol it belongs to — a

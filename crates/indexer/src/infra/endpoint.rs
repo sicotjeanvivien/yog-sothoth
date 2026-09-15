@@ -7,8 +7,15 @@
 //! by the client that will use it: `PubsubClient::new` accepts an `https://`
 //! URL and simply fails to connect, tonic's `Endpoint::from_shared` accepts a
 //! `wss://` one, and a header name that is not a token is only rejected when a
-//! request is built. So each of these faults arrives **inside the retry loop**,
-//! multiplied by the fleet, and reads like an unreachable provider.
+//! request is built.
+//!
+//! Unchecked, each of these therefore surfaces **late and disguised** — inside
+//! a retry loop, reading like an unreachable provider rather than like the
+//! configuration fault it is. ⚠️ How badly differs by path, and the difference
+//! is not decoration: on the WebSocket side the fault is *multiplied by the
+//! fleet*, `RPC_WORKER_MAX_RETRIES` attempts per watched pool before
+//! `AllWorkersGaveUp` (see [`scheme::WEBSOCKET`]); the gRPC side is one channel
+//! with one budget. Same shape, two orders of magnitude.
 //!
 //! [`scheme`] answers "is this address one this path can speak", [`credential`]
 //! answers "is this header one a request can carry", and both answer **once, at

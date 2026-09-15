@@ -1,7 +1,7 @@
 //! Tests for the gRPC half of the credential.
 //!
 //! Deliberately short: validating the header, refusing a malformed one without
-//! quoting it, and keeping it out of `{:?}` are `infra::credential`'s business
+//! quoting it, and keeping it out of `{:?}` are `infra::endpoint::credential`'s business
 //! and are tested there, once, for both paths. What is left here is what only
 //! this module does — putting the pair on a tonic request, and the one shape a
 //! metadata key refuses that a header name allows.
