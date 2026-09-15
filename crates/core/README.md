@@ -102,8 +102,12 @@ transaction is indexed as "nothing to record" rather than counted as a failure.
 
 One nuance the adapter introduced: it runs *before* the dispatcher,
 so a transaction the adapter refuses — no `blockTime`, an encoding that is not
-`Json` — is a transaction-level failure for *every* protocol, including the ones
-whose extractor reads nothing. The stub never looks at those fields itself.
+`Json`, and since 15 September 2026 a response carrying no `meta` or no
+`innerInstructions` — is a transaction-level failure for *every* protocol,
+including the ones whose extractor reads nothing. The stub never looks at those
+fields itself, and that last pair widens the surface: the absence is refused
+because it is indistinguishable from an empty transaction, which is exactly what
+a stub protocol produces on purpose.
 Nothing subscribes DLMM today, so the change of exit path is latent; it becomes
 real the day a stub protocol is subscribed ahead of its extractor, and so does
 the base58 decoding the adapter does before the stub discards the transaction.

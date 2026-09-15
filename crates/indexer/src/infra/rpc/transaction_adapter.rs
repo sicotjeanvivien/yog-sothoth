@@ -160,8 +160,14 @@ fn extract_inner_instructions(
 ) -> CoreResult<Vec<InnerInstructionPayload>> {
     // ⚠️ An absent `meta` is the **same** absence as the one below, and both
     // read as an empty list until you refuse them: that records a transaction
-    // full of events as "nothing to record", with no error, no failure metric
-    // and no retry — the downstream only ever sees `events.is_empty()`.
+    // full of events as "nothing to record", with no error and no failure
+    // metric — the downstream only ever sees `events.is_empty()`.
+    //
+    // ⚠️ **Refusing does not recover the transaction**, and nothing here should
+    // be read as saying it does: `FetchWorker` logs the error, counts it, and
+    // drops the signature, which nothing re-requests. What changes is that the
+    // loss is counted instead of silent — the same bargain as every other
+    // per-signature failure of this stage.
     //
     // It is absent more quietly than it looks. `meta` has no `#[serde(default)]`,
     // but the outer `EncodedConfirmedTransactionWithStatusMeta` flattens

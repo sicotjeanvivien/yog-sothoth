@@ -99,9 +99,16 @@ fn meta_not_captured_is_an_error_not_an_empty_list() {
 
     let err = from_rpc(&parse(json)).expect_err("an absent meta must be refused");
 
+    // The exact field, not `contains("not captured")`: the two refusals of this
+    // pair differ only by *which* absence occurred, and that is the whole of
+    // what the operator acts on — a provider that dropped `meta` wholesale and
+    // one that stopped recording inner instructions are two different fixes.
+    // Asserting the looser predicate let the two labels be swapped with all 153
+    // tests green; checked by mutation, 15 September 2026.
     assert!(
-        matches!(&err, CoreError::MissingField { field, .. } if field.contains("not captured")),
-        "the error must distinguish absence from emptiness: {err:?}"
+        matches!(&err, CoreError::MissingField { field, .. }
+            if field == "meta (not captured by the source)"),
+        "the error must distinguish absence from emptiness, and name which: {err:?}"
     );
 }
 
@@ -119,8 +126,9 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
     let err = from_rpc(&parse(json)).expect_err("absent innerInstructions must be refused");
 
     assert!(
-        matches!(&err, CoreError::MissingField { field, .. } if field.contains("not captured")),
-        "the error must distinguish absence from emptiness: {err:?}"
+        matches!(&err, CoreError::MissingField { field, .. }
+            if field == "meta.inner_instructions (not captured by the source)"),
+        "the error must distinguish absence from emptiness, and name which: {err:?}"
     );
 }
 

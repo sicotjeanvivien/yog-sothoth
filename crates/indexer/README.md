@@ -401,16 +401,23 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_fetch_not_found_total`,
   `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
   a response that arrived and could not be turned into an
-  `OnChainTransaction` — a missing signature or `blockTime`, **and a response
-  that carries no `meta` or no `innerInstructions`**, which says the source did
-  not capture them and is not the same as there being none. Both adapters refuse
-  that absence, so the label is where it lands whichever source runs; a genuine
-  empty group list is not a failure and flows on. ⚠️ **This counter is
-  structurally zero** (0 over the 1 046 transactions of a 2 h 20 run, 15
-  September 2026), so any sustained non-zero value is the signal, not noise —
-  the failure it guards against is a step on provider configuration, absent
-  until it is everything. The *dropped* family is different in kind — work
-  discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
+  `OnChainTransaction` — **every** refusal of `from_rpc`, whose doc-comment
+  holds the complete list: no signature, an unparsable signature, an encoding
+  that is not `Json`, no `blockTime`, and a response carrying no `meta` or no
+  `innerInstructions`. That last pair says the source did not capture them,
+  which is not the same as there being none; a genuine empty group list is not a
+  failure and flows on. ⚠️ **`reason="adapt"` specifically is structurally
+  zero** (0 over the 1 046 transactions of a 2 h 20 run, 15 September 2026), so
+  a sustained non-zero value on *that* label is signal — the absence it guards
+  against is a step on provider configuration, absent until it is everything.
+  The other labels are not: `rate_limited`, `timeout` and `connection_error`
+  are ordinary weather on a metered provider. ⚠️ **And the gRPC path does not
+  answer on this family at all** — it refuses the same absence, but counts it as
+  `yog_indexer_grpc_dropped_transactions_total{reason="missing_field"}`
+  (`grpc/session.rs`, `drop_reason`). An alert written against `adapt` alone
+  goes blind the moment `INGEST_SOURCE` changes, which is precisely the failure
+  the two adapters were aligned to make visible. The *dropped* family is
+  different in kind — work discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
   two losses and the total conflates them**: `shutdown` and `downstream_closed`
   cost a request that was made and billed, `shutdown_before_fetch` is a
   signature dropped while queueing for a permit and cost nothing. A non-zero
@@ -429,12 +436,15 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_unknown_event_total{discriminator}`,
   `yog_indexer_extraction_failure_total{kind}`.
   ⚠️ **`outcome="no_events"` and `no_match` are the same transaction counted
-  twice**, once on each family, and both are structurally zero on the qualified
-  stream: a transaction only reaches here after the `InvocationFilter`, and one
-  that invokes the program carries at least one inner instruction — 198 of 198
-  sampled, 15 September 2026. They read as "nothing matched", so a sustained
+  twice**, once on each family, and **while DAMM v2 is the only subscribed
+  protocol** both are structurally zero: a transaction only reaches here after
+  the `InvocationFilter`, and one that invokes the program carries at least one
+  inner instruction — 198 of 198 sampled, 15 September 2026. So a sustained
   non-zero value means something upstream stopped looking rather than that the
-  traffic was dull.
+  traffic was dull. ⚠️ **That reading expires the day a stub protocol is
+  subscribed**: `MeteoraDlmm` returns `ExtractionOutcome::default()`, so every
+  DLMM transaction exits `no_events` by design (`../core/README.md`, *The
+  dispatcher*) — the counter would then be measuring the stub, not a fault.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,
