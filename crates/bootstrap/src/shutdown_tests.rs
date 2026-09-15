@@ -91,13 +91,50 @@ async fn a_panicking_task_is_still_an_error() {
 
 #[tokio::test]
 async fn a_task_that_ends_in_time_is_not_reported_as_still_running() {
-    let mut stop = Stop::new(Ok(()));
+    let mut stop = Stop::new(Ok(()), None);
 
     stop.settle("test task", &mut ends_with(Ok::<(), std::io::Error>(())))
         .await;
 
     assert!(stop.still_running.is_empty());
     assert!(stop.finish().is_ok());
+}
+
+/// ⚠️ **The stage the `select!` already collected must not be joined a second
+/// time, and getting it wrong is a panic rather than a wrong number.** `tokio`
+/// panics on a `JoinHandle` polled after completion, so every drain has to step
+/// over the one the `select!` answered with. That guard used to sit at the call
+/// sites — three `if ended != Some(…)` per daemon, two daemons, one rule stated
+/// six times. It sits in `settle` now, and this is what holds it there.
+///
+/// Verified by mutation: delete the `collected` early return in `settle` and
+/// this test fails with `polled after completion`.
+///
+/// ⚠️ **The skip is by name**, which the second half asserts: a `settle` that
+/// returned early for everything would leave a stage that never ends unnamed,
+/// and the grace would have nothing to report.
+#[tokio::test(start_paused = true)]
+async fn the_stage_the_select_already_collected_is_not_joined_again() {
+    let mut spent = ends_with(Ok::<(), std::io::Error>(()));
+    // What the daemon's `select!` arm did: this handle is polled to completion.
+    assert!(
+        (&mut spent).await.is_ok(),
+        "the fixture must be a handle already joined, not a fresh one"
+    );
+
+    let mut stop = Stop::new(Ok(()), Some("spent stage"));
+    stop.settle("spent stage", &mut spent).await;
+    stop.settle(
+        "other stage",
+        &mut tokio::spawn(std::future::pending::<Result<(), std::io::Error>>()),
+    )
+    .await;
+
+    assert_eq!(
+        stop.still_running,
+        vec!["other stage"],
+        "only the stage that was never collected is drained, and it is drained normally"
+    );
 }
 
 /// ⚠️ **This is the test the grace exists for, and the one that proves it is
@@ -110,7 +147,7 @@ async fn a_task_that_ends_in_time_is_not_reported_as_still_running() {
 /// assertion that could catch a missing bound, only the clock.
 #[tokio::test(start_paused = true)]
 async fn a_task_that_outlives_the_grace_is_named() {
-    let mut stop = Stop::new(Ok(()));
+    let mut stop = Stop::new(Ok(()), None);
 
     stop.settle(
         "test task",
@@ -139,7 +176,7 @@ async fn a_task_that_outlives_the_grace_is_named() {
 #[tokio::test(start_paused = true)]
 async fn two_stages_that_never_end_share_one_grace() {
     let started = Instant::now();
-    let mut stop = Stop::new(Ok(()));
+    let mut stop = Stop::new(Ok(()), None);
 
     for name in ["first stage", "second stage"] {
         stop.settle(
@@ -168,7 +205,7 @@ async fn two_stages_that_never_end_share_one_grace() {
 /// left a dead ingestion running.
 #[tokio::test]
 async fn an_error_reported_after_the_verdict_becomes_the_verdict() {
-    let mut stop = Stop::new(Ok(()));
+    let mut stop = Stop::new(Ok(()), None);
 
     stop.settle(
         "test task",
@@ -189,7 +226,7 @@ async fn an_error_reported_after_the_verdict_becomes_the_verdict() {
 /// indexer and the reporter, and both exit `Ok`.
 #[tokio::test]
 async fn a_clean_stop_after_a_failure_does_not_erase_it() {
-    let mut stop = Stop::new(Err(anyhow::anyhow!("the source failed first")));
+    let mut stop = Stop::new(Err(anyhow::anyhow!("the source failed first")), None);
 
     stop.settle("test task", &mut ends_with(Ok::<(), std::io::Error>(())))
         .await;

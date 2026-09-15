@@ -172,36 +172,30 @@ impl Daemon {
             shutdown.clone(),
         );
 
-        // Which worker ended here, if it is one of them. Its handle must not be
-        // polled again — `tokio` panics on a `JoinHandle` polled after
-        // completion — so the drain below steps over it.
-        let mut ended: Option<&'static str> = None;
-
         // ⚠️ **The cancellation arm carries no verdict.** It says the stop was
         // asked for, not what happened, and a worker that failed can still be
         // in the middle of stopping when it fires — so its error arrives
         // afterwards, through the drain. `Stop` is what collects it.
-        let mut stop = Stop::new(tokio::select! {
-            result = &mut metadata_task => {
-                ended = Some(METADATA);
-                shutdown.cancel();
-                handle_task_result(result, METADATA)
-            }
-            result = &mut price_task => {
-                ended = Some(PRICE);
-                shutdown.cancel();
-                handle_task_result(result, PRICE)
-            }
+        //
+        // Which worker answered comes back with its outcome, because `Stop`
+        // needs it: that handle has been polled to completion, and the drain
+        // below has to step over it. The rule lives in `settle`, not here.
+        let (ended, first) = tokio::select! {
+            result = &mut metadata_task => (Some(METADATA), handle_task_result(result, METADATA)),
+            result = &mut price_task => (Some(PRICE), handle_task_result(result, PRICE)),
             result = &mut pool_account_task => {
-                ended = Some(POOL_ACCOUNT);
-                shutdown.cancel();
-                handle_task_result(result, POOL_ACCOUNT)
+                (Some(POOL_ACCOUNT), handle_task_result(result, POOL_ACCOUNT))
             }
             _ = shutdown.cancelled() => {
                 info!("cancellation received — stopping");
-                Ok(())
+                (None, Ok(()))
             }
-        });
+        };
+
+        // Whichever arm fired, the other two have to be told. Idempotent, so
+        // the cancellation arm — whose token is already cancelled — needs no
+        // branch of its own.
+        shutdown.cancel();
 
         // ⚠️ **The price worker is waited on first, and the order is a
         // decision.** `Stop` spends one grace across the three, so the first
@@ -211,15 +205,10 @@ impl Daemon {
         // destroy it and that instant is gone. The other two re-list what they
         // did not finish on their next tick (`list_missing_mints`,
         // `list_unresolved`), so interrupting them costs time, not rows.
-        if ended != Some(PRICE) {
-            stop.settle(PRICE, &mut price_task).await;
-        }
-        if ended != Some(METADATA) {
-            stop.settle(METADATA, &mut metadata_task).await;
-        }
-        if ended != Some(POOL_ACCOUNT) {
-            stop.settle(POOL_ACCOUNT, &mut pool_account_task).await;
-        }
+        let mut stop = Stop::new(first, ended);
+        stop.settle(PRICE, &mut price_task).await;
+        stop.settle(METADATA, &mut metadata_task).await;
+        stop.settle(POOL_ACCOUNT, &mut pool_account_task).await;
 
         stop.finish()
     }

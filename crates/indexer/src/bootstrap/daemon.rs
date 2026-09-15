@@ -174,11 +174,6 @@ impl Daemon {
         let mut reporter_task =
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
 
-        // Which task ended here, if it is one of them. Its handle must not be
-        // polled again — `tokio` panics on a `JoinHandle` polled after
-        // completion — so the drain below steps over it.
-        let mut ended: Option<&'static str> = None;
-
         // ⚠️ **The cancellation arm carries no verdict.** It says the stop was
         // asked for, not what happened — and it now wins races it used not to:
         // `RpcTransactionSource::run` cancels the token *before* returning, so
@@ -188,27 +183,24 @@ impl Daemon {
         // every fleet that had exhausted its retry budget — measured on 14
         // September 2026, and the reason `Stop` collects a verdict instead of
         // the `select!` deciding one alone.
-        let mut stop = Stop::new(tokio::select! {
-            result = &mut source_task => {
-                ended = Some(SOURCE);
-                shutdown.cancel();
-                handle_task_result(result, SOURCE)
-            }
-            result = &mut indexer_task => {
-                ended = Some(INDEXER);
-                shutdown.cancel();
-                handle_task_result(result, INDEXER)
-            }
-            result = &mut reporter_task => {
-                ended = Some(REPORTER);
-                shutdown.cancel();
-                handle_task_result(result, REPORTER)
-            }
+        //
+        // Which stage answered comes back with its outcome, because `Stop`
+        // needs it: that handle has been polled to completion, and the drain
+        // below has to step over it. The rule lives in `settle`, not here.
+        let (ended, first) = tokio::select! {
+            result = &mut source_task => (Some(SOURCE), handle_task_result(result, SOURCE)),
+            result = &mut indexer_task => (Some(INDEXER), handle_task_result(result, INDEXER)),
+            result = &mut reporter_task => (Some(REPORTER), handle_task_result(result, REPORTER)),
             _ = shutdown.cancelled() => {
                 tracing::info!("cancellation received — stopping");
-                Ok(())
+                (None, Ok(()))
             }
-        });
+        };
+
+        // Whichever arm fired, the other two have to be told. Idempotent, so
+        // the cancellation arm — whose token is already cancelled — needs no
+        // branch of its own.
+        shutdown.cancel();
 
         // ⚠️ **The indexer is waited on first, and the order is the whole
         // point.** `Stop` spends one grace across the three, so the first stage
@@ -230,15 +222,10 @@ impl Daemon {
         // hiding a failure: the same stage was going to be destroyed by the
         // runtime moments later whatever the order, and what the ticket asks of
         // an overrun is to be named, not to become an exit code.
-        if ended != Some(INDEXER) {
-            stop.settle(INDEXER, &mut indexer_task).await;
-        }
-        if ended != Some(SOURCE) {
-            stop.settle(SOURCE, &mut source_task).await;
-        }
-        if ended != Some(REPORTER) {
-            stop.settle(REPORTER, &mut reporter_task).await;
-        }
+        let mut stop = Stop::new(first, ended);
+        stop.settle(INDEXER, &mut indexer_task).await;
+        stop.settle(SOURCE, &mut source_task).await;
+        stop.settle(REPORTER, &mut reporter_task).await;
 
         stop.finish()
     }

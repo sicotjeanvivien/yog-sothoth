@@ -121,21 +121,29 @@ pub struct Stop {
     /// One absolute deadline for every stage, so waiting on them in turn is
     /// still bounded by [`SHUTDOWN_GRACE`] in total.
     deadline: Instant,
+    /// The stage the `select!` already collected, if it was one — see
+    /// [`Stop::new`]. `None` when the stop came from the cancellation arm and
+    /// every handle is still unpolled.
+    collected: Option<&'static str>,
 }
 
 impl Stop {
     /// Open a stop with the verdict the `select!` produced, and start the clock.
+    ///
+    /// `collected` names the stage that verdict came from, so the drain can be
+    /// written as a plain list of every stage — see [`Stop::settle`].
     ///
     /// ⚠️ **The deadline is computed here, not handed in.** It used to be the
     /// caller's job, next to a `finish` that printed [`SHUTDOWN_GRACE`] in its
     /// warning — one binary, so the two could not disagree. At two they could:
     /// the grace named in the logs and the grace actually waited would have
     /// been two statements of one rule. Now there is one.
-    pub fn new(first: anyhow::Result<()>) -> Self {
+    pub fn new(first: anyhow::Result<()>, collected: Option<&'static str>) -> Self {
         Self {
             outcome: first,
             still_running: Vec::new(),
             deadline: Instant::now() + SHUTDOWN_GRACE,
+            collected,
         }
     }
 
@@ -154,10 +162,22 @@ impl Stop {
     /// polls the task before the clock, so an answer already given is collected
     /// — but no wait for one that has not come. Call first the stage whose
     /// work is *lost* rather than merely abandoned.
+    ///
+    /// ⚠️ **The stage the `select!` already collected is skipped here, and that
+    /// is why it is skipped nowhere else.** Its handle has been polled to
+    /// completion and `tokio` panics on a `JoinHandle` polled again, so every
+    /// drain has to step over it. Written at the call sites, that guard was six
+    /// `if`s across two daemons — one rule stated six times, which is one rule
+    /// per site waiting to be forgotten by the seventh. Callers now list every
+    /// stage, in the order they want them served, and say nothing about which
+    /// one is spent.
     pub async fn settle<E>(&mut self, name: &'static str, handle: &mut JoinHandle<Result<(), E>>)
     where
         E: std::error::Error + Send + Sync + 'static,
     {
+        if self.collected == Some(name) {
+            return;
+        }
         match tokio::time::timeout_at(self.deadline, handle).await {
             Ok(result) => {
                 let reported = handle_task_result(result, name);
