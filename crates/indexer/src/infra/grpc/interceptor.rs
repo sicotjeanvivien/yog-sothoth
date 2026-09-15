@@ -11,7 +11,7 @@
 //! # What carries the credential, and what does not
 //!
 //! Nothing here decides *whether* there is a header, and nothing here validates
-//! it either — that is `infra::credential`, once, for both ingestion paths.
+//! it either — that is `infra::endpoint::credential`, once, for both ingestion paths.
 //! What is left in this file is the one thing only gRPC does: turning a
 //! validated header into request metadata.
 //!

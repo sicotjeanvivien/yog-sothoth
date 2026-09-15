@@ -47,12 +47,12 @@ use crate::{
     error::GrpcListenerError,
     infra::{
         Credential,
+        endpoint::scheme,
         grpc::{
             interceptor::CredentialInterceptor,
             session::{SessionState, StreamSession},
             subscription::build_request,
         },
-        scheme,
     },
 };
 

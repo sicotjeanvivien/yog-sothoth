@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     // ⚠️ But **not the same door**, and that is a limitation worth naming
     // rather than a choice. The indexer reads this endpoint through
     // `required_endpoint_allowing_header`, because both of its listeners send the
-    // header it may carry (`infra::credential`). This helper cannot reach that
+    // header it may carry (`infra::endpoint::credential`). This helper cannot reach that
     // module — a `src/bin/*.rs` is its own crate root — and copying its ten
     // lines here would be the second definition of a rule the workspace keeps
     // in one place. So it stays on `required_endpoint`, which **refuses** a

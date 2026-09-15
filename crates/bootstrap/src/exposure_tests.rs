@@ -66,7 +66,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "tokio-tungstenite owns the socket — argument of `connect_async`",
     ),
     (
-        "crates/indexer/src/infra/credential.rs",
+        "crates/indexer/src/infra/endpoint/credential.rs",
         2,
         "the two lines where a credential meets the client that will carry it, \
          and they are two because there are two carriers: the key becomes the \
