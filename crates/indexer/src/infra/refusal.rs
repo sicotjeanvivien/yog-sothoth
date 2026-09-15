@@ -26,8 +26,13 @@
 //! Rewording one side and not the other would have left both suites green while
 //! the same gap printed two different strings depending on which source had
 //! ingested the transaction, and an operator grepping for one of them would have
-//! seen half their traffic. One definition removes the possibility rather than
-//! guarding against it.
+//! seen half their traffic.
+//!
+//! One definition removes that possibility rather than guarding against it —
+//! and [`Gap`] is what extends the removal to the gap this module does not know
+//! about yet. A `&'static str` parameter would have fixed today's two labels
+//! and left the next one free to arrive as a literal at two call sites; a
+//! variant cannot be added anywhere but here.
 //!
 //! # ⚠️ What one definition costs, and what pays it back
 //!
@@ -41,32 +46,59 @@
 use solana_signature::Signature;
 use yog_core::CoreError;
 
-/// The whole of `meta` is missing — on the JSON-RPC path an absent or `null`
-/// key, on the gRPC path an absent `meta` message.
-pub(crate) const META: &str = "meta (not captured by the source)";
-
-/// `meta` is there but says nothing about inner instructions — `None` on the
-/// JSON-RPC path (an absent key and an explicit `null` both land there),
-/// `inner_instructions_none` on the gRPC path, a flag the proto carries
-/// precisely so the two cannot be confused.
-pub(crate) const INNER_INSTRUCTIONS: &str = "meta.inner_instructions (not captured by the source)";
-
-/// Refuse a transaction whose source did not capture `field`.
+/// A gap **both** adapters can meet, and that is the whole admission rule for
+/// this module.
 ///
-/// `field` is one of the two constants above, and taking `&'static str` rather
-/// than an enum is deliberate: the caller reads
-/// `refusal::refuse(META, signature)`, which says at the call site both what it
-/// is doing and which of the two gaps it is answering — the two things a reader
-/// needs there, and what the mutation check exercises.
+/// The four `MissingField`s left inline in the two adapters are not oversights:
+/// `transaction` and `transaction.message` exist only on the protobuf side,
+/// `signatures` and `blockTime` only on the JSON-RPC envelope. One adapter can
+/// word those alone, because only it can raise them. A variant here means the
+/// opposite — two adapters must answer with one voice — so adding one is a
+/// claim about both wire formats, to be made at this site and nowhere else.
+///
+/// ⚠️ **This enum is the point, not decoration.** A `&'static str` parameter
+/// would let the next shared gap be written as a literal at two call sites,
+/// compile clean, and rebuild in silence the four-literal drift this module was
+/// made to remove — and more quietly than the first time, because the module's
+/// existence reads as the problem being solved. Raised in review, 15 September
+/// 2026.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Gap {
+    /// The whole of `meta` is missing — on the JSON-RPC path an absent or
+    /// `null` key, on the gRPC path an absent `meta` message.
+    Meta,
+
+    /// `meta` is there but says nothing about inner instructions — `None` on
+    /// the JSON-RPC path (an absent key and an explicit `null` both land
+    /// there), `inner_instructions_none` on the gRPC path, a flag the proto
+    /// carries precisely so the two cannot be confused.
+    InnerInstructions,
+}
+
+impl Gap {
+    /// The words an operator reads, and the reason this module exists.
+    pub(crate) const fn field(self) -> &'static str {
+        match self {
+            Self::Meta => "meta (not captured by the source)",
+            Self::InnerInstructions => "meta.inner_instructions (not captured by the source)",
+        }
+    }
+}
+
+/// Refuse a transaction whose source did not describe `gap`.
+///
+/// The caller reads `refusal::refuse(Gap::Meta, signature)`, which says at the
+/// call site both what it is doing and which of the gaps it is answering — the
+/// two things a reader needs there, and what the mutation check exercises.
 ///
 /// The `refusal::refuse` repetition is kept rather than avoided. Importing
 /// `refuse` bare would read a shade better and drop the one word that tells the
 /// next author this text is shared: the module has to stay visible at the call
 /// site, or the literal comes back.
-pub(crate) fn refuse(field: &'static str, signature: &Signature) -> CoreError {
+pub(crate) fn refuse(gap: Gap, signature: &Signature) -> CoreError {
     CoreError::MissingField {
         signature: signature.to_string(),
-        field: field.to_string(),
+        field: gap.field().to_string(),
     }
 }
 

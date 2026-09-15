@@ -411,7 +411,7 @@ fn a_missing_meta_is_an_error_not_an_empty_list() {
     // they are told apart, and this `field` is what it prints.
     assert!(
         matches!(&error, CoreError::MissingField { field, .. }
-            if field == META),
+            if field == Gap::Meta.field()),
         "the error must distinguish absence from emptiness, and name which: {error:?}"
     );
 }
@@ -437,7 +437,7 @@ fn inner_instructions_not_captured_is_an_error_not_an_empty_list() {
 
     assert!(
         matches!(&error, CoreError::MissingField { field, .. }
-            if field == INNER_INSTRUCTIONS),
+            if field == Gap::InnerInstructions.field()),
         "the error must distinguish absence from emptiness, and name which: {error:?}"
     );
 }

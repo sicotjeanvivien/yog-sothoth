@@ -70,7 +70,13 @@ Filling it is this crate's job, one module per source:
   cardinality. Written once per adapter, the two could be reworded apart with
   both suites green, so they are written once for both. Its sibling suite pins
   the text at that one site, which is the only guard a single definition cannot
-  give itself.
+  give itself. ⚠️ **What belongs here is a `Gap` variant, and the rule is
+  narrow**: a gap *both* adapters can meet. The four `MissingField`s left inline
+  in the adapters are not oversights — `transaction` and `transaction.message`
+  exist only on the protobuf side, `signatures` and `blockTime` only on the
+  JSON-RPC envelope, so one adapter can word each of those alone. Taking a
+  variant rather than a string is what stops the next shared gap from arriving
+  as a literal at two call sites and rebuilding the drift this module removed.
 
 - `infra/grpc/slot_timestamp_buffer.rs` pairs a transaction with the block time
   its own message does not carry. `block_time` lives on

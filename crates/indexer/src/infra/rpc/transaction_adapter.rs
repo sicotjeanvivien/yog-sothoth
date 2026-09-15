@@ -23,7 +23,7 @@ use chrono::{DateTime, Utc};
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
-use crate::infra::refusal::{self, INNER_INSTRUCTIONS, META};
+use crate::infra::refusal::{self, Gap};
 pub(crate) use solana_transaction_status_client_types::{
     EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding,
 };
@@ -194,7 +194,7 @@ fn extract_inner_instructions(
     // not reassurance — this failure mode is a step on provider configuration, 0
     // until it is all of them.
     let Some(meta) = tx.transaction.meta.as_ref() else {
-        return Err(refusal::refuse(META, signature));
+        return Err(refusal::refuse(Gap::Meta, signature));
     };
 
     // ⚠️ `OptionSerializer::Skip` is unreachable here, so matching `Some` is not
@@ -207,7 +207,7 @@ fn extract_inner_instructions(
     // that one arrives as `Some([])` and is an ordinary transaction, which the
     // sort-and-flatten below turns into the empty list it is.
     let OptionSerializer::Some(inner_groups) = &meta.inner_instructions else {
-        return Err(refusal::refuse(INNER_INSTRUCTIONS, signature));
+        return Err(refusal::refuse(Gap::InnerInstructions, signature));
     };
 
     let mut groups: Vec<_> = inner_groups.iter().collect();
