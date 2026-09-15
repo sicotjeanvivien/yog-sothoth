@@ -35,16 +35,46 @@ use yog_core::{CoreError, CoreResult};
 
 /// Build the transport-neutral transaction from a `getTransaction` response.
 ///
-/// Fails only on a transaction-level malformation — an encoding that carries no
-/// signature, an unparsable signature, or a missing `blockTime`. A transaction
-/// with no inner instructions is not a failure: it yields an empty payload list
-/// and extraction reports "nothing to record".
+/// # Errors
+///
+/// Only on a transaction-level malformation. The list is kept complete
+/// **because nothing downstream reconstructs it**: `FetchWorker` matches
+/// `Ok`/`Err` and collapses every variant into one `error!` and one
+/// `record_failure(…, "adapt")`, so this is where a reader learns what that
+/// single label covers:
+///
+/// - the encoding carries no signature, or the signature will not parse;
+/// - the encoding is not `Json` at all;
+/// - `blockTime` is absent, **or present and outside the range
+///   `DateTime::from_timestamp` accepts** — two different refusals, and the
+///   second one was missing from this list until review found it, in a sentence
+///   that claims to be complete. Its gRPC sibling carries the same scar;
+/// - `meta` is absent, or `meta.innerInstructions` is not carried by the
+///   response — both mean the source did not capture the inner instructions,
+///   which is **not** the same as there being none.
+///
+/// A transaction that genuinely carries no inner instructions is not a failure:
+/// it yields an empty payload list, and extraction reports "nothing to record".
+/// That is ordinary traffic, not a corner case — six of the 74 mainnet `dlmm`
+/// fixtures are invocations with no CPI at all.
 pub(crate) fn from_rpc(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
 ) -> CoreResult<OnChainTransaction> {
+    // Hoisted out of the literal below — unchanged in evaluation order, since
+    // struct fields are evaluated in the order they are written — because
+    // `extract_inner_instructions` takes it as a parameter, the shape its gRPC
+    // sibling already has.
+    //
+    // The `signature` it then puts on its errors is a convenience, not the
+    // thing that identifies them: `FetchWorker` logs `%signature` beside the
+    // error anyway, and the two refusals above still carry `String::new()`
+    // because one of them *is* the signature extraction. Nothing asserts the
+    // field, and nothing should be read as promising it.
+    let signature = extract_signature(tx)?;
+
     Ok(OnChainTransaction {
         position: TransactionPosition {
-            signature: extract_signature(tx)?,
+            signature,
             timestamp: extract_timestamp(tx)?,
             // Read straight off the envelope: unlike the two above they need
             // no parsing. `transaction_index` is optional in the response and
@@ -53,7 +83,7 @@ pub(crate) fn from_rpc(
             slot: tx.slot,
             transaction_index: tx.transaction_index,
         },
-        inner_instructions: extract_inner_instructions(tx),
+        inner_instructions: extract_inner_instructions(tx, &signature)?,
     })
 }
 
@@ -141,23 +171,58 @@ fn extract_timestamp(tx: &EncodedConfirmedTransactionWithStatusMeta) -> CoreResu
 /// small decodes per transaction is not.
 fn extract_inner_instructions(
     tx: &EncodedConfirmedTransactionWithStatusMeta,
-) -> Vec<InnerInstructionPayload> {
+    signature: &Signature,
+) -> CoreResult<Vec<InnerInstructionPayload>> {
+    // ⚠️ An absent `meta` is the **same** absence as the one below, and both
+    // read as an empty list until you refuse them: that records a transaction
+    // full of events as "nothing to record", with no error and no failure
+    // metric — the downstream only ever sees `events.is_empty()`.
+    //
+    // ⚠️ **Refusing does not recover the transaction**, and nothing here should
+    // be read as saying it does: `FetchWorker` logs the error, counts it, and
+    // drops the signature, which nothing re-requests. What changes is that the
+    // loss is counted instead of silent — the same bargain as every other
+    // per-signature failure of this stage.
+    //
+    // It is absent more quietly than it looks. `meta` has no `#[serde(default)]`,
+    // but the outer `EncodedConfirmedTransactionWithStatusMeta` flattens
+    // `transaction` into itself, and serde's flatten makes a missing `Option`
+    // field deserialize to `None` instead of failing — so a response with no
+    // `meta` key at all does not even raise a parse error. Measured 15 September
+    // 2026: never seen on the provider in use, over ~2 000 transactions. That is
+    // not reassurance — this failure mode is a step on provider configuration, 0
+    // until it is all of them.
     let Some(meta) = tx.transaction.meta.as_ref() else {
-        return Vec::new();
+        return Err(CoreError::MissingField {
+            signature: signature.to_string(),
+            field: "meta (not captured by the source)".to_string(),
+        });
     };
 
+    // ⚠️ `OptionSerializer::Skip` is unreachable here, so matching `Some` is not
+    // narrower than it looks: the field carries
+    // `default = "OptionSerializer::none"`, and its `Deserialize` is
+    // `Option::deserialize(…).map(Into::into)` — an absent key and an explicit
+    // `null` both land on `None`. `Skip` exists for the serializing side only.
+    //
+    // And `None` is "the response does not carry them", never "there were none":
+    // that one arrives as `Some([])` and is an ordinary transaction, which the
+    // sort-and-flatten below turns into the empty list it is.
     let OptionSerializer::Some(inner_groups) = &meta.inner_instructions else {
-        return Vec::new();
+        return Err(CoreError::MissingField {
+            signature: signature.to_string(),
+            field: "meta.inner_instructions (not captured by the source)".to_string(),
+        });
     };
 
     let mut groups: Vec<_> = inner_groups.iter().collect();
     groups.sort_by_key(|g| g.index);
 
-    groups
+    Ok(groups
         .into_iter()
         .flat_map(|group| group.instructions.iter())
         .filter_map(to_payload)
-        .collect()
+        .collect())
 }
 
 /// Turn one RPC inner instruction into a neutral payload, or `None` when this

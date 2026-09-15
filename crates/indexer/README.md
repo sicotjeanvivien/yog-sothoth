@@ -401,8 +401,23 @@ emitted. No gauges today — all counters and histograms.
   `yog_indexer_fetch_not_found_total`,
   `yog_indexer_fetch_dropped_total{reason}`. `reason="adapt"` on the failures is
   a response that arrived and could not be turned into an
-  `OnChainTransaction`; the *dropped* family is different in kind — work
-  discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
+  `OnChainTransaction` — **every** refusal of `from_rpc`, whose `# Errors`
+  doc-comment holds the list and is the one place it is written; restating it
+  here is how the two drift. The pair worth knowing about from outside is a
+  response carrying no `meta` or no `innerInstructions`: that says the source
+  did not capture them, which is not the same as there being none, and a genuine
+  empty group list is not a failure and flows on. ⚠️ **`reason="adapt"` specifically is structurally
+  zero** (0 over the 1 046 transactions of a 2 h 20 run, 15 September 2026), so
+  a sustained non-zero value on *that* label is signal — the absence it guards
+  against is a step on provider configuration, absent until it is everything.
+  The other labels are not: `rate_limited`, `timeout` and `connection_error`
+  are ordinary weather on a metered provider. ⚠️ **And the gRPC path does not
+  answer on this family at all** — it refuses the same absence, but counts it as
+  `yog_indexer_grpc_dropped_transactions_total{reason="missing_field"}`
+  (`grpc/session.rs`, `drop_reason`). An alert written against `adapt` alone
+  goes blind the moment `INGEST_SOURCE` changes, which is precisely the failure
+  the two adapters were aligned to make visible. The *dropped* family is
+  different in kind — work discarded rather than work that went wrong. ⚠️ **Its `reason` label separates
   two losses and the total conflates them**: `shutdown` and `downstream_closed`
   cost a request that was made and billed, `shutdown_before_fetch` is a
   signature dropped while queueing for a permit and cost nothing. A non-zero
@@ -419,7 +434,28 @@ emitted. No gauges today — all counters and histograms.
   `extract_failure`, `unknown_exit`,
   `yog_indexer_transactions_no_match_total`,
   `yog_indexer_unknown_event_total{discriminator}`,
-  `yog_indexer_extraction_failure_total{kind}`
+  `yog_indexer_extraction_failure_total{kind}`.
+  ⚠️ **`outcome="no_events"` and `no_match` are the same transaction counted
+  twice**, once on each family — so they move together, and their sum is not a
+  quantity. Both read *nil* over a 2 h 20 JSON-RPC run on DAMM v2 (1 046
+  transactions, 15 September 2026), which makes a change in them worth a look.
+  ⚠️ **But do not read them as a fault detector.** "Nothing to record" is an
+  ordinary outcome for at least three reasons that are not faults:
+  - **an invocation that emits nothing.** `zap_protocol_fee` mutates pool state
+    without an `event_cpi` at all — the documented blind spot of this pipeline
+    (`fixture_pipeline_tests::zap_protocol_fee_emits_no_event_of_its_own`). A
+    standalone fee harvest is operator traffic that lands here by construction;
+  - **a stub protocol.** `MeteoraDlmm` returns `ExtractionOutcome::default()`,
+    so every DLMM transaction would exit `no_events` the day it is subscribed
+    (`../core/README.md`, *The dispatcher*);
+  - **no `InvocationFilter` on the gRPC path.** `account_include` matches
+    account keys, so a transaction referencing the program only through an
+    address lookup table arrives and decodes to nothing
+    (`grpc/subscription.rs`, a handful per thousand).
+
+  What *would* be a fault — a source that stopped carrying inner instructions —
+  no longer arrives here at all: both adapters refuse it upstream, which is the
+  point of that refusal. These two counters were the place it used to hide.
 - **Persistor counters** —
   `yog_indexer_instructions_indexed_total{instruction}`,
   `yog_indexer_persist_failure_total{event_kind}`,
