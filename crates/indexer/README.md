@@ -25,6 +25,8 @@ indexer/src/
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer
+│   └── tests/             ← its eight test files, grouped: what is left beside
+│                            them is what goes into the binary
 ├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),
 │                            SignatureDispatcher filter chain, FetchWorker +
@@ -124,15 +126,15 @@ Filling it is this crate's job, one module per source:
   beside it, and `interceptor.rs` putting the credential on every request. The
   split is by what can be proven without a server: the request and the meaning
   of an update are pure and tested. The retry rule is neither pure nor
-  untested — `test_geyser_server.rs` is a scripted Yellowstone server, `#[cfg(test)]`
-  and in-process, that `listener_tests.rs` drives `run` against.
+  untested — `tests/geyser_server.rs` is a scripted Yellowstone server, `#[cfg(test)]`
+  and in-process, that `tests/listener_tests.rs` drives `run` against.
 
 ⚠️ **The gRPC path is selected and only partly proven.** `INGEST_SOURCE=grpc`
 builds it, and `infra/grpc.rs` no longer carries the blanket
 `#![allow(dead_code)]` it held while nothing reached it — deleting that line was
 the test that the wiring was complete, and it named three things that were
 genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
-`test_geyser_server.rs` serves a test-written script over loopback, and every arm of
+`tests/geyser_server.rs` serves a test-written script over loopback, and every arm of
 `run`'s `match` has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
 asks for. The backoff reset is the one decision left unguarded on purpose — its

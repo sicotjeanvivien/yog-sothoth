@@ -174,5 +174,5 @@ pub(crate) fn protocol_of(filters: &[String]) -> Option<Protocol> {
 }
 
 #[cfg(test)]
-#[path = "subscription_tests.rs"]
+#[path = "tests/subscription_tests.rs"]
 mod tests;

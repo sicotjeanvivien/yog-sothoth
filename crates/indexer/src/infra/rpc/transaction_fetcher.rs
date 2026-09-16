@@ -132,5 +132,5 @@ impl FetchError {
 }
 
 #[cfg(test)]
-#[path = "transaction_fetcher_tests.rs"]
+#[path = "tests/transaction_fetcher_tests.rs"]
 mod tests;

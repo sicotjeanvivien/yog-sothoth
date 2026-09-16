@@ -151,5 +151,5 @@ impl SignatureDispatcher {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-#[path = "dispatcher_tests.rs"]
+#[path = "tests/dispatcher_tests.rs"]
 mod tests;

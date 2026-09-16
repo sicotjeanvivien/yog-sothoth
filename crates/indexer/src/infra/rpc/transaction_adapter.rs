@@ -234,7 +234,7 @@ fn to_payload(ix: &UiInstruction) -> Option<InnerInstructionPayload> {
 }
 
 #[cfg(test)]
-#[path = "transaction_adapter_tests.rs"]
+#[path = "tests/transaction_adapter_tests.rs"]
 mod tests;
 
 // The two suites that drive the whole pipeline from a mainnet fixture. They sit
@@ -243,9 +243,9 @@ mod tests;
 // because this crate is a binary: an integration target could not reach a
 // `pub(crate)` adapter without making it public for the tests' sake.
 #[cfg(test)]
-#[path = "fixture_pipeline_tests.rs"]
+#[path = "tests/fixture_pipeline_tests.rs"]
 mod fixture_pipeline_tests;
 
 #[cfg(test)]
-#[path = "extraction_oracle_tests.rs"]
+#[path = "tests/extraction_oracle_tests.rs"]
 mod extraction_oracle_tests;

@@ -139,5 +139,5 @@ impl std::fmt::Debug for CredentialInterceptor {
 }
 
 #[cfg(test)]
-#[path = "interceptor_tests.rs"]
+#[path = "tests/interceptor_tests.rs"]
 mod tests;
