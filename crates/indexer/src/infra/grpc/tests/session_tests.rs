@@ -449,6 +449,40 @@ async fn only_data_counts_as_delivered_not_a_keep_alive() {
     assert!(session.received_data(), "a block-meta is data");
 }
 
+/// ⚠️ **An unroutable transaction is delivery with nothing to resume from**, and
+/// that pair is the premise of the listener's keep-the-mark rule. `handle` sets
+/// `received_data` before `on_transaction` decides anything — which is right,
+/// since the server did send us data and is not refusing us — and
+/// `on_transaction` then drops the transaction *before* the buffer, leaving no
+/// slot to resume from.
+///
+/// So the two answers below disagree on purpose, and the listener has to read
+/// the second as "this session has no mark", never as "there is no mark":
+/// `an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold` is what
+/// proves it does. Stated here so that a session which stopped producing the
+/// pair would redden *this* test, with a message that names the reason, rather
+/// than only that one.
+#[tokio::test]
+async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
+    let (mut session, _downstream, _outbound) = session(4);
+
+    session
+        .handle(transaction(10, &["a_filter_no_protocol_claims"]))
+        .await;
+
+    assert!(
+        session.received_data(),
+        "the server sent data and did not refuse us — the retry budget must not \
+         be charged for this session"
+    );
+    assert_eq!(
+        session.resume_from(),
+        None,
+        "it never reached the buffer, so this session finished no slot and \
+         left none pending"
+    );
+}
+
 /// ⚠️ **The back-pressure wait must not swallow a shutdown.** `handle` is driven
 /// from the body of the listener's `select!` arm, so while it is parked on a
 /// full consumer nothing else polls the cancellation token. A consumer that
