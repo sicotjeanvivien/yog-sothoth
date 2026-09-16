@@ -24,13 +24,21 @@
 //! downstream of `source` sees the port and never learns which model is
 //! running.
 //!
-//! ⚠️ **Nothing here is exercised against a real server.** The connection, TLS,
-//! the retry budget, keep-alive and the exact semantics of `from_slot` are
-//! written, reviewed and unproven; `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
-//! is where they meet one. What *is* testable was deliberately kept out of
-//! `listener`: the request in `subscription`, the meaning of each update in
+//! ⚠️ **Nothing here has met a real server.** What changed on 16 September 2026
+//! is that the retry rule now meets a *scripted* one: `test_geyser_server` serves a
+//! test-written script over loopback so `listener_tests` can drive
+//! `GrpcListener::run` through every ending a stream can have. That proves this
+//! client against our model of the server, and nothing about the protocol — so
+//! TLS, keep-alive and the exact semantics of `from_slot` are still written,
+//! reviewed and unproven, and `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
+//! is still where they meet one. The rest was made testable by being kept out
+//! of `listener`: the request in `subscription`, the meaning of each update in
 //! `session`, the pairing in `slot_timestamp_buffer`, the shape in
 //! `transaction_adapter`.
+//!
+//! The last two modules below are `#[cfg(test)]` and carry no production code:
+//! `test_fixtures` builds the protobuf updates both test modules send, and
+//! `test_geyser_server` is the scripted server itself.
 //!
 //! The `#![allow(dead_code)]` this module carried until 10 September 2026 is
 //! gone with the wiring it was waiting for. It had covered the whole path
@@ -45,6 +53,14 @@ mod slot_timestamp_buffer;
 mod source;
 mod subscription;
 mod transaction_adapter;
+
+// Test-only, and last so that the list above is the path itself. The `test_`
+// prefix is the signal a bare name would not give: `#[cfg(test)]` says it in
+// the source, nothing said it in a directory listing.
+#[cfg(test)]
+mod test_fixtures;
+#[cfg(test)]
+mod test_geyser_server;
 
 pub(crate) use listener::GrpcListener;
 pub(crate) use metrics::{GrpcBufferMetrics, GrpcListenerMetrics};

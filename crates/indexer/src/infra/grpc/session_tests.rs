@@ -1,81 +1,24 @@
 //! Tests for what one update does.
 //!
 //! ⚠️ **The same caveat as `transaction_adapter_tests`, and it is worth
-//! repeating rather than referencing:** the updates below are built by hand, so
-//! they carry this author's understanding of what a provider sends. What they
-//! *can* establish is everything this module decides on its own — which slot a
-//! transaction waits for, what happens when a block-meta brings no time, what a
-//! ping is answered with, what a full channel does. Those are our rules, not the
-//! wire's, and each of them is invisible when wrong.
+//! repeating rather than referencing:** the updates come from `test_fixtures`, where
+//! they are built by hand, so they carry this author's understanding of what a
+//! provider sends. What they *can* establish is everything this module decides
+//! on its own — which slot a transaction waits for, what happens when a
+//! block-meta brings no time, what a ping is answered with, what a full channel
+//! does. Those are our rules, not the wire's, and each of them is invisible when
+//! wrong.
 
 use super::*;
 
-use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
-use yellowstone_grpc_proto::prelude::{
-    Message, SubscribeUpdatePing, SubscribeUpdatePong, SubscribeUpdateTransactionInfo, Transaction,
-    TransactionStatusMeta, UnixTimestamp,
+use yellowstone_grpc_proto::prelude::{SubscribeUpdatePing, SubscribeUpdatePong};
+
+// The updates themselves live next door, because `listener_tests` builds the
+// same ones to put on a real stream — see `test_fixtures`.
+use crate::infra::grpc::test_fixtures::{
+    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature, update,
 };
-
-use crate::infra::grpc::subscription::BLOCK_META_FILTER;
-
-const PROTOCOL: Protocol = Protocol::MeteoraDammV2;
-
-fn at(secs: i64) -> DateTime<Utc> {
-    DateTime::from_timestamp(secs, 0).expect("a valid instant")
-}
-
-/// A transaction update the adapter accepts: a 64-byte signature, a message
-/// with one account key, and a meta that says its inner instructions *were*
-/// captured (there simply are none).
-fn transaction_update(slot: u64) -> SubscribeUpdateTransaction {
-    transaction_update_with_signature(slot, vec![7; 64])
-}
-
-fn transaction_update_with_signature(slot: u64, signature: Vec<u8>) -> SubscribeUpdateTransaction {
-    SubscribeUpdateTransaction {
-        slot,
-        transaction: Some(SubscribeUpdateTransactionInfo {
-            signature,
-            index: 3,
-            transaction: Some(Transaction {
-                message: Some(Message {
-                    account_keys: vec![vec![1; 32]],
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            meta: Some(TransactionStatusMeta {
-                inner_instructions_none: false,
-                ..Default::default()
-            }),
-            ..Default::default()
-        }),
-    }
-}
-
-fn transaction(slot: u64, filters: &[&str]) -> SubscribeUpdate {
-    update(filters, UpdateOneof::Transaction(transaction_update(slot)))
-}
-
-fn block_meta(slot: u64, block_time: Option<i64>) -> SubscribeUpdate {
-    update(
-        &[BLOCK_META_FILTER],
-        UpdateOneof::BlockMeta(SubscribeUpdateBlockMeta {
-            slot,
-            block_time: block_time.map(|timestamp| UnixTimestamp { timestamp }),
-            ..Default::default()
-        }),
-    )
-}
-
-fn update(filters: &[&str], oneof: UpdateOneof) -> SubscribeUpdate {
-    SubscribeUpdate {
-        filters: filters.iter().map(|f| f.to_string()).collect(),
-        update_oneof: Some(oneof),
-        ..Default::default()
-    }
-}
 
 /// A session, its downstream receiver, and its outbound receiver.
 fn session(

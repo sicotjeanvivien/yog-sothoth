@@ -123,21 +123,29 @@ Filling it is this crate's job, one module per source:
   `subscription.rs` (what is asked for) and `session.rs` (what an update means)
   beside it, and `interceptor.rs` putting the credential on every request. The
   split is by what can be proven without a server: the request and the meaning
-  of an update are pure and tested, the connection is neither.
+  of an update are pure and tested. The retry rule is neither pure nor
+  untested — `test_geyser_server.rs` is a scripted Yellowstone server, `#[cfg(test)]`
+  and in-process, that `listener_tests.rs` drives `run` against.
 
-⚠️ **The gRPC path is selected but unproven.** `INGEST_SOURCE=grpc` builds it,
-and `infra/grpc.rs` no longer carries the blanket `#![allow(dead_code)]` it held
-while nothing reached it — deleting that line was the test that the wiring was
-complete, and it named three things that were genuinely unreachable. What
-remains untested is everything that needs a server: the connection, TLS, the
-retry budget, keep-alive, and the exact semantics of `from_slot`.
+⚠️ **The gRPC path is selected and only partly proven.** `INGEST_SOURCE=grpc`
+builds it, and `infra/grpc.rs` no longer carries the blanket
+`#![allow(dead_code)]` it held while nothing reached it — deleting that line was
+the test that the wiring was complete, and it named three things that were
+genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
+`test_geyser_server.rs` serves a test-written script over loopback, and every arm of
+`run`'s `match` has a test that goes red when it changes its answer to which
+ending restarts the retry budget, which charges it, and what the next attempt
+asks for. The backoff reset is the one decision left unguarded on purpose — its
+only observable is a duration; `listener.rs`'s header says why. What
+remains untested is what needs a *real* server: the connection, TLS, keep-alive,
+and whether a provider honours `from_slot` the way this code assumes.
 `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet one.
 
-⚠️ And **none of it has met a server.** Every local test is either pure state or
-a message this repository built itself, so the connection, TLS, keep-alive, the
-retry budget and the exact semantics of `from_slot` are written and reviewed and
-unproven. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet
-one, and it needs an API key.
+⚠️ And **none of it has met a real server.** Every local test drives either pure
+state, a message this repository built itself, or a server this repository
+scripted — so TLS, keep-alive and the exact semantics of `from_slot` are written
+and reviewed and unproven. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is
+where they meet one, and it needs an API key.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
