@@ -15,20 +15,26 @@
 //!   transactions are refused by the server (`failed: Some(false)`), and the
 //!   invocation filter has no server-side equivalent — see `subscription`.
 //!
-//! # ⚠️ What is here and cannot be tested here
+//! # ⚠️ What is here, and how much of it a test reaches
 //!
-//! Everything in this file that touches the network. No gRPC endpoint is
-//! reachable without a subscription, so the connection, TLS, the retry budget,
-//! keep-alive and the exact semantics of `from_slot` are **written, reviewed and
-//! unproven**. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they
-//! meet a server. What *is* testable was deliberately moved out: the request
-//! into `subscription`, the meaning of each update into `session`.
+//! **The retry rule is exercised**, since 16 September 2026: `listener_tests`
+//! drives `run` against `fake_geyser`, a scripted Yellowstone server in the
+//! test process, and every arm of the `match` below has a test that goes red
+//! when that arm's decision changes. Until then the rule was read and never
+//! run, which is how all five of its defects came to be found in review.
 //!
-//! That split is also why the two facts the retry rules turn on —
-//! `StreamSession::received_anything` and `StreamSession::resume_from` — are
-//! computed and tested next door. What stays here and is read rather than
-//! exercised is the rule itself: which of them resets the budget, and which
-//! charges it.
+//! What no test here reaches is the rest of the file: TLS, the keep-alive, the
+//! connect timeout, and — the one that matters — whether a provider honours
+//! `from_slot` the way this code assumes. A scripted server validates **this
+//! client against our model of the server**, never the protocol;
+//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where that model meets a
+//! real one.
+//!
+//! The split that made the rule reachable at all still holds: the request is
+//! built in `subscription` and the meaning of an update in `session`, so the
+//! two facts the retry rules turn on — `StreamSession::received_data` and
+//! `StreamSession::resume_from` — are computed and tested next door. What is
+//! tested *here* is that the listener does the right thing with them.
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
 

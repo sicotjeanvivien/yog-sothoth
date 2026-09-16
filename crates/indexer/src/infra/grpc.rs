@@ -24,19 +24,31 @@
 //! downstream of `source` sees the port and never learns which model is
 //! running.
 //!
-//! ⚠️ **Nothing here is exercised against a real server.** The connection, TLS,
-//! the retry budget, keep-alive and the exact semantics of `from_slot` are
-//! written, reviewed and unproven; `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
-//! is where they meet one. What *is* testable was deliberately kept out of
-//! `listener`: the request in `subscription`, the meaning of each update in
+//! ⚠️ **Nothing here has met a real server.** What changed on 16 September 2026
+//! is that the retry rule now meets a *scripted* one: `fake_geyser` serves a
+//! test-written script over loopback so `listener_tests` can drive
+//! `GrpcListener::run` through every ending a stream can have. That proves this
+//! client against our model of the server, and nothing about the protocol — so
+//! TLS, keep-alive and the exact semantics of `from_slot` are still written,
+//! reviewed and unproven, and `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
+//! is still where they meet one. The rest was made testable by being kept out
+//! of `listener`: the request in `subscription`, the meaning of each update in
 //! `session`, the pairing in `slot_timestamp_buffer`, the shape in
 //! `transaction_adapter`.
+//!
+//! Two of the modules below are `#[cfg(test)]` and carry no production code:
+//! `fixtures` builds the protobuf updates both test modules send, and
+//! `fake_geyser` is the scripted server itself.
 //!
 //! The `#![allow(dead_code)]` this module carried until 10 September 2026 is
 //! gone with the wiring it was waiting for. It had covered the whole path
 //! rather than each module, precisely so that deleting it would make the build
 //! name whatever was still unreachable — which it did.
 
+#[cfg(test)]
+mod fake_geyser;
+#[cfg(test)]
+mod fixtures;
 mod interceptor;
 mod listener;
 mod metrics;
