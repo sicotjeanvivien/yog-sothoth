@@ -133,7 +133,10 @@ builds it, and `infra/grpc.rs` no longer carries the blanket
 the test that the wiring was complete, and it named three things that were
 genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 `fake_geyser.rs` serves a test-written script over loopback, and every arm of
-`run`'s `match` has a test that goes red when that arm's decision changes. What
+`run`'s `match` has a test that goes red when it changes its answer to which
+ending restarts the retry budget, which charges it, and what the next attempt
+asks for. The backoff reset is the one decision left unguarded on purpose — its
+only observable is a duration; `listener.rs`'s header says why. What
 remains untested is what needs a *real* server: the connection, TLS, keep-alive,
 and whether a provider honours `from_slot` the way this code assumes.
 `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet one.

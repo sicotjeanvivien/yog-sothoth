@@ -19,9 +19,21 @@
 //!
 //! **The retry rule is exercised**, since 16 September 2026: `listener_tests`
 //! drives `run` against `fake_geyser`, a scripted Yellowstone server in the
-//! test process, and every arm of the `match` below has a test that goes red
-//! when that arm's decision changes. Until then the rule was read and never
-//! run, which is how all five of its defects came to be found in review.
+//! test process. Every arm of the `match` below has a test that goes red when
+//! that arm's answer to *which ending restarts the budget, which charges it,
+//! and what the next attempt asks for* changes. Until then the rule was read
+//! and never run, which is how all five of its defects came to be found in
+//! review — and how a sixth, the clean-EOF twin of the `Failed` reset, was
+//! still uncovered by the first version of those very tests.
+//!
+//! ⚠️ **One decision is deliberately left unguarded: the backoff reset.** Both
+//! churn arms put `backoff` back to `INITIAL_BACKOFF_SECS`, and no test
+//! observes it, because the only observable is *how long* the next attempt
+//! waits. Pinning it means driving the backoff up, cutting the stream, and
+//! asserting on an elapsed duration with a tolerance — slow, and exactly the
+//! sort of timing assertion that goes red on a loaded runner for reasons that
+//! have nothing to do with the rule. Named here rather than covered by a
+//! sentence that says "every arm" and means "almost".
 //!
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
 //! connect timeout, and — the one that matters — whether a provider honours

@@ -186,11 +186,11 @@ impl Geyser for FakeGeyser {
 
     // ── the rest of the service, which this path never calls ────────────
     //
-    // `GrpcListener` issues exactly one RPC. The twelve below exist because the
-    // trait is the whole schema, and a panic is the right answer: if one is
-    // ever reached, the listener started doing something this file knows
-    // nothing about, and that should stop a test rather than return a
-    // plausible-looking default.
+    // `GrpcListener` issues exactly one of the schema's ten RPCs, so the nine
+    // stubs below exist only because the trait is the whole schema. A panic is
+    // the right answer for them: if one is ever reached, the listener started
+    // doing something this file knows nothing about, and that should stop a
+    // test rather than return a plausible-looking default.
 
     type SubscribeDeshredStream = ReceiverStream<Result<SubscribeUpdateDeshred, Status>>;
     type SubscribeGossipStream = ReceiverStream<Result<SubscribeUpdateGossip, Status>>;

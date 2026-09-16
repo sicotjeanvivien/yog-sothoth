@@ -120,7 +120,7 @@ use tonic::Status;
 
 use crate::infra::grpc::{
     fake_geyser::{self, Action, FakeGeyserHandle, ScriptedSession},
-    fixtures::{block_meta, ping, transaction},
+    fixtures::{PROTOCOL, block_meta, ping, transaction},
 };
 
 /// Nothing here should take seconds; `run`'s own backoff starts at one and the
@@ -153,9 +153,12 @@ async fn listener_for(server: &FakeGeyserHandle, max_attempts: u32) -> Arc<GrpcL
 /// A transaction of `slot`, carrying the filter name that makes it routable.
 ///
 /// ⚠️ Any other name and `on_transaction` drops it before the buffer, so
-/// `resume_from` stays `None` and the resumption tests assert nothing.
+/// `resume_from` stays `None` and the resumption tests assert nothing. Which is
+/// why the name comes from `fixtures::PROTOCOL` and is not spelled again here:
+/// that constant *is* the rule, and a second copy of a rule is how this module
+/// has produced defects before.
 fn routable(slot: u64) -> Action {
-    Action::send(transaction(slot, &[Protocol::MeteoraDammV2.as_str()]))
+    Action::send(transaction(slot, &[PROTOCOL.as_str()]))
 }
 
 /// Wait until the server has been subscribed to at least `count` times.
@@ -264,6 +267,56 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     );
 }
 
+/// ⚠️ **And a stream that delivered and then closed *cleanly* is churn too** —
+/// the same rule, on the arm next door. A graceful GOAWAY, a provider draining
+/// a node before a restart and an idle-timeout close all end as `Ok(None)`
+/// rather than `Err(Status)`, and which of the two a given provider sends is
+/// not ours to choose. Charging the budget for them makes `attempt` climb
+/// across sessions until the *n*-th restart stops an indexer that has lost
+/// nothing — the defect the `Failed` arm had until 10 September 2026, waiting
+/// on its twin.
+///
+/// Found by review of this very change, 16 September 2026: the first version of
+/// these tests claimed to cover every arm and left this one reset unobserved.
+///
+/// Mutation this is written against: removing `attempt = 0` from the
+/// `StreamClosed { delivered: true }` arm.
+#[tokio::test]
+async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
+    let server = fake_geyser::start(vec![
+        // No `Fail`: the actions simply run out, which the client sees as a
+        // clean end of stream.
+        ScriptedSession::Stream(vec![routable(10)]),
+        ScriptedSession::closes_empty(),
+        ScriptedSession::closes_empty(),
+    ])
+    .await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener_for(&server, 2)
+            .await
+            .run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("the two empty closes must exhaust the restarted budget");
+
+    assert!(
+        matches!(
+            outcome,
+            Err(GrpcListenerError::RetriesExhausted { attempts: 2, .. })
+        ),
+        "the budget runs out on the two empty closes, not before: {outcome:?}"
+    );
+    assert_eq!(
+        server.requests().len(),
+        3,
+        "a clean close after delivering is churn, not a failing attempt: two \
+         attempts after it, not one"
+    );
+}
+
 /// ⚠️ **The resume point is the oldest slot the session did not finish, and a
 /// break mid-block is the case it exists for.** A transaction names a slot
 /// still in flight: its payload sits in the buffer, and the buffer dies with
@@ -349,6 +402,60 @@ async fn a_refused_resume_point_is_not_asked_for_twice() {
         Some([None, Some(8), None].as_slice()),
         "the refused replay is given up, not repeated: the attempt after it \
          starts from the live edge"
+    );
+}
+
+/// ⚠️ **And a stream that opened, delivered nothing and closed gives the replay
+/// point up too** — again the same rule as the arm above, on the clean-EOF
+/// side. The mark may be past the server's retention, so it is asked for once
+/// and then abandoned for the live edge; keeping it loops on a request that
+/// cannot succeed, at one attempt per backoff, for the whole budget.
+///
+/// Found by review of this change, 16 September 2026, with its twin above.
+///
+/// Mutation this is written against: removing `resume_from = mark` from the
+/// `StreamClosed { delivered: false }` arm.
+///
+/// ⚠️ **The mark is produced by the `Failed` arm, on purpose**, though the rule
+/// under test is the clean-EOF one. Observing a mark being dropped needs a mark
+/// to exist first, and the only producers are the two delivered arms — so
+/// making the churn arm produce it would put *its* rule under this test too,
+/// and a review of the first version of this file caught exactly that: one
+/// mutation reddening two tests sends the reader to the wrong file. How the
+/// mark got there is scaffolding; which arm gives it up is the subject.
+///
+/// ⚠️ A **prefix**, for the reason its `Failed`-side twin gives: reaching a
+/// third attempt needs the budget reset of another rule, and breaking *that*
+/// one would otherwise make this test red for a defect it does not own.
+#[tokio::test]
+async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
+    let server = fake_geyser::start(vec![
+        ScriptedSession::Stream(vec![
+            routable(10),
+            Action::Fail(Status::unavailable("the provider restarted")),
+        ]),
+        ScriptedSession::closes_empty(),
+        ScriptedSession::closes_empty(),
+        ScriptedSession::closes_empty(),
+    ])
+    .await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener_for(&server, 3)
+            .await
+            .run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("the budget must run out rather than loop on a stale replay point");
+
+    assert!(outcome.is_err(), "{outcome:?}");
+    assert_eq!(
+        server.resume_points().get(..3),
+        Some([None, Some(8), None].as_slice()),
+        "the attempt that delivered nothing drops the mark: the one after it \
+         starts from the live edge, not from slot 8 again"
     );
 }
 
