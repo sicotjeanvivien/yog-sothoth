@@ -128,10 +128,12 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // makes that readable; it was missing until a review of this change found the
 // arm had none.
 //
-// ⚠️ **One rule below is driven at `connect_and_stream` and not at `run`**, and
-// it is the only one: a scripted server cannot fail a dial, so the ending that
-// says "the service was never reached" is produced by a port with nothing
-// behind it. Its own header carries the measurement that settled it.
+// ⚠️ **Two rules below are driven at `connect_and_stream` and not at `run`**,
+// and they are the only ones: what an attempt that never reached the service
+// does to the **mark**. Observing a mark being kept needs one to exist first,
+// and only a delivered session makes one — against a server that must, for the
+// next attempt, be unreachable. What that same ending costs the **budget** is
+// driven through `run` like every other rule here. Each header says which.
 //
 // ⚠️ **Where the resume mutations live moved on 16 September 2026**, with the
 // fix for a delivered session that had no mark of its own. `run`'s arms no
@@ -212,6 +214,48 @@ async fn a_closed_port() -> String {
     drop(listener);
 
     format!("http://{address}")
+}
+
+/// A port that accepts every connection and cuts it at once, before a byte of
+/// HTTP/2 is exchanged.
+///
+/// ⚠️ **This is not a slower way to refuse a dial** — it is the other
+/// pre-contact fault, and the one a middlebox actually produces. `connect()`
+/// *succeeds* against it (hyper's handshake does not wait for the server's
+/// settings), so the failure surfaces inside `client.subscribe` as a `Status`,
+/// which is where it can be mistaken for the server answering.
+struct CuttingPort {
+    url: String,
+    accepting: tokio::task::JoinHandle<()>,
+}
+
+impl CuttingPort {
+    async fn bind() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("a free loopback port");
+        let address = listener.local_addr().expect("a bound address");
+
+        // Every socket, not just the first: tonic's `Reconnect` redials
+        // underneath a failing RPC, and a second connection that was *served*
+        // would let the attempt succeed.
+        let accepting = tokio::spawn(async move {
+            while let Ok((connection, _)) = listener.accept().await {
+                drop(connection);
+            }
+        });
+
+        Self {
+            url: format!("http://{address}"),
+            accepting,
+        }
+    }
+}
+
+impl Drop for CuttingPort {
+    fn drop(&mut self) {
+        self.accepting.abort();
+    }
 }
 
 /// Wait until the server has been subscribed to at least `count` times.
@@ -633,32 +677,41 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
 /// was dropped, the attempt after it started from the live edge, and the
 /// transactions of the original break were never asked for again.
 ///
-/// Two mutations, both owned here and nowhere else: `connect_and_stream`'s
-/// `channel.connect()` failure returning `Attempt::Failed { delivered: false }`
-/// again, and `Attempt::next_resume_from`'s `Unreachable` branch returning
-/// `None` rather than `held`. The first is caught by the `match` below, the
-/// second by the assertion after it.
+/// Mutation this owns: `connect_and_stream`'s `channel.connect()` failure
+/// returning `Attempt::Failed { delivered: false }` again, which the `match`
+/// below catches by name.
 ///
-/// # ⚠️ Why this one does not drive `run`
+/// ⚠️ It also reddens under `Attempt::next_resume_from`'s `Unreachable` branch
+/// returning `None`, **and so does its twin below** — one branch answers for
+/// every site that never got an answer, exactly as one branch answers for both
+/// undelivered endings. That is the price of the single expression, and it is
+/// paid knowingly: what separates the two tests is the *site* each drives it
+/// from, which is where the defect lived.
 ///
-/// **A scripted server cannot fail a dial.** A connection it accepts and cuts
-/// leaves `connect()` succeeding: hyper's HTTP/2 handshake does not wait for
-/// the server's settings, so writing the preface into a socket the peer has
-/// just closed completes it. The failure then surfaces inside the RPC, where
-/// tonic's `Reconnect` layer redials underneath us — so the loop sees one
-/// attempt where the script wrote two. Measured 16 September 2026 with a
-/// `DropConnection` entry written for this test and then removed: the whole
-/// three-attempt run stayed green with the defect in place.
+/// # ⚠️ Why the mark half cannot go through `run`
 ///
-/// What does fail a dial is a port with nothing behind it, and nothing
-/// server-side can observe *when* a refused dial happened — so a run that
-/// closed and reopened the port around one attempt would have to time the
-/// reopening, which is the sort of assertion this file refuses elsewhere. So
-/// the attempt is driven one level down, at `connect_and_stream`: the refusal
-/// is the operating system's, the return site is production's, and the rule is
-/// read from the value that site produces. The one thing left to reading is
-/// `run`'s single `resume_from =` assignment, which the five tests above that
-/// assert on `resume_points` drive.
+/// Three attempts are what the scenario needs — deliver and break, fail before
+/// contact, then ask again — and the middle one has to reach a **dead** port
+/// while the first reaches a live server, on the one URL the listener dials.
+/// Closing the port and reopening it around that attempt is the only way, and
+/// nothing server-side can observe *when* a refused dial happened, so the
+/// reopening would have to be **timed** between two backoffs: the sort of
+/// assertion this file refuses elsewhere, for the backoff reset, and for the
+/// same reason.
+///
+/// Scripting the cut instead of the refusal does not work either, and that was
+/// measured before this shape was chosen: a connection the server accepts and
+/// cuts leaves `connect()` succeeding — hyper's HTTP/2 handshake does not wait
+/// for the server's settings — and tonic's `Reconnect` then redials underneath
+/// the failing RPC. The three-attempt run written that way stayed green with
+/// the defect in place (16 September 2026).
+///
+/// So the mark half is driven one level down: the refusal is the operating
+/// system's, the return site is production's, and the rule is read from the
+/// value that site produces. What this leaves to reading is `run`'s single
+/// `resume_from =` assignment, which the five tests above that assert on
+/// `resume_points` drive — and the budget, which
+/// `a_dial_that_never_connects_spends_the_budget` drives through `run`.
 #[tokio::test]
 async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     let listener = GrpcListener::new(Endpoint::for_tests(&a_closed_port().await, None), 1);
@@ -711,6 +764,116 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
         Some(8),
         "nothing was asked of anyone, so slot 8 was refused by no one: the \
          attempt after this one must ask for it again"
+    );
+}
+
+/// ⚠️ **And a connection cut before the server answered is the same fault, on
+/// the site that looks most like a verdict.** `client.subscribe` returning a
+/// `Status` is what a refused replay looks like — and it is *also* what our own
+/// transport giving way looks like, because tonic maps a broken connection into
+/// a `Status` too. A load balancer with no backend, a link cut just after the
+/// TCP handshake, a redial of tonic's that finds nothing: all land here,
+/// none of them is the server refusing `from_slot`, and reading them as one
+/// gives the gap up exactly as the dial used to.
+///
+/// Found in review of this change, 16 September 2026 — the first version fixed
+/// the two sites the ticket had listed and left standing the one it had
+/// classified, wrongly, as the server's answer.
+///
+/// Mutation this owns: `connect_and_stream`'s `subscribe` arm losing its
+/// `reached_the_service` guard, so every `Status` counts as an answer. It
+/// reddens nothing else — the twin above never reaches `subscribe`, and
+/// `a_refused_resume_point_is_not_asked_for_twice` drives a `Status` the
+/// scripted server really did send, which the guard keeps on the `Failed` side.
+/// The shared branch it also reddens is the one named on that twin.
+#[tokio::test]
+async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
+    let port = CuttingPort::bind().await;
+    let listener = GrpcListener::new(Endpoint::for_tests(&port.url, None), 1);
+    listener.watch(PROTOCOL).await;
+
+    let credential = Credential::new(listener.endpoint.header()).expect("no header is valid");
+    let interceptor = CredentialInterceptor::new(&credential).expect("no header to reject");
+    let channel = listener
+        .channel_endpoint()
+        .expect("a plaintext loopback URL is a gRPC endpoint");
+    let request = listener
+        .subscribe_request(Some(8))
+        .await
+        .expect("one protocol is watched");
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener.connect_and_stream(
+            &channel,
+            &interceptor,
+            request,
+            &downstream,
+            &CancellationToken::new(),
+        ),
+    )
+    .await
+    .expect("a cut connection fails the RPC at once");
+
+    let error = match &outcome {
+        Attempt::Unreachable { error } => error,
+        Attempt::Failed { error, .. } => {
+            panic!("the connection was cut, so the server never answered — yet: {error}")
+        }
+        _ => panic!("a cut connection ends the attempt before any stream exists"),
+    };
+    // The site, and it is the point of this test: this fault is the one that
+    // arrives *through* `subscribe`.
+    assert!(
+        error.starts_with("subscribe:"),
+        "the RPC is where a cut connection surfaces, and the log must say so: {error}"
+    );
+
+    assert_eq!(
+        outcome.next_resume_from(Some(8)),
+        Some(8),
+        "a `Status` our own transport produced is nobody's verdict on slot 8: \
+         the attempt after this one must ask for it again"
+    );
+}
+
+/// ⚠️ **An attempt that never reached the service still costs the budget.** It
+/// is a failing attempt, not the churn of a live connection: restarting the
+/// counter on it would redial a dead endpoint once a second for ever,
+/// `max_attempts` never reached, one `warn!` per second as the only trace —
+/// the failure mode the empty-close arm was written against, on the ending
+/// next door.
+///
+/// This is the half of `Attempt::Unreachable` that **does** go through `run`,
+/// and the header of its sibling says why the other half cannot: a mark has to
+/// exist before it can be kept, and nothing can deliver one through a port that
+/// must stay dead.
+///
+/// Mutation this is written against: the `run` arm restarting the budget on
+/// `Unreachable` (`attempt = 0`). It cannot produce a wrong value, only a
+/// listener that never returns — so the deadline is the assertion, as it is for
+/// the two shutdown tests.
+#[tokio::test]
+async fn a_dial_that_never_connects_spends_the_budget() {
+    let url = a_closed_port().await;
+    let listener = Arc::new(GrpcListener::new(Endpoint::for_tests(&url, None), 3));
+    listener.watch(PROTOCOL).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener.run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("a budget of three must run out rather than redial for ever");
+
+    assert!(
+        matches!(
+            outcome,
+            Err(GrpcListenerError::RetriesExhausted { attempts: 3, .. })
+        ),
+        "three dials, three charges, then a stop: {outcome:?}"
     );
 }
 

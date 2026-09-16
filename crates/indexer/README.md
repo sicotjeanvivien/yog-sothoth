@@ -142,13 +142,14 @@ genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
 asks for — the budget being `run`'s `match`, and the resume point the one
-expression beside it, `Attempt::next_resume_from`. One ending is guarded a level
-down, at `connect_and_stream` rather than through `run`: a scripted server
-cannot fail a *dial* — a connection it accepts and cuts leaves `connect()`
-succeeding and tonic redialling underneath — so the attempt that never reached
-the service is produced by a port with nothing behind it. The backoff reset is
-the one decision left unguarded on purpose — its only observable is a duration;
-`listener.rs`'s header says why, and carries the measurement behind the dial.
+expression beside it, `Attempt::next_resume_from`. One ending is guarded from two
+sides: what an attempt that never reached the service costs the retry budget is
+driven through `run`, against a port with nothing behind it, while what it does
+to the resume mark is driven one level down at `connect_and_stream` — observing
+a mark being *kept* needs a delivered session to make one first, against a
+server that must be unreachable for the attempt after. The backoff reset is the
+one decision left unguarded on purpose — its only observable is a duration;
+`listener.rs`'s header says why, and carries the measurements behind both.
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, and whether a provider honours `from_slot` the way this code
 assumes. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet
