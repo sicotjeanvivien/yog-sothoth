@@ -142,12 +142,17 @@ genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
 asks for — the budget being `run`'s `match`, and the resume point the one
-expression beside it, `Attempt::next_resume_from`. The backoff reset is the one
-decision left unguarded on purpose — its only observable is a duration;
-`listener.rs`'s header says why. What
-remains untested is what needs a *real* server: the connection, TLS, keep-alive,
-and whether a provider honours `from_slot` the way this code assumes.
-`02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet one.
+expression beside it, `Attempt::next_resume_from`. One ending is guarded a level
+down, at `connect_and_stream` rather than through `run`: a scripted server
+cannot fail a *dial* — a connection it accepts and cuts leaves `connect()`
+succeeding and tonic redialling underneath — so the attempt that never reached
+the service is produced by a port with nothing behind it. The backoff reset is
+the one decision left unguarded on purpose — its only observable is a duration;
+`listener.rs`'s header says why, and carries the measurement behind the dial.
+What remains untested is what needs a *real* server: TLS, keep-alive, the
+connect timeout, and whether a provider honours `from_slot` the way this code
+assumes. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet
+one.
 
 ⚠️ And **none of it has met a real server.** Every local test drives either pure
 state, a message this repository built itself, or a server this repository

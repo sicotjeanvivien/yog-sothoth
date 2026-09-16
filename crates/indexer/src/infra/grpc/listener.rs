@@ -30,7 +30,20 @@
 //! budget**, and [`Attempt::next_resume_from`] decides the **resume point**. It
 //! was one thing in four arms until a seventh defect — a delivered session with
 //! no mark of its own erasing the mark the loop held — showed what four
-//! identical assignments cost.
+//! identical assignments cost. The eighth was its mirror image: the same
+//! expression reading a failure that never reached the server as the server
+//! refusing the replay, which is what [`Attempt::Unreachable`] now separates.
+//!
+//! ⚠️ **One ending is guarded without going through `run`, and it is the one
+//! just named.** A scripted server cannot produce a failed dial: a connection it
+//! accepts and cuts does not fail `connect()` — hyper's HTTP/2 handshake does
+//! not wait for the server's settings, so it succeeds, and tonic's `Reconnect`
+//! then redials underneath us without the loop ever seeing an attempt fail
+//! (measured 16 September 2026). What does fail a dial is a port with nothing
+//! behind it, and that is where `listener_tests` points `connect_and_stream`:
+//! a real refusal from the OS, the real return site, then the rule. What that
+//! test does not cover is the loop's single `resume_from =` assignment — the
+//! five tests that assert on `resume_points` drive it.
 //!
 //! ⚠️ **One decision is deliberately left unguarded: the backoff reset.** Both
 //! churn arms put `backoff` back to `INITIAL_BACKOFF_SECS`, and no test
@@ -291,7 +304,18 @@ impl GrpcListener {
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
                 }
 
-                Attempt::Failed {
+                // ⚠️ **Two endings, one budget, on purpose.** An attempt that
+                // never reached the service and one the server answered with a
+                // refusal cost the same: they are both a failing attempt, and
+                // charging one and not the other would redial a dead endpoint
+                // for ever. What they do *not* share is the resume point, which
+                // is [`Attempt::next_resume_from`]'s and not this arm's — the
+                // two questions were one thing until 16 September 2026, and the
+                // answer for one was wrong for the other. The `error` texts
+                // stay distinguishable in the log, `connect:` against
+                // `subscribe:`, so an operator still reads which happened.
+                Attempt::Unreachable { error }
+                | Attempt::Failed {
                     error,
                     delivered: false,
                     ..
@@ -374,11 +398,11 @@ impl GrpcListener {
 
         let channel: Channel = match channel.connect().await {
             Ok(channel) => channel,
+            // Nothing has been asked of anyone yet, and that is the whole
+            // difference [`Attempt::Unreachable`] exists to carry.
             Err(e) => {
-                return Attempt::Failed {
+                return Attempt::Unreachable {
                     error: url.scrub(&format!("connect: {e}")),
-                    delivered: false,
-                    resume_from: None,
                 };
             }
         };
@@ -392,10 +416,8 @@ impl GrpcListener {
         // an idle-timing middlebox collects.
         let (outbound_tx, outbound_rx) = mpsc::channel::<SubscribeRequest>(OUTBOUND_CAPACITY);
         if outbound_tx.send(request.clone()).await.is_err() {
-            return Attempt::Failed {
+            return Attempt::Unreachable {
                 error: "outbound stream closed before the subscription was sent".to_string(),
-                delivered: false,
-                resume_from: None,
             };
         }
 
@@ -453,16 +475,34 @@ impl GrpcListener {
 
 /// How one connection ended.
 ///
-/// Both ending variants carry the same two facts, and the listener needs both
-/// **on both variants** — dropping `delivered` from this one was a defect of
-/// its own, see the `Failed` arm:
-/// `resume_from` is where to pick up (see `StreamSession::resume_from`), and
-/// `delivered` says whether this attempt got anything off the stream at all —
-/// which is what separates the churn of a long-lived connection from a server
-/// that accepts a subscription and closes it at once.
+/// The two **stream** endings carry the same two facts, and the listener needs
+/// both on both — dropping `delivered` from one of them was a defect of its
+/// own, see the `Failed` arm: `resume_from` is where to pick up (see
+/// `StreamSession::resume_from`), and `delivered` says whether this attempt got
+/// anything off the stream at all, which is what separates the churn of a
+/// long-lived connection from a server that accepts a subscription and closes
+/// it at once.
+///
+/// [`Attempt::Unreachable`] carries neither, and that is the point of it: a
+/// failure before the service answered has no stream to report on, and no
+/// verdict of anyone's to carry.
 enum Attempt {
     ShutdownRequested,
     DownstreamClosed,
+    /// The attempt never reached the service.
+    ///
+    /// ⚠️ **Not a variety of `Failed`, and the difference is a lost gap.** The
+    /// dial or the outbound half gave way *before* `client.subscribe` was
+    /// called, so nothing was asked of anyone: a DNS blip, a refused
+    /// connection, the ~2-minute link cuts a laptop sees. It cannot be a
+    /// judgement on the `from_slot` we were about to send, because that
+    /// `from_slot` never left the process — which is what
+    /// [`Attempt::next_resume_from`] reads it for. There is no `delivered`
+    /// here (nothing can have been) and no `resume_from` (no session existed
+    /// to compute one).
+    Unreachable {
+        error: String,
+    },
     StreamClosed {
         delivered: bool,
         resume_from: Option<u64>,
@@ -498,37 +538,29 @@ impl Attempt {
     /// original break were then never asked for again, and no event table can
     /// know a row is missing. Found in review of PR #149, 16 September 2026.
     ///
-    /// # ⚠️ The `from_slot` fallback, and it is deterministic on purpose
+    /// # ⚠️ A mark is given up only to the server that refused it
     ///
     /// A replay can be refused for a reason this code cannot see — the slot may
     /// be past the server's retention, and providers do not agree on how far
-    /// back that goes. So a replay that never established is not asked for
-    /// twice: the next attempt starts from the live edge, losing the gap rather
-    /// than looping on a request that cannot succeed. No error string is read to
-    /// decide this; only whether the stream produced anything.
+    /// back that goes. So a replay the **server** was asked for and did not
+    /// honour is not asked for twice: the next attempt starts from the live
+    /// edge, losing the gap rather than looping on a request that cannot
+    /// succeed. No error string is read to decide it; what decides it is that
+    /// the server had the request and gave nothing back.
     ///
     /// `None` states that rule rather than carrying the attempt's own mark,
     /// which is the same value today and says less: an attempt that delivered
     /// nothing fed neither the buffer nor `highest_meta_slot`, so
-    /// [`StreamSession::resume_from`] can only answer `None` for it, and the
-    /// returns before the stream is established hard-code it.
+    /// [`StreamSession::resume_from`] can only answer `None` for it.
     ///
-    /// ⚠️ **And that rule pays a price it is worth naming**: "produced nothing"
-    /// also describes a failure that never reached the server at all — a DNS
-    /// blip, a refused connection, the ~2-minute link cuts this machine sees
-    /// routinely. Such an attempt drops a resume point that was still valid, and
-    /// the gap is lost to a fault that had nothing to do with retention. It is
-    /// the very defect the branch above fixes, left standing on this one.
-    ///
-    /// ⚠️ **And the reason given for leaving it is wrong** — it said telling the
-    /// two apart meant reading a provider's error text. It does not: the two are
-    /// *separate code sites*. `channel.connect()` failing and the outbound send
-    /// failing both return before `client.subscribe` is ever called, so no
-    /// retention judgement can apply to them, while a `Status` from `subscribe`
-    /// is the server answering. What merges them is this enum, which records
-    /// only whether anything was produced. Corrected on reading, 16 September
-    /// 2026; the fix is a fact `Attempt` does not carry yet, and it is its own
-    /// ticket rather than a widening of this one.
+    /// ⚠️ **A failure before contact is not that**, and reading it as that cost
+    /// a gap until 16 September 2026. `channel.connect()` failing and the
+    /// outbound half failing both return before `client.subscribe` is ever
+    /// called: the `from_slot` never left this process, so no verdict on it can
+    /// exist. They are [`Attempt::Unreachable`], and the mark we hold survives
+    /// them. The distinction is the one the *return sites* already made — it
+    /// took a variant to record it, not a provider's error text to parse, which
+    /// is what an earlier version of this comment claimed.
     ///
     /// ⚠️ **One more thing this expression does not do: put a floor under the
     /// mark.** `StreamSession::resume_from` prefers the oldest slot still
@@ -557,6 +589,10 @@ impl Attempt {
             | Attempt::Failed {
                 delivered: false, ..
             } => None,
+
+            // Nothing was asked of anyone, so nothing was refused: the mark is
+            // exactly as good as it was a moment ago.
+            Attempt::Unreachable { .. } => held,
 
             // Neither ending: the loop returns on both, so this answer is never
             // read. Handing back what we hold is the only one that is not a

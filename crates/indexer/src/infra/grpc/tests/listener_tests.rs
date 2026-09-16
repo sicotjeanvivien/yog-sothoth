@@ -128,6 +128,11 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // makes that readable; it was missing until a review of this change found the
 // arm had none.
 //
+// ⚠️ **One rule below is driven at `connect_and_stream` and not at `run`**, and
+// it is the only one: a scripted server cannot fail a dial, so the ending that
+// says "the service was never reached" is produced by a port with nothing
+// behind it. Its own header carries the measurement that settled it.
+//
 // ⚠️ **Where the resume mutations live moved on 16 September 2026**, with the
 // fix for a delivered session that had no mark of its own. `run`'s arms no
 // longer write `resume_from`: the rule is `Attempt::next_resume_from`, one
@@ -135,7 +140,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // built in `connect_and_stream`. So a mutation that used to belong to one arm
 // now belongs to one of those two places, and each annotation below says which.
 
-use tokio::time::timeout;
+use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
 
 use crate::infra::grpc::{
@@ -190,6 +195,23 @@ fn routable(slot: u64) -> Action {
 /// reason the constant next to `PROTOCOL` gives.
 fn unroutable(slot: u64) -> Action {
     Action::send(unroutable_transaction(slot))
+}
+
+/// A `http://` URL nothing listens on: bound to take a free port, then closed.
+///
+/// The only way to a **refused dial** in this process — the server next door
+/// cannot produce one, and the header of the test that uses this says why. The
+/// window between the close and the dial is why this is a URL and not a server:
+/// nothing may bind that port in between, and if something did, the test would
+/// fail loudly on the ending it got rather than pass on the wrong one.
+async fn a_closed_port() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a free loopback port");
+    let address = listener.local_addr().expect("a bound address");
+    drop(listener);
+
+    format!("http://{address}")
 }
 
 /// Wait until the server has been subscribed to at least `count` times.
@@ -600,6 +622,95 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
         Some([None, Some(8), None].as_slice()),
         "the attempt that delivered nothing drops the mark: the one after it \
          starts from the live edge, not from slot 8 again"
+    );
+}
+
+/// ⚠️ **A failure that never reached the server must not give up the mark.** A
+/// dial that fails — DNS, a refused connection, the ~2-minute link cuts this
+/// machine sees routinely — produces nothing, exactly like a stream the server
+/// opened and closed empty. Until 16 September 2026 the rule read only that, so
+/// a local fault was answered as a provider's verdict on `from_slot`: the mark
+/// was dropped, the attempt after it started from the live edge, and the
+/// transactions of the original break were never asked for again.
+///
+/// Two mutations, both owned here and nowhere else: `connect_and_stream`'s
+/// `channel.connect()` failure returning `Attempt::Failed { delivered: false }`
+/// again, and `Attempt::next_resume_from`'s `Unreachable` branch returning
+/// `None` rather than `held`. The first is caught by the `match` below, the
+/// second by the assertion after it.
+///
+/// # ⚠️ Why this one does not drive `run`
+///
+/// **A scripted server cannot fail a dial.** A connection it accepts and cuts
+/// leaves `connect()` succeeding: hyper's HTTP/2 handshake does not wait for
+/// the server's settings, so writing the preface into a socket the peer has
+/// just closed completes it. The failure then surfaces inside the RPC, where
+/// tonic's `Reconnect` layer redials underneath us — so the loop sees one
+/// attempt where the script wrote two. Measured 16 September 2026 with a
+/// `DropConnection` entry written for this test and then removed: the whole
+/// three-attempt run stayed green with the defect in place.
+///
+/// What does fail a dial is a port with nothing behind it, and nothing
+/// server-side can observe *when* a refused dial happened — so a run that
+/// closed and reopened the port around one attempt would have to time the
+/// reopening, which is the sort of assertion this file refuses elsewhere. So
+/// the attempt is driven one level down, at `connect_and_stream`: the refusal
+/// is the operating system's, the return site is production's, and the rule is
+/// read from the value that site produces. The one thing left to reading is
+/// `run`'s single `resume_from =` assignment, which the five tests above that
+/// assert on `resume_points` drive.
+#[tokio::test]
+async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
+    let listener = GrpcListener::new(Endpoint::for_tests(&a_closed_port().await, None), 1);
+    listener.watch(PROTOCOL).await;
+
+    // Built exactly as `run` builds them, and none of the three is what fails:
+    // the endpoint is well formed, the credential empty, the subscription
+    // non-empty. What is missing is a server.
+    let credential = Credential::new(listener.endpoint.header()).expect("no header is valid");
+    let interceptor = CredentialInterceptor::new(&credential).expect("no header to reject");
+    let channel = listener
+        .channel_endpoint()
+        .expect("a plaintext loopback URL is a gRPC endpoint");
+    // The attempt is about to ask for slot 8 — the mark a previous break left.
+    let request = listener
+        .subscribe_request(Some(8))
+        .await
+        .expect("one protocol is watched");
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener.connect_and_stream(
+            &channel,
+            &interceptor,
+            request,
+            &downstream,
+            &CancellationToken::new(),
+        ),
+    )
+    .await
+    .expect("a refused dial fails at once; it does not hang to the connect timeout");
+
+    let error = match &outcome {
+        Attempt::Unreachable { error } => error,
+        // Naming the impostor rather than the expectation: reading this failure
+        // as an ending of a stream is the defect itself.
+        Attempt::Failed { error, .. } => {
+            panic!("the dial was refused, so nothing answered — yet: {error}")
+        }
+        _ => panic!("a refused dial ends the attempt before any stream exists"),
+    };
+    assert!(
+        error.starts_with("connect:"),
+        "the dial is the site that gave way, and an operator reads which one: {error}"
+    );
+
+    assert_eq!(
+        outcome.next_resume_from(Some(8)),
+        Some(8),
+        "nothing was asked of anyone, so slot 8 was refused by no one: the \
+         attempt after this one must ask for it again"
     );
 }
 
