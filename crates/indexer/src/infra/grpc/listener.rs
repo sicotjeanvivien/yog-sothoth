@@ -19,12 +19,18 @@
 //!
 //! **The retry rule is exercised**, since 16 September 2026: `listener_tests`
 //! drives `run` against `test_geyser_server`, a scripted Yellowstone server in the
-//! test process. Every arm of the `match` below has a test that goes red when
-//! that arm's answer to *which ending restarts the budget, which charges it,
-//! and what the next attempt asks for* changes. Until then the rule was read
-//! and never run, which is how all five of its defects came to be found in
-//! review — and how a sixth, the clean-EOF twin of the `Failed` reset, was
-//! still uncovered by the first version of those very tests.
+//! test process. Every ending has a test that goes red when its answer to
+//! *which ending restarts the budget, which charges it, and what the next
+//! attempt asks for* changes. Until then the rule was read and never run, which
+//! is how all five of its defects came to be found in review — and how a sixth,
+//! the clean-EOF twin of the `Failed` reset, was still uncovered by the first
+//! version of those very tests.
+//!
+//! The rule is split in two on purpose: the `match` below decides the **retry
+//! budget**, and [`Attempt::next_resume_from`] decides the **resume point**. It
+//! was one thing in four arms until a seventh defect — a delivered session with
+//! no mark of its own erasing the mark the loop held — showed what four
+//! identical assignments cost.
 //!
 //! ⚠️ **One decision is deliberately left unguarded: the backoff reset.** Both
 //! churn arms put `backoff` back to `INITIAL_BACKOFF_SECS`, and no test
@@ -190,10 +196,21 @@ impl GrpcListener {
             attempt += 1;
             let request = self.subscribe_request(resume_from).await?;
 
-            match self
+            let outcome = self
                 .connect_and_stream(&channel, &interceptor, request, &downstream, &shutdown)
-                .await
-            {
+                .await;
+
+            // ⚠️ **The only place `resume_from` is written**, and that is the
+            // point. It was four assignments, one per arm below, all spelled
+            // `resume_from = mark` — two meaning *keep* and two meaning
+            // *abandon*, told apart only by reading the arm they sat in. One of
+            // the two keeping arms then had to learn that an absent mark is not
+            // a mark at zero, and nothing would have said if only one of them
+            // had. [`Attempt::next_resume_from`] holds the whole rule; the arms
+            // below hold the retry budget and nothing else.
+            resume_from = outcome.next_resume_from(resume_from);
+
+            match outcome {
                 Attempt::ShutdownRequested => {
                     info!("shutdown requested — gRPC listener stopping");
                     return Ok(());
@@ -203,8 +220,7 @@ impl GrpcListener {
                     return Ok(());
                 }
                 Attempt::StreamClosed {
-                    delivered: true,
-                    resume_from: mark,
+                    delivered: true, ..
                 } => {
                     // The connection lived long enough to deliver. That is churn,
                     // not a failing provider, so the budget starts over — the
@@ -212,7 +228,6 @@ impl GrpcListener {
                     warn!(attempt, "gRPC stream closed — resubscribing");
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
-                    resume_from = mark;
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
                 }
 
@@ -228,10 +243,8 @@ impl GrpcListener {
                 // `SubscriptionWorker` resets unconditionally because it has no
                 // such signal; this path has one.
                 Attempt::StreamClosed {
-                    delivered: false,
-                    resume_from: mark,
+                    delivered: false, ..
                 } => {
-                    resume_from = mark;
                     warn!(
                         attempt,
                         max = self.max_attempts,
@@ -270,19 +283,18 @@ impl GrpcListener {
                 Attempt::Failed {
                     error,
                     delivered: true,
-                    resume_from: mark,
+                    ..
                 } => {
                     warn!(attempt, error = %error, "gRPC stream broke — resubscribing");
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
-                    resume_from = mark;
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
                 }
 
                 Attempt::Failed {
                     error,
                     delivered: false,
-                    resume_from: mark,
+                    ..
                 } => {
                     warn!(
                         attempt,
@@ -290,29 +302,6 @@ impl GrpcListener {
                         error = %error,
                         "gRPC stream attempt failed"
                     );
-
-                    // ⚠️ The `from_slot` fallback, and it is deterministic on
-                    // purpose. A replay can be refused for a reason this code
-                    // cannot see — the slot may be past the server's retention,
-                    // and providers do not agree on how far back that goes. So a
-                    // replay that never established is not asked for twice:
-                    // the next attempt starts from the live edge, losing the
-                    // gap rather than looping on a request that cannot succeed.
-                    // No error string is read to decide this; only whether the
-                    // stream produced anything.
-                    //
-                    // ⚠️ **And that rule pays a price it is worth naming**:
-                    // "produced nothing" also describes a failure that never
-                    // reached the server at all — a DNS blip, a refused
-                    // connection. Such an attempt drops a resume point that was
-                    // still valid, and the gap is lost to a fault that had
-                    // nothing to do with retention. Telling the two apart means
-                    // reading a provider's error text, which is the
-                    // shape-recognition this workspace refuses elsewhere for
-                    // the same reason: it is right until a provider rewords its
-                    // message. Kept as is, and it is the first thing a real
-                    // stream should be watched for.
-                    resume_from = mark;
 
                     if attempt >= self.max_attempts {
                         return Err(GrpcListenerError::RetriesExhausted {
@@ -483,6 +472,98 @@ enum Attempt {
         delivered: bool,
         resume_from: Option<u64>,
     },
+}
+
+impl Attempt {
+    /// Where the next attempt resumes from, given the mark the loop already
+    /// `held`.
+    ///
+    /// The whole resume rule, in one expression, because it used to be four
+    /// assignments spelled identically in four arms — two meaning *keep* and two
+    /// meaning *abandon*, told apart only by reading the arm around them. A rule
+    /// that lives at four sites gets corrected at three.
+    ///
+    /// # ⚠️ An absent mark is not a mark at zero
+    ///
+    /// A session can end **delivered with nothing to resume from**: a
+    /// transaction matching no protocol filter is counted `Unroutable` and
+    /// dropped before the buffer, while `handle` has already recorded that data
+    /// came off the stream — rightly, since the server is not refusing us. So a
+    /// delivered attempt's mark *completes* the one we hold: what it never
+    /// replaces is a mark we hold with **nothing**. A mark it does carry wins,
+    /// including one further back — which is the unbounded rewind named at the
+    /// end of this comment, and not a second reading of this sentence.
+    /// Overwriting it with `None` threw away a still-valid resume point and
+    /// sent the attempt after it to the live edge; the transactions of the
+    /// original break were then never asked for again, and no event table can
+    /// know a row is missing. Found in review of PR #149, 16 September 2026.
+    ///
+    /// # ⚠️ The `from_slot` fallback, and it is deterministic on purpose
+    ///
+    /// A replay can be refused for a reason this code cannot see — the slot may
+    /// be past the server's retention, and providers do not agree on how far
+    /// back that goes. So a replay that never established is not asked for
+    /// twice: the next attempt starts from the live edge, losing the gap rather
+    /// than looping on a request that cannot succeed. No error string is read to
+    /// decide this; only whether the stream produced anything.
+    ///
+    /// `None` states that rule rather than carrying the attempt's own mark,
+    /// which is the same value today and says less: an attempt that delivered
+    /// nothing fed neither the buffer nor `highest_meta_slot`, so
+    /// [`StreamSession::resume_from`] can only answer `None` for it, and the
+    /// returns before the stream is established hard-code it.
+    ///
+    /// ⚠️ **And that rule pays a price it is worth naming**: "produced nothing"
+    /// also describes a failure that never reached the server at all — a DNS
+    /// blip, a refused connection, the ~2-minute link cuts this machine sees
+    /// routinely. Such an attempt drops a resume point that was still valid, and
+    /// the gap is lost to a fault that had nothing to do with retention. It is
+    /// the very defect the branch above fixes, left standing on this one.
+    ///
+    /// ⚠️ **And the reason given for leaving it is wrong** — it said telling the
+    /// two apart meant reading a provider's error text. It does not: the two are
+    /// *separate code sites*. `channel.connect()` failing and the outbound send
+    /// failing both return before `client.subscribe` is ever called, so no
+    /// retention judgement can apply to them, while a `Status` from `subscribe`
+    /// is the server answering. What merges them is this enum, which records
+    /// only whether anything was produced. Corrected on reading, 16 September
+    /// 2026; the fix is a fact `Attempt` does not carry yet, and it is its own
+    /// ticket rather than a widening of this one.
+    ///
+    /// ⚠️ **One more thing this expression does not do: put a floor under the
+    /// mark.** `StreamSession::resume_from` prefers the oldest slot still
+    /// pending, which on a replay is about the `from_slot` just asked for, minus
+    /// `REWIND_SLOTS`. A stream that breaks before the buffer drains therefore
+    /// resumes two slots earlier each round, and the churn arm resets the budget
+    /// every time — so a provider that accepts and breaks after one transaction
+    /// walks `from_slot` backwards without bound, on a connection billed by the
+    /// byte. Pre-existing, unchanged here, and named because this is now the one
+    /// expression a reader is sent to.
+    fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
+        match self {
+            Attempt::StreamClosed {
+                delivered: true,
+                resume_from,
+            }
+            | Attempt::Failed {
+                delivered: true,
+                resume_from,
+                ..
+            } => (*resume_from).or(held),
+
+            Attempt::StreamClosed {
+                delivered: false, ..
+            }
+            | Attempt::Failed {
+                delivered: false, ..
+            } => None,
+
+            // Neither ending: the loop returns on both, so this answer is never
+            // read. Handing back what we hold is the only one that is not a
+            // claim about a stream that had none.
+            Attempt::ShutdownRequested | Attempt::DownstreamClosed => held,
+        }
+    }
 }
 
 /// Sleep, unless the shutdown token fires first.

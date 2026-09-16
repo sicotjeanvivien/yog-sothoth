@@ -73,6 +73,53 @@ pub(super) fn transaction_update_with_signature(
     }
 }
 
+/// The filter name of a transaction **no protocol claims**, and the one place a
+/// fixture spells it.
+///
+/// It is the other half of [`PROTOCOL`]: that constant is the name that routes,
+/// this one is a name that does not, and both are rules rather than strings.
+/// Four spellings were in the tree on 16 September 2026 — found in review, over
+/// two passes, against the rule the sibling constant's own comment states.
+///
+/// ⚠️ **`subscription_tests` keeps its own literal, and that is the decision.**
+/// It tests `protocol_of` itself, whose contract is that *any* unknown name
+/// answers `None` — tying that assertion to this constant would make it prove
+/// something narrower than the contract. The rule stated here is what a
+/// *fixture* spells, not every string in the crate that happens to name no
+/// protocol.
+pub(super) const UNROUTABLE_FILTER: &str = "a_filter_no_protocol_claims";
+
+/// A transaction the pipeline cannot route: well-formed, matching no protocol
+/// filter.
+///
+/// ⚠️ **It is delivery with nothing to resume from**, and that pair is why it
+/// has a fixture of its own. `protocol_of` answers `None`, so `on_transaction`
+/// counts it `Unroutable` and drops it *before* the buffer — while `handle` has
+/// already recorded that data came off the stream, rightly, since the server is
+/// not refusing us. A session ending on one is `delivered` with
+/// `resume_from() == None`, which is the premise of the listener's
+/// keep-the-mark rule.
+///
+/// ⚠️ **Against a conformant server this shape does not arrive**, and the
+/// claim that it did was wrong twice over before review caught it on
+/// 16 September 2026. `build_request` names every transaction filter
+/// `Protocol::as_str()` and `protocol_of` parses it back with `FromStr` — an
+/// exact inverse, guarded by `every_protocol_name_round_trips_through_the_filter`
+/// — so an update that arrives at all carries a name that parses. An
+/// address-lookup table changes *which* transactions match, never whether the
+/// match is named. What `Unroutable` counts is a filter name our request never
+/// emits, which is what `on_transaction`'s own comment says: the request and
+/// this reader disagree.
+///
+/// So this fixture builds a **non-conformant** update on purpose. It is still
+/// the right one: the pair it produces is what the listener must survive, the
+/// counter exists because the divergence is possible, and the rule under test —
+/// an absent mark is not a mark at zero — is cheaper to hold than to
+/// re-establish. What it is not is evidence of frequency.
+pub(super) fn unroutable_transaction(slot: u64) -> SubscribeUpdate {
+    transaction(slot, &[UNROUTABLE_FILTER])
+}
+
 /// A transaction update wrapped in the filters it matched.
 ///
 /// ⚠️ The filter names are the routing — see `subscription`. Passing anything

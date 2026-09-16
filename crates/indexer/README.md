@@ -138,11 +138,13 @@ builds it, and `infra/grpc.rs` no longer carries the blanket
 `#![allow(dead_code)]` it held while nothing reached it — deleting that line was
 the test that the wiring was complete, and it named three things that were
 genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
-`tests/geyser_server.rs` serves a test-written script over loopback, and every arm of
-`run`'s `match` has a test that goes red when it changes its answer to which
+`tests/geyser_server.rs` serves a test-written script over loopback, and every
+ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
-asks for. The backoff reset is the one decision left unguarded on purpose — its
-only observable is a duration; `listener.rs`'s header says why. What
+asks for — the budget being `run`'s `match`, and the resume point the one
+expression beside it, `Attempt::next_resume_from`. The backoff reset is the one
+decision left unguarded on purpose — its only observable is a duration;
+`listener.rs`'s header says why. What
 remains untested is what needs a *real* server: the connection, TLS, keep-alive,
 and whether a provider honours `from_slot` the way this code assumes.
 `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet one.

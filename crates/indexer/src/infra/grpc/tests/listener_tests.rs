@@ -104,9 +104,11 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 //
 // Everything below drives `GrpcListener::run` itself, against `test_geyser_server`.
 // Until 16 September 2026 nothing did: the six arms of `run`'s `match` are the
-// rule that decides what restarts the retry budget, what charges it, and where
-// the next attempt resumes from, and every one of the five defects that rule
-// has had was found by reading it. None could have been found by running it.
+// rule that decides what restarts the retry budget and what charges it — and,
+// until later the same day, where the next attempt resumed from too. Every one
+// of the five defects that rule has had was found by reading it. None could
+// have been found by running it. Where the resume point lives now, and what
+// that moved, is the last note of this header.
 //
 // ⚠️ **Every rule below has an owner**: one test whose failure message names
 // that rule, listed on the test as the mutation it is written against. A
@@ -116,20 +118,28 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // observed rather than the whole of it.
 //
 // ⚠️ **One entanglement cannot be removed, and pretending otherwise is how this
-// file already went wrong once.** The two tests that prove a resume point is
-// *given up* need one to exist first, and the only things that create one are
-// the two arms that prove a resume point is *kept*. So breaking
-// `Failed { delivered: true }`'s mark reddens three tests, not one:
+// file already went wrong once.** The three tests that prove a resume point is
+// *given up*, or *kept across an attempt that had none*, need one to exist
+// first, and the only things that create one are the two endings that prove a
+// resume point is *kept*. So breaking the mark an errored stream carries
+// reddens four tests, not one:
 // `an_error_mid_block_resumes_from_the_slot_that_was_cut`, which owns it and
-// names it, plus the two that borrowed it as scaffolding. The owner is what
+// names it, plus the three that borrowed it as scaffolding. The owner is what
 // makes that readable; it was missing until a review of this change found the
 // arm had none.
+//
+// ⚠️ **Where the resume mutations live moved on 16 September 2026**, with the
+// fix for a delivered session that had no mark of its own. `run`'s arms no
+// longer write `resume_from`: the rule is `Attempt::next_resume_from`, one
+// expression with one branch per ending, and the *per-ending* facts it reads are
+// built in `connect_and_stream`. So a mutation that used to belong to one arm
+// now belongs to one of those two places, and each annotation below says which.
 
 use tokio::time::timeout;
 use tonic::Status;
 
 use crate::infra::grpc::{
-    test_fixtures::{PROTOCOL, block_meta, ping, transaction},
+    test_fixtures::{PROTOCOL, block_meta, ping, transaction, unroutable_transaction},
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
 
@@ -169,6 +179,17 @@ async fn listener_for(server: &ScriptedGeyserHandle, max_attempts: u32) -> Arc<G
 /// has produced defects before.
 fn routable(slot: u64) -> Action {
     Action::send(transaction(slot, &[PROTOCOL.as_str()]))
+}
+
+/// A transaction of `slot` the pipeline cannot route.
+///
+/// ⚠️ The pair it produces — delivered, with nothing to resume from — is stated
+/// once, on `test_fixtures::unroutable_transaction`, and pinned on its own by
+/// `session_tests`. What is built here is only the `Action` that puts it on a
+/// stream, exactly as `routable` does: the rule is not spelled twice, for the
+/// reason the constant next to `PROTOCOL` gives.
+fn unroutable(slot: u64) -> Action {
+    Action::send(unroutable_transaction(slot))
 }
 
 /// Wait until the server has been subscribed to at least `count` times.
@@ -282,14 +303,16 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
 /// reset and a graceful GOAWAY cut the same block in the same place — so the
 /// arm that handles the error must carry the mark exactly as its twin does.
 ///
-/// Found by review of this change, 16 September 2026: this arm's
-/// `resume_from = mark` had **no owner**. Two tests used it as scaffolding to
-/// produce their `Some(8)`, so dropping it turned both of them red with
-/// messages about other rules — the very pattern the section header above
-/// forbids, left unapplied on one arm by the commit that wrote the rule.
+/// Found by review of this change, 16 September 2026: the mark an errored
+/// stream carries had **no owner**. Two tests used it as scaffolding to produce
+/// their `Some(8)`, so dropping it turned both of them red with messages about
+/// other rules — the very pattern the section header above forbids, left
+/// unapplied on one arm by the commit that wrote the rule.
 ///
-/// Mutation this is written against: removing `resume_from = mark` from the
-/// `Failed { delivered: true }` arm.
+/// Mutation this is written against: `connect_and_stream`'s `Err(status)`
+/// ending handing back `resume_from: None` instead of `session.resume_from()`.
+/// That is where this ending's mark is now built — `next_resume_from` no longer
+/// tells the two endings apart, which is the point of it.
 #[tokio::test]
 async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
     let server = test_geyser_server::start(vec![
@@ -379,9 +402,10 @@ async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
 /// again — rewound by `REWIND_SLOTS`, because a block-meta does not promise its
 /// slot's transactions have all arrived either.
 ///
-/// Mutation this is written against: the churn arm dropping the mark
-/// (`resume_from = mark` → `None`), which is the half `session_tests` cannot
-/// see — it proves `resume_from` computes 8, not that anything asks for it.
+/// Mutation this is written against: `connect_and_stream`'s `Ok(None)` ending
+/// handing back `resume_from: None` instead of `session.resume_from()` — the
+/// half `session_tests` cannot see, since it proves `resume_from` computes 8,
+/// not that anything asks for it.
 #[tokio::test]
 async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
     let server = test_geyser_server::start(vec![
@@ -411,15 +435,78 @@ async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
     );
 }
 
+/// ⚠️ **A session that delivered but has no mark of its own must not erase the
+/// mark we already hold.** An absent mark is not a mark at zero: a transaction
+/// matching no protocol filter is counted `Unroutable` and dropped before the
+/// buffer, so the session ends `delivered` with `resume_from() == None` — and
+/// reading that as "there is no resume point" threw away a still-valid one and
+/// sent the attempt after it to the live edge. The transactions of the original
+/// break are then never asked for again, and no event table can know a row is
+/// missing.
+///
+/// The three attempts are the defect: *break mid-block* leaves slot 8, *one
+/// unroutable transaction then a clean close* has nothing to offer, and the
+/// third must still ask for 8.
+///
+/// Mutation this is written against: `Attempt::next_resume_from`'s delivered
+/// branch returning the session's mark alone (`*resume_from`) instead of
+/// `(*resume_from).or(held)`. It reddens nothing else — the two resumption
+/// tests above hold `None` at that point, where `or` is invisible.
+///
+/// ⚠️ **The mark of the first attempt is scaffolding**, produced by the
+/// `Failed { delivered: true }` ending as its siblings' is, and for the reason
+/// the header gives: only the delivered arms can create a mark to observe.
+#[tokio::test]
+async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
+    let server = test_geyser_server::start(vec![
+        // Slot 10's transaction and then a break — the mark is 10 rewound by two.
+        ScriptedSession::Stream(vec![
+            routable(10),
+            Action::Fail(Status::unavailable("the connection was reset")),
+        ]),
+        // Delivery the pipeline cannot route, then a clean close: this session
+        // has nothing to resume from, and nothing is not "slot zero".
+        ScriptedSession::Stream(vec![unroutable(20)]),
+        ScriptedSession::closes_empty(),
+    ])
+    .await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener_for(&server, 1)
+            .await
+            .run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("one empty close after two churn endings exhausts a budget of one");
+
+    assert!(outcome.is_err(), "{outcome:?}");
+    // ⚠️ The whole vector, not a prefix, and it is safe here where its
+    // neighbours' is not: removing either churn arm's `attempt = 0` still
+    // leaves three subscriptions asking for these same three points, so no
+    // budget rule can redden this test.
+    assert_eq!(
+        server.resume_points(),
+        vec![None, Some(8), Some(8)],
+        "the unroutable transaction gave that session nothing to resume from; \
+         it must not take slot 8 away from the attempt after it"
+    );
+}
+
 /// ⚠️ **A replay refused at the handshake is not asked for twice.** The slot
 /// may be past the server's retention, and providers do not agree on how far
 /// back that goes, so the next attempt starts from the live edge: the gap is
 /// lost rather than looped on. No error text is read to decide it — only
 /// whether the stream produced anything.
 ///
-/// Mutation this is written against: removing `resume_from = mark` from the
-/// `Failed { delivered: false }` arm, which keeps the refused mark and asks for
-/// it again.
+/// Mutation this is written against: `Attempt::next_resume_from`'s undelivered
+/// branch returning `held` rather than `None`, which keeps the refused mark and
+/// asks for it again. It is the mutation
+/// `a_clean_close_that_delivered_nothing_gives_up_the_replay_point` also owns —
+/// one branch now answers for both endings, and a branch cannot be corrected on
+/// one ending and forgotten on the other, which is what four assignments
+/// allowed. What separates the two tests is the ending each drives it with.
 ///
 /// ⚠️ A **prefix** of the resume points, not all of them: reaching a second
 /// attempt at all needs the budget reset of
@@ -468,8 +555,10 @@ async fn a_refused_resume_point_is_not_asked_for_twice() {
 ///
 /// Found by review of this change, 16 September 2026, with its twin above.
 ///
-/// Mutation this is written against: removing `resume_from = mark` from the
-/// `StreamClosed { delivered: false }` arm.
+/// Mutation this is written against: the same one its `Failed`-side twin names
+/// — `Attempt::next_resume_from`'s undelivered branch returning `held` rather
+/// than `None`. The branch is shared; the ending that reaches it is not, and
+/// that is what this test adds.
 ///
 /// ⚠️ **The mark is produced by the `Failed` arm, on purpose**, though the rule
 /// under test is the clean-EOF one. Observing a mark being dropped needs a mark

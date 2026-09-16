@@ -17,7 +17,8 @@ use yellowstone_grpc_proto::prelude::{SubscribeUpdatePing, SubscribeUpdatePong};
 // The updates themselves live next door, because `listener_tests` builds the
 // same ones to put on a real stream — see `test_fixtures`.
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature, update,
+    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature,
+    unroutable_transaction, update,
 };
 
 /// A session, its downstream receiver, and its outbound receiver.
@@ -135,7 +136,7 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
 async fn a_transaction_matching_no_protocol_filter_is_dropped() {
     let (mut session, mut downstream, _outbound) = session(4);
 
-    session.handle(transaction(10, &["something_else"])).await;
+    session.handle(unroutable_transaction(10)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
 
     assert!(downstream.try_recv().is_err());
@@ -204,7 +205,7 @@ fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
                 session.handle(block_meta(10, Some(1_700_000_000))).await;
 
                 // Unroutable: perfectly well-formed, matching no protocol.
-                session.handle(transaction(11, &["something_else"])).await;
+                session.handle(unroutable_transaction(11)).await;
             });
     });
 
@@ -447,6 +448,38 @@ async fn only_data_counts_as_delivered_not_a_keep_alive() {
 
     session.handle(block_meta(10, Some(1_700_000_000))).await;
     assert!(session.received_data(), "a block-meta is data");
+}
+
+/// ⚠️ **An unroutable transaction is delivery with nothing to resume from**, and
+/// that pair is the premise of the listener's keep-the-mark rule. `handle` sets
+/// `received_data` before `on_transaction` decides anything — which is right,
+/// since the server did send us data and is not refusing us — and
+/// `on_transaction` then drops the transaction *before* the buffer, leaving no
+/// slot to resume from.
+///
+/// So the two answers below disagree on purpose, and the listener has to read
+/// the second as "this session has no mark", never as "there is no mark":
+/// `an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold` is what
+/// proves it does. Stated here so that a session which stopped producing the
+/// pair would redden *this* test, with a message that names the reason, rather
+/// than only that one.
+#[tokio::test]
+async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
+    let (mut session, _downstream, _outbound) = session(4);
+
+    session.handle(unroutable_transaction(10)).await;
+
+    assert!(
+        session.received_data(),
+        "the server sent data and did not refuse us — the retry budget must not \
+         be charged for this session"
+    );
+    assert_eq!(
+        session.resume_from(),
+        None,
+        "it never reached the buffer, so this session finished no slot and \
+         left none pending"
+    );
 }
 
 /// ⚠️ **The back-pressure wait must not swallow a shutdown.** `handle` is driven
