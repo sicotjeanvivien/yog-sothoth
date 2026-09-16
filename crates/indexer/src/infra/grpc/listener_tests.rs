@@ -108,12 +108,22 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // the next attempt resumes from, and every one of the five defects that rule
 // has had was found by reading it. None could have been found by running it.
 //
-// ⚠️ **Each test is written against one named mutation**, listed on the test,
-// and only that one. Several of these rules can be broken in ways that make
-// another test red too, which would send whoever reads the failure to the wrong
-// file — so where a test needs a rule it does not own (the budget reset, to
-// reach a second attempt at all), it asserts a *prefix* of what it observed
-// rather than the whole of it.
+// ⚠️ **Every rule below has an owner**: one test whose failure message names
+// that rule, listed on the test as the mutation it is written against. A
+// mutation that reddens a test which does *not* own the rule sends the reader
+// to the wrong file, so where a test needs a rule it does not own — the budget
+// reset, to reach a second attempt at all — it asserts a *prefix* of what it
+// observed rather than the whole of it.
+//
+// ⚠️ **One entanglement cannot be removed, and pretending otherwise is how this
+// file already went wrong once.** The two tests that prove a resume point is
+// *given up* need one to exist first, and the only things that create one are
+// the two arms that prove a resume point is *kept*. So breaking
+// `Failed { delivered: true }`'s mark reddens three tests, not one:
+// `an_error_mid_block_resumes_from_the_slot_that_was_cut`, which owns it and
+// names it, plus the two that borrowed it as scaffolding. The owner is what
+// makes that readable; it was missing until a review of this change found the
+// arm had none.
 
 use tokio::time::timeout;
 use tonic::Status;
@@ -264,6 +274,51 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
         3,
         "the session that delivered must not be charged: two attempts after it, \
          not one"
+    );
+}
+
+/// ⚠️ **And the same resume point, when the cut is an error rather than a clean
+/// close.** Which of the two a provider sends is not ours to choose — a TCP
+/// reset and a graceful GOAWAY cut the same block in the same place — so the
+/// arm that handles the error must carry the mark exactly as its twin does.
+///
+/// Found by review of this change, 16 September 2026: this arm's
+/// `resume_from = mark` had **no owner**. Two tests used it as scaffolding to
+/// produce their `Some(8)`, so dropping it turned both of them red with
+/// messages about other rules — the very pattern the section header above
+/// forbids, left unapplied on one arm by the commit that wrote the rule.
+///
+/// Mutation this is written against: removing `resume_from = mark` from the
+/// `Failed { delivered: true }` arm.
+#[tokio::test]
+async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
+    let server = test_geyser_server::start(vec![
+        // Slot 10's transaction, then the stream breaks — no block-meta, so the
+        // slot is still open when the session dies.
+        ScriptedSession::Stream(vec![
+            routable(10),
+            Action::Fail(Status::unavailable("the connection was reset")),
+        ]),
+        ScriptedSession::closes_empty(),
+    ])
+    .await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener_for(&server, 1)
+            .await
+            .run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("one empty close after the churn exhausts a budget of one");
+
+    assert!(outcome.is_err(), "{outcome:?}");
+    assert_eq!(
+        server.resume_points(),
+        vec![None, Some(8)],
+        "a stream that broke mid-block must ask for slot 10 again, rewound by \
+         two — exactly like one that closed there"
     );
 }
 

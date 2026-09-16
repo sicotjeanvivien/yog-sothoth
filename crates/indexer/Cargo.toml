@@ -83,3 +83,21 @@ yog-core = { path = "../core", features = ["test-support"] }
 # request and then look for in every printed form. A dev-dependency, so the
 # constructor stays unreachable from production code.
 yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
+# ⚠️ **Two features this crate uses and never declared**, found in review of
+# PR #149. `infra::grpc::test_geyser_server` serves a scripted Geyser on
+# `127.0.0.1:0`, which needs `TcpListenerStream` (`tokio-stream/net`) and
+# `transport::Server` plus the generated `GeyserServer` (`tonic/server`).
+#
+# Both were *already* switched on, but only as a side effect:
+# `yellowstone-grpc-proto` pulls `tonic` with its default features, which turns
+# on `tonic/transport` → `tonic/server` → `tokio-stream/net`. That is a chain
+# through a caret-pinned third party, so a routine `12.x` release setting
+# `default-features = false` on its own `tonic` — or a tonic that moves `server`
+# out of `transport` — would break the test build on a `cargo update`, and
+# `check-per-crate` could not catch it (default features, no test targets).
+#
+# Declaring them changes no version and no `Cargo.lock` entry: features are not
+# recorded there, and these two were resolved on already. It only stops the
+# build from depending on someone else's default.
+tokio-stream = { workspace = true, features = ["net"] }
+tonic = { workspace = true, features = ["server"] }
