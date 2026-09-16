@@ -100,9 +100,22 @@ pub(super) const UNROUTABLE_FILTER: &str = "a_filter_no_protocol_claims";
 /// `resume_from() == None`, which is the premise of the listener's
 /// keep-the-mark rule.
 ///
-/// On the wire it is not exotic: `account_include` filters on *account keys*,
-/// so a transaction reaching the program through an address-lookup table
-/// arrives all the same.
+/// ⚠️ **Against a conformant server this shape does not arrive**, and the
+/// claim that it did was wrong twice over before review caught it on
+/// 16 September 2026. `build_request` names every transaction filter
+/// `Protocol::as_str()` and `protocol_of` parses it back with `FromStr` — an
+/// exact inverse, guarded by `every_protocol_name_round_trips_through_the_filter`
+/// — so an update that arrives at all carries a name that parses. An
+/// address-lookup table changes *which* transactions match, never whether the
+/// match is named. What `Unroutable` counts is a filter name our request never
+/// emits, which is what `on_transaction`'s own comment says: the request and
+/// this reader disagree.
+///
+/// So this fixture builds a **non-conformant** update on purpose. It is still
+/// the right one: the pair it produces is what the listener must survive, the
+/// counter exists because the divergence is possible, and the rule under test —
+/// an absent mark is not a mark at zero — is cheaper to hold than to
+/// re-establish. What it is not is evidence of frequency.
 pub(super) fn unroutable_transaction(slot: u64) -> SubscribeUpdate {
     transaction(slot, &[UNROUTABLE_FILTER])
 }
