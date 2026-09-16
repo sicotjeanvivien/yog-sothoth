@@ -27,7 +27,11 @@
 //! ⚠️ **Nothing here has met a real server.** What changed on 16 September 2026
 //! is that the retry rule now meets a *scripted* one: `test_geyser_server` serves a
 //! test-written script over loopback so `listener_tests` can drive
-//! `GrpcListener::run` through every ending a stream can have. That proves this
+//! `GrpcListener::run` through every ending a stream can have. The one ending
+//! that is **not** a stream's — the dial that never reached the service — is
+//! guarded a level down, against a port with nothing behind it, because a
+//! scripted server cannot fail a dial; `listener.rs`'s header carries that
+//! measurement. All of it proves this
 //! client against our model of the server, and nothing about the protocol — so
 //! TLS, keep-alive and the exact semantics of `from_slot` are still written,
 //! reviewed and unproven, and `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
