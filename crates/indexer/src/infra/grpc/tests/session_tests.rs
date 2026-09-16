@@ -136,7 +136,7 @@ async fn a_block_meta_without_a_time_gives_up_the_slot() {
 async fn a_transaction_matching_no_protocol_filter_is_dropped() {
     let (mut session, mut downstream, _outbound) = session(4);
 
-    session.handle(transaction(10, &["something_else"])).await;
+    session.handle(unroutable_transaction(10)).await;
     session.handle(block_meta(10, Some(1_700_000_000))).await;
 
     assert!(downstream.try_recv().is_err());

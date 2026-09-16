@@ -73,13 +73,20 @@ pub(super) fn transaction_update_with_signature(
     }
 }
 
-/// The filter name of a transaction **no protocol claims**, and the one place it
-/// is spelled.
+/// The filter name of a transaction **no protocol claims**, and the one place a
+/// fixture spells it.
 ///
 /// It is the other half of [`PROTOCOL`]: that constant is the name that routes,
 /// this one is a name that does not, and both are rules rather than strings.
-/// Three spellings of this one were in the tree on 16 September 2026 — found in
-/// review, against the rule the sibling constant's own comment states.
+/// Four spellings were in the tree on 16 September 2026 — found in review, over
+/// two passes, against the rule the sibling constant's own comment states.
+///
+/// ⚠️ **`subscription_tests` keeps its own literal, and that is the decision.**
+/// It tests `protocol_of` itself, whose contract is that *any* unknown name
+/// answers `None` — tying that assertion to this constant would make it prove
+/// something narrower than the contract. The rule stated here is what a
+/// *fixture* spells, not every string in the crate that happens to name no
+/// protocol.
 pub(super) const UNROUTABLE_FILTER: &str = "a_filter_no_protocol_claims";
 
 /// A transaction the pipeline cannot route: well-formed, matching no protocol

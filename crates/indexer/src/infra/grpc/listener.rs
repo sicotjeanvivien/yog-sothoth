@@ -489,8 +489,11 @@ impl Attempt {
     /// transaction matching no protocol filter is counted `Unroutable` and
     /// dropped before the buffer, while `handle` has already recorded that data
     /// came off the stream — rightly, since the server is not refusing us. So a
-    /// delivered attempt's mark *completes* the one we hold and never replaces
-    /// it. Overwriting it with `None` threw away a still-valid resume point and
+    /// delivered attempt's mark *completes* the one we hold: what it never
+    /// replaces is a mark we hold with **nothing**. A mark it does carry wins,
+    /// including one further back — which is the unbounded rewind named at the
+    /// end of this comment, and not a second reading of this sentence.
+    /// Overwriting it with `None` threw away a still-valid resume point and
     /// sent the attempt after it to the live edge; the transactions of the
     /// original break were then never asked for again, and no event table can
     /// know a row is missing. Found in review of PR #149, 16 September 2026.

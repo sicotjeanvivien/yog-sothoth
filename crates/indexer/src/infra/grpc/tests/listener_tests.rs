@@ -104,9 +104,11 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 //
 // Everything below drives `GrpcListener::run` itself, against `test_geyser_server`.
 // Until 16 September 2026 nothing did: the six arms of `run`'s `match` are the
-// rule that decides what restarts the retry budget, what charges it, and where
-// the next attempt resumes from, and every one of the five defects that rule
-// has had was found by reading it. None could have been found by running it.
+// rule that decides what restarts the retry budget and what charges it — and,
+// until later the same day, where the next attempt resumed from too. Every one
+// of the five defects that rule has had was found by reading it. None could
+// have been found by running it. Where the resume point lives now, and what
+// that moved, is the last note of this header.
 //
 // ⚠️ **Every rule below has an owner**: one test whose failure message names
 // that rule, listed on the test as the mutation it is written against. A
