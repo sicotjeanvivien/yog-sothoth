@@ -6,7 +6,7 @@
 //! `scheme_tests`'s; what is tested here is that this path builds its endpoint,
 //! and asks.
 //!
-//! **Inside the loop** — the retry rule itself, driven against `fake_geyser`.
+//! **Inside the loop** — the retry rule itself, driven against `test_geyser_server`.
 //! A scripted server is what makes it reachable: every decision `run` makes is
 //! a decision about *how a stream ended*, and nothing short of a server
 //! produces those endings. See the header of that module for what this proves
@@ -102,7 +102,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 
 // ── the retry rules, against a scripted server ──────────────────────
 //
-// Everything below drives `GrpcListener::run` itself, against `fake_geyser`.
+// Everything below drives `GrpcListener::run` itself, against `test_geyser_server`.
 // Until 16 September 2026 nothing did: the six arms of `run`'s `match` are the
 // rule that decides what restarts the retry budget, what charges it, and where
 // the next attempt resumes from, and every one of the five defects that rule
@@ -119,8 +119,8 @@ use tokio::time::timeout;
 use tonic::Status;
 
 use crate::infra::grpc::{
-    fake_geyser::{self, Action, FakeGeyserHandle, ScriptedSession},
-    fixtures::{PROTOCOL, block_meta, ping, transaction},
+    test_fixtures::{PROTOCOL, block_meta, ping, transaction},
+    test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
 
 /// Nothing here should take seconds; `run`'s own backoff starts at one and the
@@ -141,7 +141,7 @@ const BLOCK_TIME: i64 = 1_700_000_000;
 /// ⚠️ The `watch` is not decoration: `build_request` refuses an empty
 /// subscription with `NoSubscriptionTargets` **before** the retry loop, so a
 /// test that forgot it would never reach a single one of these rules.
-async fn listener_for(server: &FakeGeyserHandle, max_attempts: u32) -> Arc<GrpcListener> {
+async fn listener_for(server: &ScriptedGeyserHandle, max_attempts: u32) -> Arc<GrpcListener> {
     let listener = Arc::new(GrpcListener::new(
         Endpoint::for_tests(server.url(), None),
         max_attempts,
@@ -154,7 +154,7 @@ async fn listener_for(server: &FakeGeyserHandle, max_attempts: u32) -> Arc<GrpcL
 ///
 /// ⚠️ Any other name and `on_transaction` drops it before the buffer, so
 /// `resume_from` stays `None` and the resumption tests assert nothing. Which is
-/// why the name comes from `fixtures::PROTOCOL` and is not spelled again here:
+/// why the name comes from `test_fixtures::PROTOCOL` and is not spelled again here:
 /// that constant *is* the rule, and a second copy of a rule is how this module
 /// has produced defects before.
 fn routable(slot: u64) -> Action {
@@ -162,7 +162,7 @@ fn routable(slot: u64) -> Action {
 }
 
 /// Wait until the server has been subscribed to at least `count` times.
-async fn wait_for_subscriptions(server: &FakeGeyserHandle, count: usize) {
+async fn wait_for_subscriptions(server: &ScriptedGeyserHandle, count: usize) {
     let deadline = tokio::time::Instant::now() + TEST_DEADLINE;
     while server.requests().len() < count {
         assert!(
@@ -187,7 +187,7 @@ async fn wait_for_subscriptions(server: &FakeGeyserHandle, count: usize) {
 /// it is the **number of attempts**, which is the quantity the rule is about.
 #[tokio::test]
 async fn a_stream_that_only_pings_before_closing_spends_the_budget() {
-    let server = fake_geyser::start(vec![
+    let server = test_geyser_server::start(vec![
         ScriptedSession::Stream(vec![Action::send(ping())]),
         ScriptedSession::Stream(vec![Action::send(ping())]),
     ])
@@ -232,7 +232,7 @@ async fn a_stream_that_only_pings_before_closing_spends_the_budget() {
 /// `Failed { delivered: true }` arm.
 #[tokio::test]
 async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
-    let server = fake_geyser::start(vec![
+    let server = test_geyser_server::start(vec![
         ScriptedSession::Stream(vec![
             routable(10),
             Action::Fail(Status::unavailable("the provider restarted")),
@@ -283,7 +283,7 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
 /// `StreamClosed { delivered: true }` arm.
 #[tokio::test]
 async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
-    let server = fake_geyser::start(vec![
+    let server = test_geyser_server::start(vec![
         // No `Fail`: the actions simply run out, which the client sees as a
         // clean end of stream.
         ScriptedSession::Stream(vec![routable(10)]),
@@ -329,7 +329,7 @@ async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
 /// see — it proves `resume_from` computes 8, not that anything asks for it.
 #[tokio::test]
 async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
-    let server = fake_geyser::start(vec![
+    let server = test_geyser_server::start(vec![
         // Slot 10's transaction, and then the stream ends — no block-meta, so
         // the slot is still open when the session dies.
         ScriptedSession::Stream(vec![routable(10)]),
@@ -373,7 +373,7 @@ async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
 /// whole vector would make this test red for a defect it does not own.
 #[tokio::test]
 async fn a_refused_resume_point_is_not_asked_for_twice() {
-    let server = fake_geyser::start(vec![
+    let server = test_geyser_server::start(vec![
         ScriptedSession::Stream(vec![
             routable(10),
             Action::Fail(Status::unavailable("the provider restarted")),
@@ -429,7 +429,7 @@ async fn a_refused_resume_point_is_not_asked_for_twice() {
 /// one would otherwise make this test red for a defect it does not own.
 #[tokio::test]
 async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
-    let server = fake_geyser::start(vec![
+    let server = test_geyser_server::start(vec![
         ScriptedSession::Stream(vec![
             routable(10),
             Action::Fail(Status::unavailable("the provider restarted")),
@@ -470,7 +470,7 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
 /// a listener that never returns — which is why the deadline is the assertion.
 #[tokio::test]
 async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
-    let server = fake_geyser::start(vec![ScriptedSession::Stream(vec![Action::Hold])]).await;
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![Action::Hold])]).await;
     let (downstream, _consumer) = mpsc::channel(4);
     let shutdown = CancellationToken::new();
 
@@ -511,7 +511,7 @@ async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
 /// consumes, so the second can never proceed.
 #[tokio::test]
 async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
-    let server = fake_geyser::start(vec![ScriptedSession::Stream(vec![
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
         routable(10),
         routable(10),
         Action::send(block_meta(10, Some(BLOCK_TIME))),
@@ -558,7 +558,7 @@ async fn a_shutdown_reaches_a_session_parked_on_a_full_consumer() {
 /// `run` would return an error instead of `Ok`.
 #[tokio::test]
 async fn a_vanished_consumer_stops_the_listener_without_retrying() {
-    let server = fake_geyser::start(vec![ScriptedSession::Stream(vec![
+    let server = test_geyser_server::start(vec![ScriptedSession::Stream(vec![
         routable(10),
         Action::send(block_meta(10, Some(BLOCK_TIME))),
         Action::Hold,

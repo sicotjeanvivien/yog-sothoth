@@ -11,7 +11,7 @@
 //!
 //! It validates **our client against our model of the server**, not the
 //! protocol. The script is written from a reading of the proto, exactly like
-//! the hand-built messages of `fixtures`. A provider that honours `from_slot`
+//! the hand-built messages of `test_fixtures`. A provider that honours `from_slot`
 //! differently, or pings on a schedule of its own, is
 //! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` — the two are complements,
 //! not substitutes.
@@ -108,7 +108,7 @@ impl ScriptedSession {
     }
 }
 
-struct FakeGeyser {
+struct ScriptedGeyser {
     /// Consumed one entry per `subscribe`.
     script: Mutex<VecDeque<ScriptedSession>>,
     /// Every `SubscribeRequest` this server was sent, in order. The test reads
@@ -117,7 +117,7 @@ struct FakeGeyser {
 }
 
 #[tonic::async_trait]
-impl Geyser for FakeGeyser {
+impl Geyser for ScriptedGeyser {
     type SubscribeStream = ReceiverStream<Result<SubscribeUpdate, Status>>;
 
     async fn subscribe(
@@ -257,14 +257,14 @@ impl Geyser for FakeGeyser {
 }
 
 /// A running scripted server, and the way back to what it was asked.
-pub(super) struct FakeGeyserHandle {
+pub(super) struct ScriptedGeyserHandle {
     /// The plaintext URL to hand `Endpoint::for_tests`.
     url: String,
     requests: Arc<Mutex<Vec<SubscribeRequest>>>,
     server: JoinHandle<()>,
 }
 
-impl FakeGeyserHandle {
+impl ScriptedGeyserHandle {
     pub(super) fn url(&self) -> &str {
         &self.url
     }
@@ -291,7 +291,7 @@ impl FakeGeyserHandle {
     }
 }
 
-impl Drop for FakeGeyserHandle {
+impl Drop for ScriptedGeyserHandle {
     fn drop(&mut self) {
         // The server outlives nothing: a test that ended must not leave a
         // listener socket behind for the next one.
@@ -300,14 +300,14 @@ impl Drop for FakeGeyserHandle {
 }
 
 /// Bind a scripted server on a free port and start serving.
-pub(super) async fn start(script: Vec<ScriptedSession>) -> FakeGeyserHandle {
+pub(super) async fn start(script: Vec<ScriptedSession>) -> ScriptedGeyserHandle {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .expect("a free loopback port");
     let address = listener.local_addr().expect("a bound address");
 
     let requests = Arc::new(Mutex::new(Vec::new()));
-    let service = FakeGeyser {
+    let service = ScriptedGeyser {
         script: Mutex::new(script.into()),
         requests: Arc::clone(&requests),
     };
@@ -320,7 +320,7 @@ pub(super) async fn start(script: Vec<ScriptedSession>) -> FakeGeyserHandle {
             .expect("the scripted server serves until the test drops it");
     });
 
-    FakeGeyserHandle {
+    ScriptedGeyserHandle {
         // ⚠️ `http://`, and the module header says why that is not a shortcut.
         url: format!("http://{address}"),
         requests,

@@ -18,7 +18,7 @@
 //! # ⚠️ What is here, and how much of it a test reaches
 //!
 //! **The retry rule is exercised**, since 16 September 2026: `listener_tests`
-//! drives `run` against `fake_geyser`, a scripted Yellowstone server in the
+//! drives `run` against `test_geyser_server`, a scripted Yellowstone server in the
 //! test process. Every arm of the `match` below has a test that goes red when
 //! that arm's answer to *which ending restarts the budget, which charges it,
 //! and what the next attempt asks for* changes. Until then the rule was read

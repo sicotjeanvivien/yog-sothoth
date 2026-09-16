@@ -1,7 +1,7 @@
 //! Tests for what one update does.
 //!
 //! ⚠️ **The same caveat as `transaction_adapter_tests`, and it is worth
-//! repeating rather than referencing:** the updates come from `fixtures`, where
+//! repeating rather than referencing:** the updates come from `test_fixtures`, where
 //! they are built by hand, so they carry this author's understanding of what a
 //! provider sends. What they *can* establish is everything this module decides
 //! on its own — which slot a transaction waits for, what happens when a
@@ -15,8 +15,8 @@ use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::{SubscribeUpdatePing, SubscribeUpdatePong};
 
 // The updates themselves live next door, because `listener_tests` builds the
-// same ones to put on a real stream — see `fixtures`.
-use crate::infra::grpc::fixtures::{
+// same ones to put on a real stream — see `test_fixtures`.
+use crate::infra::grpc::test_fixtures::{
     PROTOCOL, at, block_meta, transaction, transaction_update_with_signature, update,
 };
 

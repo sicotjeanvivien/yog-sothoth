@@ -2,7 +2,7 @@
 //!
 //! Two test modules need the same protobuf shapes and for different reasons:
 //! `session_tests` feeds them to [`StreamSession::handle`] directly, and
-//! `listener_tests` has `fake_geyser` send them down a real stream so that
+//! `listener_tests` has `test_geyser_server` send them down a real stream so that
 //! `GrpcListener::run` sees them arrive. The shapes themselves are the same
 //! messages, so they are defined here rather than twice.
 //!

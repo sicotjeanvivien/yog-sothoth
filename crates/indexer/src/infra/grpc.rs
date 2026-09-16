@@ -25,7 +25,7 @@
 //! running.
 //!
 //! ⚠️ **Nothing here has met a real server.** What changed on 16 September 2026
-//! is that the retry rule now meets a *scripted* one: `fake_geyser` serves a
+//! is that the retry rule now meets a *scripted* one: `test_geyser_server` serves a
 //! test-written script over loopback so `listener_tests` can drive
 //! `GrpcListener::run` through every ending a stream can have. That proves this
 //! client against our model of the server, and nothing about the protocol — so
@@ -36,19 +36,15 @@
 //! `session`, the pairing in `slot_timestamp_buffer`, the shape in
 //! `transaction_adapter`.
 //!
-//! Two of the modules below are `#[cfg(test)]` and carry no production code:
-//! `fixtures` builds the protobuf updates both test modules send, and
-//! `fake_geyser` is the scripted server itself.
+//! The last two modules below are `#[cfg(test)]` and carry no production code:
+//! `test_fixtures` builds the protobuf updates both test modules send, and
+//! `test_geyser_server` is the scripted server itself.
 //!
 //! The `#![allow(dead_code)]` this module carried until 10 September 2026 is
 //! gone with the wiring it was waiting for. It had covered the whole path
 //! rather than each module, precisely so that deleting it would make the build
 //! name whatever was still unreachable — which it did.
 
-#[cfg(test)]
-mod fake_geyser;
-#[cfg(test)]
-mod fixtures;
 mod interceptor;
 mod listener;
 mod metrics;
@@ -57,6 +53,14 @@ mod slot_timestamp_buffer;
 mod source;
 mod subscription;
 mod transaction_adapter;
+
+// Test-only, and last so that the list above is the path itself. The `test_`
+// prefix is the signal a bare name would not give: `#[cfg(test)]` says it in
+// the source, nothing said it in a directory listing.
+#[cfg(test)]
+mod test_fixtures;
+#[cfg(test)]
+mod test_geyser_server;
 
 pub(crate) use listener::GrpcListener;
 pub(crate) use metrics::{GrpcBufferMetrics, GrpcListenerMetrics};
