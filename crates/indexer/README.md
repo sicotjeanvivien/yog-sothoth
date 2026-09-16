@@ -31,6 +31,10 @@ indexer/src/
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),
 │                            SignatureDispatcher filter chain, FetchWorker +
 │                            TransactionFetcher (HTTP + FetchError)
+│   └── tests/             ← and its seven, for the same reason. These two are
+│                            the only grouped ones: the crate's nine other
+│                            directories hold one or two test files each, and a
+│                            directory for one file groups nothing
 ├── bootstrap/             ← Config::load(), and Daemon (composition root) split
 │                            by subject: daemon.rs holds the lifecycle, and
 │                            daemon/ the wiring (init.rs), the tasks and the
