@@ -423,5 +423,5 @@ impl<T> SlotTimestampBuffer<T> {
 }
 
 #[cfg(test)]
-#[path = "slot_timestamp_buffer_tests.rs"]
+#[path = "tests/slot_timestamp_buffer_tests.rs"]
 mod tests;

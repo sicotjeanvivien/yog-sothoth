@@ -76,7 +76,7 @@ fn reporter(get_slot: &[Value], repository: Arc<ScriptedRepository>) -> NetworkS
 ///
 /// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
 /// *current thread* for the duration of a closure, so the future is driven
-/// inside it — the recipe `infra/grpc/session_tests.rs` uses.
+/// inside it — the recipe `infra/grpc/tests/session_tests.rs` uses.
 fn with_recorder(body: impl Future<Output = ()>) -> Snapshotter {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();

@@ -408,5 +408,5 @@ fn drop_reason(error: &CoreError) -> DropReason {
 }
 
 #[cfg(test)]
-#[path = "session_tests.rs"]
+#[path = "tests/session_tests.rs"]
 mod tests;

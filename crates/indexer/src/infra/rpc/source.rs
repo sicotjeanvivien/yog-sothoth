@@ -284,5 +284,5 @@ fn join(
 }
 
 #[cfg(test)]
-#[path = "source_tests.rs"]
+#[path = "tests/source_tests.rs"]
 mod tests;

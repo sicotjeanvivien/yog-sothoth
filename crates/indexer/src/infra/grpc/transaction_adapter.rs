@@ -321,5 +321,5 @@ fn to_payload(
 }
 
 #[cfg(test)]
-#[path = "transaction_adapter_tests.rs"]
+#[path = "tests/transaction_adapter_tests.rs"]
 mod tests;

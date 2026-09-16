@@ -120,9 +120,9 @@ Respect **skip-and-log over abort-and-die**: per-event failures are logged + cou
 
 - Add fixture transactions under `crates/core/tests/fixtures/` (one per recognized
   signature for the new protocol) and extraction tests in
-  `crates/indexer/src/infra/rpc/fixture_pipeline_tests.rs` — they live beside the
-  adapter that turns a fixture into an `OnChainTransaction`, the fixtures stay in
-  `yog-core`.
+  `crates/indexer/src/infra/rpc/tests/fixture_pipeline_tests.rs` — one directory
+  over from the adapter that turns a fixture into an `OnChainTransaction`, the
+  fixtures stay in `yog-core`.
 
 ## Verify (run from repo root)
 

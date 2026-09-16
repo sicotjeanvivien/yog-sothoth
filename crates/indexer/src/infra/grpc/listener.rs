@@ -494,5 +494,5 @@ async fn sleep_or_cancel(duration: Duration, shutdown: &CancellationToken) {
 }
 
 #[cfg(test)]
-#[path = "listener_tests.rs"]
+#[path = "tests/listener_tests.rs"]
 mod tests;

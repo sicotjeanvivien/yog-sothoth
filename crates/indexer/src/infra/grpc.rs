@@ -54,12 +54,21 @@ mod source;
 mod subscription;
 mod transaction_adapter;
 
-// Test-only, and last so that the list above is the path itself. The `test_`
-// prefix is the signal a bare name would not give: `#[cfg(test)]` says it in
-// the source, nothing said it in a directory listing.
+// Test-only, and last so that the list above is the path itself. They live in
+// `grpc/tests/` with the six `_tests.rs` files, which is what a directory
+// listing needs to say; the module keeps the `test_` prefix, which is what a
+// `use` needs to say. Same split as `api`'s `request.rs` — file `common.rs`,
+// module `test_common`.
+//
+// ⚠️ **The `grpc/` in these paths is not a typo.** `#[path]` resolves against
+// the directory of the *declaring file*, and this file is `infra/grpc.rs`, so
+// the base is `infra/`. The thirteen `#[path]`s inside `grpc/` and `rpc/` are
+// already one level down and need only `tests/`.
 #[cfg(test)]
+#[path = "grpc/tests/fixtures.rs"]
 mod test_fixtures;
 #[cfg(test)]
+#[path = "grpc/tests/geyser_server.rs"]
 mod test_geyser_server;
 
 pub(crate) use listener::GrpcListener;
