@@ -73,6 +73,33 @@ pub(super) fn transaction_update_with_signature(
     }
 }
 
+/// The filter name of a transaction **no protocol claims**, and the one place it
+/// is spelled.
+///
+/// It is the other half of [`PROTOCOL`]: that constant is the name that routes,
+/// this one is a name that does not, and both are rules rather than strings.
+/// Three spellings of this one were in the tree on 16 September 2026 — found in
+/// review, against the rule the sibling constant's own comment states.
+pub(super) const UNROUTABLE_FILTER: &str = "a_filter_no_protocol_claims";
+
+/// A transaction the pipeline cannot route: well-formed, matching no protocol
+/// filter.
+///
+/// ⚠️ **It is delivery with nothing to resume from**, and that pair is why it
+/// has a fixture of its own. `protocol_of` answers `None`, so `on_transaction`
+/// counts it `Unroutable` and drops it *before* the buffer — while `handle` has
+/// already recorded that data came off the stream, rightly, since the server is
+/// not refusing us. A session ending on one is `delivered` with
+/// `resume_from() == None`, which is the premise of the listener's
+/// keep-the-mark rule.
+///
+/// On the wire it is not exotic: `account_include` filters on *account keys*,
+/// so a transaction reaching the program through an address-lookup table
+/// arrives all the same.
+pub(super) fn unroutable_transaction(slot: u64) -> SubscribeUpdate {
+    transaction(slot, &[UNROUTABLE_FILTER])
+}
+
 /// A transaction update wrapped in the filters it matched.
 ///
 /// ⚠️ The filter names are the routing — see `subscription`. Passing anything

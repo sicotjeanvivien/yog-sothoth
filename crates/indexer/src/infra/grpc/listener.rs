@@ -512,12 +512,30 @@ impl Attempt {
     ///
     /// ⚠️ **And that rule pays a price it is worth naming**: "produced nothing"
     /// also describes a failure that never reached the server at all — a DNS
-    /// blip, a refused connection. Such an attempt drops a resume point that was
-    /// still valid, and the gap is lost to a fault that had nothing to do with
-    /// retention. Telling the two apart means reading a provider's error text,
-    /// which is the shape-recognition this workspace refuses elsewhere for the
-    /// same reason: it is right until a provider rewords its message. Kept as
-    /// is, and it is the first thing a real stream should be watched for.
+    /// blip, a refused connection, the ~2-minute link cuts this machine sees
+    /// routinely. Such an attempt drops a resume point that was still valid, and
+    /// the gap is lost to a fault that had nothing to do with retention. It is
+    /// the very defect the branch above fixes, left standing on this one.
+    ///
+    /// ⚠️ **And the reason given for leaving it is wrong** — it said telling the
+    /// two apart meant reading a provider's error text. It does not: the two are
+    /// *separate code sites*. `channel.connect()` failing and the outbound send
+    /// failing both return before `client.subscribe` is ever called, so no
+    /// retention judgement can apply to them, while a `Status` from `subscribe`
+    /// is the server answering. What merges them is this enum, which records
+    /// only whether anything was produced. Corrected on reading, 16 September
+    /// 2026; the fix is a fact `Attempt` does not carry yet, and it is its own
+    /// ticket rather than a widening of this one.
+    ///
+    /// ⚠️ **One more thing this expression does not do: put a floor under the
+    /// mark.** `StreamSession::resume_from` prefers the oldest slot still
+    /// pending, which on a replay is about the `from_slot` just asked for, minus
+    /// `REWIND_SLOTS`. A stream that breaks before the buffer drains therefore
+    /// resumes two slots earlier each round, and the churn arm resets the budget
+    /// every time — so a provider that accepts and breaks after one transaction
+    /// walks `from_slot` backwards without bound, on a connection billed by the
+    /// byte. Pre-existing, unchanged here, and named because this is now the one
+    /// expression a reader is sent to.
     fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
         match self {
             Attempt::StreamClosed {

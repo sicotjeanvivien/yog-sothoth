@@ -137,7 +137,7 @@ use tokio::time::timeout;
 use tonic::Status;
 
 use crate::infra::grpc::{
-    test_fixtures::{PROTOCOL, block_meta, ping, transaction},
+    test_fixtures::{PROTOCOL, block_meta, ping, transaction, unroutable_transaction},
     test_geyser_server::{self, Action, ScriptedGeyserHandle, ScriptedSession},
 };
 
@@ -179,21 +179,15 @@ fn routable(slot: u64) -> Action {
     Action::send(transaction(slot, &[PROTOCOL.as_str()]))
 }
 
-/// A transaction of `slot` carrying a filter name no protocol claims.
+/// A transaction of `slot` the pipeline cannot route.
 ///
-/// ⚠️ **It is delivery, and it leaves the session with nothing to resume
-/// from** — `protocol_of` returns `None`, so `on_transaction` counts it
-/// `Unroutable` and drops it *before* the buffer, while `handle` has already
-/// set `received_data`. That pair is the whole premise of
-/// `an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold`, and
-/// `session_tests` pins it on its own so that a session which stopped
-/// producing it would say so there rather than here.
-///
-/// The name is deliberately not a protocol's: `subscription::protocol_of`
-/// matches on the filter name, and any name it does not know is the case a
-/// transaction reaching the program through an address-lookup table produces.
+/// ⚠️ The pair it produces — delivered, with nothing to resume from — is stated
+/// once, on `test_fixtures::unroutable_transaction`, and pinned on its own by
+/// `session_tests`. What is built here is only the `Action` that puts it on a
+/// stream, exactly as `routable` does: the rule is not spelled twice, for the
+/// reason the constant next to `PROTOCOL` gives.
 fn unroutable(slot: u64) -> Action {
-    Action::send(transaction(slot, &["a_filter_no_protocol_claims"]))
+    Action::send(unroutable_transaction(slot))
 }
 
 /// Wait until the server has been subscribed to at least `count` times.

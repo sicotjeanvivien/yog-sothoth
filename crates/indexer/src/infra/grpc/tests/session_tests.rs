@@ -17,7 +17,8 @@ use yellowstone_grpc_proto::prelude::{SubscribeUpdatePing, SubscribeUpdatePong};
 // The updates themselves live next door, because `listener_tests` builds the
 // same ones to put on a real stream — see `test_fixtures`.
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature, update,
+    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature,
+    unroutable_transaction, update,
 };
 
 /// A session, its downstream receiver, and its outbound receiver.
@@ -204,7 +205,7 @@ fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
                 session.handle(block_meta(10, Some(1_700_000_000))).await;
 
                 // Unroutable: perfectly well-formed, matching no protocol.
-                session.handle(transaction(11, &["something_else"])).await;
+                session.handle(unroutable_transaction(11)).await;
             });
     });
 
@@ -466,9 +467,7 @@ async fn only_data_counts_as_delivered_not_a_keep_alive() {
 async fn an_unroutable_transaction_is_delivery_with_nothing_to_resume_from() {
     let (mut session, _downstream, _outbound) = session(4);
 
-    session
-        .handle(transaction(10, &["a_filter_no_protocol_claims"]))
-        .await;
+    session.handle(unroutable_transaction(10)).await;
 
     assert!(
         session.received_data(),
