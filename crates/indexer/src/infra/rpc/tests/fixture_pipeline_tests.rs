@@ -215,6 +215,46 @@ fn decodes_liquidity_add_fixtures() {
     }
 }
 
+/// A **version 1** transaction reads like any other.
+///
+/// Solana activated the v1 format on mainnet on 15 September 2026, and until
+/// the fetcher declared it, every v1 was refused by the RPC and lost. Raising
+/// the ceiling is only safe if the adapter reads the format: this fixture is
+/// the refused transaction itself (`2yyZaQ3w…`, a Jupiter route), and it must
+/// come through the same path as a legacy one — its `transactionConfig`
+/// ignored, its one `EvtSwap2` extracted, its pool the one the swap instruction
+/// names as its second account.
+#[test]
+fn a_v1_transaction_yields_its_swap() {
+    let tx = load_fixture("damm_v2/swap_v1.json");
+
+    let outcome = MeteoraDammV2::new()
+        .extract_events(&tx)
+        .expect("a v1 transaction must extract at the transaction level");
+
+    assert!(
+        outcome.failures.is_empty(),
+        "unexpected failures: {:?}",
+        outcome.failures
+    );
+    assert_eq!(
+        outcome.events.len(),
+        1,
+        "expected the transaction's one EvtSwap2, got {:?}",
+        outcome.events.iter().map(|e| e.kind()).collect::<Vec<_>>()
+    );
+
+    let DomainEvent::MeteoraDammV2(MeteoraDammV2Event::Swap(swap)) = &outcome.events[0] else {
+        panic!("expected DomainEvent::Swap, got {:?}", outcome.events[0]);
+    };
+    assert_eq!(
+        swap.pool_address,
+        pubkey!("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie"),
+    );
+    assert_eq!(tx.position.slot, 447_166_931);
+    assert_eq!(tx.position.transaction_index, Some(544));
+}
+
 #[test]
 fn extracts_swap_via_router_correctly() {
     // Fixture: real mainnet transaction where cp-amm is invoked via a router

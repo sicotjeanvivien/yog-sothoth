@@ -61,7 +61,7 @@ cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ Since the adapter moved (31 Aug 2026), `-p yog-core extraction` no longer
-# runs the 27-fixture oracle nor the 19 extractor fixture tests: they live in
+# runs the 28-fixture oracle nor the 19 extractor fixture tests: they live in
 # `yog-indexer`, beside the adapter that builds their input. Extraction work
 # needs BOTH — this can be green while the oracle is red.
 cargo test -p yog-indexer                  # the fixture suites and the oracle

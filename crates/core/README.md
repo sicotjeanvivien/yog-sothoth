@@ -161,12 +161,12 @@ neither optional:
 What guards them, and how far each guard reaches — because the two are not
 witnessed by the same thing:
 
-- `yog-indexer`'s `extraction_oracle_tests` freezes the outcome of all 27 mainnet fixtures —
+- `yog-indexer`'s `extraction_oracle_tests` freezes the outcome of all 28 mainnet fixtures —
   events, `event_index`, unknowns, failures — against a committed witness.
   Reversing the instruction groups turns **6** of them red — the 6 whose cp-amm
   payloads actually span more than one group (`claim_position_fee`,
   `close_position`, `initialize_reward`, `lock_position`, `split_position2`,
-  `swap_double`). The other 21 emit all their payloads from a single group, so
+  `swap_double`). The other 22 emit all their payloads from a single group, so
   no reordering of groups can be observed on them, whatever the corpus size;
 - it does **not** witness the sort by group index, because every mainnet fixture
   already arrives in ascending order — delete `sort_by_key` and the whole suite

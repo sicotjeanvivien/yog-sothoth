@@ -55,7 +55,15 @@ Filling it is this crate's job, one module per source:
   encoding and the adapter are **one contract** (the fetcher must ask for
   `JsonParsed`, because the adapter reads the `PartiallyDecoded` inner
   instructions only that encoding produces), and splitting them across crates is
-  what would let the two drift;
+  what would let the two drift. The fetcher also declares the highest
+  transaction version it reads — `MAX_SUPPORTED_TRANSACTION_VERSION`, **1**
+  since Solana activated the v1 format on 15 September 2026. The RPC refuses
+  anything above it with `-32015`, and a refused transaction is lost, so the
+  refusal is counted under its own `reason="unsupported_version"` and never
+  retried. ⚠️ **The ceiling rises only with a mainnet fixture of the new
+  version**: declaring a version no fixture shows the adapter reading would
+  trade a counted loss for a silent misreading, and
+  `the_declared_ceiling_is_the_highest_fixture_version` fails either way;
 - `infra/grpc/transaction_adapter.rs` turns a Yellowstone
   `SubscribeUpdateTransaction` into the same shape — a sibling module, not a
   second path through extraction.
