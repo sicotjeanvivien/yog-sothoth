@@ -56,7 +56,7 @@
 //! connect timeout, and — the one that matters — whether a provider honours
 //! `from_slot` the way this code assumes. A scripted server validates **this
 //! client against our model of the server**, never the protocol;
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where that model meets a
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md` is where that model meets a
 //! real one.
 //!
 //! The split that made the rule reachable at all still holds: the request is

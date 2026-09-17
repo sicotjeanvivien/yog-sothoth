@@ -228,7 +228,7 @@ pub(super) fn init_processor(
 /// them lives.
 ///
 /// ⚠️ **And what it should measure is an open question**, tracked by
-/// `02 - backlog/pre-v02/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
+/// `02 - backlog/[bug]le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
 /// this probe reads `INGEST_TRANSACTION`, which the gRPC source will not use.
 pub(super) async fn init_network_status_reporter(
     database: &Database,

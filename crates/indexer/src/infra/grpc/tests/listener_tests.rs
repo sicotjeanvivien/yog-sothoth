@@ -12,7 +12,7 @@
 //! produces those endings. See the header of that module for what this proves
 //! and what it does not; the short version is that it validates this client
 //! against our model of the server, and that
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is still the ticket where
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md` is still the ticket where
 //! the model meets a real one.
 
 use super::*;

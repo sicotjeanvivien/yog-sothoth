@@ -64,7 +64,7 @@ fn debugging_the_config_prints_no_credential() {
         );
     }
     // And the diagnostic survives: a config that says nothing costs more than
-    // it saves — that lesson is `04 - release/cle-api-en-clair-dans-les-logs.md`.
+    // it saves — that lesson is `04 - release/[bug]cle-api-en-clair-dans-les-logs.md`.
     assert!(rendered.contains("das.example.invalid"), "{rendered}");
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }

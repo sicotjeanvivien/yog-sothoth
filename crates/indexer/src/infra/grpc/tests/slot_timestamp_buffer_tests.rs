@@ -4,7 +4,7 @@
 //! about a wire format: the buffer is pure state, and these tests exercise it
 //! exhaustively. What they cannot say is whether the **bound** is the right
 //! number — that is a physical property of a provider's stream, measured in
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, and the eviction counter
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md`, and the eviction counter
 //! is what will say it.
 
 use super::*;
@@ -14,7 +14,7 @@ use super::*;
 ///
 /// The reader production would have is an occupancy gauge — this buffer can
 /// hold 40–160 MB — and it is a criterion of
-/// `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, the ticket that will read
+/// `02 - backlog/[spike]flux-grpc-reel-mesures.md`, the ticket that will read
 /// the number.
 impl<T> SlotTimestampBuffer<T> {
     /// How many payloads are waiting.

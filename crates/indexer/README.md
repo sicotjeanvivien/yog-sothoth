@@ -152,13 +152,13 @@ one decision left unguarded on purpose — its only observable is a duration;
 `listener.rs`'s header says why, and carries the measurements behind both.
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, and whether a provider honours `from_slot` the way this code
-assumes. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet
+assumes. `02 - backlog/[spike]flux-grpc-reel-mesures.md` is where they meet
 one.
 
 ⚠️ And **none of it has met a real server.** Every local test drives either pure
 state, a message this repository built itself, or a server this repository
 scripted — so TLS, keep-alive and the exact semantics of `from_slot` are written
-and reviewed and unproven. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is
+and reviewed and unproven. `02 - backlog/[spike]flux-grpc-reel-mesures.md` is
 where they meet one, and it needs an API key.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it

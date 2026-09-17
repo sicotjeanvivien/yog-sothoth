@@ -13,7 +13,7 @@ use metrics::{counter, describe_counter};
 /// bounds are ceilings picked without a measurement — see
 /// `slot_timestamp_buffer`'s module docs — so this counter staying at zero is
 /// what says the guess was generous, and any movement is what says it was not.
-/// `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` replaces the guess by
+/// `02 - backlog/[spike]flux-grpc-reel-mesures.md` replaces the guess by
 /// reading it.
 ///
 /// ⚠️ **The unit is a transaction, not an `InnerInstructionPayload`** — hence
@@ -52,7 +52,7 @@ pub(crate) enum EvictionReason {
     /// distinct from [`Self::PayloadBound`]**, and it is the more misleading
     /// confusion of the two. Without this label such a slot waits out the whole
     /// window and then leaves counted `slot_bound` — so
-    /// `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` would read "the wait
+    /// `02 - backlog/[spike]flux-grpc-reel-mesures.md` would read "the wait
     /// window is too small" and raise `MAX_PENDING_SLOTS`, which changes
     /// nothing at all: the meta already came, empty.
     Unresolvable,

@@ -113,7 +113,7 @@ impl Daemon {
     /// rather than half-done: `engine.run` joins its detectors with no deadline,
     /// so a detector stuck in a slow query still holds the stop open without
     /// naming itself. See
-    /// `.project/02 - backlog/others/l-arret-de-yog-signals-n-a-aucun-plafond.md`.
+    /// `.project/02 - backlog/[bug]l-arret-de-yog-signals-n-a-aucun-plafond.md`.
     pub(crate) async fn run(self) -> anyhow::Result<()> {
         let shutdown = CancellationToken::new();
 

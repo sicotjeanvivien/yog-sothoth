@@ -19,7 +19,7 @@
 //!
 //! # ⚠️ Why the bound counts slots and not seconds
 //!
-//! This is decision n° 3 of `04 - release/listener-grpc-yellowstone.md`, and the
+//! This is decision n° 3 of `04 - release/[chore]listener-grpc-yellowstone.md`, and the
 //! argument is not comfort — it is what each choice does **when things break**.
 //!
 //! A time bound reads a wall clock, and a wall clock keeps running while the
@@ -40,7 +40,7 @@
 //! reachable before the subscription. So the number is picked to be far beyond
 //! any plausible lag, precisely so that **the eviction counter is a signal and
 //! not background noise**. Reading that counter is how
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` will replace the guess with
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md` will replace the guess with
 //! a measurement, which is what its "borne du tampon posée sur cette mesure"
 //! criterion asks for.
 
@@ -239,7 +239,7 @@ impl<T> SlotTimestampBuffer<T> {
     ///
     /// Both roads end in the same eviction, so the difference is only what the
     /// counter says — which is the whole difference, since that counter is the
-    /// one `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` reads to size the
+    /// one `02 - backlog/[spike]flux-grpc-reel-mesures.md` reads to size the
     /// window. A slot nobody can resolve, left to the slot bound, waits out the
     /// full window and leaves labelled `slot_bound`; the ticket reads "the
     /// window is too small", raises `MAX_PENDING_SLOTS`, and the number does not

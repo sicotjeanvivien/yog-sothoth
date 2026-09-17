@@ -36,7 +36,7 @@
 //! after. `listener.rs`'s header carries the measurements. All of it proves this
 //! client against our model of the server, and nothing about the protocol — so
 //! TLS, keep-alive and the exact semantics of `from_slot` are still written,
-//! reviewed and unproven, and `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`
+//! reviewed and unproven, and `02 - backlog/[spike]flux-grpc-reel-mesures.md`
 //! is still where they meet one. The rest was made testable by being kept out
 //! of `listener`: the request in `subscription`, the meaning of each update in
 //! `session`, the pairing in `slot_timestamp_buffer`, the shape in

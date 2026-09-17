@@ -11,7 +11,7 @@
 //!
 //! # ⚠️ Why the buffer belongs to the session and not to the listener
 //!
-//! This is the reconnection decision of `04 - release/listener-grpc-yellowstone.md`,
+//! This is the reconnection decision of `04 - release/[chore]listener-grpc-yellowstone.md`,
 //! and it is expressed by ownership rather than by a method someone has to
 //! remember to call.
 //!

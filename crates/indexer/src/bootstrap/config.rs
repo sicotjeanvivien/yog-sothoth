@@ -42,7 +42,7 @@
 //! 2026: whether there is a header is said by
 //! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE` and by nothing else, and a
 //! transport has no business deciding a credential question — the same
-//! inversion `04 - release/une-variable-nomme-un-transport.md` removed from
+//! inversion `04 - release/[chore]une-variable-nomme-un-transport.md` removed from
 //! variable *names*. Both listeners now send what the operator declares
 //! (`infra::endpoint::credential`), so there is one door for one variable.
 

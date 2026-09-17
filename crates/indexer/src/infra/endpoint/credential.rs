@@ -12,7 +12,7 @@
 //! the reading door on `INGEST_SOURCE`, so a header configured for the
 //! WebSocket path was refused at startup. That put a *transport* in charge of a
 //! *credential* question — the very inversion
-//! `04 - release/une-variable-nomme-un-transport.md` was written against — and
+//! `04 - release/[chore]une-variable-nomme-un-transport.md` was written against — and
 //! it rested on a claim that turned out to be false: that the WebSocket client
 //! could not send a header. It can. `PubsubClient::new` takes an
 //! `IntoClientRequest`, so what was missing was not a capability but ten lines,

@@ -6,7 +6,7 @@
 //! can say is whether a provider **honours** the request — whether `vote:
 //! false` really keeps votes off the wire, whether `from_slot` replays what we
 //! think it replays. That is
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, and the
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md`, and the
 //! `yog_indexer_grpc_updates_total{kind}` counter is what it will read.
 
 use super::*;

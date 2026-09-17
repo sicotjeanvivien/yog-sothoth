@@ -12,7 +12,7 @@
 //! module is now what both of them rest on. What these fixtures can establish
 //! is what *our* code decides when a message of a given shape arrives; what
 //! they cannot is that a server sends that shape. That half is
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`.
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md`.
 //!
 //! ⚠️ And one property below is load-bearing in a way that is easy to undo:
 //! [`transaction_update`] produces a transaction the **adapter accepts**. Half

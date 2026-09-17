@@ -56,7 +56,7 @@
 //! adds. Raised in review, 8 September 2026.
 //!
 //! Their first confrontation with reality is
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, which needs an API key.
+//! `02 - backlog/[spike]flux-grpc-reel-mesures.md`, which needs an API key.
 //! Until then, read this suite as "the translation is self-consistent", never
 //! as "the translation is right".
 
