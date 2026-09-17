@@ -7,8 +7,11 @@ use crate::{
 
 /// Common interface for all supported AMM protocols.
 ///
-/// Each protocol implements this trait. The indexer dispatches incoming
-/// transactions to the correct implementation based on `program_id()`.
+/// Each protocol implements this trait. Routing happens before any
+/// implementation is asked: [`ExtractionDispatcher::extract`] takes the
+/// [`Protocol`] the transaction was fetched for, and matches on it.
+/// [`program_id`] is not a routing key — it names the program whose
+/// inner-instruction payloads this extractor decodes.
 ///
 /// The transaction arrives as a [`OnChainTransaction`] — the neutral shape every
 /// source adapter produces — so no implementation names a transport.
@@ -23,10 +26,16 @@ use crate::{
 /// The implementation MUST NOT panic on partial failures (unrecognized
 /// discriminators, borsh errors, missing transferChecked context, etc.).
 /// Those go into `unknown` or `failures`. A returned `Err` is reserved
-/// for transaction-level malformations (no log messages, no inner
-/// instructions when they were required, etc.).
+/// for a malformation of the transaction as a whole, and neither
+/// implementation has one today: the DAMM v2 extractor always returns `Ok`,
+/// and the DLMM one is a stub. The indexer still counts the case, under
+/// `extract_failure`.
+///
+/// [`ExtractionDispatcher::extract`]: crate::application::extraction::ExtractionDispatcher::extract
+/// [`Protocol`]: crate::domain::Protocol
+/// [`program_id`]: Self::program_id
 pub trait EventExtractor: Send + Sync {
-    /// Program ID this indexer handles.
+    /// Program ID this extractor decodes events from.
     fn program_id(&self) -> Pubkey;
 
     /// Extract every domain event the transaction emitted for this protocol.

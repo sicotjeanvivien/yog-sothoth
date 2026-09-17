@@ -11,17 +11,27 @@ use crate::domain::{PoolProperties, Protocol};
 /// protocol's concrete type. That is what lets a cross-protocol consumer hold
 /// `Vec<Arc<dyn PoolPropertiesLookup>>` and name no protocol at all.
 ///
-/// # Why this exists rather than reading the satellite trait directly
+/// # Why a read trait apart from the writer's
 ///
-/// The satellite repositories (e.g.
-/// [`crate::domain::MeteoraDammV2PoolPropertiesRepository`]) are the *writers'*
-/// contracts: each is scoped to one protocol because each writer decodes that
-/// protocol's bytes. A reader assembling a pool-detail sheet is not — it is
-/// handed a [`crate::domain::Pool`] whose protocol it learns at runtime.
-/// Depending on a satellite trait would put one protocol's name in the
-/// constructor of a cross-protocol service, and add a field and a `match` arm
-/// there for every protocol added — the accretion pattern migration 036 removed
-/// from the `pools` table, re-formed one layer up.
+/// Both traits are implemented by the same `Pg*PoolPropertiesRepository`, one
+/// per protocol, and nothing in the table forces two contracts. The processes
+/// do: yog-context writes the satellite and yog-api only reads it, each under
+/// its own Postgres role. A single trait would hand the api
+/// [`set_pool_account`], which its read-only role cannot execute, and hand
+/// yog-context a [`find_by_pool`] it never calls. Split, each binary depends on
+/// exactly the half it uses.
+///
+/// [`set_pool_account`]: crate::domain::PoolAccountResolver::set_pool_account
+/// [`find_by_pool`]: Self::find_by_pool
+///
+/// # Why generic rather than one trait per protocol
+///
+/// A reader assembling a pool-detail sheet is handed a
+/// [`crate::domain::Pool`] whose protocol it learns at runtime. A per-protocol
+/// trait would put one protocol's name in the constructor of a cross-protocol
+/// service, and add a field and a `match` arm there for every protocol added —
+/// the accretion pattern migration 036 removed from the `pools` table,
+/// re-formed one layer up.
 ///
 /// The `match` does not vanish, it moves: it belongs at the serialization
 /// boundary, where the wire shape is genuinely protocol-specific, not in the

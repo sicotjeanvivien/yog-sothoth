@@ -29,7 +29,7 @@ impl ExtractionDispatcher {
     }
 
     /// Extract every domain event the transaction emitted for the given
-    /// protocol. Delegates to the protocol-specific [`PoolIndexer`] impl.
+    /// protocol. Delegates to the protocol-specific [`EventExtractor`] impl.
     pub fn extract(
         &self,
         protocol: Protocol,

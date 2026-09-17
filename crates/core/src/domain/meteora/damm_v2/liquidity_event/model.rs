@@ -52,7 +52,7 @@ impl std::str::FromStr for MeteoraDammV2LiquidityEventKind {
 /// Raw liquidity-change event extracted from an on-chain Anchor event.
 ///
 /// Covers both add-liquidity and remove-liquidity operations, discriminated
-/// by [`liquidity_event_kind`].
+/// by [`Self::liquidity_event_kind`].
 ///
 /// # Conventions
 ///
