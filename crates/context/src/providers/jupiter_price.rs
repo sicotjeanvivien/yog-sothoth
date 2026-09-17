@@ -70,7 +70,7 @@ struct JupiterPriceEntry {
 
 /// Client for the Jupiter Price API V3.
 ///
-/// Owns its own `reqwest::Client`, separate from the Helius client
+/// Owns its own [`reqwest::Client`], separate from the Helius client
 /// and from the indexer's RPC client. Holds the API key set in the
 /// `x-api-key` header on every request.
 #[derive(Clone)]

@@ -55,7 +55,7 @@ pub struct TokenPrice {
 
     /// Price in USD.
     ///
-    /// `rust_decimal::Decimal` — an exact fixed-point decimal. Chosen
+    /// [`rust_decimal::Decimal`] — an exact fixed-point decimal. Chosen
     /// over `f64` (lossy on very small memecoin values) and over a
     /// scaled `u128` (a price has no protocol-canonical scale factor,
     /// unlike on-chain sqrt_price/amounts). `rust_decimal` is a

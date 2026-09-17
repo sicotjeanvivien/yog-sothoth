@@ -43,7 +43,9 @@
 //! `_HEADER_VALUE` and by nothing else, and a transport has no business
 //! deciding a credential question — the same inversion that was removed from
 //! variable *names*. Both listeners now send what the operator declares
-//! (`infra::endpoint::credential`), so there is one door for one variable.
+//! ([`Credential`]), so there is one door for one variable.
+//!
+//! [`Credential`]: crate::infra::Credential
 
 use yog_bootstrap::{
     ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,

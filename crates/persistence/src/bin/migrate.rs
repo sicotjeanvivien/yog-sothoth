@@ -209,7 +209,7 @@ async fn bootstrap() -> Result<()> {
 
 /// Read a connection URL from the environment, naming the role it must carry.
 ///
-/// Goes through `yog_bootstrap::required_secret_url` rather than `std::env::var` so the
+/// Goes through [`yog_bootstrap::required_secret_url`] rather than [`std::env::var`] so the
 /// URL inherits the two rules every other variable in the workspace obeys: a
 /// blank value counts as missing, and surrounding whitespace is trimmed. The
 /// second is not cosmetic here — this repository's `.env` is CRLF, and the

@@ -54,7 +54,7 @@ impl AppState {
     /// Build the state and the signal-stream poller that feeds it.
     ///
     /// Returned as a pair: the state goes to the router, the poller to
-    /// a `tokio::spawn` in `main` — the binary owns the runtime wiring.
+    /// a [`tokio::spawn`] in `main` — the binary owns the runtime wiring.
     pub(crate) async fn build(config: Config) -> anyhow::Result<(Self, SignalStreamPoller)> {
         let database = Database::connect(config.database_url.expose())
             .await

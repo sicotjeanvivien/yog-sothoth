@@ -59,11 +59,13 @@ use super::metrics::{EvictionReason, GrpcBufferMetrics};
 /// which in steady state — one or two pending — never happens. A single slot
 /// whose block-meta never came (a fork, at `confirmed`) therefore sat in the
 /// map for the life of the session: it was never evicted, so it stayed the
-/// oldest pending slot for ever, and `session::StreamSession::resume_from`
+/// oldest pending slot for ever, and [`session::StreamSession::resume_from`]
 /// answered with it at every reconnection — asking a bandwidth-billed provider
 /// to replay from a slot hours behind, or burning the retry budget on a request
 /// past its retention. Found in review, 9 September 2026. The docs already
 /// described a distance ("≈ 100 s"); the code now agrees with them.
+///
+/// [`session::StreamSession::resume_from`]: crate::infra::grpc::session::StreamSession::resume_from
 pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 
 /// How many payloads may be held across all pending slots.
@@ -306,13 +308,15 @@ impl<T> SlotTimestampBuffer<T> {
     /// full buffer loses its own payloads**, silently except for the counter.
     /// That is decided, and decided by ownership rather than by a rule this
     /// buffer would have to follow: a buffer belongs to one subscription
-    /// (`session::StreamSession`) and cannot outlive it, so a replay never
+    /// ([`session::StreamSession`]) and cannot outlive it, so a replay never
     /// arrives into the previous connection's backlog.
     ///
     /// ⚠️ Evicted payloads are **lost**, and that is not a choice — without an
     /// instant they cannot be written at all. What is a choice is that the loss
     /// is counted and logged rather than silent: the counter is the only thing
     /// that will say the bound was wrong.
+    ///
+    /// [`session::StreamSession`]: crate::infra::grpc::session::StreamSession
     fn enforce_pending_bounds(&mut self) {
         loop {
             // Which bound is binding is recorded, not just that one was: an
@@ -414,7 +418,9 @@ impl<T> SlotTimestampBuffer<T> {
     ///
     /// For the caller that has to say **where to resume** after a break: these
     /// payloads die with the buffer, so this is the oldest slot the connection
-    /// did not finish. See `session::StreamSession::resume_from`.
+    /// did not finish. See [`session::StreamSession::resume_from`].
+    ///
+    /// [`session::StreamSession::resume_from`]: crate::infra::grpc::session::StreamSession::resume_from
     pub(crate) fn oldest_pending_slot(&self) -> Option<u64> {
         self.pending.first_key_value().map(|(slot, _)| *slot)
     }

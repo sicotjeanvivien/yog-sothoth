@@ -1,7 +1,7 @@
 //! Application services — the choreography layer between the HTTP handlers and
 //! the `yog-core` repository traits.
 //!
-//! Split by *reach*, mirroring `yog_core::domain`:
+//! Split by *reach*, mirroring [`yog_core::domain`]:
 //!
 //! - at the root, the **cross-protocol** services. They serve every protocol's
 //!   data and name none: `PoolService` reaches a pool's per-protocol properties

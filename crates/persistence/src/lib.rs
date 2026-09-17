@@ -37,6 +37,6 @@ pub use repositories::{
     PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };
 
-/// Re-export `sqlx::PgPool` so consumers don't need to depend on sqlx directly
+/// Re-export [`sqlx::PgPool`] so consumers don't need to depend on sqlx directly
 /// just to type their dependency-injection wiring.
 pub use sqlx::PgPool;

@@ -1,10 +1,12 @@
 //! Metrics emitted by the TransactionProcessorMetrics.
 //!
 //! ⚠️ **The `yog_indexer_fetch_*` families used to be here and are not any
-//! more.** They moved to `infra::rpc::FetchMetrics` with the fetch itself,
+//! more.** They moved to [`infra::rpc::FetchMetrics`] with the fetch itself,
 //! which belongs to the one acquisition path that has to ask for a
 //! transaction. Their exported names did not change; only the type that emits
 //! them did. What that costs is written on `INDEX_TX_EXITED` below.
+//!
+//! [`infra::rpc::FetchMetrics`]: crate::infra::FetchMetrics
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 use yog_core::domain::Protocol;

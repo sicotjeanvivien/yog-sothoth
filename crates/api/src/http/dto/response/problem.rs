@@ -23,7 +23,7 @@
 use serde::Serialize;
 
 /// RFC 9457 content type. The handler sets this on the response,
-/// not the DTO itself — `axum::Json` would force `application/json`.
+/// not the DTO itself — [`axum::Json`] would force `application/json`.
 pub(crate) const PROBLEM_CONTENT_TYPE: &str = "application/problem+json";
 
 /// Problem Details for HTTP APIs — the wire shape returned for every

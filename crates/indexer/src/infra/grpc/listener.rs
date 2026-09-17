@@ -135,8 +135,10 @@ pub(crate) struct GrpcListener {
     /// question — see `interceptor`.
     endpoint: Endpoint,
     /// Every address to subscribe to, with its protocol — see
-    /// `subscription::build_request`, which groups them into one filter per
+    /// [`subscription::build_request`], which groups them into one filter per
     /// protocol.
+    ///
+    /// [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
 }
@@ -637,7 +639,7 @@ impl Attempt {
 /// way.
 ///
 /// ⚠️ **Not error-text matching, and that distinction is the whole point.** The
-/// chain of causes is walked for a `tonic::transport::Error`, a type that can
+/// chain of causes is walked for a [`tonic::transport::Error`], a type that can
 /// only exist on *our* side: a status the server sent arrives in the response
 /// trailers and is rebuilt from them with **no source at all**. So a transport
 /// error anywhere in the chain says the request never got an answer — a load
