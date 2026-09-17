@@ -418,10 +418,10 @@ impl GrpcListener {
         let mut client = GeyserClient::with_interceptor(channel, interceptor.clone())
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
-        // The outbound half stays open for the life of the stream. Half-closing
-        // it after the subscription would be legal HTTP/2, but it also removes
-        // the only way to answer a ping — and a client that never speaks is what
-        // an idle-timing middlebox collects.
+        // The outbound half stays open for the life of the stream, although nothing
+        // is sent after the subscription. Half-closing it would be legal HTTP/2, and
+        // a server is free to read it as the end of the exchange — see the
+        // `_outbound` field of `StreamSession`.
         let (outbound_tx, outbound_rx) = mpsc::channel::<SubscribeRequest>(OUTBOUND_CAPACITY);
         if outbound_tx.send(request.clone()).await.is_err() {
             return Attempt::Unreachable {
