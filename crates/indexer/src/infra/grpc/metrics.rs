@@ -143,7 +143,8 @@ pub(crate) enum UpdateKind {
     ///
     /// [`StreamSession`]: crate::infra::grpc::session::StreamSession
     Ping,
-    /// The answer to one of ours.
+    /// The server's answer to a client ping. This client sends none, so this
+    /// should stay at zero.
     Pong,
     /// Anything the subscription did not ask for. Non-zero here means the
     /// request and the reader disagree about what was subscribed to.

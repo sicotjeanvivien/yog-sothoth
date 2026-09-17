@@ -118,9 +118,9 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 /// the buffer downstream, not this, is what bounds memory.
 const MAX_DECODING_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
-/// How many outbound requests may queue. One subscription plus the occasional
-/// ping answer — anything above a handful means the outbound half is stuck, and
-/// queueing more keep-alives would not unstick it.
+/// How many outbound requests may queue. Only one is ever sent — the
+/// subscription, once per connection — since a server ping is counted and not
+/// answered (see [`StreamSession`]). The headroom above one is unused.
 const OUTBOUND_CAPACITY: usize = 8;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped
