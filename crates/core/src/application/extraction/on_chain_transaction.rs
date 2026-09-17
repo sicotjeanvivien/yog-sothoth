@@ -6,7 +6,7 @@
 //! and it is the only thing the extractors see. Each source gets an adapter that
 //! fills it, and **none of them lives in this crate**: they are in `yog-indexer`,
 //! under `infra::rpc`. What stays here is the contract they owe — stated below,
-//! and checkable through [`super::conformance`].
+//! and checkable through `crate::application::extraction::conformance`.
 //!
 //! It carries exactly what extraction needs, and nothing else: the coordinate
 //! that locates an event ([`TransactionPosition`]) and the material to decode
@@ -55,7 +55,7 @@ pub struct OnChainTransaction {
 /// belongs in [`OnChainTransaction::inner_instructions`], regardless of the
 /// program that emitted it or of how many accounts it references. Deciding
 /// "is this really an event" is the job of the decoder downstream
-/// ([`super::decode_anchor_event_cpi`], which checks the Anchor tag).
+/// (`decode_anchor_event_cpi`, which checks the Anchor tag).
 ///
 /// What the rule protects is precise, and worth stating precisely: numbering
 /// happens *after* the filter on the emitting program, so dropping a payload

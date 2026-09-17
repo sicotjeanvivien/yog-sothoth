@@ -17,7 +17,7 @@ use yog_core::{
 // Params
 // ---------------------------------------------------------------------------
 
-/// Input to [`SwapService::list_swaps_for_pool`].
+/// Input to [`MeteoraDammV2SwapService::list_swaps_for_pool`].
 pub(crate) struct MeteoraDammV2SwapListParams {
     pub pool_address: Pubkey,
     pub cursor: Option<MeteoraDammV2SwapEventCursor>,

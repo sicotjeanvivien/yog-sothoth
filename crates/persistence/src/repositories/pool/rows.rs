@@ -12,7 +12,8 @@ use yog_core::{
 ///
 /// The cp-amm fee properties are deliberately absent: they moved to
 /// `meteora_damm_v2_pool_properties` in migration 036 and are read through
-/// [`super::pool_properties`], not here.
+/// [`PgMeteoraDammV2PoolPropertiesRepository`](crate::PgMeteoraDammV2PoolPropertiesRepository),
+/// not here.
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolRow {
     pub(super) pool_address: String,

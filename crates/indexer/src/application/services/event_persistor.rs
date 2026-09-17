@@ -2,7 +2,7 @@
 //!
 //! Thin dispatcher: matches on the outer DomainEvent variant and
 //! delegates to the per-protocol sub-persistor. All real persistence
-//! logic lives in the sub-persistors and in [`PoolMaintenance`].
+//! logic lives in the sub-persistors and in\n//! [`crate::application::services::PoolMaintenance`].
 
 use std::sync::Arc;
 use yog_core::domain::DomainEvent;

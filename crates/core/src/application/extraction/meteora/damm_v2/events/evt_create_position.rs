@@ -17,6 +17,8 @@ pub fn discriminator_create_position() -> [u8; DISCRIMINATOR_LEN] {
 /// PDA holding the position state. Carries no token amounts — a freshly
 /// created position is empty until liquidity is added (see
 /// [`EvtLiquidityChange`]).
+///
+/// [`EvtLiquidityChange`]: crate::application::extraction::meteora::damm_v2::events::EvtLiquidityChange
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtCreatePosition {
     pub pool: Pubkey,

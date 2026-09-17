@@ -54,11 +54,11 @@ use crate::domain::TradeDirection;
 /// # Fees
 ///
 /// The four fee components correspond directly to the on-chain `SwapResult2`:
-/// - [`claiming_fee`] — claimable by LPs via `claim_position_fee`
-/// - [`protocol_fee`] — collected by Meteora
-/// - [`compounding_fee`] — re-injected into the pool's liquidity (compounding
+/// - [`Self::claiming_fee`] — claimable by LPs via `claim_position_fee`
+/// - [`Self::protocol_fee`] — collected by Meteora
+/// - [`Self::compounding_fee`] — re-injected into the pool's liquidity (compounding
 ///   pools only; otherwise zero)
-/// - [`referral_fee`] — paid out to the referrer (only if `has_referral`
+/// - [`Self::referral_fee`] — paid out to the referrer (only if `has_referral`
 ///   is set on the swap; otherwise zero)
 ///
 /// The total fee charged on the swap is the sum of all four. It is borne

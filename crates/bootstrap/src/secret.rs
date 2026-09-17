@@ -128,7 +128,7 @@ impl fmt::Debug for SecretKey {
 /// name and its passwordless userinfo is a least-privilege role, so both
 /// survive. Every other scheme loses both, which is what makes a provider
 /// nobody has met yet covered by default rather than by having been recognised.
-/// See [`redact_password`] for what happens when even that is not enough to
+/// See `redact_password` for what happens when even that is not enough to
 /// locate the secret.
 ///
 /// # What this type does not cover

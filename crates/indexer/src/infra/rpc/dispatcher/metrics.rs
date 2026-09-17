@@ -1,7 +1,7 @@
 use metrics::{counter, describe_counter};
 use yog_core::domain::Protocol;
 
-/// Total [`RawLogEvent`](super::types::RawLogEvent) received from the listener.
+/// Total [`RawLogEvent`](crate::infra::rpc::types::RawLogEvent) received from the listener.
 const EVENTS_RECEIVED: &str = "yog_indexer_raw_log_events_total";
 
 /// Events rejected by a filter.

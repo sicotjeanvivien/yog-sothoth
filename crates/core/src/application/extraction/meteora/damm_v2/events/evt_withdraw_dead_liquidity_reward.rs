@@ -26,6 +26,8 @@ pub fn discriminator_withdraw_dead_liquidity_reward() -> [u8; DISCRIMINATOR_LEN]
 /// stay distinct types because they describe different on-chain facts. Layout
 /// taken from the cp-amm source (`ix_withdraw_dead_liquidity_reward.rs`); no
 /// on-chain fixture captured.
+///
+/// [`EvtWithdrawIneligibleReward`]: crate::application::extraction::meteora::damm_v2::events::EvtWithdrawIneligibleReward
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtWithdrawDeadLiquidityReward {
     pub pool: Pubkey,

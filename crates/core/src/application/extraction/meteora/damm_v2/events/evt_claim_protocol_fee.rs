@@ -25,6 +25,8 @@ pub fn discriminator_claim_protocol_fee() -> [u8; DISCRIMINATOR_LEN] {
 /// (single `token_mint` + `amount` + receiver) emitted via a plain `emit!`
 /// *log* — not an event_cpi — so it is **not** captured by this pipeline (and
 /// cp-amm itself notes that log "could be truncated. should not rely on this").
+///
+/// [`EvtClaimPositionFee`]: crate::application::extraction::meteora::damm_v2::events::EvtClaimPositionFee
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtClaimProtocolFee {
     pub pool: Pubkey,
