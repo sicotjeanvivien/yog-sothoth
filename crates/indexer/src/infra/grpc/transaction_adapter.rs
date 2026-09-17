@@ -34,7 +34,7 @@
 //!    observation;
 //! 3. anything temporal — this module sees one message and has no clock.
 //!
-//! # ⚠️ Two things this adapter deliberately does not do, for the listener slice
+//! # ⚠️ Two things this adapter deliberately leaves to the listener
 //!
 //! **It does not look at `meta.err`**, so events from reverted transactions
 //! would be persisted if nothing upstream filtered them. On the JSON-RPC path that
@@ -90,8 +90,8 @@ use yog_core::{CoreError, CoreResult};
 ///
 /// # Errors
 ///
-/// Only on a transaction-level malformation, and this list is what slice 3's
-/// listener will read to decide what to log, count and retry — so it is kept
+/// Only on a transaction-level malformation, and this list is what the
+/// listener reads to decide what to log, count and retry — so it is kept
 /// complete:
 ///
 /// - the `transaction` envelope is absent;
@@ -106,7 +106,7 @@ use yog_core::{CoreError, CoreResult};
 ///
 /// ⚠️ That last one was missing until review pointed at it, in a list whose own
 /// sentence claims to be complete. A claim of completeness is a claim, and this
-/// one is load-bearing: slice 3 reads it to decide what to log and count.
+/// one is load-bearing: the listener reads it to decide what to log and count.
 ///
 /// A transaction that genuinely carries no inner instructions is not a failure:
 /// it yields an empty payload list, and extraction reports "nothing to

@@ -57,7 +57,7 @@ fn session_with(
 
 // ── the two halves meet ─────────────────────────────────────────────
 
-/// The path the whole slice exists for: a transaction arrives with no instant,
+/// The path the whole session exists for: a transaction arrives with no instant,
 /// waits, and leaves carrying the one its block-meta brought.
 #[tokio::test]
 async fn a_transaction_waits_for_its_block_time_and_leaves_with_it() {

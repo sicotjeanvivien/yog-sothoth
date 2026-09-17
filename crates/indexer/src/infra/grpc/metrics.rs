@@ -9,7 +9,7 @@ use metrics::{counter, describe_counter};
 
 /// Payloads dropped because their slot never received a block time.
 ///
-/// ⚠️ **This is the number the next slice goes looking for.** The buffer's
+/// ⚠️ **This is the number a real-stream measurement looks for.** The buffer's
 /// bounds are ceilings picked without a measurement — see
 /// `slot_timestamp_buffer`'s module docs — so this counter staying at zero is
 /// what says the guess was generous, and any movement is what says it was not.

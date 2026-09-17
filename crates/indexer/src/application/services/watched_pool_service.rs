@@ -88,7 +88,7 @@ impl WatchedPoolService {
         // ⚠️ **Every row skipped is not "nothing to do", it is a dead end**, and
         // it deserves to be named here rather than three lines later. The
         // listener will refuse with `NoSubscriptionTargets` — the "reads like a
-        // network fault, is a configuration one" message this slice argues
+        // network fault, is a configuration one" message this module argues
         // against everywhere else — and that refusal knows nothing of the skip.
         // An `error!` at the moment the cause is still in hand is what connects
         // the two.

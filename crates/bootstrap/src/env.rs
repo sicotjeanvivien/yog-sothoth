@@ -90,7 +90,7 @@ fn optional(key: &str) -> Option<String> {
 /// silence.
 ///
 /// It also made that variable the only one of the workspace's 45 to carry a
-/// compound value — which is the very defect the `Endpoint` split removes,
+/// compound value — which is the very defect the variable split removes,
 /// reproduced one scale down: `SOLANA_RPC_HTTP` held three roles and was split
 /// into four pairs, and the fix then wrote a variable holding two.
 ///
@@ -214,7 +214,7 @@ fn read_header(
 /// else. The caller passes the **prefix**, and `<PREFIX>_URL` /
 /// `<PREFIX>_KEY` are derived from it — one name, one place. Spelling them at
 /// every call site is how a convention comes to hold at some sites and not
-/// others, which is the defect the `Endpoint` split exists to prevent.
+/// others, which is the defect the variable split exists to prevent.
 ///
 /// ⚠️ **The choice of door is about the consumer, never about the endpoint.**
 /// `INGEST_STREAM_*` goes through [`required_endpoint_allowing_header`] because

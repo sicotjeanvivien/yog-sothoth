@@ -14,7 +14,7 @@
 //!
 //! It is deliberately **generic over the payload** and knows nothing about
 //! protobuf: "given a stream of `(slot, T)` and a stream of `(slot, time)`,
-//! yield `(T, time)`". The listener slice instantiates it; the reasoning about
+//! yield `(T, time)`". The listener instantiates it; the reasoning about
 //! time is testable without a wire.
 //!
 //! # ⚠️ Why the bound counts slots and not seconds
@@ -77,7 +77,7 @@ pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 /// instructions, log messages, pre/post balances — on the order of 5–20 KB for
 /// a Meteora swap, so 8 192 of them is roughly **40–160 MB resident in this
 /// buffer alone**. That is bounded, which is the point, but it is a number
-/// slice 3 has to know when it sizes the process. Raised in review,
+/// the listener has to account for when it sizes the process. Raised in review,
 /// 8 September 2026, where this doc claimed to make the pathological case
 /// "impossible" without saying at what price.
 pub(crate) const MAX_PENDING_PAYLOADS: usize = 8_192;
@@ -201,7 +201,7 @@ impl<T> SlotTimestampBuffer<T> {
     ///
     /// This signature takes a `DateTime<Utc>` and not an `Option` precisely so
     /// the decision cannot be deferred to here: a caller with no instant has
-    /// nothing to call this with. Slice 1 had to learn the same lesson twice —
+    /// nothing to call this with. The adapter had to learn the same lesson twice —
     /// "the source did not tell us" is not a value.
     ///
     /// What such a caller has instead is [`Self::on_slot_unresolvable`]: the

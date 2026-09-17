@@ -11,8 +11,8 @@
 //! # What the port asks, and why this side already answered
 //!
 //! [`TransactionSource`] states three obligations, and the JSON-RPC source had
-//! to learn all three in review. This one was built with them, in the slice
-//! that wrote the listener:
+//! to learn all three in review. This one was built with them, alongside the
+//! listener:
 //!
 //! - **skip-and-log inside** — `session` counts every dropped update by reason
 //!   and steps over it; only a broken stream reaches [`GrpcListenerError`];
