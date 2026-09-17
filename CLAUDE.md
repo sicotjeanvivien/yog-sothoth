@@ -55,6 +55,14 @@ for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 cargo clippy -p yog-api -p yog-bootstrap -p yog-core -p yog-context -p yog-indexer \
     -p yog-persistence -p yog-signals --all-targets --all-features -- -D warnings
 
+# Doc links — rustdoc is the only thing that checks them (the CI `check` job
+# runs this). `--document-private-items` is required: without it a library's
+# private-item docs are skipped, links included. To force a re-check of an
+# already-documented crate, touch files that EXIST (`lib.rs` for the libraries,
+# `main.rs` for the four binaries): touching a missing `src/lib.rs` creates an
+# empty library, which cargo then documents in place of the binary.
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
 # Test — workspace unit tests, DB-free (660 tests, measured 31 Aug 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
