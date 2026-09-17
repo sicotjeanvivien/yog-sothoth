@@ -34,18 +34,18 @@
 //!    observation;
 //! 3. anything temporal — this module sees one message and has no clock.
 //!
-//! # ⚠️ Two things this adapter deliberately leaves to the listener
+//! # ⚠️ Two things this adapter deliberately leaves to the subscription
 //!
 //! **It does not look at `meta.err`**, so events from reverted transactions
 //! would be persisted if nothing upstream filtered them. On the JSON-RPC path that
 //! filtering lives in `infra/rpc/dispatcher/filters/failed_transaction.rs`, and
-//! the corpus keeps `damm_v2/swap_failed.json` for it. The gRPC path has no
-//! counterpart yet: the listener must set `failed: Some(false)` on its
-//! `SubscribeRequestFilterTransactions` — pushing the filter server-side, which
-//! is one of the stated gains — or check `meta.err` here.
+//! the corpus keeps `damm_v2/swap_failed.json` for it. On the gRPC path it is
+//! pushed server-side: `subscription::build_request` sets `failed: Some(false)`
+//! on every `SubscribeRequestFilterTransactions`.
 //!
-//! **It does not look at `is_vote` either**, and the omission bites twice. A
-//! subscription without `vote: Some(false)` hands over the bulk of the stream:
+//! **It does not look at `is_vote` either**, and the omission would bite twice
+//! if the request lost its `vote: Some(false)`, which `build_request` also sets
+//! and `subscription_tests` pins. Without it the stream hands over its bulk:
 //! every vote update gets its signature decoded, its index narrowed and its
 //! payloads allocated, to be discarded downstream. And under the rule two
 //! paragraphs up, a provider that reports votes with `inner_instructions_none`
@@ -53,7 +53,7 @@
 //! would read as a broken pipeline while nothing is wrong.
 //!
 //! Both are written down because a filter nobody remembers is a filter nobody
-//! adds. Raised in review, 8 September 2026.
+//! keeps. Raised in review, 8 September 2026.
 //!
 //! Their first confrontation with reality is the first run against a real
 //! provider, which needs an API key.
