@@ -36,7 +36,7 @@ const EVENTS_CHANNEL_CAPACITY: usize = 256;
 /// The listener does NOT:
 /// - manage retries (each worker owns its retry budget)
 /// - force a global reconnect when one worker dies (siblings keep running)
-/// - respawn dead workers (future work — see roadmap)
+/// - respawn dead workers (a dead worker stays dead)
 pub(crate) struct RpcListener {
     /// The whole endpoint, not just its URL: a provider may carry its key in
     /// the query string **or** in a metadata header, and which one is the

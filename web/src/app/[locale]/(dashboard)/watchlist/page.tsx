@@ -3,7 +3,7 @@
  *
  * Server Component shell (title + ⓘ) around the client `WatchlistContent`,
  * which owns the LocalStorage read and the per-pool fetches. The watchlist
- * lives entirely in the browser — no account, no backend — until the v0.3
+ * lives entirely in the browser — no account, no backend — until a
  * server-side watchlist replaces the store behind the same hook.
  */
 

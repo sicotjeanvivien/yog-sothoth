@@ -28,7 +28,7 @@
  *   a less-than-ideal mechanism (e.g. polling instead of WebSocket)
  * - `pending-aggregate`: needs a TimescaleDB continuous aggregate
  *   that is not created yet
- * - `pending-signals`: depends on the v0.2 Signal Engine
+ * - `pending-signals`: depends on Signal Engine work not built yet
  * - `pending-design`: scoring or formula not yet defined
  * - `pending-visual`: bespoke visualization not in scope for v0.1
  */
@@ -118,7 +118,7 @@ export const FEATURE_REGISTRY = {
     defaultEnabled: false,
   },
 
-  // ---- Scoring / Signal Engine (v0.2) ----
+  // ---- Scoring / Signal Engine ----
   liquidityHealthScore: {
     description: "Pool health score (0-100). Formula not yet defined.",
     status: "pending-design",

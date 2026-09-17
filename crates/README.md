@@ -4,7 +4,7 @@ This directory hosts the Rust workspace — the engine of yog-sothoth.
 
 The workspace follows a **Domain-Driven Design** layout: domain types and contracts live in `core`, infrastructure and I/O live in dedicated adapter crates (`persistence` for Postgres, `bootstrap` for startup utilities). The four native binaries (`indexer`, `api`, `context`, `signals`) are thin assembly layers that wire the pieces together; a one-shot binary (`yog-migrate`) lives next to the migrations it applies.
 
-**How the documentation is organised**: this README covers what is *inter-crate and common* — the dependency graph, the conventions, the database roles, the local workflows, and the cross-crate recipes (adding a protocol, adding an endpoint). Each substantial crate has its own README for its internals; each fact lives in exactly one place, so this file links rather than repeats. For the project-wide pitch and roadmap, see the [root README](../README.md).
+**How the documentation is organised**: this README covers what is *inter-crate and common* — the dependency graph, the conventions, the database roles, the local workflows, and the cross-crate recipes (adding a protocol, adding an endpoint). Each substantial crate has its own README for its internals; each fact lives in exactly one place, so this file links rather than repeats. For the project-wide pitch and status, see the [root README](../README.md).
 
 ---
 
@@ -73,7 +73,7 @@ The dependency graph is strict and one-directional:
 - **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Sixteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
 - **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill. The last one names no protocol — it iterates one `PoolAccountResolver` per protocol (cp-amm and DLMM today), each owning its queue and its satellite table.
 - **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain.
-- **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed at v0.3 (auth).
+- **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed once user accounts exist.
 
 ---
 
