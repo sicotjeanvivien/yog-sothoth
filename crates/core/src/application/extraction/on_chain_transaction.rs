@@ -1,12 +1,13 @@
 //! The shape in which a transaction reaches the extraction pipeline.
 //!
 //! `core` has no I/O, and it must not name a transport either: a transaction
-//! may arrive as a JSON-RPC `getTransaction` response today and as a Yellowstone
-//! protobuf update tomorrow. [`OnChainTransaction`] is what the two have in common,
-//! and it is the only thing the extractors see. Each source gets an adapter that
-//! fills it, and **none of them lives in this crate**: they are in `yog-indexer`,
-//! under `infra::rpc`. What stays here is the contract they owe — stated below,
-//! and checkable through `crate::application::extraction::conformance`.
+//! arrives either as a JSON-RPC `getTransaction` response or as a Yellowstone
+//! gRPC update. [`OnChainTransaction`] is what the two have in common, and it is
+//! the only thing the extractors see. Each source gets an adapter that fills it,
+//! and **none of them lives in this crate**: they are in `yog-indexer`, under
+//! `infra::rpc` and `infra::grpc`. What stays here is the contract they owe —
+//! stated below, and checkable through
+//! `crate::application::extraction::conformance`.
 //!
 //! It carries exactly what extraction needs, and nothing else: the coordinate
 //! that locates an event ([`TransactionPosition`]) and the material to decode
