@@ -23,6 +23,8 @@ pub fn discriminator_initialize_reward() -> [u8; DISCRIMINATOR_LEN] {
 ///
 /// `funder` and `creator` are frequently the same wallet, so a fixture cannot
 /// discriminate their order — it comes from the cp-amm source.
+///
+/// [`EvtFundReward`]: crate::application::extraction::meteora::damm_v2::events::EvtFundReward
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtInitializeReward {
     pub pool: Pubkey,

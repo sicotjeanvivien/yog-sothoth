@@ -39,7 +39,7 @@ impl PgHealthChecker {
     /// Run a minimal round-trip against the database.
     ///
     /// Returns `Ok(())` when Postgres acknowledges within
-    /// [`PING_TIMEOUT`], `Err(HealthError)` otherwise. The error
+    /// `PING_TIMEOUT`, `Err(HealthError)` otherwise. The error
     /// variant distinguishes a timeout (DB slow or unreachable) from
     /// a connection-level failure (DB returned an error).
     pub async fn ping(&self) -> Result<(), HealthError> {

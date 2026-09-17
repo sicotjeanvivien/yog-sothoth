@@ -1,7 +1,7 @@
 //! Extract DAMM v2 wire events from a confirmed Solana transaction.
 //!
 //! Bridges three pieces:
-//! - the generic Anchor event_cpi decoder ([`crate::protocols::anchor_event`])
+//! - the generic Anchor event_cpi decoder (`crate::application::extraction::anchor_event`)
 //! - the DAMM v2 wire event mirrors ([`super::events`])
 //! - the neutral transaction shape ([`OnChainTransaction`])
 //!

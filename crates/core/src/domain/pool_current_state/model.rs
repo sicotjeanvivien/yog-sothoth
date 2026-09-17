@@ -102,7 +102,7 @@ pub struct PoolCurrentState {
 }
 
 /// Payload describing a state change to apply via
-/// [`PoolCurrentStateRepository::upsert`].
+/// [`crate::domain::PoolCurrentStateRepository::upsert`].
 ///
 /// Constructed by the indexer from the event it just persisted. Unlike
 /// [`PoolCurrentState`], this struct carries only what the event provides —

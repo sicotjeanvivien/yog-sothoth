@@ -24,6 +24,8 @@ pub fn discriminator_update_reward_duration() -> [u8; DISCRIMINATOR_LEN] {
 /// (`ix_update_reward_duration.rs`, single `emit_cpi!` site); no on-chain
 /// fixture has been captured for this event — see the module-level note on
 /// fixture-less events.
+///
+/// [`EvtFundReward`]: crate::application::extraction::meteora::damm_v2::events::EvtFundReward
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtUpdateRewardDuration {
     pub pool: Pubkey,

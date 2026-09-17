@@ -1,8 +1,9 @@
 //! The Yellowstone acquisition model, behind the port.
 //!
-//! Thin, and the thinness is the point: where [`super::super::rpc::source`]
-//! assembles three stages and two channels because `logsSubscribe` notifies and
-//! the pipeline then asks, this one has a single connection that **delivers**.
+//! Thin, and the thinness is the point: where
+//! [`RpcTransactionSource`](crate::infra::RpcTransactionSource) assembles three
+//! stages and two channels because `logsSubscribe` notifies and the pipeline
+//! then asks, this one has a single connection that **delivers**.
 //! `GrpcListener::run` already produces the port's own
 //! [`IngestedTransaction`] — the translation, the slot/time pairing and the
 //! reconnection all live inside it — so there is nothing here but the

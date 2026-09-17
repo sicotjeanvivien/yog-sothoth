@@ -24,7 +24,7 @@ use rust_decimal::Decimal;
 /// It caps `base_fee_rate + variable_fee_rate` **at swap time**, so it bounds
 /// each part individually too — which is why both functions here saturate at it
 /// rather than returning an error.
-const MAX_FEE_BPS: Decimal = Decimal::ONE_THOUSAND;
+pub const MAX_FEE_BPS: Decimal = Decimal::ONE_THOUSAND;
 
 /// Divisor of the variable-fee formula, applied to a value already in 1e9
 /// precision.

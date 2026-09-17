@@ -15,6 +15,8 @@ pub fn discriminator_close_position() -> [u8; DISCRIMINATOR_LEN] {
 /// Emitted when an LP closes a position and the position account is torn
 /// down on-chain. Same field shape as [`EvtCreatePosition`]; any remaining
 /// liquidity/fees are withdrawn through separate events prior to closing.
+///
+/// [`EvtCreatePosition`]: crate::application::extraction::meteora::damm_v2::events::EvtCreatePosition
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtClosePosition {
     pub pool: Pubkey,

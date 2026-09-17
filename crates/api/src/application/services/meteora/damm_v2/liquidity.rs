@@ -19,7 +19,7 @@ use yog_core::{
 // Params
 // ---------------------------------------------------------------------------
 
-/// Input to [`LiquidityService::list_liquidity_for_pool`].
+/// Input to [`MeteoraDammV2LiquidityService::list_liquidity_for_pool`].
 pub(crate) struct MeteoraDammV2LiquidityListParams {
     pub pool_address: Pubkey,
     pub cursor: Option<MeteoraDammV2LiquidityEventCursor>,

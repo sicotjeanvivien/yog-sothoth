@@ -20,6 +20,8 @@ pub fn discriminator_liquidity_change() -> [u8; DISCRIMINATOR_LEN] {
 /// `reserve_a_amount` / `reserve_b_amount` are post-change reserves in the
 /// pool's own `(token_a, token_b)` order — same convention as [`EvtSwap2`],
 /// and like it, not a sort of the mints.
+///
+/// [`EvtSwap2`]: crate::application::extraction::meteora::damm_v2::events::EvtSwap2
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtLiquidityChange {
     pub pool: Pubkey,

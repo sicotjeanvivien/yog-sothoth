@@ -3,7 +3,8 @@
 # Eight jobs in parallel:
 #   - check            : `cargo check` across the whole workspace (catches
 #                        anything that doesn't compile, including the WASM
-#                        crate's host build).
+#                        crate's host build), then `cargo doc`, which fails on
+#                        any intra-doc link that does not resolve.
 #   - check-per-crate  : `cargo check -p <crate>`, once per workspace member —
 #                        catches a crate that only compiles because a sibling
 #                        in the same invocation enables a feature for it.
@@ -65,6 +66,25 @@ jobs:
       # so a new crate is picked up on its own. What it CANNOT do is tell
       # whether a member still compiles ALONE — see `check-per-crate` below.
       - run: cargo check --workspace --all-targets
+      # Intra-doc links are checked by rustdoc and by nothing else: clippy
+      # passes over a doc link whose target is gone. With no job running
+      # rustdoc, 27 broken links had piled up by 17 Sept 2026.
+      #
+      # A step here rather than a job of its own: `cargo doc` reuses the
+      # dependency metadata `cargo check` just built, and adds no cache entry
+      # (see the note on the 10GB quota below). `--workspace` again, so a new
+      # member is covered without being listed — yog-wasm included, it
+      # documents cleanly.
+      #
+      # `--document-private-items` is not optional. Without it rustdoc skips
+      # the docs of a LIBRARY's private items, links included: 29 warnings
+      # without the flag, 32 with, on 17 Sept 2026 — the three extra all in
+      # yog-core and yog-persistence. Binaries don't depend on it, cargo
+      # already documents their private items.
+      - name: Doc links resolve
+        run: cargo doc --workspace --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   # ─────────────────────────────────────────────────────────────────
   # check-per-crate — does every member still compile ON ITS OWN?

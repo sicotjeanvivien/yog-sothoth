@@ -27,7 +27,7 @@
 //! Anchor prefixes each event with an 8-byte discriminator equal to
 //! `sha256("event:<EventName>")[..8]`. The values in this module are
 //! computed at runtime from the canonical event names (see
-//! [`compute_discriminator`]).
+//! `compute_discriminator`).
 //!
 //! ## Scope
 //!
