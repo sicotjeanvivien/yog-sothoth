@@ -94,7 +94,7 @@ pub(crate) fn from_rpc(
 /// required signer, ordered to match the leading account keys, and
 /// `account_keys[0]` is the fee payer — so `signatures[0]` is what Solana calls
 /// the transaction id: what an explorer indexes, and the argument
-/// `getTransaction` is queried by. Ten of the 27 mainnet fixtures in
+/// `getTransaction` is queried by. Ten of the 28 mainnet fixtures in
 /// `core/tests/fixtures/damm_v2/` carry two or three signatures; the extra ones
 /// are co-signers. They authenticate the transaction, none of them identifies
 /// it.

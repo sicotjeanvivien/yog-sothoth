@@ -104,8 +104,8 @@ fn digest() -> String {
     let dir = fixtures_dir();
     let files = fixture_files(&dir);
     assert!(
-        files.len() >= 27,
-        "expected the 27 mainnet fixtures, found {} — did the corpus move?",
+        files.len() >= 28,
+        "expected the 28 mainnet fixtures, found {} — did the corpus move?",
         files.len()
     );
 

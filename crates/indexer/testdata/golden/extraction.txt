@@ -88,6 +88,9 @@
 == swap_ok.json
   events=1 unknown=0 failures=0
   event MeteoraDammV2(Swap(MeteoraDammV2SwapEvent { pool_address: CGPxT5d1uf9a8cKVJuZaJAU76t2EfLGbTmRbfvLLZp5j, signature: 4UqWceGzjNpGb8ZxDSTaNCHDHNF2Dh9TVHwxboPhPpYh8tr1v3GsHZs7FVdzBe8xiLvu1LGDcGXbY3pBPxXXqByF, timestamp: 2026-04-09T05:48:59Z, slot: 412008934, transaction_index: None, event_index: 1, trade_direction: AtoB, amount_a: 133661157, amount_b: 10994840, reserve_a_after: 85301113122, reserve_b_after: 2614112898, next_sqrt_price: 5294842400730792161, claiming_fee: 22051, protocol_fee: 5512, compounding_fee: 0, referral_fee: 0, fee_token_is_a: false }))
+== swap_v1.json
+  events=1 unknown=0 failures=0
+  event MeteoraDammV2(Swap(MeteoraDammV2SwapEvent { pool_address: 8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie, signature: 2yyZaQ3wcH8SMqJsGEZyRsXoKyyWVNFnPRMicKZLJ4XDeAerQUvfnRojYqsARRZNkkWCeC5AWMjGzfEcsyFuyEBt, timestamp: 2026-09-15T05:11:32Z, slot: 447166931, transaction_index: Some(544), event_index: 1, trade_direction: BtoA, amount_a: 612925663, amount_b: 61975302, reserve_a_after: 11310414964468, reserve_b_after: 368418327977, next_sqrt_price: 5864681061524408989, claiming_fee: 196216, protocol_fee: 49053, compounding_fee: 0, referral_fee: 0, fee_token_is_a: true }))
 == swap_via_router.json
   events=1 unknown=0 failures=0
   event MeteoraDammV2(Swap(MeteoraDammV2SwapEvent { pool_address: 8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie, signature: 4NAjaq6zBbFJ7yUBRNkkCH4gnXFcQyQQTpkWK3t6443H9yPzobUtpvuc9DyVyRKyPkN65Bw6jhxCQqNwQrihX1oJ, timestamp: 2026-04-28T10:10:37Z, slot: 416198296, transaction_index: None, event_index: 1, trade_direction: BtoA, amount_a: 92918108, amount_b: 7780718, reserve_a_after: 13524729497254, reserve_b_after: 171702418541, next_sqrt_price: 5336952575984740364, claiming_fee: 29747, protocol_fee: 5949, compounding_fee: 0, referral_fee: 1487, fee_token_is_a: true }))

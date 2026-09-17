@@ -32,7 +32,7 @@ use solana_signature::Signature;
 /// # `transaction_index` is `None` today — the provider's doing, not the API's
 ///
 /// The field is `#[serde(default)]` on the Solana type: a `getTransaction`
-/// response *may* carry it, and some RPCs do — 10 of the 27 mainnet fixtures in
+/// response *may* carry it, and some RPCs do — 11 of the 28 mainnet fixtures in
 /// `core/tests/fixtures/damm_v2/` have one. The provider this project ingests
 /// from does not: **measured 31 August 2026, 136 of 136 rows of
 /// `pool_current_state` have `last_transaction_index IS NULL`** — not most, all.
