@@ -7,12 +7,14 @@
 //! correlation.
 //!
 //! Probe endpoints (`/healthz`, `/readyz`) are NOT routed through
-//! this layer — see `http::build_router`. Filtering them here at the
+//! this layer — see [`http::build_router`]. Filtering them here at the
 //! span/event level would not work reliably: `debug_span!` only
 //! lowers the span itself, not the `info!` events created within it,
 //! so an event-level `info!` would still surface in the logs. The
 //! cleaner answer is to mount this layer only on the application
 //! sub-router and keep the probe routes free of tracing.
+//!
+//! [`http::build_router`]: crate::http::build_router
 
 use std::time::Duration;
 

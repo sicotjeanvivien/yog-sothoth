@@ -143,11 +143,13 @@ impl Daemon {
     /// one lost it.
     ///
     /// ⚠️ **That is not a missing timeout.** Every provider request is already
-    /// bounded (15 s total, 5 s connect — `providers::http_client`). The tick
+    /// bounded (15 s total, 5 s connect — [`providers::http_client`]). The tick
     /// is long because it is ~19 chunks sent back to back plus the capped
     /// backoff the rate-limited ones earn, and **nothing between two chunks
     /// looks at the token**. Shortening it is a question for the worker and
     /// its client, not for the grace.
+    ///
+    /// [`providers::http_client`]: crate::providers::http_client
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),
@@ -223,7 +225,7 @@ const POOL_ACCOUNT: &str = "pool-account worker";
 /// Connect to the database.
 ///
 /// The database URL is held in `Config::database_url` (a redacted secret),
-/// so we never log it directly — `anyhow::Context` is sufficient to surface
+/// so we never log it directly — [`anyhow::Context`] is sufficient to surface
 /// the failure at startup without leaking credentials.
 async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     let db = Database::connect(database_url.expose())

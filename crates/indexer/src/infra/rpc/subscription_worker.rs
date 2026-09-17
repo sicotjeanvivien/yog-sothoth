@@ -39,7 +39,7 @@ const MAX_BACKOFF_SECS: u64 = 60;
 ///
 /// Keeping it under `application` made the dependency run the wrong way twice
 /// over — `application` reaching into `infra` for the types it needs, and
-/// `infra::rpc::listener` reaching back into `application` to spawn it. Moving
+/// [`infra::rpc::listener`] reaching back into `application` to spawn it. Moving
 /// the file removes both, and it is the only thing that had to move for that.
 ///
 /// Each worker owns its own `PubsubClient` (one WebSocket connection per
@@ -53,11 +53,14 @@ const MAX_BACKOFF_SECS: u64 = 60;
 ///
 /// The worker emits `SubscriptionEvent`s on a broadcast channel so the
 /// listener (and any future observer) can track its state.
+///
+/// [`infra::rpc::listener`]: crate::infra::rpc::listener
 pub(crate) struct SubscriptionWorker {
     ws_url: SecretUrl,
     /// The header this endpoint authenticates with, if it has one. Validated by
-    /// the listener before any worker exists — see `infra::endpoint::credential`, and
-    /// why the answer is the operator's configuration and not the transport.
+    /// the listener before any worker exists — see the module docs of
+    /// [`Credential`], and why the answer is the operator's configuration and
+    /// not the transport.
     credential: Credential,
     target: SubscriptionTarget,
     max_attempts: u32,

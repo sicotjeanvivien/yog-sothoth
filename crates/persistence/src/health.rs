@@ -56,7 +56,7 @@ impl PgHealthChecker {
 /// Reasons a health check can fail.
 ///
 /// The string variant intentionally swallows the underlying
-/// `sqlx::Error` to avoid leaking internals through the readiness
+/// [`sqlx::Error`] to avoid leaking internals through the readiness
 /// payload — the handler maps both variants to a generic "db down"
 /// label.
 #[derive(Debug)]

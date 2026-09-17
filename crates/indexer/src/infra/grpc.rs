@@ -14,7 +14,7 @@
 //!   a separate subscription keyed by slot;
 //! - `source` — the port's face on all of it, and the only public item.
 //!
-//! What leaves is `application::source::IngestedTransaction`, which is not this
+//! What leaves is [`application::source::IngestedTransaction`], which is not this
 //! path's type: it is the port's, and this path was merely the first to need
 //! it.
 //!
@@ -49,6 +49,8 @@
 //! gone with the wiring it was waiting for. It had covered the whole path
 //! rather than each module, precisely so that deleting it would make the build
 //! name whatever was still unreachable — which it did.
+//!
+//! [`application::source::IngestedTransaction`]: crate::application::source::IngestedTransaction
 
 mod interceptor;
 mod listener;

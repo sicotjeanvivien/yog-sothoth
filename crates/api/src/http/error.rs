@@ -16,7 +16,7 @@ use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetails};
 ///
 /// Responses are serialised as RFC 9457 Problem Details with
 /// `Content-Type: application/problem+json`. See
-/// `crate::http::dto::response::problem` for the format rationale.
+/// [`crate::http::dto::response::problem`] for the format rationale.
 #[derive(Debug)]
 pub(crate) enum ApiError {
     BadRequest(String),

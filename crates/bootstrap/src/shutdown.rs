@@ -55,7 +55,7 @@ impl From<&JoinError> for TaskEnd {
     }
 }
 
-/// Normalise the result of a spawned task into a loggable `anyhow::Result`.
+/// Normalise the result of a spawned task into a loggable [`anyhow::Result`].
 ///
 /// Distinguishes four cases: clean stop, task error, task panic, and a task
 /// destroyed before it could answer — see [`TaskEnd`] for why the last two are

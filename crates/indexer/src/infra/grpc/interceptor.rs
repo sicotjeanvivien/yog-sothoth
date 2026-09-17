@@ -11,13 +11,13 @@
 //! # What carries the credential, and what does not
 //!
 //! Nothing here decides *whether* there is a header, and nothing here validates
-//! it either — that is `infra::endpoint::credential`, once, for both ingestion paths.
+//! it either — that is [`Credential`], once, for both ingestion paths.
 //! What is left in this file is the one thing only gRPC does: turning a
 //! validated header into request metadata.
 //!
 //! Whether there is one at all is the operator's, through
 //! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE`, and
-//! `yog_bootstrap::Endpoint` is what assembles the two with the key — see its
+//! [`yog_bootstrap::Endpoint`] is what assembles the two with the key — see its
 //! module docs for the four authentication shapes measured across providers,
 //! and why the header's **name** is a provider convention too. This module
 //! takes what `Endpoint::header()` hands over, or nothing at all, and puts it

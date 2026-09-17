@@ -118,9 +118,9 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 /// the buffer downstream, not this, is what bounds memory.
 const MAX_DECODING_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
-/// How many outbound requests may queue. One subscription plus the occasional
-/// ping answer — anything above a handful means the outbound half is stuck, and
-/// queueing more keep-alives would not unstick it.
+/// How many outbound requests may queue. Only one is ever sent — the
+/// subscription, once per connection — since a server ping is counted and not
+/// answered (see [`StreamSession`]). The headroom above one is unused.
 const OUTBOUND_CAPACITY: usize = 8;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped
@@ -135,8 +135,10 @@ pub(crate) struct GrpcListener {
     /// question — see `interceptor`.
     endpoint: Endpoint,
     /// Every address to subscribe to, with its protocol — see
-    /// `subscription::build_request`, which groups them into one filter per
+    /// [`subscription::build_request`], which groups them into one filter per
     /// protocol.
+    ///
+    /// [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
 }
@@ -637,7 +639,7 @@ impl Attempt {
 /// way.
 ///
 /// ⚠️ **Not error-text matching, and that distinction is the whole point.** The
-/// chain of causes is walked for a `tonic::transport::Error`, a type that can
+/// chain of causes is walked for a [`tonic::transport::Error`], a type that can
 /// only exist on *our* side: a status the server sent arrives in the response
 /// trailers and is rebuilt from them with **no source at all**. So a transport
 /// error anywhere in the chain says the request never got an answer — a load

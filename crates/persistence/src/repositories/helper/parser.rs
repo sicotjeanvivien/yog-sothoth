@@ -96,7 +96,7 @@ pub(crate) fn parse_string_to_liquidity_event_kind(
         .map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {liquidity_event_kind}")))
 }
 
-/// Map a `sqlx::Error` to its semantic `RepositoryError` counterpart.
+/// Map a [`sqlx::Error`] to its semantic `RepositoryError` counterpart.
 ///
 /// The mapping is intentionally coarse — refine variants only when a
 /// caller actually needs to distinguish specific cases.

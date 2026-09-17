@@ -16,7 +16,7 @@ use crate::error::CredentialError;
 /// it there.
 ///
 /// ⚠️ **And `scrub` covers one carrier of the two.** A credential riding in a
-/// metadata header has no equivalent, which `yog_bootstrap::Endpoint`'s module
+/// metadata header has no equivalent, which [`yog_bootstrap::Endpoint`]'s module
 /// docs state as a known gap rather than an oversight: it would mean guessing
 /// at the shape of an error no client here has been seen to produce, and
 /// guessing at shapes is what the redactor this workspace deleted did. What is

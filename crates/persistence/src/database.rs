@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::error::MigrationError;
 
-/// Thin wrapper around `sqlx::PgPool` providing a single entry point for
+/// Thin wrapper around [`sqlx::PgPool`] providing a single entry point for
 /// connecting and a hook for future cross-cutting concerns (metrics, health,
 /// migrations runner if we ever bundle one).
 ///
@@ -48,7 +48,7 @@ impl Database {
     ///
     /// Callers needing different sizing should use `connect_with_options`.
     ///
-    /// Returns `sqlx::Error` directly: connection failures at boot time are
+    /// Returns [`sqlx::Error`] directly: connection failures at boot time are
     /// best surfaced with their original context (configuration, IO, TLS,
     /// authentication…) rather than wrapped behind a generic error type.
     pub async fn connect(url: &str) -> Result<Self, sqlx::Error> {

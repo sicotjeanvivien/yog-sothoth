@@ -91,10 +91,12 @@ impl Gap {
 /// call site both what it is doing and which of the gaps it is answering — the
 /// two things a reader needs there, and what the mutation check exercises.
 ///
-/// The `refusal::refuse` repetition is kept rather than avoided. Importing
+/// The [`refusal::refuse`] repetition is kept rather than avoided. Importing
 /// `refuse` bare would read a shade better and drop the one word that tells the
 /// next author this text is shared: the module has to stay visible at the call
 /// site, or the literal comes back.
+///
+/// [`refusal::refuse`]: crate::infra::refusal::refuse
 pub(crate) fn refuse(gap: Gap, signature: &Signature) -> CoreError {
     CoreError::MissingField {
         signature: signature.to_string(),

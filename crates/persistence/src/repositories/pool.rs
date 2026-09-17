@@ -127,7 +127,7 @@ fn resolve_fence(claimed: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Resolved
 /// and drops the long tail of one-off dynamic-fee/launch values.
 const FEE_TIER_LIMIT: i64 = 8;
 
-/// Convert a domain `fee_bps` (`rust_decimal::Decimal`) to the `BigDecimal`
+/// Convert a domain `fee_bps` ([`rust_decimal::Decimal`]) to the `BigDecimal`
 /// that NUMERIC binds to at the persistence boundary. Round-trips through the
 /// exact decimal string — never lossy for the small fee values we store.
 pub(super) fn fee_bps_to_numeric(

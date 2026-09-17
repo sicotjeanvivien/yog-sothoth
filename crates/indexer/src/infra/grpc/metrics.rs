@@ -137,11 +137,14 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
-    /// A server keep-alive. Answered, not merely counted — see
-    /// `session::StreamSession::answer_ping`, and why the answer is the whole
-    /// subscription.
+    /// A server keep-alive. Counted, never answered — see how
+    /// [`StreamSession`] handles it, and why no answer is safe under both
+    /// readings of the proto.
+    ///
+    /// [`StreamSession`]: crate::infra::grpc::session::StreamSession
     Ping,
-    /// The answer to one of ours.
+    /// The server's answer to a client ping. This client sends none, so this
+    /// should stay at zero.
     Pong,
     /// Anything the subscription did not ask for. Non-zero here means the
     /// request and the reader disagree about what was subscribed to.

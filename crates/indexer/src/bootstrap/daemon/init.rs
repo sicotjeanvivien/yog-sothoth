@@ -81,7 +81,7 @@ pub(super) fn log_ingestion_mode(config: &Config) {
 /// Connect to the database.
 ///
 /// The database URL is held in `Config::database_url` (a redacted secret),
-/// so we never log it directly — `anyhow::Context` is sufficient to surface
+/// so we never log it directly — [`anyhow::Context`] is sufficient to surface
 /// the failure at startup without leaking credentials.
 pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     let db = Database::connect(database_url.expose())

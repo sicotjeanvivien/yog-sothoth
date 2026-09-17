@@ -10,9 +10,12 @@
 //!     state; downstream code (services, mappers) can rely on its
 //!     fields unconditionally.
 //!
-//! Validation helpers themselves live in `http::query` and
-//! `http::cursor`. The request DTOs are their orchestrators, not
+//! Validation helpers themselves live in [`http::query`] and
+//! [`http::cursor`]. The request DTOs are their orchestrators, not
 //! their replacement.
+//!
+//! [`http::query`]: crate::http::query
+//! [`http::cursor`]: crate::http::cursor
 
 pub(crate) mod get_pool;
 pub(crate) mod get_pool_history;

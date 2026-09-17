@@ -45,7 +45,7 @@ pub(super) fn frame_options_layer() -> SetResponseHeaderLayer<HeaderValue> {
 /// CORS configuration.
 ///
 /// Restricted to the explicit set of browser origins configured via
-/// `API_CORS_ALLOWED_ORIGINS` (parsed at boot in `bootstrap::config`).
+/// `API_CORS_ALLOWED_ORIGINS` (parsed at boot in [`bootstrap::config`]).
 /// The API is read-only, so only `GET` is allowed; `Content-Type` is
 /// the sole request header a browser sets on these calls. The
 /// `x-request-id` response header is exposed so the browser client can
@@ -55,6 +55,8 @@ pub(super) fn frame_options_layer() -> SetResponseHeaderLayer<HeaderValue> {
 /// monitoring) don't send an `Origin` header and are unaffected — CORS
 /// only ever *grants* cross-origin browser access, it never gates
 /// server-to-server traffic.
+///
+/// [`bootstrap::config`]: crate::bootstrap::config
 pub(super) fn cors_layer(allowed_origins: Vec<HeaderValue>) -> CorsLayer {
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(allowed_origins))

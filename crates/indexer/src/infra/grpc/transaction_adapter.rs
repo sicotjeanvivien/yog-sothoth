@@ -40,7 +40,7 @@
 //! would be persisted if nothing upstream filtered them. On the JSON-RPC path that
 //! filtering lives in `infra/rpc/dispatcher/filters/failed_transaction.rs`, and
 //! the corpus keeps `damm_v2/swap_failed.json` for it. On the gRPC path it is
-//! pushed server-side: `subscription::build_request` sets `failed: Some(false)`
+//! pushed server-side: [`subscription::build_request`] sets `failed: Some(false)`
 //! on every `SubscribeRequestFilterTransactions`.
 //!
 //! **It does not look at `is_vote` either**, and the omission would bite twice
@@ -59,6 +59,8 @@
 //! provider, which needs an API key.
 //! Until then, read this suite as "the translation is self-consistent", never
 //! as "the translation is right".
+//!
+//! [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
 
 use crate::infra::refusal::{self, Gap};
 use chrono::{DateTime, Utc};

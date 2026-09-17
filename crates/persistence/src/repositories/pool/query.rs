@@ -36,7 +36,7 @@ pub(super) struct PaginatedPoolsQuery {
     /// Snapshot fence of the traversal, minted by the repository. When set,
     /// the listing reads only `last_seen_at <= as_of`, which keeps a mutable
     /// sort key from moving rows across the cursor mid-traversal — see
-    /// `yog_core::domain::PoolPage`. `None` on a sort over an immutable
+    /// [`yog_core::domain::PoolPage`]. `None` on a sort over an immutable
     /// column, which needs no fence.
     pub(super) as_of: Option<DateTime<Utc>>,
     pub(super) fetch_limit: i64,
