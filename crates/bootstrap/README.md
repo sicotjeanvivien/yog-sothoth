@@ -19,9 +19,8 @@ roles), see [`crates/README.md`](../README.md).
 
 ```
 bootstrap/src/
-├── env.rs        ← required*, required_endpoint*, duration_var,
-│                   parse_required_* — trim and blank-as-missing live in
-│                   `required`, and the helpers built on it inherit them
+├── env.rs        ← required*, required_endpoint*, parse_required_*,
+│                   duration_var — see the note below the tree
 ├── secret.rs     ← SecretUrl, SecretKey — redaction, scrub, expose()
 ├── endpoint.rs   ← Endpoint: <FUNCTION>_URL + optional header pair + key
 ├── error.rs      ← ConfigError, returned by every binary's Config::load
@@ -30,6 +29,14 @@ bootstrap/src/
 │                   SHUTDOWN_GRACE
 └── lib.rs        ← re-exports, and the exposure_tests.rs guard
 ```
+
+**Trimming is not one rule for every reader.** `required` trims and reads a
+blank value as missing; `required*`, `parse_required_*` and the endpoint
+readers go through it, or through the private `optional`, which applies the
+same rule without the refusal. `duration_var` does not: a value with a default
+may be absent, which `required` refuses, so it trims on its own — and a
+**blank** value is not read as absent there but refused as `InvalidValue`, so
+`FOO_SECS=` stops the daemon instead of falling back to the default.
 
 `env`, `secret`, `endpoint`, `runtime` and `shutdown` each have their
 `*_tests.rs` beside them; `exposure_tests.rs` is the build-failing guard on
