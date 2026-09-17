@@ -58,8 +58,9 @@ const MAX_BACKOFF_SECS: u64 = 60;
 pub(crate) struct SubscriptionWorker {
     ws_url: SecretUrl,
     /// The header this endpoint authenticates with, if it has one. Validated by
-    /// the listener before any worker exists — see [`Credential`], and
-    /// why the answer is the operator's configuration and not the transport.
+    /// the listener before any worker exists — see the module docs of
+    /// [`Credential`], and why the answer is the operator's configuration and
+    /// not the transport.
     credential: Credential,
     target: SubscriptionTarget,
     max_attempts: u32,
