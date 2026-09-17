@@ -227,9 +227,8 @@ pub(super) fn init_processor(
 /// and it is why the client used to be built one storey up, where neither of
 /// them lives.
 ///
-/// ⚠️ **And what it should measure is an open question**, tracked by
-/// `02 - backlog/pre-v02/le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`:
-/// this probe reads `INGEST_TRANSACTION`, which the gRPC source will not use.
+/// ⚠️ **And what it should measure is an open question**: this probe reads
+/// `INGEST_TRANSACTION`, which the gRPC source will not use.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,

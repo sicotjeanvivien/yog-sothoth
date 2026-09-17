@@ -215,7 +215,7 @@ async fn pool_without_current_state_has_null_tvl(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
-    // The case the 6 August update of `.project` ticket 08 added, and the one
+    // The case found on 6 August 2026, and the one
     // that had no coverage at all. It is the SILENT failure, not the loud one:
     //
     //   * the pool's current TVL is perfectly known, so `tvl_drain`'s existing

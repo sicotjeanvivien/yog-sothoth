@@ -13,8 +13,10 @@ Four backend processes share one Postgres database and never call each other —
 This file is a map, not the territory. The in-repo READMEs are the authoritative, maintained architecture docs — read them before non-trivial work:
 
 - **`crates/README.md`** — the workspace-level doc: dependency graph, conventions, DB roles, local workflows, and the step-by-step recipes for *Adding a new protocol* and *Adding a new API endpoint*. Follow those recipes verbatim; they list every dispatch point that must change.
-- **`crates/<crate>/README.md`** — one per substantial crate (`core`, `persistence`, `indexer`, `api`, `context`, `signals`): layout and internals of that crate. When you change a crate, its README is part of the change.
+- **`crates/<crate>/README.md`** — one per substantial crate (`core`, `persistence`, `bootstrap`, `indexer`, `api`, `context`, `signals`): layout and internals of that crate. When you change a crate, its README is part of the change.
 - **`web/README.md`** — the Next.js frontend (direct-API architecture, signal feed, feature flags, i18n).
+
+**Never reference a project-tracking ticket in this repository** — no `.project/…` path, no ticket number, no "this ticket", in code, comments, READMEs, CI files or commit-visible docs. The tracker is a separate private repository: a reader of this code cannot follow the pointer, and every rename there breaks it. Write the reason itself instead (the defect, the measurement still to come, the migration that fixed it). Committed migrations are the one exception, and only because they can never be edited.
 
 ## Commands
 

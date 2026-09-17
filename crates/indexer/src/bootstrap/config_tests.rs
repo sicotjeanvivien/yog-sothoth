@@ -6,7 +6,7 @@ use yog_bootstrap::EnvEnum;
 /// ⚠️ **This test used to assert a refusal, and now asserts its opposite.**
 /// Until 10 September 2026 three of the four `(source, scope)` couples were
 /// rejected at load time by a `validator` module, for one shared reason:
-/// nothing populated a subscription set. The gRPC slice filled that
+/// nothing populated a subscription set. The gRPC work filled that
 /// precondition — the daemon registers, as the scope says, the protocols whose
 /// extraction is written or the pools restored from the database — so the
 /// module and its refusals are gone. What replaced them is not a looser check

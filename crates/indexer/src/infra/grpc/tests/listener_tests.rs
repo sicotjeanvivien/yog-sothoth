@@ -11,9 +11,8 @@
 //! a decision about *how a stream ended*, and nothing short of a server
 //! produces those endings. See the header of that module for what this proves
 //! and what it does not; the short version is that it validates this client
-//! against our model of the server, and that
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is still the ticket where
-//! the model meets a real one.
+//! against our model of the server, and that only a run against a real
+//! provider meets the model with a real one.
 
 use super::*;
 
@@ -777,7 +776,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
 /// gives the gap up exactly as the dial used to.
 ///
 /// Found in review of this change, 16 September 2026 — the first version fixed
-/// the two sites the ticket had listed and left standing the one it had
+/// the two sites the plan had listed and left standing the one it had
 /// classified, wrongly, as the server's answer.
 ///
 /// Mutation this owns: `connect_and_stream`'s `subscribe` arm losing its

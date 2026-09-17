@@ -33,7 +33,7 @@ describe("volumeCoverage", () => {
   });
 
   it("separates two pools of equal volume and unequal coverage", () => {
-    // The whole point of the ticket: same headline figure, different meaning.
+    // The whole point of the mark: same headline figure, different meaning.
     const measured = volumeCoverage({
       swapBuckets24h: 4,
       swapBucketsPriced24h: 4,

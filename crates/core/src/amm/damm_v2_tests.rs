@@ -227,7 +227,7 @@ fn linear_decay_reaches_its_floor_at_the_last_period() {
     assert_eq!(fee_numerator_to_bps(floor).round_dp(1).to_string(), "400.0");
 }
 
-/// The case the audit measured, and the reason this ticket exists: the pool's
+/// The case the audit measured, and the reason this computation exists: the pool's
 /// scheduler expired on 2026-07-28, so a trader pays the 400 bps floor while
 /// `pools.fee_bps` still publishes the 5000 bps cliff — a factor of 12.5.
 #[test]
@@ -381,7 +381,7 @@ fn pow_inverts_a_base_above_one_like_the_source_does() {
 }
 
 /// The kinds that must never reach this function get `None`, never the cliff.
-/// Returning the cliff would republish the exact number this ticket removes.
+/// Returning the cliff would republish the exact number this computation replaces.
 #[test]
 fn a_non_time_scheduler_kind_yields_no_fee_not_the_cliff() {
     for kind in [

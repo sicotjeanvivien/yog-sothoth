@@ -105,8 +105,8 @@ fn watched(source: &RecordingSource) -> Vec<(Protocol, Pubkey)> {
 /// Put in failure before being trusted: deleting the `contains` check in
 /// `restore_subscriptions` turns this red. Its sibling in `yog-core` guards the
 /// `protocols` scope and was mutation-proven the same way; this one was written
-/// afterwards, because a guard on one scope of two is the defect this whole
-/// slice kept repeating.
+/// afterwards, because a guard on one scope of two is the defect the gRPC work
+/// kept repeating.
 #[tokio::test]
 async fn a_pool_whose_protocol_has_no_extractor_is_not_subscribed_to() {
     let (service, source) = service(

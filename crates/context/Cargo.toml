@@ -49,5 +49,6 @@ async-trait = { workspace = true }
 metrics-util = { workspace = true, features = ["debugging"] }
 # `SecretKey::for_tests`: the price client now holds the API key typed, and a
 # test has no environment to read one from. Dev-only on purpose — enabling it
-# as a normal dependency would reopen the door this ticket closed.
+# as a normal dependency would let production code build a `SecretKey`
+# without going through `required_secret_key`.
 yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }

@@ -110,7 +110,8 @@ jobs:
   # branch. The trade: the first run on main after a merge pays the cold
   # 176s, and a PR that moves Cargo.lock restores a partial entry.
   #
-  # The matrix this ticket first retained would have added eight entries.
+  # A matrix (one job per crate) was considered first; it would have added
+  # eight entries.
   check-per-crate:
     name: Check (per crate)
     runs-on: ubuntu-latest

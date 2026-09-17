@@ -94,7 +94,7 @@ fn any_header_name_the_operator_writes_is_used() {
 
 // ── the token is printed by nothing ─────────────────────────────────
 
-/// ⚠️ **The acceptance criterion of the ticket, in the one form a test can
+/// ⚠️ **The whole point of the credential split, in the one form a test can
 /// carry it.**
 ///
 /// ⚠️ What turns it red is **both** guards going: measured by mutation on

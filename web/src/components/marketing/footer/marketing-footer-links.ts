@@ -75,7 +75,7 @@ const PRODUCT_COLUMN: FooterColumn = {
  * Company column — every destination exists under `(marketing)/`.
  * (Historical note: these pages were listed here before they were
  * built; the GDPR content review of privacy/terms/legal-notice remains
- * a pre-deployment task on the BACKLOG.)
+ * to be done before deployment.)
  */
 const COMPANY_COLUMN: FooterColumn = {
   key: "company",

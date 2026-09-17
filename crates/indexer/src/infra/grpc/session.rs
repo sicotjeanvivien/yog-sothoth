@@ -11,9 +11,8 @@
 //!
 //! # ⚠️ Why the buffer belongs to the session and not to the listener
 //!
-//! This is the reconnection decision of `04 - release/listener-grpc-yellowstone.md`,
-//! and it is expressed by ownership rather than by a method someone has to
-//! remember to call.
+//! This is the gRPC listener's reconnection decision, and it is expressed by
+//! ownership rather than by a method someone has to remember to call.
 //!
 //! The buffer evicts the oldest pending slot, which is right on a stream that
 //! delivers slots in order. A `from_slot` replay is exactly the case where that

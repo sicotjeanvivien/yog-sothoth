@@ -36,7 +36,7 @@ fn try_from_null_volumes_maps_to_none_rather_than_zero() {
     // The query returns NULL for a window that was not entirely valuable. It
     // must survive the conversion AS an absence: mapping it to `Decimal::ZERO`
     // here would re-introduce, one layer lower, the exact collapse the
-    // repository stopped doing (`.project` ticket 08).
+    // repository stopped doing (migration 006).
     let row = PoolSwapFlowRow {
         pool_address: VALID_POOL.into(),
         volume_a_to_b_usd: None,

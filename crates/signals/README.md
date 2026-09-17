@@ -55,6 +55,34 @@ index: TimescaleDB requires the partition key (`triggered_at`) in unique
 indexes, which differs at every tick. Stateless like everything else — the DB
 carries the dedup state too.
 
+## Stopping
+
+`Daemon::run` owns the `CancellationToken` and cancels it on **SIGINT or
+SIGTERM** (`yog_bootstrap::shutdown_signal`); every detector loop then returns
+at its next turn, and `SignalEngine::run` joins them. A tick runs in the body
+of its `select!` arm, not inside the `select!`, so a tick already started
+always finishes.
+
+- **The stop wins a tie.** The loop's `select!` is `biased`, with the
+  cancellation arm first. The ticker keeps tokio's default
+  `MissedTickBehavior::Burst`, so a tick that outran its interval leaves the
+  next one already ready: unbiased, about one stop in two would start a fresh
+  round of reads and inserts *after* the stop was asked for.
+- **A cancelled task is not a panic.** A `JoinError` goes through
+  `yog_bootstrap::TaskEnd`: only a panic cancels the other detectors and ends
+  the engine in `EngineError::DetectorPanicked`.
+
+⚠️ Until 14 September 2026 the daemon waited on `ctrl_c()` alone. `docker
+compose stop` sends SIGTERM, and as PID 1 the process does not die on it
+either, so the stop never started and Docker's SIGKILL arrived ten seconds
+later, mid-tick.
+
+⚠️ **The other half is still missing.** Unlike `yog-indexer` and
+`yog-context`, the engine joins its detectors **with no deadline** — no
+`yog_bootstrap::Stop`, no `SHUTDOWN_GRACE`. A detector stuck in a slow query
+holds the stop open until Docker's SIGKILL, and nothing in the logs names it.
+Not fixed yet.
+
 ## Detectors
 
 **`flow_imbalance`** — directional swap-flow imbalance over a rolling window:
@@ -128,11 +156,13 @@ counts, failure counters.
 **`yog_signals_skipped_total{detector, reason}`** counts pools a detector
 declined to evaluate — `unpriced` (the window was not entirely valuable),
 `no_tvl` (current TVL unpriceable), `stale` (an input older than its freshness
-gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol — a
-backlog item, not a data problem), `undecodable` (an oracle ratio that will not
-compute). Emitting nothing is the right answer to a pool we cannot value; staying
-*quiet* about how often that happens is not, because degrading price coverage
-would then look exactly like a calm market.
+gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
+missing code, not a data problem), `undecodable` (an oracle ratio that will not
+compute). The labels are defined once, by the `SkipReason` enum in
+`metrics.rs`, and the counter's `# HELP` text is built from it — this list
+copies it for the reader, not for the code. Emitting nothing is the right answer
+to a pool we cannot value; staying *quiet* about how often that happens is not,
+because degrading price coverage would then look exactly like a calm market.
 
 ⚠️ Alert on **`skipped / considered`**, using
 `yog_signals_considered_total{detector}` — the pools a tick was handed, before

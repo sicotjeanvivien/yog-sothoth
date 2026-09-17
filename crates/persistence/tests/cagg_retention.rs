@@ -1,8 +1,8 @@
 //! Integration tests for the relation between the four retention policies and
 //! the four continuous-aggregate refresh policies (migration 008).
 //!
-//! Gated behind `integration-tests`. The finding they guard (`.project` ticket
-//! 03, re-diagnosed on 10 August 2026): a refresh whose window reaches further
+//! Gated behind `integration-tests`. The defect they guard (re-diagnosed on
+//! 10 August 2026): a refresh whose window reaches further
 //! back than the retention **deletes** materialized buckets.
 //!
 //! `drop_chunks` logs an invalidation over the range it removes. A refresh is

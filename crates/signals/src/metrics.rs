@@ -54,7 +54,7 @@ skip_reasons! {
     NoTvl => "no_tvl",
     /// An input was older than its freshness gate.
     Stale => "stale",
-    /// No `sqrt_price` decoder shipped for that protocol — a backlog item rather
+    /// No `sqrt_price` decoder shipped for that protocol — missing code rather
     /// than a data problem, which is why it is not lumped in with `Undecodable`.
     NoDecoder => "no_decoder",
     /// A ratio that will not compute: a zero price, or a magnitude overflow on
@@ -111,7 +111,7 @@ impl EngineMetrics {
     /// A pool skipped for want of a price must be a **number, not a silence**:
     /// it is the only way to tell "nothing is happening" from "we stopped being
     /// able to see". Emitting no signal is the right answer to an unvaluable
-    /// pool (`.project` ticket 08) — staying quiet about how often that happens
+    /// pool — staying quiet about how often that happens
     /// is not, because a degrading price coverage then looks exactly like a
     /// calm market.
     pub(crate) fn record_skipped(detector: &'static str, reason: SkipReason) {

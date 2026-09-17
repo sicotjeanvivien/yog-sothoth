@@ -77,7 +77,7 @@ pub(crate) struct PoolResponse {
     /// All four are read straight from the analytics — the split is computed
     /// once in SQL. `lp_fees_24h_usd` is **not** `fees - protocol`: cp-amm
     /// takes the referral out of the protocol share, so that formula credits
-    /// it to the LPs (`.project` ticket 05). Do not reintroduce it here.
+    /// it to the LPs (corrected by migration 007). Do not reintroduce it here.
     pub(crate) fees_24h_usd: Option<Decimal>,
     pub(crate) protocol_fees_24h_usd: Option<Decimal>,
     pub(crate) referral_fees_24h_usd: Option<Decimal>,

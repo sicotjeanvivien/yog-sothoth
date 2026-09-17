@@ -14,13 +14,13 @@
 //!
 //! It is deliberately **generic over the payload** and knows nothing about
 //! protobuf: "given a stream of `(slot, T)` and a stream of `(slot, time)`,
-//! yield `(T, time)`". The listener slice instantiates it; the reasoning about
+//! yield `(T, time)`". The listener instantiates it; the reasoning about
 //! time is testable without a wire.
 //!
 //! # ⚠️ Why the bound counts slots and not seconds
 //!
-//! This is decision n° 3 of `04 - release/listener-grpc-yellowstone.md`, and the
-//! argument is not comfort — it is what each choice does **when things break**.
+//! This was decided with the gRPC listener, and the argument is not comfort —
+//! it is what each choice does **when things break**.
 //!
 //! A time bound reads a wall clock, and a wall clock keeps running while the
 //! stream is down. A thirty-second outage would then empty this buffer and
@@ -39,10 +39,8 @@
 //! the provider's stream, and nobody here has measured it — no gRPC endpoint is
 //! reachable before the subscription. So the number is picked to be far beyond
 //! any plausible lag, precisely so that **the eviction counter is a signal and
-//! not background noise**. Reading that counter is how
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` will replace the guess with
-//! a measurement, which is what its "borne du tampon posée sur cette mesure"
-//! criterion asks for.
+//! not background noise**. Reading that counter on a real stream is how the
+//! guess gets replaced by a measurement.
 
 use std::collections::BTreeMap;
 
@@ -79,7 +77,7 @@ pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 /// instructions, log messages, pre/post balances — on the order of 5–20 KB for
 /// a Meteora swap, so 8 192 of them is roughly **40–160 MB resident in this
 /// buffer alone**. That is bounded, which is the point, but it is a number
-/// slice 3 has to know when it sizes the process. Raised in review,
+/// the listener has to account for when it sizes the process. Raised in review,
 /// 8 September 2026, where this doc claimed to make the pathological case
 /// "impossible" without saying at what price.
 pub(crate) const MAX_PENDING_PAYLOADS: usize = 8_192;
@@ -203,7 +201,7 @@ impl<T> SlotTimestampBuffer<T> {
     ///
     /// This signature takes a `DateTime<Utc>` and not an `Option` precisely so
     /// the decision cannot be deferred to here: a caller with no instant has
-    /// nothing to call this with. Slice 1 had to learn the same lesson twice —
+    /// nothing to call this with. The adapter had to learn the same lesson twice —
     /// "the source did not tell us" is not a value.
     ///
     /// What such a caller has instead is [`Self::on_slot_unresolvable`]: the
@@ -239,12 +237,12 @@ impl<T> SlotTimestampBuffer<T> {
     ///
     /// Both roads end in the same eviction, so the difference is only what the
     /// counter says — which is the whole difference, since that counter is the
-    /// one `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` reads to size the
-    /// window. A slot nobody can resolve, left to the slot bound, waits out the
-    /// full window and leaves labelled `slot_bound`; the ticket reads "the
-    /// window is too small", raises `MAX_PENDING_SLOTS`, and the number does not
-    /// move. Worse, while it waits it occupies one of the window's places
-    /// against slots that *would* have resolved.
+    /// one a real-stream measurement reads to size the window. A slot nobody
+    /// can resolve, left to the slot bound, waits out the full window and
+    /// leaves labelled `slot_bound`; the reader concludes "the window is too
+    /// small", raises `MAX_PENDING_SLOTS`, and the number does not move. Worse,
+    /// while it waits it occupies one of the window's places against slots that
+    /// *would* have resolved.
     ///
     /// Two callers on the listener's side, both meaning "this slot has no
     /// instant to give":
@@ -352,7 +350,7 @@ impl<T> SlotTimestampBuffer<T> {
     /// Whether the oldest pending slot has fallen out of the window.
     ///
     /// The comparison is against the head *the stream* has reached, so no time
-    /// passes here on its own — decision n° 3 of the ticket, unchanged: nothing
+    /// passes here on its own — the slot-count decision above, unchanged: nothing
     /// arrives, nothing is evicted.
     fn oldest_is_out_of_window(&self) -> bool {
         match (self.pending.first_key_value(), self.head_slot) {

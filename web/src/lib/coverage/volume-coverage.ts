@@ -17,8 +17,8 @@
  *
  * ⚠️ **No threshold, deliberately.** The mark fires on "not fully covered", a
  * fact — not on "below x %", a number nobody has chosen. Penalising thin
- * coverage is a separate decision about the ORDER (`.project` ticket 03,
- * options A and B), and it needs a measurement we do not have yet.
+ * coverage is a separate decision about the ORDER, and it needs a measurement
+ * we do not have yet.
  */
 
 /** What the reader is told about one pool's 24h volume figure. */

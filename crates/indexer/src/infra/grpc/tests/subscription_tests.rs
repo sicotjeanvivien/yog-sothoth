@@ -5,8 +5,7 @@
 //! exercise `transaction_adapter_tests` has to warn about. What no test here
 //! can say is whether a provider **honours** the request — whether `vote:
 //! false` really keeps votes off the wire, whether `from_slot` replays what we
-//! think it replays. That is
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`, and the
+//! think it replays. That takes a real provider, and the
 //! `yog_indexer_grpc_updates_total{kind}` counter is what it will read.
 
 use super::*;
@@ -26,7 +25,7 @@ fn request(watched: &[(Protocol, Pubkey)]) -> SubscribeRequest {
     build_request(&watched.iter().copied().collect(), None).expect("something is watched")
 }
 
-// ── the two flags the ticket says nothing will remind us of ─────────
+// ── the two flags nothing else will remind us of ─────────
 
 /// ⚠️ **Votes and failed transactions are refused at the server**, and both
 /// omissions are silent in a way this test exists to break.

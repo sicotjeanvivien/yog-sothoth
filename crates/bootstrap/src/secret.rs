@@ -5,11 +5,10 @@
 //! nothing worth showing, so [`SecretKey`] shows nothing. A connection string
 //! has a host, a port, a database and a role — and redacting those away costs
 //! the only diagnostic a crashing daemon leaves behind, which this repository
-//! learned the expensive way (see `04 - release/cle-api-en-clair-dans-les-logs.md`
-//! in the tracking repo: "retirer l'URL avait emporté le seul diagnostic qui
-//! restait"). So [`SecretUrl`] keeps the carrier and redacts every component a
-//! URL can hide a credential in — userinfo, path, query string, fragment —
-//! falling back to the scheme alone when it cannot locate them with
+//! learned the expensive way: stripping the whole URL once removed the only
+//! diagnostic left. So [`SecretUrl`] keeps the carrier and redacts every
+//! component a URL can hide a credential in — userinfo, path, query string,
+//! fragment — falling back to the scheme alone when it cannot locate them with
 //! confidence.
 //!
 //! # Why `new` is not public

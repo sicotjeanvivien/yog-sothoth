@@ -36,8 +36,8 @@ add/remove kind that gives it meaning.
 
 `004_fee_scheduler_params.sql` — six columns on the cp-amm satellite holding a
 fee scheduler's decay curve, so a pool's base fee can be evaluated at read time
-instead of being frozen on its genesis cliff (ticket 07, measured wrong by ×5
-and ×49). They are NULL for every fee shape that has no time curve, and that
+instead of being frozen on its genesis cliff (measured wrong by ×5 and ×49).
+They are NULL for every fee shape that has no time curve, and that
 NULL is a decoded fact: `BaseFeeInfo` is 32 bytes the modes reinterpret, so the
 same offsets under a market-cap scheduler or a rate limiter yield
 plausible-looking nonsense. **No GRANT** — this satellite is granted at table
@@ -50,8 +50,8 @@ nothing this file could add would beat reading them.
 
 `007_referral_fee_split.sql` — **the second drop and rebuild of the swap cagg**,
 for two columns (`referral_fee_in_a` / `referral_fee_in_b`) that let the
-realized fee be split into the three shares cp-amm actually applies (ticket 05:
-the LP share was published as `fees − protocol`, which credits the referral to
+realized fee be split into the three shares cp-amm actually applies (the LP
+share was published as `fees − protocol`, which credits the referral to
 the LPs). Still free, for the same reason 002 was — no bucket has ever been
 materialized. ⚠️ **That is the point to carry forward, not the fix**: two
 migrations have now paid nothing for a rebuild, and 002 had the window open in
@@ -71,7 +71,7 @@ matters more than a stale comment usually would: by this file's own argument
 where people go to read the current shape of an object — so the next reader of
 the swap cagg meets, first, the formula 007 exists to remove. The correct rule
 is in `007`'s header and in `crates/persistence/README.md` → *The realized fee
-split*. This is the same defect the ticket is about, one level up: one
+split*. This is the same defect 007 fixes, one level up: one
 definition, written in two places, one of which went stale.
 
 `008_cagg_refresh_below_retention.sql` — moves the four refresh policies from
@@ -91,8 +91,7 @@ whose jobs may be executing at that moment. Measured 10 August 2026:
   really ran throughout (15–20 executions each, 0 failures) and every replay
   succeeded — 0 failures out of 35. The aggregate materialized 479 buckets.
 
-So the deployment path is exercised, not assumed. That was the last unchecked
-item of `.project` ticket 03.
+So the deployment path is exercised, not assumed.
 
 The point was not to have fewer files. It was that the current shape of a table
 had stopped being readable anywhere: `pools` had to be reconstructed by reading

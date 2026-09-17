@@ -22,7 +22,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 
 ## Features
 
-- **Real-time indexing** — WebSocket subscription per Meteora program, live Anchor event extraction
+- **Real-time indexing** — JSON-RPC WebSocket or Yellowstone gRPC stream (`INGEST_SOURCE`), subscribed per Meteora program or per watched pool (`INGEST_SCOPE`), live Anchor event extraction
 - **Anchor `event_cpi` decoding** — events read from on-chain emissions, not reconstructed from transfer instructions
 - **AMM state reconstruction** — price, reserves, slippage, imbalance computed from the event stream
 - **Token enrichment** — symbol / name / decimals / logo via Helius DAS, USD prices via Jupiter Price V3
@@ -38,7 +38,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 
 ## How it works (high-level)
 
-Five processes share a single Postgres database — no direct calls between them, all coordination happens through the schema:
+Four backend processes share a single Postgres database — no direct calls between them, all coordination happens through the schema. The web dashboard never touches the database; it reads through the API:
 
 ```
                 ┌──────────────────────────────────────────────────────┐
@@ -50,19 +50,20 @@ Five processes share a single Postgres database — no direct calls between them
                 │ indexer  │ │ context  │ │  signals  │ │     api      │
                 │  (Rust)  │ │  (Rust)  │ │  (Rust)   │ │ (Rust, axum) │
                 └─────┬────┘ └────┬─────┘ └───────────┘ └───────┬──────┘
-                      │ WebSocket │ HTTP                        │ HTTP + SSE
+                      │ WS / gRPC │ HTTP                        │ HTTP + SSE
                       ▼           ▼                             ▼
                  Solana RPC   Helius DAS               web (Next.js) · browser
-                 (Helius)     Jupiter Price V3
+                 Yellowstone  Jupiter Price V3
+                 gRPC
 ```
 
-- **`indexer`** subscribes to Meteora programs, decodes Anchor events, persists the reconstructed state. A `TransactionSource` port — JSON-RPC or Yellowstone gRPC, chosen by `INGEST_SOURCE` — feeding a bounded-concurrency worker, with Prometheus metrics.
+- **`indexer`** subscribes to Meteora programs (or, for now, to the watched pools), decodes Anchor events, persists the reconstructed state. A `TransactionSource` port — JSON-RPC or Yellowstone gRPC, chosen by `INGEST_SOURCE` — feeding a bounded-concurrency worker, with Prometheus metrics.
 - **`context`** enriches the raw mint addresses recorded by the indexer with token metadata (Helius DAS) and USD prices (Jupiter Price V3), and resolves pool properties (mints, fee config) from on-chain accounts. Independent worker loops with configurable intervals.
 - **`signals`** is a batch detector engine: each detector polls the accumulated data at its own cadence, stateless between ticks — the database carries the state — and emits typed signals with a severity into the `signals` table. A per-`(detector, pool)` cooldown prevents re-alerting, except on severity escalation.
 - **`api`** exposes the indexed, enriched, and detected data over HTTP. Cursor-based pagination, RFC 9457 errors, security headers as router-level middleware. It is also the single egress for signals: a paginated collection endpoint plus an SSE stream fed by an internal poller that broadcasts new signals to connected clients.
 - **`web`** is a Next.js dashboard. Server Components render the initial data from the API; the browser then talks to the API directly (CORS-locked) — there is no BFF layer.
 
-Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the five processes connects under its own least-privilege Postgres role.
+Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the four above connects under its own least-privilege Postgres role, and `yog-migrate` is the only holder of DDL rights.
 
 For the full ingestion pipeline, the Anchor decoding mechanism, the database role split, and the workspace layout, see **[`crates/README.md`](./crates/README.md)**. For the dashboard architecture, see **[`web/README.md`](./web/README.md)**.
 
@@ -72,9 +73,9 @@ For the full ingestion pipeline, the Anchor decoding mechanism, the database rol
 
 The long-term design is **protocol-centric**: the indexer subscribes to Meteora program IDs and ingests every transaction that touches them, discovering pools as they appear in the stream.
 
-In the current phase, ingestion is bounded by a **temporary allowlist** stored in the `watched_pools` table — the public Solana RPC and the free Helius tier both cap transaction fetches at roughly 10 req/s, and peak DAMM v2 traffic saturates that by more than an order of magnitude. The allowlist bounds what the indexer *subscribes to*, not what it accepts afterwards: `INGEST_SCOPE=pools` makes the listener open one `logsSubscribe` per watched pool instead of one per program id. Nothing downstream knows about it — no filter, no code path conditioned on a pool list, so lifting the constraint is a config flip, not a refactor.
+In the current phase, ingestion is bounded by a **temporary allowlist** stored in the `watched_pools` table — the public Solana RPC and the free Helius tier both cap transaction fetches at roughly 10 req/s, and peak DAMM v2 traffic saturates that by more than an order of magnitude. The allowlist bounds what the indexer *subscribes to*, not what it accepts afterwards: `INGEST_SCOPE=pools` registers one subscription target per watched pool instead of one per program id, on either source. Nothing downstream knows about it — no filter, no code path conditioned on a pool list, so lifting the constraint is a config flip (`INGEST_SCOPE=protocols`), not a refactor. How each source turns a target into a subscription is in the [indexer README](./crates/indexer/README.md).
 
-The allowlist will be lifted once an upgraded RPC path is in place — a managed Yellowstone gRPC (Geyser) stream (Shyft, Triton, Helius LaserStream…), selected to avoid structural dependency on a single provider. This acquisition is a hard gate before v0.2 (multi-protocol expansion — see the roadmap). Only the subscription layer of the indexer changes; the extraction → persistence pipeline stays as is.
+The allowlist is lifted by a managed Yellowstone gRPC (Geyser) stream. The source is written — `INGEST_SOURCE=grpc`, behind the same `TransactionSource` port as JSON-RPC — and the provider is chosen: **Alchemy, pay-as-you-go** (September 2026), replaceable by configuration alone since the code names no provider. What is still missing is the first run against a real stream: the gRPC source has only ever talked to an in-process test server, so the allowlist stays until that run has measured the stream.
 
 For administering the allowlist (schema, seed scripts, SQL helpers), see **[`crates/persistence/README.md`](./crates/persistence/README.md)**.
 
@@ -111,11 +112,11 @@ All nineteen are extracted, persisted to their own per-kind table (`meteora_damm
 | Indexer, enrichment, signals, API | Rust 1.95, Tokio, axum, sqlx |
 | Database | TimescaleDB on PostgreSQL 16 |
 | Frontend | Next.js 16, TypeScript, Tailwind v4, next-intl |
-| RPC providers | Helius (WebSocket + HTTP + DAS), Jupiter Price V3 |
+| External data | Solana JSON-RPC (any provider), Yellowstone gRPC (Alchemy), Helius DAS, Jupiter Price V3 |
 | Container runtime | Docker Compose (5 backend images + 1 frontend image) |
 | Reverse proxy | Caddy (automatic TLS via Let's Encrypt) |
 | Observability | Prometheus, tracing |
-| CI | GitHub Actions (cargo check / fmt / clippy / test / audit, sqlx offline check) |
+| CI | GitHub Actions (cargo check, per-crate check, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
 
 ---
 
@@ -178,16 +179,18 @@ Originally two releases, merged in June 2026: an on-chain analytics tool without
 - [ ] Signals page UX pass (hierarchy, severity filter, pagination)
 - [ ] Next detector — fee yield spike
 - [ ] Telegram operator channel
-- [ ] Pre-release audit (security, conventions) and legal pages (privacy, terms)
-- [ ] Scaleway deployment *(scheduled to start early August 2026)*
+- [x] Yellowstone gRPC ingestion source (`INGEST_SOURCE=grpc`) — code shipped, provider chosen (Alchemy)
+- [ ] First run against a real gRPC stream — the production ingestion path, not yet measured
+- [ ] Pre-release security audit and legal pages review (privacy, terms)
+- [ ] Scaleway deployment — after the gRPC run and the audit
 
-### Pre-v0.2 gate — upgraded RPC stream
+### Pre-v0.2 gate — full protocol-centric coverage
 
-Acquisition of a managed Yellowstone gRPC (Geyser) stream (Shyft, Triton, Helius LaserStream, …), chosen to avoid structural dependency on any single provider — the subscription layer stays behind an interface, the provider swappable by config. Lifts the watched-pools allowlist and returns ingestion to full protocol-centric coverage. With multi-protocol expansion ahead, this is now a viability requirement, not an optimization.
+Production ingests over Yellowstone gRPC from the start (see v0.1.1). What remains before v0.2 is lifting the watched-pools allowlist (`INGEST_SCOPE=protocols`) once the real stream has been measured — throughput, cost, and the ordering data it was chosen for. With multi-protocol expansion ahead, that coverage is a viability requirement, not an optimization.
 
 ### v0.2 — Multi-protocol expansion *(one protocol per v0.2.x release)*
 
-The sequencing decision (July 2026): coverage before auth — acquire an audience (protocols), then retain it (auth, v0.3), then monetize it (v0.4). Entry gates: the DAMM v2 signal engine **empirically calibrated in production** (not just shipped), and the upgraded RPC stream above. Each release ships a protocol end-to-end — decoder, domain semantics, detector coverage, dashboard — because the real cost is never the decoder, it's the per-protocol liquidity model:
+The sequencing decision (July 2026): coverage before auth — acquire an audience (protocols), then retain it (auth, v0.3), then monetize it (v0.4). Entry gates: the DAMM v2 signal engine **empirically calibrated in production** (not just shipped), and the full protocol-centric coverage above. Each release ships a protocol end-to-end — decoder, domain semantics, detector coverage, dashboard — because the real cost is never the decoder, it's the per-protocol liquidity model:
 
 - **v0.2.0 — Meteora DLMM** (concentrated bins ≠ x·y=k; richest signal value)
 - **v0.2.1 — Raydium CLMM/CPMM** (largest real volume on Solana)
@@ -211,7 +214,7 @@ Wallet connect and a swap UI on top of the signal feed — an integrator fee (bp
 
 ## Hosting
 
-Production deployment targets **Scaleway** in the Paris region — a single instance running the five backend containers (`yog-migrate`, `yog-indexer`, `yog-api`, `yog-context`, `yog-signals`) plus the frontend and Caddy as reverse proxy, with a Managed PostgreSQL instance carrying the TimescaleDB extension and Object Storage for daily `pg_dump` backups. Approximate monthly cost: **~20 € HT**.
+Production deployment targets **Scaleway** in the Paris region — a single instance running the five backend containers (`yog-migrate`, `yog-indexer`, `yog-api`, `yog-context`, `yog-signals`) plus the frontend and Caddy as reverse proxy, with a Managed PostgreSQL instance carrying the TimescaleDB extension and Object Storage for daily `pg_dump` backups. The monthly budget is dominated by the gRPC stream and will be stated here once confirmed by provider quotes.
 
 ---
 

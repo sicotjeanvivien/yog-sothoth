@@ -55,9 +55,8 @@
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
 //! connect timeout, and — the one that matters — whether a provider honours
 //! `from_slot` the way this code assumes. A scripted server validates **this
-//! client against our model of the server**, never the protocol;
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where that model meets a
-//! real one.
+//! client against our model of the server**, never the protocol; the first run
+//! against a real provider is where that model meets a real one.
 //!
 //! The split that made the rule reachable at all still holds: the request is
 //! built in `subscription` and the meaning of an update in `session`, so the

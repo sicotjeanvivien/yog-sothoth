@@ -2,7 +2,7 @@ use std::env;
 
 use super::*;
 
-/// The wall this ticket exists to pull down: the DAS and the account reads used
+/// The wall the variable split pulls down: the DAS and the account reads used
 /// to share `SOLANA_RPC_HTTP`, so a migration that moved one and not the other
 /// could not be *expressed* — one variable, two addresses. Here they are given
 /// two different hosts, and each field carries its own.
@@ -64,7 +64,8 @@ fn debugging_the_config_prints_no_credential() {
         );
     }
     // And the diagnostic survives: a config that says nothing costs more than
-    // it saves — that lesson is `04 - release/cle-api-en-clair-dans-les-logs.md`.
+    // it saves — a redaction that removed the host once left a crash log with
+    // nothing to go on.
     assert!(rendered.contains("das.example.invalid"), "{rendered}");
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }

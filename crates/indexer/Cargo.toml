@@ -42,8 +42,8 @@ solana-signature = { workspace = true }
 # own client stubs, generated here by `prost`/`tonic-prost` from the public
 # `.proto`. That is not the `yellowstone-grpc-client` crate the root
 # `Cargo.toml` refuses: no connection policy, no authentication, no
-# reconnection, and nothing that prints a token. Slices 1 and 2 needed the
-# types only; `infra::grpc::listener` needs the stub.
+# reconnection, and nothing that prints a token. The adapter needs the types
+# only; `infra::grpc::listener` needs the stub.
 yellowstone-grpc-proto = { workspace = true, features = ["tonic"] }
 # The channel under that stub, plus TLS — see the root `Cargo.toml` for why
 # these two TLS features and not the other two.

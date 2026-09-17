@@ -11,8 +11,8 @@
 //! `session_tests` already state, and it is worth repeating here because this
 //! module is now what both of them rest on. What these fixtures can establish
 //! is what *our* code decides when a message of a given shape arrives; what
-//! they cannot is that a server sends that shape. That half is
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md`.
+//! they cannot is that a server sends that shape. That half needs a real
+//! provider.
 //!
 //! ⚠️ And one property below is load-bearing in a way that is easy to undo:
 //! [`transaction_update`] produces a transaction the **adapter accepts**. Half

@@ -152,14 +152,13 @@ one decision left unguarded on purpose — its only observable is a duration;
 `listener.rs`'s header says why, and carries the measurements behind both.
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, and whether a provider honours `from_slot` the way this code
-assumes. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is where they meet
-one.
+assumes. The first run against a real provider is where they meet one.
 
 ⚠️ And **none of it has met a real server.** Every local test drives either pure
 state, a message this repository built itself, or a server this repository
 scripted — so TLS, keep-alive and the exact semantics of `from_slot` are written
-and reviewed and unproven. `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` is
-where they meet one, and it needs an API key.
+and reviewed and unproven until the first run against a real provider, which
+needs an API key.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every
@@ -551,8 +550,8 @@ roles across two crates; one variable cannot hold two addresses, which is the
 wall a provider migration would have hit. A URL with no `{key}` and no key is a
 public endpoint and is used verbatim; the two mismatches — a `{key}` without
 its key, a key without its `{key}` — are refused at startup, naming the
-variable. See `crates/README.md` for the type, and `.env.example` for the
-convention.
+variable. See [`yog-bootstrap`](../bootstrap/README.md#endpoints--named-after-what-they-serve-credential-outside-the-url)
+for the type, and `.env.example` for the convention.
 
 `DATABASE_URL_INDEXER` carries its secret *inside* the URL, because `sqlx`
 wants the string whole, and is a `SecretUrl`: userinfo, path, query string and
@@ -566,7 +565,8 @@ An assembled endpoint is a `SecretUrl` too, and keeps that type all the way
 down: `Endpoint::url()` builds one, `RpcListener` clones it once per worker,
 and `SubscriptionWorker` exposes it only as the argument of `PubsubClient::new`.
 The `inspect_logs` bin reads the same pair through the same types. The
-invariant and the guard that enforces it are documented in `crates/README.md`.
+invariant and the guard that enforces it are documented in
+[`yog-bootstrap`](../bootstrap/README.md#secrets--one-invariant-two-types).
 
 ### Scrubbing what a third party wrote
 
@@ -609,7 +609,7 @@ and all four couples mean something:
 **All four start.** Three of them were refused at load time until 10 September
 2026 by a `bootstrap/config/validator.rs` that no longer exists: its two arms
 shared one precondition — nothing populated a subscription set — and the gRPC
-slice filled it on both halves. The daemon now registers, at start-up, **one or
+work filled it on both halves. The daemon now registers, at start-up, **one or
 the other** as `INGEST_SCOPE` says: the protocols whose extraction is written,
 or the pools restored from the database. What replaced the refusals is a met
 precondition, not a looser check.

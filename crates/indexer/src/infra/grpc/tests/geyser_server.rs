@@ -12,9 +12,8 @@
 //! It validates **our client against our model of the server**, not the
 //! protocol. The script is written from a reading of the proto, exactly like
 //! the hand-built messages of `test_fixtures`. A provider that honours `from_slot`
-//! differently, or pings on a schedule of its own, is
-//! `02 - backlog/pre-v02/flux-grpc-reel-mesures.md` — the two are complements,
-//! not substitutes.
+//! differently, or pings on a schedule of its own, is for a run against a real
+//! provider to find — the two are complements, not substitutes.
 //!
 //! What it *does* prove is the part that has never had a guard: given an
 //! ending, the listener charges or restarts the retry budget, resumes from the

@@ -14,9 +14,9 @@
 //! commit shows immediately whether behaviour moved.
 //!
 //! Its weak spot is the one every golden file has: it is only as strong as the
-//! mutation that was shown to break it. See the mutation recorded in the
-//! ticket — shifting the order of inner-instruction groups by one must turn
-//! this test red, and a witness that survives that mutation compares nothing.
+//! mutation that was shown to break it. The recorded one: shifting the order of
+//! inner-instruction groups by one must turn this test red, and a witness that
+//! survives that mutation compares nothing.
 //!
 //! # Regenerating
 //!

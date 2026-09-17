@@ -3,7 +3,7 @@
 //! The types in `secret` make a secret unprintable; `expose` is the one door
 //! out, and this test is what keeps that door where it belongs. The rule it
 //! enforces is not "call `expose` sparingly" — that is a habit, and a habit
-//! applied at seven sites out of nine is what produced this ticket. The rule
+//! applied at seven sites out of nine is what leaked a key. The rule
 //! is: **every exposure sits on the line that consumes the secret** — a
 //! `connect`, a request builder, a client constructor owned by a third party.
 //!
