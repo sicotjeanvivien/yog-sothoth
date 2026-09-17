@@ -63,7 +63,7 @@ Four backend processes share a single Postgres database — no direct calls betw
 - **`api`** exposes the indexed, enriched, and detected data over HTTP. Cursor-based pagination, RFC 9457 errors, security headers as router-level middleware. It is also the single egress for signals: a paginated collection endpoint plus an SSE stream fed by an internal poller that broadcasts new signals to connected clients.
 - **`web`** is a Next.js dashboard. Server Components render the initial data from the API; the browser then talks to the API directly (CORS-locked) — there is no BFF layer.
 
-Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the five binaries (`yog-migrate` and the four above) connects under its own least-privilege Postgres role.
+Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the four above connects under its own least-privilege Postgres role, and `yog-migrate` is the only holder of DDL rights.
 
 For the full ingestion pipeline, the Anchor decoding mechanism, the database role split, and the workspace layout, see **[`crates/README.md`](./crates/README.md)**. For the dashboard architecture, see **[`web/README.md`](./web/README.md)**.
 
