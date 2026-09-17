@@ -1,7 +1,7 @@
 //! Integration tests for migration 002 — valuing a swap bucket by whichever
 //! side is priced, and reporting the coverage of the resulting sums.
 //!
-//! Gated behind `integration-tests`. Covers the finding of `.project` ticket 02:
+//! Gated behind `integration-tests`. Covers the defect migration 002 fixes:
 //! one missing price used to annihilate the whole bucket (NULL is contagious in
 //! SQL arithmetic), and `SUM` then skipped it — publishing a sub-total as a
 //! total, silently.
@@ -270,7 +270,7 @@ async fn bucket_with_no_priced_side_stays_null(pool: PgPool) {
 
 #[sqlx::test]
 async fn partial_coverage_reports_both_counters(pool: PgPool) {
-    // The test the ticket asks for by name: three buckets that traded, one of
+    // The central case: three buckets that traded, one of
     // which cannot be valued. The sum must NOT pass for a complete total.
     let pool_addr = pk(1).to_string();
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
@@ -392,7 +392,7 @@ async fn observed_price_wins_over_the_implied_rate(pool: PgPool) {
 
 #[sqlx::test]
 async fn fees_are_valued_by_the_same_effective_price(pool: PgPool) {
-    // Ticket 02 lists fees among the contaminated figures: they share volume's
+    // Fees are among the contaminated figures too: they share volume's
     // join, so an hour lost to one was lost to both. They must be recovered
     // together too.
     let pool_addr = pk(1).to_string();
@@ -431,7 +431,7 @@ async fn a_pool_with_unresolved_mints_counts_as_uncovered_not_as_absent(pool: Pg
     // Vanishing is fine for a *value*, and wrong for a *coverage denominator*:
     // the buckets that disappear are precisely the ones we failed to value, so
     // counting only the survivors would report "100 % covered" over a window
-    // whose volume is silently missing — this ticket's defect, one join up.
+    // whose volume is silently missing — the same defect, one join up.
     let pool_addr = pk(1).to_string();
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
@@ -504,7 +504,7 @@ async fn a_bucket_that_moved_no_token_b_is_not_counted_as_covered(pool: PgPool) 
     // Found in review. `NULLIF` was on the divisor only, so with `traded_b = 0`
     // and token B priced, `implied_a` came out a clean 0 → `eff_price_a = 0` →
     // `volume_usd = 0`, non-NULL, hence counted in the coverage NUMERATOR.
-    // Coverage read 1/1 over a fabricated zero: this ticket's defect, produced
+    // Coverage read 1/1 over a fabricated zero: the same defect, produced
     // by its own fix.
     let pool_addr = pk(1).to_string();
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
@@ -693,7 +693,7 @@ async fn volume_and_every_fee_share_are_null_together(pool: PgPool) {
     // whose LP share is a subtraction and can go negative; `effectiveFeeBps`,
     // which divides two disjoint sets of hours; and the coverage counters, keyed
     // on `volume_usd` alone while a fee figure sits on screen. That last one is
-    // this ticket's own defect, re-created by its fix.
+    // the same defect, re-created by its fix.
     //
     // Migration 007 widened the coupled set from three figures to five. This
     // fixture charges its whole fee through `claiming_fee`, so it pins the two

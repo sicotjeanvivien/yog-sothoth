@@ -81,7 +81,7 @@ later, mid-tick.
 `yog-context`, the engine joins its detectors **with no deadline** — no
 `yog_bootstrap::Stop`, no `SHUTDOWN_GRACE`. A detector stuck in a slow query
 holds the stop open until Docker's SIGKILL, and nothing in the logs names it.
-Tracked in `.project/02 - backlog/[bug]l-arret-de-yog-signals-n-a-aucun-plafond.md`.
+Not fixed yet.
 
 ## Detectors
 
@@ -156,8 +156,8 @@ counts, failure counters.
 **`yog_signals_skipped_total{detector, reason}`** counts pools a detector
 declined to evaluate — `unpriced` (the window was not entirely valuable),
 `no_tvl` (current TVL unpriceable), `stale` (an input older than its freshness
-gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol — a
-backlog item, not a data problem), `undecodable` (an oracle ratio that will not
+gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
+missing code, not a data problem), `undecodable` (an oracle ratio that will not
 compute). The labels are defined once, by the `SkipReason` enum in
 `metrics.rs`, and the counter's `# HELP` text is built from it — this list
 copies it for the reader, not for the code. Emitting nothing is the right answer

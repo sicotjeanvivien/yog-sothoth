@@ -45,7 +45,7 @@ impl SwapFlowRepository for PgSwapFlowRepository {
         // real zero — and since the two directions were coalesced
         // INDEPENDENTLY, one unpriced side yielded `(0 − X)/X = −1.0` exactly:
         // a guaranteed maximum-magnitude Critical from `flow_imbalance` on a
-        // possibly balanced pool (`.project` ticket 08).
+        // possibly balanced pool.
         //
         // `bool_and` is the other half, and it is not redundant: `SUM` skips
         // NULLs on its own, so dropping the COALESCE alone would still publish

@@ -220,8 +220,8 @@ impl Daemon {
         // verdict unsaid, and the process exits 0 with `transaction source`
         // named in the `warn!`. That is the grace doing its job rather than
         // hiding a failure: the same stage was going to be destroyed by the
-        // runtime moments later whatever the order, and what the ticket asks of
-        // an overrun is to be named, not to become an exit code.
+        // runtime moments later whatever the order, and what an overrun owes is
+        // to be named, not to become an exit code.
         let mut stop = Stop::new(first, ended);
         stop.settle(INDEXER, &mut indexer_task).await;
         stop.settle(SOURCE, &mut source_task).await;

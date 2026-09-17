@@ -38,7 +38,7 @@ fn flow(seed: u8, added: i64, removed: i64, tvl: Option<i64>) -> PoolLiquidityFl
 }
 
 /// A pool with a perfectly valued TVL whose *window* could not be fully
-/// valued. This is the mixed case the ticket's 6 August update found: it
+/// valued. This is the mixed case found on 6 August 2026: it
 /// clears the `tvl_usd` guard, so before the fix it went through with a
 /// sub-total and under-estimated the drain.
 fn unvaluable_flow(seed: u8, tvl: i64) -> PoolLiquidityFlow {
@@ -172,11 +172,11 @@ async fn each_pool_is_judged_independently() {
     assert_eq!(signals[1].severity, Severity::Critical);
 }
 
-// ── The silent half of `.project` ticket 08 ─────────────────────────────────
+// ── The silent half of the defect migration 006 fixes ──────────────
 
 #[tokio::test]
 async fn a_partly_unvaluable_window_is_skipped_rather_than_under_reported() {
-    // The case the ticket's 6 August update added, and the one that had no
+    // The case found on 6 August 2026, and the one that had no
     // coverage at all. `SUM` skips unvaluable buckets, so a window only PARTLY
     // priced used to arrive as a sub-total — small enough to look like calm,
     // large enough to clear every guard. The TVL guard does not catch it: the

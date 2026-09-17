@@ -25,22 +25,21 @@
 //! running.
 //!
 //! ⚠️ **Nothing here has met a real server.** What changed on 16 September 2026
-//! is that the retry rule now meets a *scripted* one: `test_geyser_server` serves a
-//! test-written script over loopback so `listener_tests` can drive
+//! is that the retry rule now meets a *scripted* one: `test_geyser_server`
+//! serves a test-written script over loopback so `listener_tests` can drive
 //! `GrpcListener::run` through every ending a stream can have. The one ending
 //! that is **not** a stream's — the attempt that never got an answer — is
 //! guarded in two halves: what it costs the retry budget goes through `run`
 //! like the others, against a port with nothing behind it, while what it does
 //! to the resume mark is driven one level down, at `connect_and_stream`,
 //! because no server can both deliver a mark and be unreachable for the attempt
-//! after. `listener.rs`'s header carries the measurements. All of it proves this
-//! client against our model of the server, and nothing about the protocol — so
-//! TLS, keep-alive and the exact semantics of `from_slot` are still written,
-//! reviewed and unproven, and `02 - backlog/[spike]flux-grpc-reel-mesures.md`
-//! is still where they meet one. The rest was made testable by being kept out
-//! of `listener`: the request in `subscription`, the meaning of each update in
-//! `session`, the pairing in `slot_timestamp_buffer`, the shape in
-//! `transaction_adapter`.
+//! after. `listener.rs`'s header carries the measurements. All of it proves
+//! this client against our model of the server, and nothing about the protocol
+//! — so TLS, keep-alive and the exact semantics of `from_slot` are still
+//! written, reviewed and unproven until the first run against a real provider.
+//! The rest was made testable by being kept out of `listener`: the request in
+//! `subscription`, the meaning of each update in `session`, the pairing in
+//! `slot_timestamp_buffer`, the shape in `transaction_adapter`.
 //!
 //! The last two modules below are `#[cfg(test)]` and carry no production code:
 //! `test_fixtures` builds the protobuf updates both test modules send, and

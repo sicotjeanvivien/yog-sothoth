@@ -136,11 +136,11 @@ async fn mixed_batch_emits_only_qualifying_pools() {
     assert_eq!(signals[1].severity, Severity::Critical);
 }
 
-// ── The defect `.project` ticket 08 exists to remove ─────────────────────────
+// ── The defect migration 006 exists to remove ─────────────────────────
 
 #[tokio::test]
 async fn an_unvaluable_window_emits_nothing_rather_than_a_critical() {
-    // The test the ticket asks for by name. Before the fix, a window whose
+    // The central case. Before the fix, a window whose
     // token A had no usable price arrived with that direction COALESCEd to 0
     // while the other kept its full value — so this pool produced
     // `(0 − X)/X = −1.0` exactly: a Critical at maximum magnitude, on a pool

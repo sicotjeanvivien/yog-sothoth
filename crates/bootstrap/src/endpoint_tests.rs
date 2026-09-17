@@ -156,7 +156,7 @@ fn both_halves_are_trimmed() {
 
 // ── what it prints ──────────────────────────────────────────────────
 
-/// The return on the whole ticket: an address with `{key}` in it hides nothing,
+/// The return on the whole design: an address with `{key}` in it hides nothing,
 /// so a startup log names the endpoint **in full** — no arbitrage left between
 /// the diagnostic and the leak.
 #[test]
@@ -223,7 +223,7 @@ fn a_second_credential_does_not_ride_the_placeholder_out() {
 
 /// And the readability the fix must not cost: path and query are exactly where
 /// the placeholder lives, so they stay legible. A redaction that swallowed them
-/// would give back the arbitrage this whole ticket removed.
+/// would give back the arbitrage this design removed.
 #[test]
 fn the_placeholder_and_its_carrier_stay_legible() {
     let query = endpoint("https://mainnet.helius-rpc.com/?api-key={key}", Some("k"));

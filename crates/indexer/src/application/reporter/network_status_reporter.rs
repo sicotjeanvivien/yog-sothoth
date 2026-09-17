@@ -34,8 +34,7 @@
 //!   transaction arrives on the stream, and this probe is then the process's
 //!   only HTTP client, measuring an endpoint ingestion never touches.
 //! - **What it should measure is undecided**, and the question is parked behind
-//!   a real Geyser provider:
-//!   `02 - backlog/[bug]le-reporter-mesure-un-lien-que-l-ingestion-n-utilise-pas.md`.
+//!   a real Geyser provider.
 //!   Until then, read the numbers it publishes as an external reference on the
 //!   chain, not as the health of ingestion.
 

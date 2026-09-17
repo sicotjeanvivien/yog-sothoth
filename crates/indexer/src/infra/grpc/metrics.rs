@@ -13,8 +13,8 @@ use metrics::{counter, describe_counter};
 /// bounds are ceilings picked without a measurement — see
 /// `slot_timestamp_buffer`'s module docs — so this counter staying at zero is
 /// what says the guess was generous, and any movement is what says it was not.
-/// `02 - backlog/[spike]flux-grpc-reel-mesures.md` replaces the guess by
-/// reading it.
+/// The first measurement against a real stream replaces the guess by reading
+/// it.
 ///
 /// ⚠️ **The unit is a transaction, not an `InnerInstructionPayload`** — hence
 /// the name. This crate already uses "payload" for what `transaction_adapter`
@@ -22,13 +22,13 @@ use metrics::{counter, describe_counter};
 /// those through one adapter and 14 through the other. The buffer holds whole
 /// transactions, so a reading of 100 here is 100 transactions and some larger
 /// number of adapter payloads. Named for the unit after review pointed out that
-/// the measuring ticket had no way to tell which one it was holding.
+/// whoever measures the stream had no way to tell which one they were holding.
 const TRANSACTIONS_EVICTED: &str = "yog_indexer_grpc_untimestamped_transactions_total";
 
 /// Which bound forced the eviction, on every increment of [`TRANSACTIONS_EVICTED`].
 ///
-/// ⚠️ **Not decoration — without it the counter misleads the ticket that reads
-/// it.** Three very different evictions share this metric: a slot the stream
+/// ⚠️ **Not decoration — without it the counter misleads whoever reads it.**
+/// Three very different evictions share this metric: a slot the stream
 /// left more than `MAX_PENDING_SLOTS` behind, a burst that hit
 /// `MAX_PENDING_PAYLOADS` while the slot may have been one message from
 /// resolving, and a slot whose block-meta came empty. The first two cross at
@@ -51,10 +51,9 @@ pub(crate) enum EvictionReason {
     /// ⚠️ **Distinct from [`Self::SlotBound`] for the same reason that one is
     /// distinct from [`Self::PayloadBound`]**, and it is the more misleading
     /// confusion of the two. Without this label such a slot waits out the whole
-    /// window and then leaves counted `slot_bound` — so
-    /// `02 - backlog/[spike]flux-grpc-reel-mesures.md` would read "the wait
-    /// window is too small" and raise `MAX_PENDING_SLOTS`, which changes
-    /// nothing at all: the meta already came, empty.
+    /// window and then leaves counted `slot_bound` — so a measurement would
+    /// read "the wait window is too small" and raise `MAX_PENDING_SLOTS`, which
+    /// changes nothing at all: the meta already came, empty.
     Unresolvable,
 }
 

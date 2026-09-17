@@ -352,7 +352,7 @@ pub fn base_fee_numerator_at(params: &FeeSchedulerParams, current_point: u64) ->
         }
         // Not a time scheduler. Unreachable — the decoder only builds these
         // params for the two modes above — and `None` rather than the cliff on
-        // purpose: the cliff is precisely the wrong number this whole ticket
+        // purpose: the cliff is precisely the wrong number this computation
         // exists to stop publishing, so a fallback that returns it would quietly
         // reinstate the defect the day this arm becomes reachable.
         _ => None,
@@ -388,7 +388,7 @@ fn fee_in_period(
 /// The on-chain fee is whatever this integer arithmetic yields, truncation
 /// included. A floating-point approximation would disagree with the chain in
 /// the last basis points — precisely the range that separates a 400 bps floor
-/// from a 402 bps one, and precisely what this whole ticket is about.
+/// from a 402 bps one, and precisely what this computation is for.
 ///
 /// ## The inversion branch
 ///

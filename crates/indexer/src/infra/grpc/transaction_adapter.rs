@@ -55,8 +55,8 @@
 //! Both are written down because a filter nobody remembers is a filter nobody
 //! adds. Raised in review, 8 September 2026.
 //!
-//! Their first confrontation with reality is
-//! `02 - backlog/[spike]flux-grpc-reel-mesures.md`, which needs an API key.
+//! Their first confrontation with reality is the first run against a real
+//! provider, which needs an API key.
 //! Until then, read this suite as "the translation is self-consistent", never
 //! as "the translation is right".
 
@@ -85,8 +85,8 @@ use yog_core::{CoreError, CoreResult};
 ///
 /// Correlating slot → time, and bounding the wait for a block-meta that may
 /// never arrive, is a problem of its own with its own failure modes. It is the
-/// next slice of this ticket, and this signature is the seam between them: this
-/// function translates one message and knows nothing about time.
+/// job of `slot_timestamp_buffer`, and this signature is the seam between them:
+/// this function translates one message and knows nothing about time.
 ///
 /// # Errors
 ///

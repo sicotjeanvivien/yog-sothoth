@@ -10,7 +10,7 @@
 //! `lpFeesUsd` used to be derived here too, as `fees - protocol`. It is now
 //! read from the domain type: that formula credited the referral to the LPs,
 //! and it was written twice — here and on `PoolResponse`. The split is defined
-//! once, in `meteora_damm_v2_pool_hourly_activity` (`.project` ticket 05).
+//! once, in `meteora_damm_v2_pool_hourly_activity` (migration 007).
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;

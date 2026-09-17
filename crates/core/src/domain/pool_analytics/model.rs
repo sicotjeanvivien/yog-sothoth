@@ -46,10 +46,9 @@ use rust_decimal::Decimal;
 ///
 /// So the LP share is `claiming + compounding`, NOT
 /// `fees - protocol_fees` — that formula credits the referral to the
-/// liquidity providers, which is the defect `.project` ticket 05
-/// records. The split is therefore computed once, in
-/// `meteora_damm_v2_pool_hourly_activity`, and carried here as three
-/// read values. Do not re-derive one of them from the others.
+/// liquidity providers, the defect migration 007 corrected. The split is
+/// therefore computed once, in `meteora_damm_v2_pool_hourly_activity`, and
+/// carried here as three read values. Do not re-derive one of them from the others.
 ///
 /// The effective fee rate is still left to the presentation layer:
 /// `fees_24h_usd / volume_24h_usd` is a ratio, not a share.

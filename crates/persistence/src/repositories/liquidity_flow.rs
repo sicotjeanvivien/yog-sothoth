@@ -48,7 +48,7 @@ impl LiquidityFlowRepository for PgLiquidityFlowRepository {
         // ⚠️ No COALESCE, and `bool_and` for the same reasons as the swap
         // flow — written identically on purpose. The view already propagates
         // NULL across both token legs of a direction, which is the behaviour
-        // `.project` ticket 08 wants; the defect was here, one level up, where
+        // migration 006 settled on; the defect was here, one level up, where
         // `SUM` skipped the unvaluable buckets and the COALESCE dressed the
         // remainder as a total. That sub-total slipped past `tvl_drain`'s
         // `tvl_usd` guard whenever the window was only PARTLY unpriced, and it

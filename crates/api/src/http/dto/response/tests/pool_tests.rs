@@ -280,7 +280,7 @@ fn pool_response_serialises_the_coverage_counters_in_camel_case() {
 // ── The fee split reaches the wire, and is not recomputed ────────────────────
 
 /// `lpFees24hUsd` was derived here as `fees - protocol`, which credits the
-/// referral to the LPs (`.project` ticket 05). It is now read from the
+/// referral to the LPs (corrected by migration 007). It is now read from the
 /// analytics, where the split is computed once in SQL.
 ///
 /// The fixture makes the two answers differ — `3500 - 700 = 2800` against a
@@ -363,7 +363,7 @@ fn at(secs: i64) -> chrono::DateTime<chrono::Utc> {
     chrono::TimeZone::timestamp_opt(&chrono::Utc, secs, 0).unwrap()
 }
 
-/// The measurement that opened ticket 07, reproduced end to end.
+/// The measurement that exposed the frozen `fee_bps`, reproduced end to end.
 ///
 /// This pool's scheduler expired on 2026-07-28. A trader pays the 400 bps floor;
 /// `feeBps` still publishes the 5000 bps genesis tier, a factor of 12.5. The

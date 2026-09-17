@@ -476,7 +476,7 @@ async fn insert_batch_error_does_not_panic() {
 
 // ── Coverage metrics ──────────────────────────────────────────────────
 //
-// The gauges are the whole point of the observability half of ticket 02: a
+// The gauges are the whole point of the price-coverage observability: a
 // price coverage that degrades must be visible, and a tick that priced nothing
 // must not look like a tick that never happened.
 //

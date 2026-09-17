@@ -2,10 +2,10 @@
 //! `meteora_damm_v2_pool_hourly_activity` (migration 007) and read back through
 //! `PgPoolAnalyticsRepository::batch_compute` / `history`.
 //!
-//! Gated behind `integration-tests`. The finding it guards (`.project` ticket
-//! 05): the LP share was published as `fees - protocol_fees`, which credits the
-//! referral to the liquidity providers. cp-amm takes the referral out of the
-//! PROTOCOL share (`cp-amm/src/state/fee.rs::split_fees`), so the LP share is
+//! Gated behind `integration-tests`. The defect it guards: the LP share was
+//! published as `fees - protocol_fees`, which credits the referral to the
+//! liquidity providers. cp-amm takes the referral out of the PROTOCOL share
+//! (`cp-amm/src/state/fee.rs::split_fees`), so the LP share is
 //! `claiming + compounding`.
 //!
 //! ## What makes this fixture bite, component by component

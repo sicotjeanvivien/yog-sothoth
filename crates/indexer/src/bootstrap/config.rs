@@ -39,10 +39,9 @@
 //! ⚠️ It briefly decided something else, and that was wrong: for a day it chose
 //! **which door read `INGEST_STREAM`**, on the belief that only the gRPC path
 //! could send a metadata header. Raised in review of PR #138 on 10 September
-//! 2026: whether there is a header is said by
-//! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE` and by nothing else, and a
-//! transport has no business deciding a credential question — the same
-//! inversion `04 - release/[chore]une-variable-nomme-un-transport.md` removed from
+//! 2026: whether there is a header is said by `INGEST_STREAM_HEADER_NAME` /
+//! `_HEADER_VALUE` and by nothing else, and a transport has no business
+//! deciding a credential question — the same inversion that was removed from
 //! variable *names*. Both listeners now send what the operator declares
 //! (`infra::endpoint::credential`), so there is one door for one variable.
 

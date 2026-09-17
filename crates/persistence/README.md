@@ -220,7 +220,7 @@ past that it is materialized, and the caller's `WHERE` is applied *after*.
 `meteora_damm_v2_pool_hourly_activity` is in that case today — its four CTEs are
 each read twice (once by the `buckets` UNION, once by the final `LEFT JOIN`), so
 a single-pool read aggregates the whole swap hypertable and filters afterwards.
-Known and ticketed, not yet fixed.
+Known, not yet fixed.
 
 So the check on a new view over a cagg is **two** things, and the second is the
 one that gets forgotten:
@@ -450,7 +450,7 @@ protocol_fee      = protocol_fee_brut − referral_fee   ← what the event carr
 
 So the LP share is `claiming + compounding`, and ⚠️ **`fees − protocol` is
 wrong** — it credits the referral to the liquidity providers. That was the
-published figure until migration 007 (`.project` ticket 05), measured at 0,14 %
+published figure until migration 007, measured at 0,14 %
 to 0,89 % of a pool's fees. The four components summing to the total was never
 in question: the emitted `protocol_fee` is already net, so `fee_in_*` in the
 cagg double-counts nothing. Only the split was wrong.

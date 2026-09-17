@@ -3,9 +3,8 @@
 //! Unlike its neighbour `transaction_adapter_tests`, nothing here is a guess
 //! about a wire format: the buffer is pure state, and these tests exercise it
 //! exhaustively. What they cannot say is whether the **bound** is the right
-//! number — that is a physical property of a provider's stream, measured in
-//! `02 - backlog/[spike]flux-grpc-reel-mesures.md`, and the eviction counter
-//! is what will say it.
+//! number — that is a physical property of a provider's stream, to be
+//! measured on a real one, and the eviction counter is what will say it.
 
 use super::*;
 
@@ -13,9 +12,7 @@ use super::*;
 /// why these live here, where a child module still sees the private fields.
 ///
 /// The reader production would have is an occupancy gauge — this buffer can
-/// hold 40–160 MB — and it is a criterion of
-/// `02 - backlog/[spike]flux-grpc-reel-mesures.md`, the ticket that will read
-/// the number.
+/// hold 40–160 MB — and it is what a real-stream measurement will read.
 impl<T> SlotTimestampBuffer<T> {
     /// How many payloads are waiting.
     fn pending_payloads(&self) -> usize {
@@ -121,9 +118,9 @@ fn a_block_time_releases_only_its_own_slot() {
 
 // ── the bounds ──────────────────────────────────────────────────────
 
-/// ⚠️ **The test that carries decision n° 3.** A stream that stops delivering
-/// must cost nothing: the bound counts slots, so no new slot means no eviction,
-/// and an outage stays an outage instead of becoming data loss.
+/// ⚠️ **The test that carries the slot-count bound.** A stream that stops
+/// delivering must cost nothing: the bound counts slots, so no new slot means
+/// no eviction, and an outage stays an outage instead of becoming data loss.
 ///
 /// A time-bounded implementation fails here — that is the whole point of
 /// writing it down.
@@ -306,9 +303,9 @@ fn the_table_of_known_times_is_bounded_too() {
 }
 
 /// ⚠️ **The eviction has to be counted, not just to happen.** This counter is
-/// what `flux-grpc-reel-mesures` reads to replace the guessed bound with a
-/// measurement, so a drop that increments nothing would leave that ticket
-/// looking at a metric that is silent for the wrong reason.
+/// what a real-stream measurement reads to replace the guessed bound, so a
+/// drop that increments nothing would leave that measurement looking at a
+/// metric that is silent for the wrong reason.
 ///
 /// Not `#[tokio::test]` and no runtime: `with_local_recorder` installs the
 /// recorder on the **current thread** for a closure, and this buffer is
@@ -341,7 +338,7 @@ fn evicted_payloads_are_counted() {
         counter_for(&snapshot, "payload_bound"),
         None,
         "the slot bound is what fired here — a label that never distinguishes \
-         is a label that misleads the ticket reading this counter"
+         is a label that misleads whoever reads this counter"
     );
 }
 
@@ -382,8 +379,8 @@ fn the_bound_that_evicted_is_recorded_with_the_count() {
 
 /// ⚠️ **The label is the whole reason this method exists.** Giving up on a slot
 /// and letting the slot bound expel it destroy the same payloads; only the
-/// counter tells the measuring ticket which of the two happened, and only one of
-/// the two is fixed by raising `MAX_PENDING_SLOTS`.
+/// counter tells whoever measures the stream which of the two happened, and
+/// only one of the two is fixed by raising `MAX_PENDING_SLOTS`.
 #[test]
 fn a_slot_given_up_on_is_counted_under_its_own_reason() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -443,7 +440,7 @@ fn giving_up_on_a_slot_releases_its_place_in_the_window() {
 
 /// ⚠️ A slot that was never pending must count **nothing**. The listener calls
 /// this on every block-meta with no instant, most of which have no payload
-/// waiting; counting those would turn the metric the measuring ticket reads into
+/// waiting; counting those would turn the metric a measurement reads into
 /// a count of empty blocks.
 #[test]
 fn giving_up_on_a_slot_with_nothing_waiting_counts_nothing() {

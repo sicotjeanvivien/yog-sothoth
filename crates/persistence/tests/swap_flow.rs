@@ -196,9 +196,10 @@ async fn seed_pool_with_unpriced_a(pool: &PgPool, priced_hours: i64) -> String {
 
 #[sqlx::test]
 async fn a_partly_unvaluable_window_yields_no_total(pool: PgPool) {
-    // The silent half of `.project` ticket 08. `SUM` skips NULL buckets on its
-    // own, so dropping the COALESCE alone would still publish the valuable
-    // hours as if they were the whole window — a sub-total dressed as a total.
+    // The silent half of the defect migration 006 fixes. `SUM` skips NULL
+    // buckets on its own, so dropping the COALESCE alone would still publish
+    // the valuable hours as if they were the whole window — a sub-total dressed
+    // as a total.
     //
     // Token B is priced for the last 2 hours only: the swap at -1h is valuable,
     // the one at -6h is not, and the window covers both.

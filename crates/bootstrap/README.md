@@ -127,8 +127,8 @@ WebSocket handshake header.
 else** — not `INGEST_SOURCE`. A door chosen on the transport was tried for a
 day and removed on review: it rested on "the WebSocket client cannot send one",
 which is false (`PubsubClient::new` takes an `IntoClientRequest`), and it put a
-transport in charge of a credential question — the same inversion this family
-of tickets removed from variable *names*. The door grants the ability to carry
+transport in charge of a credential question — the same inversion that was
+removed from variable *names*. The door grants the ability to carry
 a credential; it does not impose one, and three of the four measured provider
 shapes send none.
 

@@ -16,6 +16,8 @@ This file is a map, not the territory. The in-repo READMEs are the authoritative
 - **`crates/<crate>/README.md`** — one per substantial crate (`core`, `persistence`, `bootstrap`, `indexer`, `api`, `context`, `signals`): layout and internals of that crate. When you change a crate, its README is part of the change.
 - **`web/README.md`** — the Next.js frontend (direct-API architecture, signal feed, feature flags, i18n).
 
+**Never reference a project-tracking ticket in this repository** — no `.project/…` path, no ticket number, no "this ticket", in code, comments, READMEs, CI files or commit-visible docs. The tracker is a separate private repository: a reader of this code cannot follow the pointer, and every rename there breaks it. Write the reason itself instead (the defect, the measurement still to come, the migration that fixed it). Committed migrations are the one exception, and only because they can never be edited.
+
 ## Commands
 
 All Rust commands run from the repo root. Toolchain is pinned in `rust-toolchain.toml` (don't override it).
