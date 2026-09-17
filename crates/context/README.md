@@ -247,8 +247,8 @@ by header, so that URL hides nothing, and that is also why it is **not** an
 
 The type reaches the wire: `HeliusDasClient` and `SolanaAccountClient` hold a
 `SecretUrl` until `.post(…)`, `JupiterPriceClient` holds a `SecretKey` until
-the `x-api-key` header is built. See `crates/README.md` for the invariant and
-the guard that enforces it.
+the `x-api-key` header is built. See [`yog-bootstrap`](../bootstrap/README.md#secrets--one-invariant-two-types)
+for the invariant and the guard that enforces it.
 
 Connects to Postgres as `yog_context` — RW on `token_metadata` and
 `token_prices`, `UPDATE` on the pool-property columns of `pools`, RO

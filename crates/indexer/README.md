@@ -551,8 +551,8 @@ roles across two crates; one variable cannot hold two addresses, which is the
 wall a provider migration would have hit. A URL with no `{key}` and no key is a
 public endpoint and is used verbatim; the two mismatches — a `{key}` without
 its key, a key without its `{key}` — are refused at startup, naming the
-variable. See `crates/README.md` for the type, and `.env.example` for the
-convention.
+variable. See [`yog-bootstrap`](../bootstrap/README.md#endpoints--named-after-what-they-serve-credential-outside-the-url)
+for the type, and `.env.example` for the convention.
 
 `DATABASE_URL_INDEXER` carries its secret *inside* the URL, because `sqlx`
 wants the string whole, and is a `SecretUrl`: userinfo, path, query string and
@@ -566,7 +566,8 @@ An assembled endpoint is a `SecretUrl` too, and keeps that type all the way
 down: `Endpoint::url()` builds one, `RpcListener` clones it once per worker,
 and `SubscriptionWorker` exposes it only as the argument of `PubsubClient::new`.
 The `inspect_logs` bin reads the same pair through the same types. The
-invariant and the guard that enforces it are documented in `crates/README.md`.
+invariant and the guard that enforces it are documented in
+[`yog-bootstrap`](../bootstrap/README.md#secrets--one-invariant-two-types).
 
 ### Scrubbing what a third party wrote
 
