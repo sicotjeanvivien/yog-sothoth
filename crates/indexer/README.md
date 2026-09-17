@@ -464,6 +464,11 @@ emitted. No gauges today — all counters and histograms.
   zero** (0 over the 1 046 transactions of a 2 h 20 run, 15 September 2026), so
   a sustained non-zero value on *that* label is signal — the absence it guards
   against is a step on provider configuration, absent until it is everything.
+  ⚠️ **`reason="unsupported_version"` is the other one to alert on.** It stays
+  at zero while the chain serves nothing above `MAX_SUPPORTED_TRANSACTION_VERSION`;
+  the day it does, every such transaction is refused and lost for good, and
+  this label is the only place that says so. Until 17 September 2026 the same
+  refusal hid under `other` and was retried five times.
   The other labels are not: `rate_limited`, `timeout` and `connection_error`
   are ordinary weather on a metered provider. ⚠️ **And the gRPC path does not
   answer on this family at all** — it refuses the same absence, but counts it as
