@@ -1,6 +1,6 @@
 //! Common types for the multi-protocol event extraction pipeline.
 //!
-//! Every protocol implementation of [`crate::protocols::PoolIndexer`]
+//! Every protocol implementation of [`crate::application::EventExtractor`]
 //! returns an [`ExtractionOutcome`] carrying domain events alongside
 //! diagnostic information about events that could not be processed.
 
