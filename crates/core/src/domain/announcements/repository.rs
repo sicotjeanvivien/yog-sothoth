@@ -2,8 +2,8 @@
 //!
 //! The concrete Postgres implementation lives in the `persistence`
 //! crate. There is no write-side trait: publication is an operator
-//! INSERT via psql until the authenticated endpoint lands with auth
-//! (v0.3).
+//! INSERT via psql until the authenticated endpoint lands with user
+//! accounts.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};

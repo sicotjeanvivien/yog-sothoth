@@ -6,7 +6,7 @@
  * a mismatch warning) and stays in sync across tabs and across every component
  * that uses it in the same tab.
  *
- * The v0.3 server-side watchlist can replace the store behind this hook
+ * A future server-side watchlist can replace the store behind this hook
  * without touching the components that consume it.
  */
 

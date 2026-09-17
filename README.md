@@ -32,7 +32,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 - **HTTP API** — JSON endpoints with cursor-based pagination and SSE streaming, served by an axum-based server
 - **Per-process database roles** — least-privilege Postgres roles, one per binary, enforced at the database level
 - **Docker stack** — full local development environment via `docker compose`, profile-driven
-- **WASM in the browser** *(deferred)* — same Rust AMM formulas run client-side via WebAssembly; reassessed at v0.3 (auth)
+- **WASM in the browser** *(deferred)* — same Rust AMM formulas run client-side via WebAssembly; reassessed once user accounts exist
 
 ---
 
@@ -86,9 +86,9 @@ For administering the allowlist (schema, seed scripts, SQL helpers), see **[`cra
 | Protocol | Status | Model |
 |---|---|---|
 | Meteora DAMM v2 | **Active** — 19 event kinds end-to-end | x·y=k + dynamic fees + NFT positions |
-| Meteora DLMM | **Partial** — pool account decoded, properties + `fee_bps` live; events stubbed, scheduled v0.2.0 | Bin-based liquidity, volatility fees |
-| Raydium CLMM/CPMM | Scheduled v0.2.1 | Concentrated liquidity |
-| Orca Whirlpools | Scheduled v0.2.2 | Concentrated liquidity |
+| Meteora DLMM | **Partial** — pool account decoded, properties + `fee_bps` live; events stubbed, planned | Bin-based liquidity, volatility fees |
+| Raydium CLMM/CPMM | Planned | Concentrated liquidity |
+| Orca Whirlpools | Planned | Concentrated liquidity |
 | Meteora DAMM v1, Farm, Stake2Earn, LST, Multi-Token | Not started | — |
 
 DLMM is *partial* in a specific sense worth stating, since the two halves land
@@ -96,8 +96,8 @@ separately: its `LbPair` account is decoded, its per-protocol properties table
 and its normalized `fee_bps` are in place, and the pool-detail endpoint serves
 them. What is missing is **event extraction** — `MeteoraDlmm::extract_events` is
 still a stub. Since pool discovery runs off extracted events, no DLMM pool
-reaches `pools` on its own yet, so that satellite stays empty until v0.2.0
-despite being fully wired and tested against real mainnet accounts.
+reaches `pools` on its own yet, so that satellite stays empty until event
+extraction lands, despite being fully wired and tested against real mainnet accounts.
 
 For DAMM v2, "circle 1" covers `EvtSwap2`, `EvtLiquidityChange`, `EvtClaimPositionFee`, `EvtClaimReward` — the events that drive the LP-observation model. Circle 2 (position lifecycle — `EvtCreatePosition`, `EvtClosePosition`, `EvtLockPosition`, `EvtPermanentLockPosition`) and circle 3 (pool config / admin — `EvtInitializePool`, `EvtSetPoolStatus`, `EvtUpdatePoolFees`) are wired end-to-end as well. The remaining eight cover the protocol-fee claim (`EvtClaimProtocolFee`), position splits (`EvtSplitPosition3`), and the farm's admin/funder side — `EvtInitializeReward`, `EvtFundReward`, `EvtUpdateRewardDuration`, `EvtUpdateRewardFunder`, `EvtWithdrawIneligibleReward`, `EvtWithdrawDeadLiquidityReward` — whose LP-facing counterpart, `EvtClaimReward`, was already in circle 1.
 
@@ -151,64 +151,15 @@ For the native development workflow (running services via `cargo run` against a 
 
 ---
 
-## Roadmap
+## Status
 
-### v0.1 — Analyzer + Signal Engine *(in progress)*
+Yog-Scope is **not open to the public yet**. What runs today, on a development machine:
 
-Originally two releases, merged in June 2026: an on-chain analytics tool without detectors is an event viewer, not a product — no public release until there are signals to offer. The internal split is kept to preserve the build order.
+- **Meteora DAMM v2**, end to end — 19 event kinds indexed, tokens enriched with metadata and USD prices, analytics served by the API and the dashboard.
+- **Three signal detectors** — swap-flow imbalance, spot-vs-oracle price deviation, TVL drain — with a live feed in the dashboard.
+- **Ingestion over JSON-RPC**, bounded by the watched-pools allowlist. The Yellowstone gRPC source is written and has not yet run against a real stream.
 
-**v0.1.0 — Analyzer** ✅ *(complete — internal POC, no public release)*
-
-- [x] Rust workspace — `core` / `persistence` / `bootstrap` / `indexer` / `api` / `context` / `wasm`
-- [x] Ingestion behind a `TransactionSource` port, with two implementations — JSON-RPC (`RpcListener` → `SignatureDispatcher` → `FetchWorker`) and Yellowstone gRPC — feeding `IndexerWorker`, with Prometheus instrumentation
-- [x] DAMM v2 decoding — Anchor `event_cpi`, 19 event kinds end-to-end (swap/liquidity/claims, position lifecycle, pool config & admin, farm admin)
-- [x] Token enrichment daemon — metadata via Helius DAS, USD prices via Jupiter Price V3, pool account resolution (mints, fee config)
-- [x] HTTP API on axum — pools (list, detail, top-N, history), tokens, global stats
-- [x] Realised-fee analytics — continuous aggregates, USD valuation views, fee charts on the pool page
-- [x] Next.js dashboard — overview (KPIs + top pools), pools list, pool detail with charts
-- [x] Least-privilege Postgres model — one role per process, forward-only migrations via `yog-migrate`
-- [x] Full Docker stack and CI (check / fmt / clippy / test / audit, sqlx offline check)
-
-**v0.1.1 — Signal Engine + release prep** *(in progress, blocks the public deployment)*
-
-- [x] `signals` process — batch detector engine, per-detector cadence, cooldown deduplication, Prometheus metrics
-- [x] Three detectors — swap-flow imbalance, spot-vs-oracle price deviation (with freshness guards), TVL drain
-- [x] `signals` hypertable + `yog_signals` role
-- [x] `GET /api/signals` (cursor pagination) + `GET /api/signals/stream` (SSE)
-- [x] Live signals feed page in the dashboard
-- [ ] Signals page UX pass (hierarchy, severity filter, pagination)
-- [ ] Next detector — fee yield spike
-- [ ] Telegram operator channel
-- [x] Yellowstone gRPC ingestion source (`INGEST_SOURCE=grpc`) — code shipped, provider chosen (Alchemy)
-- [ ] First run against a real gRPC stream — the production ingestion path, not yet measured
-- [ ] Pre-release security audit and legal pages review (privacy, terms)
-- [ ] Scaleway deployment — after the gRPC run and the audit
-
-### Pre-v0.2 gate — full protocol-centric coverage
-
-Production ingests over Yellowstone gRPC from the start (see v0.1.1). What remains before v0.2 is lifting the watched-pools allowlist (`INGEST_SCOPE=protocols`) once the real stream has been measured — throughput, cost, and the ordering data it was chosen for. With multi-protocol expansion ahead, that coverage is a viability requirement, not an optimization.
-
-### v0.2 — Multi-protocol expansion *(one protocol per v0.2.x release)*
-
-The sequencing decision (July 2026): coverage before auth — acquire an audience (protocols), then retain it (auth, v0.3), then monetize it (v0.4). Entry gates: the DAMM v2 signal engine **empirically calibrated in production** (not just shipped), and the full protocol-centric coverage above. Each release ships a protocol end-to-end — decoder, domain semantics, detector coverage, dashboard — because the real cost is never the decoder, it's the per-protocol liquidity model:
-
-- **v0.2.0 — Meteora DLMM** (concentrated bins ≠ x·y=k; richest signal value)
-- **v0.2.1 — Raydium CLMM/CPMM** (largest real volume on Solana)
-- **v0.2.2 — Orca Whirlpools**
-
-### v0.3 — Auth and per-user pool watchlists
-
-Multi-channel authentication (email, OAuth, Solana wallet), per-user pool watchlists, tier infrastructure with placeholder quotas. The `yog_api` Postgres role gains `INSERT/UPDATE` on user-facing tables. The Solana wallet auth is also the technical prerequisite for v0.4's wallet connect. WASM activation reassessed at this point.
-
-### v0.4 — Monetization: Jupiter Referral Program
-
-Wallet connect and a swap UI on top of the signal feed — an integrator fee (bps) on swaps routed through the dashboard via Jupiter's on-chain Referral Program. This monetizes an audience the signal engine must first earn: the trigger is usage, not a date. Stripe billing tiers remain a complementary lever if revenue is needed earlier.
-
-### Later *(unscheduled)*
-
-- **Further Meteora products** — DAMM v1, DAMM v1 Farm, Stake2Earn, LST, Multi-Token.
-- **Second price oracle** — Pyth, reducing the dependency on Jupiter as sole price source.
-- **Stripe billing** — public pricing tiers, API keys with rate limiting.
+Next comes production, which ingests over gRPC. After that: lifting the allowlist, then widening coverage to the protocols listed under *Supported protocols*.
 
 ---
 

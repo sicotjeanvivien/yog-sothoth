@@ -15,7 +15,7 @@ core/src/
 │   │                       model + repository trait; damm_v2.rs holds the
 │   │                       MeteoraDammV2Event sub-enum; pool_properties/ holds
 │   │                       this protocol's satellite payload)
-│   ├── meteora/dlmm/      (pool_properties/ only — events land in v0.2.0)
+│   ├── meteora/dlmm/      (pool_properties/ only — events not extracted yet)
 │   ├── pool/              (Pool, PoolRepository — cross-protocol registry)
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
 │   ├── pool_analytics/    (hourly aggregates read models)
@@ -116,7 +116,7 @@ A variant means "a protocol this project indexes", not "a protocol Meteora
 ships". DAMM v1 was carried as a third, empty variant until 31 August 2026 and
 removed: no extractor, no decoder, no subscription, and no row in any table —
 every arm mentioning it existed only to say "not this one". Meteora's other
-products are on the roadmap, not in the enum; they arrive through the
+products are planned, not in the enum; they arrive through the
 add-a-protocol recipe.
 
 The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
@@ -336,4 +336,4 @@ and prompts a direct assertion instead.
 ## Compilation targets
 
 - `cargo build` → native library, linked into every binary ✅
-- `wasm-pack build` → WASM module for the browser 🚧 deferred — reassessed at v0.3 — auth (see [`crates/README.md`](../README.md#wasm-yog-wasm))
+- `wasm-pack build` → WASM module for the browser 🚧 deferred — reassessed once user accounts exist (see [`crates/README.md`](../README.md#wasm-yog-wasm))

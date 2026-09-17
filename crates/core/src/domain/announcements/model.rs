@@ -91,7 +91,7 @@ impl std::str::FromStr for AnnouncementSeverity {
 /// Carries its storage `id` directly (no write-side/read-side split à la
 /// `Signal`/`SignalRecord`): the domain has no write path — publication
 /// is an operator INSERT via psql until the authenticated endpoint lands
-/// with auth (v0.3) — and the id is what the web's dismiss cookie keys on.
+/// with user accounts — and the id is what the web's dismiss cookie keys on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Announcement {
     /// Storage-assigned identity — the dismiss key on the web.

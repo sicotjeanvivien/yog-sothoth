@@ -859,8 +859,8 @@ ORDER BY added_at DESC;
 The allowlist is read once at indexer startup, when the subscriptions are
 opened. Modifying `watched_pools` while the indexer is running has no effect on
 the running process — restart the indexer to pick up the change. Hot reload
-becomes relevant in **v0.3** when user-managed watchlists arrive as a
-first-class feature.
+becomes relevant once user-managed watchlists arrive as a first-class
+feature.
 
 ### Removing the constraint
 
@@ -885,4 +885,4 @@ read, becoming purely informational rather than enforced.
 
 - [`crates/README.md`](../README.md) — workspace architecture, database roles, recipes
 - [`migrations/README.md`](./migrations/README.md) — migration conventions (forward-only, GRANTs per migration, local workflow)
-- [Root README](../../README.md) — project pitch, roadmap, getting started
+- [Root README](../../README.md) — project pitch, status, getting started

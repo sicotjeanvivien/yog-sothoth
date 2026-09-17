@@ -191,7 +191,7 @@ no account, no backend. `lib/watchlist/` splits the store (plain module, no
 React) from the `useWatchlist` hook, which sits on `useSyncExternalStore` so it
 is SSR-safe and stays in sync across tabs. The page renders the same
 `PoolsTableRow` as `/pools` (shared vocabulary in `pools-table-shared.ts`), the
-star living in the row's actions column. The v0.3 server-side watchlist can
+star living in the row's actions column. A future server-side watchlist can
 replace the store behind the hook without touching a component.
 
 **Overview** — the top-N strip ranks by `?rank=volume_24h` (default, param
@@ -208,7 +208,7 @@ tier. That row uses `formatComputedFeeBps`, not `formatFeeBps`: a tier is
 human-chosen and clean, a decayed fee is the chain's integer arithmetic and
 renders as `4.000006%` if trimmed rather than rounded. The API also serves a
 `meteoraDlmm` sibling block; the dashboard does not model it yet — no DLMM pool
-reaches `pools` until event extraction lands in v0.2.0.
+reaches `pools` until DLMM event extraction lands.
 
 ## Operator announcements
 
@@ -295,7 +295,7 @@ Because Next.js inlines `NEXT_PUBLIC_*` values into the client bundle
 at build time, **flipping a flag in production requires a rebuild and
 a redeploy**. This is a build-time toggle, not a hot runtime toggle.
 A runtime toggle system (DB-backed, modifiable via UI) only makes sense
-once user accounts and admin areas exist (v0.3).
+once user accounts and admin areas exist.
 
 ### Using a flag in code
 
@@ -444,5 +444,5 @@ routes. It does not push anywhere — it's a regression guard.
 
 ## See also
 
-- [Root README](../README.md) — project pitch, roadmap, getting started
+- [Root README](../README.md) — project pitch, status, getting started
 - [`crates/README.md`](../crates/README.md) — Rust workspace architecture, the `yog-api` shape this frontend consumes

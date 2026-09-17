@@ -4,7 +4,7 @@
  * Plain module (no "use client", no React) so the hook, and any future
  * server-side reconciliation, share the same key and serialization. The
  * watchlist is a set of pool addresses the visitor chose to keep an eye on;
- * it lives entirely in the browser (no account, no backend) until the v0.3
+ * it lives entirely in the browser (no account, no backend) until a
  * server-side watchlist replaces this store behind the same hook.
  *
  * Shaped as a `useSyncExternalStore` source: a cached snapshot with a stable
