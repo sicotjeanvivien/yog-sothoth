@@ -11,7 +11,7 @@ use crate::{
         source::TransactionSource,
         workers::IndexerWorkerMetrics,
     },
-    bootstrap::{Config, IngestScope, TransactionArrival},
+    bootstrap::{Config, TransactionArrival},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
         GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
@@ -40,43 +40,6 @@ use yog_persistence::{
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
     PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository,
 };
-
-/// Say which acquisition model is running, and warn when it cannot keep up.
-///
-/// ⚠️ **The first lines the process writes, because it is the first question a
-/// reader has.** Two acquisition models exist and one is running; from here on
-/// nothing else in the crate names which. The two `as_str` were written for the
-/// refusals of a validator that no longer exists — their remaining reader is
-/// this line, and it is a better one: a refusal is read once, a running mode
-/// every time something looks wrong.
-///
-/// ⚠️ **And the one couple that boots and cannot keep up.** `logsSubscribe` on
-/// a program id delivers everything that program does, and the RPC path then
-/// fetches each transaction back — measured at ~200 in 30 s against a ~10 req/s
-/// tier. Nothing stops: fetch failures are skip-and-logged per transaction, so
-/// the process stays up and the metrics stay plausible while most of what it
-/// sees is dropped.
-///
-/// A `check_supported` used to refuse that couple, for a different reason — an
-/// empty target set — and that reason is genuinely fixed. What went with the
-/// refusal was the only loud signal an operator got, and the warning puts it
-/// back at the cost of one branch.
-pub(super) fn log_ingestion_mode(config: &Config) {
-    info!(
-        source = config.transaction_arrival.source().as_str(),
-        scope = config.scope.as_str(),
-        "ingestion mode"
-    );
-
-    if matches!(
-        (&config.transaction_arrival, config.scope),
-        (TransactionArrival::Fetched { .. }, IngestScope::Protocols)
-    ) {
-        tracing::warn!(
-            "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
-        );
-    }
-}
 
 /// Connect to the database.
 ///
@@ -238,23 +201,11 @@ pub(super) fn init_processor(
 /// `INGEST_SOURCE=grpc` nothing ingests through: the panel showed the health of
 /// a link no data travelled on, and no configuration could say so.
 ///
-/// The start-up line below prints the probe beside **everything ingestion
-/// touches**, so that whether they are independent in fact — and not merely in
-/// name — is read off the logs rather than assumed. Everything, and not just
-/// the stream: on the notify-then-ask path ingestion also holds
-/// `INGEST_TRANSACTION`, the very endpoint the probe used to share, and a line
-/// omitting it would let an operator read an independence that endpoint denies.
-///
-/// ⚠️ **And the line no longer *asserts* that independence — it checks it.** It
-/// said "an external reference, not the ingestion link" whatever the addresses
-/// were, which is a claim about configuration written where configuration is
-/// not read: with the `.env.example` this repository ships, the probe and the
-/// fetch endpoint are the *same* public host, so the sentence was false on a
-/// fresh clone. A message is also what survives in an aggregator, where the
-/// fields beside it do not. The equality below is what the check can honestly
-/// see — one address written twice — and it is the likely mistake, since the
-/// example file seeds both. Two spellings of one host it cannot see, which is
-/// why the warning says what it compared.
+/// **It builds the reporter and says nothing.** Which endpoints it ended up on,
+/// and whether they are independent of ingestion, are written by
+/// [`super::consequences`] — a comparison of two addresses is not wiring, and
+/// while it lived here it needed a live `Database` to reach, so no test could
+/// hold it.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,
@@ -264,36 +215,6 @@ pub(super) async fn init_network_status_reporter(
     let rpc_client = Arc::new(RpcClient::new(
         config.network_status.url().expose().to_string(),
     ));
-    // `Display`, not `expose`: the templates are what the operator wrote, they
-    // compare exactly as well, and the `.expose()` guard list counts every site
-    // in this file — a fourth one for a log line would be a widening bought for
-    // nothing.
-    let probe = config.network_status.to_string();
-    let fetch = config
-        .transaction_arrival
-        .fetched_from()
-        .map(ToString::to_string);
-    let ingestion = match &fetch {
-        Some(fetch) => format!(
-            "{} (stream) + {fetch} (getTransaction)",
-            config.ingest_stream
-        ),
-        None => format!("{} (stream)", config.ingest_stream),
-    };
-    info!(
-        probe = %probe,
-        %ingestion,
-        "network status probe initialized — the chain reference the panel's slot and latency come from"
-    );
-    if fetch.as_deref() == Some(probe.as_str()) || config.ingest_stream.to_string() == probe {
-        tracing::warn!(
-            "NETWORK_STATUS_URL is the address ingestion already uses, so the dashboard's two \
-             halves share one provider: the day it drops, the chain reading and the freshness \
-             verdict go red together and neither says which failed. Point it elsewhere — the \
-             probe costs one request every fifteen seconds. Compared as written; two spellings \
-             of the same host would not be caught here."
-        );
-    }
     Ok(NetworkStatusReporter::new(
         rpc_client,
         config.network_status.url(),

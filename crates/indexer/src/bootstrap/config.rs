@@ -106,17 +106,40 @@ impl Config {
             // the one place that turns the pair into something a client sends,
             // and both go through it.
             ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,
-            transaction_arrival: match source {
-                IngestSource::Rpc => TransactionArrival::Fetched {
-                    from: required_endpoint("INGEST_TRANSACTION")?,
-                },
-                // Nothing to read: the stream delivers the transaction whole.
-                IngestSource::Grpc => TransactionArrival::Delivered,
-            },
+            transaction_arrival: TransactionArrival::from_source(source)?,
             network_status: required_endpoint("NETWORK_STATUS")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,
         })
+    }
+
+    /// Whether the health probe reads an address ingestion already uses.
+    ///
+    /// **A fact about the configuration, not a log line**, which is why it is
+    /// a method here and not a branch inside a bootstrap function: it can be
+    /// read, asserted and mutated in a unit test, where buried in the daemon's
+    /// wiring it needed a live `Database` to reach and was therefore never
+    /// covered by anything.
+    ///
+    /// What it can honestly see is **one address written twice**, and that is
+    /// the likely mistake, since `.env.example` seeds the probe and the fetch
+    /// endpoint with the same public host. Two spellings of one host it cannot
+    /// see — `wss://h` and `https://h` compare as different, and recognising
+    /// that they are the same host would mean parsing the address, which is
+    /// the form-recognition this configuration refuses everywhere else. The
+    /// warning built on this says what it compared, rather than implying more.
+    ///
+    /// Comparison is on [`Endpoint`]'s `Display` — the template the operator
+    /// wrote — and not on the assembled URL: the templates compare exactly as
+    /// well, and every `.expose()` site of the crate is counted by a guard, so
+    /// a new one bought for a comparison would be a widening for nothing.
+    pub(crate) fn probe_shares_ingestion_address(&self) -> bool {
+        let probe = self.network_status.to_string();
+        self.ingest_stream.to_string() == probe
+            || self
+                .transaction_arrival
+                .fetched_from()
+                .is_some_and(|fetch| fetch.to_string() == probe)
     }
 }
 

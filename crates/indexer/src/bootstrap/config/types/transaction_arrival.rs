@@ -1,4 +1,4 @@
-use yog_bootstrap::Endpoint;
+use yog_bootstrap::{ConfigError, Endpoint, required_endpoint};
 
 use super::IngestSource;
 
@@ -33,6 +33,25 @@ pub(crate) enum TransactionArrival {
 }
 
 impl TransactionArrival {
+    /// Build the arrival the setting selects, reading what that arrival needs.
+    ///
+    /// **The reading lives here rather than in `Config::load`** because the
+    /// fact it encodes is about this type: `INGEST_TRANSACTION` exists for the
+    /// variant that asks and for no other, so the variant is where that is
+    /// written. It is the same arrangement [`IngestSource`] and `IngestScope`
+    /// already have through `EnvEnum` — a setting knows how to read itself —
+    /// and it keeps `Config::load` a list of one-liners, where a six-line match
+    /// stopped the struct literal being scannable.
+    pub(crate) fn from_source(source: IngestSource) -> Result<Self, ConfigError> {
+        Ok(match source {
+            IngestSource::Rpc => Self::Fetched {
+                from: required_endpoint("INGEST_TRANSACTION")?,
+            },
+            // Nothing to read: the stream delivers the transaction whole.
+            IngestSource::Grpc => Self::Delivered,
+        })
+    }
+
     /// Where the transaction is fetched back from, when it has to be fetched
     /// at all.
     ///
