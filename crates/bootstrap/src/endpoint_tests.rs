@@ -51,7 +51,7 @@ fn the_key_is_substituted_at_the_placeholder() {
 }
 
 /// A public endpoint is called exactly as written. `api.mainnet-beta.solana.com`
-/// wants no credential, and the local workflow points all four endpoints at it.
+/// wants no credential, and the local workflow points all five endpoints at it.
 #[test]
 fn a_url_without_a_placeholder_is_used_verbatim() {
     let public = endpoint("https://api.mainnet-beta.solana.com", None);

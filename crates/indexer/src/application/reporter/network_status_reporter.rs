@@ -1,6 +1,6 @@
-//! Network status reporter — periodically records the indexer's view
-//! of the Solana chain (current slot + RPC round-trip latency) into
-//! the `network_status` singleton.
+//! Network status reporter — periodically records an **external reference on
+//! the Solana chain** (current slot + RPC round-trip latency) into the
+//! `network_status` singleton.
 //!
 //! Responsibility split (mirrors the pipeline stages):
 //! - `run` owns the tick loop and the shutdown semantics.
@@ -11,13 +11,14 @@
 //!   `yog_indexer_network_status_tick_failures_total{reason}` counts it, and
 //!   the next tick tries again. `run` cannot fail: it returns
 //!   `Result<(), Infallible>`, so propagating a tick error does not compile.
-//! - **The decision to stop the daemon belongs to the data path alone.** This
-//!   probe reads the same endpoint over the same network as ingestion, so when
-//!   the link drops it fails by construction — usually before the subscription
-//!   worker has spent its first backoff. Until 11 September 2026 it propagated
-//!   that first failure, `Daemon::run` stopped everything, and every restart
-//!   reset the worker's retry budget to 1: nine restarts in two minutes, and a
-//!   budget of ~5 minutes never consumed.
+//! - **The decision to stop the daemon belongs to the data path alone.** Until
+//!   11 September 2026 this probe propagated its first failure, `Daemon::run`
+//!   stopped everything, and every restart reset the subscription worker's
+//!   retry budget to 1: nine restarts in two minutes, and a budget of ~5
+//!   minutes never consumed. It read the ingestion's own endpoint then, so it
+//!   failed whenever the link did; now that it reads an endpoint deliberately
+//!   independent of ingestion, the same rule holds for a sharper reason — a
+//!   third party being unreachable is not a reason to stop indexing.
 //! - What is left of that noise: a `warn!` per failed tick and the counter —
 //!   and **nothing a reader of the dashboard can see**, which is not what this
 //!   module claimed until the review of PR #141. The stale `observed_at` it
@@ -26,17 +27,36 @@
 //!   what would close it. A panic still stops the daemon — that is a bug, not
 //!   a network.
 //!
+//! What it measures, and why that is not ingestion:
+//! - **An external reference**, read over its own `NETWORK_STATUS_*` endpoint
+//!   and its own `RpcClient`. It answers *is the chain advancing, and how far
+//!   away is it* — and nothing about whether this process is keeping up.
+//! - The other half of the same dashboard panel already answers that, and
+//!   answers it better: `freshness` is derived from the last event written to
+//!   the database, so it costs no network call and it **stays loud when the
+//!   link is silent**. Two questions, two independent answers, one panel.
+//! - **Which is why the probe must not ride the ingestion's link.** Point it
+//!   there and the two halves go red together the day that link drops, exactly
+//!   when the only thing worth knowing is which of the two failed: Solana
+//!   stopped, or our pipe did. Deriving the numbers from the stream itself has
+//!   the same defect twice over — it duplicates `freshness`, and a health
+//!   signal computed from a flow falls silent when the flow does.
+//! - Until 21 September 2026 it read `INGEST_TRANSACTION`, the ingestion's
+//!   fetch endpoint, and under `INGEST_SOURCE=grpc` there is no
+//!   `getTransaction` at all: the transaction arrives on the stream, so the
+//!   probe was the process's only HTTP client and measured a host nothing
+//!   ingested through. Observed that day against a real Geyser provider — the
+//!   two hosts differed, and the panel said nothing about it. Nothing was lost
+//!   (the 44 000 transactions of that run were all persisted); what was wrong
+//!   was a reading that rested on an unstated assumption.
+//!
 //! Placement rationale:
-//! - This lives in the indexer, not in a separate daemon, because it reports on
-//!   the chain the indexer is reading. It is **not** the indexer's own link: it
-//!   opens its own `RpcClient` (since PR #139) on `INGEST_TRANSACTION`, and
-//!   under `INGEST_SOURCE=grpc` there is no `getTransaction` at all — the
-//!   transaction arrives on the stream, and this probe is then the process's
-//!   only HTTP client, measuring an endpoint ingestion never touches.
-//! - **What it should measure is undecided**, and the question is parked behind
-//!   a real Geyser provider.
-//!   Until then, read the numbers it publishes as an external reference on the
-//!   chain, not as the health of ingestion.
+//! - This lives in the indexer, not in a separate daemon, because the other
+//!   half of the panel it feeds — `freshness` — is derived from the events
+//!   this very process writes. Being in the same process is not sharing a
+//!   link: it opens its own client (since PR #139), on its own endpoint (since
+//!   21 September 2026), and the start-up line prints the two side by side so
+//!   their independence is read rather than assumed.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -59,7 +79,8 @@ use crate::application::reporter::{NetworkStatusReporterError, NetworkStatusRepo
 /// slot counter — while keeping RPC and DB load negligible.
 const TICK_INTERVAL: Duration = Duration::from_secs(15);
 
-/// Periodic reporter of the indexer's chain-link health.
+/// Periodic reporter of the chain's own progress, read from an endpoint chosen
+/// for being independent of ingestion.
 ///
 /// Generic over the repository so it can be unit-tested with a mock;
 /// the daemon wires the concrete `PgNetworkStatusRepository`.

@@ -11,7 +11,7 @@ use crate::{
         source::TransactionSource,
         workers::IndexerWorkerMetrics,
     },
-    bootstrap::{Config, IngestScope, IngestSource},
+    bootstrap::{Acquisition, Config, IngestScope},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
         GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
@@ -22,7 +22,7 @@ use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use tracing::info;
-use yog_bootstrap::SecretUrl;
+use yog_bootstrap::{Endpoint, SecretUrl};
 use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
@@ -63,14 +63,14 @@ use yog_persistence::{
 /// back at the cost of one branch.
 pub(super) fn log_ingestion_mode(config: &Config) {
     info!(
-        source = config.source.as_str(),
+        source = config.acquisition.source().as_str(),
         scope = config.scope.as_str(),
         "ingestion mode"
     );
 
     if matches!(
-        (config.source, config.scope),
-        (IngestSource::Rpc, IngestScope::Protocols)
+        (&config.acquisition, config.scope),
+        (Acquisition::Rpc { .. }, IngestScope::Protocols)
     ) {
         tracing::warn!(
             "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
@@ -102,14 +102,21 @@ pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database
 /// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
 /// its source is the listener.
 pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
-    match config.source {
-        IngestSource::Rpc => init_rpc_source(config),
-        IngestSource::Grpc => init_grpc_source(config),
+    match &config.acquisition {
+        Acquisition::Rpc { transaction } => init_rpc_source(config, transaction),
+        Acquisition::Grpc => init_grpc_source(config),
     }
 }
 
 /// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
-fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+///
+/// `transaction` comes in from the [`Acquisition::Rpc`] arm rather than off
+/// `Config` directly: it is the endpoint `getTransaction` goes to, it exists on
+/// this path alone, and this is the only function that needs it.
+fn init_rpc_source(
+    config: &Config,
+    transaction: &Endpoint,
+) -> anyhow::Result<Arc<dyn TransactionSource>> {
     let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
@@ -121,19 +128,13 @@ fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>
     // wanted one too — which made the composition root assemble an ingredient
     // belonging to exactly one of the two sources, and gave this function a
     // parameter the gRPC arm could only ignore. Raised in review of PR #139.
-    // The price of not sharing is a second connection pool against the same
-    // host, for a caller that makes one request every fifteen seconds.
-    let rpc_client = Arc::new(RpcClient::new(
-        config.ingest_transaction.url().expose().to_string(),
-    ));
-    info!(
-        "transaction RPC client initialized: {}",
-        config.ingest_transaction
-    );
-    let fetcher = Arc::new(TransactionFetcher::new(
-        rpc_client,
-        config.ingest_transaction.url(),
-    ));
+    // The price of not sharing was a second connection pool against the same
+    // host, for a caller making one request every fifteen seconds — and since
+    // 21 September 2026 there is not even that: the probe reads its own
+    // endpoint, which is free to be a different provider entirely.
+    let rpc_client = Arc::new(RpcClient::new(transaction.url().expose().to_string()));
+    info!("transaction RPC client initialized: {transaction}");
+    let fetcher = Arc::new(TransactionFetcher::new(rpc_client, transaction.url()));
 
     Ok(Arc::new(RpcTransactionSource::new(
         listener, dispatcher, fetcher,
@@ -227,8 +228,17 @@ pub(super) fn init_processor(
 /// and it is why the client used to be built one storey up, where neither of
 /// them lives.
 ///
-/// ⚠️ **And what it should measure is an open question**: this probe reads
-/// `INGEST_TRANSACTION`, which the gRPC source will not use.
+/// ⚠️ **And it reads its own variable**, `NETWORK_STATUS_*`, not
+/// `INGEST_TRANSACTION`. What the probe measures is an *external reference on
+/// the chain*, independent of ingestion by design; [`NetworkStatusReporter`]'s
+/// own module docs carry the reasoning and the two readings it rules out. Until
+/// 21 September 2026 it read the ingestion's fetch endpoint, which under
+/// `INGEST_SOURCE=grpc` nothing ingests through: the panel showed the health of
+/// a link no data travelled on, and no configuration could say so.
+///
+/// The start-up line below prints the probe and the ingestion side by side, so
+/// that whether they are independent in fact — and not merely in name — is read
+/// off the logs rather than assumed.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,
@@ -236,11 +246,16 @@ pub(super) async fn init_network_status_reporter(
     let pg_network_status_reporter_repository =
         Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
     let rpc_client = Arc::new(RpcClient::new(
-        config.ingest_transaction.url().expose().to_string(),
+        config.network_status.url().expose().to_string(),
     ));
+    info!(
+        probe = %config.network_status,
+        ingestion = %config.ingest_stream,
+        "network status probe initialized — an external reference, not the ingestion link"
+    );
     Ok(NetworkStatusReporter::new(
         rpc_client,
-        config.ingest_transaction.url(),
+        config.network_status.url(),
         pg_network_status_reporter_repository,
     ))
 }

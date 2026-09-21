@@ -127,8 +127,19 @@ services:
       # header design exists to prevent.
       INGEST_STREAM_HEADER_NAME: ${INGEST_STREAM_HEADER_NAME:-}
       INGEST_STREAM_HEADER_VALUE: ${INGEST_STREAM_HEADER_VALUE:-}
-      INGEST_TRANSACTION_URL: ${INGEST_TRANSACTION_URL}
+      # `:-` on the URL too, unlike the stream above: this pair is read on
+      # INGEST_SOURCE=rpc alone — a delivered stream has no second call to
+      # make — and an empty value reads as absent, so `grpc` starts without it
+      # and `rpc` stops naming the variable. Passed through on both paths for
+      # the same reason the header pair is: an operator who switches source
+      # should not have to also remember a compose edit.
+      INGEST_TRANSACTION_URL: ${INGEST_TRANSACTION_URL:-}
       INGEST_TRANSACTION_KEY: ${INGEST_TRANSACTION_KEY:-}
+      # The health probe's own endpoint, deliberately not one of the two
+      # above — see `.env.example`. Required on both sources, because the
+      # probe runs whichever model does.
+      NETWORK_STATUS_URL: ${NETWORK_STATUS_URL}
+      NETWORK_STATUS_KEY: ${NETWORK_STATUS_KEY:-}
       RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}
       # No default on purpose, unlike the retry budget above and the log
       # knobs below: a default here picks an ingestion mode nobody chose —

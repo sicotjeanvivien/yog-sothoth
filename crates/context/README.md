@@ -231,7 +231,7 @@ a name describing a transport, which excluded neither — so a migration moving
 one and not the other could not be *expressed*: one variable, one value. They
 are now two `Endpoint`s, each a `<FUNCTION>_URL` / `<FUNCTION>_KEY` pair; a URL
 with no `{key}` and no key is a public endpoint. `POOL_ACCOUNT_URL` above shows
-that shape, and in local development all four endpoints of the workspace point
+that shape, and in local development all five endpoints of the workspace point
 at the same public host.
 
 Nothing carrying a secret reaches the daemon as a `String`.

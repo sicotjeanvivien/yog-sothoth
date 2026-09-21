@@ -28,13 +28,19 @@
 //! started registering what it watches. What replaced the refusal is not a
 //! looser check but a filled precondition.
 //!
-//! **Why `Config` carries both axes.** Each travels exactly one storey, into
-//! the daemon. The scope decides what is registered with the source — the
-//! protocols or the pools — and no listener reads it. The source goes into
-//! `init_source`, which builds one of the two implementations and hands back
-//! the port. Nothing downstream learns either. It became a field the day that
-//! function grew its second arm, which is what the doc above said would
-//! happen.
+//! **Why `Config` carries the acquisition model.** It travels exactly one
+//! storey, into the daemon: [`Acquisition`] goes into `init_source`, which
+//! builds one of the two implementations and hands back the port; the scope
+//! decides what is registered with it — the protocols or the pools — and no
+//! listener reads either. Nothing downstream learns which model is running.
+//!
+//! ⚠️ **And it carries `INGEST_TRANSACTION` *inside* that model**, rather than
+//! beside it. `getTransaction` exists on the notify-then-ask path alone, so its
+//! endpoint is a field of [`Acquisition::Rpc`] and does not exist on the other
+//! arm — which is what makes the variable stop being required under
+//! `INGEST_SOURCE=grpc`. Not a rule written somewhere and remembered: no code
+//! reads it there. It was required on both paths until the health probe stopped
+//! reading it, and the probe was the only reason it ever was.
 //!
 //! ⚠️ It briefly decided something else, and that was wrong: for a day it chose
 //! **which door read `INGEST_STREAM`**, on the belief that only the gRPC path
@@ -45,6 +51,22 @@
 //! variable *names*. Both listeners now send what the operator declares
 //! ([`Credential`]), so there is one door for one variable.
 //!
+//! # `NETWORK_STATUS_*`, which is deliberately not in that family
+//!
+//! The health probe's endpoint is the one this process reads that has **no
+//! relation to ingestion**, and its name says so. It answers "is the chain
+//! advancing, and how far away is it" — an external reference — while the other
+//! half of the same dashboard panel, `freshness`, answers "is our ingestion
+//! keeping up" from the last event written to the database, with no network
+//! call at all. Pointing the probe at the ingestion's own endpoint, which is
+//! what `INGEST_TRANSACTION` did until 21 September 2026, collapses two
+//! independent questions onto one link: the day the link drops both halves go
+//! red together and neither says which failed.
+//!
+//! It is therefore required on **both** sources — the probe runs whichever
+//! model does — and it is free to point at a different provider entirely, which
+//! is the only form independence can take.
+//!
 //! [`Credential`]: crate::infra::Credential
 
 use yog_bootstrap::{
@@ -54,18 +76,20 @@ use yog_bootstrap::{
 
 mod types;
 
-pub(crate) use types::{IngestScope, IngestSource};
+pub(crate) use types::{Acquisition, IngestScope, IngestSource};
 
 pub(crate) struct Config {
     pub(crate) database_url: SecretUrl,
     /// Where the notifications the ingestion listens to come from.
     pub(crate) ingest_stream: Endpoint,
-    /// Where a transaction is fetched back from, once a notification names it.
-    pub(crate) ingest_transaction: Endpoint,
+    /// Which acquisition model to build, and what that model needs — the
+    /// `getTransaction` endpoint on the arm that has one. Read by
+    /// `init_source` and by `log_ingestion_mode`, and by nothing else.
+    pub(crate) acquisition: Acquisition,
+    /// The external chain reference the health probe reads. **Not** an
+    /// ingestion endpoint: see this module's second section.
+    pub(crate) network_status: Endpoint,
     pub(crate) worker_max_retries: u32,
-    /// Which acquisition model to build. Read by `init_source` and by nothing
-    /// else — `grep IngestSource` outside `bootstrap/` should stay empty.
-    pub(crate) source: IngestSource,
     pub(crate) scope: IngestScope,
 }
 
@@ -82,9 +106,15 @@ impl Config {
             // the one place that turns the pair into something a client sends,
             // and both go through it.
             ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,
-            ingest_transaction: required_endpoint("INGEST_TRANSACTION")?,
+            acquisition: match source {
+                IngestSource::Rpc => Acquisition::Rpc {
+                    transaction: required_endpoint("INGEST_TRANSACTION")?,
+                },
+                // Nothing to read: the stream delivers the transaction whole.
+                IngestSource::Grpc => Acquisition::Grpc,
+            },
+            network_status: required_endpoint("NETWORK_STATUS")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
-            source,
             scope,
         })
     }
