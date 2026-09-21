@@ -128,10 +128,12 @@ fn init_rpc_source(
     // wanted one too — which made the composition root assemble an ingredient
     // belonging to exactly one of the two sources, and gave this function a
     // parameter the gRPC arm could only ignore. Raised in review of PR #139.
-    // The price of not sharing was a second connection pool against the same
-    // host, for a caller making one request every fifteen seconds — and since
-    // 21 September 2026 there is not even that: the probe reads its own
-    // endpoint, which is free to be a different provider entirely.
+    // The price of not sharing is a second connection pool, for a caller making
+    // one request every fifteen seconds — against the same host whenever the
+    // two variables hold the same address, which the shipped `.env.example`
+    // does. What changed on 21 September 2026 is not that the second pool went
+    // away: it is that the probe reads its own variable, so separating the two
+    // providers is now something configuration can express.
     let rpc_client = Arc::new(RpcClient::new(transaction.url().expose().to_string()));
     info!("transaction RPC client initialized: {transaction}");
     let fetcher = Arc::new(TransactionFetcher::new(rpc_client, transaction.url()));
@@ -236,9 +238,12 @@ pub(super) fn init_processor(
 /// `INGEST_SOURCE=grpc` nothing ingests through: the panel showed the health of
 /// a link no data travelled on, and no configuration could say so.
 ///
-/// The start-up line below prints the probe and the ingestion side by side, so
-/// that whether they are independent in fact — and not merely in name — is read
-/// off the logs rather than assumed.
+/// The start-up line below prints the probe beside **everything ingestion
+/// touches**, so that whether they are independent in fact — and not merely in
+/// name — is read off the logs rather than assumed. Everything, and not just
+/// the stream: on the notify-then-ask path ingestion also holds
+/// `INGEST_TRANSACTION`, the very endpoint the probe used to share, and a line
+/// omitting it would let an operator read an independence that endpoint denies.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,
@@ -248,9 +253,16 @@ pub(super) async fn init_network_status_reporter(
     let rpc_client = Arc::new(RpcClient::new(
         config.network_status.url().expose().to_string(),
     ));
+    let ingestion = match config.acquisition.transaction() {
+        Some(fetch) => format!(
+            "{} (stream) + {fetch} (getTransaction)",
+            config.ingest_stream
+        ),
+        None => format!("{} (stream)", config.ingest_stream),
+    };
     info!(
         probe = %config.network_status,
-        ingestion = %config.ingest_stream,
+        %ingestion,
         "network status probe initialized — an external reference, not the ingestion link"
     );
     Ok(NetworkStatusReporter::new(

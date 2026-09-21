@@ -26,6 +26,21 @@ pub(crate) enum Acquisition {
 }
 
 impl Acquisition {
+    /// The endpoint this model fetches transactions back from, when it fetches
+    /// at all.
+    ///
+    /// Its readers are the start-up line that prints everything ingestion
+    /// touches — a probe is independent of *all* of it or of none, so a line
+    /// naming only the stream would let an operator read an independence that
+    /// the fetch endpoint denies — and nothing else. `init_rpc_source` receives
+    /// the endpoint from the match arm instead, where it is not an `Option`.
+    pub(crate) const fn transaction(&self) -> Option<&Endpoint> {
+        match self {
+            Self::Rpc { transaction } => Some(transaction),
+            Self::Grpc => None,
+        }
+    }
+
     /// The axis this model is, stripped of what it carries.
     ///
     /// Its reader is the `ingestion mode` line the daemon writes at start-up,

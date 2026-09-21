@@ -6,7 +6,7 @@ use yog_bootstrap::EnvEnum;
 /// The variable a refusal is expected to name, or the test fails saying what it
 /// got instead.
 ///
-/// Written once because it is asserted four times, and because the assertion
+/// Written once because it is asserted three times, and because the assertion
 /// that matters is **the name**, not the variant: `MissingVariable` alone is
 /// satisfied by any missing variable, including the one the operator did set.
 /// What an operator reads in a crash log is the name, and that is the only
@@ -172,6 +172,21 @@ fn every_couple_of_the_two_axes_loads() {
         "NETWORK_STATUS_URL",
         "and on the grpc model, where nothing else is an HTTP client",
     );
+
+    // ⚠️ **Put back what was removed.** These keys are process-global, and this
+    // test is the only one in the binary that unsets any of them: leaving the
+    // process without `NETWORK_STATUS_URL` hands the next test added here a
+    // refusal it did not ask for, and a failure whose cause is in another
+    // function. The rule this file states for the *ambient* environment — a
+    // test owns both halves of every pair it reads — is the same one, read from
+    // the other end.
+    //
+    // SAFETY: same keys, same reasoning.
+    unsafe {
+        env::set_var("NETWORK_STATUS_URL", "https://reference.invalid/?k={key}");
+        env::set_var("NETWORK_STATUS_KEY", "reference-key");
+    }
+    Config::load().expect("every variable this test removed is back");
 }
 
 /// ⚠️ **Rescued from `validator_tests.rs` when that module was deleted**, and

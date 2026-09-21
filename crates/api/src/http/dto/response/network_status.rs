@@ -11,22 +11,30 @@ use yog_core::domain::{FreshnessStatus, NetworkStatus};
 
 /// The "Solana Live" panel payload.
 ///
-/// Two concerns combined: the chain link (slot + RPC latency, from
-/// the `network_status` singleton) and ingestion freshness (derived
-/// from the most recent indexed event).
+/// Two concerns combined, and they **fail separately** — which is the whole
+/// reason they sit side by side: the chain itself (slot + RPC latency, from the
+/// `network_status` singleton, measured over an endpoint chosen for being
+/// independent of ingestion) and ingestion freshness (derived from the most
+/// recent indexed event, with no network call at all).
+///
+/// So the first pair answers *is the chain advancing, and how far away is it*,
+/// and the second *is our ingestion keeping up*. Reading the first as the
+/// health of our own link is the mistake this panel is built to prevent, and
+/// the one the indexer's probe itself made until 21 September 2026.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NetworkStatusResponse {
-    /// Latest Solana slot observed by the indexer.
+    /// Latest Solana slot the probe saw.
     ///
     /// Serialized as a string: slots are u64 and can exceed the safe
     /// integer range of a JSON number consumer.
     slot: String,
 
-    /// Round-trip latency of the indexer's last `getSlot` call, in ms.
+    /// Round-trip latency of the probe's last `getSlot` call, in ms — the
+    /// distance to *that* endpoint, not to the one ingestion uses.
     rpc_latency_ms: u32,
 
-    /// When the indexer recorded the slot above.
+    /// When the probe recorded the slot above.
     observed_at: DateTime<Utc>,
 
     /// Ingestion freshness verdict: "live" | "delayed" | "stale".

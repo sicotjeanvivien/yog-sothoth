@@ -2,9 +2,12 @@
  * Schema for the `GET /api/network/status` response.
  *
  * Mirrors the `NetworkStatusResponse` DTO emitted by yog-api. The
- * payload combines two concerns: the chain link (slot + RPC latency,
- * from the `network_status` singleton) and ingestion freshness
- * (derived server-side from the most recent indexed event).
+ * payload combines two concerns that fail separately: the chain itself
+ * (slot + RPC latency, measured by the indexer's probe over an endpoint
+ * chosen for being independent of ingestion) and ingestion freshness
+ * (derived server-side from the most recent indexed event, no network
+ * call). The first says whether the chain is advancing; only the second
+ * says whether we are keeping up with it.
  *
  * Notes on a couple of fields:
  *   - `slot` is a STRING on the wire — slots are u64 and can exceed

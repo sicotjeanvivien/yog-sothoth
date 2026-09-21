@@ -138,7 +138,15 @@ services:
       # The health probe's own endpoint, deliberately not one of the two
       # above — see `.env.example`. Required on both sources, because the
       # probe runs whichever model does.
-      NETWORK_STATUS_URL: ${NETWORK_STATUS_URL}
+      #
+      # `:?` rather than the bare form its neighbours use, for the reason the
+      # ingestion axes below give at length: unset, a bare `${...}` yields an
+      # empty string, the indexer stops on `MissingVariable`, and
+      # `restart: unless-stopped` flaps the container while the interpolation
+      # warning scrolls past under `up -d`. This variable is the one case where
+      # that is not hypothetical — it is new on 21 September 2026, so **no**
+      # existing `.env` has it, and every deployment meets the unset path once.
+      NETWORK_STATUS_URL: ${NETWORK_STATUS_URL:?set it in .env — see .env.example (an endpoint independent of the ingestion, e.g. https://api.mainnet-beta.solana.com)}
       NETWORK_STATUS_KEY: ${NETWORK_STATUS_KEY:-}
       RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}
       # No default on purpose, unlike the retry budget above and the log
