@@ -383,10 +383,12 @@ the two dispatch points a new protocol touches in this crate, the other being
   adapt, is counted and stepped over by `FetchWorker`.
 - **An observer never stops the pipeline** — a `NetworkStatusReporter` tick
   that fails is logged, counted and skipped; its `run` returns
-  `Result<(), Infallible>`. It probes the same endpoint over the same network as
-  ingestion, so it fails whenever the link does, and until 11 September 2026 it
-  stopped the daemon first — resetting the subscription workers' retry budget
-  on every restart.
+  `Result<(), Infallible>`. Until 11 September 2026 it stopped the daemon
+  instead, resetting the subscription workers' retry budget on every restart;
+  it probed the ingestion's own endpoint then, so it failed whenever the link
+  did. It now probes an endpoint deliberately independent of ingestion, which
+  makes the rule sharper rather than looser: a third party being unreachable
+  has never been a reason to stop indexing.
 - **Loop-level failures bubble up** — closed channels, exhausted semaphores,
   panics in spawned tasks reach `Daemon::run` via typed errors and trigger
   graceful shutdown of all tasks via the shared `CancellationToken`.
@@ -543,21 +545,30 @@ emitted. No gauges today — all counters and histograms.
 DATABASE_URL_INDEXER=postgresql://yog_indexer:...@localhost:5433/yog_sothoth
 INGEST_STREAM_URL=wss://...            # + INGEST_STREAM_KEY if it has a {key}
 INGEST_TRANSACTION_URL=https://...     # + INGEST_TRANSACTION_KEY likewise
+NETWORK_STATUS_URL=https://...         # + NETWORK_STATUS_KEY likewise
 RPC_WORKER_MAX_RETRIES=10
 INGEST_SOURCE=rpc                      # or grpc — see "The two ingestion axes"
 INGEST_SCOPE=pools                     # or protocols
 ```
 
-All six are required — none has an implicit default, and a missing one fails
-at startup with a `ConfigError`. The two `INGEST_*` axes are the only ones that
-change what the process *is*, and the first line of its log names the couple it
-loaded.
+Six of the seven are required on both paths — none has an implicit default, and
+a missing one fails at startup with a `ConfigError` naming it. The exception is
+`INGEST_TRANSACTION_*`, **required under `INGEST_SOURCE=rpc` and unread under
+`grpc`**: a delivered stream carries the transaction whole, so there is no
+second call to configure. That is not a rule written down and remembered — the
+endpoint is a field of the `Fetched` variant of `TransactionArrival` and does
+not exist on the other arm, so no code can read it there. It was required on both paths
+until 21 September 2026 because the health probe read it, which is a reason
+that has gone away.
 
-**Two endpoints, four variables.** Each is an `Endpoint`: a `<FUNCTION>_URL`
+The two `INGEST_*` axes are the only ones that change what the process *is*,
+and the first line of its log names the couple it loaded.
+
+**Three endpoints, six variables.** Each is an `Endpoint`: a `<FUNCTION>_URL`
 carrying `{key}` where the provider expects its credential, plus a
 `<FUNCTION>_KEY` holding it. They are named after what they serve — what the
-ingestion listens to, and where a transaction is fetched back from — never
-after the protocol they speak. The variable they replace, `SOLANA_RPC_HTTP`,
+ingestion listens to, where a transaction is fetched back from, and the chain
+reference the health probe reads — never after the protocol they speak. The variable they replace, `SOLANA_RPC_HTTP`,
 was named for its transport, so it excluded nothing and had accumulated three
 roles across two crates; one variable cannot hold two addresses, which is the
 wall a provider migration would have hit. A URL with no `{key}` and no key is a
@@ -604,6 +615,41 @@ teaching it that shape would have added a fourth thing to recognise to a
 redactor whose whole weakness was having to recognise anything. `scrub` knows
 its **own** secret instead, so a provider that hides a credential somewhere new
 is covered the day the configuration points at it.
+
+### The health probe measures a reference, not our pipe
+
+`NETWORK_STATUS_*` is the one endpoint this process reads that has **nothing to
+do with ingestion**, and it has its own name so that the configuration says so.
+The dashboard's "Solana Live" panel combines two answers that fail separately:
+
+| what it shows | where it comes from | the question it answers |
+|---|---|---|
+| `slot`, `rpcLatencyMs` | `NETWORK_STATUS_*`, one `getSlot` every 15 s | is the **chain** advancing, and how far away is it |
+| `freshness`, `lastEventAt` | the last event written to the database, no network call | is **our ingestion** keeping up |
+
+Point the probe at the ingestion's own endpoint and those two collapse onto one
+link: the day it drops, both halves go red together and neither says whether
+Solana stopped or our pipe did — at the one moment that is the only thing worth
+knowing. That is what the probe did until 21 September 2026, when it read
+`INGEST_TRANSACTION`; under `INGEST_SOURCE=grpc` it was then the process's only
+HTTP client, reporting on a host nothing ingested through. Observed that day
+against a real Geyser provider: two different hosts, one of them idle, and a
+green panel that said nothing about it. No data was lost — the run's 44 000
+transactions were all persisted — the reading was.
+
+Two alternatives were weighed and dropped. **Probing the source's own link** is
+implementable on both paths (Yellowstone exposes unary `GetSlot` and `Ping`,
+and both answer), but it merges the two questions back together and needs two
+implementations for one displayed value. **Deriving health from the stream**
+duplicates `freshness`, which already answers it from the database, and a
+signal computed from a flow goes quiet exactly when the flow does — the
+opposite of what a probe is for.
+
+The probe costs 0.067 req/s, so the public endpoint carries it; pointing it at
+a second provider, so that one outage cannot darken both halves, is a value in
+`.env` rather than a code change. The two endpoints are printed side by side at
+start-up (`network status probe initialized`, fields `probe` and `ingestion`),
+so their independence is read off the logs rather than assumed.
 
 ### The two ingestion axes
 

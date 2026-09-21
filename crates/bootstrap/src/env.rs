@@ -208,10 +208,10 @@ fn read_header(
 
 /// Read an external endpoint whose consumer sends **only the URL**.
 ///
-/// The default, and what three of the workspace's four endpoints use:
-/// `TOKEN_METADATA_*`, `POOL_ACCOUNT_*` and `INGEST_TRANSACTION_*`, whose
-/// consumers hand [`Endpoint::url`] to `reqwest` or `RpcClient` and nothing
-/// else. The caller passes the **prefix**, and `<PREFIX>_URL` /
+/// The default, and what four of the workspace's five endpoints use:
+/// `TOKEN_METADATA_*`, `POOL_ACCOUNT_*`, `INGEST_TRANSACTION_*` and
+/// `NETWORK_STATUS_*`, whose consumers hand [`Endpoint::url`] to `reqwest` or
+/// `RpcClient` and nothing else. The caller passes the **prefix**, and `<PREFIX>_URL` /
 /// `<PREFIX>_KEY` are derived from it — one name, one place. Spelling them at
 /// every call site is how a convention comes to hold at some sites and not
 /// others, which is the defect the variable split exists to prevent.

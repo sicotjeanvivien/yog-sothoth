@@ -15,12 +15,16 @@ use yog_bootstrap::{Stop, handle_task_result};
 use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
 use yog_persistence::Database;
 
+mod config_log;
 mod init;
 mod tasks;
 
+use config_log::{
+    log_ingestion_mode, log_probe_endpoints, warn_probe_not_independent, warn_saturating_couple,
+};
 use init::{
     init_db, init_network_status_reporter, init_processor, init_source, init_watched_pool_service,
-    log_ingestion_mode, register_metric_descriptions,
+    register_metric_descriptions,
 };
 use tasks::{
     index_concurrency, spawn_indexer_task, spawn_network_status_reporter_task, spawn_source_task,
@@ -61,7 +65,13 @@ impl Daemon {
     /// Fails fast if the database is unreachable, if migrations cannot
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
+        // What the configuration entails, before anything acts on it — see
+        // `config_log`. Each pair states a fact, then objects if the
+        // combination deserves it.
         log_ingestion_mode(&config);
+        warn_saturating_couple(&config);
+        log_probe_endpoints(&config);
+        warn_probe_not_independent(&config);
 
         let database = init_db(&config.database_url)
             .await

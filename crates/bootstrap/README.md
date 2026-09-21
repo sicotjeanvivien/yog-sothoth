@@ -115,9 +115,10 @@ literal `api-key=` and was blind to a credential in a path.
 `Endpoint` is a `<FUNCTION>_URL` plus an optional `<FUNCTION>_HEADER_NAME` /
 `<FUNCTION>_HEADER_VALUE` pair, and the `<FUNCTION>_KEY` they share — read by
 `required_endpoint("<FUNCTION>")`, which derives every name from the one
-prefix. Three of the four endpoints in place today — `TOKEN_METADATA_*`,
-`POOL_ACCOUNT_*`, `INGEST_TRANSACTION_*` — go through that door and therefore
-**refuse** a header pair. The fourth, `INGEST_STREAM_*`, goes through
+prefix. Four of the five endpoints in place today — `TOKEN_METADATA_*`,
+`POOL_ACCOUNT_*`, `INGEST_TRANSACTION_*`, `NETWORK_STATUS_*` — go through that
+door and therefore **refuse** a header pair. The fifth, `INGEST_STREAM_*`, goes
+through
 `required_endpoint_allowing_header`, because both of its listeners send what it
 carries: `yog-indexer`'s `infra::endpoint::credential` is the single place that
 turns the pair into something a client sends, as gRPC request metadata or as a

@@ -11,7 +11,7 @@ use crate::{
         source::TransactionSource,
         workers::IndexerWorkerMetrics,
     },
-    bootstrap::{Config, IngestScope, IngestSource},
+    bootstrap::{Config, TransactionArrival},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
         GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
@@ -22,7 +22,7 @@ use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use tracing::info;
-use yog_bootstrap::SecretUrl;
+use yog_bootstrap::{Endpoint, SecretUrl};
 use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
 use yog_persistence::{
     Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
@@ -40,43 +40,6 @@ use yog_persistence::{
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
     PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository,
 };
-
-/// Say which acquisition model is running, and warn when it cannot keep up.
-///
-/// ⚠️ **The first lines the process writes, because it is the first question a
-/// reader has.** Two acquisition models exist and one is running; from here on
-/// nothing else in the crate names which. The two `as_str` were written for the
-/// refusals of a validator that no longer exists — their remaining reader is
-/// this line, and it is a better one: a refusal is read once, a running mode
-/// every time something looks wrong.
-///
-/// ⚠️ **And the one couple that boots and cannot keep up.** `logsSubscribe` on
-/// a program id delivers everything that program does, and the RPC path then
-/// fetches each transaction back — measured at ~200 in 30 s against a ~10 req/s
-/// tier. Nothing stops: fetch failures are skip-and-logged per transaction, so
-/// the process stays up and the metrics stay plausible while most of what it
-/// sees is dropped.
-///
-/// A `check_supported` used to refuse that couple, for a different reason — an
-/// empty target set — and that reason is genuinely fixed. What went with the
-/// refusal was the only loud signal an operator got, and the warning puts it
-/// back at the cost of one branch.
-pub(super) fn log_ingestion_mode(config: &Config) {
-    info!(
-        source = config.source.as_str(),
-        scope = config.scope.as_str(),
-        "ingestion mode"
-    );
-
-    if matches!(
-        (config.source, config.scope),
-        (IngestSource::Rpc, IngestScope::Protocols)
-    ) {
-        tracing::warn!(
-            "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
-        );
-    }
-}
 
 /// Connect to the database.
 ///
@@ -102,14 +65,21 @@ pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database
 /// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
 /// its source is the listener.
 pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
-    match config.source {
-        IngestSource::Rpc => init_rpc_source(config),
-        IngestSource::Grpc => init_grpc_source(config),
+    match &config.transaction_arrival {
+        TransactionArrival::Fetched { from } => init_rpc_source(config, from),
+        TransactionArrival::Delivered => init_grpc_source(config),
     }
 }
 
 /// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
-fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
+///
+/// `transaction` comes in from the [`TransactionArrival::Fetched`] arm rather
+/// than off `Config` directly: it is the endpoint `getTransaction` goes to, it
+/// exists on this path alone, and this is the only function that needs it.
+fn init_rpc_source(
+    config: &Config,
+    transaction: &Endpoint,
+) -> anyhow::Result<Arc<dyn TransactionSource>> {
     let listener = Arc::new(RpcListener::new(
         config.ingest_stream.clone(),
         config.worker_max_retries,
@@ -121,19 +91,15 @@ fn init_rpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>
     // wanted one too — which made the composition root assemble an ingredient
     // belonging to exactly one of the two sources, and gave this function a
     // parameter the gRPC arm could only ignore. Raised in review of PR #139.
-    // The price of not sharing is a second connection pool against the same
-    // host, for a caller that makes one request every fifteen seconds.
-    let rpc_client = Arc::new(RpcClient::new(
-        config.ingest_transaction.url().expose().to_string(),
-    ));
-    info!(
-        "transaction RPC client initialized: {}",
-        config.ingest_transaction
-    );
-    let fetcher = Arc::new(TransactionFetcher::new(
-        rpc_client,
-        config.ingest_transaction.url(),
-    ));
+    // The price of not sharing is a second connection pool, for a caller making
+    // one request every fifteen seconds — against the same host whenever the
+    // two variables hold the same address, which the shipped `.env.example`
+    // does. What changed on 21 September 2026 is not that the second pool went
+    // away: it is that the probe reads its own variable, so separating the two
+    // providers is now something configuration can express.
+    let rpc_client = Arc::new(RpcClient::new(transaction.url().expose().to_string()));
+    info!("transaction RPC client initialized: {transaction}");
+    let fetcher = Arc::new(TransactionFetcher::new(rpc_client, transaction.url()));
 
     Ok(Arc::new(RpcTransactionSource::new(
         listener, dispatcher, fetcher,
@@ -227,8 +193,19 @@ pub(super) fn init_processor(
 /// and it is why the client used to be built one storey up, where neither of
 /// them lives.
 ///
-/// ⚠️ **And what it should measure is an open question**: this probe reads
-/// `INGEST_TRANSACTION`, which the gRPC source will not use.
+/// ⚠️ **And it reads its own variable**, `NETWORK_STATUS_*`, not
+/// `INGEST_TRANSACTION`. What the probe measures is an *external reference on
+/// the chain*, independent of ingestion by design; [`NetworkStatusReporter`]'s
+/// own module docs carry the reasoning and the two readings it rules out. Until
+/// 21 September 2026 it read the ingestion's fetch endpoint, which under
+/// `INGEST_SOURCE=grpc` nothing ingests through: the panel showed the health of
+/// a link no data travelled on, and no configuration could say so.
+///
+/// **It builds the reporter and says nothing.** Which endpoints it ended up on,
+/// and whether they are independent of ingestion, are written by
+/// [`super::config_log`] — a comparison of two addresses is not wiring, and
+/// while it lived here it needed a live `Database` to reach, so no test could
+/// hold it.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,
@@ -236,11 +213,11 @@ pub(super) async fn init_network_status_reporter(
     let pg_network_status_reporter_repository =
         Arc::new(PgNetworkStatusRepository::new(database.pool().clone()));
     let rpc_client = Arc::new(RpcClient::new(
-        config.ingest_transaction.url().expose().to_string(),
+        config.network_status.url().expose().to_string(),
     ));
     Ok(NetworkStatusReporter::new(
         rpc_client,
-        config.ingest_transaction.url(),
+        config.network_status.url(),
         pg_network_status_reporter_repository,
     ))
 }

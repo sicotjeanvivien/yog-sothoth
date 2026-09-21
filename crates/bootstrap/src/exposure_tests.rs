@@ -90,9 +90,13 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          type belongs to solana-rpc-client. The second one arrived on \
          10 September 2026 and is a widening this list should show rather than \
          hide: the ingestion source and the health reporter each open their own \
-         client instead of sharing one, so the same URL is exposed at two \
-         construction sites. The alternative was the composition root holding a \
-         client on behalf of one of the two ingestion paths",
+         client instead of sharing one. The alternative was the composition \
+         root holding a client on behalf of one of the two ingestion paths. \
+         ⚠️ Until 21 September 2026 the two sites exposed the *same* address, \
+         which made the widening look like an accounting detail; they now read \
+         two variables — `INGEST_TRANSACTION` and `NETWORK_STATUS` — and may \
+         point at two providers, so this list covers two addresses, not one \
+         twice",
     ),
     (
         "crates/persistence/src/bin/migrate.rs",
