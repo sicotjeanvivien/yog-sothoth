@@ -133,20 +133,37 @@ services:
       # and `rpc` stops naming the variable. Passed through on both paths for
       # the same reason the header pair is: an operator who switches source
       # should not have to also remember a compose edit.
+      #
+      # ⚠️ The price, and it is paid knowingly: on `rpc` with the variable
+      # unset, compose no longer prints "variable is not set" before starting,
+      # so the first signal is the container's own refusal. The bare form would
+      # put that warning back — and print it on every `grpc` run, where the
+      # variable is legitimately absent. Compose cannot express "required iff
+      # INGEST_SOURCE=rpc"; the process can, and does, naming the variable.
       INGEST_TRANSACTION_URL: ${INGEST_TRANSACTION_URL:-}
       INGEST_TRANSACTION_KEY: ${INGEST_TRANSACTION_KEY:-}
       # The health probe's own endpoint, deliberately not one of the two
       # above — see `.env.example`. Required on both sources, because the
       # probe runs whichever model does.
       #
-      # `:?` rather than the bare form its neighbours use, for the reason the
-      # ingestion axes below give at length: unset, a bare `${...}` yields an
-      # empty string, the indexer stops on `MissingVariable`, and
-      # `restart: unless-stopped` flaps the container while the interpolation
-      # warning scrolls past under `up -d`. This variable is the one case where
-      # that is not hypothetical — it is new on 21 September 2026, so **no**
-      # existing `.env` has it, and every deployment meets the unset path once.
-      NETWORK_STATUS_URL: ${NETWORK_STATUS_URL:?set it in .env — see .env.example (an endpoint independent of the ingestion, e.g. https://api.mainnet-beta.solana.com)}
+      # ⚠️ Bare `${...}`, like every other endpoint here — and `:?` was tried
+      # first, for the reason the ingestion axes below give at length: unset, a
+      # bare form yields an empty string, the indexer stops on
+      # `MissingVariable`, and `restart: unless-stopped` flaps the container
+      # while the interpolation warning scrolls past. This variable is new on
+      # 21 September 2026, so no existing `.env` carries it and every checkout
+      # meets that path once, which made it look like the case `:?` is for.
+      #
+      # It is not, and what decides is WHO pays. `:?` aborts EVERY compose
+      # command, and the documented first step of both local workflows is
+      # `docker compose up -d` — Postgres alone, no profile, this service not
+      # started. Measured: with the two NETWORK_STATUS lines stripped from a
+      # real `.env`, `config`, `ps` and `down` all exit 1. That is a variable
+      # belonging to a container the command does not run, refusing the command.
+      # `INGEST_SOURCE` below can afford `:?` because every `.env` already
+      # carries it; here the cost lands on everyone, for a one-time migration
+      # the indexer's own start-up names.
+      NETWORK_STATUS_URL: ${NETWORK_STATUS_URL}
       NETWORK_STATUS_KEY: ${NETWORK_STATUS_KEY:-}
       RPC_WORKER_MAX_RETRIES: ${RPC_WORKER_MAX_RETRIES:-10}
       # No default on purpose, unlike the retry budget above and the log

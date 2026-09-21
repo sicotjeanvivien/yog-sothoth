@@ -16,7 +16,10 @@ use axum::{Json, extract::State};
 
 /// `GET /api/network/status`
 ///
-/// Returns the current chain-link health and ingestion freshness.
+/// Returns where the chain is — slot and round-trip latency, measured by the
+/// indexer's probe over an endpoint chosen for being independent of ingestion —
+/// and, separately, whether our ingestion is keeping up. Two answers that fail
+/// apart; see [`NetworkStatusResponse`] for why they are one payload.
 /// The `network_status` row is seeded by the baseline migration (§5), so a
 /// healthy system always has one — its absence is treated as an internal
 /// error rather than a 404, since it means the seed row is missing.

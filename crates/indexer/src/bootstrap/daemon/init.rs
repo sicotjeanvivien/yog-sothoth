@@ -244,6 +244,17 @@ pub(super) fn init_processor(
 /// the stream: on the notify-then-ask path ingestion also holds
 /// `INGEST_TRANSACTION`, the very endpoint the probe used to share, and a line
 /// omitting it would let an operator read an independence that endpoint denies.
+///
+/// ⚠️ **And the line no longer *asserts* that independence — it checks it.** It
+/// said "an external reference, not the ingestion link" whatever the addresses
+/// were, which is a claim about configuration written where configuration is
+/// not read: with the `.env.example` this repository ships, the probe and the
+/// fetch endpoint are the *same* public host, so the sentence was false on a
+/// fresh clone. A message is also what survives in an aggregator, where the
+/// fields beside it do not. The equality below is what the check can honestly
+/// see — one address written twice — and it is the likely mistake, since the
+/// example file seeds both. Two spellings of one host it cannot see, which is
+/// why the warning says what it compared.
 pub(super) async fn init_network_status_reporter(
     database: &Database,
     config: &Config,
@@ -253,7 +264,13 @@ pub(super) async fn init_network_status_reporter(
     let rpc_client = Arc::new(RpcClient::new(
         config.network_status.url().expose().to_string(),
     ));
-    let ingestion = match config.acquisition.transaction() {
+    // `Display`, not `expose`: the templates are what the operator wrote, they
+    // compare exactly as well, and the `.expose()` guard list counts every site
+    // in this file — a fourth one for a log line would be a widening bought for
+    // nothing.
+    let probe = config.network_status.to_string();
+    let fetch = config.acquisition.transaction().map(ToString::to_string);
+    let ingestion = match &fetch {
         Some(fetch) => format!(
             "{} (stream) + {fetch} (getTransaction)",
             config.ingest_stream
@@ -261,10 +278,19 @@ pub(super) async fn init_network_status_reporter(
         None => format!("{} (stream)", config.ingest_stream),
     };
     info!(
-        probe = %config.network_status,
+        probe = %probe,
         %ingestion,
-        "network status probe initialized — an external reference, not the ingestion link"
+        "network status probe initialized — the chain reference the panel's slot and latency come from"
     );
+    if fetch.as_deref() == Some(probe.as_str()) || config.ingest_stream.to_string() == probe {
+        tracing::warn!(
+            "NETWORK_STATUS_URL is the address ingestion already uses, so the dashboard's two \
+             halves share one provider: the day it drops, the chain reading and the freshness \
+             verdict go red together and neither says which failed. Point it elsewhere — the \
+             probe costs one request every fifteen seconds. Compared as written; two spellings \
+             of the same host would not be caught here."
+        );
+    }
     Ok(NetworkStatusReporter::new(
         rpc_client,
         config.network_status.url(),
