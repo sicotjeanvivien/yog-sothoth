@@ -29,14 +29,14 @@
 //! looser check but a filled precondition.
 //!
 //! **Why `Config` carries the acquisition model.** It travels exactly one
-//! storey, into the daemon: [`Acquisition`] goes into `init_source`, which
+//! storey, into the daemon: [`TransactionArrival`] goes into `init_source`, which
 //! builds one of the two implementations and hands back the port; the scope
 //! decides what is registered with it — the protocols or the pools — and no
 //! listener reads either. Nothing downstream learns which model is running.
 //!
 //! ⚠️ **And it carries `INGEST_TRANSACTION` *inside* that model**, rather than
 //! beside it. `getTransaction` exists on the notify-then-ask path alone, so its
-//! endpoint is a field of [`Acquisition::Rpc`] and does not exist on the other
+//! endpoint is a field of [`TransactionArrival::Fetched`] and does not exist on the other
 //! arm — which is what makes the variable stop being required under
 //! `INGEST_SOURCE=grpc`. Not a rule written somewhere and remembered: no code
 //! reads it there. It was required on both paths until the health probe stopped
@@ -76,16 +76,16 @@ use yog_bootstrap::{
 
 mod types;
 
-pub(crate) use types::{Acquisition, IngestScope, IngestSource};
+pub(crate) use types::{IngestScope, IngestSource, TransactionArrival};
 
 pub(crate) struct Config {
     pub(crate) database_url: SecretUrl,
     /// Where the notifications the ingestion listens to come from.
     pub(crate) ingest_stream: Endpoint,
-    /// Which acquisition model to build, and what that model needs — the
-    /// `getTransaction` endpoint on the arm that has one. Read by
-    /// `init_source` and by `log_ingestion_mode`, and by nothing else.
-    pub(crate) acquisition: Acquisition,
+    /// How a transaction reaches this process, and what that way of reaching
+    /// it needs — the `getTransaction` endpoint on the arm that asks for one.
+    /// Read by `init_source` and by `log_ingestion_mode`, and by nothing else.
+    pub(crate) transaction_arrival: TransactionArrival,
     /// The external chain reference the health probe reads. **Not** an
     /// ingestion endpoint: see this module's second section.
     pub(crate) network_status: Endpoint,
@@ -106,12 +106,12 @@ impl Config {
             // the one place that turns the pair into something a client sends,
             // and both go through it.
             ingest_stream: required_endpoint_allowing_header("INGEST_STREAM")?,
-            acquisition: match source {
-                IngestSource::Rpc => Acquisition::Rpc {
-                    transaction: required_endpoint("INGEST_TRANSACTION")?,
+            transaction_arrival: match source {
+                IngestSource::Rpc => TransactionArrival::Fetched {
+                    from: required_endpoint("INGEST_TRANSACTION")?,
                 },
                 // Nothing to read: the stream delivers the transaction whole.
-                IngestSource::Grpc => Acquisition::Grpc,
+                IngestSource::Grpc => TransactionArrival::Delivered,
             },
             network_status: required_endpoint("NETWORK_STATUS")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,

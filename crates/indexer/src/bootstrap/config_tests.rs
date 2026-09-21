@@ -74,7 +74,7 @@ fn every_couple_of_the_two_axes_loads() {
     }
 
     let config = Config::load().expect("rpc + protocols no longer needs a refusal");
-    assert_eq!(config.acquisition.source(), IngestSource::Rpc);
+    assert_eq!(config.transaction_arrival.source(), IngestSource::Rpc);
     assert_eq!(config.scope, IngestScope::Protocols);
 
     // SAFETY: same keys, same reasoning.
@@ -82,7 +82,7 @@ fn every_couple_of_the_two_axes_loads() {
         env::set_var("INGEST_SOURCE", "grpc");
     }
     let config = Config::load().expect("grpc + protocols loads");
-    assert_eq!(config.acquisition.source(), IngestSource::Grpc);
+    assert_eq!(config.transaction_arrival.source(), IngestSource::Grpc);
 
     // SAFETY: same keys, same reasoning.
     unsafe {
@@ -97,7 +97,7 @@ fn every_couple_of_the_two_axes_loads() {
     }
 
     let config = Config::load().expect("rpc + pools is the couple that runs today");
-    assert_eq!(config.acquisition.source(), IngestSource::Rpc);
+    assert_eq!(config.transaction_arrival.source(), IngestSource::Rpc);
     assert_eq!(config.scope, IngestScope::Pools);
 
     // The three endpoints are read from three variables, and each keeps its own
@@ -112,19 +112,16 @@ fn every_couple_of_the_two_axes_loads() {
         config.network_status.url().expose(),
         "https://reference.invalid/?k=reference-key"
     );
-    let Acquisition::Rpc { transaction } = &config.acquisition else {
+    let TransactionArrival::Fetched { from } = &config.transaction_arrival else {
         panic!("`rpc` must carry the endpoint `getTransaction` goes to");
     };
     assert_eq!(
-        transaction.url().expose(),
+        from.url().expose(),
         "https://fetch.invalid/?k=transaction-key"
     );
     // The point of the split, asserted rather than assumed: the probe and the
     // ingestion are free to be two different hosts.
-    assert_ne!(
-        config.network_status.url().expose(),
-        transaction.url().expose()
-    );
+    assert_ne!(config.network_status.url().expose(), from.url().expose());
 
     // ── `INGEST_TRANSACTION` belongs to the path that fetches ──────────────
     //
@@ -136,7 +133,10 @@ fn every_couple_of_the_two_axes_loads() {
     }
     let config = Config::load()
         .expect("a delivered stream fetches nothing back, so it configures nothing for it");
-    assert!(matches!(config.acquisition, Acquisition::Grpc));
+    assert!(matches!(
+        config.transaction_arrival,
+        TransactionArrival::Delivered
+    ));
 
     // SAFETY: same keys, same reasoning.
     unsafe {

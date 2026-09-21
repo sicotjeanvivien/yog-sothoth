@@ -11,7 +11,7 @@ use crate::{
         source::TransactionSource,
         workers::IndexerWorkerMetrics,
     },
-    bootstrap::{Acquisition, Config, IngestScope},
+    bootstrap::{Config, IngestScope, TransactionArrival},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
         GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
@@ -63,14 +63,14 @@ use yog_persistence::{
 /// back at the cost of one branch.
 pub(super) fn log_ingestion_mode(config: &Config) {
     info!(
-        source = config.acquisition.source().as_str(),
+        source = config.transaction_arrival.source().as_str(),
         scope = config.scope.as_str(),
         "ingestion mode"
     );
 
     if matches!(
-        (&config.acquisition, config.scope),
-        (Acquisition::Rpc { .. }, IngestScope::Protocols)
+        (&config.transaction_arrival, config.scope),
+        (TransactionArrival::Fetched { .. }, IngestScope::Protocols)
     ) {
         tracing::warn!(
             "INGEST_SOURCE=rpc with INGEST_SCOPE=protocols subscribes to the whole program and fetches every transaction back, one request each. On a rate-limited endpoint most will be dropped and counted as fetch failures, with the process still up. INGEST_SOURCE=grpc is the mode this scope is for."
@@ -102,17 +102,17 @@ pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database
 /// assemble a fleet, a filter chain and a fetch stage; Yellowstone delivers, so
 /// its source is the listener.
 pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
-    match &config.acquisition {
-        Acquisition::Rpc { transaction } => init_rpc_source(config, transaction),
-        Acquisition::Grpc => init_grpc_source(config),
+    match &config.transaction_arrival {
+        TransactionArrival::Fetched { from } => init_rpc_source(config, from),
+        TransactionArrival::Delivered => init_grpc_source(config),
     }
 }
 
 /// The notify-then-ask model: a WebSocket fleet, a filter chain, a fetch stage.
 ///
-/// `transaction` comes in from the [`Acquisition::Rpc`] arm rather than off
-/// `Config` directly: it is the endpoint `getTransaction` goes to, it exists on
-/// this path alone, and this is the only function that needs it.
+/// `transaction` comes in from the [`TransactionArrival::Fetched`] arm rather
+/// than off `Config` directly: it is the endpoint `getTransaction` goes to, it
+/// exists on this path alone, and this is the only function that needs it.
 fn init_rpc_source(
     config: &Config,
     transaction: &Endpoint,
@@ -269,7 +269,10 @@ pub(super) async fn init_network_status_reporter(
     // in this file — a fourth one for a log line would be a widening bought for
     // nothing.
     let probe = config.network_status.to_string();
-    let fetch = config.acquisition.transaction().map(ToString::to_string);
+    let fetch = config
+        .transaction_arrival
+        .fetched_from()
+        .map(ToString::to_string);
     let ingestion = match &fetch {
         Some(fetch) => format!(
             "{} (stream) + {fetch} (getTransaction)",

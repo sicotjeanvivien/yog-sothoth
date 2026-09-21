@@ -556,8 +556,8 @@ a missing one fails at startup with a `ConfigError` naming it. The exception is
 `INGEST_TRANSACTION_*`, **required under `INGEST_SOURCE=rpc` and unread under
 `grpc`**: a delivered stream carries the transaction whole, so there is no
 second call to configure. That is not a rule written down and remembered — the
-endpoint is a field of the `Rpc` variant of `Acquisition` and does not exist on
-the other arm, so no code can read it there. It was required on both paths
+endpoint is a field of the `Fetched` variant of `TransactionArrival` and does
+not exist on the other arm, so no code can read it there. It was required on both paths
 until 21 September 2026 because the health probe read it, which is a reason
 that has gone away.
 
