@@ -1,9 +1,16 @@
-//! What the configuration entails, said out loud before the daemon works.
+//! The log lines this daemon writes **about its own configuration**, before it
+//! acts on any of it.
 //!
-//! **Not "the start-up logs".** A name for the mechanism would take anything
-//! that gets printed, and this file has a narrower subject: the things an
-//! operator *cannot read off the variables they set*, because they follow from
-//! a combination of them.
+//! ⚠️ **The subject is what narrows the name, not the verb.** Twenty of the
+//! crate's twenty logging files log; a `logger.rs` would accept every one of
+//! them, and the real logger — the `tracing_subscriber` and its filter — is
+//! `yog_bootstrap::init_tracing`, not this. What this file refuses is
+//! everything that is not the configuration: `database initialized` belongs to
+//! the wiring, a stage outliving the grace belongs to the shutdown, a fetch
+//! failure belongs to its worker.
+//!
+//! Within that subject it carries the part an operator **cannot read off the
+//! variables they set**, because it follows from a *combination* of them.
 //!
 //! Three of those exist today, and each is a pair — **state it, then object if
 //! the combination deserves an objection**:

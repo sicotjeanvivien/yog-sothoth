@@ -15,11 +15,11 @@ use yog_bootstrap::{Stop, handle_task_result};
 use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
 use yog_persistence::Database;
 
-mod consequences;
+mod config_log;
 mod init;
 mod tasks;
 
-use consequences::{
+use config_log::{
     log_ingestion_mode, log_probe_endpoints, warn_probe_not_independent, warn_saturating_couple,
 };
 use init::{
@@ -66,7 +66,7 @@ impl Daemon {
     /// be applied, or if the dispatcher is misconfigured.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
         // What the configuration entails, before anything acts on it — see
-        // `consequences`. Each pair states a fact, then objects if the
+        // `config_log`. Each pair states a fact, then objects if the
         // combination deserves it.
         log_ingestion_mode(&config);
         warn_saturating_couple(&config);

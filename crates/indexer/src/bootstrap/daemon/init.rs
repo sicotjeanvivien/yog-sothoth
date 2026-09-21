@@ -203,7 +203,7 @@ pub(super) fn init_processor(
 ///
 /// **It builds the reporter and says nothing.** Which endpoints it ended up on,
 /// and whether they are independent of ingestion, are written by
-/// [`super::consequences`] — a comparison of two addresses is not wiring, and
+/// [`super::config_log`] — a comparison of two addresses is not wiring, and
 /// while it lived here it needed a live `Database` to reach, so no test could
 /// hold it.
 pub(super) async fn init_network_status_reporter(
