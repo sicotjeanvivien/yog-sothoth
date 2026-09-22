@@ -502,6 +502,27 @@ them carry two** (mainnet, 20 August 2026 — `getProgramAccountsV2`, memcmp on
 `reward_infos[i].initialized`). A dormant defect, like 009's zero price, closed
 because it traverses a shipped guard rather than because it is bleeding.
 
+**"deliberately NOT compressed", baseline §7 (`001_baseline.sql:380-386`)** —
+one half of that sentence, and the half that cost the most. It bundles two
+decisions of very different standing:
+
+- *no retention policy* — **still true, and still for the stated reason.** The
+  valuation views read the price history bucket by bucket, and migration 005
+  established that an as-of gap never heals: the worker only inserts at `now()`,
+  nothing backfills, so a dropped price row is a permanently unvalued bucket;
+- *not compressed* — **reversed by `011_price_series_compression.sql`.** The
+  refusal was an assertion, never measured. Measured on the development
+  database on 22 September 2026, by compressing the six chunks the new policy
+  covers: **938 MB → 15.6 MB**, the database as a whole **1983 MB → 1035 MB**,
+  and every price-dependent read hashing identically before and after.
+
+The direction the sentence named is real — a point lookup into a compressed
+chunk decompresses a batch of ~1000 rows to yield one, 0.123 ms → 0.304 ms on
+the same row, and the 30-day history read of one pool goes from 1.19 s to
+1.38 s (**+16 %**). What was never weighed is what it buys: by the time anyone
+measured, the table §7 describes had grown to 90.6 % of the database. That is
+how an unmeasured clause gets expensive rather than merely wrong.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped
@@ -665,6 +686,13 @@ chunk. The expensive path is never taken. Putting `signature` into
 compression ratio — it is maximum-cardinality, so each segment would hold a
 single row.
 
+**One compressed table raises none of this: `token_prices` (011).** Its unique
+key is `(mint, fetched_at)`, which is **exactly** its `(compress_segmentby,
+compress_orderby)` pair — so TimescaleDB has everything it needs to check
+uniqueness against compressed rows, and says nothing. It is the shape to aim for
+when it is available; on an event table it is not, since the idempotency key is
+`(signature, event_index, timestamp)` and `signature` cannot segment.
+
 **When it would start to cost.** Backfilling events older than the compression
 delay — every insert would decompress to check uniqueness. Correct, but slow.
 Worth remembering the day historical replay becomes possible (see the gRPC
@@ -672,11 +700,18 @@ migration in the project tracker).
 
 ## ⚠️ What a local run cannot prove — compressed chunks
 
-**A migration that passes locally has never met a compressed chunk, and cannot.**
-The local Postgres runs with `timescaledb.max_background_workers = 0`
-(`docker-compose.yml`, for the reason in `CLAUDE.md`), so the compression
-policies never fire: **0 compressed chunk out of 45** on a typical dev
-database. Production compresses at 7 days.
+**A migration that passes locally has never met a compressed chunk — unless a
+test puts one there.** The local Postgres runs with
+`timescaledb.max_background_workers = 0` (`docker-compose.yml`, for the reason
+in `CLAUDE.md`), so the compression policies never fire: **0 compressed chunk
+out of 45** on a typical dev database. Production compresses at 7 days.
+
+What the scheduler will not do, a test can: `compress_chunk` is an ordinary
+function call, it needs no background worker, and `tests/price_compression.rs`
+uses it to run the price reads and the price writes against compressed chunks
+inside `sqlx::test`, in CI. That is the shape to copy when a migration's
+behaviour on compressed data is the thing in doubt — it turns the blind spot
+below into a missing test rather than an impossibility.
 
 This is a structural blind spot, not an accident of timing — raising the worker
 count re-introduces the job-scheduler race that made the integration suite

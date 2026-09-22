@@ -28,6 +28,8 @@ pub const CHECK_VIOLATION: &str = "23514";
 /// `22003` — numeric_value_out_of_range, raised by the column TYPE during
 /// coercion, before any constraint is consulted.
 pub const NUMERIC_OVERFLOW: &str = "22003";
+/// `23505` — unique_violation.
+pub const UNIQUE_VIOLATION: &str = "23505";
 pub fn sg() -> Signature {
     Signature::from([7u8; 64])
 }

@@ -40,6 +40,7 @@ mod pool_pagination;
 mod pool_price_snapshot;
 mod pool_properties;
 mod pool_search;
+mod price_compression;
 mod price_positivity;
 mod price_staleness;
 mod privileges;

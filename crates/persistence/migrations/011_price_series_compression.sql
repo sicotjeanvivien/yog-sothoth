@@ -1,0 +1,135 @@
+-- ============================================================================
+-- 011_price_series_compression.sql — the price series is 90 % of the database,
+-- and none of it was compressed
+-- ============================================================================
+-- `token_prices` holds 1795 MB of a 1983 MB database — **90.6 %** — and grows
+-- without bound, at the price worker's cadence rather than at the rate prices
+-- move. It is the single line item that decides the bill of a managed database.
+--
+-- This migration compresses it past seven days, the house delay, and drops the
+-- index nobody wrote.
+--
+-- ## What this reverses, and on what measurement
+--
+-- Baseline §7 (`001_baseline.sql:380-386`) states the table is *"deliberately
+-- NOT compressed: it is the join target of every valuation VIEW in §15, always
+-- through a LATERAL 'most recent row as-of X' lookup"*. That sentence bundles
+-- two decisions of very different standing:
+--
+--   * **no retention policy** — justified, and untouched here. Migration 005
+--     established that an as-of gap is permanent: the worker only ever inserts
+--     at `fetched_at = now()`, nothing backfills, and it is the price history
+--     that makes an old row readable at its trade-time value. Dropping price
+--     rows would blank `volume_usd` for the buckets they cover, for ever;
+--   * **no compression** — an assertion, never measured. Measured on 22
+--     September 2026 it is right about the direction and wrong by two orders of
+--     magnitude about the size of it.
+--
+-- Run on the development database itself, 4 822 643 rows over 47 days, by
+-- compressing the six chunks the policy declared below would take:
+--
+--     those six chunks, uncompressed ........... 938 MB
+--     compressed ...............................  15.6 MB   -98.3 %
+--     whole database ........................... 1983 MB -> 1035 MB
+--
+-- Nothing a reader sees moved: `pool_price_snapshot` (3547 rows),
+-- `meteora_damm_v2_pool_hourly_activity` (11 007 buckets, 10 193 valued),
+-- `meteora_damm_v2_liquidity_events_valued` (138 valued events) and the latest
+-- price of all 2082 mints hash identically before and after.
+--
+-- ## And what it costs, which is not nothing
+--
+-- One as-of lookup into a compressed chunk, `EXPLAIN (ANALYZE, BUFFERS)` on the
+-- same row of the same table, warm:
+--
+--     uncompressed ............... 0.123 ms,  5 buffers
+--     compressed ................. 0.304 ms, 36 buffers
+--
+-- It is not a plan regression — the compressed chunk has its own
+-- `(mint, _ts_meta_min_1, _ts_meta_max_1)` index and the scan uses it — it is
+-- the batch of ~1000 rows that has to be decompressed to yield one.
+--
+-- End to end, the 30-day history read of one pool (which evaluates the whole
+-- valuation view, ~60 000 price lookups — see the separate defect where a
+-- single-pool read is not pushed down) goes from **1.19 s to 1.38 s**, a
+-- **+16 %** that five runs on each side reproduce. That is the price of halving
+-- the database, and it is paid on a path that is already slow for an unrelated
+-- reason.
+--
+-- ⚠️ Compressing a large backlog churns the buffer cache: the reads right after
+-- the first run were an order of magnitude slower, and returned to +16 % once
+-- the cache was warm again. Expect that transient the day the policy first
+-- fires in production, where it has months of chunks to take rather than six.
+--
+-- ## Why `mint` segments and `fetched_at DESC` orders
+--
+-- Every reader asks the same question — the most recent row of ONE mint, at or
+-- before an instant — so `mint` is the segment and `fetched_at` the order
+-- inside it. That choice has a second consequence worth stating, because the
+-- event tables show the opposite case: the primary key here is `(mint,
+-- fetched_at)`, which is **exactly** `(segmentby, orderby)`. TimescaleDB
+-- therefore raises none of the `column "…" should be used for segmenting or
+-- ordering` warnings the event tables produce, and uniqueness stays cheap to
+-- check against compressed rows rather than requiring a decompression.
+--
+-- ## The index nobody wrote
+--
+-- `create_hypertable` was called without `create_default_indexes => FALSE`
+-- (`001_baseline.sql:396-401`), so Postgres added a third index, on
+-- `fetched_at` alone. Measured on the same database:
+--
+--     idx_token_prices_mint_recent (mint, fetched_at DESC) .. 621 MB  982 518 scans
+--     token_prices_pkey            (mint, fetched_at) ....... 628 MB   22 871 scans
+--     token_prices_fetched_at_idx  (fetched_at) .............  61 MB    3 875 scans
+--
+-- No query looks for a price at an instant without naming its mint, so the
+-- third one goes. Its 3 875 scans are not a contradiction and not a mandate:
+-- they are plans the planner took when it could as well have used one of the
+-- other two, plus whatever was typed at a psql prompt over 47 days. What no
+-- shipped query does is ask for `fetched_at` alone. The other two index the same columns in two orders and both stay:
+-- deciding whether a backward scan on the primary key replaces the second is a
+-- question for an `EXPLAIN`, not for this migration — and compression shrinks
+-- that question to the hot chunk, since a compressed chunk keeps neither.
+--
+-- ⚠️ None of the 21 `create_hypertable` calls in `001` passes
+-- `create_default_indexes => FALSE`, and `bin/migrate/lint.rs` only binds
+-- migrations from `010` on. The 20 other default indexes stay: forward-only,
+-- and `token_prices` is the only table where this one is measured in tens of
+-- megabytes.
+--
+-- ## What this migration deliberately does NOT do
+--
+--   * **no retention** on `token_prices`, for the reason above;
+--   * **nothing to the write path.** Four rows in five repeat the previous
+--     price of the same mint, and writing fewer of them is a `yog-context`
+--     change with its own staleness trade-off (a mint whose price never moves
+--     must still carry a fresh observation). What compression cannot reach is
+--     the hot chunk, which is exactly what that work would shrink;
+--   * **no aggregate over the prices.** An hourly rollup (`last(price_usd,
+--     fetched_at)` per mint) was built and measured: 60 118 rows, 11 MB for the
+--     whole history, and over 9 862 real as-of lookups it returns the identical
+--     price every time. It is not adopted, because after compression it saves
+--     nothing worth 17 rewritten LATERALs, and because
+--     `meteora_damm_v2_liquidity_events_valued` (021) values each event at its
+--     own timestamp — an hourly bucket would widen its admitted staleness from
+--     1 h to 1 h 45.
+--
+-- ⚠️ **The policy is inert on a development database**, which runs with
+-- `timescaledb.max_background_workers = 0`: no job ever fires, so nothing here
+-- compresses until `compress_chunk` is called by hand. See
+-- `migrations/README.md`, *What a local run cannot prove — compressed chunks*.
+-- ============================================================================
+
+DROP INDEX token_prices_fetched_at_idx;
+
+ALTER TABLE token_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'fetched_at DESC',
+    timescaledb.compress_segmentby = 'mint'
+);
+
+SELECT add_compression_policy('token_prices', INTERVAL '7 days');
+
+-- No GRANT: this migration creates no object a runtime role must be granted on.
+-- Chunk privileges are propagated from the hypertable by TimescaleDB, and the
+-- compressed chunks are read through `token_prices` itself.
