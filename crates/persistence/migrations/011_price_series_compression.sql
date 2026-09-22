@@ -25,21 +25,41 @@
 --     September 2026 it is right about the direction and wrong by two orders of
 --     magnitude about the size of it.
 --
--- Same table, same primary key, both indexes, one week of real rows
--- (1 210 040 rows, 15 → 22 September 2026), copied into a throwaway schema:
+-- Run on the development database itself, 4 822 643 rows over 47 days, by
+-- compressing the six chunks the policy declared below would take:
 --
---     as it stands today ....................... 426 MB
---     compressed (segmentby mint) ..............   9.6 MB   -97.8 %
+--     those six chunks, uncompressed ........... 938 MB
+--     compressed ...............................  15.6 MB   -98.3 %
+--     whole database ........................... 1983 MB -> 1035 MB
 --
--- And what it costs the lookup the sentence is defending, `EXPLAIN (ANALYZE,
--- BUFFERS)` over 500 mints of that copy, warm cache:
+-- Nothing a reader sees moved: `pool_price_snapshot` (3547 rows),
+-- `meteora_damm_v2_pool_hourly_activity` (11 007 buckets, 10 193 valued),
+-- `meteora_damm_v2_liquidity_events_valued` (138 valued events) and the latest
+-- price of all 2082 mints hash identically before and after.
 --
---     500 latest lookups, uncompressed .........   4.3 ms
---     500 latest lookups, compressed ...........   7.2 ms
---     500 as-of lookups (1 h bound), compressed   7.8 ms
+-- ## And what it costs, which is not nothing
 --
--- Six microseconds per lookup. The point-lookup cost is real; it does not buy
--- 416 MB a week.
+-- One as-of lookup into a compressed chunk, `EXPLAIN (ANALYZE, BUFFERS)` on the
+-- same row of the same table, warm:
+--
+--     uncompressed ............... 0.123 ms,  5 buffers
+--     compressed ................. 0.304 ms, 36 buffers
+--
+-- It is not a plan regression — the compressed chunk has its own
+-- `(mint, _ts_meta_min_1, _ts_meta_max_1)` index and the scan uses it — it is
+-- the batch of ~1000 rows that has to be decompressed to yield one.
+--
+-- End to end, the 30-day history read of one pool (which evaluates the whole
+-- valuation view, ~60 000 price lookups — see the separate defect where a
+-- single-pool read is not pushed down) goes from **1.19 s to 1.38 s**, a
+-- **+16 %** that five runs on each side reproduce. That is the price of halving
+-- the database, and it is paid on a path that is already slow for an unrelated
+-- reason.
+--
+-- ⚠️ Compressing a large backlog churns the buffer cache: the reads right after
+-- the first run were an order of magnitude slower, and returned to +16 % once
+-- the cache was warm again. Expect that transient the day the policy first
+-- fires in production, where it has months of chunks to take rather than six.
 --
 -- ## Why `mint` segments and `fetched_at DESC` orders
 --

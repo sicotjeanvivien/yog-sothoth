@@ -511,16 +511,17 @@ decisions of very different standing:
   established that an as-of gap never heals: the worker only inserts at `now()`,
   nothing backfills, so a dropped price row is a permanently unvalued bucket;
 - *not compressed* — **reversed by `011_price_series_compression.sql`.** The
-  refusal was an assertion, never measured. On a week of real rows (1 210 040,
-  15 → 22 September 2026, same primary key and both indexes, copied into a
-  throwaway schema) the table goes from **426 MB to 9.6 MB**, and the LATERAL
-  point lookup the sentence was protecting costs **6 µs more** per lookup
-  (500 latest lookups: 4.3 ms → 7.2 ms). The direction it named was right; the
-  magnitude was off by two orders.
+  refusal was an assertion, never measured. Measured on the development
+  database on 22 September 2026, by compressing the six chunks the new policy
+  covers: **938 MB → 15.6 MB**, the database as a whole **1983 MB → 1035 MB**,
+  and every price-dependent read hashing identically before and after.
 
-At the time it was written the table was 90.6 % of the database — 1795 MB of
-1983 MB — which is how an unmeasured clause gets expensive rather than merely
-wrong.
+The direction the sentence named is real — a point lookup into a compressed
+chunk decompresses a batch of ~1000 rows to yield one, 0.123 ms → 0.304 ms on
+the same row, and the 30-day history read of one pool goes from 1.19 s to
+1.38 s (**+16 %**). What was never weighed is what it buys: at the time §7 was
+written the table was 90.6 % of the database. That is how an unmeasured clause
+gets expensive rather than merely wrong.
 
 This is the right discipline for production safety:
 
@@ -695,8 +696,8 @@ when it is available; on an event table it is not, since the idempotency key is
 ⚠️ It does raise a *different* warning in the integration suite —
 `poor compression ratio detected` — because a fixture of a few dozen kilobytes
 cannot amortise a compressed chunk's own overhead. That one is about the size of
-the fixture, not about the table: the same settings turn a week of real rows
-from 426 MB into 9.6 MB.
+the fixture, not about the table: the same settings take 938 MB of real chunks
+down to 15.6 MB.
 
 **When it would start to cost.** Backfilling events older than the compression
 delay — every insert would decompress to check uniqueness. Correct, but slow.

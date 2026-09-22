@@ -24,8 +24,8 @@
 //! ⚠️ The fixtures are small enough for TimescaleDB to emit `poor compression
 //! ratio detected` warnings while compressing them — 32 kB of rows do not
 //! amortise the compressed chunk's own overhead. That is a property of a
-//! fixture, not of the table: measured on a week of real rows the same settings
-//! turn 426 MB into 9.6 MB.
+//! fixture, not of the table: on the development database the same settings
+//! take 938 MB of chunks down to 15.6 MB.
 
 use super::helpers::{UNIQUE_VIOLATION, pk, sqlstate};
 use chrono::{DateTime, Duration, Utc};
