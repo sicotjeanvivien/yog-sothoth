@@ -24,7 +24,7 @@
 //! must not fall over on a Jupiter hiccup.
 
 use super::price_metrics::PriceWorkerMetrics;
-use super::price_tick_end::TickOutcome;
+use super::tick_outcome::TickOutcome;
 use std::sync::Arc;
 use std::time::Instant;
 
