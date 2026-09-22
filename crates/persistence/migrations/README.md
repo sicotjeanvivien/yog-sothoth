@@ -502,6 +502,26 @@ them carry two** (mainnet, 20 August 2026 — `getProgramAccountsV2`, memcmp on
 `reward_infos[i].initialized`). A dormant defect, like 009's zero price, closed
 because it traverses a shipped guard rather than because it is bleeding.
 
+**"deliberately NOT compressed", baseline §7 (`001_baseline.sql:380-386`)** —
+one half of that sentence, and the half that cost the most. It bundles two
+decisions of very different standing:
+
+- *no retention policy* — **still true, and still for the stated reason.** The
+  valuation views read the price history bucket by bucket, and migration 005
+  established that an as-of gap never heals: the worker only inserts at `now()`,
+  nothing backfills, so a dropped price row is a permanently unvalued bucket;
+- *not compressed* — **reversed by `011_price_series_compression.sql`.** The
+  refusal was an assertion, never measured. On a week of real rows (1 210 040,
+  15 → 22 September 2026, same primary key and both indexes, copied into a
+  throwaway schema) the table goes from **426 MB to 9.6 MB**, and the LATERAL
+  point lookup the sentence was protecting costs **6 µs more** per lookup
+  (500 latest lookups: 4.3 ms → 7.2 ms). The direction it named was right; the
+  magnitude was off by two orders.
+
+At the time it was written the table was 90.6 % of the database — 1795 MB of
+1983 MB — which is how an unmeasured clause gets expensive rather than merely
+wrong.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped
@@ -664,6 +684,19 @@ chunk. The expensive path is never taken. Putting `signature` into
 `compress_segmentby` would silence the warning at the cost of destroying the
 compression ratio — it is maximum-cardinality, so each segment would hold a
 single row.
+
+**One compressed table raises none of this: `token_prices` (011).** Its unique
+key is `(mint, fetched_at)`, which is **exactly** its `(compress_segmentby,
+compress_orderby)` pair — so TimescaleDB has everything it needs to check
+uniqueness against compressed rows, and says nothing. It is the shape to aim for
+when it is available; on an event table it is not, since the idempotency key is
+`(signature, event_index, timestamp)` and `signature` cannot segment.
+
+⚠️ It does raise a *different* warning in the integration suite —
+`poor compression ratio detected` — because a fixture of a few dozen kilobytes
+cannot amortise a compressed chunk's own overhead. That one is about the size of
+the fixture, not about the table: the same settings turn a week of real rows
+from 426 MB into 9.6 MB.
 
 **When it would start to cost.** Backfilling events older than the compression
 delay — every insert would decompress to check uniqueness. Correct, but slow.
