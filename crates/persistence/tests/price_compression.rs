@@ -11,8 +11,9 @@
 //!      return the identical value once the chunk they read is compressed.
 //!      Baseline §7 refused compression precisely because of those lookups, so
 //!      that refusal is what this test replaces;
-//!   3. the **write path against a compressed chunk** — `ON CONFLICT DO
-//!      NOTHING`, a duplicate without it, and a genuinely new row.
+//!   3. the **write path against a compressed chunk** — the repository's own
+//!      batch, carrying one row already there and one new, then a duplicate
+//!      written without its `ON CONFLICT` guard.
 //!
 //! ⚠️ **`compress_chunk` is called by hand here, and that is not a shortcut.**
 //! The local Postgres runs with `timescaledb.max_background_workers = 0`, so
@@ -20,18 +21,13 @@
 //! it would pass on an uncompressed table and prove nothing. That is why test 2
 //! asserts `is_compressed` before re-reading: remove the compression step and
 //! it must go red there, not silently keep passing.
-//!
-//! ⚠️ The fixtures are small enough for TimescaleDB to emit `poor compression
-//! ratio detected` warnings while compressing them — 32 kB of rows do not
-//! amortise the compressed chunk's own overhead. That is a property of a
-//! fixture, not of the table: on the development database the same settings
-//! take 938 MB of chunks down to 15.6 MB.
 
 use super::helpers::{UNIQUE_VIOLATION, pk, sqlstate};
 use chrono::{DateTime, Duration, Utc};
+use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
 
-use yog_core::domain::TokenPriceLookup;
+use yog_core::domain::{PriceProvider, TokenPrice, TokenPriceLookup, TokenPriceRepository};
 use yog_persistence::PgTokenPriceRepository;
 
 /// Days of hourly price observations seeded by the behaviour tests. The
@@ -72,7 +68,8 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
         compress_after,
         vec!["7 days".to_string()],
         "token_prices must carry exactly one compression policy, at the house \
-         delay of 7 days — the same one the five event tables use"
+         delay of 7 days — the one every other hypertable `001` compresses \
+         uses, `signals` excepted at 30 days"
     );
 
     // The other half of baseline §7 still stands, and its absence is a decision:
@@ -177,6 +174,12 @@ struct Readings {
     /// The repository read path the API uses, `TokenPriceLookup`.
     latest_price: Option<String>,
     latest_fetched_at: Option<DateTime<Utc>>,
+    latest_confidence: Option<String>,
+    /// Every `confidence` in the table, in key order. It is the only nullable
+    /// column and the only `REAL` one, so it is the only one compression stores
+    /// down a codec path the other columns never take — and a comparison over
+    /// the columns that are always populated would never notice.
+    confidence_digest: Option<String>,
 }
 
 async fn read_both_shapes(pool: &PgPool, pool_addr: &str) -> Readings {
@@ -202,12 +205,23 @@ async fn read_both_shapes(pool: &PgPool, pool_addr: &str) -> Readings {
         .await
         .unwrap();
 
+    let confidence_digest: Option<String> = sqlx::query_scalar(
+        "SELECT md5(string_agg(coalesce(confidence::TEXT, '-'), '|'
+                               ORDER BY mint, fetched_at))
+           FROM token_prices",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
     Readings {
         tvl_usd,
         buckets: activity.get("buckets"),
         volume_usd: activity.get("volume_usd"),
         latest_price: latest.as_ref().map(|p| p.price_usd.to_string()),
-        latest_fetched_at: latest.map(|p| p.fetched_at),
+        latest_fetched_at: latest.as_ref().map(|p| p.fetched_at),
+        latest_confidence: latest.and_then(|p| p.confidence).map(|c| c.to_string()),
+        confidence_digest,
     }
 }
 
@@ -259,15 +273,21 @@ async fn seed(pool: &PgPool) -> String {
     // One observation per hour per mint. A price moving from hour to hour is
     // what makes the comparison meaningful: a constant series would read the
     // same whichever row the lookup picked.
-    for (mint, base) in [(&mint_a, "1.5"), (&mint_b, "100.0")] {
+    //
+    // `confidence` is populated on the first mint and left NULL on the second,
+    // on purpose: it is the table's only nullable column, and both states have
+    // to survive a round trip through the compressed form.
+    for (mint, base, confidence) in [(&mint_a, "1.5", Some(0.75_f32)), (&mint_b, "100.0", None)] {
         sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             SELECT $1, $2::NUMERIC + h / 1000.0, 'jupiter', now() - (h || ' hours')::interval
+            "INSERT INTO token_prices (mint, price_usd, price_provider, confidence, fetched_at)
+             SELECT $1, $2::NUMERIC + h / 1000.0, 'jupiter', $4,
+                    now() - (h || ' hours')::interval
                FROM generate_series(0, $3::INT * 24) h",
         )
         .bind(mint)
         .bind(base)
         .bind(SEEDED_DAYS as i32)
+        .bind(confidence)
         .execute(pool)
         .await
         .unwrap();
@@ -333,10 +353,13 @@ async fn a_compressed_chunk_serves_the_same_prices(pool: PgPool) {
 
     let before = read_both_shapes(&pool, &pool_addr).await;
     assert!(
-        before.tvl_usd.is_some() && before.volume_usd.is_some() && before.buckets > 0,
-        "the fixture must produce a valued TVL and valued buckets before \
-         anything is compressed, or the comparison below compares two absences: \
-         {before:?}"
+        before.tvl_usd.is_some()
+            && before.volume_usd.is_some()
+            && before.buckets > 0
+            && before.latest_confidence.is_some(),
+        "the fixture must produce a valued TVL, valued buckets and a non-NULL \
+         confidence before anything is compressed, or the comparison below \
+         compares two absences: {before:?}"
     );
 
     compress_every_chunk(&pool).await;
@@ -394,27 +417,38 @@ async fn writing_against_a_compressed_chunk_still_behaves(pool: PgPool) {
 
     let before = count_prices(&pool, &mint).await;
 
-    // The idempotency guard of `PgTokenPriceRepository::insert_batch`, against a
-    // compressed chunk: TimescaleDB decompresses the candidate segments to
-    // check, so it behaves as on an open chunk.
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1, 9.0, 'jupiter', $2) ON CONFLICT (mint, fetched_at) DO NOTHING",
-    )
-    .bind(&mint)
-    .bind(existing)
-    .execute(&pool)
-    .await
-    .expect("ON CONFLICT DO NOTHING must not fail against a compressed chunk");
+    // The real writer, not a copy of its SQL: `insert_batch` is a multi-row
+    // `QueryBuilder` INSERT carrying `ON CONFLICT (mint, fetched_at) DO
+    // NOTHING`, and the batch is the shape that matters — TimescaleDB
+    // decompresses per candidate segment to check uniqueness. One row already
+    // there, one not: the first must be dropped and the second stored, both
+    // inside a compressed chunk.
+    let price_at = |at: DateTime<Utc>| TokenPrice {
+        mint: pk(2),
+        price_usd: Decimal::new(9, 0),
+        price_provider: PriceProvider::Jupiter,
+        confidence: Some(0.75),
+        fetched_at: at,
+    };
+    PgTokenPriceRepository::new(pool.clone())
+        .insert_batch(&[
+            price_at(existing),
+            price_at(existing + Duration::minutes(7)),
+        ])
+        .await
+        .expect("the batch insert must not fail against a compressed chunk");
     assert_eq!(
         count_prices(&pool, &mint).await,
-        before,
-        "the conflicting row must be dropped, not written twice"
+        before + 1,
+        "the conflicting row must be dropped and the new one stored — one row \
+         written out of the two offered"
     );
 
-    // And without the guard, uniqueness is still ENFORCED there — the warning
-    // TimescaleDB raises on the event tables is about cost, not correctness, and
-    // this table raises none at all (its key is the segmentby/orderby pair).
+    // And without that guard, uniqueness is still ENFORCED there. The warning
+    // TimescaleDB raises on the event tables is about cost, not correctness —
+    // and this table raises none at all, its key being the segmentby/orderby
+    // pair. Written as raw SQL because no repository ever inserts without the
+    // conflict clause: what is under test here is the constraint, not a caller.
     let err = sqlx::query(
         "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
          VALUES ($1, 9.0, 'jupiter', $2)",
@@ -428,24 +462,5 @@ async fn writing_against_a_compressed_chunk_still_behaves(pool: PgPool) {
         sqlstate(&err),
         UNIQUE_VIOLATION,
         "the duplicate must be refused by the primary key, not by something else"
-    );
-
-    // A genuinely new row inside the compressed range is accepted. Our write
-    // path never does this — `yog-context` only ever inserts at `now()`, which
-    // lands in the open chunk — but a backfill would, and what it costs is a
-    // decompression per insert, not a failure.
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1, 9.0, 'jupiter', $2)",
-    )
-    .bind(&mint)
-    .bind(existing + Duration::minutes(7))
-    .execute(&pool)
-    .await
-    .expect("a new row inside a compressed chunk must be accepted");
-    assert_eq!(
-        count_prices(&pool, &mint).await,
-        before + 1,
-        "the new row must actually be stored"
     );
 }

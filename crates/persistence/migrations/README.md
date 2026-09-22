@@ -693,12 +693,6 @@ uniqueness against compressed rows, and says nothing. It is the shape to aim for
 when it is available; on an event table it is not, since the idempotency key is
 `(signature, event_index, timestamp)` and `signature` cannot segment.
 
-⚠️ It does raise a *different* warning in the integration suite —
-`poor compression ratio detected` — because a fixture of a few dozen kilobytes
-cannot amortise a compressed chunk's own overhead. That one is about the size of
-the fixture, not about the table: the same settings take 938 MB of real chunks
-down to 15.6 MB.
-
 **When it would start to cost.** Backfilling events older than the compression
 delay — every insert would decompress to check uniqueness. Correct, but slow.
 Worth remembering the day historical replay becomes possible (see the gRPC
