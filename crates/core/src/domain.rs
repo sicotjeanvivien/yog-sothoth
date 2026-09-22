@@ -83,7 +83,7 @@ pub use token_metadata::{
 };
 pub use token_price::{
     KeptPrices, PRICE_MAX_AGE_LATEST, PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider,
-    TokenPrice, TokenPriceLookup, TokenPriceRepository, max_price_interval,
+    TokenPrice, TokenPriceLookup, TokenPriceRepository,
 };
 pub use trade_direction::TradeDirection;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

@@ -75,6 +75,11 @@ impl PriceWorkerMetrics {
         // exactly the window an operator is watching a fresh deployment.
         counter!(REJECTED_TOTAL).absolute(0);
         counter!(UNCHANGED_TOTAL).absolute(0);
+        // And `INSERTED_TOTAL`, because the redundancy expression divides by
+        // their SUM: in PromQL a vector-to-vector `+` matches nothing when one
+        // side is absent, so publishing only the numerator would still leave
+        // the query returning no data on the very deployment it was written for.
+        counter!(INSERTED_TOTAL).absolute(0);
     }
 
     pub(crate) fn record_tick(outcome: &'static str, seconds: f64) {

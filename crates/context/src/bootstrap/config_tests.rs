@@ -70,32 +70,41 @@ fn debugging_the_config_prints_no_credential() {
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }
 
-/// The cadence bound the redundancy filter introduced. It is tested here and
-/// not through `Config::load` on purpose: the environment is process-global,
-/// and the file keeps a single test that touches it.
+/// The two cadences the daemon cannot honour. Tested here and not through
+/// `Config::load` on purpose: the environment is process-global, and the file
+/// keeps a single test that touches it.
 ///
-/// The three values are not decoration. 30 s is the default; 300 s is the
-/// ceiling itself, which must be *accepted* or the bound is off by one; 480 s
-/// is the value that breaks it, and it sits **between** two safe ones — 600 s
-/// divides the 10-minute floor exactly and spaces rows 10 minutes apart, 480 s
-/// does not and spaces them 16. A guard written as "reject anything large"
-/// would pass this test and still admit 480.
+/// Neither refusal belongs to the redundancy filter — `KeptPrices` decides its
+/// floor one tick early so that the cadence alone bounds freshness. What the
+/// filter changed is that the coupling is now *named*, and these are the two
+/// values that were silently accepted before: zero, which panics the ticker
+/// inside the spawned worker long after startup reported success, and anything
+/// at or past the staleness bound, which leaves every price stale before the
+/// next tick fires.
+///
+/// 480 s is in the list because it was the wrong answer to this question: an
+/// earlier guard capped the cadence at 300 s, on the theory that the floor plus
+/// one tick had to fit under the bound. It must be **accepted** — the floor
+/// absorbs the cadence now, and a rule that still refused it would be the old
+/// one wearing a new name.
 #[test]
-fn a_cadence_the_price_series_cannot_absorb_is_refused() {
-    assert!(price_interval_the_series_can_absorb(30).is_ok());
+fn only_a_cadence_that_keeps_prices_current_is_accepted() {
+    for accepted in [1_u64, 30, 300, 480, 899] {
+        assert!(
+            price_interval_that_keeps_prices_current(accepted).is_ok(),
+            "{accepted}s is under the staleness bound and must be accepted"
+        );
+    }
 
-    let ceiling = u64::try_from(max_price_interval().num_seconds()).expect("positive");
-    assert!(
-        price_interval_the_series_can_absorb(ceiling).is_ok(),
-        "the ceiling is the longest cadence that WORKS, not the first that fails"
-    );
+    let zero = price_interval_that_keeps_prices_current(0)
+        .expect_err("tokio::time::interval panics on a zero period");
+    assert!(zero.to_string().contains("zero"), "{zero}");
 
-    let err = price_interval_the_series_can_absorb(480)
-        .expect_err("480s leaves a motionless price unwritten for 16 minutes");
-    let rendered = err.to_string();
+    let bound = u64::try_from(PRICE_MAX_AGE_LATEST.num_seconds()).expect("positive");
+    let stale = price_interval_that_keeps_prices_current(bound)
+        .expect_err("a price would be stale before the next tick fires");
     assert!(
-        rendered.contains("480") && rendered.contains(&ceiling.to_string()),
-        "an operator reads this in a crash log and needs both the value they \
-         set and the one to set instead: {rendered}"
+        stale.to_string().contains(&bound.to_string()),
+        "an operator reads this in a crash log: {stale}"
     );
 }

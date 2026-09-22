@@ -60,7 +60,10 @@ impl PriceWorker {
             price_repository,
             source,
             interval,
-            kept: KeptPrices::default(),
+            // The cadence is part of the rule: the floor is decided one tick
+            // early so a forced row lands at or before it, whatever the
+            // interval. See `KeptPrices::new`.
+            kept: KeptPrices::new(interval),
         }
     }
 

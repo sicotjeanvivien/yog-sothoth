@@ -16,7 +16,7 @@ use yog_bootstrap::{
     ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, required, required_endpoint,
     required_secret_key, required_secret_url,
 };
-use yog_core::domain::max_price_interval;
+use yog_core::domain::PRICE_MAX_AGE_LATEST;
 
 /// Default interval between Jupiter price fetches, in seconds.
 ///
@@ -88,43 +88,56 @@ impl Config {
     }
 }
 
-/// Read `CONTEXT_PRICE_INTERVAL_SECS`, and refuse a cadence the price series
-/// cannot absorb.
+/// Read `CONTEXT_PRICE_INTERVAL_SECS`, and refuse the two values the daemon
+/// cannot honour.
 ///
-/// The worker no longer writes a row per tick: a motionless price is rewritten
-/// only when the last kept one reaches the floor, and the forced row lands at
-/// the *next tick* after that. Too slow a cadence therefore pushes the newest
-/// observation past `yog_price_max_age_latest()` and stops valuing every
-/// motionless token — silently, and only for the tokens that never move.
+/// Neither is new with the redundancy filter — `KeptPrices` decides its floor
+/// one tick early precisely so that the cadence, and nothing else, bounds
+/// freshness. Both were simply never checked:
 ///
-/// Refused at startup rather than logged, because the symptom is USD figures
-/// that go absent hours later, on a subset of pools, with nothing in the logs
+///   * **zero** panics `tokio::time::interval` inside the spawned worker,
+///     *after* startup succeeded — a typo that takes the daemon down where no
+///     configuration error is expected any more;
+///   * **at or past [`PRICE_MAX_AGE_LATEST`]** means the newest observation is
+///     older than the staleness bound before the next tick even fires, so every
+///     `pool_current_tvl` reads NULL. Not the filter's doing either: a worker
+///     writing on every tick at that cadence was already past the bound.
+///
+/// Refused at startup rather than logged, because the symptom arrives hours
+/// later, on the subset of pools nobody is watching, with nothing in the logs
 /// pointing back at a cadence someone raised to be kind to Jupiter.
 fn price_interval() -> Result<Duration, ConfigError> {
     let seconds = duration_var("CONTEXT_PRICE_INTERVAL_SECS", DEFAULT_PRICE_INTERVAL_SECS)?;
-    price_interval_the_series_can_absorb(seconds)
+    price_interval_that_keeps_prices_current(seconds)
 }
 
 /// The rule of [`price_interval`], separated from the variable it reads.
 ///
 /// Environment variables are process-global and this binary's tests run in
 /// parallel, so the module keeps to a single test that touches them (see
-/// `config_tests.rs`). Taking the seconds as an argument is what lets the bound
+/// `config_tests.rs`). Taking the seconds as an argument is what lets the rule
 /// itself be tested without joining that queue.
-fn price_interval_the_series_can_absorb(seconds: u64) -> Result<Duration, ConfigError> {
-    let ceiling = max_price_interval().num_seconds();
+fn price_interval_that_keeps_prices_current(seconds: u64) -> Result<Duration, ConfigError> {
+    const KEY: &str = "CONTEXT_PRICE_INTERVAL_SECS";
+    let bound = PRICE_MAX_AGE_LATEST.num_seconds();
 
-    if i64::try_from(seconds).is_ok_and(|s| s <= ceiling) {
+    if seconds == 0 {
+        return Err(ConfigError::InvalidValue {
+            key: KEY.to_string(),
+            value: seconds.to_string(),
+            expected: "a cadence of at least one second — zero panics the ticker",
+        });
+    }
+
+    if i64::try_from(seconds).is_ok_and(|s| s < bound) {
         return Ok(Duration::from_secs(seconds));
     }
 
-    Err(ConfigError::UnsupportedCombination {
-        detail: format!(
-            "CONTEXT_PRICE_INTERVAL_SECS={seconds} is longer than the {ceiling}s a price \
-             series can absorb: a token whose price never moves would carry an observation \
-             older than the staleness bound of yog_price_max_age_latest(), and its USD \
-             figures would read as absent. Use {ceiling} or less"
-        ),
+    Err(ConfigError::InvalidValue {
+        key: KEY.to_string(),
+        value: seconds.to_string(),
+        expected: "a cadence under the 900s price staleness bound of \
+                   yog_price_max_age_latest(), or every USD figure reads as absent",
     })
 }
 

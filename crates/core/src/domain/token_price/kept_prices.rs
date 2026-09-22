@@ -42,31 +42,15 @@ pub const PRICE_MAX_AGE_LATEST: Duration = Duration::minutes(15);
 /// derived from it turns NULL. Suppressing a repeated row must never suppress
 /// the price itself.
 ///
-/// ⚠️ **The margin is not the difference between the two constants.** A forced
-/// row does not land at the floor, it lands at the first *tick* on or after it,
-/// so two kept rows can sit `ceil(gap / interval) × interval` apart — strictly
-/// less than `gap + interval`. At the default 30 s cadence that is 10 minutes
-/// on the nose; at 480 s it is 16, and the staleness bound is breached by a
-/// cadence nobody thought of as dangerous. What keeps the two in step is
-/// [`max_price_interval`], which the context daemon enforces at startup.
+/// ⚠️ **A forced row does not land at the floor, it lands at the first *tick*
+/// on or after it.** Taken literally the floor would therefore promise
+/// `ceil(gap / interval) × interval`, which is *not* monotonic in the cadence —
+/// 600 s divides ten minutes and spaces rows by ten, 480 s does not and spaces
+/// them by sixteen, past the staleness bound, at a cadence nobody would call
+/// dangerous. [`KeptPrices::new`] removes that dependency instead of bounding
+/// it: it subtracts one tick, so the row lands at or before this constant
+/// whatever the cadence.
 const PRICE_SERIES_MAX_GAP: Duration = Duration::minutes(10);
-
-/// The longest cadence a price worker may tick at and still honour
-/// [`PRICE_MAX_AGE_LATEST`] — five minutes.
-///
-/// A forced row lands at the first tick on or after the floor, so two kept
-/// rows sit strictly less than `PRICE_SERIES_MAX_GAP + interval` apart. Keeping
-/// that sum inside the staleness bound is therefore sufficient, and it is the
-/// form that does not depend on arithmetic luck: the real spacing,
-/// `ceil(gap / interval) × interval`, is **not** monotonic in the interval —
-/// 600 s divides the floor and is safe, 480 s does not and breaches the bound
-/// by a minute.
-///
-/// The context daemon refuses a longer `CONTEXT_PRICE_INTERVAL_SECS` at
-/// startup rather than silently letting motionless tokens stop being valued.
-pub fn max_price_interval() -> Duration {
-    PRICE_MAX_AGE_LATEST - PRICE_SERIES_MAX_GAP
-}
 
 /// The last observation kept for each mint — the tail of the written series.
 ///
@@ -80,9 +64,10 @@ pub fn max_price_interval() -> Duration {
 /// outgrow something the process holds anyway. It starts empty on every boot,
 /// which costs exactly one full batch at the first tick — a row too many,
 /// never one too few.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct KeptPrices {
     last: HashMap<Pubkey, KeptPrice>,
+    max_gap: Duration,
 }
 
 /// One kept observation, reduced to what the decision reads.
@@ -95,11 +80,43 @@ struct KeptPrice {
 }
 
 impl KeptPrices {
+    /// Build the rule for a worker ticking every `tick_interval`.
+    ///
+    /// **The cadence is not optional, and that is the point.** The floor is
+    /// decided one tick early — `PRICE_SERIES_MAX_GAP - tick_interval` — so the
+    /// forced row lands at or before `PRICE_SERIES_MAX_GAP` rather than at the
+    /// first tick past it. Without that subtraction the real spacing is
+    /// `ceil(gap / interval) × interval`, a quantity that jumps over the
+    /// staleness bound at cadences no one would flag: 480 s spaces rows by 16
+    /// minutes while both 300 s and 600 s stay at 10. There is then no ceiling
+    /// to enforce and no ragged set of safe values to document — the worst
+    /// spacing becomes `max(tick_interval, PRICE_SERIES_MAX_GAP)`, which is to
+    /// say that the cadence bounds freshness exactly as it did before any of
+    /// this existed.
+    ///
+    /// A cadence at or past the floor leaves nothing to subtract, so every tick
+    /// writes and the rule goes inert — the safe direction.
+    ///
+    /// ⚠️ It is the *configured* cadence, not the observed one. A cycle that
+    /// persistently overruns its period (this worker's took 10.7–19.9 s on
+    /// 14 September 2026, and 85 s against 5 028 mints on 22 September) widens
+    /// the spacing by the overrun. The five minutes between
+    /// `PRICE_SERIES_MAX_GAP` and [`PRICE_MAX_AGE_LATEST`] are what absorb it:
+    /// a 200 s cycle against a 30 s cadence still lands at 600 s.
+    pub fn new(tick_interval: core::time::Duration) -> Self {
+        let tick = Duration::from_std(tick_interval).unwrap_or(PRICE_SERIES_MAX_GAP);
+
+        Self {
+            last: HashMap::new(),
+            max_gap: (PRICE_SERIES_MAX_GAP - tick).max(Duration::zero()),
+        }
+    }
+
     /// Whether this observation earns a row.
     ///
     /// True when the mint has never been priced, when the price moved, when
-    /// the provenance changed, or when the last kept row has reached
-    /// `PRICE_SERIES_MAX_GAP`.
+    /// the provenance changed, or when the last kept row has reached the floor
+    /// [`KeptPrices::new`] computed for this cadence.
     ///
     /// # Why the comparison rounds first
     ///
@@ -145,7 +162,7 @@ impl KeptPrices {
 
         last.price_usd != at_storage_scale(candidate.price_usd)
             || last.price_provider != candidate.price_provider
-            || candidate.fetched_at - last.fetched_at >= PRICE_SERIES_MAX_GAP
+            || candidate.fetched_at - last.fetched_at >= self.max_gap
     }
 
     /// Remember observations that have been written.

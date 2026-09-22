@@ -86,8 +86,13 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   only after the insert succeeds. A restart forgets everything, which costs one
   full batch at the first tick: a row too many, never one too few.
 
-  The floor also puts a ceiling on the cadence: see
-  `CONTEXT_PRICE_INTERVAL_SECS` under *Configuration*.
+  The floor is set **one tick early** (`KeptPrices::new` takes the cadence), so
+  the forced row lands at or *before* 10 minutes whatever the interval. Taken
+  literally it would land at the first tick past the floor, which spaces rows by
+  16 minutes at a 480 s cadence while 300 s and 600 s both stay at 10 — a defect
+  hiding between two safe values. See `CONTEXT_PRICE_INTERVAL_SECS` under
+  *Configuration* for the two cadences that are still refused, and why they are
+  not this filter's doing.
 
   ⚠️ Ideally this worker is already running when 009 is applied, but
   `docker-compose.yml` orders `yog-context` *after* `yog-migrate`, so the plain
@@ -275,15 +280,13 @@ CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
 
-⚠️ **`CONTEXT_PRICE_INTERVAL_SECS` is capped at 300, and the daemon refuses to
-start above it.** Since the worker writes a motionless price only when the last
-kept row reaches the 10-minute floor, and that row lands at the *next tick*
-after it, a slow cadence pushes the newest observation past the 15 minutes of
-`yog_price_max_age_latest()` — and the tokens that stop being valued are
-precisely the ones that never move, so nothing looks broken. The bound is not
-monotonic (600 s divides the floor and is safe, 480 s does not and breaches it
-by a minute), which is why it is enforced rather than left to judgement. See
-`max_price_interval` in `yog-core`.
+⚠️ **`CONTEXT_PRICE_INTERVAL_SECS` must be non-zero and under 900 s, and the
+daemon refuses to start otherwise.** Zero panics the ticker inside the spawned
+worker, long after startup reported success; 900 s or more leaves the newest
+price older than `yog_price_max_age_latest()` before the next tick even fires,
+whether or not anything is being suppressed. Neither refusal comes from the
+redundancy filter: `KeptPrices` sets its floor one tick early so that the
+cadence, and nothing else, bounds freshness.
 
 **Two Solana endpoints, and this crate is why they are two.** The DAS
 (`getAssetBatch`) is Helius' own API; `getMultipleAccounts` is standard Solana
