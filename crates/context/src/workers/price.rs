@@ -173,7 +173,7 @@ impl PriceWorker {
         // this filter is what keeps it from ever firing. See
         // `TokenPrice::is_storable` for why the test is neither `> 0` nor
         // one-sided.
-        let (to_insert, rejected): (Vec<TokenPrice>, Vec<TokenPrice>) =
+        let (mut to_insert, rejected): (Vec<TokenPrice>, Vec<TokenPrice>) =
             priced.into_iter().partition(TokenPrice::is_storable);
 
         if !rejected.is_empty() {
@@ -214,19 +214,24 @@ impl PriceWorker {
         // a motionless price anyway before it ages out of migration 005's
         // windows, and the rounding to the column's scale without which the
         // comparison would never find two prices equal.
-        let (to_write, unchanged): (Vec<TokenPrice>, Vec<TokenPrice>) = to_insert
-            .into_iter()
-            .partition(|price| self.kept.worth_keeping(price));
+        //
+        // `retain` rather than a second `partition`: unlike `rejected` above,
+        // which is logged mint by mint, nothing here reads the suppressed rows
+        // — only how many there were. Partitioning would move four fifths of
+        // the tick into a Vec built to be dropped.
+        let before = to_insert.len();
+        to_insert.retain(|price| self.kept.worth_keeping(price));
+        let unchanged = before - to_insert.len();
 
-        // Unconditional, including at zero: it is what publishes the series on
-        // the first tick, so "nothing suppressed" is an observation rather than
-        // an absence. Its ratio to `inserted_total` is the redundancy the
-        // database query used to be needed for.
-        PriceWorkerMetrics::record_unchanged(unchanged.len());
+        // Recorded on every tick that reaches the rule, zero included, so that
+        // "nothing was suppressed" is a measurement. Its ratio to
+        // `inserted_total` is the redundancy the database query used to be
+        // needed for.
+        PriceWorkerMetrics::record_unchanged(unchanged);
 
-        if to_write.is_empty() {
+        if to_insert.is_empty() {
             debug!(
-                count = unchanged.len(),
+                count = unchanged,
                 "price worker: every price repeats the last one kept"
             );
             // NOT `no_prices`: that outcome means the source valued nothing,
@@ -237,8 +242,8 @@ impl PriceWorker {
             return;
         }
 
-        let inserted = to_write.len();
-        if let Err(e) = self.price_repository.insert_batch(&to_write).await {
+        let inserted = to_insert.len();
+        if let Err(e) = self.price_repository.insert_batch(&to_insert).await {
             warn!(error = %e, "price worker: insert_batch failed");
             PriceWorkerMetrics::record_tick("insert_failed", start.elapsed().as_secs_f64());
             return;
@@ -247,7 +252,7 @@ impl PriceWorker {
         // Only now, and never before the insert: a batch that failed left no
         // row, and remembering it would hold the real price back until the
         // floor fires — a gap in a series nothing backfills.
-        self.kept.record(&to_write);
+        self.kept.record(&to_insert);
 
         PriceWorkerMetrics::record_inserted(inserted);
         debug!(count = inserted, "price worker: prices inserted");

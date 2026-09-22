@@ -19,21 +19,54 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::{PRICE_STORAGE_SCALE, PriceProvider, TokenPrice};
 
+/// How old the most recent observation may be and still count as a current
+/// price — the 15 minutes of `yog_price_max_age_latest()`.
+///
+/// **A mirror of migration 005, not a preference.** The SQL function is the
+/// source of truth; every `pool_current_tvl` and latest-price read is bounded
+/// by it, and a price older than this stops valuing anything. It is restated
+/// here because `PRICE_SERIES_MAX_GAP` is only correct *relative to it*, and
+/// a floor whose reason lives in another language is a floor nobody can check.
+///
+/// Migrations are forward-only, so this value can only change by a new one
+/// redefining the function — and that migration has to revisit this constant.
+/// Nothing enforces that today.
+pub const PRICE_MAX_AGE_LATEST: Duration = Duration::minutes(15);
+
 /// The widest gap allowed between two kept observations of the same mint.
 ///
-/// Chosen **below** the 15 minutes of `yog_price_max_age_latest()` (migration
-/// 005), which is how old the most recent observation may be and still count
-/// as a current price. Without this floor, a mint whose price never moves
-/// would keep one row for ever: three hours later its last observation is
-/// three hours old, outside that bound *and* outside the one-hour as-of window
-/// of `yog_price_max_age_asof()`, and every USD figure derived from it turns
-/// NULL. Suppressing a repeated row must never suppress the price itself.
+/// Chosen **below** [`PRICE_MAX_AGE_LATEST`]. Without this floor, a mint whose
+/// price never moves would keep one row for ever: three hours later its last
+/// observation is three hours old, outside that bound *and* outside the
+/// one-hour as-of window of `yog_price_max_age_asof()`, and every USD figure
+/// derived from it turns NULL. Suppressing a repeated row must never suppress
+/// the price itself.
 ///
-/// The margin is deliberate. The worker ticks every 30 s
-/// (`CONTEXT_PRICE_INTERVAL_SECS`), so a forced row lands at worst 10 min 30 s
-/// after the previous one — 4 min 30 s of slack under the 15-minute bound, and
-/// six rows an hour where the as-of window asks for one.
+/// ⚠️ **The margin is not the difference between the two constants.** A forced
+/// row does not land at the floor, it lands at the first *tick* on or after it,
+/// so two kept rows can sit `ceil(gap / interval) × interval` apart — strictly
+/// less than `gap + interval`. At the default 30 s cadence that is 10 minutes
+/// on the nose; at 480 s it is 16, and the staleness bound is breached by a
+/// cadence nobody thought of as dangerous. What keeps the two in step is
+/// [`max_price_interval`], which the context daemon enforces at startup.
 const PRICE_SERIES_MAX_GAP: Duration = Duration::minutes(10);
+
+/// The longest cadence a price worker may tick at and still honour
+/// [`PRICE_MAX_AGE_LATEST`] — five minutes.
+///
+/// A forced row lands at the first tick on or after the floor, so two kept
+/// rows sit strictly less than `PRICE_SERIES_MAX_GAP + interval` apart. Keeping
+/// that sum inside the staleness bound is therefore sufficient, and it is the
+/// form that does not depend on arithmetic luck: the real spacing,
+/// `ceil(gap / interval) × interval`, is **not** monotonic in the interval —
+/// 600 s divides the floor and is safe, 480 s does not and breaches the bound
+/// by a minute.
+///
+/// The context daemon refuses a longer `CONTEXT_PRICE_INTERVAL_SECS` at
+/// startup rather than silently letting motionless tokens stop being valued.
+pub fn max_price_interval() -> Duration {
+    PRICE_MAX_AGE_LATEST - PRICE_SERIES_MAX_GAP
+}
 
 /// The last observation kept for each mint — the tail of the written series.
 ///
@@ -93,6 +126,18 @@ impl KeptPrices {
     /// only at the next move of the market. Only [`PriceProvider::Jupiter`] has
     /// an implementation today; the other two variants are why this is written
     /// down rather than left to the future writer to notice.
+    ///
+    /// # Why `confidence` does not
+    ///
+    /// The fourth column `insert_batch` binds is left out on purpose. It is a
+    /// source-reported precision hint about the price, not a second
+    /// observation, and it is an `f32`: a provider whose confidence wobbles in
+    /// its last digits would make every tick look like news and this rule
+    /// inert — the same failure the rounding above exists to prevent, arriving
+    /// through another column. Today the worker hardcodes `None`, so nothing
+    /// is lost. A source that does report one (Helius DAS carries a
+    /// `price_info` confidence) must decide what a *material* change of
+    /// confidence is before adding it here; equality is not that decision.
     pub fn worth_keeping(&self, candidate: &TokenPrice) -> bool {
         let Some(last) = self.last.get(&candidate.mint) else {
             return true;

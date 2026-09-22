@@ -61,13 +61,20 @@ impl PriceWorkerMetrics {
              rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
-        // Materialise it at zero. `describe_counter!` only registers the help
+        // Materialise both at zero. `describe_counter!` only registers the help
         // text: the Prometheus exporter emits nothing for a counter that has
         // never been incremented, so a metric expected to sit at 0 for ever
         // would be *absent* for ever — unalertable, and indistinguishable from
         // a build where the rejection path was dropped. Publishing the zero is
         // what makes "flat at 0" an observation instead of a hope.
+        //
+        // `UNCHANGED_TOTAL` needs it for the opposite reason: it is incremented
+        // deep in the tick, after three early returns, so a context whose
+        // `token_metadata` is still empty leaves `/metrics` with no redundancy
+        // series at all and the README's PromQL returning no data — during
+        // exactly the window an operator is watching a fresh deployment.
         counter!(REJECTED_TOTAL).absolute(0);
+        counter!(UNCHANGED_TOTAL).absolute(0);
     }
 
     pub(crate) fn record_tick(outcome: &'static str, seconds: f64) {
@@ -100,9 +107,9 @@ impl PriceWorkerMetrics {
     }
 
     /// Count prices the redundancy rule suppressed. Called on every tick that
-    /// reached the rule, zero included — the zero is what publishes the series
-    /// on a fresh process, so "nothing was suppressed" reads as a measurement
-    /// rather than as a missing metric.
+    /// reached the rule, zero included, so a tick that suppressed nothing is
+    /// still a tick that was measured. The series itself is published by
+    /// `register_descriptions`, which cannot be reached by an early return.
     ///
     /// [`KeptPrices`][kept] carries the rule.
     ///

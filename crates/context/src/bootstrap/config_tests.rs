@@ -69,3 +69,33 @@ fn debugging_the_config_prints_no_credential() {
     assert!(rendered.contains("das.example.invalid"), "{rendered}");
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }
+
+/// The cadence bound the redundancy filter introduced. It is tested here and
+/// not through `Config::load` on purpose: the environment is process-global,
+/// and the file keeps a single test that touches it.
+///
+/// The three values are not decoration. 30 s is the default; 300 s is the
+/// ceiling itself, which must be *accepted* or the bound is off by one; 480 s
+/// is the value that breaks it, and it sits **between** two safe ones — 600 s
+/// divides the 10-minute floor exactly and spaces rows 10 minutes apart, 480 s
+/// does not and spaces them 16. A guard written as "reject anything large"
+/// would pass this test and still admit 480.
+#[test]
+fn a_cadence_the_price_series_cannot_absorb_is_refused() {
+    assert!(price_interval_the_series_can_absorb(30).is_ok());
+
+    let ceiling = u64::try_from(max_price_interval().num_seconds()).expect("positive");
+    assert!(
+        price_interval_the_series_can_absorb(ceiling).is_ok(),
+        "the ceiling is the longest cadence that WORKS, not the first that fails"
+    );
+
+    let err = price_interval_the_series_can_absorb(480)
+        .expect_err("480s leaves a motionless price unwritten for 16 minutes");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("480") && rendered.contains(&ceiling.to_string()),
+        "an operator reads this in a crash log and needs both the value they \
+         set and the one to set instead: {rendered}"
+    );
+}

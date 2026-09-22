@@ -86,6 +86,9 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   only after the insert succeeds. A restart forgets everything, which costs one
   full batch at the first tick: a row too many, never one too few.
 
+  The floor also puts a ceiling on the cadence: see
+  `CONTEXT_PRICE_INTERVAL_SECS` under *Configuration*.
+
   ⚠️ Ideally this worker is already running when 009 is applied, but
   `docker-compose.yml` orders `yog-context` *after* `yog-migrate`, so the plain
   `up --build` cannot do it — see the deployment note in
@@ -271,6 +274,16 @@ JUPITER_API_KEY=...
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
+
+⚠️ **`CONTEXT_PRICE_INTERVAL_SECS` is capped at 300, and the daemon refuses to
+start above it.** Since the worker writes a motionless price only when the last
+kept row reaches the 10-minute floor, and that row lands at the *next tick*
+after it, a slow cadence pushes the newest observation past the 15 minutes of
+`yog_price_max_age_latest()` — and the tokens that stop being valued are
+precisely the ones that never move, so nothing looks broken. The bound is not
+monotonic (600 s divides the floor and is safe, 480 s does not and breaches it
+by a minute), which is why it is enforced rather than left to judgement. See
+`max_price_interval` in `yog-core`.
 
 **Two Solana endpoints, and this crate is why they are two.** The DAS
 (`getAssetBatch`) is Helius' own API; `getMultipleAccounts` is standard Solana

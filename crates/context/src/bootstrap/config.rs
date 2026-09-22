@@ -16,6 +16,7 @@ use yog_bootstrap::{
     ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, required, required_endpoint,
     required_secret_key, required_secret_url,
 };
+use yog_core::domain::max_price_interval;
 
 /// Default interval between Jupiter price fetches, in seconds.
 ///
@@ -78,16 +79,53 @@ impl Config {
             pool_account: required_endpoint("POOL_ACCOUNT")?,
             jupiter_url: required("JUPITER_URL")?,
             jupiter_api_key: required_secret_key("JUPITER_API_KEY")?,
-            price_interval: Duration::from_secs(duration_var(
-                "CONTEXT_PRICE_INTERVAL_SECS",
-                DEFAULT_PRICE_INTERVAL_SECS,
-            )?),
+            price_interval: price_interval()?,
             metadata_poll_interval: Duration::from_secs(duration_var(
                 "CONTEXT_METADATA_POLL_SECS",
                 DEFAULT_METADATA_POLL_SECS,
             )?),
         })
     }
+}
+
+/// Read `CONTEXT_PRICE_INTERVAL_SECS`, and refuse a cadence the price series
+/// cannot absorb.
+///
+/// The worker no longer writes a row per tick: a motionless price is rewritten
+/// only when the last kept one reaches the floor, and the forced row lands at
+/// the *next tick* after that. Too slow a cadence therefore pushes the newest
+/// observation past `yog_price_max_age_latest()` and stops valuing every
+/// motionless token — silently, and only for the tokens that never move.
+///
+/// Refused at startup rather than logged, because the symptom is USD figures
+/// that go absent hours later, on a subset of pools, with nothing in the logs
+/// pointing back at a cadence someone raised to be kind to Jupiter.
+fn price_interval() -> Result<Duration, ConfigError> {
+    let seconds = duration_var("CONTEXT_PRICE_INTERVAL_SECS", DEFAULT_PRICE_INTERVAL_SECS)?;
+    price_interval_the_series_can_absorb(seconds)
+}
+
+/// The rule of [`price_interval`], separated from the variable it reads.
+///
+/// Environment variables are process-global and this binary's tests run in
+/// parallel, so the module keeps to a single test that touches them (see
+/// `config_tests.rs`). Taking the seconds as an argument is what lets the bound
+/// itself be tested without joining that queue.
+fn price_interval_the_series_can_absorb(seconds: u64) -> Result<Duration, ConfigError> {
+    let ceiling = max_price_interval().num_seconds();
+
+    if i64::try_from(seconds).is_ok_and(|s| s <= ceiling) {
+        return Ok(Duration::from_secs(seconds));
+    }
+
+    Err(ConfigError::UnsupportedCombination {
+        detail: format!(
+            "CONTEXT_PRICE_INTERVAL_SECS={seconds} is longer than the {ceiling}s a price \
+             series can absorb: a token whose price never moves would carry an observation \
+             older than the staleness bound of yog_price_max_age_latest(), and its USD \
+             figures would read as absent. Use {ceiling} or less"
+        ),
+    })
 }
 
 #[cfg(test)]

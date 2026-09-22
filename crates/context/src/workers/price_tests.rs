@@ -834,3 +834,29 @@ fn a_tick_that_changed_nothing_is_not_a_tick_that_priced_nothing() {
          moving `set_priced_mints` below the redundancy filter would read 0 here"
     );
 }
+
+#[test]
+fn the_two_expected_zeros_are_published_before_any_tick() {
+    // `describe_counter!` registers help text only: the Prometheus exporter
+    // emits nothing for a counter never incremented. Both of these are
+    // incremented deep inside a tick, after three early returns, so on a fresh
+    // process — `token_metadata` still empty, every tick returning at
+    // `no_work` — neither series would exist and the README's redundancy PromQL
+    // would return no data, during exactly the window someone is watching a
+    // deployment.
+    let recorder = DebuggingRecorder::new();
+    let snapshotter: Snapshotter = recorder.snapshotter();
+    metrics::with_local_recorder(&recorder, PriceWorkerMetrics::register_descriptions);
+    let snapshot = snapshotter.snapshot().into_vec();
+
+    for name in [
+        "yog_context_price_rejected_total",
+        "yog_context_price_unchanged_total",
+    ] {
+        assert_eq!(
+            value(&snapshot, name),
+            Some(&DebugValue::Counter(0)),
+            "`{name}` must be published at 0 before any tick runs"
+        );
+    }
+}
