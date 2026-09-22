@@ -26,7 +26,8 @@ core/src/
 │   ├── liquidity_flow/    (PoolLiquidityFlow — windowed add/remove + TVL read model)
 │   ├── pool_price_snapshot/ (spot-vs-oracle read model)
 │   ├── token_metadata/    (TokenMetadata + repo)
-│   ├── token_price/       (TokenPrice + repo, PriceProvider)
+│   ├── token_price/       (TokenPrice + repo, PriceProvider, KeptPrices —
+│   │                       which observations earn a row in the series)
 │   ├── network_status/    (singleton snapshot)
 │   ├── announcements/     (Announcement + AnnouncementLookup — operator → users
 │   │                       banner; severity deliberately distinct from signals')
