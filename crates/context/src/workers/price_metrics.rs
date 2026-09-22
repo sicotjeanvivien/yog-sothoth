@@ -56,9 +56,11 @@ impl PriceWorkerMetrics {
             UNCHANGED_TOTAL,
             "Prices fetched but not written because they repeat the last observation kept for \
              that mint and it is still recent. Expected to carry four rows in five: that is the \
-             point, not a fault. unchanged/(unchanged+inserted) is the redundancy of the series, \
-             and a collapse towards 0 means either the market moved or the comparison stopped \
-             rounding to the price column's scale — see KeptPrices::worth_keeping"
+             point, not a fault. rate(unchanged)/(rate(unchanged)+rate(inserted)) is the \
+             suppression rate of the series — rates, not the bare counters, which average over \
+             the process lifetime and hide the collapse. A collapse towards 0 means the market \
+             moved, or CONTEXT_PRICE_INTERVAL_SECS was raised past 300s, or the comparison \
+             stopped rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
         // Materialise both at zero. `describe_counter!` only registers the help

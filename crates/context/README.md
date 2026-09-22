@@ -89,12 +89,19 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   full batch at the first tick: a row too many, never one too few.
 
   The floor is set **one tick early** (`KeptPrices::new` takes the cadence), so
-  the forced row lands at or *before* 10 minutes whatever the interval. Taken
-  literally it would land at the first tick past the floor, which spaces rows by
-  16 minutes at a 480 s cadence while 300 s and 600 s both stay at 10 — a defect
-  hiding between two safe values. See `CONTEXT_PRICE_INTERVAL_SECS` under
-  *Configuration* for the two cadences that are still refused, and why they are
-  not this filter's doing.
+  the forced row lands at 10 minutes and not at the first tick past them — which
+  would space rows by 16 minutes at a 480 s cadence while 300 s and 600 s both
+  stay at 10, a defect hiding between two safe values.
+
+  ⚠️ **Above 300 s of cadence the rule saves nothing.** Two kept rows are at
+  most 10 minutes apart, so a cadence over half of that leaves no room for a
+  suppressed tick and every tick writes. Correct — freshness beats volume — but
+  it means raising the cadence past five minutes silently costs the whole
+  benefit, with `yog_context_price_unchanged_total` flat at 0. The startup line
+  says which regime you are in: `rewrite_at_most_every_secs` equal to the
+  cadence means nothing is being suppressed. See `CONTEXT_PRICE_INTERVAL_SECS`
+  under *Configuration* for the two cadences that are refused outright, and why
+  they are not this filter's doing.
 
   ⚠️ Ideally this worker is already running when 009 is applied, but
   `docker-compose.yml` orders `yog-context` *after* `yog-migrate`, so the plain
@@ -259,15 +266,22 @@ losing nothing.
 judged on:
 
 ```promql
-yog_context_price_unchanged_total
-  / (yog_context_price_unchanged_total + yog_context_price_inserted_total)
+sum(rate(yog_context_price_unchanged_total[1h]))
+  / sum(rate(yog_context_price_unchanged_total[1h])
+        + rate(yog_context_price_inserted_total[1h]))
 ```
 
 It answers "how much of what we fetch is worth storing". It should sit high —
 four rows in five suppressed is the design, not a fault. A collapse towards 0
-means either that the market genuinely moved, or that the comparison stopped
-rounding to the price column's scale, which makes the filter inert without
-failing anything.
+means the market genuinely moved, or the cadence was raised past 300 s, or the
+comparison stopped rounding to the price column's scale — the last making the
+filter inert without failing anything.
+
+⚠️ **`rate()` on both sides, not the bare counters.** A ratio of lifetime
+counters is a process-lifetime average: it moves far too slowly to show the
+collapse this expression exists to detect, and the cold-start batch — every
+known mint inserted on the first tick after a restart — biases it downwards for
+good.
 
 ## Configuration
 

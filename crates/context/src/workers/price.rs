@@ -81,7 +81,7 @@ impl PriceWorker {
         // a `config_log` module of its own, which one line does not yet earn.
         info!(
             cadence_secs = self.interval.as_secs(),
-            rewrite_floor_secs = self.kept.floor().num_seconds(),
+            rewrite_at_most_every_secs = self.kept.rewrites_at_most_every().num_seconds(),
             "PriceWorker started — a motionless price is rewritten at the floor"
         );
 

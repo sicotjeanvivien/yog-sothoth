@@ -20,17 +20,35 @@
 use super::*;
 use std::str::FromStr;
 
-/// The rule at the default cadence. `TICK` is named because the floor is
-/// `PRICE_SERIES_MAX_GAP - TICK`: the tests below assert the *effective* floor,
-/// not the constant, which is the whole point of passing the cadence in.
+/// The rule at the default cadence.
 const TICK: core::time::Duration = core::time::Duration::from_secs(30);
 
 fn kept_prices() -> KeptPrices {
     KeptPrices::new(TICK)
 }
 
-fn floor() -> Duration {
-    PRICE_SERIES_MAX_GAP - Duration::seconds(TICK.as_secs() as i64)
+/// Walk the ticks as the worker does, and return how long the motionless price
+/// went unwritten — `None` if no tick in `PRICE_SERIES_MAX_GAP × 2` wrote one.
+///
+/// Every claim about the floor is a claim about *this* number, which is why the
+/// tests go through it rather than reading a threshold: the threshold is what
+/// an age is compared against, the row lands at the first tick past it, and the
+/// gap between those two is exactly the defect this walk exists to catch.
+fn ticks_until_a_motionless_price_is_rewritten(cadence: u64) -> Option<Duration> {
+    let mint = Pubkey::new_unique();
+    let mut kept = KeptPrices::new(core::time::Duration::from_secs(cadence));
+    kept.record(&[at(mint, "1.0", t0())]);
+
+    let step = Duration::seconds(cadence as i64);
+    let mut when = t0();
+    while when - t0() <= PRICE_SERIES_MAX_GAP * 2 {
+        when += step;
+        if kept.worth_keeping(&at(mint, "1.0", when)) {
+            return Some(when - t0());
+        }
+    }
+
+    None
 }
 
 fn at(mint: Pubkey, price: &str, fetched_at: DateTime<Utc>) -> TokenPrice {
@@ -80,19 +98,15 @@ fn a_motionless_price_is_kept_at_the_floor() {
     // written anyway so the series never ages past
     // `yog_price_max_age_latest()`. Removing the floor branch must turn this
     // red — that mutation is the proof, not this assertion on its own.
-    let mint = Pubkey::new_unique();
-    let mut kept = kept_prices();
-    kept.record(&[at(mint, "1.0", t0())]);
-
-    let just_under = t0() + floor() - Duration::seconds(1);
-    assert!(
-        !kept.worth_keeping(&at(mint, "1.0", just_under)),
-        "one second short of the floor is still a repeat"
-    );
-
-    assert!(
-        kept.worth_keeping(&at(mint, "1.0", t0() + floor())),
-        "at the floor exactly, the row is written — the bound is inclusive"
+    //
+    // `PRICE_SERIES_MAX_GAP` **exactly**, not one tick short of it. An earlier
+    // version compared with `>=`, which wrote the row a whole tick early and
+    // read as correct because the test asserted the threshold instead of the
+    // spacing: at a 30 s cadence it landed at 570 s, and at 200 s at 400 s —
+    // a third more forced rows than the floor asks for.
+    assert_eq!(
+        ticks_until_a_motionless_price_is_rewritten(TICK.as_secs()),
+        Some(PRICE_SERIES_MAX_GAP)
     );
 }
 
@@ -173,59 +187,102 @@ fn recording_again_moves_the_floor_forward() {
         !kept.worth_keeping(&at(mint, "1.1", t0() + Duration::minutes(11))),
         "11 minutes after the first row, but only 5 after the last kept one"
     );
-    assert!(kept.worth_keeping(&at(mint, "1.1", mid + floor())));
+    assert!(kept.worth_keeping(&at(mint, "1.1", mid + PRICE_SERIES_MAX_GAP)));
 }
 
 #[test]
-fn the_floor_is_set_one_tick_early_so_the_row_lands_before_it() {
-    // The defect this constructor exists to remove: a forced row lands at the
-    // first tick on or after the floor, so a floor taken literally would space
-    // rows by `ceil(gap / interval) × interval` — 16 minutes at a 480 s
-    // cadence, past the 15-minute staleness bound, while 300 s and 600 s both
-    // stay at 10. Subtracting one tick makes the row land at or *before*
-    // PRICE_SERIES_MAX_GAP for every cadence, so there is no ragged set of
-    // safe values and no ceiling to enforce.
-    let mint = Pubkey::new_unique();
-
-    for secs in [1_u64, 30, 100, 299, 480, 599] {
-        let tick = core::time::Duration::from_secs(secs);
-        let mut kept = KeptPrices::new(tick);
-        kept.record(&[at(mint, "1.0", t0())]);
-
-        // Walk the ticks as the worker does, and find the first one that writes.
-        let step = Duration::seconds(secs as i64);
-        let mut when = t0();
-        loop {
-            when += step;
-            if kept.worth_keeping(&at(mint, "1.0", when)) {
-                break;
-            }
-            assert!(
-                when - t0() < PRICE_SERIES_MAX_GAP,
-                "cadence {secs}s: no row written by the floor itself"
-            );
-        }
+fn no_cadence_spaces_two_kept_rows_past_the_floor() {
+    // The defect the constructor removes: a forced row lands at the first tick
+    // *past* the threshold, so a floor taken literally would space rows by
+    // `ceil(gap / interval) × interval` — 16 minutes at a 480 s cadence, past
+    // the 15-minute staleness bound, while 300 s and 600 s both stayed at 10.
+    // The defect hid between two safe values, so this walks cadences on both
+    // sides of it rather than sampling round numbers.
+    for secs in [1_u64, 30, 100, 200, 299, 300, 301, 400, 480, 599] {
+        let gap = ticks_until_a_motionless_price_is_rewritten(secs)
+            .unwrap_or_else(|| panic!("cadence {secs}s: no row written at all"));
 
         assert!(
-            when - t0() <= PRICE_SERIES_MAX_GAP,
-            "cadence {secs}s: the forced row landed {} s after the last kept one, \
-             past the {} s floor",
-            (when - t0()).num_seconds(),
+            gap <= PRICE_SERIES_MAX_GAP,
+            "cadence {secs}s: two kept rows {} s apart, past the {} s floor",
+            gap.num_seconds(),
             PRICE_SERIES_MAX_GAP.num_seconds()
         );
     }
 }
 
 #[test]
-fn a_cadence_at_or_past_the_floor_writes_every_tick() {
-    // Nothing left to subtract: the rule goes inert rather than promising a
-    // freshness the cadence cannot deliver. The safe direction — a row too
-    // many, never one too few.
-    let mint = Pubkey::new_unique();
-    let mut kept = KeptPrices::new(core::time::Duration::from_secs(
-        PRICE_SERIES_MAX_GAP.num_seconds() as u64,
-    ));
-    kept.record(&[at(mint, "1.0", t0())]);
+fn the_forced_row_lands_as_late_as_the_cadence_allows() {
+    // The other half, and the one no assertion covered: landing *early* is
+    // just as wrong, it simply fails by writing rows nobody asked for instead
+    // of by going stale. With `>=` instead of `>`, a 200 s cadence forced a row
+    // at 400 s — a third more forced rows than the floor requires — and every
+    // "is it under the floor?" assertion still passed.
+    //
+    // The expected value is the last tick at or before the floor, which is the
+    // definition of "as late as the cadence allows".
+    for secs in [1_u64, 30, 100, 200, 299, 300] {
+        let step = Duration::seconds(secs as i64);
+        let latest = step * (PRICE_SERIES_MAX_GAP.num_seconds() / secs as i64) as i32;
 
-    assert!(kept.worth_keeping(&at(mint, "1.0", t0() + Duration::seconds(1))));
+        assert_eq!(
+            ticks_until_a_motionless_price_is_rewritten(secs),
+            Some(latest),
+            "cadence {secs}s: the forced row is early, so rows are being written \
+             that the floor does not ask for"
+        );
+    }
+}
+
+#[test]
+fn above_half_the_floor_every_tick_writes_and_the_rule_goes_inert() {
+    // Where the rule stops saving anything, stated rather than discovered.
+    //
+    // Two kept rows are at most `PRICE_SERIES_MAX_GAP` apart, so a cadence over
+    // half of it leaves no room for a suppressed tick in between: from 301 s up
+    // every tick must write. That is correct — freshness beats volume — but it
+    // means an operator who raises the cadence past five minutes silently
+    // loses the whole point of this rule, with `unchanged_total` flat at 0 and
+    // nothing else saying so. `rewrites_at_most_every` is what says it: above
+    // the threshold it collapses to the cadence itself.
+    let half = PRICE_SERIES_MAX_GAP.num_seconds() / 2;
+
+    assert_eq!(
+        ticks_until_a_motionless_price_is_rewritten(half as u64),
+        Some(PRICE_SERIES_MAX_GAP),
+        "at exactly half the floor, one tick is still suppressed"
+    );
+
+    for secs in [half as u64 + 1, 400, 599, 600, 899] {
+        let step = Duration::seconds(secs as i64);
+        assert_eq!(
+            ticks_until_a_motionless_price_is_rewritten(secs),
+            Some(step),
+            "cadence {secs}s: the first tick must write — nothing can be suppressed"
+        );
+        assert_eq!(
+            KeptPrices::new(core::time::Duration::from_secs(secs)).rewrites_at_most_every(),
+            step,
+            "and the worker must announce the cadence, not a floor it cannot honour"
+        );
+    }
+}
+
+#[test]
+fn the_announced_spacing_is_the_one_observed() {
+    // `rewrites_at_most_every` is logged at startup and is the only number an
+    // operator gets. It is derived arithmetically while the walk above steps
+    // tick by tick, so nothing but this test keeps the two honest — and the
+    // `>=` defect made them disagree by exactly one tick.
+    for secs in [1_u64, 30, 100, 200, 299, 300, 301, 480, 599] {
+        let announced =
+            KeptPrices::new(core::time::Duration::from_secs(secs)).rewrites_at_most_every();
+
+        assert_eq!(
+            ticks_until_a_motionless_price_is_rewritten(secs),
+            Some(announced),
+            "cadence {secs}s: the worker announces {} s and the rule does something else",
+            announced.num_seconds()
+        );
+    }
 }

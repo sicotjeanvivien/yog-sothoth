@@ -80,6 +80,7 @@ const PRICE_SERIES_MAX_GAP: Duration = Duration::minutes(10);
 #[derive(Debug)]
 pub struct KeptPrices {
     last: HashMap<Pubkey, KeptPrice>,
+    tick: Duration,
     max_gap: Duration,
 }
 
@@ -107,33 +108,54 @@ impl KeptPrices {
     /// say that the cadence bounds freshness exactly as it did before any of
     /// this existed.
     ///
-    /// A cadence at or past the floor leaves nothing to subtract, so every tick
-    /// writes and the rule goes inert — the safe direction.
+    /// ⚠️ **Above half the floor the rule saves nothing, and that is correct.**
+    /// Two kept rows are at most `PRICE_SERIES_MAX_GAP` apart, so a cadence
+    /// over half of it leaves no room for a suppressed tick in between: from
+    /// 301 s up, every tick writes. Freshness beats volume — but an operator
+    /// who raises the cadence past five minutes loses the whole point of this
+    /// rule, with `unchanged_total` flat at 0 and nothing else saying so.
+    /// [`Self::rewrites_at_most_every`] is what says it: past the threshold it
+    /// collapses to the cadence itself.
     ///
     /// ⚠️ It is the *configured* cadence, not the observed one. A cycle that
     /// persistently overruns its period (this worker's took 10.7–19.9 s on
     /// 14 September 2026, and 85 s against 5 028 mints on 22 September) widens
-    /// the spacing by the overrun. The five minutes between
-    /// `PRICE_SERIES_MAX_GAP` and [`PRICE_MAX_AGE_LATEST`] are what absorb it:
-    /// a 200 s cycle against a 30 s cadence still lands at 600 s.
+    /// the spacing by the overrun, and the five minutes between
+    /// `PRICE_SERIES_MAX_GAP` and [`PRICE_MAX_AGE_LATEST`] are what absorb it —
+    /// **up to a cycle of 450 s**, where the spacing reaches 900 s exactly. A
+    /// 200 s cycle against a 30 s cadence still lands at 600 s; a 500 s one
+    /// lands at 1 000 s, past the staleness bound. Nothing here can see that,
+    /// because it reads the cadence and not the clock; what it would take is
+    /// Jupiter pacing, which is its own piece of work.
     pub fn new(tick_interval: core::time::Duration) -> Self {
         let tick = Duration::from_std(tick_interval).unwrap_or(PRICE_SERIES_MAX_GAP);
 
         Self {
             last: HashMap::new(),
+            tick,
             max_gap: (PRICE_SERIES_MAX_GAP - tick).max(Duration::zero()),
         }
     }
 
-    /// The floor this cadence yields — how long a motionless price may stand
-    /// before a fresh row is written anyway.
+    /// The longest a motionless price can go unwritten at this cadence.
+    ///
+    /// **The spacing, not the threshold.** `max_gap` is what an age is compared
+    /// against; the row itself lands at the first *tick* strictly past it, so
+    /// the two differ by up to one tick and only this one is meaningful to a
+    /// reader. At 30 s it is 600 s exactly; above 300 s it collapses to the
+    /// cadence, because from there every tick is needed to honour the floor.
     ///
     /// Exposed for one reason: it follows from the cadence *and* a constant of
     /// this crate, so an operator reading `CONTEXT_PRICE_INTERVAL_SECS=30`
     /// cannot derive it, and nothing else in either crate names it. The price
     /// worker states it once at startup.
-    pub fn floor(&self) -> Duration {
-        self.max_gap
+    pub fn rewrites_at_most_every(&self) -> Duration {
+        // A zero cadence never reaches here — `yog-context` refuses it at
+        // startup — but dividing by it would panic, so it degrades to "every
+        // tick" rather than taking the process down.
+        let tick = self.tick.num_seconds().max(1);
+
+        Duration::seconds((self.max_gap.num_seconds() / tick + 1) * tick)
     }
 
     /// Whether this observation earns a row.
@@ -186,7 +208,7 @@ impl KeptPrices {
 
         last.price_usd != at_storage_scale(candidate.price_usd)
             || last.price_provider != candidate.price_provider
-            || candidate.fetched_at - last.fetched_at >= self.max_gap
+            || candidate.fetched_at - last.fetched_at > self.max_gap
     }
 
     /// Remember observations that have been written.

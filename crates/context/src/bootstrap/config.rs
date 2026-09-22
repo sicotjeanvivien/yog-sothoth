@@ -103,6 +103,15 @@ impl Config {
 ///     `pool_current_tvl` reads NULL. Not the filter's doing either: a worker
 ///     writing on every tick at that cadence was already past the bound.
 ///
+/// ⚠️ **It bounds the cadence, not the age of the newest price.** A cycle takes
+/// time of its own — 85 s against 5 028 mints on 22 September 2026 — and that
+/// time adds to the cadence before the next row lands, so 899 s is accepted
+/// while the real worst age is nearer 984 s. Leaving headroom would mean
+/// picking a cycle budget out of the air; what actually bounds the cycle is
+/// Jupiter pacing, which is its own piece of work. This guard refuses the
+/// cadences that cannot keep prices current **on their own**, which is the
+/// whole of what it claims.
+///
 /// Refused at startup rather than logged, because the symptom arrives hours
 /// later, on the subset of pools nobody is watching, with nothing in the logs
 /// pointing back at a cadence someone raised to be kind to Jupiter.
