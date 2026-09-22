@@ -35,6 +35,15 @@ pub trait TokenPriceRepository: Send + Sync {
     /// (a backfill, a second price source, a repair task) must apply the same
     /// filter; the debug assertion in the Postgres implementation is there to
     /// make forgetting it fail loudly in dev rather than quietly in production.
+    ///
+    /// # Not a contract: [`KeptPrices`]
+    ///
+    /// The price worker also drops observations that repeat the last row kept
+    /// for their mint. That one is an economy, not a contract — a caller that
+    /// writes every observation is *correct*, merely four times heavier — and
+    /// the reason it is safe to skip a row lives entirely with the rule.
+    ///
+    /// [`KeptPrices`]: crate::domain::KeptPrices
     async fn insert_batch(&self, prices: &[TokenPrice]) -> RepositoryResult<()>;
 }
 

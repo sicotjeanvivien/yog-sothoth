@@ -69,3 +69,42 @@ fn debugging_the_config_prints_no_credential() {
     assert!(rendered.contains("das.example.invalid"), "{rendered}");
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }
+
+/// The two cadences the daemon cannot honour. Tested here and not through
+/// `Config::load` on purpose: the environment is process-global, and the file
+/// keeps a single test that touches it.
+///
+/// Neither refusal belongs to the redundancy filter — `KeptPrices` decides its
+/// floor one tick early so that the cadence alone bounds freshness. What the
+/// filter changed is that the coupling is now *named*, and these are the two
+/// values that were silently accepted before: zero, which panics the ticker
+/// inside the spawned worker long after startup reported success, and anything
+/// at or past the staleness bound, which leaves every price stale before the
+/// next tick fires.
+///
+/// 480 s is in the list because it was the wrong answer to this question: an
+/// earlier guard capped the cadence at 300 s, on the theory that the floor plus
+/// one tick had to fit under the bound. It must be **accepted** — the floor
+/// absorbs the cadence now, and a rule that still refused it would be the old
+/// one wearing a new name.
+#[test]
+fn only_a_cadence_that_keeps_prices_current_is_accepted() {
+    for accepted in [1_u64, 30, 300, 480, 899] {
+        assert!(
+            price_interval_that_keeps_prices_current(accepted).is_ok(),
+            "{accepted}s is under the staleness bound and must be accepted"
+        );
+    }
+
+    let zero = price_interval_that_keeps_prices_current(0)
+        .expect_err("tokio::time::interval panics on a zero period");
+    assert!(zero.to_string().contains("zero"), "{zero}");
+
+    let bound = u64::try_from(PRICE_MAX_AGE_LATEST.num_seconds()).expect("positive");
+    let stale = price_interval_that_keeps_prices_current(bound)
+        .expect_err("a price would be stale before the next tick fires");
+    assert!(
+        stale.to_string().contains(&bound.to_string()),
+        "an operator reads this in a crash log: {stale}"
+    );
+}

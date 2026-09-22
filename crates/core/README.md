@@ -27,6 +27,8 @@ core/src/
 │   ├── pool_price_snapshot/ (spot-vs-oracle read model)
 │   ├── token_metadata/    (TokenMetadata + repo)
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)
+│   ├── kept_prices/       (KeptPrices — what the price series already records,
+│   │                       and what a new observation must say to earn a row)
 │   ├── network_status/    (singleton snapshot)
 │   ├── announcements/     (Announcement + AnnouncementLookup — operator → users
 │   │                       banner; severity deliberately distinct from signals')

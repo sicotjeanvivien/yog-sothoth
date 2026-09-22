@@ -17,7 +17,9 @@ context/src/
 ├── providers/    ← adapters: HeliusDasClient, JupiterPriceClient,
 │                   SolanaAccountClient (+ provider metrics)
 ├── workers/      ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
-│                   (+ per-worker metrics)
+│                   (+ per-worker metrics, and tick_outcome: TickOutcome, the
+│                   seven ways a pricing cycle ends — returning one is what
+│                   makes a silent exit fail to compile)
 ├── bootstrap/    ← Config::load(), Daemon::new — composition root, and the
 │                   stop: run() joins its three workers under the shared grace
 ├── error/        ← SourceError, WorkerError
@@ -61,6 +63,45 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   that mint stays known, leaving an as-of gap that migration 005 established
   never heals. The database is the guarantee; this filter is what keeps it from
   ever firing.
+
+  **It also writes only what says something new.** A price identical to the
+  last row kept for its mint earns no row of its own. Without that the series
+  grows at the rate of the worker rather than at the rate of the prices — 70 to
+  82 % of the rows repeated their predecessor (measured 22 September 2026). The
+  rule is
+  `KeptPrices` in `yog-core` — a product judgement about freshness, not a
+  storage trick — and it turns on two things that are easy to get wrong:
+
+  - **a floor.** A motionless price is written anyway once the last kept row
+    reaches 10 minutes, chosen under the 15 minutes of
+    `yog_price_max_age_latest()` (migration 005). Without it a stable token's
+    last observation ages out of both staleness windows and its USD figures
+    turn NULL — a worse defect than the volume it saves.
+  - **rounding to the column's scale.** `NUMERIC(38, 18)` rounds on write, and
+    80 % of the rows measured carry exactly 18 decimals, so the value Jupiter
+    sent is not the value the table holds. The comparison therefore rounds
+    first; comparing the raw `Decimal`s would find almost no two prices equal
+    and suppress nothing at all.
+
+  The worker holds the last kept row per mint **in memory** — it is the only
+  writer of `token_prices`, so nothing else could tell it — and records a row
+  only after the insert succeeds. A restart forgets everything, which costs one
+  full batch at the first tick: a row too many, never one too few.
+
+  The floor is set **one tick early** (`KeptPrices::new` takes the cadence), so
+  the forced row lands at 10 minutes and not at the first tick past them — which
+  would space rows by 16 minutes at a 480 s cadence while 300 s and 600 s both
+  stay at 10, a defect hiding between two safe values.
+
+  ⚠️ **Above 300 s of cadence the rule saves nothing.** Two kept rows are at
+  most 10 minutes apart, so a cadence over half of that leaves no room for a
+  suppressed tick and every tick writes. Correct — freshness beats volume — but
+  it means raising the cadence past five minutes silently costs the whole
+  benefit, with `yog_context_price_unchanged_total` flat at 0. The startup line
+  says which regime you are in: `rewrite_at_most_every_secs` equal to the
+  cadence means nothing is being suppressed. See `CONTEXT_PRICE_INTERVAL_SECS`
+  under *Configuration* for the two cadences that are refused outright, and why
+  they are not this filter's doing.
 
   ⚠️ Ideally this worker is already running when 009 is applied, but
   `docker-compose.yml` orders `yog-context` *after* `yog-migrate`, so the plain
@@ -203,13 +244,44 @@ A tick that reached Jupiter but priced nothing sets the gauge to 0 and records
 `yog_context_price_tick_total{outcome="no_prices"}` — it must not look like a
 tick that never ran.
 
-⚠️ The numerator counts the prices **kept**, not the ones Jupiter returned: a
+A tick that priced everything and wrote nothing because nothing moved records
+`outcome="unchanged"` instead, and **that one is the normal case** — most ticks
+land there. The two must never share a label: `no_prices` is the anomaly to
+alert on, and merging them would leave the alert permanently lit.
+
+⚠️ **The numerator sits between the worker's two filters, and each side is a
+decision.** It counts the prices **kept**, not the ones Jupiter returned: a
 price refused as unstorable is, downstream, exactly as absent as one the source
 never sent, so counting it would inflate the coverage the gauge exists to
 measure. `outcome="no_prices"` therefore also covers a tick whose every price was
 refused; `yog_context_price_rejected_total` tells the two apart and should sit
 flat at 0 — a rising count means a very-high-supply mint entered the known set,
-and that its USD figures will be **absent rather than wrong**.
+and that its USD figures will be **absent rather than wrong**. But it counts
+them *before* the redundancy filter, for the opposite reason: a price suppressed
+as unchanged is still valued downstream, by the row that already carries it.
+Counting after would read as a coverage collapse to under a fifth, on a system
+losing nothing.
+
+**Redundancy of the series** is the second ratio, and the one this worker is
+judged on:
+
+```promql
+sum(rate(yog_context_price_unchanged_total[1h]))
+  / sum(rate(yog_context_price_unchanged_total[1h])
+        + rate(yog_context_price_inserted_total[1h]))
+```
+
+It answers "how much of what we fetch is worth storing". It should sit high —
+four rows in five suppressed is the design, not a fault. A collapse towards 0
+means the market genuinely moved, or the cadence was raised past 300 s, or the
+comparison stopped rounding to the price column's scale — the last making the
+filter inert without failing anything.
+
+⚠️ **`rate()` on both sides, not the bare counters.** A ratio of lifetime
+counters is a process-lifetime average: it moves far too slowly to show the
+collapse this expression exists to detect, and the cold-start batch — every
+known mint inserted on the first tick after a restart — biases it downwards for
+good.
 
 ## Configuration
 
@@ -223,6 +295,14 @@ JUPITER_API_KEY=...
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
+
+⚠️ **`CONTEXT_PRICE_INTERVAL_SECS` must be non-zero and under 900 s, and the
+daemon refuses to start otherwise.** Zero panics the ticker inside the spawned
+worker, long after startup reported success; 900 s or more leaves the newest
+price older than `yog_price_max_age_latest()` before the next tick even fires,
+whether or not anything is being suppressed. Neither refusal comes from the
+redundancy filter: `KeptPrices` sets its floor one tick early so that the
+cadence, and nothing else, bounds freshness.
 
 **Two Solana endpoints, and this crate is why they are two.** The DAS
 (`getAssetBatch`) is Helius' own API; `getMultipleAccounts` is standard Solana

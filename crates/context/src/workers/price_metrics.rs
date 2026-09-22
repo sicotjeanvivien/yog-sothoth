@@ -8,6 +8,7 @@ const KNOWN_MINTS: &str = "yog_context_price_known_mints";
 const PRICED_MINTS: &str = "yog_context_price_priced_mints";
 const INSERTED_TOTAL: &str = "yog_context_price_inserted_total";
 const REJECTED_TOTAL: &str = "yog_context_price_rejected_total";
+const UNCHANGED_TOTAL: &str = "yog_context_price_unchanged_total";
 
 pub(crate) struct PriceWorkerMetrics;
 
@@ -15,9 +16,10 @@ impl PriceWorkerMetrics {
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TICK_TOTAL,
-            "Price worker ticks completed (label: outcome=ok|no_work|list_failed|source_hard_error|no_prices|insert_failed). \
+            "Price worker ticks completed (label: outcome=ok|no_work|list_failed|source_hard_error|no_prices|unchanged|insert_failed). \
              `no_prices` covers both a source that priced nothing and a tick whose every price was rejected as unstorable — \
-             yog_context_price_rejected_total tells the two apart"
+             yog_context_price_rejected_total tells the two apart. `unchanged` is the opposite and is the NORMAL case: \
+             every price came back identical to the last one kept, so the tick wrote nothing on purpose"
         );
         describe_histogram!(
             TICK_DURATION,
@@ -50,13 +52,36 @@ impl PriceWorkerMetrics {
              figures are absent rather than wrong"
         );
 
-        // Materialise it at zero. `describe_counter!` only registers the help
+        describe_counter!(
+            UNCHANGED_TOTAL,
+            "Prices fetched but not written because they repeat the last observation kept for \
+             that mint and it is still recent. Expected to carry four rows in five: that is the \
+             point, not a fault. rate(unchanged)/(rate(unchanged)+rate(inserted)) is the \
+             suppression rate of the series — rates, not the bare counters, which average over \
+             the process lifetime and hide the collapse. A collapse towards 0 means the market \
+             moved, or CONTEXT_PRICE_INTERVAL_SECS was raised past 300s, or the comparison \
+             stopped rounding to the price column's scale — see KeptPrices::worth_keeping"
+        );
+
+        // Materialise both at zero. `describe_counter!` only registers the help
         // text: the Prometheus exporter emits nothing for a counter that has
         // never been incremented, so a metric expected to sit at 0 for ever
         // would be *absent* for ever — unalertable, and indistinguishable from
         // a build where the rejection path was dropped. Publishing the zero is
         // what makes "flat at 0" an observation instead of a hope.
+        //
+        // `UNCHANGED_TOTAL` needs it for the opposite reason: it is incremented
+        // deep in the tick, after three early returns, so a context whose
+        // `token_metadata` is still empty leaves `/metrics` with no redundancy
+        // series at all and the README's PromQL returning no data — during
+        // exactly the window an operator is watching a fresh deployment.
         counter!(REJECTED_TOTAL).absolute(0);
+        counter!(UNCHANGED_TOTAL).absolute(0);
+        // And `INSERTED_TOTAL`, because the redundancy expression divides by
+        // their SUM: in PromQL a vector-to-vector `+` matches nothing when one
+        // side is absent, so publishing only the numerator would still leave
+        // the query returning no data on the very deployment it was written for.
+        counter!(INSERTED_TOTAL).absolute(0);
     }
 
     pub(crate) fn record_tick(outcome: &'static str, seconds: f64) {
@@ -86,5 +111,17 @@ impl PriceWorkerMetrics {
     /// [is_storable]: yog_core::domain::TokenPrice::is_storable
     pub(crate) fn record_rejected(count: usize) {
         counter!(REJECTED_TOTAL).increment(count as u64);
+    }
+
+    /// Count prices the redundancy rule suppressed. Called on every tick that
+    /// reached the rule, zero included, so a tick that suppressed nothing is
+    /// still a tick that was measured. The series itself is published by
+    /// `register_descriptions`, which cannot be reached by an early return.
+    ///
+    /// [`KeptPrices`][kept] carries the rule.
+    ///
+    /// [kept]: yog_core::domain::KeptPrices
+    pub(crate) fn record_unchanged(count: usize) {
+        counter!(UNCHANGED_TOTAL).increment(count as u64);
     }
 }

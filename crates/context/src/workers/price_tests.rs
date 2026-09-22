@@ -151,7 +151,7 @@ async fn no_known_mints_skips_source_and_insert() {
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -180,7 +180,7 @@ async fn inserts_prices_for_all_priced_mints_with_uniform_timestamp() {
         priced(mint_c, "42.5"),
     ])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -242,7 +242,7 @@ async fn inserts_only_what_source_priced() {
         priced(mint_c, "3.0"),
     ])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -285,7 +285,7 @@ async fn unstorable_price_is_dropped_before_the_batch() {
         priced(mint_c, "3.0"),
     ])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -320,7 +320,7 @@ async fn a_tick_of_only_unstorable_prices_inserts_nothing() {
         "0.0000000000000000001",
     )])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -358,7 +358,7 @@ async fn an_overflowing_price_is_dropped_before_the_batch() {
         priced(mint_c, "3.0"),
     ])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -389,7 +389,7 @@ async fn midpoint_price_is_kept() {
         "0.0000000000000000005",
     )])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -412,7 +412,7 @@ async fn list_known_mints_error_skips_cycle_silently() {
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -434,7 +434,7 @@ async fn no_insert_when_no_chunk_yields_a_price() {
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -461,7 +461,7 @@ async fn insert_batch_error_does_not_panic() {
         "1.0",
     )])]));
 
-    let worker = PriceWorker::new(
+    let mut worker = PriceWorker::new(
         metadata_repo,
         price_repo.clone(),
         source.clone(),
@@ -472,6 +472,99 @@ async fn insert_batch_error_does_not_panic() {
 
     // Sanity: the insert WAS attempted before failing.
     assert_eq!(price_repo.inserts().len(), 1);
+}
+
+#[tokio::test]
+async fn a_price_that_repeats_is_written_once() {
+    // The whole change in one test: two ticks, one unchanged price, one row.
+    // The two ticks are milliseconds apart, so the 10-minute floor cannot be
+    // what suppresses the second — only the value comparison can.
+    let mint = pk(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![
+        Ok(vec![priced(mint, "1.0")]),
+        Ok(vec![priced(mint, "1.0")]),
+    ]));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+
+    assert_eq!(
+        source.calls().len(),
+        2,
+        "both ticks still ASK for the price"
+    );
+    let inserts = price_repo.inserts();
+    assert_eq!(inserts.len(), 1, "only the first tick writes");
+    assert_eq!(inserts[0][0].price_usd, dec("1.0"));
+}
+
+#[tokio::test]
+async fn a_price_that_moved_is_written_on_the_next_tick() {
+    // The counterpart, and what keeps the test above from passing against a
+    // worker that simply stopped writing after its first tick.
+    let mint = pk(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![
+        Ok(vec![priced(mint, "1.0")]),
+        Ok(vec![priced(mint, "1.5")]),
+    ]));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+
+    let inserts = price_repo.inserts();
+    assert_eq!(inserts.len(), 2);
+    assert_eq!(inserts[1][0].price_usd, dec("1.5"));
+}
+
+#[tokio::test]
+async fn a_failed_insert_leaves_nothing_remembered() {
+    // The ordering guard. `KeptPrices::record` runs only after a successful
+    // insert; recording before it would make the worker believe a row exists
+    // that the database refused, and the real price would then wait for the
+    // 10-minute floor — a gap nothing backfills.
+    let mint = pk(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    price_repo.fail_insert_once(RepositoryError::Integrity("disk full".into()));
+
+    let source = Arc::new(FakePriceSource::with_responses(vec![
+        Ok(vec![priced(mint, "1.0")]),
+        Ok(vec![priced(mint, "1.0")]),
+    ]));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await; // insert fails
+    worker.run_one_cycle().await; // same price — must be retried, not skipped
+
+    assert_eq!(
+        price_repo.inserts().len(),
+        2,
+        "the price the first tick could not write must be written by the second"
+    );
 }
 
 // ── Coverage metrics ──────────────────────────────────────────────────
@@ -496,6 +589,20 @@ fn snapshot_one_cycle(
     Option<metrics::SharedString>,
     DebugValue,
 )> {
+    snapshot_cycles(worker, 1)
+}
+
+/// Same, over `cycles` consecutive ticks of the SAME worker — the only way to
+/// observe anything that depends on what the previous tick kept.
+fn snapshot_cycles(
+    mut worker: PriceWorker,
+    cycles: usize,
+) -> Vec<(
+    metrics_util::CompositeKey,
+    Option<metrics::Unit>,
+    Option<metrics::SharedString>,
+    DebugValue,
+)> {
     let recorder = DebuggingRecorder::new();
     let snapshotter: Snapshotter = recorder.snapshotter();
 
@@ -503,7 +610,11 @@ fn snapshot_one_cycle(
         tokio::runtime::Builder::new_current_thread()
             .build()
             .expect("current-thread runtime")
-            .block_on(async { worker.run_one_cycle().await });
+            .block_on(async {
+                for _ in 0..cycles {
+                    worker.run_one_cycle().await;
+                }
+            });
     });
 
     // ONE snapshot, queried repeatedly: `Snapshotter::snapshot` is destructive
@@ -657,4 +768,100 @@ fn a_hard_source_error_also_zeroes_the_priced_gauge() {
         "a source that answered nothing priced nothing — the coverage ratio \
          must say 0, not hold its last value"
     );
+}
+
+#[test]
+fn a_tick_that_changed_nothing_is_not_a_tick_that_priced_nothing() {
+    // Two outcomes that look alike from the outside and mean opposite things.
+    // `no_prices` is an anomaly worth alerting on — the source valued nothing.
+    // `unchanged` is the normal case once redundant rows are suppressed, and
+    // after this change it is most ticks: labelling it `no_prices` would leave
+    // that alert lit for ever.
+    //
+    // The gauge is the second half of the test. `priced_mints` answers "what
+    // can be valued downstream", and a price suppressed as redundant still can
+    // be — by the row that already carries it. Counting it after the
+    // redundancy filter would read as a coverage collapse.
+    let mint = pk(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_responses(vec![
+        Ok(vec![priced(mint, "1.0")]),
+        Ok(vec![priced(mint, "1.0")]),
+    ]));
+
+    let snapshot = snapshot_cycles(
+        PriceWorker::new(
+            metadata_repo,
+            price_repo,
+            source,
+            std::time::Duration::from_secs(30),
+        ),
+        2,
+    );
+
+    let outcomes: Vec<String> = snapshot
+        .iter()
+        .filter(|(key, _, _, _)| key.key().name() == "yog_context_price_tick_total")
+        .filter_map(|(key, _, _, _)| {
+            key.key()
+                .labels()
+                .find(|l| l.key() == "outcome")
+                .map(|l| l.value().to_string())
+        })
+        .collect();
+
+    assert!(
+        outcomes.contains(&"unchanged".to_string()),
+        "the second tick wrote nothing on purpose and must say so — outcomes seen: {outcomes:?}"
+    );
+    assert!(
+        !outcomes.contains(&"no_prices".to_string()),
+        "`no_prices` means the source valued nothing, which is not what happened \
+         — outcomes seen: {outcomes:?}"
+    );
+
+    assert_eq!(
+        value(&snapshot, "yog_context_price_unchanged_total"),
+        Some(&DebugValue::Counter(1)),
+        "the suppressed row must be countable, or the redundancy of the series \
+         is only knowable by querying the database"
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_priced_mints"),
+        Some(&DebugValue::Gauge(1.0.into())),
+        "coverage is still 1/1 after a tick that suppressed its only price — \
+         moving `set_priced_mints` below the redundancy filter would read 0 here"
+    );
+}
+
+#[test]
+fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
+    // `describe_counter!` registers help text only: the Prometheus exporter
+    // emits nothing for a counter never incremented. Both of these are
+    // incremented deep inside a tick, after three early returns, so on a fresh
+    // process — `token_metadata` still empty, every tick returning at
+    // `no_work` — neither series would exist and the README's redundancy PromQL
+    // would return no data, during exactly the window someone is watching a
+    // deployment.
+    let recorder = DebuggingRecorder::new();
+    let snapshotter: Snapshotter = recorder.snapshotter();
+    metrics::with_local_recorder(&recorder, PriceWorkerMetrics::register_descriptions);
+    let snapshot = snapshotter.snapshot().into_vec();
+
+    // All three, not just the two the redundancy rule touches: that ratio is
+    // `unchanged / (unchanged + inserted)`, and PromQL's vector-to-vector `+`
+    // matches nothing when one side is missing — publishing the numerator
+    // alone would leave the query just as empty.
+    for name in [
+        "yog_context_price_rejected_total",
+        "yog_context_price_unchanged_total",
+        "yog_context_price_inserted_total",
+    ] {
+        assert_eq!(
+            value(&snapshot, name),
+            Some(&DebugValue::Counter(0)),
+            "`{name}` must be published at 0 before any tick runs"
+        );
+    }
 }
