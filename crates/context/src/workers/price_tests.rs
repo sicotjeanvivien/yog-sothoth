@@ -476,7 +476,7 @@ async fn insert_batch_error_does_not_panic() {
 
 #[tokio::test]
 async fn a_price_that_repeats_is_written_once() {
-    // The whole ticket in one test: two ticks, one unchanged price, one row.
+    // The whole change in one test: two ticks, one unchanged price, one row.
     // The two ticks are milliseconds apart, so the 10-minute floor cannot be
     // what suppresses the second — only the value comparison can.
     let mint = pk(1);
