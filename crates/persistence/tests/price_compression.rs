@@ -22,7 +22,7 @@
 //! asserts `is_compressed` before re-reading: remove the compression step and
 //! it must go red there, not silently keep passing.
 
-use super::helpers::{UNIQUE_VIOLATION, pk, sqlstate};
+use super::helpers::{UNIQUE_VIOLATION, pk, price_mint_since, sqlstate};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
@@ -54,22 +54,37 @@ struct CompressionSetting {
 
 #[sqlx::test]
 async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
-    let compress_after: Vec<String> = sqlx::query_scalar(
-        "SELECT config->>'compress_after'
+    // The delay is compared as an INTERVAL, not as the text the catalog stores:
+    // that text is `interval_out` under whatever `IntervalStyle` was in effect
+    // when the policy was created, and it is frozen in the job's jsonb. Under
+    // `postgres_verbose` the very same 7 days read `@ 7 days`. Postgres is the
+    // one that knows how to compare intervals — same pattern as
+    // `cagg_retention.rs`.
+    let policies: Vec<(bool, String)> = sqlx::query(
+        "SELECT (config->>'compress_after')::interval = INTERVAL '7 days' AS is_house_delay,
+                (config->>'compress_after')                               AS declared
            FROM timescaledb_information.jobs
           WHERE proc_name = 'policy_compression'
             AND hypertable_name = 'token_prices'",
     )
     .fetch_all(&pool)
     .await
-    .expect("the compression policy must be readable from the catalog");
+    .expect("the compression policy must be readable from the catalog")
+    .iter()
+    .map(|row| (row.get("is_house_delay"), row.get("declared")))
+    .collect();
 
     assert_eq!(
-        compress_after,
-        vec!["7 days".to_string()],
-        "token_prices must carry exactly one compression policy, at the house \
-         delay of 7 days — the one every other hypertable `001` compresses \
-         uses, `signals` excepted at 30 days"
+        policies.len(),
+        1,
+        "token_prices must carry exactly one compression policy, got {policies:?}"
+    );
+    assert!(
+        policies[0].0,
+        "the compression delay must be the house 7 days — the one every other \
+         hypertable `001` compresses uses, `signals` excepted at 30 days — and \
+         the catalog declares {}",
+        policies[0].1
     );
 
     // The other half of baseline §7 still stands, and its absence is a decision:
@@ -150,8 +165,9 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
             "token_prices_pkey".to_string(),
         ],
         "`token_prices_fetched_at_idx` — 61 MB, put there by create_hypertable \
-         and read by nothing — must be gone, and the two written indexes must \
-         both still be there"
+         and needed by no written query, none of which looks for a price at an \
+         instant without naming its mint — must be gone, and the two written \
+         indexes must both still be there"
     );
 }
 
@@ -165,13 +181,18 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
 /// way.
 #[derive(Debug, PartialEq, Eq)]
 struct Readings {
-    /// `pool_current_tvl` — the *latest* shape: no time bound at all.
+    /// `pool_current_tvl` — the *latest* shape, bounded to
+    /// `yog_price_max_age_latest()` (15 minutes) since migration 005.
     tvl_usd: Option<String>,
     /// `meteora_damm_v2_pool_hourly_activity` — the *as-of* shape, bounded to
     /// one hour before each bucket.
     buckets: i64,
     volume_usd: Option<String>,
-    /// The repository read path the API uses, `TokenPriceLookup`.
+    /// `find_latest_by_mint`, the read path the API uses — and the one that
+    /// carries **no** time bound at all, so it is the one that really can land
+    /// on a compressed chunk in production, for a mint last priced over seven
+    /// days ago. (`pool_price_snapshot` has the same unbounded shape; 005 left
+    /// it outside the staleness policy on purpose.)
     latest_price: Option<String>,
     latest_fetched_at: Option<DateTime<Utc>>,
     latest_confidence: Option<String>,
@@ -316,8 +337,9 @@ async fn seed(pool: &PgPool) -> String {
 /// compressed.
 ///
 /// The hot chunk is compressed on purpose although the policy will never touch
-/// it: it is the only way to put a compressed chunk under the *latest* lookup,
-/// which carries no time bound and therefore reads the newest chunk first.
+/// it: a 15-minute-bounded reader like `pool_current_tvl` can otherwise only
+/// ever read the open chunk, and compressing everything is what puts it — and
+/// the unbounded `find_latest_by_mint` — on top of compressed rows here.
 async fn compress_every_chunk(pool: &PgPool) {
     sqlx::query("SELECT compress_chunk(c) FROM show_chunks('token_prices') c")
         .execute(pool)
@@ -389,16 +411,7 @@ async fn writing_against_a_compressed_chunk_still_behaves(pool: PgPool) {
     let mint = pk(2).to_string();
     let at = Utc::now() - Duration::days(20);
 
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         SELECT $1, 1.5, 'jupiter', now() - (h || ' hours')::interval
-           FROM generate_series(0, $2::INT * 24) h",
-    )
-    .bind(&mint)
-    .bind(SEEDED_DAYS as i32)
-    .execute(&pool)
-    .await
-    .unwrap();
+    price_mint_since(&pool, &mint, "1.5", SEEDED_DAYS * 24).await;
 
     // The row this test then writes against, taken from the seeded series so it
     // sits inside a chunk that is about to be compressed.

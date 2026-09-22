@@ -82,8 +82,11 @@
 --     token_prices_pkey            (mint, fetched_at) ....... 628 MB   22 871 scans
 --     token_prices_fetched_at_idx  (fetched_at) .............  61 MB    3 875 scans
 --
--- No query looks for a price at an instant without naming its mint. The third
--- one goes. The other two index the same columns in two orders and both stay:
+-- No query looks for a price at an instant without naming its mint, so the
+-- third one goes. Its 3 875 scans are not a contradiction and not a mandate:
+-- they are plans the planner took when it could as well have used one of the
+-- other two, plus whatever was typed at a psql prompt over 47 days. What no
+-- shipped query does is ask for `fetched_at` alone. The other two index the same columns in two orders and both stay:
 -- deciding whether a backward scan on the primary key replaces the second is a
 -- question for an `EXPLAIN`, not for this migration — and compression shrinks
 -- that question to the hot chunk, since a compressed chunk keeps neither.

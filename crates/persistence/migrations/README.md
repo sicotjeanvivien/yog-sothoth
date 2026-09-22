@@ -519,9 +519,9 @@ decisions of very different standing:
 The direction the sentence named is real — a point lookup into a compressed
 chunk decompresses a batch of ~1000 rows to yield one, 0.123 ms → 0.304 ms on
 the same row, and the 30-day history read of one pool goes from 1.19 s to
-1.38 s (**+16 %**). What was never weighed is what it buys: at the time §7 was
-written the table was 90.6 % of the database. That is how an unmeasured clause
-gets expensive rather than merely wrong.
+1.38 s (**+16 %**). What was never weighed is what it buys: by the time anyone
+measured, the table §7 describes had grown to 90.6 % of the database. That is
+how an unmeasured clause gets expensive rather than merely wrong.
 
 This is the right discipline for production safety:
 
@@ -700,11 +700,18 @@ migration in the project tracker).
 
 ## ⚠️ What a local run cannot prove — compressed chunks
 
-**A migration that passes locally has never met a compressed chunk, and cannot.**
-The local Postgres runs with `timescaledb.max_background_workers = 0`
-(`docker-compose.yml`, for the reason in `CLAUDE.md`), so the compression
-policies never fire: **0 compressed chunk out of 45** on a typical dev
-database. Production compresses at 7 days.
+**A migration that passes locally has never met a compressed chunk — unless a
+test puts one there.** The local Postgres runs with
+`timescaledb.max_background_workers = 0` (`docker-compose.yml`, for the reason
+in `CLAUDE.md`), so the compression policies never fire: **0 compressed chunk
+out of 45** on a typical dev database. Production compresses at 7 days.
+
+What the scheduler will not do, a test can: `compress_chunk` is an ordinary
+function call, it needs no background worker, and `tests/price_compression.rs`
+uses it to run the price reads and the price writes against compressed chunks
+inside `sqlx::test`, in CI. That is the shape to copy when a migration's
+behaviour on compressed data is the thing in doubt — it turns the blind spot
+below into a missing test rather than an impossibility.
 
 This is a structural blind spot, not an accident of timing — raising the worker
 count re-introduces the job-scheduler race that made the integration suite
