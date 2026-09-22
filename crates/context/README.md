@@ -62,6 +62,30 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   never heals. The database is the guarantee; this filter is what keeps it from
   ever firing.
 
+  **It also writes only what says something new.** A price identical to the
+  last row kept for its mint earns no row of its own. Without that the series
+  grows at the rate of the worker rather than at the rate of the prices — 70 to
+  82 % of the rows repeated their predecessor (measured 22 September 2026). The
+  rule is
+  `KeptPrices` in `yog-core` — a product judgement about freshness, not a
+  storage trick — and it turns on two things that are easy to get wrong:
+
+  - **a floor.** A motionless price is written anyway once the last kept row
+    reaches 10 minutes, chosen under the 15 minutes of
+    `yog_price_max_age_latest()` (migration 005). Without it a stable token's
+    last observation ages out of both staleness windows and its USD figures
+    turn NULL — a worse defect than the volume it saves.
+  - **rounding to the column's scale.** `NUMERIC(38, 18)` rounds on write, and
+    80 % of the rows measured carry exactly 18 decimals, so the value Jupiter
+    sent is not the value the table holds. The comparison therefore rounds
+    first; comparing the raw `Decimal`s would find almost no two prices equal
+    and suppress nothing at all.
+
+  The worker holds the last kept row per mint **in memory** — it is the only
+  writer of `token_prices`, so nothing else could tell it — and records a row
+  only after the insert succeeds. A restart forgets everything, which costs one
+  full batch at the first tick: a row too many, never one too few.
+
   ⚠️ Ideally this worker is already running when 009 is applied, but
   `docker-compose.yml` orders `yog-context` *after* `yog-migrate`, so the plain
   `up --build` cannot do it — see the deployment note in
@@ -203,13 +227,37 @@ A tick that reached Jupiter but priced nothing sets the gauge to 0 and records
 `yog_context_price_tick_total{outcome="no_prices"}` — it must not look like a
 tick that never ran.
 
-⚠️ The numerator counts the prices **kept**, not the ones Jupiter returned: a
+A tick that priced everything and wrote nothing because nothing moved records
+`outcome="unchanged"` instead, and **that one is the normal case** — most ticks
+land there. The two must never share a label: `no_prices` is the anomaly to
+alert on, and merging them would leave the alert permanently lit.
+
+⚠️ **The numerator sits between the worker's two filters, and each side is a
+decision.** It counts the prices **kept**, not the ones Jupiter returned: a
 price refused as unstorable is, downstream, exactly as absent as one the source
 never sent, so counting it would inflate the coverage the gauge exists to
 measure. `outcome="no_prices"` therefore also covers a tick whose every price was
 refused; `yog_context_price_rejected_total` tells the two apart and should sit
 flat at 0 — a rising count means a very-high-supply mint entered the known set,
-and that its USD figures will be **absent rather than wrong**.
+and that its USD figures will be **absent rather than wrong**. But it counts
+them *before* the redundancy filter, for the opposite reason: a price suppressed
+as unchanged is still valued downstream, by the row that already carries it.
+Counting after would read as a coverage collapse to under a fifth, on a system
+losing nothing.
+
+**Redundancy of the series** is the second ratio, and the one this worker is
+judged on:
+
+```promql
+yog_context_price_unchanged_total
+  / (yog_context_price_unchanged_total + yog_context_price_inserted_total)
+```
+
+It answers "how much of what we fetch is worth storing". It should sit high —
+four rows in five suppressed is the design, not a fault. A collapse towards 0
+means either that the market genuinely moved, or that the comparison stopped
+rounding to the price column's scale, which makes the filter inert without
+failing anything.
 
 ## Configuration
 

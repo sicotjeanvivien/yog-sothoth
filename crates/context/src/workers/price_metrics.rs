@@ -8,6 +8,7 @@ const KNOWN_MINTS: &str = "yog_context_price_known_mints";
 const PRICED_MINTS: &str = "yog_context_price_priced_mints";
 const INSERTED_TOTAL: &str = "yog_context_price_inserted_total";
 const REJECTED_TOTAL: &str = "yog_context_price_rejected_total";
+const UNCHANGED_TOTAL: &str = "yog_context_price_unchanged_total";
 
 pub(crate) struct PriceWorkerMetrics;
 
@@ -15,9 +16,10 @@ impl PriceWorkerMetrics {
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TICK_TOTAL,
-            "Price worker ticks completed (label: outcome=ok|no_work|list_failed|source_hard_error|no_prices|insert_failed). \
+            "Price worker ticks completed (label: outcome=ok|no_work|list_failed|source_hard_error|no_prices|unchanged|insert_failed). \
              `no_prices` covers both a source that priced nothing and a tick whose every price was rejected as unstorable — \
-             yog_context_price_rejected_total tells the two apart"
+             yog_context_price_rejected_total tells the two apart. `unchanged` is the opposite and is the NORMAL case: \
+             every price came back identical to the last one kept, so the tick wrote nothing on purpose"
         );
         describe_histogram!(
             TICK_DURATION,
@@ -48,6 +50,15 @@ impl PriceWorkerMetrics {
              count means either a very-high-supply mint entered the known set or \
              the source returned an absurd value, and that the affected USD \
              figures are absent rather than wrong"
+        );
+
+        describe_counter!(
+            UNCHANGED_TOTAL,
+            "Prices fetched but not written because they repeat the last observation kept for \
+             that mint and it is still recent. Expected to carry four rows in five: that is the \
+             point, not a fault. unchanged/(unchanged+inserted) is the redundancy of the series, \
+             and a collapse towards 0 means either the market moved or the comparison stopped \
+             rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
         // Materialise it at zero. `describe_counter!` only registers the help
@@ -86,5 +97,17 @@ impl PriceWorkerMetrics {
     /// [is_storable]: yog_core::domain::TokenPrice::is_storable
     pub(crate) fn record_rejected(count: usize) {
         counter!(REJECTED_TOTAL).increment(count as u64);
+    }
+
+    /// Count prices the redundancy rule suppressed. Called on every tick that
+    /// reached the rule, zero included — the zero is what publishes the series
+    /// on a fresh process, so "nothing was suppressed" reads as a measurement
+    /// rather than as a missing metric.
+    ///
+    /// [`KeptPrices`][kept] carries the rule.
+    ///
+    /// [kept]: yog_core::domain::KeptPrices
+    pub(crate) fn record_unchanged(count: usize) {
+        counter!(UNCHANGED_TOTAL).increment(count as u64);
     }
 }
