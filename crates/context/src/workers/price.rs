@@ -24,7 +24,7 @@
 //! must not fall over on a Jupiter hiccup.
 
 use super::price_metrics::PriceWorkerMetrics;
-use super::price_tick_end as tick_end;
+use super::price_tick_end::TickOutcome;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -113,30 +113,36 @@ impl PriceWorker {
         }
     }
 
-    /// One pricing cycle. Absorbs every recoverable error so a hiccup never
-    /// stops the worker.
-    ///
-    /// Each of the seven ways it can end is one call into
-    /// [`price_tick_end`][super::price_tick_end], which owns the log line, the
-    /// outcome label and the gauges that go with it.
+    /// One pricing cycle: time it, and let the ending say what it was.
     async fn run_one_cycle(&mut self) {
         let start = Instant::now();
 
+        self.price_once().await.record(start);
+    }
+
+    /// The cycle itself. **It decides, it does not narrate.**
+    ///
+    /// Absorbs every recoverable error so a hiccup never stops the worker, and
+    /// yields how it ended; [`TickOutcome`] owns the log line, the outcome
+    /// label and the gauges that go with each ending. Returning the outcome
+    /// rather than recording it in place is what makes a bare `return;` — an
+    /// exit that tells the outside nothing — fail to compile.
+    async fn price_once(&mut self) -> TickOutcome {
         let mints = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
-            Err(e) => return tick_end::list_failed(start, &e),
+            Err(e) => return TickOutcome::ListFailed(e),
         };
         PriceWorkerMetrics::set_known_mints(mints.len());
 
         if mints.is_empty() {
-            return tick_end::no_known_mints(start);
+            return TickOutcome::NoKnownMints;
         }
 
         debug!(count = mints.len(), "price worker: pricing mints");
 
         let fetched = match self.source.fetch_prices(&mints).await {
             Ok(fetched) => fetched,
-            Err(e) => return tick_end::source_failed(start, &e),
+            Err(e) => return TickOutcome::SourceFailed(e),
         };
 
         let now = Utc::now();
@@ -184,7 +190,7 @@ impl PriceWorker {
 
         // Coverage of this tick: how many of the mints we asked for yielded a
         // price we actually kept. **Its position between the two filters is the
-        // decision, which is why it is here and not in `price_tick_end`.**
+        // decision, which is why it is here and not in `TickOutcome`.**
         //
         // After the storability filter, because the gauge answers "what can be
         // valued downstream" and a price rejected there is as absent as one the
@@ -196,7 +202,7 @@ impl PriceWorker {
         PriceWorkerMetrics::set_priced_mints(to_insert.len());
 
         if to_insert.is_empty() {
-            return tick_end::no_storable_price(start);
+            return TickOutcome::NoStorablePrice;
         }
 
         // Second filter, and the one that decides the SIZE of the series: a
@@ -221,12 +227,12 @@ impl PriceWorker {
         PriceWorkerMetrics::record_unchanged(suppressed);
 
         if to_insert.is_empty() {
-            return tick_end::all_unchanged(start, suppressed);
+            return TickOutcome::AllUnchanged { suppressed };
         }
 
         let count = to_insert.len();
         if let Err(e) = self.price_repository.insert_batch(&to_insert).await {
-            return tick_end::insert_failed(start, &e);
+            return TickOutcome::InsertFailed(e);
         }
 
         // Only now, and never before the insert: a batch that failed left no
@@ -234,7 +240,7 @@ impl PriceWorker {
         // floor fires — a gap in a series nothing backfills.
         self.kept.record(&to_insert);
 
-        tick_end::inserted(start, count);
+        TickOutcome::Inserted { count }
     }
 }
 

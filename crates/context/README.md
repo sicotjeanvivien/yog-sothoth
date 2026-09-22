@@ -17,8 +17,9 @@ context/src/
 ├── providers/    ← adapters: HeliusDasClient, JupiterPriceClient,
 │                   SolanaAccountClient (+ provider metrics)
 ├── workers/      ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
-│                   (+ per-worker metrics, and price_tick_end: the seven ways
-│                   a pricing cycle ends, one function each)
+│                   (+ per-worker metrics, and price_tick_end: TickOutcome,
+│                   the seven ways a pricing cycle ends — returning one is
+│                   what makes a silent exit fail to compile)
 ├── bootstrap/    ← Config::load(), Daemon::new — composition root, and the
 │                   stop: run() joins its three workers under the shared grace
 ├── error/        ← SourceError, WorkerError
