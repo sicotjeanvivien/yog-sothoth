@@ -1,0 +1,112 @@
+-- ============================================================================
+-- 011_price_series_compression.sql — the price series is 90 % of the database,
+-- and none of it was compressed
+-- ============================================================================
+-- `token_prices` holds 1795 MB of a 1983 MB database — **90.6 %** — and grows
+-- without bound, at the price worker's cadence rather than at the rate prices
+-- move. It is the single line item that decides the bill of a managed database.
+--
+-- This migration compresses it past seven days, the house delay, and drops the
+-- index nobody wrote.
+--
+-- ## What this reverses, and on what measurement
+--
+-- Baseline §7 (`001_baseline.sql:380-386`) states the table is *"deliberately
+-- NOT compressed: it is the join target of every valuation VIEW in §15, always
+-- through a LATERAL 'most recent row as-of X' lookup"*. That sentence bundles
+-- two decisions of very different standing:
+--
+--   * **no retention policy** — justified, and untouched here. Migration 005
+--     established that an as-of gap is permanent: the worker only ever inserts
+--     at `fetched_at = now()`, nothing backfills, and it is the price history
+--     that makes an old row readable at its trade-time value. Dropping price
+--     rows would blank `volume_usd` for the buckets they cover, for ever;
+--   * **no compression** — an assertion, never measured. Measured on 22
+--     September 2026 it is right about the direction and wrong by two orders of
+--     magnitude about the size of it.
+--
+-- Same table, same primary key, both indexes, one week of real rows
+-- (1 210 040 rows, 15 → 22 September 2026), copied into a throwaway schema:
+--
+--     as it stands today ....................... 426 MB
+--     compressed (segmentby mint) ..............   9.6 MB   -97.8 %
+--
+-- And what it costs the lookup the sentence is defending, `EXPLAIN (ANALYZE,
+-- BUFFERS)` over 500 mints of that copy, warm cache:
+--
+--     500 latest lookups, uncompressed .........   4.3 ms
+--     500 latest lookups, compressed ...........   7.2 ms
+--     500 as-of lookups (1 h bound), compressed   7.8 ms
+--
+-- Six microseconds per lookup. The point-lookup cost is real; it does not buy
+-- 416 MB a week.
+--
+-- ## Why `mint` segments and `fetched_at DESC` orders
+--
+-- Every reader asks the same question — the most recent row of ONE mint, at or
+-- before an instant — so `mint` is the segment and `fetched_at` the order
+-- inside it. That choice has a second consequence worth stating, because the
+-- event tables show the opposite case: the primary key here is `(mint,
+-- fetched_at)`, which is **exactly** `(segmentby, orderby)`. TimescaleDB
+-- therefore raises none of the `column "…" should be used for segmenting or
+-- ordering` warnings the event tables produce, and uniqueness stays cheap to
+-- check against compressed rows rather than requiring a decompression.
+--
+-- ## The index nobody wrote
+--
+-- `create_hypertable` was called without `create_default_indexes => FALSE`
+-- (`001_baseline.sql:396-401`), so Postgres added a third index, on
+-- `fetched_at` alone. Measured on the same database:
+--
+--     idx_token_prices_mint_recent (mint, fetched_at DESC) .. 621 MB  982 518 scans
+--     token_prices_pkey            (mint, fetched_at) ....... 628 MB   22 871 scans
+--     token_prices_fetched_at_idx  (fetched_at) .............  61 MB    3 875 scans
+--
+-- No query looks for a price at an instant without naming its mint. The third
+-- one goes. The other two index the same columns in two orders and both stay:
+-- deciding whether a backward scan on the primary key replaces the second is a
+-- question for an `EXPLAIN`, not for this migration — and compression shrinks
+-- that question to the hot chunk, since a compressed chunk keeps neither.
+--
+-- ⚠️ None of the 21 `create_hypertable` calls in `001` passes
+-- `create_default_indexes => FALSE`, and `bin/migrate/lint.rs` only binds
+-- migrations from `010` on. The 20 other default indexes stay: forward-only,
+-- and `token_prices` is the only table where this one is measured in tens of
+-- megabytes.
+--
+-- ## What this migration deliberately does NOT do
+--
+--   * **no retention** on `token_prices`, for the reason above;
+--   * **nothing to the write path.** Four rows in five repeat the previous
+--     price of the same mint, and writing fewer of them is a `yog-context`
+--     change with its own staleness trade-off (a mint whose price never moves
+--     must still carry a fresh observation). What compression cannot reach is
+--     the hot chunk, which is exactly what that work would shrink;
+--   * **no aggregate over the prices.** An hourly rollup (`last(price_usd,
+--     fetched_at)` per mint) was built and measured: 60 118 rows, 11 MB for the
+--     whole history, and over 9 862 real as-of lookups it returns the identical
+--     price every time. It is not adopted, because after compression it saves
+--     nothing worth 17 rewritten LATERALs, and because
+--     `meteora_damm_v2_liquidity_events_valued` (021) values each event at its
+--     own timestamp — an hourly bucket would widen its admitted staleness from
+--     1 h to 1 h 45.
+--
+-- ⚠️ **The policy is inert on a development database**, which runs with
+-- `timescaledb.max_background_workers = 0`: no job ever fires, so nothing here
+-- compresses until `compress_chunk` is called by hand. See
+-- `migrations/README.md`, *What a local run cannot prove — compressed chunks*.
+-- ============================================================================
+
+DROP INDEX token_prices_fetched_at_idx;
+
+ALTER TABLE token_prices SET (
+    timescaledb.compress,
+    timescaledb.compress_orderby   = 'fetched_at DESC',
+    timescaledb.compress_segmentby = 'mint'
+);
+
+SELECT add_compression_policy('token_prices', INTERVAL '7 days');
+
+-- No GRANT: this migration creates no object a runtime role must be granted on.
+-- Chunk privileges are propagated from the hypertable by TimescaleDB, and the
+-- compressed chunks are read through `token_prices` itself.
