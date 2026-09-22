@@ -4,6 +4,7 @@ mod event_position;
 mod freshness_status;
 mod global_analytics;
 mod insert_outcome;
+mod kept_prices;
 mod liquidity_flow;
 mod meteora;
 mod network_status;
@@ -27,6 +28,7 @@ pub use event_position::{EventPosition, TransactionPosition};
 pub use freshness_status::{EventFreshnessRepository, FreshnessStatus};
 pub use global_analytics::{GlobalAnalytics, GlobalAnalyticsRepository};
 pub use insert_outcome::InsertOutcome;
+pub use kept_prices::{KeptPrices, PRICE_MAX_AGE_LATEST};
 pub use liquidity_flow::{LiquidityFlowRepository, PoolLiquidityFlow};
 pub use meteora::{
     MeteoraDammV2ClaimPositionFeeEvent, MeteoraDammV2ClaimPositionFeeEventRepository,
@@ -82,8 +84,8 @@ pub use token_metadata::{
     MetadataProvider, TokenMetadata, TokenMetadataLookup, TokenMetadataRepository,
 };
 pub use token_price::{
-    KeptPrices, PRICE_MAX_AGE_LATEST, PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider,
-    TokenPrice, TokenPriceLookup, TokenPriceRepository,
+    PRICE_STORAGE_PRECISION, PRICE_STORAGE_SCALE, PriceProvider, TokenPrice, TokenPriceLookup,
+    TokenPriceRepository,
 };
 pub use trade_direction::TradeDirection;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};

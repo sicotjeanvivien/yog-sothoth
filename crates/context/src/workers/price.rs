@@ -24,6 +24,7 @@
 //! must not fall over on a Jupiter hiccup.
 
 use super::price_metrics::PriceWorkerMetrics;
+use super::price_tick_end as tick_end;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -73,7 +74,16 @@ impl PriceWorker {
     /// at once), so a fresh price sample lands as soon as the daemon
     /// starts rather than after the first interval.
     pub async fn run(mut self, shutdown: CancellationToken) -> Result<(), WorkerError> {
-        info!("PriceWorker started");
+        // What the cadence *entails*, which is the part an operator cannot read
+        // off the variable they set: the floor follows from
+        // `CONTEXT_PRICE_INTERVAL_SECS` and a constant of `yog-core` together,
+        // and nothing else in either crate names it. Stated here rather than in
+        // a `config_log` module of its own, which one line does not yet earn.
+        info!(
+            cadence_secs = self.interval.as_secs(),
+            rewrite_floor_secs = self.kept.floor().num_seconds(),
+            "PriceWorker started — a motionless price is rewritten at the floor"
+        );
 
         let mut ticker = tokio::time::interval(self.interval);
 
@@ -103,46 +113,30 @@ impl PriceWorker {
         }
     }
 
-    /// One pricing cycle. Absorbs every recoverable error so a hiccup
-    /// never stops the worker.
+    /// One pricing cycle. Absorbs every recoverable error so a hiccup never
+    /// stops the worker.
+    ///
+    /// Each of the seven ways it can end is one call into
+    /// [`price_tick_end`][super::price_tick_end], which owns the log line, the
+    /// outcome label and the gauges that go with it.
     async fn run_one_cycle(&mut self) {
         let start = Instant::now();
+
         let mints = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
-            Err(e) => {
-                warn!(error = %e, "price worker: list_known_mints failed");
-                PriceWorkerMetrics::record_tick("list_failed", start.elapsed().as_secs_f64());
-
-                return;
-            }
+            Err(e) => return tick_end::list_failed(start, &e),
         };
         PriceWorkerMetrics::set_known_mints(mints.len());
 
         if mints.is_empty() {
-            debug!("price worker: no known mints yet — sleeping");
-            // Both gauges move together or the ratio the README tells you to
-            // alert on (`priced / known`) divides a stale numerator by 0 and
-            // reads +Inf on a cold start.
-            PriceWorkerMetrics::set_priced_mints(0);
-            PriceWorkerMetrics::record_tick("no_work", start.elapsed().as_secs_f64());
-            return;
+            return tick_end::no_known_mints(start);
         }
 
         debug!(count = mints.len(), "price worker: pricing mints");
 
         let fetched = match self.source.fetch_prices(&mints).await {
             Ok(fetched) => fetched,
-            Err(e) => {
-                warn!(error = %e, "price worker: source returned a hard error");
-                // Third early return, same rule as the other two: the numerator
-                // must never outlive the denominator it was measured against.
-                // Unreachable with the current Jupiter client (it absorbs
-                // per-chunk failures and returns Ok(partial)), which is exactly
-                // why it would rot silently in the next PriceSource.
-                PriceWorkerMetrics::set_priced_mints(0);
-                PriceWorkerMetrics::record_tick("source_hard_error", start.elapsed().as_secs_f64());
-                return;
-            }
+            Err(e) => return tick_end::source_failed(start, &e),
         };
 
         let now = Utc::now();
@@ -189,26 +183,20 @@ impl PriceWorker {
         }
 
         // Coverage of this tick: how many of the mints we asked for yielded a
-        // price we actually kept. Counted after the storability filter, because
-        // the gauge answers "what can be valued downstream" — a price rejected
-        // there is as absent, downstream, as one the source never returned. Set
-        // before the empty check so a tick that keeps nothing reports 0 rather
-        // than leaving the gauge on its last value.
+        // price we actually kept. **Its position between the two filters is the
+        // decision, which is why it is here and not in `price_tick_end`.**
         //
-        // ⚠️ And counted BEFORE the redundancy filter below, for the same
-        // question: a price suppressed as unchanged is still valued downstream,
-        // by the row that already says it. Moving this line down would read as
-        // a coverage collapse to under a fifth — `priced / known` is the ratio
-        // the README tells you to alert on, and it would be lit for ever.
+        // After the storability filter, because the gauge answers "what can be
+        // valued downstream" and a price rejected there is as absent as one the
+        // source never returned. Before the redundancy filter, for the same
+        // question read the other way: a price suppressed as unchanged is still
+        // valued downstream, by the row that already says it. Moving this line
+        // down would read as a coverage collapse to under a fifth — and
+        // `priced / known` is the ratio the README tells you to alert on.
         PriceWorkerMetrics::set_priced_mints(to_insert.len());
 
         if to_insert.is_empty() {
-            debug!("price worker: no prices to insert");
-            // `no_prices` was declared in the outcome label set from the start
-            // but never emitted — a tick that priced nothing looked, in the
-            // metrics, exactly like a tick that never happened.
-            PriceWorkerMetrics::record_tick("no_prices", start.elapsed().as_secs_f64());
-            return;
+            return tick_end::no_storable_price(start);
         }
 
         // Second filter, and the one that decides the SIZE of the series: a
@@ -224,32 +212,21 @@ impl PriceWorker {
         // the tick into a Vec built to be dropped.
         let before = to_insert.len();
         to_insert.retain(|price| self.kept.worth_keeping(price));
-        let unchanged = before - to_insert.len();
+        let suppressed = before - to_insert.len();
 
         // Recorded on every tick that reaches the rule, zero included, so that
         // "nothing was suppressed" is a measurement. Its ratio to
         // `inserted_total` is the redundancy the database query used to be
         // needed for.
-        PriceWorkerMetrics::record_unchanged(unchanged);
+        PriceWorkerMetrics::record_unchanged(suppressed);
 
         if to_insert.is_empty() {
-            debug!(
-                count = unchanged,
-                "price worker: every price repeats the last one kept"
-            );
-            // NOT `no_prices`: that outcome means the source valued nothing,
-            // which is an anomaly worth alerting on. Once redundant rows are
-            // suppressed, most ticks write nothing at all — labelling them the
-            // same way would leave that alert permanently lit.
-            PriceWorkerMetrics::record_tick("unchanged", start.elapsed().as_secs_f64());
-            return;
+            return tick_end::all_unchanged(start, suppressed);
         }
 
-        let inserted = to_insert.len();
+        let count = to_insert.len();
         if let Err(e) = self.price_repository.insert_batch(&to_insert).await {
-            warn!(error = %e, "price worker: insert_batch failed");
-            PriceWorkerMetrics::record_tick("insert_failed", start.elapsed().as_secs_f64());
-            return;
+            return tick_end::insert_failed(start, &e);
         }
 
         // Only now, and never before the insert: a batch that failed left no
@@ -257,9 +234,7 @@ impl PriceWorker {
         // floor fires — a gap in a series nothing backfills.
         self.kept.record(&to_insert);
 
-        PriceWorkerMetrics::record_inserted(inserted);
-        debug!(count = inserted, "price worker: prices inserted");
-        PriceWorkerMetrics::record_tick("ok", start.elapsed().as_secs_f64());
+        tick_end::inserted(start, count);
     }
 }
 

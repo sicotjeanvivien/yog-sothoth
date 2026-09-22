@@ -3,6 +3,7 @@ mod metadata_metrics;
 mod pool_account;
 mod price;
 mod price_metrics;
+mod price_tick_end;
 
 pub(crate) use metadata::MetadataWorker;
 pub(crate) use metadata_metrics::MetadataWorkerMetrics;

@@ -1,4 +1,10 @@
-//! Which price observations earn a row in the series.
+//! What the price series has already recorded, and what a new observation has
+//! to say to earn a row of its own.
+//!
+//! A [`TokenPrice`] is one observation; this is about the *series* they form
+//! once stored — how dense it has to stay to keep valuing anything, and how
+//! much denser than that it was being written. Different subject from the
+//! observation, so a module of its own rather than a corner of `token_price/`.
 //!
 //! The price worker asks a source for every known mint on a fixed cadence, so
 //! the series grows at the rate of the *worker* rather than at the rate of the
@@ -59,11 +65,18 @@ const PRICE_SERIES_MAX_GAP: Duration = Duration::minutes(10);
 /// a cache of the database: nothing else produces the information, and reading
 /// it back would be asking Postgres what we just told it.
 ///
-/// It is bounded by `token_metadata`, which the worker already loads in full
-/// on every tick (`list_known_mints`), so it needs no eviction: it cannot
-/// outgrow something the process holds anyway. It starts empty on every boot,
-/// which costs exactly one full batch at the first tick — a row too many,
-/// never one too few.
+/// **It needs no eviction, and here is the size rather than the reassurance.**
+/// An entry is 64 bytes — a `Pubkey` key and a value of exactly as much — so
+/// the 5 028 mints of `token_metadata` on 22 September 2026 cost about 0.5 MB
+/// once hashbrown rounds its capacity up. That is roughly three times the
+/// `Vec<Pubkey>` the worker already builds from the same table on *every* tick,
+/// and reaching 100 MB would take a million and a half mints. Nothing deletes
+/// from `token_metadata` either, so the map is bounded by a table that grows
+/// only as new tokens are discovered — about a hundred a day at the rate
+/// measured over the preceding 47 days.
+///
+/// It starts empty on every boot, which costs exactly one full batch at the
+/// first tick — a row too many, never one too few.
 #[derive(Debug)]
 pub struct KeptPrices {
     last: HashMap<Pubkey, KeptPrice>,
@@ -110,6 +123,17 @@ impl KeptPrices {
             last: HashMap::new(),
             max_gap: (PRICE_SERIES_MAX_GAP - tick).max(Duration::zero()),
         }
+    }
+
+    /// The floor this cadence yields — how long a motionless price may stand
+    /// before a fresh row is written anyway.
+    ///
+    /// Exposed for one reason: it follows from the cadence *and* a constant of
+    /// this crate, so an operator reading `CONTEXT_PRICE_INTERVAL_SECS=30`
+    /// cannot derive it, and nothing else in either crate names it. The price
+    /// worker states it once at startup.
+    pub fn floor(&self) -> Duration {
+        self.max_gap
     }
 
     /// Whether this observation earns a row.
@@ -191,5 +215,5 @@ fn at_storage_scale(price: Decimal) -> Decimal {
 }
 
 #[cfg(test)]
-#[path = "kept_prices_tests.rs"]
+#[path = "model_tests.rs"]
 mod tests;
