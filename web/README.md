@@ -412,13 +412,25 @@ the full stack via `docker compose --profile full up -d` at the repo
 root, but can also be built and run standalone:
 
 ```bash
-docker build -t yog-sothoth-web:dev .
-docker run --rm -p 3000:3000 --env-file .env.local yog-sothoth-web:dev
+docker build --build-arg NEXT_PUBLIC_YOG_API_URL=http://localhost:5000 \
+  -t yog-sothoth-web:dev .
+docker run --rm -p 3000:3000 --add-host=host.docker.internal:host-gateway \
+  -e YOG_API_INTERNAL_URL=http://host.docker.internal:5000 yog-sothoth-web:dev
 ```
 
-Inside the compose network, the container reads
-`YOG_API_INTERNAL_URL=http://yog-api:5000` — set automatically by
-`docker-compose.yml`.
+The two URLs arrive at different moments, and that is not a choice:
+
+- `NEXT_PUBLIC_YOG_API_URL` is a **build argument**. `next build` writes it
+  into the client bundle as a literal and nothing reads it afterwards, so
+  passing it to `docker run` changes nothing. The build stops if it is
+  empty.
+- `YOG_API_INTERNAL_URL` is read by the server **at run time**.
+
+`docker-compose.yml` passes both — the build argument defaults to
+`http://localhost:5000`, and in production `docker-compose.prod.yml`
+derives it from `YOG_API_DOMAIN`. `src/lib/config/__tests__/compose-env.test.ts`
+runs the server schema on the compose's values, and checks every build
+argument the compose passes is declared in the Dockerfile.
 
 ## Note on the `proxy.ts` naming
 

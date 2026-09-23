@@ -1,0 +1,20 @@
+# Caddyfile — mounted by docker-compose.prod.yml only.
+#
+# Two sites, because the browser calls the API directly (there is no BFF):
+# the dashboard's pages and the API each have their own host name. Caddy
+# obtains and renews their certificates on its own.
+#
+# The domains come from the environment, set in the server's .env.
+
+{$YOG_WEB_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy yog-web:3000
+}
+
+# No `encode` on this site: /api/signals/stream is Server-Sent Events, and
+# a compressor holds small writes until it has enough to compress — the
+# events would arrive late and in bursts. Without it, Caddy flushes a
+# `text/event-stream` response as it arrives.
+{$YOG_API_DOMAIN} {
+	reverse_proxy yog-api:5000
+}

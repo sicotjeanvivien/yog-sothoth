@@ -109,8 +109,12 @@ docker compose up -d
 # Full backend stack (postgres + migrate + indexer + api + context + signals)
 docker compose --profile backend up -d --build
 
-# Everything including the Next.js dashboard
+# Everything including the Next.js dashboard (still the dev shape)
 docker compose --profile full up -d --build
+
+# The production shape: the same stack under an overlay (scheduler on, only
+# Caddy publishes ports, memory limits). Its header explains the why.
+docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full config
 
 # Tail a service's logs
 docker compose logs -f yog-indexer
