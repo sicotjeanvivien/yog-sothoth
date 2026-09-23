@@ -165,9 +165,13 @@ printf '%s' "$PGPASSWORD" > "$DIR/password"
         self.pg_dump(VERSION_16, &format!("printf '{ARCHIVE}'"))
     }
 
-    /// A `pg_restore --list` that reads the archive head and accepts it.
+    /// A `pg_restore` that reads the whole archive, records how it was
+    /// asked to, and accepts it.
     fn good_pg_restore(&self) -> PathBuf {
-        self.script("pg_restore", r#"cat > "$DIR/restore-input"; exit 0"#)
+        self.script(
+            "pg_restore",
+            r#"printf '%s\n' "$@" > "$DIR/restore-args"; cat > "$DIR/restore-input"; exit 0"#,
+        )
     }
 
     fn read(&self, name: &str) -> Option<String> {
@@ -282,8 +286,14 @@ async fn a_dump_is_archived_under_its_version_and_signalled_once() {
         Some("2.27.1".to_string())
     );
 
-    // What pg_restore checked is the very archive stored.
+    // What pg_restore checked is the very archive stored, and it was asked
+    // to write it out — which reads every data block — not merely to list
+    // its table of contents, which passes a truncated dump.
     assert_eq!(fakes.read("restore-input").as_deref(), Some(ARCHIVE));
+    assert_eq!(
+        fakes.read("restore-args").as_deref(),
+        Some("--file=/dev/null\n")
+    );
 }
 
 #[tokio::test]

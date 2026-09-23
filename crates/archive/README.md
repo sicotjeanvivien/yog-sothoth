@@ -48,13 +48,12 @@ archive/src/
    and never in the arguments, which any user of the host can read in
    `/proc/<pid>/cmdline`. Its output streams to the bucket in 8 MiB parts,
    two in flight at most.
-5. Check the archive: `pg_dump` exited 0, **and** `pg_restore --list`,
-   fed the **whole** stream alongside the upload, reads it and exits 0.
-   Otherwise abort the upload. Not a head of it: the table of contents grows
-   with every chunk (423 KiB for 48 chunks in September 2026), so a fixed
-   head — 4 MiB in the first version — would one day cut it, and every run
-   from then on would fail. Reading a piped archive, `pg_restore --list`
-   consumes it to the end, so feeding it all cannot stall.
+5. Check the archive: `pg_dump` exited 0, **and** `pg_restore
+   --file=/dev/null`, fed the whole stream alongside the upload, exits 0.
+   Otherwise abort the upload. Restoring to a script file makes `pg_restore`
+   read and decompress every data block: a dump cut in half, or with bytes
+   zeroed in its data, fails it — measured — where `--list`, used by the
+   first version, passed both. About 2 s for a 172 MB dump.
 6. Complete the upload.
 
 Each run ends in a `RunOutcome` — `archived`, `refused`, `dump_failed`,
@@ -64,9 +63,9 @@ deciding what it signals.
 
 ### What "checked" means, and what it does not
 
-The check proves the archive is complete and well-formed from its first byte
-to its last, as `pg_restore` walks it. It does **not** prove that every data block restores: only a
-restore proves that. Run the procedure of `persistence/README.md` against a
+The check proves the archive is complete and every data block decompresses. It
+does **not** prove that the dump restores into a database — extensions,
+versions, constraints: only a restore proves that. Run the procedure of `persistence/README.md` against a
 recent dump from time to time — a backup whose restore has never been tried is
 a hope.
 

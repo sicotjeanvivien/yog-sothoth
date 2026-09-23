@@ -124,18 +124,31 @@ impl PgTools {
         })
     }
 
-    /// Start `pg_restore --list`, to be fed the archive while it is produced.
+    /// Start `pg_restore --file=/dev/null`, to be fed the archive while it
+    /// is produced.
     ///
-    /// Fed the **whole** archive, not a head of it: the table of contents
-    /// grows with every chunk — 423 KiB for 48 chunks, measured on
-    /// 23 September 2026 — so any fixed head would one day cut it, and every
-    /// run from then on would fail. Measured the same day: reading a piped
-    /// archive, `pg_restore --list` consumes it to the end, so feeding it all
-    /// cannot stall, and the check walks the archive's whole structure rather
-    /// than its first bytes.
+    /// Restoring **to a script file** makes `pg_restore` read and decompress
+    /// every data block to write it out, which is what a check needs; the
+    /// file is `/dev/null`. Measured on 23 September 2026 against real
+    /// dumps: a dump cut in half, and one with 5,000 bytes zeroed in its data,
+    /// both fail it (`end of file`, `could not uncompress data`); a 172 MB
+    /// dump passes in about 2 s.
+    ///
+    /// ⚠️ **Not `--list`**, which the first version used: it reads the table
+    /// of contents and exits, so both damaged dumps above passed it. The
+    /// claim that `--list` read the whole archive rested on a test that could
+    /// not fail — `(cat …; echo done)` echoes even when `cat` dies of the
+    /// broken pipe.
+    ///
+    /// Fed the whole stream rather than a head of it for the same reason:
+    /// the table of contents alone grows with every chunk (423 KiB for 48),
+    /// so any fixed head would one day cut it.
+    ///
+    /// What it does not prove: that the dump restores **into a database** —
+    /// constraints, extensions, versions. Only a restore proves that.
     pub(crate) fn start_check(&self) -> Result<ReadabilityCheck, String> {
         let mut child = Command::new(&self.pg_restore)
-            .arg("--list")
+            .arg("--file=/dev/null")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -152,11 +165,11 @@ impl PgTools {
     }
 }
 
-/// A `pg_restore --list` reading the archive as `pg_dump` writes it.
+/// A `pg_restore` reading the archive as `pg_dump` writes it.
 ///
-/// Its exit status is the verdict. Should it stop reading early — it does
-/// not today, see [`PgTools::start_check`] — the broken pipe that follows is
-/// not a failure: feeding simply stops.
+/// Its exit status is the verdict. Should it stop reading early, the broken
+/// pipe that follows is not a failure of its own: feeding stops, and the exit
+/// status says why it stopped.
 pub(crate) struct ReadabilityCheck {
     child: Child,
     stdin: Option<ChildStdin>,
@@ -179,13 +192,13 @@ impl ReadabilityCheck {
             .child
             .wait()
             .await
-            .map_err(|e| format!("`pg_restore --list` did not finish: {e}"))?;
+            .map_err(|e| format!("`pg_restore --file=/dev/null` did not finish: {e}"))?;
         if status.success() {
             return Ok(());
         }
         let stderr = self.stderr.await.unwrap_or_default();
         Err(format!(
-            "`pg_restore --list` exited with {status}: {stderr}"
+            "`pg_restore --file=/dev/null` exited with {status}: {stderr}"
         ))
     }
 }
@@ -204,7 +217,7 @@ fn tail(text: &str) -> String {
     let start = text
         .char_indices()
         .rev()
-        .nth(MESSAGE_TAIL)
+        .nth(MESSAGE_TAIL - 1)
         .map_or(0, |(i, _)| i);
     text[start..].to_string()
 }
