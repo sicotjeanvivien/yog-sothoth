@@ -55,10 +55,22 @@
 
 services:
   postgres:
+    # A versioned tag, not the base file's `latest-pg16`, which pins only the
+    # Postgres major. A dump restores only into the SAME TimescaleDB version
+    # (crates/persistence/README.md, "Backup and restore"), so a `pull` that
+    # silently moved the version would strand every dump taken before it.
+    # Upgrading is a decision: change this line, then take a fresh dump.
+    # 2.27.1-pg16 is the image the restore procedure was proven on.
+    image: timescale/timescaledb:2.27.1-pg16
     command:
       - postgres
       - -c
       - timescaledb.max_background_workers=8
+      # TimescaleDB reports usage statistics to its vendor once a day by
+      # default (the `policy_telemetry` job). Off: production data leaves
+      # this machine only by our choice.
+      - -c
+      - timescaledb.telemetry_level=off
       - -c
       - shared_buffers=256MB
       - -c
