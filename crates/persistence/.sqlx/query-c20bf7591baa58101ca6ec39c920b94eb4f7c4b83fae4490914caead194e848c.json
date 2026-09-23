@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT current_setting('server_version_num')::int / 10000 AS \"postgres_major!\",\n                   (SELECT extversion FROM pg_extension WHERE extname = 'timescaledb') AS timescaledb\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "postgres_major!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "timescaledb",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "c20bf7591baa58101ca6ec39c920b94eb4f7c4b83fae4490914caead194e848c"
+}

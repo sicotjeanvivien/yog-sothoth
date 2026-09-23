@@ -11,11 +11,13 @@
 //! and schema definitions.
 
 mod database;
+mod database_info;
 mod error;
 mod health;
 mod repositories;
 
 pub use database::Database;
+pub use database_info::{PgDatabaseInfo, ServerVersions};
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
     PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
