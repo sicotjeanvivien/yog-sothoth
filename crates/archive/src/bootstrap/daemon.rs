@@ -4,15 +4,16 @@
 use std::{sync::Arc, time::Instant};
 
 use anyhow::Context;
+use async_trait::async_trait;
 use chrono::Utc;
 use object_store::aws::AmazonS3Builder;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
-use yog_bootstrap::{SHUTDOWN_GRACE, shutdown_signal};
-use yog_persistence::{Database, PgDatabaseInfo};
+use yog_bootstrap::{SHUTDOWN_GRACE, SecretUrl, shutdown_signal};
+use yog_persistence::{Database, PgDatabaseInfo, ServerVersions};
 
 use crate::{
-    archiver::{Archiver, RunOutcome},
+    archiver::{Archiver, RunOutcome, VersionSource},
     bootstrap::{Config, config::StoreConfig},
     dump::{Connection, PgTools},
     heartbeat::HealthchecksHeartbeat,
@@ -25,12 +26,9 @@ pub(crate) struct Daemon {
 }
 
 impl Daemon {
+    /// Build everything a run needs. Nothing here touches the database: see
+    /// [`PgVersions`] for why the connection belongs to the run.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let database = Database::connect(config.database_url.expose())
-            .await
-            .context("failed to connect to database")?;
-        info!("connected to database");
-
         let store = build_store(&config.store).context("failed to configure the bucket")?;
         let heartbeat = HealthchecksHeartbeat::new(config.heartbeat_url)
             .context("failed to build the heartbeat client")?;
@@ -38,7 +36,9 @@ impl Daemon {
 
         Ok(Self {
             archiver: Archiver {
-                versions: Arc::new(PgDatabaseInfo::new(database.pool().clone())),
+                versions: Arc::new(PgVersions {
+                    url: config.database_url,
+                }),
                 store: Arc::new(store),
                 heartbeat: Arc::new(heartbeat),
                 tools: PgTools {
@@ -110,6 +110,39 @@ fn log_outcome(outcome: &RunOutcome, elapsed: std::time::Duration) {
                 reason, secs, "archiving run failed"
             );
         }
+    }
+}
+
+/// Reads the server's versions over a connection opened for this run and
+/// closed after it.
+///
+/// Connecting once at startup made a refusing database — a wrong password, a
+/// server that is down — stop the process before the heartbeat could say
+/// anything. Under `restart: unless-stopped` that is a silent crash loop,
+/// noticed only when the missing ping times out, hours later and without a
+/// reason. Measured on 23 September 2026 with a wrong password: exit 1, no
+/// signal. Connected here, the same refusal ends the run in `refused` and
+/// sends the failure signal with the database's own words. One connection
+/// every six hours costs nothing.
+struct PgVersions {
+    url: SecretUrl,
+}
+
+#[async_trait]
+impl VersionSource for PgVersions {
+    async fn server_versions(&self) -> Result<ServerVersions, String> {
+        let database = Database::connect(self.url.expose()).await.map_err(|e| {
+            format!(
+                "cannot connect to the database: {}",
+                self.url.scrub(&e.to_string())
+            )
+        })?;
+        let versions = PgDatabaseInfo::new(database.pool().clone())
+            .server_versions()
+            .await
+            .map_err(|e| e.to_string());
+        database.pool().close().await;
+        versions
     }
 }
 

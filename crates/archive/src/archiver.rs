@@ -16,7 +16,7 @@ use object_store::{
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
-use yog_persistence::{PgDatabaseInfo, ServerVersions};
+use yog_persistence::ServerVersions;
 
 use crate::{
     dump::{Connection, PgTools, read_tail},
@@ -74,19 +74,13 @@ impl RunOutcome {
 }
 
 /// The server facts a dump depends on. A trait so the tests need no
-/// database; the production implementation is [`PgDatabaseInfo`].
+/// database; the production implementation connects for each run
+/// (`bootstrap::daemon`), so that a database that refuses ends a run in
+/// `refused` — signalled — instead of stopping the process before it can
+/// signal anything.
 #[async_trait]
 pub(crate) trait VersionSource: Send + Sync {
     async fn server_versions(&self) -> Result<ServerVersions, String>;
-}
-
-#[async_trait]
-impl VersionSource for PgDatabaseInfo {
-    async fn server_versions(&self) -> Result<ServerVersions, String> {
-        PgDatabaseInfo::server_versions(self)
-            .await
-            .map_err(|e| e.to_string())
-    }
 }
 
 pub(crate) struct Archiver {
