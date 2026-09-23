@@ -43,6 +43,10 @@ jobs:
           # to a registry is intentionally out of scope here.
           load: true
           tags: yog-sothoth-web:ci
+          # Required: web/Dockerfile stops on an empty one, because Next.js
+          # writes the browser's API URL into the bundle at build time.
+          build-args: |
+            NEXT_PUBLIC_YOG_API_URL=http://localhost:5000
           # GHA cache backend — first run populates it, every later
           # run that touches only application code reuses the npm-ci
           # layer and shaves ~30 seconds off the build.
