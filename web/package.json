@@ -2,6 +2,7 @@
   "name": "yog-sothoth-web",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Shield-1.0.0",
   "description": "Yog-Sothoth dashboard — Next.js 16 frontend for the Meteora liquidity intelligence engine.",
   "scripts": {
     "dev": "next dev",

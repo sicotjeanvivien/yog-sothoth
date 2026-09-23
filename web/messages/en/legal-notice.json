@@ -54,7 +54,7 @@
       "intellectualProperty": {
         "title": "Intellectual property",
         "fields": {
-          "body": "The Yog-Scope source code is released under the MIT license and is available on GitHub. The textual and visual content of this website — outside of the source code — is the property of its editor, except where third-party materials are explicitly credited. Any reproduction or representation outside the terms of the MIT license requires prior written authorisation."
+          "body": "The Yog-Scope source code is released under the PolyForm Shield 1.0.0 license and is available on GitHub: it may be read, run, modified and reused, except to provide a product or service that competes with Yog-Scope. The textual and visual content of this website — outside of the source code — is the property of its editor, except where third-party materials are explicitly credited. Any reproduction or representation outside the terms of that license requires prior written authorisation."
         }
       }
     }

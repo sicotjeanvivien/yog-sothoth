@@ -10,7 +10,7 @@
       "lead": "Yog-Scope is built and maintained independently. If you find the project useful, there are a few ways to help. None of them require much, and at this stage visibility and feedback matter as much as anything else."
     },
     "makeKnown": {
-      "shareText": "Yog-Scope — open source real-time observation of Meteora liquidity pools on Solana.",
+      "shareText": "Yog-Scope — real-time observation of Meteora liquidity pools on Solana.",
       "star": {
         "title": "Star the repository",
         "body": "A GitHub star takes one click, costs nothing, and helps other developers find the project. It is the simplest signal that the project is worth attention.",
@@ -32,7 +32,7 @@
     "sponsor": {
       "title": "Sponsor the project",
       "body": "If you want to support Yog-Scope financially, GitHub Sponsors and direct Solana donations are both available.",
-      "fundsNote": "Funds go toward infrastructure costs (hosting, RPC quota) and ongoing development. The project remains open source and the public dashboard remains free.",
+      "fundsNote": "Funds go toward infrastructure costs (hosting, RPC quota) and ongoing development. The project's source code remains public and the public dashboard remains free.",
       "ctaGithub": "Sponsor on GitHub",
       "solanaLabel": "Solana wallet",
       "copyAddress": "Copy wallet address"

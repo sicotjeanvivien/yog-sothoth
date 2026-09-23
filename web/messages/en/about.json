@@ -2,13 +2,13 @@
   "About": {
     "meta": {
       "title": "About — Yog-Scope",
-      "description": "Yog-Scope is an open source real-time observation platform for Meteora liquidity pools on Solana."
+      "description": "Yog-Scope is a source-available real-time observation platform for Meteora liquidity pools on Solana."
     },
     "hero": {
       "eyebrow": "About Yog-Scope",
       "titleLine1": "Built to observe.",
       "titleLine2": "Open by design.",
-      "lead": "Yog-Scope is an open source platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
+      "lead": "Yog-Scope is a source-available platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
       "ctaGithub": "View on GitHub",
       "ctaAWSD": "About AWSD"
     },
@@ -27,7 +27,7 @@
       },
       "availability": {
         "title": "How it's available",
-        "body": "The platform is released under the MIT license. The code is public and the dashboard is free to use; this is intentional and not going to change. The current scope is Meteora's DAMM v2 pools — coverage of the other Meteora products (DLMM, DAMM v1, Stake2Earn) is planned but not yet delivered. Premium features may be added later, but the open infrastructure and the free public access stay."
+        "body": "The platform is released under the PolyForm Shield license. The code is public and the dashboard is free to use; this is intentional and not going to change. The current scope is Meteora's DAMM v2 pools — coverage of the other Meteora products (DLMM, DAMM v1, Stake2Earn) is planned but not yet delivered. Premium features may be added later, but the public code and the free public access stay."
       },
       "behind": {
         "title": "Who is behind it",

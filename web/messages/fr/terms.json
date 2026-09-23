@@ -13,11 +13,11 @@
     "prose": {
       "inShort": {
         "title": "En bref",
-        "body": "Yog-Scope est une plateforme publique et gratuite d'observation des pools de liquidité Meteora sur Solana. Les données affichées sont fournies à titre informatif uniquement et ne doivent pas être considérées comme un conseil financier. Le service est fourni en l'état, sans garantie de disponibilité ni d'exactitude. Le code source est ouvert et réutilisable sous licence MIT, le service hébergé est régi par les présentes conditions, et le droit français s'applique."
+        "body": "Yog-Scope est une plateforme publique et gratuite d'observation des pools de liquidité Meteora sur Solana. Les données affichées sont fournies à titre informatif uniquement et ne doivent pas être considérées comme un conseil financier. Le service est fourni en l'état, sans garantie de disponibilité ni d'exactitude. Le code source est public et réutilisable sous licence PolyForm Shield, sauf pour proposer un service concurrent ; le service hébergé est régi par les présentes conditions, et le droit français s'applique."
       },
       "service": {
         "title": "Le service",
-        "body": "Yog-Scope est une plateforme open source qui observe les pools Meteora sur le mainnet Solana en temps réel, décode les événements on-chain, les enrichit avec les métadonnées de tokens et les prix en USD, puis expose le résultat via une API HTTP publique et un dashboard web. Le service est exploité par AWSD, l'éditeur identifié dans les mentions légales."
+        "body": "Yog-Scope est une plateforme à code source public qui observe les pools Meteora sur le mainnet Solana en temps réel, décode les événements on-chain, les enrichit avec les métadonnées de tokens et les prix en USD, puis expose le résultat via une API HTTP publique et un dashboard web. Le service est exploité par AWSD, l'éditeur identifié dans les mentions légales."
       },
       "audience": {
         "title": "Qui peut l'utiliser",
@@ -37,7 +37,7 @@
       },
       "intellectualProperty": {
         "title": "Propriété intellectuelle",
-        "body": "Le code source de Yog-Scope est publié sous licence MIT ; vous pouvez le réutiliser dans les termes de cette licence. Les contenus textuels et visuels du site hébergé — en dehors du code source — ainsi que le nom et l'identité visuelle Yog-Scope restent la propriété de l'éditeur. Toute utilisation en dehors des termes de la licence MIT nécessite une autorisation écrite préalable."
+        "body": "Le code source de Yog-Scope est publié sous licence PolyForm Shield 1.0.0 ; vous pouvez le réutiliser dans les termes de cette licence, qui interdit de l'utiliser pour fournir un produit ou un service concurrent de Yog-Scope. Les contenus textuels et visuels du site hébergé — en dehors du code source — ainsi que le nom et l'identité visuelle Yog-Scope restent la propriété de l'éditeur. Toute utilisation en dehors des termes de cette licence nécessite une autorisation écrite préalable."
       },
       "governingLaw": {
         "title": "Droit applicable et évolutions",

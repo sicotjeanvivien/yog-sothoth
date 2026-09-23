@@ -2,6 +2,7 @@
 name = "yog-bootstrap"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 
 [features]
 # Opens `SecretKey::for_tests` / `SecretUrl::for_tests` to other crates' tests.

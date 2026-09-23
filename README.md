@@ -2,7 +2,7 @@
 
 [![crates](https://github.com/sicotjeanvivien/yog-sothoth/actions/workflows/crates.yml/badge.svg)](https://github.com/sicotjeanvivien/yog-sothoth/actions/workflows/crates.yml)
 [![web-quality](https://github.com/sicotjeanvivien/yog-sothoth/actions/workflows/web-quality.yml/badge.svg)](https://github.com/sicotjeanvivien/yog-sothoth/actions/workflows/web-quality.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: PolyForm Shield 1.0.0](https://img.shields.io/badge/License-PolyForm%20Shield%201.0.0-blue.svg)](./LICENSE)
 
 > Protocol-centric liquidity analytics engine for Meteora on Solana.
 
@@ -182,4 +182,13 @@ Before opening a PR, run the relevant local checks (mirrored by CI) and make sur
 
 ## License
 
-[MIT](./LICENSE)
+[PolyForm Shield 1.0.0](./LICENSE).
+
+The code is public, and you may read it, run it — locally or on your own
+server — change it, and reuse parts of it, including in a commercial product
+of your own. What the license forbids is using it to provide a product that
+competes with Yog-Scope or with any other product its author provides with
+this software: deploying it as a rival service, free or paid, is not allowed.
+
+Earlier versions of this repository were released under the MIT license, and
+those versions remain available under MIT.
