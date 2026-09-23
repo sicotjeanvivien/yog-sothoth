@@ -27,7 +27,7 @@
       },
       "availability": {
         "title": "Comment elle est accessible",
-        "body": "La plateforme est publiée sous licence MIT. Le code est public et le dashboard est gratuit ; c'est intentionnel et ça ne changera pas. Le périmètre actuel couvre les pools DAMM v2 de Meteora — le support des autres produits Meteora (DLMM, DAMM v1, Stake2Earn) est prévu mais pas encore livré. Des fonctionnalités premium pourront s'ajouter par la suite, mais l'infrastructure ouverte et l'accès public gratuit restent acquis."
+        "body": "La plateforme est publiée sous licence PolyForm Shield. Le code est public et le dashboard est gratuit ; c'est intentionnel et ça ne changera pas. Le périmètre actuel couvre les pools DAMM v2 de Meteora — le support des autres produits Meteora (DLMM, DAMM v1, Stake2Earn) est prévu mais pas encore livré. Des fonctionnalités premium pourront s'ajouter par la suite, mais le code public et l'accès public gratuit restent acquis."
       },
       "behind": {
         "title": "Qui est derrière",

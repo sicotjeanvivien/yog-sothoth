@@ -2,6 +2,7 @@
 name = "yog-signals"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 
 [dependencies]
 # Workspace crates. The engine + detectors (engine.rs, detectors/) use only

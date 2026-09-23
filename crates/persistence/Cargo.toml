@@ -2,6 +2,7 @@
 name = "yog-persistence"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 # Every `.rs` directly under tests/ would otherwise become its own test binary,
 # relinking the whole crate each time. One declared target (see [[test]] below),
 # every other file is a plain module of it.

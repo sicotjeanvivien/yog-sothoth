@@ -11,6 +11,11 @@ members = [
 ]
 resolver = "2"
 
+# One declaration, inherited by every crate through `license.workspace = true`.
+# The terms are in LICENSE at the repository root.
+[workspace.package]
+license = "PolyForm-Shield-1.0.0"
+
 [workspace.dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }

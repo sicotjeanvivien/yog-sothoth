@@ -13,7 +13,7 @@
     "prose": {
       "inShort": {
         "title": "In short",
-        "body": "Yog-Scope is a public, free-to-use observation platform for Meteora liquidity pools on Solana. The data shown is informational only and must not be taken as financial advice. The service is provided as-is, without availability or accuracy guarantees. The source code is open and reusable under MIT, the hosted service is governed by these terms, and French law applies."
+        "body": "Yog-Scope is a public, free-to-use observation platform for Meteora liquidity pools on Solana. The data shown is informational only and must not be taken as financial advice. The service is provided as-is, without availability or accuracy guarantees. The source code is public and reusable under PolyForm Shield, except to provide a competing service; the hosted service is governed by these terms, and French law applies."
       },
       "service": {
         "title": "The service",
@@ -37,7 +37,7 @@
       },
       "intellectualProperty": {
         "title": "Intellectual property",
-        "body": "The Yog-Scope source code is released under the MIT license; you may reuse it under the terms of that license. The textual and visual content of the hosted website — outside of the source code — and the Yog-Scope name and visual identity remain the property of the editor. Using them outside of the MIT license terms requires prior written authorisation."
+        "body": "The Yog-Scope source code is released under the PolyForm Shield 1.0.0 license; you may reuse it under the terms of that license, which forbids using it to provide a product or service that competes with Yog-Scope. The textual and visual content of the hosted website — outside of the source code — and the Yog-Scope name and visual identity remain the property of the editor. Using them outside of that license's terms requires prior written authorisation."
       },
       "governingLaw": {
         "title": "Governing law and changes",
