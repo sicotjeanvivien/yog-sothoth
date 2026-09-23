@@ -644,13 +644,19 @@ check can fail. The dump took 15 s and weighed 164 MB; the restore took 65 s.
   not to the database, so `pg_dump` never writes them. The privileges on each
   table *are* in the dump, and they only apply if the roles already exist.
   So `setup-roles` runs first. It creates the roles with their `CHANGE_ME_…`
-  passwords, so a real target needs one `ALTER ROLE … PASSWORD …` per role
-  afterwards (see [`setup_roles.sql`](#setup_rolessql) for why a rerun never
-  does it).
+  passwords, which is why the real ones are set **immediately after**, before
+  anything else runs (see [`setup_roles.sql`](#setup_rolessql) for why a rerun
+  never does it).
 - **Nothing about versions.** The target must run the **same Postgres major
   and the same TimescaleDB version** as the source, and `pg_dump` and
   `pg_restore` must be the server's major (a 14 client refuses a 16 server).
-  Running both from the database image itself guarantees the match.
+  ⚠️ The image *tag* does not pin that: `timescale/timescaledb:latest-pg16`
+  fixes the Postgres major only, and a later pull can bring a newer
+  TimescaleDB. Record the source's version next to every dump —
+  `SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'` — and
+  start the target from that exact version (a versioned tag such as
+  `2.27.1-pg16`, or the image digest). The proof above used the source's image
+  by its ID, not by its tag.
 
 ### The sequence
 
@@ -661,6 +667,10 @@ the database and the `timescaledb` extension:
 # 1. the roles, which the dump does not carry
 DATABASE_URL_ADMIN=postgresql://<admin>@<target>/yog_sothoth \
   cargo run -p yog-persistence --bin yog-migrate -- setup-roles
+
+# 1b. their real passwords, at once: until then the target accepts the
+#     published CHANGE_ME_… ones. One per role, matching the DATABASE_URL_*.
+psql <target-admin-url> -c "ALTER ROLE yog_migrate PASSWORD '<password>';"   # … and the four others
 
 # 2. TimescaleDB's restore mode — it stops the background workers
 psql <target-admin-url> -c "SELECT timescaledb_pre_restore();"
@@ -676,7 +686,7 @@ DATABASE_URL_MIGRATE=postgresql://yog_migrate:<password>@<target>/yog_sothoth \
   cargo run -p yog-persistence --bin yog-migrate -- migrate
 ```
 
-Then the role passwords, then the daemons. Step 3 prints nothing on success:
+Then the daemons. Step 3 prints nothing on success:
 `CREATE EXTENSION IF NOT EXISTS` absorbs the extension the image already
 installed, and `public` already belongs to `yog_migrate` by step 1.
 
