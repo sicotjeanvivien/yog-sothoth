@@ -670,7 +670,11 @@ DATABASE_URL_ADMIN=postgresql://<admin>@<target>/yog_sothoth \
 
 # 1b. their real passwords, at once: until then the target accepts the
 #     published CHANGE_ME_… ones. One per role, matching the DATABASE_URL_*.
-psql <target-admin-url> -c "ALTER ROLE yog_migrate PASSWORD '<password>';"   # … and the four others
+#     `\password` prompts and sends only a hash: the password stays out of
+#     the shell history, the process list and the server log, where an
+#     `ALTER ROLE … PASSWORD '…'` on the command line would leave it.
+psql <target-admin-url>
+  \password yog_migrate      -- … and yog_indexer, yog_api, yog_context, yog_signals
 
 # 2. TimescaleDB's restore mode — it stops the background workers
 psql <target-admin-url> -c "SELECT timescaledb_pre_restore();"
@@ -719,8 +723,12 @@ production value. Comparing with it on measures the policies, not the restore.
 Compare the target against the source, not against expectations:
 
 - row counts of every table in `public` and of every continuous aggregate, and
-  the lists in `timescaledb_information.{hypertables,jobs,continuous_aggregates,compression_settings}`
-  and `_sqlx_migrations` — identical, line for line;
+  the definitions in `timescaledb_information.{hypertables,continuous_aggregates,compression_settings}`,
+  `_sqlx_migrations` (version and checksum), and `timescaledb_information.jobs`
+  — identical, line for line. For the jobs, compare what defines them
+  (`proc_name`, `hypertable_name`, `schedule_interval`, `config`), not what
+  records their runs (`next_start` and the `job_stats` columns), which a source
+  whose jobs have run cannot share with a fresh copy;
 - for a source that is still being written, both sides must describe **the same
   instant**: hold a `REPEATABLE READ` transaction open on the source, take its
   `pg_export_snapshot()`, count inside that transaction, and dump that same
