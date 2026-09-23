@@ -2,18 +2,31 @@
 //! in-memory bucket and a heartbeat that remembers what it was told.
 //!
 //! Each failure case asserts the outcome **and** its reason, that the bucket
-//! is left empty, and that exactly one failure signal was sent with that
-//! reason — a run that fails in silence is the defect this crate exists to
-//! prevent.
+//! is left empty, that an upload it had opened was **aborted**, and that
+//! exactly one failure signal was sent with that reason — a run that fails in
+//! silence is the defect this crate exists to prevent.
+//!
+//! The abort is counted, not inferred from an empty bucket: an in-memory
+//! upload that is neither completed nor aborted never shows up in a listing
+//! either, so "the bucket is empty" stayed green with every `abort` removed.
 
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    fs,
+    os::unix::fs::PermissionsExt,
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use chrono::TimeZone;
 use futures_util::{StreamExt, stream::BoxStream};
 use object_store::{
     GetOptions, GetResult, ListResult, MultipartUpload, ObjectMeta, ObjectStoreExt, PutOptions,
-    PutPayload, PutResult, memory::InMemory,
+    PutPayload, PutResult, UploadPart, memory::InMemory,
 };
 use tempfile::TempDir;
 
@@ -40,36 +53,85 @@ fn server_16() -> FixedVersions {
     }))
 }
 
-/// A bucket that refuses to start any upload, and otherwise behaves.
+/// What happened to the multipart uploads a run opened.
 #[derive(Debug, Default)]
-struct RefusingStore(InMemory);
+struct Ledger {
+    completed: AtomicUsize,
+    aborted: AtomicUsize,
+}
 
-impl std::fmt::Display for RefusingStore {
+/// How the fake bucket answers an upload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Bucket {
+    Accepting,
+    /// Refuses to open any upload, as a key without the right would.
+    Refusing,
+}
+
+/// An in-memory bucket that records how each upload ended.
+#[derive(Debug)]
+struct TestStore {
+    inner: InMemory,
+    ledger: Arc<Ledger>,
+    bucket: Bucket,
+}
+
+impl std::fmt::Display for TestStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RefusingStore")
+        write!(f, "TestStore({:?})", self.bucket)
+    }
+}
+
+#[derive(Debug)]
+struct RecordingUpload {
+    inner: Box<dyn MultipartUpload>,
+    ledger: Arc<Ledger>,
+}
+
+#[async_trait]
+impl MultipartUpload for RecordingUpload {
+    fn put_part(&mut self, data: PutPayload) -> UploadPart {
+        self.inner.put_part(data)
+    }
+
+    async fn complete(&mut self) -> object_store::Result<PutResult> {
+        self.ledger.completed.fetch_add(1, Ordering::SeqCst);
+        self.inner.complete().await
+    }
+
+    async fn abort(&mut self) -> object_store::Result<()> {
+        self.ledger.aborted.fetch_add(1, Ordering::SeqCst);
+        self.inner.abort().await
     }
 }
 
 #[async_trait]
-impl ObjectStore for RefusingStore {
+impl ObjectStore for TestStore {
     async fn put_opts(
         &self,
         location: &Path,
         payload: PutPayload,
         opts: PutOptions,
     ) -> object_store::Result<PutResult> {
-        self.0.put_opts(location, payload, opts).await
+        self.inner.put_opts(location, payload, opts).await
     }
 
     async fn put_multipart_opts(
         &self,
-        _location: &Path,
-        _opts: PutMultipartOptions,
+        location: &Path,
+        opts: PutMultipartOptions,
     ) -> object_store::Result<Box<dyn MultipartUpload>> {
-        Err(object_store::Error::Generic {
-            store: "RefusingStore",
-            source: "AccessDenied: the bucket refused the upload".into(),
-        })
+        if self.bucket == Bucket::Refusing {
+            return Err(object_store::Error::Generic {
+                store: "TestStore",
+                source: "AccessDenied: the bucket refused the upload".into(),
+            });
+        }
+        let inner = self.inner.put_multipart_opts(location, opts).await?;
+        Ok(Box::new(RecordingUpload {
+            inner,
+            ledger: Arc::clone(&self.ledger),
+        }))
     }
 
     async fn get_opts(
@@ -77,22 +139,22 @@ impl ObjectStore for RefusingStore {
         location: &Path,
         options: GetOptions,
     ) -> object_store::Result<GetResult> {
-        self.0.get_opts(location, options).await
+        self.inner.get_opts(location, options).await
     }
 
     fn delete_stream(
         &self,
         locations: BoxStream<'static, object_store::Result<Path>>,
     ) -> BoxStream<'static, object_store::Result<Path>> {
-        self.0.delete_stream(locations)
+        self.inner.delete_stream(locations)
     }
 
     fn list(&self, prefix: Option<&Path>) -> BoxStream<'static, object_store::Result<ObjectMeta>> {
-        self.0.list(prefix)
+        self.inner.list(prefix)
     }
 
     async fn list_with_delimiter(&self, prefix: Option<&Path>) -> object_store::Result<ListResult> {
-        self.0.list_with_delimiter(prefix).await
+        self.inner.list_with_delimiter(prefix).await
     }
 
     async fn copy_opts(
@@ -101,7 +163,7 @@ impl ObjectStore for RefusingStore {
         to: &Path,
         options: object_store::CopyOptions,
     ) -> object_store::Result<()> {
-        self.0.copy_opts(from, to, options).await
+        self.inner.copy_opts(from, to, options).await
     }
 }
 
@@ -183,28 +245,45 @@ struct Run {
     outcome: RunOutcome,
     signals: Vec<String>,
     store: Arc<dyn ObjectStore>,
+    ledger: Arc<Ledger>,
+}
+
+impl Run {
+    fn aborted(&self) -> usize {
+        self.ledger.aborted.load(Ordering::SeqCst)
+    }
+
+    fn completed(&self) -> usize {
+        self.ledger.completed.load(Ordering::SeqCst)
+    }
 }
 
 const DATABASE_URL: &str = "postgresql://yog_archive:s3cret-password@db:5432/yog_sothoth";
 
 async fn run_with(
     versions: FixedVersions,
-    store: Arc<dyn ObjectStore>,
+    bucket: Bucket,
     pg_dump: PathBuf,
     pg_restore: PathBuf,
     cancel: CancellationToken,
 ) -> Run {
-    run_full(versions, store, pg_dump, pg_restore, cancel, DATABASE_URL).await
+    run_full(versions, bucket, pg_dump, pg_restore, cancel, DATABASE_URL).await
 }
 
 async fn run_full(
     versions: FixedVersions,
-    store: Arc<dyn ObjectStore>,
+    bucket: Bucket,
     pg_dump: PathBuf,
     pg_restore: PathBuf,
     cancel: CancellationToken,
     database_url: &str,
 ) -> Run {
+    let ledger = Arc::new(Ledger::default());
+    let store: Arc<dyn ObjectStore> = Arc::new(TestStore {
+        inner: InMemory::new(),
+        ledger: Arc::clone(&ledger),
+        bucket,
+    });
     let heartbeat = Arc::new(RecordingHeartbeat::default());
     let archiver = Archiver {
         versions: Arc::new(versions),
@@ -223,13 +302,14 @@ async fn run_full(
         outcome,
         signals,
         store,
+        ledger,
     }
 }
 
 async fn run(pg_dump: PathBuf, pg_restore: PathBuf) -> Run {
     run_with(
         server_16(),
-        Arc::new(InMemory::new()),
+        Bucket::Accepting,
         pg_dump,
         pg_restore,
         CancellationToken::new(),
@@ -246,12 +326,15 @@ async fn objects(store: &Arc<dyn ObjectStore>) -> Vec<String> {
 }
 
 /// The run failed with `label`, its reason contains `reason`, nothing is in
-/// the bucket, and exactly one failure signal carried both.
-async fn assert_failed(run: &Run, label: &str, reason: &str) {
+/// the bucket, the upload was aborted `aborted` times and never completed,
+/// and exactly one failure signal carried the label and the reason.
+async fn assert_failed(run: &Run, label: &str, reason: &str, aborted: usize) {
     assert_eq!(run.outcome.label(), label, "{:?}", run.outcome);
     let text = format!("{:?}", run.outcome);
     assert!(text.contains(reason), "expected `{reason}` in {text}");
     assert_eq!(objects(&run.store).await, Vec::<String>::new());
+    assert_eq!(run.completed(), 0, "a failed run completed its upload");
+    assert_eq!(run.aborted(), aborted, "aborted uploads");
     assert_eq!(run.signals.len(), 1, "{:?}", run.signals);
     assert!(
         run.signals[0].starts_with(&format!("failure: {label}: ")),
@@ -275,6 +358,7 @@ async fn a_dump_is_archived_under_its_version_and_signalled_once() {
         }
     );
     assert_eq!(run.signals, vec!["success".to_string()]);
+    assert_eq!((run.completed(), run.aborted()), (1, 0));
 
     let stored = run.store.get(&Path::from(key)).await.unwrap();
     let attributes = stored.attributes.clone();
@@ -322,7 +406,7 @@ exit 1"#,
     );
     let run = run(pg_dump, fakes.good_pg_restore()).await;
 
-    assert_failed(&run, "dump_failed", "password authentication failed").await;
+    assert_failed(&run, "dump_failed", "password authentication failed", 1).await;
 }
 
 #[tokio::test]
@@ -336,7 +420,13 @@ exit 1"#,
     );
     let run = run(fakes.good_pg_dump(), pg_restore).await;
 
-    assert_failed(&run, "unreadable", "does not appear to be a valid archive").await;
+    assert_failed(
+        &run,
+        "unreadable",
+        "does not appear to be a valid archive",
+        1,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -344,14 +434,14 @@ async fn a_bucket_that_refuses_the_upload_is_signalled() {
     let fakes = Fakes::new();
     let run = run_with(
         server_16(),
-        Arc::new(RefusingStore::default()),
+        Bucket::Refusing,
         fakes.good_pg_dump(),
         fakes.good_pg_restore(),
         CancellationToken::new(),
     )
     .await;
 
-    assert_failed(&run, "store_failed", "AccessDenied").await;
+    assert_failed(&run, "store_failed", "AccessDenied", 0).await;
     assert_eq!(
         fakes.read("args"),
         None,
@@ -372,6 +462,7 @@ async fn a_pg_dump_of_another_major_is_refused_before_dumping() {
         &run,
         "refused",
         "pg_dump is PostgreSQL 14 and the server is PostgreSQL 16",
+        0,
     )
     .await;
     assert_eq!(fakes.read("args"), None, "pg_dump ran despite the mismatch");
@@ -382,7 +473,7 @@ async fn unreadable_server_versions_refuse_the_run() {
     let fakes = Fakes::new();
     let run = run_with(
         FixedVersions(Err("the timescaledb extension is not installed".to_string())),
-        Arc::new(InMemory::new()),
+        Bucket::Accepting,
         fakes.good_pg_dump(),
         fakes.good_pg_restore(),
         CancellationToken::new(),
@@ -393,6 +484,7 @@ async fn unreadable_server_versions_refuse_the_run() {
         &run,
         "refused",
         "the timescaledb extension is not installed",
+        0,
     )
     .await;
 }
@@ -412,7 +504,7 @@ async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
         Duration::from_secs(10),
         run_with(
             server_16(),
-            Arc::new(InMemory::new()),
+            Bucket::Accepting,
             pg_dump,
             fakes.good_pg_restore(),
             cancel,
@@ -424,6 +516,7 @@ async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
     assert_eq!(run.outcome, RunOutcome::Cancelled);
     assert_eq!(run.signals, Vec::<String>::new());
     assert_eq!(objects(&run.store).await, Vec::<String>::new());
+    assert_eq!((run.completed(), run.aborted()), (0, 1));
 }
 
 #[tokio::test]
@@ -458,7 +551,7 @@ async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
     let fakes = Fakes::new();
     let run = run_full(
         server_16(),
-        Arc::new(InMemory::new()),
+        Bucket::Accepting,
         fakes.good_pg_dump(),
         fakes.good_pg_restore(),
         CancellationToken::new(),
@@ -466,6 +559,12 @@ async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
     )
     .await;
 
-    assert_failed(&run, "refused", "DATABASE_URL_ARCHIVE is not a valid URL").await;
+    assert_failed(
+        &run,
+        "refused",
+        "DATABASE_URL_ARCHIVE is not a valid URL",
+        0,
+    )
+    .await;
     assert_eq!(fakes.read("args"), None);
 }

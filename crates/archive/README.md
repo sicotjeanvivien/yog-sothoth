@@ -71,10 +71,21 @@ a hope.
 
 ### Why the upload is not read back
 
-The bucket key is meant to be **write-only**, so that a compromised server
-cannot delete the backups. A write-only key cannot `HEAD` the object it just
-wrote, so the archiver trusts the completion of the multipart upload — S3
-assembles the object or refuses — instead of reading the size back.
+The bucket key is meant to be **write-only**, and a write-only key cannot
+`HEAD` the object it just wrote, so the archiver trusts the completion of the
+multipart upload — S3 assembles the object or refuses — instead of reading the
+size back.
+
+### ⚠️ A write-only key does not protect the backups on its own
+
+It cannot delete an object, but it can **write over one**: on a bucket without
+versioning, a `PUT` to an existing key replaces it. The keys are easy to guess —
+a timestamp on a six-hour rhythm and a public TimescaleDB version — so a
+compromised server could overwrite every dump of the window with junk, using
+the very credentials the archiver holds. What makes the backups survive that is
+the bucket's **versioning** (or Object Lock): an overwrite then adds a version
+and the previous one stays, and a write-only key cannot delete versions. See
+*Deploying*.
 
 ## Configuration
 
@@ -97,12 +108,18 @@ run otherwise, and says so.
 
 ## Deploying
 
+- **Bucket versioning: on** (or Object Lock), for the reason given above —
+  without it the write-only key still lets a compromised server overwrite
+  every dump.
 - **Bucket lifecycle rules**: expire objects under `yog-sothoth/` after
-  **14 days** (56 dumps, ~9 GB at the September 2026 size), and abort
-  incomplete multipart uploads after **1 day** — a stop mid-dump aborts its
+  **14 days** (56 dumps, ~9 GB at the September 2026 size), expire
+  **noncurrent versions** after 14 days too — an overwritten dump stays
+  recoverable that long, and versions do not pile up forever — and abort
+  incomplete multipart uploads after **1 day**: a stop mid-dump aborts its
   upload, but a killed process cannot.
-- **Key**: write-only on the bucket. Retention belongs to the lifecycle rule,
-  not to the archiver, for the same reason.
+- **Key**: write-only on the bucket, no right to delete objects or versions.
+  Retention belongs to the lifecycle rule, not to the archiver, for the same
+  reason.
 - **Healthchecks.io check**: period 6 hours, a grace of about an hour. A failed
   run pings `/fail` with the reason in the body; a missing ping raises the
   alarm on its own.
