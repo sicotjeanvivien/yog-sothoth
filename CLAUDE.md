@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Protocol-centric observer of Meteora's on-chain activity on Solana. It subscribes to Meteora program IDs over WebSocket, decodes Anchor `event_cpi` emissions, reconstructs AMM state, and persists it to TimescaleDB. A signal engine runs detectors over that data; an HTTP API and a Next.js dashboard read it. Pools are *discovered* from the transaction stream, not configured upfront — the `pools` table records what was *seen*, not a watchlist.
 
-Four backend processes share one Postgres database and never call each other — all coordination is through the schema: `indexer` (ingest), `context` (token/price/pool-account enrichment), `signals` (batch detectors → `signals` table), `api` (axum HTTP + SSE). The `web` dashboard (Next.js) never touches the DB and has **no BFF**: Server Components and the browser both call the API directly over HTTP (CORS-locked).
+Five backend processes share one Postgres database and never call each other — all coordination is through the schema: `indexer` (ingest), `context` (token/price/pool-account enrichment), `signals` (batch detectors → `signals` table), `api` (axum HTTP + SSE), `archive` (a `pg_dump` every 6 h to an S3 bucket, read-only). The `web` dashboard (Next.js) never touches the DB and has **no BFF**: Server Components and the browser both call the API directly over HTTP (CORS-locked).
 
 ## Where the real documentation lives
 
@@ -48,18 +48,18 @@ for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 # an `--all-features` or dev-dependency path needs is still checked in one
 # grouped invocation, and still maskable.
 
-# Lint — the seven native crates (yog-wasm is excluded; it's a deferred
+# Lint — the eight native crates (yog-wasm is excluded; it's a deferred
 # scaffold). Every one must be named: clippy only DRIVES the packages given
 # with `-p`, so a crate reached as a path dependency is compiled but never
 # linted — that is how yog-bootstrap went unlinted until 1 Sept 2026.
-cargo clippy -p yog-api -p yog-bootstrap -p yog-core -p yog-context -p yog-indexer \
-    -p yog-persistence -p yog-signals --all-targets --all-features -- -D warnings
+cargo clippy -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
+    -p yog-indexer -p yog-persistence -p yog-signals --all-targets --all-features -- -D warnings
 
 # Doc links — rustdoc is the only thing that checks them (the CI `check` job
 # runs this). `--document-private-items` is required: without it a library's
 # private-item docs are skipped, links included. To force a re-check of an
 # already-documented crate, touch files that EXIST (`lib.rs` for the libraries,
-# `main.rs` for the four binaries): touching a missing `src/lib.rs` creates an
+# `main.rs` for the five binaries): touching a missing `src/lib.rs` creates an
 # empty library, which cargo then documents in place of the binary.
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
@@ -99,7 +99,7 @@ cargo test --workspace --all-features
 cargo test -p yog-persistence --features integration-tests
 
 # Run a binary natively (see "Local dev" for the DB it expects)
-cargo run -p yog-indexer        # or yog-api, yog-context, yog-signals
+cargo run -p yog-indexer        # or yog-api, yog-context, yog-signals, yog-archive
 cargo run -p yog-persistence --bin yog-migrate   # apply migrations (as yog_migrate)
 ```
 
@@ -156,6 +156,7 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | `yog_api` | RO everywhere | api |
 | `yog_context` | RW on `token_metadata` / `token_prices`, UPDATE on pool-property columns, RO `pools` | context |
 | `yog_signals` | INSERT (append-only) on `signals`, RO on its read VIEWs | signals |
+| `yog_archive` | RO on everything (member of `pg_read_all_data`), writes nothing | archive |
 
 Consequence: calling `insert` from the `api` process fails with `permission denied` *by design* — the role split is the safety net, not a bug. When you add a table in a migration, add its `GRANT INSERT, UPDATE ... TO yog_indexer;` in the same migration (`SELECT` is covered by default privileges in `setup_roles.sql`).
 

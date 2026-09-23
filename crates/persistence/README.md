@@ -580,7 +580,7 @@ callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*
 ## `setup_roles.sql`
 
 Provisioning script applied as the admin role, by
-`yog-migrate -- setup-roles`. Creates the five runtime roles, transfers `public`
+`yog-migrate -- setup-roles`. Creates the six roles, transfers `public`
 schema ownership to `yog_migrate`, and sets `ALTER DEFAULT PRIVILEGES FOR ROLE
 yog_migrate` so tables created by future migrations inherit the right `SELECT`
 grants automatically. It contains no table-specific GRANTs — those live in the
@@ -631,7 +631,10 @@ what that leaves uncovered.
 ## Backup and restore
 
 A logical dump (`pg_dump -Fc`) restores to an identical database, and the
-sequence below is how. It was proven on 23 September 2026 against the dev
+sequence below is how. In production the dumps come from `yog-archive`
+([`crates/archive`](../archive/README.md)), every six hours, under the
+read-only `yog_archive` role; each one names in its key the TimescaleDB
+version it restores into. It was proven on 23 September 2026 against the dev
 database (1117 MB, 21 hypertables, 4 continuous aggregates, 31 jobs): the
 restored copy matched the source on every table's row count, every aggregate's
 row count, the chunks, the jobs, the compression settings and the migration

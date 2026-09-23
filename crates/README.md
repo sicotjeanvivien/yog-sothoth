@@ -2,7 +2,7 @@
 
 This directory hosts the Rust workspace — the engine of yog-sothoth.
 
-The workspace follows a **Domain-Driven Design** layout: domain types and contracts live in `core`, infrastructure and I/O live in dedicated adapter crates (`persistence` for Postgres, `bootstrap` for startup utilities). The four native binaries (`indexer`, `api`, `context`, `signals`) are thin assembly layers that wire the pieces together; a one-shot binary (`yog-migrate`) lives next to the migrations it applies.
+The workspace follows a **Domain-Driven Design** layout: domain types and contracts live in `core`, infrastructure and I/O live in dedicated adapter crates (`persistence` for Postgres, `bootstrap` for startup utilities). The five native binaries (`indexer`, `api`, `context`, `signals`, `archive`) are thin assembly layers that wire the pieces together; a one-shot binary (`yog-migrate`) lives next to the migrations it applies.
 
 **How the documentation is organised**: this README covers what is *inter-crate and common* — the dependency graph, the conventions, the database roles, the local workflows, and the cross-crate recipes (adding a protocol, adding an endpoint). Each substantial crate has its own README for its internals; each fact lives in exactly one place, so this file links rather than repeats. For the project-wide pitch and status, see the [root README](../README.md).
 
@@ -33,6 +33,7 @@ crates/
 ├── api/           ← binary: axum HTTP server + SSE over the indexed data
 ├── context/       ← binary: token/pool enrichment (Helius DAS, Jupiter, cp-amm accounts)
 ├── signals/       ← binary: batch detector engine emitting typed signals
+├── archive/       ← binary: pg_dump every 6 h, streamed to an S3 bucket
 └── wasm/          ← WASM build target (scaffold — deferred)
 ```
 
@@ -43,20 +44,20 @@ The dependency graph is strict and one-directional:
                        │   core   │  no I/O, wasm-compatible
                        └────▲─────┘
                             │
-              ┌─────────────┼─────────────┬─────────┐
-              │             │             │         │
-        ┌─────┴─────┐ ┌─────┴─────┐  ┌────┴────┐    │
-        │persistence│ │ bootstrap │  │  wasm   │    │
-        └─────▲─────┘ └─────▲─────┘  └─────────┘    │
-              │             │                       │
-              └──────┬──────┘                       │
-                     │                              │
-      ┌──────────┬───┴──────┬───────────┐           │
-      │          │          │           │           │
- ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐      │
- │ indexer │ │  api  │ │ context │ │ signals │      │
- └─────────┘ └───────┘ └─────────┘ └─────────┘      │
-                                                    │
+              ┌─────────────┼─────────────┬──────────────────────┐
+              │             │             │                      │
+        ┌─────┴─────┐ ┌─────┴─────┐  ┌────┴────┐                 │
+        │persistence│ │ bootstrap │  │  wasm   │                 │
+        └─────▲─────┘ └─────▲─────┘  └─────────┘                 │
+              │             │                                    │
+              └──────┬──────┘                                    │
+                     │                                           │
+      ┌──────────┬───┴──────┬───────────┬───────────┐            │
+      │          │          │           │           │            │
+ ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐ ┌────┴────┐       │
+ │ indexer │ │  api  │ │ context │ │ signals │ │ archive │       │
+ └─────────┘ └───────┘ └─────────┘ └─────────┘ └─────────┘       │
+                                                                 │
                                           (no binary depends on wasm)
 ```
 
@@ -72,6 +73,7 @@ The dependency graph is strict and one-directional:
 - **[`indexer` (`yog-indexer`)](./indexer/README.md)** — the ingest daemon. A `TransactionSource` port with two implementations — JSON-RPC (listener → dispatcher → fetch) and Yellowstone gRPC — chosen by `INGEST_SOURCE`, feeding a bounded worker, `TransactionProcessor`, per-protocol sub-persistors, Prometheus metrics.
 - **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Sixteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
 - **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill. The last one names no protocol — it iterates one `PoolAccountResolver` per protocol (cp-amm and DLMM today), each owning its queue and its satellite table.
+- **[`archive` (`yog-archive`)](./archive/README.md)** — the backup daemon. Every six hours, `pg_dump` under the read-only `yog_archive` role, streamed to an S3-compatible bucket, checked with `pg_restore --list`, and signalled to a dead man's switch. It never restores: the proven procedure is in [`persistence/README.md`](./persistence/README.md#backup-and-restore).
 - **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain.
 - **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed once user accounts exist.
 
@@ -88,6 +90,7 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_api` | `SELECT` across tables and VIEWs — nothing else | api |
 | `yog_context` | `SELECT, INSERT, UPDATE` on `token_metadata` / `token_prices` and every per-protocol pool-properties satellite; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties**; `SELECT` on `pools` | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `SELECT` on its read VIEWs | signals |
+| `yog_archive` | `SELECT` on everything through `pg_read_all_data`, writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 
 The role split is the safety net, not a bug: calling a write method from the api process fails with `permission denied` from Postgres itself, by design. Provisioning mechanics (`setup_roles.sql`, default privileges) are documented in [`persistence/README.md`](./persistence/README.md#setup_rolessql).

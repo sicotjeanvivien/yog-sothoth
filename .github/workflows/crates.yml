@@ -9,9 +9,9 @@
 #                        catches a crate that only compiles because a sibling
 #                        in the same invocation enables a feature for it.
 #   - fmt              : `cargo fmt --check`.
-#   - clippy           : `cargo clippy` over the seven native crates (the
+#   - clippy           : `cargo clippy` over the eight native crates (the
 #                        WASM crate is a scaffold, disabled for now).
-#   - test             : `cargo test` over those same seven crates.
+#   - test             : `cargo test` over those same eight crates.
 #   - test-integration : the DB-backed tests, behind the `integration-tests`
 #                        feature, against a real TimescaleDB.
 #   - audit            : `cargo audit` on Cargo.lock — vulnerability scan of
@@ -202,6 +202,7 @@ jobs:
       - run: |
           cargo clippy \
             -p yog-api \
+            -p yog-archive \
             -p yog-bootstrap \
             -p yog-core \
             -p yog-context \
@@ -225,6 +226,7 @@ jobs:
       - run: |
           cargo test \
             -p yog-api \
+            -p yog-archive \
             -p yog-bootstrap \
             -p yog-core \
             -p yog-context \
