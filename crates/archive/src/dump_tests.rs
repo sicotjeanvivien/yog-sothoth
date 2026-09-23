@@ -49,3 +49,14 @@ fn tail_keeps_the_end_of_a_long_message() {
     assert!(kept.ends_with("END"));
     assert_eq!(kept.chars().count(), MESSAGE_TAIL + 1);
 }
+
+#[test]
+fn a_socket_url_without_a_host_is_accepted() {
+    let secret = SecretUrl::for_tests("postgresql:///yog_sothoth?host=/var/run/postgresql");
+    let connection = Connection::from_secret(&secret).unwrap();
+    assert_eq!(connection.password, None);
+    assert_eq!(
+        connection.url,
+        "postgresql:///yog_sothoth?host=/var/run/postgresql"
+    );
+}

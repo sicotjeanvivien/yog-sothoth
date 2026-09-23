@@ -15,8 +15,8 @@ use yog_persistence::{Database, PgDatabaseInfo, ServerVersions};
 use crate::{
     archiver::{Archiver, RunOutcome, VersionSource},
     bootstrap::{Config, config::StoreConfig},
-    dump::{Connection, PgTools},
-    heartbeat::HealthchecksHeartbeat,
+    dump::PgTools,
+    heartbeat::{HealthchecksHeartbeat, Heartbeat},
     metrics,
 };
 
@@ -29,15 +29,23 @@ impl Daemon {
     /// Build everything a run needs. Nothing here touches the database: see
     /// [`PgVersions`] for why the connection belongs to the run.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        let store = build_store(&config.store).context("failed to configure the bucket")?;
+        // The heartbeat first: from here on, whatever fails can be told.
         let heartbeat = HealthchecksHeartbeat::new(config.heartbeat_url)
             .context("failed to build the heartbeat client")?;
-        let connection = Connection::from_secret(&config.database_url)?;
+        let store = match build_store(&config.store) {
+            Ok(store) => store,
+            Err(e) => {
+                heartbeat
+                    .failure(&format!("store_misconfigured: {e}"))
+                    .await;
+                return Err(anyhow::Error::new(e).context("failed to configure the bucket"));
+            }
+        };
 
         Ok(Self {
             archiver: Archiver {
                 versions: Arc::new(PgVersions {
-                    url: config.database_url,
+                    url: config.database_url.clone(),
                 }),
                 store: Arc::new(store),
                 heartbeat: Arc::new(heartbeat),
@@ -45,7 +53,7 @@ impl Daemon {
                     pg_dump: config.pg_dump,
                     pg_restore: config.pg_restore,
                 },
-                connection,
+                database_url: config.database_url.clone(),
             },
             interval: config.interval,
         })

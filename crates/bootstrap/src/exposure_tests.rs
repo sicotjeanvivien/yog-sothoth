@@ -48,10 +48,12 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/archive/src/heartbeat.rs",
-        2,
-        "reqwest owns the request — the check's URL is the argument of `.post`, \
-         once for a success and once, with `/fail` appended, for a failure; \
-         the errors reqwest builds from it go back through `SecretUrl::scrub`",
+        3,
+        "reqwest owns the request — the check's URL is the argument of `.post` \
+         for a success, and of `fail_url` for a failure, which pushes `fail` \
+         onto its path and hands the result straight to `.post`; the third is \
+         the same `fail_url` at startup, refusing a URL that cannot take it. \
+         The errors reqwest builds from it go back through `SecretUrl::scrub`",
     ),
     (
         "crates/bootstrap/src/endpoint.rs",

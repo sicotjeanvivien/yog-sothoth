@@ -30,13 +30,24 @@ pub(crate) trait Heartbeat: Send + Sync {
 
 /// Healthchecks.io's ping API: `POST <check-url>` on success,
 /// `POST <check-url>/fail` on failure, the body shown in its log.
+///
+/// `/fail` goes into the URL's **path**. Appended as text, it would land in
+/// the query of a slug URL (`…/<ping-key>/<slug>?create=1/fail`), and the
+/// service would record every failure as a success — the one mistake this
+/// daemon exists to prevent.
 pub(crate) struct HealthchecksHeartbeat {
     client: reqwest::Client,
     url: SecretUrl,
 }
 
 impl HealthchecksHeartbeat {
-    pub(crate) fn new(url: SecretUrl) -> Result<Self, reqwest::Error> {
+    /// Refuses, at startup, a URL that cannot take `/fail`: better a daemon
+    /// that will not start than one whose failures cannot be reported. The
+    /// error does not quote the URL, which carries the check's secret.
+    pub(crate) fn new(url: SecretUrl) -> anyhow::Result<Self> {
+        if fail_url(url.expose()).is_none() {
+            anyhow::bail!("ARCHIVE_HEARTBEAT_URL is not a URL a `/fail` path can be added to");
+        }
         let client = reqwest::Client::builder().timeout(TIMEOUT).build()?;
         Ok(Self { client, url })
     }
@@ -65,13 +76,26 @@ impl Heartbeat for HealthchecksHeartbeat {
     }
 
     async fn failure(&self, reason: &str) {
-        let request = self
-            .client
-            .post(format!("{}/fail", self.url.expose()))
-            .body(reason.to_string());
+        let Some(url) = fail_url(self.url.expose()) else {
+            // Checked at startup; kept total rather than unwrapped.
+            metrics::heartbeat_failed("failure");
+            return;
+        };
+        let request = self.client.post(url).body(reason.to_string());
         self.deliver(request, "failure").await;
     }
 }
+
+/// The check's URL with `fail` pushed onto its path, query kept as is.
+fn fail_url(check: &str) -> Option<url::Url> {
+    let mut url = url::Url::parse(check).ok()?;
+    url.path_segments_mut().ok()?.pop_if_empty().push("fail");
+    Some(url)
+}
+
+#[cfg(test)]
+#[path = "heartbeat_tests.rs"]
+mod tests;
 
 /// A heartbeat that remembers what it was told, for the tests.
 #[cfg(test)]

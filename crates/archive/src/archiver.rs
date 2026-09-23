@@ -16,6 +16,7 @@ use object_store::{
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+use yog_bootstrap::SecretUrl;
 use yog_persistence::ServerVersions;
 
 use crate::{
@@ -33,11 +34,6 @@ const PART_SIZE: usize = 8 * 1024 * 1024;
 /// Parts uploaded concurrently before the reader waits. With [`PART_SIZE`],
 /// the upload holds at most ~24 MiB (two in flight, one filling).
 const PARTS_IN_FLIGHT: usize = 2;
-
-/// How much of the start of the archive is kept for the readability check.
-/// The table of contents is at the start and weighs a few hundred KiB for
-/// this schema; see [`PgTools::check_readable`].
-const HEAD_PROBE: usize = 4 * 1024 * 1024;
 
 /// How a run ended. Every variant but `Archived` and `Cancelled` carries the
 /// reason sent with the failure signal.
@@ -88,7 +84,10 @@ pub(crate) struct Archiver {
     pub(crate) store: Arc<dyn ObjectStore>,
     pub(crate) heartbeat: Arc<dyn Heartbeat>,
     pub(crate) tools: PgTools,
-    pub(crate) connection: Connection,
+    /// Split into what `pg_dump` receives at each run, so that a URL it
+    /// cannot use ends a run in `refused`, signalled, instead of stopping the
+    /// process at startup.
+    pub(crate) database_url: SecretUrl,
 }
 
 impl Archiver {
@@ -116,6 +115,10 @@ impl Archiver {
             Err(e) => {
                 return RunOutcome::Refused(format!("cannot read the server's versions: {e}"));
             }
+        };
+        let connection = match Connection::from_secret(&self.database_url) {
+            Ok(connection) => connection,
+            Err(e) => return RunOutcome::Refused(e.to_string()),
         };
         let client_major = match self.tools.pg_dump_major().await {
             Ok(major) => major,
@@ -153,17 +156,24 @@ impl Archiver {
         };
         let mut writer = WriteMultipart::new_with_chunk_size(upload, PART_SIZE);
 
-        let mut child = match self.tools.spawn_dump(&self.connection) {
+        let mut child = match self.tools.spawn_dump(&connection) {
             Ok(child) => child,
             Err(e) => {
                 abort(writer).await;
                 return RunOutcome::DumpFailed(e.to_string());
             }
         };
+        let mut check = match self.tools.start_check() {
+            Ok(check) => check,
+            Err(reason) => {
+                let _ = child.kill().await;
+                abort(writer).await;
+                return RunOutcome::Unreadable(reason);
+            }
+        };
         let mut stdout = child.stdout.take().expect("stdout is piped");
         let stderr = tokio::spawn(read_tail(child.stderr.take().expect("stderr is piped")));
 
-        let mut head = Vec::new();
         let mut bytes: u64 = 0;
         let mut buf = vec![0u8; 64 * 1024];
         loop {
@@ -185,10 +195,7 @@ impl Archiver {
                     return RunOutcome::DumpFailed(format!("cannot read pg_dump's output: {e}"));
                 }
             };
-            if head.len() < HEAD_PROBE {
-                let keep = (HEAD_PROBE - head.len()).min(n);
-                head.extend_from_slice(&buf[..keep]);
-            }
+            check.feed(&buf[..n]).await;
             if let Err(e) = writer.wait_for_capacity(PARTS_IN_FLIGHT).await {
                 let _ = child.kill().await;
                 abort(writer).await;
@@ -220,7 +227,7 @@ impl Archiver {
             }
         }
 
-        if let Err(reason) = self.tools.check_readable(&head).await {
+        if let Err(reason) = check.finish().await {
             abort(writer).await;
             return RunOutcome::Unreadable(reason);
         }

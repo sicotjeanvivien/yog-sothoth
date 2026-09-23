@@ -30,7 +30,8 @@ archive/src/
 
 ## One run
 
-1. Connect, read the server's Postgres major and TimescaleDB version
+1. Split the connection string for `pg_dump` (a socket URL with no host is
+   accepted), connect, read the server's Postgres major and TimescaleDB version
    (`PgDatabaseInfo`, in `yog-persistence` — the binary writes no SQL), and
    close. The connection belongs to the run, not to the process: connected
    once at startup, a refusing database (a wrong password, a server down)
@@ -47,9 +48,13 @@ archive/src/
    and never in the arguments, which any user of the host can read in
    `/proc/<pid>/cmdline`. Its output streams to the bucket in 8 MiB parts,
    two in flight at most.
-5. Check the archive: `pg_dump` exited 0, **and** `pg_restore --list` reads
-   the table of contents from the first 4 MiB — written to a pipe, `pg_dump`
-   puts it at the start. Otherwise abort the upload.
+5. Check the archive: `pg_dump` exited 0, **and** `pg_restore --list`,
+   fed the **whole** stream alongside the upload, reads it and exits 0.
+   Otherwise abort the upload. Not a head of it: the table of contents grows
+   with every chunk (423 KiB for 48 chunks in September 2026), so a fixed
+   head — 4 MiB in the first version — would one day cut it, and every run
+   from then on would fail. Reading a piped archive, `pg_restore --list`
+   consumes it to the end, so feeding it all cannot stall.
 6. Complete the upload.
 
 Each run ends in a `RunOutcome` — `archived`, `refused`, `dump_failed`,
@@ -59,8 +64,8 @@ deciding what it signals.
 
 ### What "checked" means, and what it does not
 
-The check proves the archive is complete and well-formed in its description of
-what it holds. It does **not** prove that every data block restores: only a
+The check proves the archive is complete and well-formed from its first byte
+to its last, as `pg_restore` walks it. It does **not** prove that every data block restores: only a
 restore proves that. Run the procedure of `persistence/README.md` against a
 recent dump from time to time — a backup whose restore has never been tried is
 a hope.
@@ -81,8 +86,8 @@ assembles the object or refuses — instead of reading the size back.
 | `ARCHIVE_STORE_BUCKET` | yes | Bucket name |
 | `ARCHIVE_STORE_REGION` | yes | e.g. `fr-par` |
 | `ARCHIVE_STORE_ACCESS_KEY` / `ARCHIVE_STORE_SECRET_KEY` | yes | A **write-only** key |
-| `ARCHIVE_HEARTBEAT_URL` | yes | The check's ping URL. Required: an archiver that fails in silence looks exactly like one that works |
-| `ARCHIVE_INTERVAL_SECS` | no, `21600` | Time between dumps. The first one runs at startup |
+| `ARCHIVE_HEARTBEAT_URL` | yes | The check's ping URL, plain or slug form (`…/<ping-key>/<slug>?create=1`): `/fail` is pushed onto its path, never appended as text. Required: an archiver that fails in silence looks exactly like one that works |
+| `ARCHIVE_INTERVAL_SECS` | no, `21600` | Time between dumps, at least 60 s (dumps are named to the second). The first one runs at startup |
 | `ARCHIVE_METRICS_ADDR` | no, `0.0.0.0:9000` | Where `/metrics` listens. Change it on a host where 9000 is taken |
 | `ARCHIVE_PG_DUMP` / `ARCHIVE_PG_RESTORE` | no, `pg_dump` / `pg_restore` | The client programs. They must be the server's major |
 

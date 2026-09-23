@@ -181,12 +181,25 @@ struct Run {
     store: Arc<dyn ObjectStore>,
 }
 
+const DATABASE_URL: &str = "postgresql://yog_archive:s3cret-password@db:5432/yog_sothoth";
+
 async fn run_with(
     versions: FixedVersions,
     store: Arc<dyn ObjectStore>,
     pg_dump: PathBuf,
     pg_restore: PathBuf,
     cancel: CancellationToken,
+) -> Run {
+    run_full(versions, store, pg_dump, pg_restore, cancel, DATABASE_URL).await
+}
+
+async fn run_full(
+    versions: FixedVersions,
+    store: Arc<dyn ObjectStore>,
+    pg_dump: PathBuf,
+    pg_restore: PathBuf,
+    cancel: CancellationToken,
+    database_url: &str,
 ) -> Run {
     let heartbeat = Arc::new(RecordingHeartbeat::default());
     let archiver = Archiver {
@@ -197,7 +210,7 @@ async fn run_with(
             pg_dump,
             pg_restore,
         },
-        connection: Connection::for_tests("postgresql://yog_archive@db:5432/yog_sothoth", PASSWORD),
+        database_url: yog_bootstrap::SecretUrl::for_tests(database_url),
     };
     let now = Utc.with_ymd_and_hms(2026, 9, 23, 6, 0, 0).unwrap();
     let outcome = archiver.run(now, &cancel).await;
@@ -269,7 +282,7 @@ async fn a_dump_is_archived_under_its_version_and_signalled_once() {
         Some("2.27.1".to_string())
     );
 
-    // What pg_restore checked is the head of the very archive stored.
+    // What pg_restore checked is the very archive stored.
     assert_eq!(fakes.read("restore-input").as_deref(), Some(ARCHIVE));
 }
 
@@ -401,4 +414,48 @@ async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
     assert_eq!(run.outcome, RunOutcome::Cancelled);
     assert_eq!(run.signals, Vec::<String>::new());
     assert_eq!(objects(&run.store).await, Vec::<String>::new());
+}
+
+#[tokio::test]
+async fn an_archive_larger_than_any_head_is_checked_whole() {
+    // 6 MiB: past the 4 MiB head the first version checked, which the table
+    // of contents would have outgrown as chunks accumulate.
+    const SIZE: usize = 6 * 1024 * 1024;
+    let fakes = Fakes::new();
+    let pg_dump = fakes.pg_dump(VERSION_16, &format!("head -c {SIZE} /dev/zero"));
+    let run = run(pg_dump, fakes.good_pg_restore()).await;
+
+    assert_eq!(run.outcome.label(), "archived", "{:?}", run.outcome);
+    let checked = fs::metadata(fakes.path("restore-input")).unwrap().len();
+    assert_eq!(
+        checked, SIZE as u64,
+        "pg_restore must be fed the whole archive"
+    );
+}
+
+#[tokio::test]
+async fn a_pg_restore_that_stops_reading_early_is_judged_by_its_exit_status() {
+    let fakes = Fakes::new();
+    let pg_dump = fakes.pg_dump(VERSION_16, "head -c 2000000 /dev/zero");
+    let pg_restore = fakes.script("pg_restore", "exit 0");
+    let run = run(pg_dump, pg_restore).await;
+
+    assert_eq!(run.outcome.label(), "archived", "{:?}", run.outcome);
+}
+
+#[tokio::test]
+async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
+    let fakes = Fakes::new();
+    let run = run_full(
+        server_16(),
+        Arc::new(InMemory::new()),
+        fakes.good_pg_dump(),
+        fakes.good_pg_restore(),
+        CancellationToken::new(),
+        "not a url",
+    )
+    .await;
+
+    assert_failed(&run, "refused", "DATABASE_URL_ARCHIVE is not a valid URL").await;
+    assert_eq!(fakes.read("args"), None);
 }

@@ -17,6 +17,11 @@ use yog_bootstrap::{
 /// Overridable via `ARCHIVE_INTERVAL_SECS`.
 const DEFAULT_INTERVAL_SECS: u64 = 6 * 60 * 60;
 
+/// The shortest interval accepted. Dumps are named to the second, so two
+/// runs within the same second would share a key and the second would
+/// overwrite the first; and a zero interval dumps back to back without end.
+const MIN_INTERVAL_SECS: u64 = 60;
+
 /// Where `/metrics` listens unless `ARCHIVE_METRICS_ADDR` says otherwise —
 /// the port every daemon uses inside its container.
 const DEFAULT_METRICS_ADDR: &str = "0.0.0.0:9000";
@@ -67,10 +72,10 @@ impl Config {
     pub(crate) fn load() -> Result<Self, ConfigError> {
         Ok(Self {
             database_url: required_secret_url("DATABASE_URL_ARCHIVE")?,
-            interval: Duration::from_secs(duration_var(
+            interval: interval(duration_var(
                 "ARCHIVE_INTERVAL_SECS",
                 DEFAULT_INTERVAL_SECS,
-            )?),
+            )?)?,
             store: StoreConfig {
                 url: required("ARCHIVE_STORE_URL")?,
                 bucket: required("ARCHIVE_STORE_BUCKET")?,
@@ -99,6 +104,17 @@ fn optional(key: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+fn interval(secs: u64) -> Result<Duration, ConfigError> {
+    if secs < MIN_INTERVAL_SECS {
+        return Err(ConfigError::InvalidValue {
+            key: "ARCHIVE_INTERVAL_SECS".to_string(),
+            value: secs.to_string(),
+            expected: "at least 60 seconds",
+        });
+    }
+    Ok(Duration::from_secs(secs))
+}
+
 fn metrics_addr() -> Result<SocketAddr, ConfigError> {
     let raw = optional("ARCHIVE_METRICS_ADDR").unwrap_or_else(|| DEFAULT_METRICS_ADDR.into());
     raw.parse().map_err(|_| ConfigError::InvalidValue {
@@ -107,3 +123,7 @@ fn metrics_addr() -> Result<SocketAddr, ConfigError> {
         expected: "a socket address such as 0.0.0.0:9000",
     })
 }
+
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod tests;

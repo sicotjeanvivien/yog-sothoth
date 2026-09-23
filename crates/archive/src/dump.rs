@@ -12,7 +12,8 @@ use percent_encoding::percent_decode_str;
 use thiserror::Error;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
-    process::{Child, Command},
+    process::{Child, ChildStdin, Command},
+    task::JoinHandle,
 };
 use yog_bootstrap::SecretUrl;
 
@@ -55,21 +56,18 @@ impl Connection {
         let password = parsed
             .password()
             .map(|p| percent_decode_str(p).decode_utf8_lossy().into_owned());
-        parsed
-            .set_password(None)
-            .map_err(|()| DumpError::Connection)?;
+        // Only when there is one: `set_password` refuses a URL with no host,
+        // and a socket URL (`postgresql:///db?host=/var/run/postgresql`) is
+        // one libpq accepts and carries no password to remove.
+        if password.is_some() {
+            parsed
+                .set_password(None)
+                .map_err(|()| DumpError::Connection)?;
+        }
         Ok(Self {
             url: parsed.to_string(),
             password,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn for_tests(url: &str, password: &str) -> Self {
-        Self {
-            url: url.to_string(),
-            password: Some(password.to_string()),
-        }
     }
 }
 
@@ -126,18 +124,16 @@ impl PgTools {
         })
     }
 
-    /// Check that `head` — the first bytes of a custom-format archive — holds
-    /// a table of contents `pg_restore --list` can read.
+    /// Start `pg_restore --list`, to be fed the archive while it is produced.
     ///
-    /// Written to a pipe, `pg_dump` puts the whole table of contents at the
-    /// start of the archive, so the head is enough: this proves the archive
-    /// is well-formed and complete in its description of what it holds, not
-    /// that every data block restores. Only a restore proves that.
-    ///
-    /// `pg_restore` may exit as soon as it has read the table of contents,
-    /// before consuming the rest of the head; the broken pipe that follows is
-    /// not a failure, its exit status is the verdict.
-    pub(crate) async fn check_readable(&self, head: &[u8]) -> Result<(), String> {
+    /// Fed the **whole** archive, not a head of it: the table of contents
+    /// grows with every chunk — 423 KiB for 48 chunks, measured on
+    /// 23 September 2026 — so any fixed head would one day cut it, and every
+    /// run from then on would fail. Measured the same day: reading a piped
+    /// archive, `pg_restore --list` consumes it to the end, so feeding it all
+    /// cannot stall, and the check walks the archive's whole structure rather
+    /// than its first bytes.
+    pub(crate) fn start_check(&self) -> Result<ReadabilityCheck, String> {
         let mut child = Command::new(&self.pg_restore)
             .arg("--list")
             .stdin(Stdio::piped())
@@ -146,29 +142,51 @@ impl PgTools {
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| format!("cannot run `{}`: {e}", self.pg_restore.display()))?;
+        let stdin = child.stdin.take();
+        let stderr = tokio::spawn(read_tail(child.stderr.take().expect("stderr is piped")));
+        Ok(ReadabilityCheck {
+            child,
+            stdin,
+            stderr,
+        })
+    }
+}
 
-        let mut stdin = child.stdin.take().expect("stdin is piped");
-        let feed = async move {
-            let written = stdin.write_all(head).await;
-            drop(stdin);
-            written
-        };
-        let (written, output) = tokio::join!(feed, child.wait_with_output());
-        let output = output.map_err(|e| format!("`pg_restore --list` did not finish: {e}"))?;
+/// A `pg_restore --list` reading the archive as `pg_dump` writes it.
+///
+/// Its exit status is the verdict. Should it stop reading early — it does
+/// not today, see [`PgTools::start_check`] — the broken pipe that follows is
+/// not a failure: feeding simply stops.
+pub(crate) struct ReadabilityCheck {
+    child: Child,
+    stdin: Option<ChildStdin>,
+    stderr: JoinHandle<String>,
+}
 
-        if output.status.success() {
+impl ReadabilityCheck {
+    pub(crate) async fn feed(&mut self, chunk: &[u8]) {
+        if let Some(stdin) = self.stdin.as_mut()
+            && stdin.write_all(chunk).await.is_err()
+        {
+            self.stdin = None;
+        }
+    }
+
+    /// Close the input and wait for the verdict.
+    pub(crate) async fn finish(mut self) -> Result<(), String> {
+        drop(self.stdin.take());
+        let status = self
+            .child
+            .wait()
+            .await
+            .map_err(|e| format!("`pg_restore --list` did not finish: {e}"))?;
+        if status.success() {
             return Ok(());
         }
-        let stderr = tail(&String::from_utf8_lossy(&output.stderr));
-        match written {
-            Err(e) if e.kind() != std::io::ErrorKind::BrokenPipe => Err(format!(
-                "cannot feed `pg_restore --list`: {e}; it said: {stderr}"
-            )),
-            _ => Err(format!(
-                "`pg_restore --list` exited with {}: {stderr}",
-                output.status
-            )),
-        }
+        let stderr = self.stderr.await.unwrap_or_default();
+        Err(format!(
+            "`pg_restore --list` exited with {status}: {stderr}"
+        ))
     }
 }
 
