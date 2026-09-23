@@ -33,6 +33,27 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "sqlx owns the pool — the URL is the argument of `Database::connect`",
     ),
     (
+        "crates/archive/src/bootstrap/daemon.rs",
+        3,
+        "sqlx owns the pool — the URL is the argument of `Database::connect`; \
+         and object_store owns the S3 signing — the access key id and the \
+         secret are the arguments of `AmazonS3Builder`'s two setters",
+    ),
+    (
+        "crates/archive/src/dump.rs",
+        1,
+        "the URL is parsed on this line to split the password out of what \
+         `pg_dump` receives as an argument (readable in `/proc/<pid>/cmdline`) \
+         and into `PGPASSWORD`; no string built from it reaches a log",
+    ),
+    (
+        "crates/archive/src/heartbeat.rs",
+        2,
+        "reqwest owns the request — the check's URL is the argument of `.post`, \
+         once for a success and once, with `/fail` appended, for a failure; \
+         the errors reqwest builds from it go back through `SecretUrl::scrub`",
+    ),
+    (
         "crates/bootstrap/src/endpoint.rs",
         2,
         "the key's only consumers are its own two carriers — `Endpoint::url` and \

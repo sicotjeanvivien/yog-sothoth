@@ -1,0 +1,45 @@
+[package]
+name = "yog-archive"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+# Workspace crates. `yog-persistence` only for the connection pool and
+# `PgDatabaseInfo` — the dump itself is `pg_dump`'s, not SQL of ours.
+yog-core = { path = "../core" }
+yog-persistence = { path = "../persistence" }
+yog-bootstrap = { path = "../bootstrap" }
+
+# Async runtime — `process` and `io-util` come with "full".
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+# Errors / logging / config
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
+async-trait = { workspace = true }
+
+# Metrics
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+
+# Storage, heartbeat, connection string
+object_store = { workspace = true }
+reqwest = { workspace = true }
+url = { workspace = true }
+percent-encoding = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+# `SecretUrl::for_tests`, reachable from tests only — see yog-bootstrap's
+# Cargo.toml for why it is a dev-dependency feature.
+yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
+# Already in the lock: the fake `pg_dump` / `pg_restore` scripts the tests run
+# live in a temporary directory.
+tempfile = "3"
+# The fake bucket of the tests implements `ObjectStore`, whose listing is a
+# `BoxStream`.
+futures-util = { workspace = true }
