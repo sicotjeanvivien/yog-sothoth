@@ -628,6 +628,118 @@ PRIVILEGES FOR ROLE yog_migrate` only covers objects *created by* `yog_migrate`,
 while tests apply migrations as the connecting user. The module doc spells out
 what that leaves uncovered.
 
+## Backup and restore
+
+A logical dump (`pg_dump -Fc`) restores to an identical database, and the
+sequence below is how. It was proven on 23 September 2026 against the dev
+database (1117 MB, 21 hypertables, 4 continuous aggregates, 31 jobs): the
+restored copy matched the source on every table's row count, every aggregate's
+row count, the chunks, the jobs, the compression settings and the migration
+checksums. A deleted row in the copy made the comparison fail by name, so the
+check can fail. The dump took 15 s and weighed 164 MB; the restore took 65 s.
+
+### What a dump does not carry
+
+- **The roles, and their passwords.** Roles belong to the Postgres cluster,
+  not to the database, so `pg_dump` never writes them. The privileges on each
+  table *are* in the dump, and they only apply if the roles already exist.
+  So `setup-roles` runs first. It creates the roles with their `CHANGE_ME_…`
+  passwords, which is why the real ones are set **immediately after**, before
+  anything else runs (see [`setup_roles.sql`](#setup_rolessql) for why a rerun
+  never does it).
+- **Nothing about versions.** The target must run the **same Postgres major
+  and the same TimescaleDB version** as the source, and `pg_dump` and
+  `pg_restore` must be the server's major (a 14 client refuses a 16 server).
+  ⚠️ The image *tag* does not pin that: `timescale/timescaledb:latest-pg16`
+  fixes the Postgres major only, and a later pull can bring a newer
+  TimescaleDB. Record the source's version next to every dump —
+  `SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'` — and
+  start the target from that exact version (a versioned tag such as
+  `2.27.1-pg16`, or the image digest). The proof above used the source's image
+  by its ID, not by its tag.
+
+### The sequence
+
+On a fresh Postgres from the same image, whose init script has already created
+the database and the `timescaledb` extension:
+
+```bash
+# 1. the roles, which the dump does not carry
+DATABASE_URL_ADMIN=postgresql://<admin>@<target>/yog_sothoth \
+  cargo run -p yog-persistence --bin yog-migrate -- setup-roles
+
+# 1b. their real passwords, at once: until then the target accepts the
+#     published CHANGE_ME_… ones. One per role, matching the DATABASE_URL_*.
+#     `\password` prompts and sends only a hash: the password stays out of
+#     the shell history, the process list and the server log, where an
+#     `ALTER ROLE … PASSWORD '…'` on the command line would leave it.
+psql <target-admin-url>
+  \password yog_migrate      -- … and yog_indexer, yog_api, yog_context, yog_signals
+
+# 2. TimescaleDB's restore mode — it stops the background workers
+psql <target-admin-url> -c "SELECT timescaledb_pre_restore();"
+
+# 3. the data, as the admin role
+pg_restore -d <target-admin-url> <file>.dump
+
+# 4. back to normal — this restarts the background workers
+psql <target-admin-url> -c "SELECT timescaledb_post_restore();"
+
+# 5. the migration state came with the dump: this must apply nothing
+DATABASE_URL_MIGRATE=postgresql://yog_migrate:<password>@<target>/yog_sothoth \
+  cargo run -p yog-persistence --bin yog-migrate -- migrate
+```
+
+Then the daemons. Step 3 prints nothing on success:
+`CREATE EXTENSION IF NOT EXISTS` absorbs the extension the image already
+installed, and `public` already belongs to `yog_migrate` by step 1.
+
+`pg_dump` prints one warning that is not an error: *"there are circular
+foreign-key constraints on this table: continuous_agg"*. It concerns
+TimescaleDB's own catalog, and it is about `--data-only` dumps, which this is
+not.
+
+### ⚠️ The scheduler runs everything the moment step 4 returns
+
+`timescaledb_post_restore()` restarts the job scheduler, and every job whose
+schedule is overdue runs within seconds: compression, the aggregates' refresh,
+**and retention**. Restoring an old dump therefore drops, at once, every chunk
+that has aged past its retention window since the dump was taken. That is the
+policy doing its job, not the restore losing data. But it makes a copy differ
+from its source within seconds.
+
+Measured on the first attempt: the dev database, whose scheduler never runs
+(`docker-compose.yml` sets `max_background_workers = 0`), still held chunks
+older than the 30-day retention. The restored copy lost them within seconds of
+step 4: 3 chunks and 3,096 rows of swaps, one chunk each of the liquidity and
+fee-claim events, and one bucket of the hourly swaps aggregate.
+
+So **verify a restore with the scheduler off** — start the target with
+`-c timescaledb.max_background_workers=0`, compare, then restart it with the
+production value. Comparing with it on measures the policies, not the restore.
+
+### Verifying a restore
+
+Compare the target against the source, not against expectations:
+
+- row counts of every table in `public` and of every continuous aggregate, and
+  the definitions in `timescaledb_information.{hypertables,continuous_aggregates,compression_settings}`,
+  `_sqlx_migrations` (version and checksum), and `timescaledb_information.jobs`
+  — identical, line for line. For the jobs, compare what defines them
+  (`proc_name`, `hypertable_name`, `schedule_interval`, `config`), not what
+  records their runs (`next_start` and the `job_stats` columns), which a source
+  whose jobs have run cannot share with a fresh copy;
+- for a source that is still being written, both sides must describe **the same
+  instant**: hold a `REPEATABLE READ` transaction open on the source, take its
+  `pg_export_snapshot()`, count inside that transaction, and dump that same
+  instant with `pg_dump --snapshot=<id>`;
+- step 5 applying nothing;
+- a runtime role reading what it should, and being refused a write it should
+  not make (`yog_api`: `SELECT` works, `INSERT INTO signals` is refused). This
+  proves the privileges followed. It proves nothing about passwords when run
+  through `docker exec … psql`, for the reason given under
+  [`setup_roles.sql`](#setup_rolessql).
+
 ## SQLx offline cache
 
 The crate uses `sqlx::query!` macros verified against the live schema at
