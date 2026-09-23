@@ -2,13 +2,13 @@
   "About": {
     "meta": {
       "title": "About — Yog-Scope",
-      "description": "Yog-Scope is an open source real-time observation platform for Meteora liquidity pools on Solana."
+      "description": "Yog-Scope is a source-available real-time observation platform for Meteora liquidity pools on Solana."
     },
     "hero": {
       "eyebrow": "About Yog-Scope",
       "titleLine1": "Built to observe.",
       "titleLine2": "Open by design.",
-      "lead": "Yog-Scope is an open source platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
+      "lead": "Yog-Scope is a source-available platform that observes liquidity activity on Meteora pools as it happens on Solana, reconstructs what occurred, and exposes the result through an API and a dashboard.",
       "ctaGithub": "View on GitHub",
       "ctaAWSD": "About AWSD"
     },
