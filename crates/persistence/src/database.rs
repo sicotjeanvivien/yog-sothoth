@@ -124,6 +124,13 @@ impl Database {
         self.pool.clone()
     }
 
+    /// Close every connection and wait for them to be returned. For a caller
+    /// that connects for one piece of work and must not hold a connection
+    /// afterwards.
+    pub async fn close(self) {
+        self.pool.close().await;
+    }
+
     pub async fn run_migrations(&self) -> Result<(), MigrationError> {
         sqlx::migrate!("./migrations")
             .run(&self.pool)

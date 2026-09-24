@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "crates/api",
+  "crates/archive",
   "crates/bootstrap",
   "crates/context",
   "crates/core",
@@ -135,3 +136,13 @@ tower-http = { version = "0.6.10", features = [
 uuid = { version = "1", features = ["v4"] }
 
 reqwest = { version = "0.13", features = ["json", "rustls"] }
+
+# yog-archive — the object store its dumps go to. Chosen over `rusty-s3` on
+# measurement (23 September 2026): 9 new packages in the lock against 16, no
+# build script among them, and it reuses the `reqwest` above. It also brings
+# the multipart upload with its abort, and an in-memory store the tests use.
+object_store = { version = "0.14", default-features = false, features = ["aws"] }
+# Already in the lock through reqwest: splitting the password out of the
+# connection string that `pg_dump` receives.
+url = "2"
+percent-encoding = "2"

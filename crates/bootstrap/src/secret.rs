@@ -22,6 +22,8 @@
 
 use std::fmt;
 
+use percent_encoding::percent_decode_str;
+
 /// Placeholder substituted for every secret this module hides.
 pub(crate) const REDACTED: &str = "***REDACTED***";
 
@@ -194,6 +196,31 @@ impl SecretUrl {
     #[cfg(feature = "test-support")]
     pub fn for_tests(raw: impl Into<String>) -> Self {
         Self::new(raw)
+    }
+
+    /// Split the password out: the URL without it, and the password alone,
+    /// percent-decoded and still wrapped.
+    ///
+    /// For a consumer that takes the two apart — libpq reads the password from
+    /// `PGPASSWORD` while the URL travels as a program argument, readable by
+    /// any user of the host in `/proc/<pid>/cmdline`. The URL that comes back
+    /// holds no secret; the password stays a [`SecretKey`] until the line that
+    /// hands it over.
+    ///
+    /// `None` when the value does not parse as a URL — and nothing of it is
+    /// quoted, since it may carry the password. A URL with no password gives
+    /// `(url, None)`, including a socket URL with no host
+    /// (`postgresql:///db?host=/var/run/postgresql`), which libpq accepts and
+    /// from which `set_password` would refuse to remove anything.
+    pub fn split_password(&self) -> Option<(String, Option<SecretKey>)> {
+        let mut parsed = url::Url::parse(&self.0).ok()?;
+        let password = parsed
+            .password()
+            .map(|p| SecretKey::new(percent_decode_str(p).decode_utf8_lossy()));
+        if password.is_some() {
+            parsed.set_password(None).ok()?;
+        }
+        Some((parsed.to_string(), password))
     }
 
     /// Remove this URL's secrets from a string **somebody else built**.

@@ -1,17 +1,17 @@
 # syntax=docker/dockerfile:1.7
 #
-# Single Dockerfile for all five Rust backend images.
+# Single Dockerfile for all six Rust backend images.
 #
-# The five binaries share one workspace, so they share one `builder`
+# The six binaries share one workspace, so they share one `builder`
 # stage that compiles everything exactly once. Each service then has
 # a tiny final stage (selected via `target:` in docker-compose.yml)
 # that copies just its binary into the slim runtime base.
 #
-# Why one file instead of five: `docker compose build` hands all the
+# Why one file instead of six: `docker compose build` hands all the
 # targets to BuildKit in a single bake session, which deduplicates
 # identical stages — the dependency cook and the workspace build run
-# once, not five times in parallel. On memory-constrained hosts
-# (7 GB WSL2) five concurrent rustc trees OOM-kill the compiler; this
+# once, not six times in parallel. On memory-constrained hosts
+# (7 GB WSL2) six concurrent rustc trees OOM-kill the compiler; this
 # layout makes a plain `docker compose --profile backend up --build`
 # safe, and ~5x faster on cold cache.
 #
@@ -19,8 +19,9 @@
 #   chef         — base image with cargo-chef installed.
 #   planner      — produces a recipe.json describing the dep graph.
 #   builder      — cooks the deps (cached on Cargo.lock), then builds
-#                  all five binaries against the real source tree.
-#   runtime      — slim Debian base shared by every final stage.
+#                  all six binaries against the real source tree.
+#   runtime      — slim Debian base shared by every final stage but
+#                  yog-archive, which needs the Postgres client tools.
 #   yog-*        — one per service: COPY its binary, set ENTRYPOINT.
 #
 # Build context: repo root. The workspace's Cargo.toml, Cargo.lock
@@ -72,7 +73,8 @@ RUN cargo build --release \
         --bin yog-indexer \
         --bin yog-api \
         --bin yog-context \
-        --bin yog-signals
+        --bin yog-signals \
+        --bin yog-archive
 
 # ── runtime base ───────────────────────────────────────────────────
 # libssl3 covers any non-rustls TLS code paths transitively pulled
@@ -123,3 +125,21 @@ FROM runtime AS yog-signals
 COPY --from=builder /app/target/release/yog-signals /usr/local/bin/yog-signals
 EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/yog-signals"]
+
+# yog-archive — the backup daemon. Not on the slim `runtime` base: it runs
+# `pg_dump` and `pg_restore`, which must be the SERVER's Postgres major (a 14
+# client refuses a 16 server). The official image carries both, on the same
+# Debian release as the builder — so the same glibc — with no apt repository
+# to add. The tag pins the major only; a minor that moves is harmless, a
+# major must move together with the database image.
+FROM postgres:16-bookworm AS yog-archive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libssl3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system yog \
+    && useradd --system --gid yog --home-dir /app --shell /usr/sbin/nologin yog
+WORKDIR /app
+USER yog
+COPY --from=builder /app/target/release/yog-archive /usr/local/bin/yog-archive
+EXPOSE 9000
+ENTRYPOINT ["/usr/local/bin/yog-archive"]

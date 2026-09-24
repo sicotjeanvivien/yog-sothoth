@@ -38,7 +38,7 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 
 ## How it works (high-level)
 
-Four backend processes share a single Postgres database — no direct calls between them, all coordination happens through the schema. The web dashboard never touches the database; it reads through the API:
+Five backend processes share a single Postgres database — no direct calls between them, all coordination happens through the schema. The four below carry the data; the fifth, `archive`, backs it up. The web dashboard never touches the database; it reads through the API:
 
 ```
                 ┌──────────────────────────────────────────────────────┐
@@ -61,9 +61,10 @@ Four backend processes share a single Postgres database — no direct calls betw
 - **`context`** enriches the raw mint addresses recorded by the indexer with token metadata (Helius DAS) and USD prices (Jupiter Price V3), and resolves pool properties (mints, fee config) from on-chain accounts. Independent worker loops with configurable intervals.
 - **`signals`** is a batch detector engine: each detector polls the accumulated data at its own cadence, stateless between ticks — the database carries the state — and emits typed signals with a severity into the `signals` table. A per-`(detector, pool)` cooldown prevents re-alerting, except on severity escalation.
 - **`api`** exposes the indexed, enriched, and detected data over HTTP. Cursor-based pagination, RFC 9457 errors, security headers as router-level middleware. It is also the single egress for signals: a paginated collection endpoint plus an SSE stream fed by an internal poller that broadcasts new signals to connected clients.
+- **`archive`** runs `pg_dump` every six hours under a read-only role, streams the dump to an S3-compatible bucket, checks that `pg_restore` can read every block of it, and signals a dead man's switch. It never restores; the proven restore procedure is in [`crates/persistence/README.md`](./crates/persistence/README.md#backup-and-restore).
 - **`web`** is a Next.js dashboard. Server Components render the initial data from the API; the browser then talks to the API directly (CORS-locked) — there is no BFF layer.
 
-Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the four above connects under its own least-privilege Postgres role, and `yog-migrate` is the only holder of DDL rights.
+Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the five backend processes connects under its own least-privilege Postgres role, and `yog-migrate` is the only holder of DDL rights.
 
 For the full ingestion pipeline, the Anchor decoding mechanism, the database role split, and the workspace layout, see **[`crates/README.md`](./crates/README.md)**. For the dashboard architecture, see **[`web/README.md`](./web/README.md)**.
 

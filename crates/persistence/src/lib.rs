@@ -10,12 +10,16 @@
 //! different Postgres roles (least privilege), while sharing the same SQL
 //! and schema definitions.
 
+mod backup;
 mod database;
 mod error;
 mod health;
 mod repositories;
+mod server_info;
 
+pub use backup::{DumpStream, PgTools, ReadabilityCheck};
 pub use database::Database;
+pub use error::BackupError;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
     PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
@@ -36,6 +40,7 @@ pub use repositories::{
     PgPoolPriceSnapshotRepository, PgPoolRepository, PgSignalRepository, PgSwapFlowRepository,
     PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };
+pub use server_info::{PgServerInfo, ServerVersions};
 
 /// Re-export [`sqlx::PgPool`] so consumers don't need to depend on sqlx directly
 /// just to type their dependency-injection wiring.

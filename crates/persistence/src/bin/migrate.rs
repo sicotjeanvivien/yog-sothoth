@@ -25,7 +25,7 @@
 //!   runtime data — the house convention keeps configuration writes under the
 //!   admin role.
 //! - `migrate` reads **`DATABASE_URL_MIGRATE`**, which must carry the
-//!   `yog_migrate` role: the four runtime roles intentionally cannot alter the
+//!   `yog_migrate` role: the five runtime roles intentionally cannot alter the
 //!   schema.
 //!
 //! `bootstrap` therefore needs both, and says so before doing anything rather
@@ -73,7 +73,7 @@ USAGE:
 SUBCOMMANDS:
     migrate                 Apply pending migrations. The default when no
                             subcommand is given.        [DATABASE_URL_MIGRATE]
-    setup-roles             Create the five roles (if absent) and the
+    setup-roles             Create the six roles (if absent) and the
                             structural privileges.       [DATABASE_URL_ADMIN]
     seed-watched-pools      Seed the startup allowlist. Without an active row
                             a pool-centric indexer has nothing to subscribe

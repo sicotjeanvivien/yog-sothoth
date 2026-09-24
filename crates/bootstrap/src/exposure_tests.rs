@@ -33,6 +33,28 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "sqlx owns the pool — the URL is the argument of `Database::connect`",
     ),
     (
+        "crates/archive/src/infra/store.rs",
+        2,
+        "object_store owns the S3 signing — the access key id and the secret \
+         are the arguments of `AmazonS3Builder`'s two setters",
+    ),
+    (
+        "crates/archive/src/infra/versions.rs",
+        1,
+        "sqlx owns the pool — the URL is the argument of `Database::connect`, \
+         for the connection each run opens to read the server's versions; its \
+         refusal goes back through `SecretUrl::scrub`",
+    ),
+    (
+        "crates/archive/src/infra/heartbeat.rs",
+        3,
+        "reqwest owns the request — the check's URL is the argument of `.post` \
+         for a success, and of `fail_url` for a failure, which pushes `fail` \
+         onto its path and hands the result straight to `.post`; the third is \
+         the same `fail_url` at startup, refusing a URL that cannot take it. \
+         The errors reqwest builds from it go back through `SecretUrl::scrub`",
+    ),
+    (
         "crates/bootstrap/src/endpoint.rs",
         2,
         "the key's only consumers are its own two carriers — `Endpoint::url` and \
@@ -97,6 +119,14 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          two variables — `INGEST_TRANSACTION` and `NETWORK_STATUS` — and may \
          point at two providers, so this list covers two addresses, not one \
          twice",
+    ),
+    (
+        "crates/persistence/src/backup/pg_tools.rs",
+        1,
+        "the process environment owns the password — it is the argument of \
+         `command.env(\"PGPASSWORD\", …)`, which `pg_dump` reads; the URL it \
+         receives as an argument (readable in `/proc/<pid>/cmdline`) comes \
+         from `SecretUrl::split_password` and holds none",
     ),
     (
         "crates/persistence/src/bin/migrate.rs",

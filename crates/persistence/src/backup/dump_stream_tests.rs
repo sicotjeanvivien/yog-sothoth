@@ -1,0 +1,54 @@
+use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
+
+use yog_bootstrap::SecretUrl;
+
+use super::super::PgTools;
+
+/// Whether `pid` has exited. A killed child stays a zombie until it is
+/// reaped, and a zombie still answers `kill -0`: dead means gone from
+/// `/proc`, or in state `Z`.
+fn has_exited(pid: &str) -> bool {
+    match fs::read_to_string(format!("/proc/{pid}/stat")) {
+        Err(_) => true,
+        // `pid (comm) state …` — the state follows the closing parenthesis.
+        Ok(stat) => stat
+            .rsplit_once(')')
+            .is_some_and(|(_, rest)| rest.trim_start().starts_with('Z')),
+    }
+}
+
+#[tokio::test]
+async fn dropping_a_dump_kills_pg_dump() {
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("pg_dump");
+    let pid_file = dir.path().join("pid");
+    fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho $$ > {}\nprintf 'PGDMP-start'\nexec sleep 30\n",
+            pid_file.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+
+    let tools = PgTools::new(script, "pg_restore".into());
+    let url = SecretUrl::for_tests("postgresql://u@db/x");
+    let mut dump = tools.start_dump(&url).unwrap();
+    let mut buf = [0u8; 64];
+    let n = dump.read(&mut buf).await.unwrap();
+    assert_eq!(&buf[..n], b"PGDMP-start");
+    let pid = fs::read_to_string(&pid_file).unwrap().trim().to_string();
+    assert!(!has_exited(&pid), "pg_dump must be running before the drop");
+
+    drop(dump);
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while !has_exited(&pid) {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "pg_dump {pid} still runs 5 s after its DumpStream was dropped"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}

@@ -59,6 +59,11 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
+# `SecretUrl::for_tests`, reachable from tests only — see yog-bootstrap's
+# Cargo.toml for why it is a dev-dependency feature.
+yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
+# The fake `pg_dump` of `backup`'s tests lives in a temporary directory.
+tempfile = "3"
 # Integration tests will spin up a real Postgres via docker-compose
 tokio = { workspace = true, features = ["test-util", "macros"] }
 # `conformance::reference_transaction` — the neutral form of the mainnet

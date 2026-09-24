@@ -36,9 +36,14 @@
 --   yog_context  : RW on token enrichment tables, RO on pools.
 --   yog_signals  : RW (append-only) on signals, RO on the read sources it
 --                  evaluates (caggs, pool_current_state, token_prices).
+--   yog_archive  : RO on everything, writes nothing. Used by yog-archive to
+--                  run `pg_dump`, which must read every table — TimescaleDB's
+--                  chunks and catalog included — so it is a member of the
+--                  predefined `pg_read_all_data` rather than of per-table
+--                  grants that every new table would have to remember.
 --
 -- Least privilege at runtime: none of yog_indexer / yog_api / yog_context /
--- yog_signals can CREATE or ALTER tables. The day one of them is compromised,
+-- yog_signals / yog_archive can CREATE or ALTER tables. The day one of them is compromised,
 -- the schema itself stays out of reach.
 --
 -- Sequence on a fresh database:
@@ -65,11 +70,13 @@ DECLARE
         'yog_indexer', 'CHANGE_ME_indexer_password',
         'yog_api',     'CHANGE_ME_api_password',
         'yog_context', 'CHANGE_ME_context_password',
-        'yog_signals', 'CHANGE_ME_signals_password'
+        'yog_signals', 'CHANGE_ME_signals_password',
+        'yog_archive', 'CHANGE_ME_archive_password'
     );
 BEGIN
     FOREACH role_name IN ARRAY ARRAY[
-        'yog_migrate', 'yog_indexer', 'yog_api', 'yog_context', 'yog_signals'
+        'yog_migrate', 'yog_indexer', 'yog_api', 'yog_context', 'yog_signals',
+        'yog_archive'
     ] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
             RAISE NOTICE 'role % already exists — left untouched (password included)', role_name;
@@ -82,6 +89,13 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+
+-- yog_archive reads everything and writes nothing, in every database of the
+-- cluster: `pg_read_all_data` (Postgres >= 14) is SELECT on all tables, views
+-- and sequences, and USAGE on all schemas, present and future. Membership is
+-- cluster-scoped like the role itself; granting it again is a no-op.
+GRANT pg_read_all_data TO yog_archive;
 
 
 -- ---------------------------------------------------------------------------

@@ -19,8 +19,12 @@ persistence/
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── .sqlx/                   ← committed offline query cache (see below)
 ├── src/
-│   ├── database.rs          ← Database::connect, run_migrations, run_script
+│   ├── backup/              ← the dump side: PgTools (the client programs),
+│   │                          DumpStream (pg_dump), ReadabilityCheck (pg_restore)
+│   ├── database.rs          ← Database::connect / close, run_migrations,
+│   │                          run_script — connections, no query of its own
 │   ├── health.rs            ← PgHealthChecker
+│   ├── server_info.rs       ← PgServerInfo: the server's versions
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
@@ -580,7 +584,7 @@ callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*
 ## `setup_roles.sql`
 
 Provisioning script applied as the admin role, by
-`yog-migrate -- setup-roles`. Creates the five runtime roles, transfers `public`
+`yog-migrate -- setup-roles`. Creates the six roles, transfers `public`
 schema ownership to `yog_migrate`, and sets `ALTER DEFAULT PRIVILEGES FOR ROLE
 yog_migrate` so tables created by future migrations inherit the right `SELECT`
 grants automatically. It contains no table-specific GRANTs — those live in the
@@ -631,12 +635,31 @@ what that leaves uncovered.
 ## Backup and restore
 
 A logical dump (`pg_dump -Fc`) restores to an identical database, and the
-sequence below is how. It was proven on 23 September 2026 against the dev
+sequence below is how. In production the dumps come from `yog-archive`
+([`crates/archive`](../archive/README.md)), every six hours, under the
+read-only `yog_archive` role; each one names in its key the TimescaleDB
+version it restores into. It was proven on 23 September 2026 against the dev
 database (1117 MB, 21 hypertables, 4 continuous aggregates, 31 jobs): the
 restored copy matched the source on every table's row count, every aggregate's
 row count, the chunks, the jobs, the compression settings and the migration
 checksums. A deleted row in the copy made the comparison fail by name, so the
 check can fail. The dump took 15 s and weighed 164 MB; the restore took 65 s.
+
+### The `backup` module
+
+What `yog-archive` runs lives here, because it is knowledge of this database:
+the server's versions (`PgServerInfo`), how `pg_dump` must be called and
+whether its major matches the server's (`PgTools`), and what `pg_restore`
+checks (`ReadabilityCheck`). It is the crate's **second way of reaching
+Postgres**: everything else goes through a `sqlx` pool, a dump goes through the
+client programs run as subprocesses, which must be installed where the caller
+runs (the `yog-archive` image carries them).
+
+The public surface shows no process. A dump is a `DumpStream` read chunk by chunk;
+**dropping it kills `pg_dump`**, which is how a caller gives up on one and why
+no path can leave one running (`dropping_a_dump_kills_pg_dump`, seen failing
+with `kill_on_drop` removed). Every step documents the `BackupError` variants
+it can return; what each means for a run is the caller's decision.
 
 ### What a dump does not carry
 

@@ -183,3 +183,18 @@ fn parse_required_enum_fails_when_absent() {
     let err = parse_required_enum::<Colour>("YOG_TEST_ENUM_ABSENT").unwrap_err();
     assert!(matches!(err, ConfigError::MissingVariable(_)));
 }
+
+#[test]
+fn optional_trims_and_reads_a_blank_value_as_absent() {
+    // SAFETY: unique keys, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_OPTIONAL_PRESENT", "  pg_dump\r");
+        env::set_var("YOG_TEST_OPTIONAL_BLANK", "  \r");
+    }
+    assert_eq!(
+        optional("YOG_TEST_OPTIONAL_PRESENT").as_deref(),
+        Some("pg_dump")
+    );
+    assert_eq!(optional("YOG_TEST_OPTIONAL_BLANK"), None);
+    assert_eq!(optional("YOG_TEST_OPTIONAL_ABSENT"), None);
+}
