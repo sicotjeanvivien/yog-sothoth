@@ -5,7 +5,7 @@
 //! Scaleway Object Storage in production and MinIO in a local test, and
 //! nothing here needs to know which.
 
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, optional, required_secret_url};
 
@@ -22,10 +22,6 @@ const DEFAULT_INTERVAL_SECS: u64 = 6 * 60 * 60;
 /// runs within the same second would share a key and the second would
 /// overwrite the first; and a zero interval dumps back to back without end.
 const MIN_INTERVAL_SECS: u64 = 60;
-
-/// Where `/metrics` listens unless `ARCHIVE_METRICS_ADDR` says otherwise —
-/// the port every daemon uses inside its container.
-const DEFAULT_METRICS_ADDR: &str = "0.0.0.0:9000";
 
 /// Runtime configuration for the `yog-archive` binary.
 #[derive(Debug)]
@@ -45,9 +41,6 @@ pub(crate) struct Config {
     /// UUID in the path is what lets anyone ping it.
     pub(crate) heartbeat_url: SecretUrl,
 
-    /// Where `/metrics` listens.
-    pub(crate) metrics_addr: SocketAddr,
-
     /// The `pg_dump` and `pg_restore` to run. Plain names resolved on `PATH`
     /// by default; configurable so a host with several Postgres clients can
     /// point at the right major, and so the tests can substitute fakes.
@@ -65,7 +58,6 @@ impl Config {
             )?)?,
             store: StoreConfig::load()?,
             heartbeat_url: required_secret_url("ARCHIVE_HEARTBEAT_URL")?,
-            metrics_addr: metrics_addr()?,
             pg_dump: program("ARCHIVE_PG_DUMP", "pg_dump"),
             pg_restore: program("ARCHIVE_PG_RESTORE", "pg_restore"),
         })
@@ -87,15 +79,6 @@ fn interval(secs: u64) -> Result<Duration, ConfigError> {
         });
     }
     Ok(Duration::from_secs(secs))
-}
-
-fn metrics_addr() -> Result<SocketAddr, ConfigError> {
-    let raw = optional("ARCHIVE_METRICS_ADDR").unwrap_or_else(|| DEFAULT_METRICS_ADDR.into());
-    raw.parse().map_err(|_| ConfigError::InvalidValue {
-        key: "ARCHIVE_METRICS_ADDR".to_string(),
-        value: raw,
-        expected: "a socket address such as 0.0.0.0:9000",
-    })
 }
 
 #[cfg(test)]

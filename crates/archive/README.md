@@ -110,7 +110,6 @@ and the previous one stays, and a write-only key cannot delete versions. See
 | `ARCHIVE_STORE_ACCESS_KEY` / `ARCHIVE_STORE_SECRET_KEY` | yes | A **write-only** key |
 | `ARCHIVE_HEARTBEAT_URL` | yes | The check's ping URL, plain or slug form (`…/<ping-key>/<slug>?create=1`): `/fail` is pushed onto its path, never appended as text. Required: an archiver that fails in silence looks exactly like one that works |
 | `ARCHIVE_INTERVAL_SECS` | no, `21600` | Time between dumps, at least 60 s (dumps are named to the second). The first one runs at startup |
-| `ARCHIVE_METRICS_ADDR` | no, `0.0.0.0:9000` | Where `/metrics` listens. Change it on a host where 9000 is taken |
 | `ARCHIVE_PG_DUMP` / `ARCHIVE_PG_RESTORE` | no, `pg_dump` / `pg_restore` | The client programs. They must be the server's major |
 
 The image (`docker/backend.Dockerfile`, target `yog-archive`) starts from
