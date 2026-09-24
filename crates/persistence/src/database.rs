@@ -3,24 +3,7 @@ use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 use std::str::FromStr;
 use std::time::Duration;
 
-use yog_core::RepositoryError;
-
 use crate::error::MigrationError;
-
-/// The two versions a dump depends on.
-///
-/// A dump restores only into the same TimescaleDB version, and `pg_dump`
-/// refuses a server of a newer Postgres major than itself (see the README,
-/// *Backup and restore*). `yog-archive` reads both before every dump: the
-/// TimescaleDB version travels with the dump, and the Postgres major is
-/// compared with `pg_dump`'s by [`PgTools::ensure_matches`](crate::PgTools::ensure_matches).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServerVersions {
-    /// `server_version_num / 10000`: 16 for 16.14.
-    pub postgres_major: u32,
-    /// `pg_extension.extversion`, e.g. `2.27.1`.
-    pub timescaledb: String,
-}
 
 /// Thin wrapper around [`sqlx::PgPool`] providing a single entry point for
 /// connecting and a hook for future cross-cutting concerns (metrics, health,
@@ -141,55 +124,11 @@ impl Database {
         self.pool.clone()
     }
 
-    /// Wrap a pool opened elsewhere — by `sqlx::test`, or by a caller that
-    /// sized its own.
-    pub fn from_pool(pool: PgPool) -> Self {
-        Self { pool }
-    }
-
     /// Close every connection and wait for them to be returned. For a caller
     /// that connects for one piece of work and must not hold a connection
     /// afterwards.
     pub async fn close(self) {
         self.pool.close().await;
-    }
-
-    /// Read the Postgres major and the installed TimescaleDB version of the
-    /// server this pool reaches.
-    ///
-    /// A fact about the server, like the migrations it runs, not a domain
-    /// read: no aggregate, no trait in `yog-core`.
-    ///
-    /// A database without the extension is an error, not an empty version:
-    /// every database of this project has it, and a dump labelled with no
-    /// version could not be matched to an image that restores it.
-    pub async fn server_versions(&self) -> Result<ServerVersions, RepositoryError> {
-        let row = sqlx::query!(
-            r#"
-            SELECT current_setting('server_version_num')::int / 10000 AS "postgres_major!",
-                   (SELECT extversion FROM pg_extension WHERE extname = 'timescaledb') AS timescaledb
-            "#
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| RepositoryError::Backend(e.to_string()))?;
-
-        let timescaledb = row.timescaledb.ok_or_else(|| {
-            RepositoryError::Integrity(
-                "the timescaledb extension is not installed in this database".to_string(),
-            )
-        })?;
-        let postgres_major = u32::try_from(row.postgres_major).map_err(|_| {
-            RepositoryError::Integrity(format!(
-                "server_version_num gives a negative major: {}",
-                row.postgres_major
-            ))
-        })?;
-
-        Ok(ServerVersions {
-            postgres_major,
-            timescaledb,
-        })
     }
 
     pub async fn run_migrations(&self) -> Result<(), MigrationError> {

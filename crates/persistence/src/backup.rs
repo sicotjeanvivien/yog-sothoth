@@ -1,6 +1,6 @@
 //! Backing up the database: `pg_dump` to take a dump, `pg_restore` to check
 //! it. The server facts a dump depends on are
-//! [`Database::server_versions`](crate::Database::server_versions).
+//! [`PgServerInfo::server_versions`](crate::PgServerInfo::server_versions).
 //!
 //! This is the crate's second way of reaching Postgres. Everything else goes
 //! through a `sqlx` pool; a dump goes through the Postgres client programs,

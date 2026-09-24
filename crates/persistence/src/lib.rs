@@ -15,9 +15,10 @@ mod database;
 mod error;
 mod health;
 mod repositories;
+mod server_info;
 
 pub use backup::{DumpConnection, DumpStream, PgTools, ReadabilityCheck};
-pub use database::{Database, ServerVersions};
+pub use database::Database;
 pub use error::BackupError;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
@@ -39,6 +40,7 @@ pub use repositories::{
     PgPoolPriceSnapshotRepository, PgPoolRepository, PgSignalRepository, PgSwapFlowRepository,
     PgTokenMetadataRepository, PgTokenPriceRepository, PgWatchedPoolRepository,
 };
+pub use server_info::{PgServerInfo, ServerVersions};
 
 /// Re-export [`sqlx::PgPool`] so consumers don't need to depend on sqlx directly
 /// just to type their dependency-injection wiring.

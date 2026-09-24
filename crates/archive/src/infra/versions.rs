@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 use yog_bootstrap::SecretUrl;
-use yog_persistence::{Database, ServerVersions};
+use yog_persistence::{Database, PgServerInfo, ServerVersions};
 
 use crate::archiver::VersionSource;
 
@@ -30,7 +30,10 @@ impl VersionSource for PgVersions {
                 self.url.scrub(&e.to_string())
             )
         })?;
-        let versions = database.server_versions().await.map_err(|e| e.to_string());
+        let versions = PgServerInfo::new(database.pool_owned())
+            .server_versions()
+            .await
+            .map_err(|e| e.to_string());
         database.close().await;
         versions
     }

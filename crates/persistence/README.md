@@ -21,9 +21,10 @@ persistence/
 ├── src/
 │   ├── backup/              ← the dump side: PgTools (the client programs),
 │   │                          DumpStream (pg_dump), ReadabilityCheck (pg_restore)
-│   ├── database.rs          ← Database::connect / from_pool / close, run_migrations,
-│   │                          run_script, server_versions
+│   ├── database.rs          ← Database::connect / close, run_migrations,
+│   │                          run_script — connections, no query of its own
 │   ├── health.rs            ← PgHealthChecker
+│   ├── server_info.rs       ← PgServerInfo: the server's versions
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
@@ -647,7 +648,7 @@ check can fail. The dump took 15 s and weighed 164 MB; the restore took 65 s.
 ### The `backup` module
 
 What `yog-archive` runs lives here, because it is knowledge of this database:
-the server's versions (`Database::server_versions`), how `pg_dump` must be called and
+the server's versions (`PgServerInfo`), how `pg_dump` must be called and
 whether its major matches the server's (`PgTools`), and what `pg_restore`
 checks (`ReadabilityCheck`). It is the crate's **second way of reaching
 Postgres**: everything else goes through a `sqlx` pool, a dump goes through the

@@ -42,7 +42,7 @@ the check, and decides the `RunOutcome`.
 
 1. Split the connection string for `pg_dump` (a socket URL with no host is
    accepted), connect, read the server's Postgres major and TimescaleDB version
-   (`Database::server_versions`, in `yog-persistence` — the binary writes no SQL), and
+   (`PgServerInfo`, in `yog-persistence` — the binary writes no SQL), and
    close. The connection belongs to the run, not to the process: connected
    once at startup, a refusing database (a wrong password, a server down)
    stopped the process before it could signal anything — a silent crash loop
