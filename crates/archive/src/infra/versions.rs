@@ -26,14 +26,14 @@ impl VersionSource for PgVersions {
     async fn server_versions(&self) -> Result<ServerVersions, String> {
         let database = Database::connect(self.url.expose()).await.map_err(|e| {
             format!(
-                "cannot connect to the database: {}",
+                "cannot read the server's versions: cannot connect to the database: {}",
                 self.url.scrub(&e.to_string())
             )
         })?;
         let versions = PgServerInfo::new(database.pool_owned())
             .server_versions()
             .await
-            .map_err(|e| e.to_string());
+            .map_err(|e| format!("cannot read the server's versions: {e}"));
         database.close().await;
         versions
     }

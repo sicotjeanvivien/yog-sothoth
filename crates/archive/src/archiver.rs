@@ -121,6 +121,8 @@ impl RunFailure {
 /// signal anything.
 #[async_trait]
 pub(crate) trait VersionSource: Send + Sync {
+    /// The error is the whole reason sent with the failure signal, saying
+    /// that it is the versions that could not be read.
     async fn server_versions(&self) -> Result<ServerVersions, String>;
 }
 
@@ -151,17 +153,32 @@ impl Archiver {
     }
 
     async fn archive(&self, now: DateTime<Utc>, cancel: &CancellationToken) -> RunOutcome {
-        let versions = match self.versions.server_versions().await {
-            Ok(versions) => versions,
-            Err(e) => {
-                return RunOutcome::Failed(RunFailure::refused(format!(
-                    "cannot read the server's versions: {e}"
-                )));
-            }
-        };
-        if let Err(e) = self.tools.ensure_matches(&versions).await {
-            return RunOutcome::Failed(RunFailure::refused(e.to_string()));
+        match self.try_archive(now, cancel).await {
+            Ok((key, bytes)) => RunOutcome::Archived { key, bytes },
+            Err(Interrupted::Cancelled) => RunOutcome::Cancelled,
+            Err(Interrupted::Failed(failure)) => RunOutcome::Failed(failure),
         }
+    }
+
+    /// The run in two phases. Up to the upload, nothing is running and a
+    /// failure just returns. Once the upload is open, [`stream`] owns
+    /// `pg_dump` and `pg_restore`: when it fails, both are dropped — killed —
+    /// as it returns, and only then is the upload aborted, so `pg_dump` never
+    /// holds its connection for the length of a round-trip to the bucket.
+    async fn try_archive(
+        &self,
+        now: DateTime<Utc>,
+        cancel: &CancellationToken,
+    ) -> Result<(String, u64), Interrupted> {
+        let versions = self
+            .versions
+            .server_versions()
+            .await
+            .map_err(RunFailure::refused)?;
+        self.tools
+            .ensure_matches(&versions)
+            .await
+            .map_err(RunFailure::refused)?;
 
         let key = object_key(now, &versions.timescaledb);
         let options = PutMultipartOptions {
@@ -177,96 +194,86 @@ impl Archiver {
             ]),
             ..Default::default()
         };
-        let upload = match self
+        let upload = self
             .store
             .put_multipart_opts(&Path::from(key.as_str()), options)
             .await
-        {
-            Ok(upload) => upload,
-            Err(e) => {
-                return RunOutcome::Failed(RunFailure::store_failed(format!(
-                    "cannot start the upload: {e}"
-                )));
-            }
-        };
+            .map_err(|e| RunFailure::store_failed(format!("cannot start the upload: {e}")))?;
         let mut writer = WriteMultipart::new_with_chunk_size(upload, PART_SIZE);
 
-        // From here, every early return goes through `abandon`, which kills
-        // `pg_dump` and `pg_restore` before the bucket round-trip.
-        let mut dump = match self.tools.start_dump(&self.database_url) {
-            Ok(dump) => dump,
-            Err(e) => {
+        let bytes = match stream(&self.tools, &self.database_url, &mut writer, cancel).await {
+            Ok(bytes) => bytes,
+            Err(interrupted) => {
                 abort(writer).await;
-                return RunOutcome::Failed(RunFailure::dump_failed(e.to_string()));
+                return Err(interrupted);
             }
         };
-        let mut check = match self.tools.start_check() {
-            Ok(check) => check,
-            Err(e) => {
-                abandon(writer, dump).await;
-                return RunOutcome::Failed(RunFailure::unreadable(e.to_string()));
-            }
-        };
-
-        let mut bytes: u64 = 0;
-        let mut buf = vec![0u8; 64 * 1024];
-        loop {
-            let read = tokio::select! {
-                biased;
-                () = cancel.cancelled() => None,
-                read = dump.read(&mut buf) => Some(read),
-            };
-            let Some(read) = read else {
-                abandon(writer, (dump, check)).await;
-                return RunOutcome::Cancelled;
-            };
-            let n = match read {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(e) => {
-                    abandon(writer, (dump, check)).await;
-                    return RunOutcome::Failed(RunFailure::dump_failed(e.to_string()));
-                }
-            };
-            check.feed(&buf[..n]).await;
-            if let Err(e) = writer.wait_for_capacity(PARTS_IN_FLIGHT).await {
-                abandon(writer, (dump, check)).await;
-                return RunOutcome::Failed(RunFailure::store_failed(format!(
-                    "a part was refused: {e}"
-                )));
-            }
-            writer.write(&buf[..n]);
-            bytes += n as u64;
-        }
-
-        // `dump` moves into `finish`; a stop drops that future, and `dump`
-        // with it, when the `select!` ends.
-        let finished = tokio::select! {
-            biased;
-            () = cancel.cancelled() => None,
-            finished = dump.finish() => Some(finished),
-        };
-        let Some(finished) = finished else {
-            abandon(writer, check).await;
-            return RunOutcome::Cancelled;
-        };
-        if let Err(e) = finished {
-            abandon(writer, check).await;
-            return RunOutcome::Failed(RunFailure::dump_failed(e.to_string()));
-        }
-
-        if let Err(e) = check.finish().await {
-            abort(writer).await;
-            return RunOutcome::Failed(RunFailure::unreadable(e.to_string()));
-        }
-
-        match writer.finish().await {
-            Ok(_) => RunOutcome::Archived { key, bytes },
-            Err(e) => RunOutcome::Failed(RunFailure::store_failed(format!(
-                "cannot complete the upload: {e}"
-            ))),
-        }
+        writer
+            .finish()
+            .await
+            .map_err(|e| RunFailure::store_failed(format!("cannot complete the upload: {e}")))?;
+        Ok((key, bytes))
     }
+}
+
+/// Why a run stopped before archiving. Internal to the run: a stop is not a
+/// failure, and [`Archiver::archive`] turns each into its [`RunOutcome`].
+enum Interrupted {
+    Cancelled,
+    Failed(RunFailure),
+}
+
+impl From<RunFailure> for Interrupted {
+    fn from(failure: RunFailure) -> Self {
+        Self::Failed(failure)
+    }
+}
+
+/// Dump into the open upload while `pg_restore` checks the same bytes, and
+/// return how many were written.
+///
+/// `dump` and `check` are locals: **any return drops them, which kills
+/// `pg_dump` and `pg_restore`** before the caller aborts the upload. That
+/// order is what `a_stop_mid_dump_kills_pg_dump…` checks.
+async fn stream(
+    tools: &PgTools,
+    url: &SecretUrl,
+    writer: &mut WriteMultipart,
+    cancel: &CancellationToken,
+) -> Result<u64, Interrupted> {
+    let mut dump = tools.start_dump(url).map_err(RunFailure::dump_failed)?;
+    let mut check = tools.start_check().map_err(RunFailure::unreadable)?;
+
+    let mut bytes: u64 = 0;
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let read = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err(Interrupted::Cancelled),
+            read = dump.read(&mut buf) => read,
+        };
+        let n = read.map_err(RunFailure::dump_failed)?;
+        if n == 0 {
+            break;
+        }
+        check.feed(&buf[..n]).await;
+        writer
+            .wait_for_capacity(PARTS_IN_FLIGHT)
+            .await
+            .map_err(|e| RunFailure::store_failed(format!("a part was refused: {e}")))?;
+        writer.write(&buf[..n]);
+        bytes += n as u64;
+    }
+
+    // `dump` moves into `finish`; a stop drops that future, and `dump` with
+    // it, when the `select!` returns.
+    tokio::select! {
+        biased;
+        () = cancel.cancelled() => return Err(Interrupted::Cancelled),
+        finished = dump.finish() => finished.map_err(RunFailure::dump_failed)?,
+    }
+    check.finish().await.map_err(RunFailure::unreadable)?;
+    Ok(bytes)
 }
 
 /// `yog-sothoth/2026-09-23T060000Z_timescaledb-2.27.1.dump`: sortable by
@@ -284,15 +291,6 @@ pub(crate) fn object_key(now: DateTime<Utc>, timescaledb: &str) -> String {
 ///
 /// A failure here is logged, not propagated: the run already has its
 /// outcome, and the bucket's lifecycle rule removes incomplete uploads.
-/// Give up on a run whose programs are running: drop them first — dropping a
-/// `DumpStream` or a `ReadabilityCheck` kills the program behind it — then abort
-/// the upload. In this order, `pg_dump` does not hold its connection for the
-/// length of a network round-trip to the bucket.
-async fn abandon(writer: WriteMultipart, programs: impl Send) {
-    drop(programs);
-    abort(writer).await;
-}
-
 async fn abort(writer: WriteMultipart) {
     if let Err(e) = writer.abort().await {
         warn!(error = %e, "cannot abort the multipart upload — the bucket's lifecycle rule will remove its parts");
