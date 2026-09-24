@@ -23,8 +23,9 @@ archive/src/
 │   └── daemon.rs      ← builds the store and the heartbeat, runs every interval,
 │                         and connects to the database for each run
 ├── archiver.rs        ← one run, ending in a RunOutcome that decides the signal
-├── dump.rs            ← pg_dump / pg_restore as subprocesses, the password split out
-├── heartbeat.rs       ← Healthchecks.io: success, or /fail with the reason
+├── infra/             ← what a run calls outside the process
+│   ├── dump.rs        ← pg_dump / pg_restore as subprocesses, the password split out
+│   └── heartbeat.rs   ← Healthchecks.io: success, or /fail with the reason
 └── metrics.rs
 ```
 

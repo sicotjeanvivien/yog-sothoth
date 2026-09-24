@@ -31,7 +31,7 @@ use object_store::{
 use tempfile::TempDir;
 
 use super::*;
-use crate::heartbeat::RecordingHeartbeat;
+use crate::infra::RecordingHeartbeat;
 
 const VERSION_16: &str = "pg_dump (PostgreSQL) 16.14 (Debian 16.14-1.pgdg120+1)";
 const ARCHIVE: &str = "PGDMP-fake-archive-body";

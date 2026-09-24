@@ -19,10 +19,7 @@ use tracing::warn;
 use yog_bootstrap::SecretUrl;
 use yog_persistence::ServerVersions;
 
-use crate::{
-    dump::{Connection, PgTools, read_tail},
-    heartbeat::Heartbeat,
-};
+use crate::infra::{Connection, Heartbeat, PgTools, read_tail};
 
 /// Where the dumps sit in the bucket, which may one day hold other projects'.
 const KEY_PREFIX: &str = "yog-sothoth/";

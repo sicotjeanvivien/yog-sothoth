@@ -40,14 +40,14 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          secret are the arguments of `AmazonS3Builder`'s two setters",
     ),
     (
-        "crates/archive/src/dump.rs",
+        "crates/archive/src/infra/dump.rs",
         1,
         "the URL is parsed on this line to split the password out of what \
          `pg_dump` receives as an argument (readable in `/proc/<pid>/cmdline`) \
          and into `PGPASSWORD`; no string built from it reaches a log",
     ),
     (
-        "crates/archive/src/heartbeat.rs",
+        "crates/archive/src/infra/heartbeat.rs",
         3,
         "reqwest owns the request — the check's URL is the argument of `.post` \
          for a success, and of `fail_url` for a failure, which pushes `fail` \

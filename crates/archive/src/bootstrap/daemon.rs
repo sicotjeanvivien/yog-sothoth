@@ -15,8 +15,7 @@ use yog_persistence::{Database, PgDatabaseInfo, ServerVersions};
 use crate::{
     archiver::{Archiver, RunOutcome, VersionSource},
     bootstrap::{Config, config::StoreConfig},
-    dump::PgTools,
-    heartbeat::{HealthchecksHeartbeat, Heartbeat},
+    infra::{HealthchecksHeartbeat, Heartbeat, PgTools},
     metrics,
 };
 

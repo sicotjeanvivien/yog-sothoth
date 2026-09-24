@@ -17,8 +17,7 @@
 
 mod archiver;
 mod bootstrap;
-mod dump;
-mod heartbeat;
+mod infra;
 mod metrics;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
