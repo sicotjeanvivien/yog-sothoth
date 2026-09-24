@@ -139,6 +139,14 @@ run otherwise, and says so.
   alarm on its own.
 - **Role**: `yog_archive` is created by `yog-migrate setup-roles` with a
   `CHANGE_ME_…` password — set the real one with `\password yog_archive`.
+- **Service**: `yog-archive` in `docker-compose.prod.yml`, profile `full`,
+  so it starts with the rest of the production stack. The overlay refuses to
+  run while one of its seven variables (`DATABASE_URL_ARCHIVE`, the five
+  `ARCHIVE_STORE_*`, `ARCHIVE_HEARTBEAT_URL`) is unset. Limit 256 MiB, for a
+  measured peak of 31 MiB with `pg_dump`. It waits for Postgres and
+  `yog-migrate` at `compose up`; after a host reboot Docker ignores that
+  order, and a first run that finds Postgres not yet up ends in `refused`,
+  signalled, with the next dump a full interval later.
 
 ## Stopping
 
