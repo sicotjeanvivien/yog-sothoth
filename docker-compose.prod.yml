@@ -46,12 +46,23 @@
 # (September 2026: web 62 MiB under HTTP load, indexer 7.7, context 9.9,
 # api 6.3, signals 4.7). The limits add up to 1216 MiB.
 #
-# Postgres's buffers are written here, not left to `timescaledb-tune`: the
-# image runs it once, when the volume is created, and sizes shared_buffers at
-# 25 % of the WHOLE machine's RAM — above this container's limit on a 4 GB
-# host, which ends in an OOM kill. 256MB inside 832M leaves room for
-# connections and for the compression jobs' maintenance_work_mem. These are
-# starting values, to be revised against measurements in production.
+# Postgres's memory and connection settings are written here, not left to
+# `timescaledb-tune`. The image runs it once, when the volume is created, and
+# sizes everything from whatever memory it sees at that moment: the cgroup
+# limit when there is one, the host's RAM when there is not. Neither is safe
+# to inherit:
+#   - a volume first created WITHOUT this overlay (the base file alone, before
+#     COMPOSE_FILE is set on the server) is tuned to the host, and its
+#     maintenance_work_mem alone can exceed this container's limit;
+#   - a volume created WITH it is tuned to 832 MB, which gives
+#     max_connections = 25 (measured on 2.27.1-pg16, September 2026). The four
+#     daemons hold pools of ten connections each, so under load the pools
+#     would be refused "too many clients".
+# Command-line `-c` settings override postgresql.conf, so these hold whichever
+# way the volume was created. 256MB of shared_buffers inside 832M leaves room
+# for 50 connections at 4MB of work_mem each and for the compression jobs'
+# 64MB of maintenance_work_mem. These are starting values, to be revised
+# against measurements in production.
 
 services:
   postgres:
@@ -75,6 +86,12 @@ services:
       - shared_buffers=256MB
       - -c
       - effective_cache_size=512MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in the server's .env — production has no default password}
     ports: !reset []
