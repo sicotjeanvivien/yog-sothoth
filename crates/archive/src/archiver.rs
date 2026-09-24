@@ -144,8 +144,8 @@ impl Archiver {
         };
         let mut writer = WriteMultipart::new_with_chunk_size(upload, PART_SIZE);
 
-        // From here, every early return drops `dump` (and `check`), which
-        // kills the program behind it: no path can leave one running.
+        // From here, every early return goes through `abandon`, which kills
+        // `pg_dump` and `pg_restore` before the bucket round-trip.
         let mut dump = match self.tools.start_dump(&connection) {
             Ok(dump) => dump,
             Err(e) => {
@@ -156,7 +156,7 @@ impl Archiver {
         let mut check = match self.tools.start_check() {
             Ok(check) => check,
             Err(e) => {
-                abort(writer).await;
+                abandon(writer, dump).await;
                 return RunOutcome::Unreadable(e.to_string());
             }
         };
@@ -166,39 +166,43 @@ impl Archiver {
         loop {
             let read = tokio::select! {
                 biased;
-                () = cancel.cancelled() => {
-                    abort(writer).await;
-                    return RunOutcome::Cancelled;
-                }
-                read = dump.read(&mut buf) => read,
+                () = cancel.cancelled() => None,
+                read = dump.read(&mut buf) => Some(read),
+            };
+            let Some(read) = read else {
+                abandon(writer, (dump, check)).await;
+                return RunOutcome::Cancelled;
             };
             let n = match read {
                 Ok(0) => break,
                 Ok(n) => n,
                 Err(e) => {
-                    abort(writer).await;
+                    abandon(writer, (dump, check)).await;
                     return RunOutcome::DumpFailed(e.to_string());
                 }
             };
             check.feed(&buf[..n]).await;
             if let Err(e) = writer.wait_for_capacity(PARTS_IN_FLIGHT).await {
-                abort(writer).await;
+                abandon(writer, (dump, check)).await;
                 return RunOutcome::StoreFailed(format!("a part was refused: {e}"));
             }
             writer.write(&buf[..n]);
             bytes += n as u64;
         }
 
+        // `dump` moves into `finish`; a stop drops that future, and `dump`
+        // with it, when the `select!` ends.
         let finished = tokio::select! {
             biased;
-            () = cancel.cancelled() => {
-                abort(writer).await;
-                return RunOutcome::Cancelled;
-            }
-            finished = dump.finish() => finished,
+            () = cancel.cancelled() => None,
+            finished = dump.finish() => Some(finished),
+        };
+        let Some(finished) = finished else {
+            abandon(writer, check).await;
+            return RunOutcome::Cancelled;
         };
         if let Err(e) = finished {
-            abort(writer).await;
+            abandon(writer, check).await;
             return RunOutcome::DumpFailed(e.to_string());
         }
 
@@ -229,6 +233,15 @@ pub(crate) fn object_key(now: DateTime<Utc>, timescaledb: &str) -> String {
 ///
 /// A failure here is logged, not propagated: the run already has its
 /// outcome, and the bucket's lifecycle rule removes incomplete uploads.
+/// Give up on a run whose programs are running: drop them first — dropping a
+/// `PgDump` or a `ReadabilityCheck` kills the program behind it — then abort
+/// the upload. In this order, `pg_dump` does not hold its connection for the
+/// length of a network round-trip to the bucket.
+async fn abandon(writer: WriteMultipart, programs: impl Send) {
+    drop(programs);
+    abort(writer).await;
+}
+
 async fn abort(writer: WriteMultipart) {
     if let Err(e) = writer.abort().await {
         warn!(error = %e, "cannot abort the multipart upload — the bucket's lifecycle rule will remove its parts");

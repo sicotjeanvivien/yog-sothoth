@@ -58,6 +58,20 @@ fn server_16() -> FixedVersions {
 struct Ledger {
     completed: AtomicUsize,
     aborted: AtomicUsize,
+    /// Where the fake `pg_dump` writes its PID, when a test watches it.
+    pid_file: Option<PathBuf>,
+    /// Whether that `pg_dump` was still running when the upload was aborted.
+    pg_dump_alive_at_abort: std::sync::Mutex<Option<bool>>,
+}
+
+/// Whether `pid` still runs. A killed child stays a zombie until it is
+/// reaped, and a zombie still answers `kill -0`: running means present in
+/// `/proc` and not in state `Z`.
+fn is_running(pid: &str) -> bool {
+    fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+        stat.rsplit_once(')')
+            .is_some_and(|(_, rest)| !rest.trim_start().starts_with('Z'))
+    })
 }
 
 /// How the fake bucket answers an upload.
@@ -101,6 +115,26 @@ impl MultipartUpload for RecordingUpload {
 
     async fn abort(&mut self) -> object_store::Result<()> {
         self.ledger.aborted.fetch_add(1, Ordering::SeqCst);
+        if let Some(pid) = self
+            .ledger
+            .pid_file
+            .as_ref()
+            .and_then(|f| fs::read_to_string(f).ok())
+        {
+            // A SIGKILL is sent, not awaited: give the kill a moment to land.
+            // Killed first, pg_dump is gone in a few milliseconds; killed after
+            // the abort, it is still running for the whole of this wait.
+            let pid = pid.trim();
+            let mut alive = is_running(pid);
+            for _ in 0..25 {
+                if !alive {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+                alive = is_running(pid);
+            }
+            *self.ledger.pg_dump_alive_at_abort.lock().unwrap() = Some(alive);
+        }
         self.inner.abort().await
     }
 }
@@ -267,7 +301,16 @@ async fn run_with(
     pg_restore: PathBuf,
     cancel: CancellationToken,
 ) -> Run {
-    run_full(versions, bucket, pg_dump, pg_restore, cancel, DATABASE_URL).await
+    run_full(
+        versions,
+        bucket,
+        pg_dump,
+        pg_restore,
+        cancel,
+        DATABASE_URL,
+        None,
+    )
+    .await
 }
 
 async fn run_full(
@@ -277,8 +320,12 @@ async fn run_full(
     pg_restore: PathBuf,
     cancel: CancellationToken,
     database_url: &str,
+    pid_file: Option<PathBuf>,
 ) -> Run {
-    let ledger = Arc::new(Ledger::default());
+    let ledger = Arc::new(Ledger {
+        pid_file,
+        ..Ledger::default()
+    });
     let store: Arc<dyn ObjectStore> = Arc::new(TestStore {
         inner: InMemory::new(),
         ledger: Arc::clone(&ledger),
@@ -489,7 +536,10 @@ async fn unreadable_server_versions_refuse_the_run() {
 #[tokio::test]
 async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
     let fakes = Fakes::new();
-    let pg_dump = fakes.pg_dump(VERSION_16, "printf 'PGDMP-start'\nexec sleep 30");
+    let pg_dump = fakes.pg_dump(
+        VERSION_16,
+        "echo $$ > \"$DIR/pid\"\nprintf 'PGDMP-start'\nexec sleep 30",
+    );
     let cancel = CancellationToken::new();
     let stopper = cancel.clone();
     tokio::spawn(async move {
@@ -499,18 +549,25 @@ async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
 
     let run = tokio::time::timeout(
         Duration::from_secs(10),
-        run_with(
+        run_full(
             server_16(),
             Bucket::Accepting,
             pg_dump,
             fakes.good_pg_restore(),
             cancel,
+            DATABASE_URL,
+            Some(fakes.path("pid")),
         ),
     )
     .await
     .expect("the stop must end the run, not wait for pg_dump");
 
     assert_eq!(run.outcome, RunOutcome::Cancelled);
+    assert_eq!(
+        *run.ledger.pg_dump_alive_at_abort.lock().unwrap(),
+        Some(false),
+        "pg_dump must be killed before the upload is aborted, not after"
+    );
     assert_eq!(run.signals, Vec::<String>::new());
     assert_eq!(objects(&run.store).await, Vec::<String>::new());
     assert_eq!((run.completed(), run.aborted()), (0, 1));
@@ -553,6 +610,7 @@ async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
         fakes.good_pg_restore(),
         CancellationToken::new(),
         "not a url",
+        None,
     )
     .await;
 
