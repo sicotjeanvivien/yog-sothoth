@@ -41,6 +41,12 @@
 #   POSTGRES_PASSWORD  the admin password of the Postgres container
 #   YOG_WEB_DOMAIN     the dashboard's host name, e.g. yog-scope.xyz
 #   YOG_API_DOMAIN     the API's host name, e.g. api.yog-scope.xyz
+#   DATABASE_URL_ARCHIVE, ARCHIVE_STORE_URL, ARCHIVE_STORE_BUCKET,
+#   ARCHIVE_STORE_REGION, ARCHIVE_STORE_ACCESS_KEY, ARCHIVE_STORE_SECRET_KEY,
+#   ARCHIVE_HEARTBEAT_URL
+#                      the backup daemon's role, bucket and dead man's switch;
+#                      what the bucket and its key must be is in
+#                      crates/archive/README.md, "Deploying"
 # The CORS origin and the browser's API URL are derived from the two domains
 # rather than set separately: three values that must agree are one value.
 #
@@ -50,7 +56,8 @@
 # and without limits the first service to grow gets Postgres killed by the
 # OOM killer. The binaries' limits are about 4x to 8x their measured peaks
 # (September 2026: web 62 MiB under HTTP load, indexer 7.7, context 9.9,
-# api 6.3, signals 4.7). The limits add up to 1216 MiB.
+# api 6.3, signals 4.7, archive 31 with its pg_dump). The limits add up to
+# 1472 MiB, inside the 2.5 GB the machine reserves for this stack.
 #
 # Postgres's memory and connection settings are written here, not left to
 # `timescaledb-tune`. The image runs it once, when the volume is created, and
@@ -141,6 +148,44 @@ services:
         NEXT_PUBLIC_YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
     ports: !reset []
     mem_limit: 128m
+
+  # The backup daemon: a pg_dump every six hours, streamed to the bucket and
+  # checked, then signalled to Healthchecks.io. Production only, like Caddy:
+  # without a real bucket and a real check it has nothing to do in dev.
+  yog-archive:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: yog-archive
+    environment:
+      DATABASE_URL_ARCHIVE: ${DATABASE_URL_ARCHIVE:?set it in the server's .env}
+      ARCHIVE_STORE_URL: ${ARCHIVE_STORE_URL:?set it in the server's .env}
+      ARCHIVE_STORE_BUCKET: ${ARCHIVE_STORE_BUCKET:?set it in the server's .env}
+      ARCHIVE_STORE_REGION: ${ARCHIVE_STORE_REGION:?set it in the server's .env}
+      ARCHIVE_STORE_ACCESS_KEY: ${ARCHIVE_STORE_ACCESS_KEY:?set it in the server's .env}
+      ARCHIVE_STORE_SECRET_KEY: ${ARCHIVE_STORE_SECRET_KEY:?set it in the server's .env}
+      ARCHIVE_HEARTBEAT_URL: ${ARCHIVE_HEARTBEAT_URL:?set it in the server's .env}
+      ARCHIVE_INTERVAL_SECS: ${ARCHIVE_INTERVAL_SECS:-21600}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_ARCHIVE="$$(echo "$$DATABASE_URL_ARCHIVE" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/yog-archive
+    # `depends_on` holds at `compose up`, not when the host reboots: Docker
+    # then restarts containers in no set order, and a first run before
+    # Postgres is up ends in `refused` — signalled, and the next dump comes
+    # a full interval later.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      yog-migrate:
+        condition: service_completed_successfully
+    mem_limit: 256m
+    restart: unless-stopped
 
   # The only service that publishes a port. The browser calls the API
   # directly, so Caddy serves two sites: the dashboard and the API.
