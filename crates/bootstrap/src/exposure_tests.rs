@@ -33,7 +33,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "sqlx owns the pool — the URL is the argument of `Database::connect`",
     ),
     (
-        "crates/archive/src/bootstrap/daemon.rs",
+        "crates/archive/src/infra/store.rs",
         2,
         "object_store owns the S3 signing — the access key id and the secret \
          are the arguments of `AmazonS3Builder`'s two setters",

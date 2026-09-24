@@ -23,11 +23,13 @@ archive/src/
 │   ├── config.rs      ← Config::load (every ARCHIVE_* variable)
 │   ├── config/types/
 │   │   └── store_config.rs ← StoreConfig::load (the ARCHIVE_STORE_* variables)
-│   └── daemon.rs      ← builds the store, the heartbeat and the archiver, runs
-│                         one dump every interval
+│   ├── daemon.rs      ← assembles the archiver, runs one dump every interval
+│   └── daemon/
+│       └── init.rs    ← init_heartbeat, init_store (signals a bad bucket before exiting)
 ├── archiver.rs        ← one run, ending in a RunOutcome that decides the signal
 ├── infra/             ← what a run calls outside the process
 │   ├── heartbeat.rs   ← Healthchecks.io: success, or /fail with the reason
+│   ├── store.rs       ← the bucket — the only file that knows it is S3
 │   └── versions.rs    ← the server's versions, over a connection opened per run
 └── metrics.rs
 ```

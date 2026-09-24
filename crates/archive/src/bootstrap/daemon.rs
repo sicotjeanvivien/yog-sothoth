@@ -3,9 +3,7 @@
 
 use std::{sync::Arc, time::Instant};
 
-use anyhow::Context;
 use chrono::Utc;
-use object_store::aws::AmazonS3Builder;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use yog_bootstrap::SHUTDOWN_GRACE;
@@ -13,10 +11,14 @@ use yog_persistence::PgTools;
 
 use crate::{
     archiver::{Archiver, RunOutcome},
-    bootstrap::{Config, config::StoreConfig},
-    infra::{HealthchecksHeartbeat, Heartbeat, PgVersions},
+    bootstrap::Config,
+    infra::PgVersions,
     metrics,
 };
+
+mod init;
+
+use init::{init_heartbeat, init_store};
 
 pub(crate) struct Daemon {
     archiver: Archiver,
@@ -27,25 +29,15 @@ impl Daemon {
     /// Build everything a run needs. Nothing here touches the database: see
     /// [`PgVersions`] for why the connection belongs to the run.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
-        // The heartbeat first: from here on, whatever fails can be told.
-        let heartbeat = HealthchecksHeartbeat::new(config.heartbeat_url)
-            .context("failed to build the heartbeat client")?;
-        let store = match build_store(&config.store) {
-            Ok(store) => store,
-            Err(e) => {
-                heartbeat
-                    .failure(&format!("store_misconfigured: {e}"))
-                    .await;
-                return Err(anyhow::Error::new(e).context("failed to configure the bucket"));
-            }
-        };
+        let heartbeat = init_heartbeat(config.heartbeat_url)?;
+        let store = init_store(&config.store, &heartbeat).await?;
 
         Ok(Self {
             archiver: Archiver {
                 versions: Arc::new(PgVersions {
                     url: config.database_url.clone(),
                 }),
-                store: Arc::new(store),
+                store,
                 heartbeat: Arc::new(heartbeat),
                 tools: PgTools::new(config.pg_dump, config.pg_restore),
                 database_url: config.database_url.clone(),
@@ -107,18 +99,4 @@ fn log_outcome(outcome: &RunOutcome, elapsed: std::time::Duration) {
             );
         }
     }
-}
-
-/// The S3-compatible store. Path-style requests, which both Scaleway and a
-/// local MinIO accept; plain HTTP only when the endpoint says `http://`.
-fn build_store(config: &StoreConfig) -> object_store::Result<object_store::aws::AmazonS3> {
-    AmazonS3Builder::new()
-        .with_endpoint(&config.url)
-        .with_allow_http(config.url.starts_with("http://"))
-        .with_virtual_hosted_style_request(false)
-        .with_bucket_name(&config.bucket)
-        .with_region(&config.region)
-        .with_access_key_id(config.access_key.expose())
-        .with_secret_access_key(config.secret_key.expose())
-        .build()
 }
