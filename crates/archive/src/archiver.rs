@@ -16,7 +16,7 @@ use object_store::{
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use yog_bootstrap::SecretUrl;
-use yog_persistence::{DumpConnection, PgTools, ServerVersions};
+use yog_persistence::{PgTools, ServerVersions};
 
 use crate::infra::Heartbeat;
 
@@ -80,9 +80,8 @@ pub(crate) struct Archiver {
     pub(crate) store: Arc<dyn ObjectStore>,
     pub(crate) heartbeat: Arc<dyn Heartbeat>,
     pub(crate) tools: PgTools,
-    /// Split into what `pg_dump` receives at each run, so that a URL it
-    /// cannot use ends a run in `refused`, signalled, instead of stopping the
-    /// process at startup.
+    /// Handed to `pg_dump` at each run, so that a URL it cannot use ends a run
+    /// in a signalled failure instead of stopping the process at startup.
     pub(crate) database_url: SecretUrl,
 }
 
@@ -111,10 +110,6 @@ impl Archiver {
             Err(e) => {
                 return RunOutcome::Refused(format!("cannot read the server's versions: {e}"));
             }
-        };
-        let connection = match DumpConnection::from_secret(&self.database_url) {
-            Ok(connection) => connection,
-            Err(e) => return RunOutcome::Refused(e.to_string()),
         };
         if let Err(e) = self.tools.ensure_matches(&versions).await {
             return RunOutcome::Refused(e.to_string());
@@ -146,7 +141,7 @@ impl Archiver {
 
         // From here, every early return goes through `abandon`, which kills
         // `pg_dump` and `pg_restore` before the bucket round-trip.
-        let mut dump = match self.tools.start_dump(&connection) {
+        let mut dump = match self.tools.start_dump(&self.database_url) {
             Ok(dump) => dump,
             Err(e) => {
                 abort(writer).await;

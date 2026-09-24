@@ -6,11 +6,15 @@
 //! newer major than itself — which is what [`PgTools::ensure_matches`]
 //! checks before every dump.
 
-use std::{path::PathBuf, process::Stdio};
+use std::{
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 
-use tokio::process::Command;
+use tokio::process::{Child, Command};
+use yog_bootstrap::SecretUrl;
 
-use super::{DumpConnection, DumpStream, ReadabilityCheck};
+use super::{DumpStream, ReadabilityCheck};
 use crate::{ServerVersions, error::BackupError};
 
 /// The `pg_dump` and `pg_restore` to run.
@@ -73,27 +77,30 @@ impl PgTools {
     /// holds none between runs, which is what lets a refusing database end a
     /// run in a signalled failure instead of stopping the process.
     ///
+    /// The password does not travel with the URL: `pg_dump` receives the URL
+    /// without it as an argument — readable by any user of the host in
+    /// `/proc/<pid>/cmdline` — and the password alone in `PGPASSWORD`, which
+    /// only the process's owner can read. [`SecretUrl::split_password`] does
+    /// the split.
+    ///
     /// `--no-password` makes a missing or wrong password fail at once instead
-    /// of waiting on a prompt nobody will answer. Fails only with `Spawn`.
-    pub fn start_dump(&self, connection: &DumpConnection) -> Result<DumpStream, BackupError> {
+    /// of waiting on a prompt nobody will answer. Fails with `InvalidUrl`,
+    /// which does not quote the value, or `Spawn`.
+    pub fn start_dump(&self, url: &SecretUrl) -> Result<DumpStream, BackupError> {
+        let (url, password) = url.split_password().ok_or(BackupError::InvalidUrl)?;
         let mut command = Command::new(&self.pg_dump);
         command
             .arg("--format=custom")
             .arg("--no-password")
             .arg("--dbname")
-            .arg(&connection.url)
+            .arg(&url)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        if let Some(password) = &connection.password {
+            .stderr(Stdio::piped());
+        if let Some(password) = &password {
             command.env("PGPASSWORD", password.expose());
         }
-        let child = command.spawn().map_err(|source| BackupError::Spawn {
-            program: self.pg_dump.display().to_string(),
-            source,
-        })?;
-        Ok(DumpStream::new(child))
+        Ok(DumpStream::new(spawn(&self.pg_dump, &mut command)?))
     }
 
     /// Start `pg_restore --file=/dev/null`, to be fed the archive while it
@@ -121,19 +128,32 @@ impl PgTools {
     ///
     /// Fails only with `Spawn`.
     pub fn start_check(&self) -> Result<ReadabilityCheck, BackupError> {
-        let child = Command::new(&self.pg_restore)
+        let mut command = Command::new(&self.pg_restore);
+        command
             .arg("--file=/dev/null")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|source| BackupError::Spawn {
-                program: self.pg_restore.display().to_string(),
-                source,
-            })?;
-        Ok(ReadabilityCheck::new(child))
+            .stderr(Stdio::piped());
+        Ok(ReadabilityCheck::new(spawn(
+            &self.pg_restore,
+            &mut command,
+        )?))
     }
+}
+
+/// Start a program that dies with the value holding it.
+///
+/// `kill_on_drop` is set **here**, for every program a backup starts, so that
+/// no caller can forget it: dropping a [`DumpStream`] or a
+/// [`ReadabilityCheck`] is how a run gives up on it.
+fn spawn(program: &Path, command: &mut Command) -> Result<Child, BackupError> {
+    command
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|source| BackupError::Spawn {
+            program: program.display().to_string(),
+            source,
+        })
 }
 
 fn parse_major(version_output: &str) -> Option<u32> {

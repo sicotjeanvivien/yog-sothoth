@@ -32,7 +32,7 @@ archive/src/
 └── metrics.rs
 ```
 
-`pg_dump`, `pg_restore` and the split of the connection string are not here:
+`pg_dump` and `pg_restore` are not here:
 they are knowledge of the database, and live in `yog-persistence`'s `backup`
 module ([`crates/persistence`](../persistence/README.md#the-backup-module)).
 The archiver drives them: it reads the dump, streams it to the bucket, feeds
@@ -40,8 +40,7 @@ the check, and decides the `RunOutcome`.
 
 ## One run
 
-1. Split the connection string for `pg_dump` (a socket URL with no host is
-   accepted), connect, read the server's Postgres major and TimescaleDB version
+1. Connect, read the server's Postgres major and TimescaleDB version
    (`PgServerInfo`, in `yog-persistence` — the binary writes no SQL), and
    close. The connection belongs to the run, not to the process: connected
    once at startup, a refusing database (a wrong password, a server down)
@@ -54,8 +53,9 @@ the check, and decides the `RunOutcome`.
    version also in the object's metadata (`timescaledb-version`,
    `postgres-major`). A dump restores only into that exact TimescaleDB
    version, and the object's name is what an operator reads first.
-4. Run `pg_dump --format=custom --no-password`, the password in `PGPASSWORD`
-   and never in the arguments, which any user of the host can read in
+4. Run `pg_dump --format=custom --no-password`, the password split out of the
+   URL (a socket URL with no host is accepted) and passed in `PGPASSWORD`,
+   never in the arguments, which any user of the host can read in
    `/proc/<pid>/cmdline`. Its output streams to the bucket in 8 MiB parts,
    two in flight at most.
 5. Check the archive: `pg_dump` exited 0, **and** `pg_restore
@@ -151,7 +151,8 @@ handled by the same `shutdown_signal`, so the difference is only in the log.
 
 ```bash
 cargo test -p yog-archive                      # DB-free: fake pg_dump / pg_restore, in-memory bucket
-cargo test -p yog-persistence backup           # DB-free: the connection split, the version parse, a dropped dump is killed
+cargo test -p yog-persistence backup           # DB-free: the version parse, a dropped dump is killed
+cargo test -p yog-bootstrap split_password     # DB-free: the password split out of the URL
 cargo test -p yog-persistence --features integration-tests archive_role   # the role, under SET ROLE
 ```
 

@@ -15,12 +15,10 @@
 //! decision, made from the [`BackupError`](crate::BackupError) each step
 //! documents.
 
-mod connection;
 mod dump_stream;
 mod pg_tools;
 mod readability_check;
 
-pub use connection::DumpConnection;
 pub use dump_stream::DumpStream;
 pub use pg_tools::PgTools;
 pub use readability_check::ReadabilityCheck;

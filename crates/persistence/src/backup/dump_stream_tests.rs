@@ -2,7 +2,7 @@ use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
 use yog_bootstrap::SecretUrl;
 
-use super::super::{DumpConnection, PgTools};
+use super::super::PgTools;
 
 /// Whether `pid` has exited. A killed child stays a zombie until it is
 /// reaped, and a zombie still answers `kill -0`: dead means gone from
@@ -33,9 +33,8 @@ async fn dropping_a_dump_kills_pg_dump() {
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
 
     let tools = PgTools::new(script, "pg_restore".into());
-    let connection =
-        DumpConnection::from_secret(&SecretUrl::for_tests("postgresql://u@db/x")).unwrap();
-    let mut dump = tools.start_dump(&connection).unwrap();
+    let url = SecretUrl::for_tests("postgresql://u@db/x");
+    let mut dump = tools.start_dump(&url).unwrap();
     let mut buf = [0u8; 64];
     let n = dump.read(&mut buf).await.unwrap();
     assert_eq!(&buf[..n], b"PGDMP-start");

@@ -17,7 +17,7 @@ mod health;
 mod repositories;
 mod server_info;
 
-pub use backup::{DumpConnection, DumpStream, PgTools, ReadabilityCheck};
+pub use backup::{DumpStream, PgTools, ReadabilityCheck};
 pub use database::Database;
 pub use error::BackupError;
 pub use health::{HealthError, PgHealthChecker};

@@ -600,8 +600,11 @@ async fn a_pg_restore_that_stops_reading_early_is_judged_by_its_exit_status() {
     assert_eq!(run.outcome.label(), "archived", "{:?}", run.outcome);
 }
 
+/// In production this URL fails the versions read first, with the same value;
+/// here the versions are fixed, so the dump is where it is caught — after the
+/// upload opened, which is why that upload is aborted.
 #[tokio::test]
-async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
+async fn a_database_url_pg_dump_cannot_use_fails_the_dump_and_is_signalled() {
     let fakes = Fakes::new();
     let run = run_full(
         server_16(),
@@ -614,6 +617,12 @@ async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
     )
     .await;
 
-    assert_failed(&run, "refused", "the database URL is not a valid URL", 0).await;
-    assert_eq!(fakes.read("args"), None);
+    assert_failed(
+        &run,
+        "dump_failed",
+        "the database URL is not a valid URL",
+        1,
+    )
+    .await;
+    assert_eq!(fakes.read("args"), None, "pg_dump ran with an unusable URL");
 }
