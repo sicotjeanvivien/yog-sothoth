@@ -523,3 +523,41 @@ fn a_scheme_may_carry_digits_and_punctuation() {
         Some("h2c".to_string())
     );
 }
+
+#[test]
+fn split_password_removes_it_from_the_url_and_decodes_it() {
+    let url = SecretUrl::new("postgresql://yog_archive:p%40ss%2Fw0rd@db:5432/yog_sothoth");
+    let (without, password) = url.split_password().unwrap();
+
+    assert_eq!(without, "postgresql://yog_archive@db:5432/yog_sothoth");
+    assert!(!without.contains("p%40ss"));
+    assert_eq!(password.as_ref().map(SecretKey::expose), Some("p@ss/w0rd"));
+}
+
+#[test]
+fn split_password_of_a_url_without_one_gives_none() {
+    let url = SecretUrl::new("postgresql://yog_archive@db:5432/yog_sothoth");
+    let (without, password) = url.split_password().unwrap();
+    assert_eq!(without, "postgresql://yog_archive@db:5432/yog_sothoth");
+    assert!(password.is_none());
+}
+
+#[test]
+fn split_password_accepts_a_socket_url_without_a_host() {
+    let url = SecretUrl::new("postgresql:///yog_sothoth?host=/var/run/postgresql");
+    let (without, password) = url.split_password().unwrap();
+    assert_eq!(
+        without,
+        "postgresql:///yog_sothoth?host=/var/run/postgresql"
+    );
+    assert!(password.is_none());
+}
+
+#[test]
+fn split_password_refuses_what_is_not_a_url() {
+    assert!(
+        SecretUrl::new("not a url with s3cret inside")
+            .split_password()
+            .is_none()
+    );
+}

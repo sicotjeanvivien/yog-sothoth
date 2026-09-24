@@ -86,7 +86,7 @@ impl PgTools {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         if let Some(password) = &connection.password {
-            command.env("PGPASSWORD", password);
+            command.env("PGPASSWORD", password.expose());
         }
         let mut child = command.spawn().map_err(|source| BackupError::Spawn {
             program: self.pg_dump.display().to_string(),

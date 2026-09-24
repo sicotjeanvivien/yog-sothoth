@@ -121,11 +121,12 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          twice",
     ),
     (
-        "crates/persistence/src/backup/connection.rs",
+        "crates/persistence/src/backup/pg_dump.rs",
         1,
-        "the URL is parsed on this line to split the password out of what \
-         `pg_dump` receives as an argument (readable in `/proc/<pid>/cmdline`) \
-         and into `PGPASSWORD`; no string built from it reaches a log",
+        "the process environment owns the password — it is the argument of \
+         `command.env(\"PGPASSWORD\", …)`, which `pg_dump` reads; the URL it \
+         receives as an argument (readable in `/proc/<pid>/cmdline`) comes \
+         from `SecretUrl::split_password` and holds none",
     ),
     (
         "crates/persistence/src/bin/migrate.rs",

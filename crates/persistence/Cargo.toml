@@ -58,10 +58,6 @@ dotenvy = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 
-# Backup: the connection string split for `pg_dump` (`backup::DumpConnection`)
-url = { workspace = true }
-percent-encoding = { workspace = true }
-
 [dev-dependencies]
 # `SecretUrl::for_tests`, reachable from tests only — see yog-bootstrap's
 # Cargo.toml for why it is a dev-dependency feature.

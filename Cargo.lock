@@ -6459,11 +6459,13 @@ name = "yog-bootstrap"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "percent-encoding",
  "rustls",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -6554,7 +6556,6 @@ dependencies = [
  "bigdecimal",
  "chrono",
  "dotenvy",
- "percent-encoding",
  "rust_decimal",
  "solana-pubkey 4.1.0",
  "solana-signature",
@@ -6563,7 +6564,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "url",
  "yog-bootstrap",
  "yog-core",
 ]
