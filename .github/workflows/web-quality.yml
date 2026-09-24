@@ -9,10 +9,16 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      # Read by src/lib/config/__tests__/compose-env.test.ts: a change to the
+      # compose alone must still run the test that watches it.
+      - "docker-compose.yml"
       - ".github/workflows/web-quality.yml"
   pull_request:
     paths:
       - "web/**"
+      # Read by src/lib/config/__tests__/compose-env.test.ts: a change to the
+      # compose alone must still run the test that watches it.
+      - "docker-compose.yml"
       - ".github/workflows/web-quality.yml"
 
 # Cancel any in-flight run for the same ref when a new commit lands.

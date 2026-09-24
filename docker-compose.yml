@@ -19,8 +19,11 @@
 #       at the containerised API on its host port.
 #
 #   docker compose --profile full up -d
-#       The whole stack including yog-web. Useful for end-to-end
-#       validation, or as a rehearsal of the deployment shape.
+#       The whole stack including yog-web, in its DEV shape: scheduler
+#       off, ports published on every interface, default password.
+#       Useful for end-to-end validation. It is not the deployment
+#       shape — that is this file plus docker-compose.prod.yml, whose
+#       header says why it has to be an overlay and not a profile.
 #
 # yog-migrate
 # -----------
@@ -324,11 +327,19 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        # The URL the BROWSER calls, so the host-side one. A build argument,
+        # not an environment entry: Next.js writes it into the client bundle
+        # at build time and never reads it again (see web/Dockerfile).
+        NEXT_PUBLIC_YOG_API_URL: ${NEXT_PUBLIC_YOG_API_URL:-http://localhost:5000}
     environment:
       NODE_ENV: production
-      # The browser talks to localhost:5000; SSR inside the container
-      # talks to the api service over the compose network.
-      API_INTERNAL_URL: http://yog-api:5000
+      # The URL Server Components call, inside the compose network. The name
+      # is the one web/src/lib/config/server-env.schema.ts reads — a test
+      # (web/src/lib/config/__tests__/compose-env.test.ts) runs that schema
+      # against this block, because a wrong name here is a 500 on every data
+      # page and nothing else.
+      YOG_API_INTERNAL_URL: http://yog-api:5000
     ports:
       - "3000:3000"
     depends_on:

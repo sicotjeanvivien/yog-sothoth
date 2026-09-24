@@ -39,6 +39,7 @@
     "postcss": "8.*",
     "tailwindcss": "^4.*",
     "typescript": "6.*",
-    "vitest": "4.*"
+    "vitest": "4.*",
+    "yaml": "2.*"
   }
 }

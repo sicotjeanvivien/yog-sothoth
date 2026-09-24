@@ -1,0 +1,171 @@
+# docker-compose.prod.yml — the production shape, as an overlay.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d --build
+#
+# `--build` is not optional after a code change: compose builds an image only
+# when none exists yet, and the dashboard's API URL is written into the web
+# image at build time. yog-web below has its own image name, so an image
+# built from the base file alone (with http://localhost:5000 baked in) is
+# never reused here.
+#
+# On the server, put the two selectors in its .env and the command shrinks
+# back to `docker compose up -d --build`:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+#   COMPOSE_PROFILES=full
+#
+# Why an overlay and not a `prod` profile
+# ---------------------------------------
+# A profile only chooses WHICH services start; it cannot change a single
+# setting of a service. Everything that separates production from dev is a
+# setting of a service that already exists — the TimescaleDB scheduler, the
+# published ports, the Postgres password. A `prod` profile would start the
+# same services with the dev settings: open ports, scheduler off, password
+# `yog`.
+#
+# And one difference cannot live in a single file at all: docker-compose.yml
+# must keep `timescaledb.max_background_workers=0`, which the DB-backed
+# integration tests depend on (its comment says why), while production must
+# run the scheduler — without it nothing is compressed, nothing is dropped
+# by retention, and no continuous aggregate is materialized, with no error.
+#
+# Requirements
+# ------------
+# - Compose >= 2.24 for `!reset`. Compose MERGES list fields such as `ports`
+#   across files: without `!reset`, every port published by the base file
+#   would stay published here.
+# - Images are still built in place (`build:` from the base file). Pulling
+#   them from a registry belongs with the deployment pipeline, not here.
+#
+# Variables this file requires (each refuses the command when unset):
+#   POSTGRES_PASSWORD  the admin password of the Postgres container
+#   YOG_WEB_DOMAIN     the dashboard's host name, e.g. yog-scope.xyz
+#   YOG_API_DOMAIN     the API's host name, e.g. api.yog-scope.xyz
+# The CORS origin and the browser's API URL are derived from the two domains
+# rather than set separately: three values that must agree are one value.
+#
+# Memory
+# ------
+# Every service has a `mem_limit`. The machine is shared with other projects,
+# and without limits the first service to grow gets Postgres killed by the
+# OOM killer. The binaries' limits are about 4x to 8x their measured peaks
+# (September 2026: web 62 MiB under HTTP load, indexer 7.7, context 9.9,
+# api 6.3, signals 4.7). The limits add up to 1216 MiB.
+#
+# Postgres's memory and connection settings are written here, not left to
+# `timescaledb-tune`. The image runs it once, when the volume is created, and
+# sizes everything from whatever memory it sees at that moment: the cgroup
+# limit when there is one, the host's RAM when there is not. Neither is safe
+# to inherit:
+#   - a volume first created WITHOUT this overlay (the base file alone, before
+#     COMPOSE_FILE is set on the server) is tuned to the host, and its
+#     maintenance_work_mem alone can exceed this container's limit;
+#   - a volume created WITH it is tuned to 832 MB, which gives
+#     max_connections = 25 (measured on 2.27.1-pg16, September 2026). The four
+#     daemons hold pools of ten connections each, so under load the pools
+#     would be refused "too many clients".
+# Command-line `-c` settings override postgresql.conf, so these hold whichever
+# way the volume was created. 256MB of shared_buffers inside 832M leaves room
+# for 50 connections at 4MB of work_mem each and for the compression jobs'
+# 64MB of maintenance_work_mem. These are starting values, to be revised
+# against measurements in production.
+
+services:
+  postgres:
+    # A versioned tag, not the base file's `latest-pg16`, which pins only the
+    # Postgres major. A dump restores only into the SAME TimescaleDB version
+    # (crates/persistence/README.md, "Backup and restore"), so a `pull` that
+    # silently moved the version would strand every dump taken before it.
+    # Upgrading is a decision: change this line, then take a fresh dump.
+    # 2.27.1-pg16 is the image the restore procedure was proven on.
+    image: timescale/timescaledb:2.27.1-pg16
+    command:
+      - postgres
+      - -c
+      - timescaledb.max_background_workers=8
+      # TimescaleDB reports usage statistics to its vendor once a day by
+      # default (the `policy_telemetry` job). Off: production data leaves
+      # this machine only by our choice.
+      - -c
+      - timescaledb.telemetry_level=off
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
+    environment:
+      # Read by the image only when it creates the data directory. On a volume
+      # that already exists, this check passes and the admin password is
+      # still whatever it was created with: change it with
+      # `ALTER ROLE yog PASSWORD …` (as `\password` in psql), or recreate the
+      # volume.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in the server's .env — production has no default password}
+    ports: !reset []
+    mem_limit: 832m
+    # The base file has no restart policy for Postgres. In production the
+    # database must come back on its own after the host reboots, or every
+    # daemon restarts in a loop against a host name that does not resolve.
+    restart: unless-stopped
+
+  yog-migrate:
+    mem_limit: 32m
+
+  yog-indexer:
+    ports: !reset []
+    mem_limit: 64m
+
+  yog-api:
+    environment:
+      API_CORS_ALLOWED_ORIGINS: https://${YOG_WEB_DOMAIN:?set it in the server's .env (e.g. yog-scope.xyz)}
+    ports: !reset []
+    mem_limit: 32m
+
+  yog-context:
+    ports: !reset []
+    mem_limit: 32m
+
+  yog-signals:
+    ports: !reset []
+    mem_limit: 32m
+
+  yog-web:
+    # Not the base file's implicit name: see the header, on `--build`.
+    image: yog-sothoth-web:prod
+    build:
+      args:
+        NEXT_PUBLIC_YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
+    ports: !reset []
+    mem_limit: 128m
+
+  # The only service that publishes a port. The browser calls the API
+  # directly, so Caddy serves two sites: the dashboard and the API.
+  caddy:
+    profiles: ["full"]
+    image: caddy:2-alpine
+    environment:
+      YOG_WEB_DOMAIN: ${YOG_WEB_DOMAIN:?set it in the server's .env (e.g. yog-scope.xyz)}
+      YOG_API_DOMAIN: ${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account: losing them means re-issuing, and
+      # Let's Encrypt rate-limits re-issuance.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - yog-web
+      - yog-api
+    mem_limit: 64m
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

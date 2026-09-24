@@ -29,6 +29,19 @@ COPY . .
 # any outbound network call during image build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# The browser's API URL is written into the client bundle BY `next build`:
+# Next.js replaces each `process.env.NEXT_PUBLIC_*` read with its literal
+# value, so a value given at `docker run` time arrives after the only moment
+# it is read. It must therefore come in as a build argument.
+#
+# No default, and an empty one stops the build: without it the image still
+# builds, and every page that calls the API from the browser fails at load
+# on the client-env schema — an error nobody sees until a user does.
+ARG NEXT_PUBLIC_YOG_API_URL
+RUN test -n "$NEXT_PUBLIC_YOG_API_URL" \
+  || { echo "NEXT_PUBLIC_YOG_API_URL is empty: pass it with --build-arg (it is fixed at build time)" >&2; exit 1; }
+ENV NEXT_PUBLIC_YOG_API_URL=$NEXT_PUBLIC_YOG_API_URL
+
 RUN npm run build
 
 # ---- Stage 3: runner ----
