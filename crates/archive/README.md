@@ -17,9 +17,12 @@ For the workspace-level picture, see [`crates/README.md`](../README.md).
 
 ```
 archive/src/
-├── main.rs            ← bootstrap: tracing → Config → /metrics → Daemon → run
+├── main.rs            ← bootstrap: tracing → Config → init_metrics → Daemon →
+│                         shutdown token → run
 ├── bootstrap/
 │   ├── config.rs      ← Config::load (every ARCHIVE_* variable)
+│   ├── config/types/
+│   │   └── store_config.rs ← StoreConfig::load (the ARCHIVE_STORE_* variables)
 │   └── daemon.rs      ← builds the store, the heartbeat and the archiver, runs
 │                         one dump every interval
 ├── archiver.rs        ← one run, ending in a RunOutcome that decides the signal

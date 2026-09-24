@@ -20,7 +20,10 @@ mod bootstrap;
 mod infra;
 mod metrics;
 
+use std::net::SocketAddr;
+
 use metrics_exporter_prometheus::PrometheusBuilder;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -33,17 +36,38 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to load configuration"))?;
     info!("configuration loaded");
 
-    PrometheusBuilder::new()
-        .with_http_listener(config.metrics_addr)
-        .install()
-        .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))
+    init_metrics(config.metrics_addr)
         .inspect_err(|e| error!(error = %e, "failed to install metrics exporter"))?;
-    metrics::register_descriptions();
 
     let daemon = bootstrap::Daemon::new(config)
         .await
         .inspect_err(|e| error!(error = %e, "failed to initialize the archiver"))?;
     info!("archiver initialized");
 
-    daemon.run().await
+    // SIGTERM or Ctrl-C cancels the token; `Daemon::run` stops between two
+    // dumps, or kills the one in progress. `shutdown_signal` listens for both:
+    // under `docker compose stop` this process is PID 1, and SIGTERM is the
+    // signal that arrives.
+    let token = CancellationToken::new();
+    let shutdown_token = token.clone();
+    tokio::spawn(async move {
+        yog_bootstrap::shutdown_signal().await;
+        shutdown_token.cancel();
+    });
+
+    daemon.run(token).await
+}
+
+/// Install the Prometheus exporter as the global `metrics` recorder, on the
+/// configured address, and describe the archiver's metrics.
+///
+/// Must run before any metric is emitted, in particular before
+/// `Daemon::new`, which can signal a misconfigured bucket.
+fn init_metrics(addr: SocketAddr) -> anyhow::Result<()> {
+    PrometheusBuilder::new()
+        .with_http_listener(addr)
+        .install()
+        .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))?;
+    metrics::register_descriptions();
+    Ok(())
 }

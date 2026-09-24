@@ -70,7 +70,10 @@ pub fn required_secret_key(key: &str) -> Result<SecretKey, ConfigError> {
 /// what "set" means — that disagreement is what would let an empty `_KEY` slip
 /// past [`required_endpoint`]'s guard as if the operator had chosen not to
 /// have one.
-fn optional(key: &str) -> Option<String> {
+///
+/// For a value that is not a secret; a secret goes through
+/// [`required_secret_url`] or [`required_secret_key`], so that it is wrapped.
+pub fn optional(key: &str) -> Option<String> {
     match env::var(key).map(|v| v.trim().to_string()) {
         Ok(v) if !v.is_empty() => Some(v),
         _ => None,

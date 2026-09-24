@@ -8,7 +8,7 @@ use chrono::Utc;
 use object_store::aws::AmazonS3Builder;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
-use yog_bootstrap::{SHUTDOWN_GRACE, shutdown_signal};
+use yog_bootstrap::SHUTDOWN_GRACE;
 use yog_persistence::PgTools;
 
 use crate::{
@@ -54,19 +54,12 @@ impl Daemon {
         })
     }
 
-    /// Dump now, then every interval, until SIGTERM or Ctrl-C.
+    /// Dump now, then every interval, until `shutdown` is cancelled.
     ///
     /// A stop arriving mid-dump kills `pg_dump` and aborts the upload; if
     /// that takes longer than [`SHUTDOWN_GRACE`], the process leaves anyway
     /// and the bucket's lifecycle rule removes the incomplete upload.
-    pub(crate) async fn run(self) -> anyhow::Result<()> {
-        let shutdown = CancellationToken::new();
-        let signal = shutdown.clone();
-        tokio::spawn(async move {
-            shutdown_signal().await;
-            signal.cancel();
-        });
-
+    pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         loop {
             let started = Instant::now();
             let run = self.archiver.run(Utc::now(), &shutdown);

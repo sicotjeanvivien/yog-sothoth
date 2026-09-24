@@ -7,10 +7,11 @@
 
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
-use yog_bootstrap::{
-    ConfigError, SecretKey, SecretUrl, duration_var, required, required_secret_key,
-    required_secret_url,
-};
+use yog_bootstrap::{ConfigError, SecretUrl, duration_var, optional, required_secret_url};
+
+mod types;
+
+pub(crate) use types::StoreConfig;
 
 /// Six hours between dumps: the largest hole the history can take when the
 /// database is lost, since the indexer cannot re-ingest the past.
@@ -54,20 +55,6 @@ pub(crate) struct Config {
     pub(crate) pg_restore: PathBuf,
 }
 
-/// An S3-compatible bucket and the credentials that may write to it.
-#[derive(Debug)]
-pub(crate) struct StoreConfig {
-    /// The endpoint, e.g. `https://s3.fr-par.scw.cloud`. Plain `http://` is
-    /// accepted for a local MinIO.
-    pub(crate) url: String,
-    pub(crate) bucket: String,
-    pub(crate) region: String,
-    /// Access key id and secret. The key is meant to be **write-only**: a
-    /// compromised server must not be able to delete the backups.
-    pub(crate) access_key: SecretKey,
-    pub(crate) secret_key: SecretKey,
-}
-
 impl Config {
     pub(crate) fn load() -> Result<Self, ConfigError> {
         Ok(Self {
@@ -76,32 +63,19 @@ impl Config {
                 "ARCHIVE_INTERVAL_SECS",
                 DEFAULT_INTERVAL_SECS,
             )?)?,
-            store: StoreConfig {
-                url: required("ARCHIVE_STORE_URL")?,
-                bucket: required("ARCHIVE_STORE_BUCKET")?,
-                region: required("ARCHIVE_STORE_REGION")?,
-                access_key: required_secret_key("ARCHIVE_STORE_ACCESS_KEY")?,
-                secret_key: required_secret_key("ARCHIVE_STORE_SECRET_KEY")?,
-            },
+            store: StoreConfig::load()?,
             heartbeat_url: required_secret_url("ARCHIVE_HEARTBEAT_URL")?,
             metrics_addr: metrics_addr()?,
-            pg_dump: optional("ARCHIVE_PG_DUMP")
-                .unwrap_or_else(|| "pg_dump".into())
-                .into(),
-            pg_restore: optional("ARCHIVE_PG_RESTORE")
-                .unwrap_or_else(|| "pg_restore".into())
-                .into(),
+            pg_dump: program("ARCHIVE_PG_DUMP", "pg_dump"),
+            pg_restore: program("ARCHIVE_PG_RESTORE", "pg_restore"),
         })
     }
 }
 
-/// An optional variable, trimmed, with a blank value read as absent — the
-/// rule `yog_bootstrap::required` applies, minus the refusal.
-fn optional(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
+/// A client program: the variable when set, the plain name resolved on
+/// `PATH` otherwise.
+fn program(key: &str, default: &str) -> PathBuf {
+    optional(key).unwrap_or_else(|| default.to_string()).into()
 }
 
 fn interval(secs: u64) -> Result<Duration, ConfigError> {
