@@ -1,9 +1,15 @@
 # docker-compose.prod.yml — the production shape, as an overlay.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d --build
+#
+# `--build` is not optional after a code change: compose builds an image only
+# when none exists yet, and the dashboard's API URL is written into the web
+# image at build time. yog-web below has its own image name, so an image
+# built from the base file alone (with http://localhost:5000 baked in) is
+# never reused here.
 #
 # On the server, put the two selectors in its .env and the command shrinks
-# back to `docker compose up -d`:
+# back to `docker compose up -d --build`:
 #
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 #   COMPOSE_PROFILES=full
@@ -93,6 +99,11 @@ services:
       - -c
       - max_connections=50
     environment:
+      # Read by the image only when it creates the data directory. On a volume
+      # that already exists, this check passes and the admin password is
+      # still whatever it was created with: change it with
+      # `ALTER ROLE yog PASSWORD …` (as `\password` in psql), or recreate the
+      # volume.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in the server's .env — production has no default password}
     ports: !reset []
     mem_limit: 832m
@@ -123,6 +134,8 @@ services:
     mem_limit: 32m
 
   yog-web:
+    # Not the base file's implicit name: see the header, on `--build`.
+    image: yog-sothoth-web:prod
     build:
       args:
         NEXT_PUBLIC_YOG_API_URL: https://${YOG_API_DOMAIN:?set it in the server's .env (e.g. api.yog-scope.xyz)}

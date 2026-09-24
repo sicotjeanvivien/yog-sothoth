@@ -428,7 +428,9 @@ The two URLs arrive at different moments, and that is not a choice:
 
 `docker-compose.yml` passes both — the build argument defaults to
 `http://localhost:5000`, and in production `docker-compose.prod.yml`
-derives it from `YOG_API_DOMAIN`. `src/lib/config/__tests__/compose-env.test.ts`
+derives it from `YOG_API_DOMAIN`, under its own image name so that a dev
+image is never reused (rebuild with `up -d --build` after every change).
+`src/lib/config/__tests__/compose-env.test.ts`
 runs the server schema on the compose's values, and checks every build
 argument the compose passes is declared in the Dockerfile.
 
