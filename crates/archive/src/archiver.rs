@@ -31,24 +31,18 @@ const PART_SIZE: usize = 8 * 1024 * 1024;
 /// the upload holds at most ~24 MiB (two in flight, one filling).
 const PARTS_IN_FLIGHT: usize = 2;
 
-/// How a run ended. Every variant but `Archived` and `Cancelled` carries the
-/// reason sent with the failure signal.
+/// How a run ended: a dump in the bucket, a stop, or a failure. Three
+/// cases, and every `match` on it — the signal, the log, the metrics — has
+/// exactly these three arms and no catch-all.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RunOutcome {
     /// A dump is in the bucket under `key`.
     Archived { key: String, bytes: u64 },
-    /// No dump was attempted: the versions could not be read, or `pg_dump`
-    /// is not the server's major.
-    Refused(String),
-    /// `pg_dump` could not start, failed, or its output could not be read.
-    DumpFailed(String),
-    /// `pg_dump` succeeded but `pg_restore` cannot read what it produced.
-    Unreadable(String),
-    /// The bucket refused the upload, or its completion.
-    StoreFailed(String),
     /// The process is stopping. Not a failure, and not signalled: the next
     /// start dumps at once.
     Cancelled,
+    /// Signalled, with its reason.
+    Failed(RunFailure),
 }
 
 impl RunOutcome {
@@ -56,12 +50,67 @@ impl RunOutcome {
     pub(crate) fn label(&self) -> &'static str {
         match self {
             Self::Archived { .. } => "archived",
-            Self::Refused(_) => "refused",
-            Self::DumpFailed(_) => "dump_failed",
-            Self::Unreadable(_) => "unreadable",
-            Self::StoreFailed(_) => "store_failed",
             Self::Cancelled => "cancelled",
+            Self::Failed(failure) => failure.kind.label(),
         }
+    }
+}
+
+/// Why a run failed: the kind names it, the reason says what happened.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RunFailure {
+    pub(crate) kind: FailureKind,
+    pub(crate) reason: String,
+}
+
+/// Where a run failed. A new kind is signalled as a failure without anything
+/// else to decide — which is the right default for a backup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FailureKind {
+    /// No dump was attempted: the versions could not be read, or `pg_dump`
+    /// is not the server's major.
+    Refused,
+    /// `pg_dump` could not start, failed, or its output could not be read.
+    DumpFailed,
+    /// `pg_dump` succeeded but `pg_restore` cannot read what it produced.
+    Unreadable,
+    /// The bucket refused the upload, one of its parts, or its completion.
+    StoreFailed,
+}
+
+impl FailureKind {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Refused => "refused",
+            Self::DumpFailed => "dump_failed",
+            Self::Unreadable => "unreadable",
+            Self::StoreFailed => "store_failed",
+        }
+    }
+}
+
+impl RunFailure {
+    fn new(kind: FailureKind, reason: impl std::fmt::Display) -> Self {
+        Self {
+            kind,
+            reason: reason.to_string(),
+        }
+    }
+
+    pub(crate) fn refused(reason: impl std::fmt::Display) -> Self {
+        Self::new(FailureKind::Refused, reason)
+    }
+
+    pub(crate) fn dump_failed(reason: impl std::fmt::Display) -> Self {
+        Self::new(FailureKind::DumpFailed, reason)
+    }
+
+    pub(crate) fn unreadable(reason: impl std::fmt::Display) -> Self {
+        Self::new(FailureKind::Unreadable, reason)
+    }
+
+    pub(crate) fn store_failed(reason: impl std::fmt::Display) -> Self {
+        Self::new(FailureKind::StoreFailed, reason)
     }
 }
 
@@ -92,12 +141,9 @@ impl Archiver {
         match &outcome {
             RunOutcome::Archived { .. } => self.heartbeat.success().await,
             RunOutcome::Cancelled => {}
-            RunOutcome::Refused(reason)
-            | RunOutcome::DumpFailed(reason)
-            | RunOutcome::Unreadable(reason)
-            | RunOutcome::StoreFailed(reason) => {
+            RunOutcome::Failed(failure) => {
                 self.heartbeat
-                    .failure(&format!("{}: {reason}", outcome.label()))
+                    .failure(&format!("{}: {}", failure.kind.label(), failure.reason))
                     .await;
             }
         }
@@ -108,11 +154,13 @@ impl Archiver {
         let versions = match self.versions.server_versions().await {
             Ok(versions) => versions,
             Err(e) => {
-                return RunOutcome::Refused(format!("cannot read the server's versions: {e}"));
+                return RunOutcome::Failed(RunFailure::refused(format!(
+                    "cannot read the server's versions: {e}"
+                )));
             }
         };
         if let Err(e) = self.tools.ensure_matches(&versions).await {
-            return RunOutcome::Refused(e.to_string());
+            return RunOutcome::Failed(RunFailure::refused(e.to_string()));
         }
 
         let key = object_key(now, &versions.timescaledb);
@@ -135,7 +183,11 @@ impl Archiver {
             .await
         {
             Ok(upload) => upload,
-            Err(e) => return RunOutcome::StoreFailed(format!("cannot start the upload: {e}")),
+            Err(e) => {
+                return RunOutcome::Failed(RunFailure::store_failed(format!(
+                    "cannot start the upload: {e}"
+                )));
+            }
         };
         let mut writer = WriteMultipart::new_with_chunk_size(upload, PART_SIZE);
 
@@ -145,14 +197,14 @@ impl Archiver {
             Ok(dump) => dump,
             Err(e) => {
                 abort(writer).await;
-                return RunOutcome::DumpFailed(e.to_string());
+                return RunOutcome::Failed(RunFailure::dump_failed(e.to_string()));
             }
         };
         let mut check = match self.tools.start_check() {
             Ok(check) => check,
             Err(e) => {
                 abandon(writer, dump).await;
-                return RunOutcome::Unreadable(e.to_string());
+                return RunOutcome::Failed(RunFailure::unreadable(e.to_string()));
             }
         };
 
@@ -173,13 +225,15 @@ impl Archiver {
                 Ok(n) => n,
                 Err(e) => {
                     abandon(writer, (dump, check)).await;
-                    return RunOutcome::DumpFailed(e.to_string());
+                    return RunOutcome::Failed(RunFailure::dump_failed(e.to_string()));
                 }
             };
             check.feed(&buf[..n]).await;
             if let Err(e) = writer.wait_for_capacity(PARTS_IN_FLIGHT).await {
                 abandon(writer, (dump, check)).await;
-                return RunOutcome::StoreFailed(format!("a part was refused: {e}"));
+                return RunOutcome::Failed(RunFailure::store_failed(format!(
+                    "a part was refused: {e}"
+                )));
             }
             writer.write(&buf[..n]);
             bytes += n as u64;
@@ -198,17 +252,19 @@ impl Archiver {
         };
         if let Err(e) = finished {
             abandon(writer, check).await;
-            return RunOutcome::DumpFailed(e.to_string());
+            return RunOutcome::Failed(RunFailure::dump_failed(e.to_string()));
         }
 
         if let Err(e) = check.finish().await {
             abort(writer).await;
-            return RunOutcome::Unreadable(e.to_string());
+            return RunOutcome::Failed(RunFailure::unreadable(e.to_string()));
         }
 
         match writer.finish().await {
             Ok(_) => RunOutcome::Archived { key, bytes },
-            Err(e) => RunOutcome::StoreFailed(format!("cannot complete the upload: {e}")),
+            Err(e) => RunOutcome::Failed(RunFailure::store_failed(format!(
+                "cannot complete the upload: {e}"
+            ))),
         }
     }
 }

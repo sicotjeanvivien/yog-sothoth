@@ -112,13 +112,12 @@ fn log_outcome(outcome: &RunOutcome, elapsed: std::time::Duration) {
             info!(key, bytes, secs, "dump archived");
         }
         RunOutcome::Cancelled => info!(secs, "run cancelled by the stop"),
-        RunOutcome::Refused(reason)
-        | RunOutcome::DumpFailed(reason)
-        | RunOutcome::Unreadable(reason)
-        | RunOutcome::StoreFailed(reason) => {
+        RunOutcome::Failed(failure) => {
             error!(
-                outcome = outcome.label(),
-                reason, secs, "archiving run failed"
+                outcome = failure.kind.label(),
+                reason = failure.reason,
+                secs,
+                "archiving run failed"
             );
         }
     }
