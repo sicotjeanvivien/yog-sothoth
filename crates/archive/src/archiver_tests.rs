@@ -289,10 +289,7 @@ async fn run_full(
         versions: Arc::new(versions),
         store: Arc::clone(&store),
         heartbeat: heartbeat.clone(),
-        tools: PgTools {
-            pg_dump,
-            pg_restore,
-        },
+        tools: PgTools::new(pg_dump, pg_restore),
         database_url: yog_bootstrap::SecretUrl::for_tests(database_url),
     };
     let now = Utc.with_ymd_and_hms(2026, 9, 23, 6, 0, 0).unwrap();
@@ -559,12 +556,6 @@ async fn a_database_url_pg_dump_cannot_use_is_refused_and_signalled() {
     )
     .await;
 
-    assert_failed(
-        &run,
-        "refused",
-        "DATABASE_URL_ARCHIVE is not a valid URL",
-        0,
-    )
-    .await;
+    assert_failed(&run, "refused", "the database URL is not a valid URL", 0).await;
     assert_eq!(fakes.read("args"), None);
 }

@@ -34,17 +34,9 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/archive/src/bootstrap/daemon.rs",
-        3,
-        "sqlx owns the pool — the URL is the argument of `Database::connect`; \
-         and object_store owns the S3 signing — the access key id and the \
-         secret are the arguments of `AmazonS3Builder`'s two setters",
-    ),
-    (
-        "crates/archive/src/infra/dump.rs",
-        1,
-        "the URL is parsed on this line to split the password out of what \
-         `pg_dump` receives as an argument (readable in `/proc/<pid>/cmdline`) \
-         and into `PGPASSWORD`; no string built from it reaches a log",
+        2,
+        "object_store owns the S3 signing — the access key id and the secret \
+         are the arguments of `AmazonS3Builder`'s two setters",
     ),
     (
         "crates/archive/src/infra/heartbeat.rs",
@@ -120,6 +112,20 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          two variables — `INGEST_TRANSACTION` and `NETWORK_STATUS` — and may \
          point at two providers, so this list covers two addresses, not one \
          twice",
+    ),
+    (
+        "crates/persistence/src/backup/connection.rs",
+        1,
+        "the URL is parsed on this line to split the password out of what \
+         `pg_dump` receives as an argument (readable in `/proc/<pid>/cmdline`) \
+         and into `PGPASSWORD`; no string built from it reaches a log",
+    ),
+    (
+        "crates/persistence/src/backup/database_info.rs",
+        1,
+        "sqlx owns the pool — the URL is the argument of `Database::connect`, \
+         for the one-off connection of `server_versions_once`; its refusal \
+         goes back through `SecretUrl::scrub`",
     ),
     (
         "crates/persistence/src/bin/migrate.rs",

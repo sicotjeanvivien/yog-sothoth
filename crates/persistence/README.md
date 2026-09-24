@@ -19,6 +19,8 @@ persistence/
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── .sqlx/                   ← committed offline query cache (see below)
 ├── src/
+│   ├── backup/              ← the dump side: PgDatabaseInfo (the server's versions),
+│   │                          PgTools / PgDump (pg_dump), ReadabilityCheck (pg_restore)
 │   ├── database.rs          ← Database::connect, run_migrations, run_script
 │   ├── health.rs            ← PgHealthChecker
 │   ├── repositories/        ← one impl per domain repository trait
@@ -640,6 +642,22 @@ restored copy matched the source on every table's row count, every aggregate's
 row count, the chunks, the jobs, the compression settings and the migration
 checksums. A deleted row in the copy made the comparison fail by name, so the
 check can fail. The dump took 15 s and weighed 164 MB; the restore took 65 s.
+
+### The `backup` module
+
+What `yog-archive` runs lives here, because it is knowledge of this database:
+the server's versions (`PgDatabaseInfo`), how `pg_dump` must be called and
+whether its major matches the server's (`PgTools`), and what `pg_restore`
+checks (`ReadabilityCheck`). It is the crate's **second way of reaching
+Postgres**: everything else goes through a `sqlx` pool, a dump goes through the
+client programs run as subprocesses, which must be installed where the caller
+runs (the `yog-archive` image carries them).
+
+The public surface shows no process. A dump is a `PgDump` read chunk by chunk;
+**dropping it kills `pg_dump`**, which is how a caller gives up on one and why
+no path can leave one running (`dropping_a_dump_kills_pg_dump`, seen failing
+with `kill_on_drop` removed). Every step documents the `BackupError` variants
+it can return; what each means for a run is the caller's decision.
 
 ### What a dump does not carry
 

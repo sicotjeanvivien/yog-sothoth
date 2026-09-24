@@ -26,7 +26,7 @@ The same principles guide every crate. They are not aspirational — the code is
 ```
 crates/
 ├── core/          ← shared library: domain types, AMM math, protocol extraction
-├── persistence/   ← Postgres adapter: repository impls, migrations, yog-migrate
+├── persistence/   ← Postgres adapter: repository impls, migrations, yog-migrate, backup
 ├── bootstrap/     ← shared startup utilities: env helpers, secret types,
 │                   init_rustls/tracing — and the shared stop (shutdown.rs)
 ├── indexer/       ← binary: Solana RPC ingestion → DB

@@ -10,14 +10,17 @@
 //! different Postgres roles (least privilege), while sharing the same SQL
 //! and schema definitions.
 
+mod backup;
 mod database;
-mod database_info;
 mod error;
 mod health;
 mod repositories;
 
+pub use backup::{
+    DumpConnection, PgDatabaseInfo, PgDump, PgTools, ReadabilityCheck, ServerVersions,
+};
 pub use database::Database;
-pub use database_info::{PgDatabaseInfo, ServerVersions};
+pub use error::BackupError;
 pub use health::{HealthError, PgHealthChecker};
 pub use repositories::{
     PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,

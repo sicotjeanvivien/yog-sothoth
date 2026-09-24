@@ -5,18 +5,16 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-# Workspace crates. `yog-persistence` only for the connection pool and
-# `PgDatabaseInfo` — the dump itself is `pg_dump`'s, not SQL of ours.
-yog-core = { path = "../core" }
+# Workspace crates. `yog-persistence` holds everything that reaches
+# Postgres — the versions, `pg_dump`, `pg_restore` (its `backup` module).
 yog-persistence = { path = "../persistence" }
 yog-bootstrap = { path = "../bootstrap" }
 
-# Async runtime — `process` and `io-util` come with "full".
+# Async runtime
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 
 # Errors / logging / config
-thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 dotenvy = { workspace = true }
@@ -26,11 +24,10 @@ async-trait = { workspace = true }
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
 
-# Storage, heartbeat, connection string
+# Storage, heartbeat
 object_store = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
-percent-encoding = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]

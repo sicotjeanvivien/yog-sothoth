@@ -20,14 +20,20 @@ archive/src/
 ├── main.rs            ← bootstrap: tracing → Config → /metrics → Daemon → run
 ├── bootstrap/
 │   ├── config.rs      ← Config::load (every ARCHIVE_* variable)
-│   └── daemon.rs      ← builds the store and the heartbeat, runs every interval,
-│                         and connects to the database for each run
+│   └── daemon.rs      ← builds the store, the heartbeat and the archiver, runs
+│                         one dump every interval
 ├── archiver.rs        ← one run, ending in a RunOutcome that decides the signal
 ├── infra/             ← what a run calls outside the process
-│   ├── dump.rs        ← pg_dump / pg_restore as subprocesses, the password split out
-│   └── heartbeat.rs   ← Healthchecks.io: success, or /fail with the reason
+│   ├── heartbeat.rs   ← Healthchecks.io: success, or /fail with the reason
+│   └── versions.rs    ← the server's versions, over a connection opened per run
 └── metrics.rs
 ```
+
+`pg_dump`, `pg_restore` and the split of the connection string are not here:
+they are knowledge of the database, and live in `yog-persistence`'s `backup`
+module ([`crates/persistence`](../persistence/README.md#the-backup-module)).
+The archiver drives them: it reads the dump, streams it to the bucket, feeds
+the check, and decides the `RunOutcome`.
 
 ## One run
 
@@ -142,6 +148,7 @@ handled by the same `shutdown_signal`, so the difference is only in the log.
 
 ```bash
 cargo test -p yog-archive                      # DB-free: fake pg_dump / pg_restore, in-memory bucket
+cargo test -p yog-persistence backup           # DB-free: the connection split, the version parse, a dropped dump is killed
 cargo test -p yog-persistence --features integration-tests archive_role   # the role, under SET ROLE
 ```
 

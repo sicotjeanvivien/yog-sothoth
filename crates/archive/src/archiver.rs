@@ -13,13 +13,12 @@ use chrono::{DateTime, Utc};
 use object_store::{
     Attribute, Attributes, ObjectStore, PutMultipartOptions, WriteMultipart, path::Path,
 };
-use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use yog_bootstrap::SecretUrl;
-use yog_persistence::ServerVersions;
+use yog_persistence::{DumpConnection, PgTools, ServerVersions};
 
-use crate::infra::{Connection, Heartbeat, PgTools, read_tail};
+use crate::infra::Heartbeat;
 
 /// Where the dumps sit in the bucket, which may one day hold other projects'.
 const KEY_PREFIX: &str = "yog-sothoth/";
@@ -68,7 +67,7 @@ impl RunOutcome {
 
 /// The server facts a dump depends on. A trait so the tests need no
 /// database; the production implementation connects for each run
-/// (`bootstrap::daemon`), so that a database that refuses ends a run in
+/// (`infra::versions`), so that a database that refuses ends a run in
 /// `refused` — signalled — instead of stopping the process before it can
 /// signal anything.
 #[async_trait]
@@ -113,20 +112,12 @@ impl Archiver {
                 return RunOutcome::Refused(format!("cannot read the server's versions: {e}"));
             }
         };
-        let connection = match Connection::from_secret(&self.database_url) {
+        let connection = match DumpConnection::from_secret(&self.database_url) {
             Ok(connection) => connection,
             Err(e) => return RunOutcome::Refused(e.to_string()),
         };
-        let client_major = match self.tools.pg_dump_major().await {
-            Ok(major) => major,
-            Err(e) => return RunOutcome::Refused(e.to_string()),
-        };
-        if client_major != versions.postgres_major {
-            return RunOutcome::Refused(format!(
-                "pg_dump is PostgreSQL {client_major} and the server is PostgreSQL {}: \
-                 the dump must be taken by the server's major",
-                versions.postgres_major
-            ));
+        if let Err(e) = self.tools.ensure_matches(&versions).await {
+            return RunOutcome::Refused(e.to_string());
         }
 
         let key = object_key(now, &versions.timescaledb);
@@ -153,8 +144,10 @@ impl Archiver {
         };
         let mut writer = WriteMultipart::new_with_chunk_size(upload, PART_SIZE);
 
-        let mut child = match self.tools.spawn_dump(&connection) {
-            Ok(child) => child,
+        // From here, every early return drops `dump` (and `check`), which
+        // kills the program behind it: no path can leave one running.
+        let mut dump = match self.tools.start_dump(&connection) {
+            Ok(dump) => dump,
             Err(e) => {
                 abort(writer).await;
                 return RunOutcome::DumpFailed(e.to_string());
@@ -162,14 +155,11 @@ impl Archiver {
         };
         let mut check = match self.tools.start_check() {
             Ok(check) => check,
-            Err(reason) => {
-                let _ = child.kill().await;
+            Err(e) => {
                 abort(writer).await;
-                return RunOutcome::Unreadable(reason);
+                return RunOutcome::Unreadable(e.to_string());
             }
         };
-        let mut stdout = child.stdout.take().expect("stdout is piped");
-        let stderr = tokio::spawn(read_tail(child.stderr.take().expect("stderr is piped")));
 
         let mut bytes: u64 = 0;
         let mut buf = vec![0u8; 64 * 1024];
@@ -177,24 +167,21 @@ impl Archiver {
             let read = tokio::select! {
                 biased;
                 () = cancel.cancelled() => {
-                    let _ = child.kill().await;
                     abort(writer).await;
                     return RunOutcome::Cancelled;
                 }
-                read = stdout.read(&mut buf) => read,
+                read = dump.read(&mut buf) => read,
             };
             let n = match read {
                 Ok(0) => break,
                 Ok(n) => n,
                 Err(e) => {
-                    let _ = child.kill().await;
                     abort(writer).await;
-                    return RunOutcome::DumpFailed(format!("cannot read pg_dump's output: {e}"));
+                    return RunOutcome::DumpFailed(e.to_string());
                 }
             };
             check.feed(&buf[..n]).await;
             if let Err(e) = writer.wait_for_capacity(PARTS_IN_FLIGHT).await {
-                let _ = child.kill().await;
                 abort(writer).await;
                 return RunOutcome::StoreFailed(format!("a part was refused: {e}"));
             }
@@ -202,31 +189,22 @@ impl Archiver {
             bytes += n as u64;
         }
 
-        let status = tokio::select! {
+        let finished = tokio::select! {
             biased;
             () = cancel.cancelled() => {
-                let _ = child.kill().await;
                 abort(writer).await;
                 return RunOutcome::Cancelled;
             }
-            status = child.wait() => status,
+            finished = dump.finish() => finished,
         };
-        let stderr = stderr.await.unwrap_or_default();
-        match status {
-            Ok(status) if status.success() => {}
-            Ok(status) => {
-                abort(writer).await;
-                return RunOutcome::DumpFailed(format!("pg_dump exited with {status}: {stderr}"));
-            }
-            Err(e) => {
-                abort(writer).await;
-                return RunOutcome::DumpFailed(format!("cannot wait for pg_dump: {e}"));
-            }
+        if let Err(e) = finished {
+            abort(writer).await;
+            return RunOutcome::DumpFailed(e.to_string());
         }
 
-        if let Err(reason) = check.finish().await {
+        if let Err(e) = check.finish().await {
             abort(writer).await;
-            return RunOutcome::Unreadable(reason);
+            return RunOutcome::Unreadable(e.to_string());
         }
 
         match writer.finish().await {

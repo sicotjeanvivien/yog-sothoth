@@ -4,7 +4,7 @@
 //! refuses a server of a newer Postgres major than itself (see the README,
 //! *Backup and restore*). `yog-archive` reads both before every dump: the
 //! TimescaleDB version travels with the dump, and the Postgres major is
-//! compared with its own `pg_dump`'s.
+//! compared with `pg_dump`'s by [`PgTools::ensure_matches`](super::PgTools::ensure_matches).
 //!
 //! Not a repository behind a trait in `yog-core`, for the reason
 //! [`PgHealthChecker`](crate::PgHealthChecker) gives: these are facts about
@@ -13,7 +13,10 @@
 
 use sqlx::PgPool;
 
+use yog_bootstrap::SecretUrl;
 use yog_core::RepositoryError;
+
+use crate::{Database, error::BackupError};
 
 /// Reads version facts about the connected server.
 #[derive(Clone)]
@@ -33,6 +36,21 @@ pub struct ServerVersions {
 impl PgDatabaseInfo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Connect, read the versions, and close the connection.
+    ///
+    /// For a caller that runs rarely and must not hold a pool between runs
+    /// (`yog-archive`, which reads them before each dump and says why it
+    /// connects then rather than at startup). A refusal is reported with the
+    /// database's own words, scrubbed of the URL.
+    pub async fn server_versions_once(url: &SecretUrl) -> Result<ServerVersions, BackupError> {
+        let database = Database::connect(url.expose())
+            .await
+            .map_err(|e| BackupError::Connect(url.scrub(&e.to_string())))?;
+        let versions = Self::new(database.pool().clone()).server_versions().await;
+        database.pool().close().await;
+        Ok(versions?)
     }
 
     /// Read the Postgres major and the installed TimescaleDB version.
