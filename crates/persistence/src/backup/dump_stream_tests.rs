@@ -2,22 +2,7 @@ use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
 
 use yog_bootstrap::SecretUrl;
 
-use super::*;
-
-#[test]
-fn parse_major_reads_the_first_number_after_postgresql() {
-    assert_eq!(parse_major("pg_dump (PostgreSQL) 16.14"), Some(16));
-    assert_eq!(
-        parse_major("pg_dump (PostgreSQL) 16.10 (Debian 16.10-1.pgdg120+1)\n"),
-        Some(16)
-    );
-    assert_eq!(
-        parse_major("pg_dump (PostgreSQL) 14.23 (Ubuntu 14.23-0ubuntu0.22.04.1)"),
-        Some(14)
-    );
-    assert_eq!(parse_major("pg_dump 16.14"), None);
-    assert_eq!(parse_major(""), None);
-}
+use super::super::{DumpConnection, PgTools};
 
 /// Whether `pid` has exited. A killed child stays a zombie until it is
 /// reaped, and a zombie still answers `kill -0`: dead means gone from
@@ -63,7 +48,7 @@ async fn dropping_a_dump_kills_pg_dump() {
     while !has_exited(&pid) {
         assert!(
             tokio::time::Instant::now() < deadline,
-            "pg_dump {pid} still runs 5 s after its PgDump was dropped"
+            "pg_dump {pid} still runs 5 s after its DumpStream was dropped"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }

@@ -8,7 +8,7 @@
 //! TimescaleDB database faithfully. They must be installed where the caller
 //! runs — only `yog-archive` calls this module, and its image carries them.
 //!
-//! The public surface shows no process: a dump is a [`PgDump`] read chunk by
+//! The public surface shows no process: a dump is a [`DumpStream`] read chunk by
 //! chunk, a check is a [`ReadabilityCheck`] fed the same chunks, and giving
 //! up on either is dropping it, which kills the program behind it. What a
 //! failure means for a run — refused, failed, unreadable — is the caller's
@@ -16,12 +16,14 @@
 //! documents.
 
 mod connection;
-mod pg_dump;
-mod pg_restore;
+mod dump_stream;
+mod pg_tools;
+mod readability_check;
 
 pub use connection::DumpConnection;
-pub use pg_dump::{PgDump, PgTools};
-pub use pg_restore::ReadabilityCheck;
+pub use dump_stream::DumpStream;
+pub use pg_tools::PgTools;
+pub use readability_check::ReadabilityCheck;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 

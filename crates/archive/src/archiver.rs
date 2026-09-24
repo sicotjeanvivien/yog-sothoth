@@ -234,7 +234,7 @@ pub(crate) fn object_key(now: DateTime<Utc>, timescaledb: &str) -> String {
 /// A failure here is logged, not propagated: the run already has its
 /// outcome, and the bucket's lifecycle rule removes incomplete uploads.
 /// Give up on a run whose programs are running: drop them first — dropping a
-/// `PgDump` or a `ReadabilityCheck` kills the program behind it — then abort
+/// `DumpStream` or a `ReadabilityCheck` kills the program behind it — then abort
 /// the upload. In this order, `pg_dump` does not hold its connection for the
 /// length of a network round-trip to the bucket.
 async fn abandon(writer: WriteMultipart, programs: impl Send) {

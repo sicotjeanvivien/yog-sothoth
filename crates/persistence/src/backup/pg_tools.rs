@@ -1,4 +1,4 @@
-//! `pg_dump`, run as a subprocess and handed back as a stream of bytes.
+//! The Postgres client programs a backup runs, and how each is started.
 //!
 //! The dump is `pg_dump`'s: it is the only tool that exports a TimescaleDB
 //! database faithfully, and this crate launches it rather than replacing it.
@@ -8,15 +8,10 @@
 
 use std::{path::PathBuf, process::Stdio};
 
-use tokio::{
-    io::AsyncReadExt,
-    process::{Child, ChildStdout, Command},
-    task::JoinHandle,
-};
+use tokio::process::Command;
 
-use super::{DumpConnection, read_tail};
-use crate::ServerVersions;
-use crate::error::BackupError;
+use super::{DumpConnection, DumpStream, ReadabilityCheck};
+use crate::{ServerVersions, error::BackupError};
 
 /// The `pg_dump` and `pg_restore` to run.
 ///
@@ -24,8 +19,8 @@ use crate::error::BackupError;
 /// Postgres clients point at the right major, and lets tests substitute
 /// fakes.
 pub struct PgTools {
-    pub(super) pg_dump: PathBuf,
-    pub(super) pg_restore: PathBuf,
+    pg_dump: PathBuf,
+    pg_restore: PathBuf,
 }
 
 impl PgTools {
@@ -70,11 +65,17 @@ impl PgTools {
     }
 
     /// Start `pg_dump` in custom format, the archive coming out of
-    /// [`PgDump::read`].
+    /// [`DumpStream::read`].
+    ///
+    /// `pg_dump` opens **its own** connection: it is a separate program and
+    /// cannot borrow a pool of ours. With the one that reads the server's
+    /// versions, a run opens two, one after the other, every six hours — and
+    /// holds none between runs, which is what lets a refusing database end a
+    /// run in a signalled failure instead of stopping the process.
     ///
     /// `--no-password` makes a missing or wrong password fail at once instead
     /// of waiting on a prompt nobody will answer. Fails only with `Spawn`.
-    pub fn start_dump(&self, connection: &DumpConnection) -> Result<PgDump, BackupError> {
+    pub fn start_dump(&self, connection: &DumpConnection) -> Result<DumpStream, BackupError> {
         let mut command = Command::new(&self.pg_dump);
         command
             .arg("--format=custom")
@@ -88,48 +89,50 @@ impl PgTools {
         if let Some(password) = &connection.password {
             command.env("PGPASSWORD", password.expose());
         }
-        let mut child = command.spawn().map_err(|source| BackupError::Spawn {
+        let child = command.spawn().map_err(|source| BackupError::Spawn {
             program: self.pg_dump.display().to_string(),
             source,
         })?;
-        let stdout = child.stdout.take().expect("stdout is piped");
-        let stderr = tokio::spawn(read_tail(child.stderr.take().expect("stderr is piped")));
-        Ok(PgDump {
-            child,
-            stdout,
-            stderr,
-        })
-    }
-}
-
-/// A running `pg_dump`.
-///
-/// **Dropping it kills `pg_dump`.** That is the whole of how a caller gives
-/// up on a dump — a stop, a bucket that refuses a part, a check that fails —
-/// and so the only way it can leave none running behind it.
-pub struct PgDump {
-    child: Child,
-    stdout: ChildStdout,
-    /// Read while the dump runs, so that a full stderr pipe can never block it.
-    stderr: JoinHandle<String>,
-}
-
-impl PgDump {
-    /// The next bytes of the archive into `buf`; `0` once it is complete.
-    /// Cancel-safe: dropping the future loses no byte already read.
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, BackupError> {
-        self.stdout.read(buf).await.map_err(BackupError::Read)
+        Ok(DumpStream::new(child))
     }
 
-    /// Wait for `pg_dump` to exit. A failure carries the end of its stderr,
-    /// which is where it says why (a refused password, a missing role).
-    pub async fn finish(mut self) -> Result<(), BackupError> {
-        let status = self.child.wait().await.map_err(BackupError::DumpWait)?;
-        if status.success() {
-            return Ok(());
-        }
-        let stderr = self.stderr.await.unwrap_or_default();
-        Err(BackupError::DumpFailed { status, stderr })
+    /// Start `pg_restore --file=/dev/null`, to be fed the archive while it
+    /// is produced.
+    ///
+    /// Restoring **to a script file** makes `pg_restore` read and decompress
+    /// every data block to write it out, which is what a check needs; the
+    /// file is `/dev/null`. Measured on 23 September 2026 against real
+    /// dumps: a dump cut in half, and one with 5,000 bytes zeroed in its data,
+    /// both fail it (`end of file`, `could not uncompress data`); a 172 MB
+    /// dump passes in about 2 s.
+    ///
+    /// ⚠️ **Not `--list`**, which the first version used: it reads the table
+    /// of contents and exits, so both damaged dumps above passed it. The
+    /// claim that `--list` read the whole archive rested on a test that could
+    /// not fail — `(cat …; echo done)` echoes even when `cat` dies of the
+    /// broken pipe.
+    ///
+    /// Fed the whole stream rather than a head of it for the same reason:
+    /// the table of contents alone grows with every chunk (423 KiB for 48),
+    /// so any fixed head would one day cut it.
+    ///
+    /// What it does not prove: that the dump restores **into a database** —
+    /// constraints, extensions, versions. Only a restore proves that.
+    ///
+    /// Fails only with `Spawn`.
+    pub fn start_check(&self) -> Result<ReadabilityCheck, BackupError> {
+        let child = Command::new(&self.pg_restore)
+            .arg("--file=/dev/null")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|source| BackupError::Spawn {
+                program: self.pg_restore.display().to_string(),
+                source,
+            })?;
+        Ok(ReadabilityCheck::new(child))
     }
 }
 
@@ -145,5 +148,5 @@ fn parse_major(version_output: &str) -> Option<u32> {
 }
 
 #[cfg(test)]
-#[path = "pg_dump_tests.rs"]
+#[path = "pg_tools_tests.rs"]
 mod tests;

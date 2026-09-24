@@ -121,7 +121,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          twice",
     ),
     (
-        "crates/persistence/src/backup/pg_dump.rs",
+        "crates/persistence/src/backup/pg_tools.rs",
         1,
         "the process environment owns the password — it is the argument of \
          `command.env(\"PGPASSWORD\", …)`, which `pg_dump` reads; the URL it \
