@@ -4,7 +4,6 @@
 use std::{sync::Arc, time::Instant};
 
 use chrono::Utc;
-use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use yog_bootstrap::SHUTDOWN_GRACE;
@@ -51,13 +50,14 @@ impl Daemon {
     /// loop of every daemon here (`signals`' detectors, `context`'s workers):
     /// a ticker, and a stop that wins a tie.
     ///
-    /// The first tick fires at once, which is the dump at startup.
-    /// `MissedTickBehavior::Delay` rather than tokio's default `Burst`: a run
-    /// that outlasted the interval is followed by one a full interval later,
-    /// not by one started back to back to catch up.
+    /// The first tick fires at once, which is the dump at startup. After each
+    /// run the ticker is **reset**, so the next dump comes a full interval
+    /// after this one *ended*: a run that outlasted the interval is not
+    /// followed by another started back to back. No `MissedTickBehavior`
+    /// gives that — even `Delay` fires an overdue tick at once and only
+    /// spaces the ones after it.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let mut ticker = tokio::time::interval(self.interval);
-        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {
             tokio::select! {
                 // `biased`: a stop that arrives with a tick due must not start
@@ -69,6 +69,7 @@ impl Daemon {
                     if !self.run_once(&shutdown).await {
                         break;
                     }
+                    ticker.reset();
                 }
             }
         }
