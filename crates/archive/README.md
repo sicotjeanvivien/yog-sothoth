@@ -27,6 +27,8 @@ archive/src/
 │   └── daemon/
 │       └── init.rs    ← init_heartbeat, init_store (signals a bad bucket before exiting)
 ├── archiver.rs        ← one run, ending in a RunOutcome that decides the signal
+├── archiver/
+│   └── stream.rs      ← the archive: pg_dump read into the upload, pg_restore fed alongside
 ├── infra/             ← what a run calls outside the process
 │   ├── heartbeat.rs   ← Healthchecks.io: success, or /fail with the reason
 │   ├── store.rs       ← the bucket — the only file that knows it is S3
