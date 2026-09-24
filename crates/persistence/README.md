@@ -19,9 +19,10 @@ persistence/
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── .sqlx/                   ← committed offline query cache (see below)
 ├── src/
-│   ├── backup/              ← the dump side: PgDatabaseInfo (the server's versions),
-│   │                          PgTools / PgDump (pg_dump), ReadabilityCheck (pg_restore)
-│   ├── database.rs          ← Database::connect, run_migrations, run_script
+│   ├── backup/              ← the dump side: PgTools / PgDump (pg_dump),
+│   │                          ReadabilityCheck (pg_restore)
+│   ├── database.rs          ← Database::connect / from_pool / close, run_migrations,
+│   │                          run_script, server_versions
 │   ├── health.rs            ← PgHealthChecker
 │   ├── repositories/        ← one impl per domain repository trait
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
@@ -646,7 +647,7 @@ check can fail. The dump took 15 s and weighed 164 MB; the restore took 65 s.
 ### The `backup` module
 
 What `yog-archive` runs lives here, because it is knowledge of this database:
-the server's versions (`PgDatabaseInfo`), how `pg_dump` must be called and
+the server's versions (`Database::server_versions`), how `pg_dump` must be called and
 whether its major matches the server's (`PgTools`), and what `pg_restore`
 checks (`ReadabilityCheck`). It is the crate's **second way of reaching
 Postgres**: everything else goes through a `sqlx` pool, a dump goes through the

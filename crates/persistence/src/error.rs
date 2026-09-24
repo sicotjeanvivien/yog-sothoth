@@ -17,28 +17,19 @@ pub enum MigrationError {
     Script(#[from] sqlx::Error),
 }
 
-/// Failure of a backup step: reading the server's versions, running
-/// `pg_dump`, or checking what it produced with `pg_restore`.
+/// Failure of a backup step: running `pg_dump`, or checking what it produced
+/// with `pg_restore`.
 ///
 /// Which variant a step can return is part of that step's contract, and the
 /// caller decides what each one means for its run. The messages never quote
 /// the connection string: [`BackupError::InvalidUrl`] names the problem
-/// without the value, and [`BackupError::Connect`] carries a message already
-/// passed through [`yog_bootstrap::SecretUrl::scrub`].
+/// without the value.
 #[derive(Debug, thiserror::Error)]
 pub enum BackupError {
     /// The connection string does not parse. The value is not quoted: it
     /// carries the password.
     #[error("the database URL is not a valid URL")]
     InvalidUrl,
-
-    /// The database refused the connection, or could not be reached.
-    #[error("cannot connect to the database: {0}")]
-    Connect(String),
-
-    /// The connection worked, the versions could not be read.
-    #[error(transparent)]
-    Versions(#[from] yog_core::RepositoryError),
 
     #[error("cannot run `{program}`: {source}")]
     Spawn {

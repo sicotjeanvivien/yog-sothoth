@@ -14,7 +14,8 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{DumpConnection, ServerVersions, read_tail};
+use super::{DumpConnection, read_tail};
+use crate::ServerVersions;
 use crate::error::BackupError;
 
 /// The `pg_dump` and `pg_restore` to run.

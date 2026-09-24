@@ -39,6 +39,13 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          are the arguments of `AmazonS3Builder`'s two setters",
     ),
     (
+        "crates/archive/src/infra/versions.rs",
+        1,
+        "sqlx owns the pool — the URL is the argument of `Database::connect`, \
+         for the connection each run opens to read the server's versions; its \
+         refusal goes back through `SecretUrl::scrub`",
+    ),
+    (
         "crates/archive/src/infra/heartbeat.rs",
         3,
         "reqwest owns the request — the check's URL is the argument of `.post` \
@@ -119,13 +126,6 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "the URL is parsed on this line to split the password out of what \
          `pg_dump` receives as an argument (readable in `/proc/<pid>/cmdline`) \
          and into `PGPASSWORD`; no string built from it reaches a log",
-    ),
-    (
-        "crates/persistence/src/backup/database_info.rs",
-        1,
-        "sqlx owns the pool — the URL is the argument of `Database::connect`, \
-         for the one-off connection of `server_versions_once`; its refusal \
-         goes back through `SecretUrl::scrub`",
     ),
     (
         "crates/persistence/src/bin/migrate.rs",

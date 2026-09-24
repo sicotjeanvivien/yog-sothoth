@@ -1,5 +1,6 @@
-//! Backing up the database: the facts a dump depends on, `pg_dump` to take
-//! it, `pg_restore` to check it.
+//! Backing up the database: `pg_dump` to take a dump, `pg_restore` to check
+//! it. The server facts a dump depends on are
+//! [`Database::server_versions`](crate::Database::server_versions).
 //!
 //! This is the crate's second way of reaching Postgres. Everything else goes
 //! through a `sqlx` pool; a dump goes through the Postgres client programs,
@@ -15,12 +16,10 @@
 //! documents.
 
 mod connection;
-mod database_info;
 mod pg_dump;
 mod pg_restore;
 
 pub use connection::DumpConnection;
-pub use database_info::{PgDatabaseInfo, ServerVersions};
 pub use pg_dump::{PgDump, PgTools};
 pub use pg_restore::ReadabilityCheck;
 

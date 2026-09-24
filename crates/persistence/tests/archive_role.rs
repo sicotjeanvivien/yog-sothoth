@@ -16,7 +16,7 @@
 
 use super::helpers::sqlstate;
 use sqlx::PgPool;
-use yog_persistence::PgDatabaseInfo;
+use yog_persistence::Database;
 
 const SETUP_ROLES_SQL: &str = include_str!("../src/bin/scripts/setup_roles.sql");
 
@@ -88,7 +88,7 @@ async fn yog_archive_reads_everything_and_writes_nothing(pool: PgPool) {
 
 #[sqlx::test]
 async fn server_versions_names_the_postgres_major_and_timescaledb(pool: PgPool) {
-    let versions = PgDatabaseInfo::new(pool.clone())
+    let versions = Database::from_pool(pool.clone())
         .server_versions()
         .await
         .unwrap();
