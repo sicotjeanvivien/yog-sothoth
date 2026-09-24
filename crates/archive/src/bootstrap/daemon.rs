@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Instant};
 
 use chrono::Utc;
+use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use yog_bootstrap::SHUTDOWN_GRACE;
@@ -46,40 +47,61 @@ impl Daemon {
         })
     }
 
-    /// Dump now, then every interval, until `shutdown` is cancelled.
+    /// Dump now, then every interval, until `shutdown` is cancelled — the
+    /// loop of every daemon here (`signals`' detectors, `context`'s workers):
+    /// a ticker, and a stop that wins a tie.
     ///
-    /// A stop arriving mid-dump kills `pg_dump` and aborts the upload; if
-    /// that takes longer than [`SHUTDOWN_GRACE`], the process leaves anyway
-    /// and the bucket's lifecycle rule removes the incomplete upload.
+    /// The first tick fires at once, which is the dump at startup.
+    /// `MissedTickBehavior::Delay` rather than tokio's default `Burst`: a run
+    /// that outlasted the interval is followed by one a full interval later,
+    /// not by one started back to back to catch up.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
+        let mut ticker = tokio::time::interval(self.interval);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {
-            let started = Instant::now();
-            let run = self.archiver.run(Utc::now(), &shutdown);
-            tokio::pin!(run);
-            let outcome = tokio::select! {
-                outcome = &mut run => outcome,
-                () = async {
-                    shutdown.cancelled().await;
-                    tokio::time::sleep(SHUTDOWN_GRACE).await;
-                } => {
-                    warn!(grace_secs = SHUTDOWN_GRACE.as_secs(), "the run outlived the shutdown grace — leaving it");
-                    return Ok(());
-                }
-            };
-            metrics::record(&outcome, started.elapsed());
-            log_outcome(&outcome, started.elapsed());
-
-            if shutdown.is_cancelled() {
-                break;
-            }
             tokio::select! {
+                // `biased`: a stop that arrives with a tick due must not start
+                // a fresh dump.
+                biased;
+
                 () = shutdown.cancelled() => break,
-                () = tokio::time::sleep(self.interval) => {}
+                _ = ticker.tick() => {
+                    if !self.run_once(&shutdown).await {
+                        break;
+                    }
+                }
             }
         }
         info!("archiver stopped");
         Ok(())
     }
+
+    /// One run, recorded and logged. `false` when a stop arrived and the run
+    /// outlived [`SHUTDOWN_GRACE`]: the process leaves it behind, and the
+    /// bucket's lifecycle rule removes its incomplete upload.
+    ///
+    /// A stop arriving mid-dump is seen by the run itself, which kills
+    /// `pg_dump` and aborts the upload; the grace only bounds how long that
+    /// may take.
+    async fn run_once(&self, shutdown: &CancellationToken) -> bool {
+        let started = Instant::now();
+        let outcome = tokio::select! {
+            outcome = self.archiver.run(Utc::now(), shutdown) => outcome,
+            () = grace_expired(shutdown) => {
+                warn!(grace_secs = SHUTDOWN_GRACE.as_secs(), "the run outlived the shutdown grace — leaving it");
+                return false;
+            }
+        };
+        metrics::record(&outcome, started.elapsed());
+        log_outcome(&outcome, started.elapsed());
+        true
+    }
+}
+
+/// Resolves [`SHUTDOWN_GRACE`] after a stop is asked for, and never before.
+async fn grace_expired(shutdown: &CancellationToken) {
+    shutdown.cancelled().await;
+    tokio::time::sleep(SHUTDOWN_GRACE).await;
 }
 
 fn log_outcome(outcome: &RunOutcome, elapsed: std::time::Duration) {
