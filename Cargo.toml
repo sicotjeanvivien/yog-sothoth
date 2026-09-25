@@ -63,7 +63,7 @@ solana-transaction-status-client-types = "4"
 #
 # ⚠️ Pinned to 12 and not 10, for a build reason found in review: 10.1.1 builds
 # protobuf 21.5 from C++ source via `protobuf-src`/`autotools`, and the backend
-# builder image (`rust:1.95-slim-bookworm` plus pkg-config, libssl-dev,
+# builder image (`rust:1.98-slim-bookworm` plus pkg-config, libssl-dev,
 # ca-certificates) carries `cc` but **no `g++` and no `make`**. Measured in that
 # exact image: 10.1.1 dies on `ToolNotFound: failed to find tool "c++"`, 12.7.0
 # compiles in 19 s — it replaced `protobuf-src` with `protoc-bin-vendored`,
