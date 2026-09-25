@@ -10,6 +10,6 @@ pub(crate) use services::{
     AnnouncementService, MeteoraDammV2LiquidityListParams, MeteoraDammV2LiquidityService,
     MeteoraDammV2SwapListParams, MeteoraDammV2SwapService, NetworkStatusAggregate,
     NetworkStatusService, PoolCurrentStateView, PoolService, SignalListParams, SignalService,
-    StatsAggregate, StatsService, TokenAggregate, TokenService,
+    StatsAggregate, StatsService, TOP_POOLS_MAX, TokenAggregate, TokenService,
 };
 pub(crate) use signal_stream::{STREAM_CHANNEL_CAPACITY, SignalStreamPoller};

@@ -622,6 +622,39 @@ async fn top_pools_emits_in_rank_order() {
     assert_eq!(top[1].pool.pool_address, a2);
 }
 
+/// The shared ranking is keyed on the metric alone: requests with different
+/// `limit`s are cut from **one** computation — `PoolRepoOnce` panics on a
+/// second `find_by_addresses`. Keyed on `limit` too, a client cycling
+/// 1..=20 over three metrics would start sixty rankings at once.
+#[tokio::test]
+async fn top_pools_cuts_every_limit_from_one_ranking() {
+    let (a1, a2, a3) = (pk(1), pk(2), pk(3));
+    let pools = vec![
+        make_pool(a1, pk(10), pk(11)),
+        make_pool(a2, pk(12), pk(13)),
+        make_pool(a3, pk(14), pk(15)),
+    ];
+    let map = [a1, a2, a3]
+        .into_iter()
+        .map(|a| (a, PoolAnalytics::empty()))
+        .collect();
+
+    let svc = service(
+        PoolRepoOnce::with_pools(pools),
+        MockPoolCurrentStateRepo::not_found(),
+        MockAnalyticsRepo::with(map).with_top(vec![a1, a2, a3]),
+        MockMetadataRepo::empty(),
+        MockPriceRepo::empty(),
+    );
+
+    let three = svc.top_pools(PoolRankMetric::Volume24h, 3).await.unwrap();
+    let one = svc.top_pools(PoolRankMetric::Volume24h, 1).await.unwrap();
+
+    assert_eq!(three.len(), 3);
+    assert_eq!(one.len(), 1);
+    assert_eq!(one[0].pool.pool_address, a1, "the cut keeps the rank order");
+}
+
 #[tokio::test]
 async fn top_pools_empty_when_no_ranking() {
     // No ranked addresses → short-circuit to an empty list, no pool/analytics

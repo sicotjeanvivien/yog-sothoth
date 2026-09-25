@@ -308,7 +308,7 @@ Each bound is named once, with its measurement, in
 |---|---|---|
 | `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
 | `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the signal stream is not cut |
-| `HEAVY_ROUTE_PERMITS` | 6 | The slow routes — `/api/pools`, `/api/pools/top`, `/api/stats`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — share 6 slots on a 10-connection pool; the light routes keep the rest |
+| `HEAVY_ROUTE_PERMITS` | 6 | The slow routes — `/api/pools`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — share 6 slots on a 10-connection pool; the light routes keep the rest |
 | `HEAVY_ROUTE_WAIT` | 2 s | How long a slow request waits for a slot before `503` — enough for a page's own burst |
 | `SSE_MAX_STREAMS` | 200 | ~60 KiB a stream; 200 fit in 32 MiB with the process's baseline |
 
@@ -316,7 +316,13 @@ And two results are shared rather than bounded: **`/api/pools/top` and
 `/api/stats`** return the same body to every visitor, so `application/cache.rs`
 computes each once per key and `SHARED_RESULT_TTL` (30 s), however many
 requests arrive together — the first caller computes, the others wait for the
-same value, and an error is never cached.
+same value, and an error is never cached. The top-pools key is the metric
+alone: the ranking is computed at 20 and cut to each `limit`, so at most four
+computations (three metrics, plus the stats) can run at once.
+
+These two stay **outside** the slow-route slots, bounded by the cache
+instead. Measured behind the slots: 30 parallel `/top` on a cold cache gave
+24 × `503` for a single computation, each waiting caller holding a slot.
 
 What this does not do: limit a client by IP or key. That is the edge's job in
 production, and the platform API's later.

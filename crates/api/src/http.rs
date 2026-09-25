@@ -67,11 +67,15 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     // The routes measured above 0.5 s at rest (25 September 2026). They
     // share `HEAVY_ROUTE_PERMITS` slots, below the pool's size, so that a
     // burst on them cannot take the connections the light routes need.
+    //
+    // `/api/pools/top` and `/api/stats` are slow too, and stay out on
+    // purpose: their cache already bounds them to one computation per key
+    // (four keys) per 30 s. Behind the slots, the callers waiting on that one
+    // computation held a slot each — measured: 30 parallel `/top` on a cold
+    // cache gave 24 × 503 for a single ranking.
     let heavy = Router::new()
         // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
-        // ── Ranked pools (non-paginated, capped) ─────────────────────────
-        .route("/api/pools/top", get(handlers::pools::list_top_pools))
         // ── Single-pool resources ───────────────────────────────────────
         .route("/api/pools/{address}", get(handlers::pools::get_pool))
         .route(
@@ -80,7 +84,6 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         )
         // ── Signal feed (paginated) ─────────────────────────────────────
         .route("/api/signals", get(handlers::signals::list_signals))
-        .route("/api/stats", get(handlers::stats::get_stats))
         .route_layer(from_fn_with_state(
             HeavyRouteLimit::new(HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT),
             heavy_route_limit,
@@ -92,6 +95,9 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
             "/api/announcements/active",
             get(handlers::announcements::list_active_announcements),
         )
+        // ── Shared results (cached, see the note on `heavy` above) ────────
+        .route("/api/pools/top", get(handlers::pools::list_top_pools))
+        .route("/api/stats", get(handlers::stats::get_stats))
         // ── Fee-tier option list (non-paginated) — powers the fee filter ──
         .route("/api/pools/fee-tiers", get(handlers::pools::list_fee_tiers))
         // ── Single-pool resources ───────────────────────────────────────

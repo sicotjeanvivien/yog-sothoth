@@ -68,6 +68,11 @@ pub(crate) struct PoolCurrentStateView {
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
+/// The most pools `/api/pools/top` ranks. The shared ranking is computed at
+/// this size and cut to each request's `limit`; the HTTP layer refuses a
+/// larger one.
+pub(crate) const TOP_POOLS_MAX: i64 = 20;
+
 pub(crate) struct PoolService {
     pool_repository: Arc<dyn PoolCatalog>,
     pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
@@ -80,10 +85,12 @@ pub(crate) struct PoolService {
     /// [`PoolPropertiesLookup::protocol`] matches. A protocol with no satellite
     /// contributes no entry and costs no round-trip.
     pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
-    /// `/api/pools/top` is the same for every visitor: computed once per key
-    /// and [`SHARED_RESULT_TTL`], however many requests arrive together.
-    /// The key space is bounded — three metrics, `limit` capped at 20.
-    top_pools_cache: TtlCache<(PoolRankMetric, i64), Vec<EnrichedPool>>,
+    /// `/api/pools/top` is the same for every visitor: computed once per
+    /// metric and [`SHARED_RESULT_TTL`], at [`TOP_POOLS_MAX`], and cut to each
+    /// caller's `limit`. Keyed on the metric alone so that at most three
+    /// rankings are ever computed at once — keyed on `limit` too, a client
+    /// cycling 1..=20 over three metrics would start sixty.
+    top_pools_cache: TtlCache<PoolRankMetric, Vec<EnrichedPool>>,
 }
 
 impl PoolService {
@@ -195,9 +202,12 @@ impl PoolService {
         metric: PoolRankMetric,
         limit: i64,
     ) -> RepositoryResult<Vec<EnrichedPool>> {
-        self.top_pools_cache
-            .get_or_try_compute((metric, limit), || self.compute_top_pools(metric, limit))
-            .await
+        let ranked = self
+            .top_pools_cache
+            .get_or_try_compute(metric, || self.compute_top_pools(metric, TOP_POOLS_MAX))
+            .await?;
+        let keep = usize::try_from(limit).unwrap_or(0);
+        Ok(ranked.into_iter().take(keep).collect())
     }
 
     /// The ranking itself — four round-trips, 2–4 s on the dev database
