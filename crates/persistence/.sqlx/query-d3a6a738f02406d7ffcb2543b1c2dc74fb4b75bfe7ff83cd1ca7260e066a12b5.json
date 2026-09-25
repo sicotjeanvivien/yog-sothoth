@@ -6,57 +6,123 @@
       {
         "ordinal": 0,
         "name": "pool_address",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "protocol_fee_percent",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "protocol_fee_percent"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "referral_fee_percent",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "referral_fee_percent"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "base_fee_kind",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "base_fee_kind"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "has_dynamic_fee",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "has_dynamic_fee"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "cliff_fee_numerator",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "cliff_fee_numerator"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "number_of_period",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "number_of_period"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "period_frequency",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "period_frequency"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "reduction_factor",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "reduction_factor"
+          }
+        }
       },
       {
         "ordinal": 9,
         "name": "activation_point",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "activation_point"
+          }
+        }
       },
       {
         "ordinal": 10,
         "name": "activation_type",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "activation_type"
+          }
+        }
       }
     ],
     "parameters": {

@@ -27,7 +27,7 @@ tokio-util = "0.7"
 # the subscription goes out on it, and so does every pong. Already in
 # `Cargo.lock` through tonic, so declaring it directly costs no new crate.
 tokio-stream = "0.1"
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 
 # Solana
 solana-rpc-client = { version = "4", default-features = false }
@@ -63,10 +63,11 @@ solana-transaction-status-client-types = "4"
 #
 # ⚠️ Pinned to 12 and not 10, for a build reason found in review: 10.1.1 builds
 # protobuf 21.5 from C++ source via `protobuf-src`/`autotools`, and the backend
-# builder image (`rust:1.95-slim-bookworm` plus pkg-config, libssl-dev,
-# ca-certificates) carries `cc` but **no `g++` and no `make`**. Measured in that
-# exact image: 10.1.1 dies on `ToolNotFound: failed to find tool "c++"`, 12.7.0
-# compiles in 19 s — it replaced `protobuf-src` with `protoc-bin-vendored`,
+# builder image (`rust:1.98-slim-bookworm` plus pkg-config, libssl-dev,
+# ca-certificates) carries `cc` but **no `g++` and no `make`** — rechecked in
+# the 1.98 image on 25 September 2026. Measured in the 1.95 image it replaced,
+# which lacked the same tools: 10.1.1 dies on `ToolNotFound: failed to find
+# tool "c++"`, 12.7.0 compiles in 19 s — it replaced `protobuf-src` with `protoc-bin-vendored`,
 # prebuilt binaries needing no toolchain. CI would have stayed green
 # (ubuntu-latest ships g++), so `docker compose --profile backend up --build`
 # would have been the first thing to break — on a machine, not in a pipeline.
@@ -88,7 +89,7 @@ tonic = { version = "0.14", default-features = false, features = [
 ] }
 
 # Database
-sqlx = { version = "0.8", default-features = false }
+sqlx = { version = "0.9", default-features = false }
 bigdecimal = "0.4"
 
 # Serialization
@@ -121,13 +122,13 @@ borsh = { version = "1", features = ["derive"] }
 rustls = { version = "0.23", features = ["ring"] }
 
 bs58 = "0.5"
-base64 = "0.22"
+base64 = "0.23"
 sha2 = "0.11"
-rust_decimal = "1"
+rust_decimal = "1.43"
 
 # Axum
 axum = "0.8.9"
-tower-http = { version = "0.6.10", features = [
+tower-http = { version = "0.7", features = [
   "cors",
   "trace",
   "request-id",

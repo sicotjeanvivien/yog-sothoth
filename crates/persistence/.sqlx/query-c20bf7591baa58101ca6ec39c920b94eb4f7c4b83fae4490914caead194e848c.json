@@ -6,12 +6,14 @@
       {
         "ordinal": 0,
         "name": "postgres_major!",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": "Expression"
       },
       {
         "ordinal": 1,
         "name": "timescaledb",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {

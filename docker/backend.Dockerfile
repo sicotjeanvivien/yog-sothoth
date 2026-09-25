@@ -28,7 +28,7 @@
 # and rust-toolchain.toml must all be visible.
 
 # ── chef base ──────────────────────────────────────────────────────
-FROM rust:1.95-slim-bookworm AS chef
+FROM rust:1.98-slim-bookworm AS chef
 WORKDIR /app
 
 # pkg-config + libssl-dev are needed by several transitive crates

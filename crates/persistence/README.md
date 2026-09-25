@@ -18,6 +18,7 @@ persistence/
 ├── migrations/              ← sqlx migrations, forward-only (001_baseline.sql today)
 │   └── README.md            (forward-only convention, GRANT policy, workflow)
 ├── .sqlx/                   ← committed offline query cache (see below)
+├── sqlx.toml                ← macro config: NUMERIC → BigDecimal (see below)
 ├── src/
 │   ├── backup/              ← the dump side: PgTools (the client programs),
 │   │                          DumpStream (pg_dump), ReadabilityCheck (pg_restore)
@@ -786,6 +787,14 @@ without `--all-features`, so those queries are never expanded, and it tolerates
 extra entries. The breakage surfaces later as an offline compile error in the
 `test-integration` job, far from its cause. Same warning, with the measurement,
 in `CLAUDE.md`.
+
+**`sqlx.toml`** sits beside `Cargo.toml` and is read by the macros (the
+`sqlx-toml` feature) and by the CLI. It maps `NUMERIC` to `BigDecimal` for
+every query that does not annotate its column; why it is a type override
+rather than the `preferred-crates` setting sqlx itself suggests is written in
+the file. A `sqlx-cli` built without the `sqlx-toml` feature refuses to run
+here — install it as the `sqlx-check` job of `.github/workflows/crates.yml`
+does.
 
 ## Integration tests
 

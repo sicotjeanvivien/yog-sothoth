@@ -6,87 +6,189 @@
       {
         "ordinal": 0,
         "name": "pool_address",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "signature",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "signature"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "trade_direction",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "trade_direction"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "amount_a",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "amount_a"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "amount_b",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "amount_b"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "reserve_a_after",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "reserve_a_after"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "reserve_b_after",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "reserve_b_after"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "next_sqrt_price",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "next_sqrt_price"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "claiming_fee",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "claiming_fee"
+          }
+        }
       },
       {
         "ordinal": 9,
         "name": "protocol_fee",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "protocol_fee"
+          }
+        }
       },
       {
         "ordinal": 10,
         "name": "compounding_fee",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "compounding_fee"
+          }
+        }
       },
       {
         "ordinal": 11,
         "name": "referral_fee",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "referral_fee"
+          }
+        }
       },
       {
         "ordinal": 12,
         "name": "fee_token_is_a",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "fee_token_is_a"
+          }
+        }
       },
       {
         "ordinal": 13,
         "name": "timestamp",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "timestamp"
+          }
+        }
       },
       {
         "ordinal": 14,
         "name": "slot",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "slot"
+          }
+        }
       },
       {
         "ordinal": 15,
         "name": "event_index",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "event_index"
+          }
+        }
       },
       {
         "ordinal": 16,
         "name": "transaction_index",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_swap_events",
+            "name": "transaction_index"
+          }
+        }
       }
     ],
     "parameters": {

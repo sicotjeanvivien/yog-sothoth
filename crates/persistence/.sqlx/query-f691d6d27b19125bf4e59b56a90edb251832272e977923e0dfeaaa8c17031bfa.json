@@ -6,52 +6,112 @@
       {
         "ordinal": 0,
         "name": "pool_address!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "protocol!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "protocol"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "last_sqrt_price!",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "last_sqrt_price"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "last_swap_at!",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "last_swap_at"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "decimals_a!",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "decimals_a"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "decimals_b!",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "decimals_b"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "price_a_usd!",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "price_a_usd"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "price_a_fetched_at!",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "price_a_fetched_at"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "price_b_usd!",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "price_b_usd"
+          }
+        }
       },
       {
         "ordinal": 9,
         "name": "price_b_fetched_at!",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pool_price_snapshot",
+            "name": "price_b_fetched_at"
+          }
+        }
       }
     ],
     "parameters": {

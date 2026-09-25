@@ -30,13 +30,17 @@ yog-bootstrap = { path = "../bootstrap" }
 # Database
 sqlx = { workspace = true, default-features = false, features = [
   "postgres",
-  "runtime-tokio-rustls",
+  "runtime-tokio",
+  "tls-rustls-ring-webpki",
   "macros",
   "chrono",
   "bigdecimal",
   "uuid",
   "rust_decimal",
   "migrate",
+  # Reads `sqlx.toml` beside this manifest: with both decimal crates enabled,
+  # the `query!` macros need to be told which one maps NUMERIC.
+  "sqlx-toml",
 ] }
 bigdecimal = { workspace = true }
 rust_decimal = { workspace = true }

@@ -1,0 +1,16 @@
+# Configuration of the sqlx macros for this crate — read at compile time
+# (the `sqlx-toml` feature in Cargo.toml) and by `cargo sqlx`.
+
+# NUMERIC maps to `BigDecimal`, which is what every `query!` here was written
+# against: lossless `u128` amounts are `NUMERIC(39,0)`, beyond `Decimal`'s 28
+# digits. The four columns read as `rust_decimal::Decimal` say so in the query
+# (`AS "price_usd!: rust_decimal::Decimal"`), and that annotation still wins.
+#
+# Why an override and not `[macros.preferred-crates] numeric = "bigdecimal"`,
+# which is what the sqlx 0.9 warning recommends: in 0.9.0 that setting does not
+# silence the warning — `type_checking.rs` flags NUMERIC as ambiguous whenever
+# `rust_decimal` is also enabled, the explicit preference included (unchanged
+# on upstream `main`, checked 25 September 2026). A type override is resolved
+# before that check, for columns and bind parameters alike.
+[macros.type-overrides]
+'NUMERIC' = "sqlx::types::BigDecimal"

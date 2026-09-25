@@ -6,17 +6,35 @@
       {
         "ordinal": 0,
         "name": "slot",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "network_status",
+            "name": "slot"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "rpc_latency_ms",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "network_status",
+            "name": "rpc_latency_ms"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "observed_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "network_status",
+            "name": "observed_at"
+          }
+        }
       }
     ],
     "parameters": {

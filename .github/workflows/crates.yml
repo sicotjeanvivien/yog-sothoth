@@ -369,16 +369,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
  
       # sqlx-cli provides `cargo sqlx prepare --check` and
-      # `cargo sqlx migrate run`. --locked uses Cargo.lock to avoid
-      # surprise updates; the postgres feature is the only one we
-      # need (no MySQL / SQLite drivers compiled in).
+      # `cargo sqlx migrate run`. The postgres feature is the only driver
+      # we need (no MySQL / SQLite compiled in); `sqlx-toml` lets the CLI
+      # read `crates/persistence/sqlx.toml`, which it otherwise refuses
+      # with "the `sqlx-toml` feature was not enabled".
+      #
+      # No `--locked`: sqlx stopped tracking its Cargo.lock in 0.9, so the
+      # flag no longer pins anything and the release notes say it "will no
+      # longer work". The exact `--version` is what keeps this reproducible.
       - name: Install sqlx-cli
         run: |
           cargo install sqlx-cli \
-            --version 0.8.6 \
+            --version 0.9.0 \
             --no-default-features \
-            --features postgres,rustls \
-            --locked
+            --features postgres,rustls,sqlx-toml
  
       # The CI Postgres has no yog_migrate / yog_indexer / yog_api /
       # yog_context roles — the baseline migration emits GRANT statements

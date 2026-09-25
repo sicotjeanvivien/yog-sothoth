@@ -24,7 +24,7 @@
 use super::helpers::{CHECK_VIOLATION, NUMERIC_OVERFLOW, pk, sqlstate};
 use chrono::Utc;
 use rust_decimal::Decimal;
-use sqlx::PgPool;
+use sqlx::{AssertSqlSafe, PgPool};
 use std::str::FromStr;
 use yog_core::domain::{PriceProvider, TokenPrice};
 
@@ -104,9 +104,11 @@ async fn dropping_the_constraint_lets_the_zero_through(pool: PgPool) {
     // constraint of migration 009, by removing it and watching the same value
     // land — as a zero, non-NULL, exactly the state the migration exists to
     // prevent.
-    sqlx::query(&format!(
+    // `AssertSqlSafe`: a DDL identifier cannot be a bind parameter, and the
+    // only thing interpolated is the `CONSTRAINT` constant above.
+    sqlx::query(AssertSqlSafe(format!(
         "ALTER TABLE token_prices DROP CONSTRAINT {CONSTRAINT}"
-    ))
+    )))
     .execute(&pool)
     .await
     .expect("the constraint must exist to be dropped — if this fails, 009 did not apply");

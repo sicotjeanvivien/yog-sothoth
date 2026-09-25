@@ -6,7 +6,8 @@
       {
         "ordinal": 0,
         "name": "last_event_at?: chrono::DateTime<chrono::Utc>",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": "Expression"
       }
     ],
     "parameters": {

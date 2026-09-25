@@ -6,27 +6,57 @@
       {
         "ordinal": 0,
         "name": "pool_address",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "watched_pools",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "protocol",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "watched_pools",
+            "name": "protocol"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "active",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "watched_pools",
+            "name": "active"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "added_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "watched_pools",
+            "name": "added_at"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "note",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "watched_pools",
+            "name": "note"
+          }
+        }
       }
     ],
     "parameters": {

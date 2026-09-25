@@ -6,37 +6,79 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "kind",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "kind"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "severity",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "severity"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "message",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "message"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "link_url",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "link_url"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "starts_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "starts_at"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "ends_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "announcements",
+            "name": "ends_at"
+          }
+        }
       }
     ],
     "parameters": {

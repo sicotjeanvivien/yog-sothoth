@@ -6,17 +6,35 @@
       {
         "ordinal": 0,
         "name": "cliff_fee_numerator",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "cliff_fee_numerator"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "period_frequency",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "period_frequency"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "activation_type",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_properties",
+            "name": "activation_type"
+          }
+        }
       }
     ],
     "parameters": {
