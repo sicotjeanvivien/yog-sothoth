@@ -629,7 +629,7 @@ async fn top_pools_emits_in_rank_order() {
 /// The shared ranking is keyed on the metric alone: requests with different
 /// `limit`s are cut from **one** computation — `PoolRepoOnce` panics on a
 /// second `find_by_addresses`. Keyed on `limit` too, a client cycling
-/// 1..=20 over three metrics would start sixty rankings at once.
+/// 1..=20 over the two metrics would start forty rankings at once.
 #[tokio::test]
 async fn top_pools_cuts_every_limit_from_one_ranking() {
     let (a1, a2, a3) = (pk(1), pk(2), pk(3));

@@ -319,7 +319,7 @@ And two results are shared rather than bounded: **`/api/pools/top` and
 `SharedCache` (`application/cache.rs`, on `moka`): the first caller of a cold
 key computes, the others wait for the same outcome — an error included, and
 nothing failed is kept. Each use declares a named `CachePolicy` (time to
-live, capacity) in that file: `TOP_POOLS` (30 s, 3 entries, one per metric —
+live, capacity) in that file: `TOP_POOLS` (30 s, 2 entries, one per `PoolRankMetric` —
 the ranking is computed at 20 and cut to each `limit`) and `STATS` (30 s,
 1 entry). The capacity, with eviction, is what makes the cache safe on keys
 that are not a fixed set.

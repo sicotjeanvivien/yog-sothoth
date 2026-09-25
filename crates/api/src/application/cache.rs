@@ -61,8 +61,10 @@ pub(crate) struct CachePolicy {
 pub(crate) const TOP_POOLS: CachePolicy = CachePolicy {
     name: "top_pools",
     ttl: SHARED_RESULT_TTL,
-    // Three metrics: volume, TVL, fees.
-    max_capacity: 3,
+    // One entry per `PoolRankMetric` variant — two today, `Volume24h` and
+    // `Tvl`. A new metric raises this with it: moka admits by frequency
+    // (TinyLFU), so an undersized cache would keep turning rankings away.
+    max_capacity: 2,
 };
 
 /// `/api/stats`: one aggregate for the whole protocol.

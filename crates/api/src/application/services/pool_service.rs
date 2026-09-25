@@ -88,10 +88,10 @@ pub(crate) struct PoolService {
     /// contributes no entry and costs no round-trip.
     pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
     /// `/api/pools/top` is the same for every visitor: computed once per
-    /// metric and time to live ([`TOP_POOLS`]), at [`TOP_POOLS_MAX`], and cut to each
-    /// caller's `limit`. Keyed on the metric alone so that at most three
+    /// metric and time to live ([`TOP_POOLS`]), at [`TOP_POOLS_MAX`], and cut
+    /// to each caller's `limit`. Keyed on the metric alone so that at most two
     /// rankings are ever computed at once — keyed on `limit` too, a client
-    /// cycling 1..=20 over three metrics would start sixty.
+    /// cycling 1..=20 over the two metrics would start forty.
     top_pools_cache: SharedCache<PoolRankMetric, Vec<EnrichedPool>>,
     /// Taken by a ranking while it computes, never by a caller waiting for
     /// the cached one.
