@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use yog_core::domain::{
     AnnouncementLookup, EventFreshnessRepository, GlobalAnalyticsRepository,
     MeteoraDammV2LiquidityEventFeed, MeteoraDammV2SwapEventFeed, NetworkStatusLookup,
@@ -48,14 +49,21 @@ pub(crate) struct AppState {
     /// Infra probe — exposed directly because no application logic
     /// surrounds it. See `yog-persistence/health.rs`.
     pub(crate) health_checker: Arc<PgHealthChecker>,
+    /// Cancelled when the process is asked to stop. Only the SSE stream reads
+    /// it: every other response ends on its own, and the graceful shutdown
+    /// waits for those.
+    pub(crate) shutdown: CancellationToken,
 }
 
 impl AppState {
     /// Build the state and the signal-stream poller that feeds it.
     ///
     /// Returned as a pair: the state goes to the router, the poller to
-    /// a [`tokio::spawn`] in `main` — the binary owns the runtime wiring.
-    pub(crate) async fn build(config: Config) -> anyhow::Result<(Self, SignalStreamPoller)> {
+    /// [`serve`](crate::bootstrap::serve()) — the binary owns the runtime wiring.
+    pub(crate) async fn build(
+        config: Config,
+        shutdown: CancellationToken,
+    ) -> anyhow::Result<(Self, SignalStreamPoller)> {
         let database = Database::connect(config.database_url.expose())
             .await
             .context("failed to connect to database")?;
@@ -133,6 +141,7 @@ impl AppState {
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
             announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),
+            shutdown,
         };
         Ok((state, signal_poller))
     }

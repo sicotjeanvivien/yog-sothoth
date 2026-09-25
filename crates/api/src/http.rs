@@ -16,6 +16,11 @@ mod handlers;
 mod middleware;
 mod query;
 
+/// The SSE response, mounted by the shutdown tests without the state it is
+/// normally read from.
+#[cfg(test)]
+pub(crate) use handlers::signals::signal_sse;
+
 use std::net::SocketAddr;
 
 use axum::{Router, http::HeaderValue, routing::get};
@@ -121,23 +126,16 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .layer(middleware::cors_layer(cors_allowed_origins))
 }
 
-/// Run the axum server on `bind_addr` until the process is killed.
-pub(crate) async fn run(
-    state: AppState,
-    bind_addr: SocketAddr,
-    cors_allowed_origins: Vec<HeaderValue>,
-) -> anyhow::Result<()> {
+/// Bind the listener the server will accept on.
+///
+/// Kept apart from serving so that the address is taken, or refused, before
+/// anything is spawned: a port already in use is a startup error, not a task
+/// that dies later.
+pub(crate) async fn bind(bind_addr: SocketAddr) -> anyhow::Result<tokio::net::TcpListener> {
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .map_err(|e| anyhow::anyhow!("failed to bind on {bind_addr}: {e}"))?;
 
     info!(addr = %bind_addr, "API server listening");
-
-    let router = build_router(state, cors_allowed_origins);
-
-    axum::serve(listener, router)
-        .await
-        .map_err(|e| anyhow::anyhow!("serve failed: {e}"))?;
-
-    Ok(())
+    Ok(listener)
 }

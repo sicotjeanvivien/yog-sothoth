@@ -16,7 +16,8 @@ roles, the add-an-endpoint recipe), see [`crates/README.md`](../README.md).
 api/src/
 ├── bootstrap/
 │   ├── app_state.rs       ← AppState — dependency container (Arc<dyn Trait>)
-│   └── config.rs          ← Config::load() — env-driven
+│   ├── config.rs          ← Config::load() — env-driven
+│   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
 │   ├── services/          ← cross-protocol services at the root (PoolService,
 │   │   │                    SignalService, StatsService, TokenService,
@@ -264,7 +265,27 @@ by per-client DB queries:
   than dropped — delivering the alert beats decorating it.
 
 Poller failures are skip-and-log: a failed tick is logged and the next one
-proceeds. The poller dies with the process — no dedicated graceful shutdown.
+proceeds.
+
+## Stopping
+
+SIGTERM or Ctrl-C (`yog_bootstrap::shutdown_signal`) cancels one token, and
+`bootstrap::serve` stops the process the way the daemons stop theirs: the
+server with axum's `with_graceful_shutdown`, then the poller, both waited on
+by `yog_bootstrap::Stop` within `SHUTDOWN_GRACE`, which names whichever
+outlives it.
+
+⚠️ **A graceful shutdown alone would not stop this server.** It stops
+accepting, then waits for every open connection — and an SSE connection never
+ends on its own. The stream reads the same token (`signal_sse`, `take_until`)
+and closes when it fires; the browser's `EventSource` reconnects to the next
+instance by itself. Any other request in flight is answered before `serve`
+returns: once it does, `main` returns and the runtime takes every connection
+task with it.
+
+Before this, the binary installed no signal handler at all. In its container it
+is PID 1, and the kernel does not apply a signal's default action to PID 1, so
+SIGTERM was ignored and Docker killed it ten seconds later (`Exited (137)`).
 
 ## Error responses
 

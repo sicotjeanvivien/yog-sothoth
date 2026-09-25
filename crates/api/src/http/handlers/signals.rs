@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
@@ -5,10 +6,13 @@ use axum::{
     extract::{Query, State},
     response::sse::{Event, KeepAlive, Sse},
 };
-use futures_util::Stream;
+use futures_util::{Stream, StreamExt};
+use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+use yog_core::domain::SignalRecord;
 
-use crate::application::EnrichedSignal;
+use crate::application::{EnrichedSignal, SignalService};
 use crate::bootstrap::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
@@ -64,10 +68,30 @@ pub(crate) async fn list_signals(
 pub(crate) async fn stream_signals(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
-    let receiver = state.signal_stream.subscribe();
-    let service = state.signal_service.clone();
     info!("signal stream client connected");
+    signal_sse(
+        state.signal_stream.subscribe(),
+        state.signal_service.clone(),
+        state.shutdown.clone(),
+    )
+}
 
+/// The SSE response itself, apart from the state it is read from — so that a
+/// test can mount it without a database.
+///
+/// ⚠️ **The stream ends when the process is asked to stop, and it has to.** A
+/// graceful shutdown waits for every open connection to finish, and this one
+/// never finishes on its own: the `unfold` below has no end, and the keep-alive
+/// keeps the connection busy. Without `take_until`, one open dashboard tab
+/// would hold the stop until the grace expires. Ending the stream closes the
+/// response cleanly, and the browser's EventSource reconnects on its own — to
+/// the next instance, once it is up. No terminal event is sent: the client
+/// has nothing to do with it that reconnecting does not already do.
+pub(crate) fn signal_sse(
+    receiver: broadcast::Receiver<SignalRecord>,
+    service: Arc<SignalService>,
+    shutdown: CancellationToken,
+) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
     let stream = futures_util::stream::unfold(
         (receiver, service),
         |(mut receiver, service)| async move {
@@ -91,7 +115,8 @@ pub(crate) async fn stream_signals(
                 Err(_) => None,
             }
         },
-    );
+    )
+    .take_until(shutdown.cancelled_owned());
 
     Sse::new(stream).keep_alive(
         // Comment ping through proxies that would otherwise reap an

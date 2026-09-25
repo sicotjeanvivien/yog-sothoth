@@ -17,6 +17,7 @@ uuid = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 futures-util = { workspace = true }
 
 # Serialization
