@@ -6,57 +6,123 @@
       {
         "ordinal": 0,
         "name": "bucket!",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "bucket"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "volume_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "volume_usd"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "fees_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "fees_usd"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "protocol_fees_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "protocol_fees_usd"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "referral_fees_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "referral_fees_usd"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "lp_fees_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "lp_fees_usd"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "swap_count",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "swap_count"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "liquidity_added_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "liquidity_added_usd"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "liquidity_removed_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "liquidity_removed_usd"
+          }
+        }
       },
       {
         "ordinal": 9,
         "name": "fees_claimed_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "fees_claimed_usd"
+          }
+        }
       },
       {
         "ordinal": 10,
         "name": "rewards_claimed_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_activity",
+            "name": "rewards_claimed_usd"
+          }
+        }
       }
     ],
     "parameters": {

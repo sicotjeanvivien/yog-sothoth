@@ -6,37 +6,79 @@
       {
         "ordinal": 0,
         "name": "pool_address",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "bin_step",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "bin_step"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "base_factor",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "base_factor"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "base_fee_power_factor",
-        "type_info": "Int2"
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "base_fee_power_factor"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "variable_fee_control",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "variable_fee_control"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "max_volatility_accumulator",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "max_volatility_accumulator"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "protocol_share",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_dlmm_pool_properties",
+            "name": "protocol_share"
+          }
+        }
       }
     ],
     "parameters": {

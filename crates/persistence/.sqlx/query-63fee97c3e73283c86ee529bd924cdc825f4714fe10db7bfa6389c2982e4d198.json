@@ -6,17 +6,25 @@
       {
         "ordinal": 0,
         "name": "pool_address!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_pool_hourly_flow",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "volume_a_to_b_usd?",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": "Expression"
       },
       {
         "ordinal": 2,
         "name": "volume_b_to_a_usd?",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": "Expression"
       }
     ],
     "parameters": {

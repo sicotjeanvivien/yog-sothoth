@@ -6,77 +6,167 @@
       {
         "ordinal": 0,
         "name": "pool_address!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "pool_address"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "signature!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "signature"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "liquidity_event_kind!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "liquidity_event_kind"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "amount_a!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "amount_a"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "amount_b!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "amount_b"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "liquidity_delta!",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "liquidity_delta"
+          }
+        }
       },
       {
         "ordinal": 6,
         "name": "reserve_a_after!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "reserve_a_after"
+          }
+        }
       },
       {
         "ordinal": 7,
         "name": "reserve_b_after!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "reserve_b_after"
+          }
+        }
       },
       {
         "ordinal": 8,
         "name": "position!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "position"
+          }
+        }
       },
       {
         "ordinal": 9,
         "name": "owner!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "owner"
+          }
+        }
       },
       {
         "ordinal": 10,
         "name": "timestamp!",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "timestamp"
+          }
+        }
       },
       {
         "ordinal": 11,
         "name": "value_usd",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "value_usd"
+          }
+        }
       },
       {
         "ordinal": 12,
         "name": "slot!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "slot"
+          }
+        }
       },
       {
         "ordinal": 13,
         "name": "event_index!",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "event_index"
+          }
+        }
       },
       {
         "ordinal": 14,
         "name": "transaction_index",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "meteora_damm_v2_liquidity_events_valued",
+            "name": "transaction_index"
+          }
+        }
       }
     ],
     "parameters": {

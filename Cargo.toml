@@ -27,7 +27,7 @@ tokio-util = "0.7"
 # the subscription goes out on it, and so does every pong. Already in
 # `Cargo.lock` through tonic, so declaring it directly costs no new crate.
 tokio-stream = "0.1"
-tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 
 # Solana
 solana-rpc-client = { version = "4", default-features = false }
@@ -88,7 +88,7 @@ tonic = { version = "0.14", default-features = false, features = [
 ] }
 
 # Database
-sqlx = { version = "0.8", default-features = false }
+sqlx = { version = "0.9", default-features = false }
 bigdecimal = "0.4"
 
 # Serialization
@@ -121,13 +121,13 @@ borsh = { version = "1", features = ["derive"] }
 rustls = { version = "0.23", features = ["ring"] }
 
 bs58 = "0.5"
-base64 = "0.22"
+base64 = "0.23"
 sha2 = "0.11"
-rust_decimal = "1"
+rust_decimal = "1.43"
 
 # Axum
 axum = "0.8.9"
-tower-http = { version = "0.6.10", features = [
+tower-http = { version = "0.7", features = [
   "cors",
   "trace",
   "request-id",

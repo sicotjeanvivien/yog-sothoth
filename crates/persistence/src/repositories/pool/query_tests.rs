@@ -260,6 +260,8 @@ fn sql_for_search(search: Option<&str>) -> String {
         fetch_limit: 50,
     })
     .into_sql()
+    .as_str()
+    .to_owned()
 }
 
 /// The single-token form matches the address or either token, via one
@@ -353,6 +355,8 @@ fn sql_for_fence(sort: PoolSort, as_of: Option<DateTime<Utc>>) -> String {
         fetch_limit: 50,
     })
     .into_sql()
+    .as_str()
+    .to_owned()
 }
 
 fn instant() -> DateTime<Utc> {
@@ -393,7 +397,9 @@ fn touched_since_count_reads_above_the_fence() {
         search: None,
         fee_bps: None,
     })
-    .into_sql();
+    .into_sql()
+    .as_str()
+    .to_owned();
 
     assert!(
         sql.contains("COUNT(*)") && sql.contains("last_seen_at > "),
@@ -411,7 +417,9 @@ fn touched_since_count_applies_the_same_filters() {
         search: Some("SOL".to_owned()),
         fee_bps: Some(BigDecimal::from(25)),
     })
-    .into_sql();
+    .into_sql()
+    .as_str()
+    .to_owned();
 
     assert!(
         sql.contains("tm.mint IN (pools.token_a_mint, pools.token_b_mint)"),

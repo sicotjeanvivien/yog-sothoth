@@ -6,12 +6,19 @@
       {
         "ordinal": 0,
         "name": "fee_bps!: rust_decimal::Decimal",
-        "type_info": "Numeric"
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "pools",
+            "name": "fee_bps"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "pool_count!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": "Expression"
       }
     ],
     "parameters": {

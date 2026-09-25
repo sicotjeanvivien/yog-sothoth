@@ -151,7 +151,7 @@ fn parse_search(raw: &str) -> ParsedSearch {
 /// substring). `mint_col` is a caller-supplied static column name
 /// (never user input), so it is interpolated directly; `term` is
 /// bound.
-fn push_side_match(qb: &mut QueryBuilder<'static, Postgres>, mint_col: &str, term: &str) {
+fn push_side_match(qb: &mut QueryBuilder<Postgres>, mint_col: &str, term: &str) {
     qb.push("EXISTS (SELECT 1 FROM token_metadata tm WHERE tm.mint = pools.");
     qb.push(mint_col);
     qb.push(" AND (tm.symbol ILIKE ('%' || ");
@@ -169,7 +169,7 @@ fn push_side_match(qb: &mut QueryBuilder<'static, Postgres>, mint_col: &str, ter
 /// the population the listing sees. A count that ignored these filters would
 /// report pools the reader filtered out.
 fn push_filters(
-    qb: &mut QueryBuilder<'static, Postgres>,
+    qb: &mut QueryBuilder<Postgres>,
     search: Option<String>,
     fee_bps: Option<BigDecimal>,
 ) {
@@ -229,7 +229,7 @@ fn push_filters(
 /// opposite side of the same instant. Under a descending sort these are the
 /// rows that moved to the head of the list, past a reader who has already been
 /// there — counting them is what keeps their absence from being silent.
-pub(super) fn build_touched_since_count(q: TouchedSinceQuery) -> QueryBuilder<'static, Postgres> {
+pub(super) fn build_touched_since_count(q: TouchedSinceQuery) -> QueryBuilder<Postgres> {
     let mut qb: QueryBuilder<Postgres> =
         QueryBuilder::new("SELECT COUNT(*) FROM pools WHERE last_seen_at > ");
     qb.push_bind(q.as_of);
@@ -238,7 +238,7 @@ pub(super) fn build_touched_since_count(q: TouchedSinceQuery) -> QueryBuilder<'s
 }
 
 /// Build the full paginated query.
-pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<'static, Postgres> {
+pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<Postgres> {
     let sort_col = column_sql(q.sort.column());
     let (primary_order, tiebreak_order) = effective_order(q.sort, q.mode);
 

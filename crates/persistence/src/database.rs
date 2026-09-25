@@ -145,8 +145,11 @@ impl Database {
     /// simple query protocol has no parameter binding, so anything
     /// interpolated into `sql` is executed as SQL. Both callers pass an
     /// `include_str!` constant, which is the only shape this method is meant
-    /// to take; a value that needs interpolating belongs in a `query!` with
-    /// bind parameters, not here.
+    /// to take — and since sqlx 0.9 the `&'static str` says so: `raw_sql`
+    /// refuses a borrowed string unless it is wrapped in `AssertSqlSafe`, and
+    /// wrapping it here would sign that promise for every future caller. A
+    /// value that needs interpolating belongs in a `query!` with bind
+    /// parameters, not here.
     ///
     /// Uses the simple query protocol, so the whole file is sent as one
     /// statement batch — which is what lets a `DO $$ … $$` block and several
@@ -157,7 +160,7 @@ impl Database {
     ///
     /// Unlike `run_migrations`, nothing here is versioned or recorded: these
     /// scripts are idempotent by construction and are expected to be re-run.
-    pub async fn run_script(&self, sql: &str) -> Result<(), MigrationError> {
+    pub async fn run_script(&self, sql: &'static str) -> Result<(), MigrationError> {
         sqlx::raw_sql(sql)
             .execute(&self.pool)
             .await
