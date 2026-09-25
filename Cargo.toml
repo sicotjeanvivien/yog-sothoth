@@ -128,6 +128,9 @@ rust_decimal = "1.43"
 
 # Axum
 axum = "0.8.9"
+# Test-only: `ServiceExt::oneshot` drives a router without a socket. Already
+# compiled with `util` through axum, so declaring it costs no new crate.
+tower = { version = "0.5", default-features = false, features = ["util"] }
 tower-http = { version = "0.7", features = [
   "cors",
   "trace",

@@ -39,3 +39,4 @@ rust_decimal = { workspace = true }
 [dev-dependencies]
 async-trait = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true }

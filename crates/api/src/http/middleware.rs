@@ -3,6 +3,7 @@
 //! Currently configures CORS and a small set of security headers.
 //! Future cross-cutting concerns (request tracing, rate limiting,
 //! request ID propagation) will land here as additional layers.
+pub(crate) mod capacity;
 pub(crate) mod tracing;
 
 use axum::http::{HeaderName, HeaderValue, Method, header};

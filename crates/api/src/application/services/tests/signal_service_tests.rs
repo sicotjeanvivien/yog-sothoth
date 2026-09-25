@@ -128,32 +128,31 @@ async fn missing_metadata_keeps_mint_without_symbol() {
 
 // ── SSE path ─────────────────────────────────────────────────────────
 
+/// The poller's path: one batch lookup for every distinct pool of the tick.
+/// `PoolRepoOnce` answers `find_by_addresses` once — a per-signal lookup
+/// would panic on the second record.
 #[tokio::test]
-async fn enrich_one_resolves_the_pair_through_point_lookup() {
-    let record = make_signal_record(21, pk(1));
+async fn enrich_batch_resolves_every_pair_through_one_lookup() {
+    let records = vec![make_signal_record(21, pk(1)), make_signal_record(22, pk(1))];
 
     let svc = service(
         MockSignalRepo::empty(),
-        PoolRepoOnce::with_pool(Some(make_pool(pk(1), pk(2), pk(3)))),
+        PoolRepoOnce::with_pools(vec![make_pool(pk(1), pk(2), pk(3))]),
         MockMetadataRepo::with(vec![(pk(2), make_metadata(pk(2), "SOL"))]),
     );
 
-    let enriched = svc.enrich_one(record).await.unwrap();
+    let enriched = svc.enrich_batch(records).await.unwrap();
 
-    assert_eq!(enriched.record.id, 21);
-    assert_eq!(
-        enriched
-            .token_a
-            .metadata
-            .as_ref()
-            .unwrap()
-            .symbol
-            .as_deref(),
-        Some("SOL")
-    );
-    // Mint B resolved, metadata not yet fetched.
-    assert_eq!(enriched.token_b.mint, Some(pk(3)));
-    assert!(enriched.token_b.metadata.is_none());
+    assert_eq!(enriched.len(), 2);
+    for signal in &enriched {
+        assert_eq!(
+            signal.token_a.metadata.as_ref().unwrap().symbol.as_deref(),
+            Some("SOL")
+        );
+        // Mint B resolved, metadata not yet fetched.
+        assert_eq!(signal.token_b.mint, Some(pk(3)));
+        assert!(signal.token_b.metadata.is_none());
+    }
 }
 
 // ── Error propagation ────────────────────────────────────────────────

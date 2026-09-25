@@ -100,9 +100,30 @@ impl SignalService {
             is_last,
         } = page;
 
-        let sides = self.resolve_pools(&items).await?;
+        let items = self.enrich_batch(items).await?;
 
-        let items = items
+        Ok(Page {
+            items,
+            next_cursor,
+            prev_cursor,
+            is_first,
+            is_last,
+        })
+    }
+
+    /// Enrich a batch of signals with their pools' token pairs — the page
+    /// of `list_signals`, and each tick of the SSE poller.
+    ///
+    /// Each distinct pool is resolved once, however many signals point at
+    /// it. The poller calls this **once per tick, before broadcasting**: the
+    /// cost of a signal no longer grows with the number of open streams.
+    pub(crate) async fn enrich_batch(
+        &self,
+        records: Vec<SignalRecord>,
+    ) -> RepositoryResult<Vec<EnrichedSignal>> {
+        let sides = self.resolve_pools(&records).await?;
+
+        Ok(records
             .into_iter()
             .map(|record| {
                 let (token_a, token_b) = sides
@@ -115,33 +136,7 @@ impl SignalService {
                     token_b,
                 }
             })
-            .collect();
-
-        Ok(Page {
-            items,
-            next_cursor,
-            prev_cursor,
-            is_first,
-            is_last,
-        })
-    }
-
-    /// Enrich a single signal — the SSE path, one record at a time as
-    /// the broadcast delivers them.
-    pub(crate) async fn enrich_one(
-        &self,
-        record: SignalRecord,
-    ) -> RepositoryResult<EnrichedSignal> {
-        let pool = self
-            .pool_catalog
-            .find_by_address(&record.signal.pool_address)
-            .await?;
-        let (token_a, token_b) = self.enrich_sides(pool.as_ref()).await?;
-        Ok(EnrichedSignal {
-            record,
-            token_a,
-            token_b,
-        })
+            .collect())
     }
 
     /// Resolve the token sides of every distinct pool referenced by

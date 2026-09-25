@@ -21,9 +21,13 @@ mod query;
 #[cfg(test)]
 pub(crate) use handlers::signals::signal_sse;
 
+/// The bounds the bootstrap applies outside the router: the statement limit
+/// on the database connection, and the cap on open signal streams.
+pub(crate) use middleware::capacity::{SSE_MAX_STREAMS, STATEMENT_TIMEOUT};
+
 use std::net::SocketAddr;
 
-use axum::{Router, http::HeaderValue, routing::get};
+use axum::{Router, http::HeaderValue, middleware::from_fn_with_state, routing::get};
 use tower_http::{
     request_id::{PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
@@ -31,6 +35,10 @@ use tower_http::{
 use tracing::info;
 
 use crate::bootstrap::AppState;
+use crate::http::middleware::capacity::{
+    HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, HeavyRouteLimit, REQUEST_TIMEOUT, heavy_route_limit,
+    request_deadline,
+};
 use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,
 };
@@ -43,7 +51,10 @@ use crate::http::middleware::tracing::{
 ///    Designed to be hit constantly by orchestration tooling without
 ///    leaving a trace in the logs.
 /// 2. `app` — every business endpoint. Wrapped in `TraceLayer` for
-///    per-request spans and in the request-id layers for correlation.
+///    per-request spans and in the request-id layers for correlation,
+///    and bounded by [`REQUEST_TIMEOUT`]. Its slow routes form a
+///    sub-router sharing [`HEAVY_ROUTE_PERMITS`] slots — see
+///    [`middleware::capacity`] for the measurements behind each bound.
 ///
 /// Cross-cutting headers (security, CORS, frame-options) apply to
 /// both — they are hung on the merged router below.
@@ -52,27 +63,41 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/healthz", get(handlers::health::healthz))
         .route("/readyz", get(handlers::health::readyz));
 
+    // ── Slow routes: behind the shared slots ────────────────────────────
+    // The routes measured above 0.5 s at rest (25 September 2026). They
+    // share `HEAVY_ROUTE_PERMITS` slots, below the pool's size, so that a
+    // burst on them cannot take the connections the light routes need.
+    let heavy = Router::new()
+        // ── Pool collection ─────────────────────────────────────────────
+        .route("/api/pools", get(handlers::pools::list_pools))
+        // ── Ranked pools (non-paginated, capped) ─────────────────────────
+        .route("/api/pools/top", get(handlers::pools::list_top_pools))
+        // ── Single-pool resources ───────────────────────────────────────
+        .route("/api/pools/{address}", get(handlers::pools::get_pool))
+        .route(
+            "/api/pools/{address}/history",
+            get(handlers::pools::get_pool_history),
+        )
+        // ── Signal feed (paginated) ─────────────────────────────────────
+        .route("/api/signals", get(handlers::signals::list_signals))
+        .route("/api/stats", get(handlers::stats::get_stats))
+        .route_layer(from_fn_with_state(
+            HeavyRouteLimit::new(HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT),
+            heavy_route_limit,
+        ));
+
     let app = Router::new()
         // ── Operator announcements (non-paginated, active window) ───────
         .route(
             "/api/announcements/active",
             get(handlers::announcements::list_active_announcements),
         )
-        // ── Pool collection ─────────────────────────────────────────────
-        .route("/api/pools", get(handlers::pools::list_pools))
         // ── Fee-tier option list (non-paginated) — powers the fee filter ──
         .route("/api/pools/fee-tiers", get(handlers::pools::list_fee_tiers))
-        // ── Ranked pools (non-paginated, capped) ─────────────────────────
-        .route("/api/pools/top", get(handlers::pools::list_top_pools))
         // ── Single-pool resources ───────────────────────────────────────
-        .route("/api/pools/{address}", get(handlers::pools::get_pool))
         .route(
             "/api/pools/{address}/latest-state",
             get(handlers::pools::get_pool_latest_state),
-        )
-        .route(
-            "/api/pools/{address}/history",
-            get(handlers::pools::get_pool_history),
         )
         .route(
             "/api/pools/{address}/swap-events",
@@ -86,14 +111,15 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
             "/api/network/status",
             get(handlers::network_status::get_network_status),
         )
-        // ── Signal feed ─────────────────────────────────────────────────
-        .route("/api/signals", get(handlers::signals::list_signals))
+        // ── Signal feed (live) — capped by its own slots, see the handler ──
         .route(
             "/api/signals/stream",
             get(handlers::signals::stream_signals),
         )
-        .route("/api/stats", get(handlers::stats::get_stats))
         .route("/api/tokens/{mint}", get(handlers::token::get_token))
+        .merge(heavy)
+        // ── Deadline (innermost: the tracing span records its 503) ───────
+        .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
         // ── Tracing and request id (applied only here) ───────────────────
         // Inner-to-outer:
         //   1. PropagateRequestIdLayer echoes the id on the response.
