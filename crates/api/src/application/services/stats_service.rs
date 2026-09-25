@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use crate::application::WorkSlots;
-use crate::application::cache::{SHARED_RESULT_TTL, TtlCache};
+use crate::application::cache::{STATS, SharedCache};
 use crate::application::work_slots::no_work_slot;
 use yog_core::{
     RepositoryError,
@@ -37,8 +37,8 @@ pub(crate) struct StatsService {
     global_analytics_repo: Arc<dyn GlobalAnalyticsRepository>,
     pool_repo: Arc<dyn PoolCatalog>,
     /// `/api/stats` is the same for every visitor: computed once per
-    /// [`SHARED_RESULT_TTL`], however many requests arrive together.
-    cache: TtlCache<(), StatsAggregate, RepositoryError>,
+    /// time to live ([`STATS`]), however many requests arrive together.
+    cache: SharedCache<(), StatsAggregate>,
     /// Taken while the stats compute, never by a caller waiting for them.
     work_slots: WorkSlots,
 }
@@ -52,7 +52,7 @@ impl StatsService {
         Self {
             global_analytics_repo,
             pool_repo,
-            cache: TtlCache::new(SHARED_RESULT_TTL),
+            cache: SharedCache::new(STATS),
             work_slots,
         }
     }
@@ -60,7 +60,7 @@ impl StatsService {
     /// Assemble the current protocol-wide statistics.
     pub(crate) async fn get_stats(&self) -> Result<StatsAggregate, RepositoryError> {
         self.cache
-            .get_or_try_compute((), || async {
+            .get_or_compute((), async {
                 let _slot = self.work_slots.acquire().await.ok_or_else(no_work_slot)?;
                 self.compute_stats().await
             })

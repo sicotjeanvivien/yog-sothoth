@@ -18,7 +18,7 @@ use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
-    RepositoryError, RepositoryResult,
+    RepositoryResult,
     domain::{
         FeeTier, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
         PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolPage, PoolPropertiesLookup,
@@ -27,7 +27,7 @@ use yog_core::{
 };
 
 use crate::application::WorkSlots;
-use crate::application::cache::{SHARED_RESULT_TTL, TtlCache};
+use crate::application::cache::{SharedCache, TOP_POOLS};
 use crate::application::work_slots::no_work_slot;
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 
@@ -88,11 +88,11 @@ pub(crate) struct PoolService {
     /// contributes no entry and costs no round-trip.
     pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
     /// `/api/pools/top` is the same for every visitor: computed once per
-    /// metric and [`SHARED_RESULT_TTL`], at [`TOP_POOLS_MAX`], and cut to each
+    /// metric and time to live ([`TOP_POOLS`]), at [`TOP_POOLS_MAX`], and cut to each
     /// caller's `limit`. Keyed on the metric alone so that at most three
     /// rankings are ever computed at once — keyed on `limit` too, a client
     /// cycling 1..=20 over three metrics would start sixty.
-    top_pools_cache: TtlCache<PoolRankMetric, Vec<EnrichedPool>, RepositoryError>,
+    top_pools_cache: SharedCache<PoolRankMetric, Vec<EnrichedPool>>,
     /// Taken by a ranking while it computes, never by a caller waiting for
     /// the cached one.
     work_slots: WorkSlots,
@@ -121,7 +121,7 @@ impl PoolService {
             token_metadata_repository: deps.token_metadata_repository,
             token_price_repository: deps.token_price_repository,
             signal_feed: deps.signal_feed,
-            top_pools_cache: TtlCache::new(SHARED_RESULT_TTL),
+            top_pools_cache: SharedCache::new(TOP_POOLS),
             work_slots: deps.work_slots,
         }
     }
@@ -215,7 +215,7 @@ impl PoolService {
     ) -> RepositoryResult<Vec<EnrichedPool>> {
         let ranked = self
             .top_pools_cache
-            .get_or_try_compute(metric, || async {
+            .get_or_compute(metric, async {
                 let _slot = self.work_slots.acquire().await.ok_or_else(no_work_slot)?;
                 self.compute_top_pools(metric, TOP_POOLS_MAX).await
             })

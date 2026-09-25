@@ -28,6 +28,9 @@ serde_json = { workspace = true }
 solana-pubkey = { workspace = true }
 solana-signature = { workspace = true }
 
+# Shared-result cache
+moka = { workspace = true }
+
 # Misc
 anyhow = { workspace = true }
 tracing = { workspace = true }

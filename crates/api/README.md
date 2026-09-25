@@ -25,7 +25,7 @@ api/src/
 │   │   └── meteora/damm_v2/ …per-protocol ones under their protocol
 │   │                        (swap.rs, liquidity.rs) — mirrors core/domain
 │   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
-│   ├── cache.rs           ← TtlCache — one computation shared by every caller
+│   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_pool.rs   ← pool + embedded token/price composition
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
@@ -315,12 +315,18 @@ Each bound is named once, with its measurement, in
 | `IDLE_TIMEOUT` | 30 s | A connection with no byte either way for this long is closed, and its slot comes back. Without it the connection cap was a cheaper outage than the one it prevents: axum's `serve` sets no header-read nor keep-alive timeout, so 400 silent sockets would hold every slot. Both directions count — an SSE client sends nothing, its 15 s ping keeps it alive. It bounds that outage (400 silent sockets: `/healthz` answered after 28 s), it does not remove it for a client that can reach the process directly — in production only Caddy can, and it opens an upstream connection only for a complete request |
 
 And two results are shared rather than bounded: **`/api/pools/top` and
-`/api/stats`** return the same body to every visitor, so `application/cache.rs`
-computes each once per key and `SHARED_RESULT_TTL` (30 s), however many
-requests arrive together — the first caller computes, the others wait for the
-same value, and an error is never cached. The top-pools key is the metric
-alone: the ranking is computed at 20 and cut to each `limit`, so at most four
-computations (three metrics, plus the stats) can exist at once.
+`/api/stats`** return the same body to every visitor, so they go through
+`SharedCache` (`application/cache.rs`, on `moka`): the first caller of a cold
+key computes, the others wait for the same outcome — an error included, and
+nothing failed is kept. Each use declares a named `CachePolicy` (time to
+live, capacity) in that file: `TOP_POOLS` (30 s, 3 entries, one per metric —
+the ranking is computed at 20 and cut to each `limit`) and `STATS` (30 s,
+1 entry). The capacity, with eviction, is what makes the cache safe on keys
+that are not a fixed set.
+
+To cache a new result: add its policy to `cache.rs` with the reason for each
+number, hold a `SharedCache` in the service, and take a work slot **inside**
+the computation, never around the call.
 
 Their **routes** stay outside the slow-route middleware; their
 **computations** take a work slot, inside the cache. So the caller that
