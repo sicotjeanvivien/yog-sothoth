@@ -15,6 +15,7 @@
 //! which holds its permit for the life of the stream, and the connection cap
 //! by [`CappedListener`], which holds one for the life of the connection.
 
+use std::future::Future;
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -31,7 +32,9 @@ use axum::{
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::time::{Instant, Sleep};
 
+use crate::application::WorkSlots;
 use crate::http::error::ApiError;
 
 /// How long a request may take to produce its response.
@@ -49,13 +52,14 @@ pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// enforce it: a request cut client-side leaves its statement running.
 pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(8);
 
-/// How many slow requests may run at once.
+/// How much expensive database work may run at once: the slow routes and the
+/// shared-result computations together ([`WorkSlots`]).
 ///
-/// Below the pool's 10 connections ([`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`]),
-/// so the light routes and the signal poller always keep 4.
+/// Below the pool's 10 connections ([`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`]):
+/// with the signal poller's one, the light routes always keep 3.
 pub(crate) const HEAVY_ROUTE_PERMITS: usize = 6;
 
-/// How long a slow request waits for a slot before being refused.
+/// How long expensive work waits for a slot before being refused.
 ///
 /// Long enough for the bursts a page makes on its own (a dashboard loads
 /// three slow routes at once), short enough that a refused client learns so
@@ -87,6 +91,25 @@ pub(crate) const SSE_MAX_STREAMS: usize = 200;
 /// `mem_limit` of `docker-compose.prod.yml`.
 pub(crate) const MAX_CONNECTIONS: usize = 400;
 
+/// How long a connection may go without a byte in either direction before it
+/// is closed, giving its [`MAX_CONNECTIONS`] slot back.
+///
+/// Without it the cap would be a cheaper outage than the one it prevents:
+/// axum's `serve` sets no header-read nor keep-alive timeout, so 400 silent
+/// sockets would hold every slot for good. It counts **both** directions:
+/// an SSE client sends nothing after its request, and the 15 s keep-alive
+/// ping is what keeps its stream alive. Above that ping, and above the worst
+/// request ([`HEAVY_ROUTE_WAIT`] + [`REQUEST_TIMEOUT`]), during which nothing
+/// is written.
+///
+/// ⚠️ **It bounds the outage, it does not remove it.** Measured on
+/// 25 September 2026: 400 silent sockets, and `/healthz` answered after
+/// 28 s, the next request in 16 ms. Someone who can reach this process
+/// directly can repeat that every 30 s. The design assumes they cannot: in
+/// production only Caddy connects here, and it opens an upstream connection
+/// once it holds a complete request — silent sockets stop at the edge.
+pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Refuse a request that has not produced its response within `limit`.
 pub(crate) async fn request_deadline(
     State(limit): State<Duration>,
@@ -99,37 +122,21 @@ pub(crate) async fn request_deadline(
     }
 }
 
-/// The slots shared by every slow route, process-wide.
+/// Run a slow route only once it holds one of the [`WorkSlots`]; refuse it
+/// if none frees up within the wait.
 ///
-/// One semaphore behind an `Arc`, handed to the middleware of each slow
-/// route: `tower::limit::ConcurrencyLimitLayer` would give each route its own
-/// semaphore under axum, and refuse outside Problem Details.
-#[derive(Clone)]
-pub(crate) struct HeavyRouteLimit {
-    slots: Arc<Semaphore>,
-    wait: Duration,
-}
-
-impl HeavyRouteLimit {
-    pub(crate) fn new(permits: usize, wait: Duration) -> Self {
-        Self {
-            slots: Arc::new(Semaphore::new(permits)),
-            wait,
-        }
-    }
-}
-
-/// Run a slow route only once it holds a slot; refuse it if none frees up
-/// within the wait.
+/// One semaphore for every slow route and for the cached computations
+/// (`application/work_slots.rs`): `tower::limit::ConcurrencyLimitLayer` would
+/// give each route its own semaphore under axum, and refuse outside Problem
+/// Details.
 pub(crate) async fn heavy_route_limit(
-    State(limit): State<HeavyRouteLimit>,
+    State(slots): State<WorkSlots>,
     request: Request,
     next: Next,
 ) -> Response {
-    match tokio::time::timeout(limit.wait, limit.slots.acquire_owned()).await {
-        Ok(Ok(_slot)) => next.run(request).await,
-        // Timed out, or the semaphore was closed (it never is).
-        _ => ApiError::Unavailable("the API is at capacity; retry shortly").into_response(),
+    match slots.acquire().await {
+        Some(_slot) => next.run(request).await,
+        None => ApiError::Unavailable("the API is at capacity; retry shortly").into_response(),
     }
 }
 
@@ -138,16 +145,21 @@ pub(crate) async fn heavy_route_limit(
 /// It takes a slot **before** accepting: past the cap, a connection waits in
 /// the kernel's queue rather than in the process. The slot travels with the
 /// accepted stream and is released when the connection closes.
+///
+/// A connection idle for `idle` — no byte read, none written — is closed
+/// ([`IDLE_TIMEOUT`]), so a silent socket cannot keep its slot.
 pub(crate) struct CappedListener {
     inner: TcpListener,
     slots: Arc<Semaphore>,
+    idle: Duration,
 }
 
 impl CappedListener {
-    pub(crate) fn new(inner: TcpListener, max: usize) -> Self {
+    pub(crate) fn new(inner: TcpListener, max: usize, idle: Duration) -> Self {
         Self {
             inner,
             slots: Arc::new(Semaphore::new(max)),
+            idle,
         }
     }
 }
@@ -169,6 +181,8 @@ impl Listener for CappedListener {
             CappedStream {
                 stream,
                 _slot: slot,
+                idle: self.idle,
+                deadline: Box::pin(tokio::time::sleep(self.idle)),
             },
             addr,
         )
@@ -179,37 +193,81 @@ impl Listener for CappedListener {
     }
 }
 
-/// An accepted connection and the slot it holds until it closes.
+/// An accepted connection, the slot it holds until it closes, and the
+/// deadline its next byte must beat.
 pub(crate) struct CappedStream {
     stream: TcpStream,
     _slot: OwnedSemaphorePermit,
+    idle: Duration,
+    deadline: Pin<Box<Sleep>>,
+}
+
+impl CappedStream {
+    /// A byte went through, one way or the other: the connection is live.
+    fn touch(&mut self) {
+        let next = Instant::now() + self.idle;
+        self.deadline.as_mut().reset(next);
+    }
+
+    /// Account for a write's outcome.
+    fn written(&mut self, outcome: Poll<io::Result<usize>>) -> Poll<io::Result<usize>> {
+        if let Poll::Ready(Ok(n)) = outcome
+            && n > 0
+        {
+            self.touch();
+        }
+        outcome
+    }
 }
 
 impl AsyncRead for CappedStream {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_read(cx, buf)
+        let this = self.get_mut();
+        let before = buf.filled().len();
+        match Pin::new(&mut this.stream).poll_read(cx, buf) {
+            Poll::Ready(outcome) => {
+                if buf.filled().len() > before {
+                    this.touch();
+                }
+                Poll::Ready(outcome)
+            }
+            // Nothing to read yet: close the connection if it has been idle
+            // too long. The sleep registers the waker, so an idle connection
+            // is woken — and closed — when the deadline passes.
+            Poll::Pending => match this.deadline.as_mut().poll(cx) {
+                Poll::Ready(()) => Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "connection idle past IDLE_TIMEOUT",
+                ))),
+                Poll::Pending => Poll::Pending,
+            },
+        }
     }
 }
 
 impl AsyncWrite for CappedStream {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.stream).poll_write(cx, buf)
+        let this = self.get_mut();
+        let outcome = Pin::new(&mut this.stream).poll_write(cx, buf);
+        this.written(outcome)
     }
 
     fn poll_write_vectored(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         bufs: &[io::IoSlice<'_>],
     ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.stream).poll_write_vectored(cx, bufs)
+        let this = self.get_mut();
+        let outcome = Pin::new(&mut this.stream).poll_write_vectored(cx, bufs);
+        this.written(outcome)
     }
 
     fn is_write_vectored(&self) -> bool {

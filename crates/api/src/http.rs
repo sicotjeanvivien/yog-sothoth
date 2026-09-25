@@ -25,7 +25,8 @@ pub(crate) use handlers::signals::signal_sse;
 /// on the database connection, the cap on open signal streams, and the cap on
 /// connections.
 pub(crate) use middleware::capacity::{
-    CappedListener, MAX_CONNECTIONS, SSE_MAX_STREAMS, STATEMENT_TIMEOUT,
+    CappedListener, HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, IDLE_TIMEOUT, MAX_CONNECTIONS,
+    SSE_MAX_STREAMS, STATEMENT_TIMEOUT,
 };
 
 use std::net::SocketAddr;
@@ -38,10 +39,7 @@ use tower_http::{
 use tracing::info;
 
 use crate::bootstrap::AppState;
-use crate::http::middleware::capacity::{
-    HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, HeavyRouteLimit, REQUEST_TIMEOUT, heavy_route_limit,
-    request_deadline,
-};
+use crate::http::middleware::capacity::{REQUEST_TIMEOUT, heavy_route_limit, request_deadline};
 use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,
 };
@@ -56,7 +54,7 @@ use crate::http::middleware::tracing::{
 /// 2. `app` — every business endpoint. Wrapped in `TraceLayer` for
 ///    per-request spans and in the request-id layers for correlation,
 ///    and bounded by [`REQUEST_TIMEOUT`]. Its slow routes form a
-///    sub-router sharing [`HEAVY_ROUTE_PERMITS`] slots — see
+///    sub-router sharing the [`crate::application::WorkSlots`] — see
 ///    [`middleware::capacity`] for the measurements behind each bound.
 ///
 /// Cross-cutting headers (security, CORS, frame-options) apply to
@@ -72,10 +70,10 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     // burst on them cannot take the connections the light routes need.
     //
     // `/api/pools/top` and `/api/stats` are slow too, and stay out on
-    // purpose: their cache already bounds them to one computation per key
-    // (four keys) per 30 s. Behind the slots, the callers waiting on that one
-    // computation held a slot each — measured: 30 parallel `/top` on a cold
-    // cache gave 24 × 503 for a single ranking.
+    // purpose: their computation takes a slot itself, inside the cache, so
+    // the callers waiting on it hold none. Behind the route slots, each
+    // waiter held one — measured: 30 parallel `/top` on a cold cache gave
+    // 24 × 503 for a single ranking.
     let heavy = Router::new()
         // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
@@ -88,7 +86,7 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         // ── Signal feed (paginated) ─────────────────────────────────────
         .route("/api/signals", get(handlers::signals::list_signals))
         .route_layer(from_fn_with_state(
-            HeavyRouteLimit::new(HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT),
+            state.work_slots.clone(),
             heavy_route_limit,
         ));
 

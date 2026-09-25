@@ -19,11 +19,11 @@ use yog_persistence::{
 
 use crate::application::{
     AnnouncementService, EnrichedSignal, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
-    NetworkStatusService, PoolService, STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller,
-    StatsService, TokenService,
+    NetworkStatusService, PoolService, PoolServiceDeps, STREAM_CHANNEL_CAPACITY, SignalService,
+    SignalStreamPoller, StatsService, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
-use crate::http::{SSE_MAX_STREAMS, STATEMENT_TIMEOUT};
+use crate::http::{HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, SSE_MAX_STREAMS, STATEMENT_TIMEOUT};
 use anyhow::Context;
 
 /// Application-level dependencies shared across HTTP handlers.
@@ -47,6 +47,9 @@ pub(crate) struct AppState {
     pub(crate) signal_stream: broadcast::Sender<Arc<EnrichedSignal>>,
     /// One permit per open signal stream, [`SSE_MAX_STREAMS`] in all.
     pub(crate) stream_slots: Arc<Semaphore>,
+    /// The slots of every expensive read — the slow routes' middleware takes
+    /// them, and so do the services' cached computations.
+    pub(crate) work_slots: WorkSlots,
     pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
@@ -131,17 +134,22 @@ impl AppState {
             config.signal_stream_poll,
         );
 
+        // One set of slots for every expensive read: the slow routes and the
+        // cached computations. See `application/work_slots.rs`.
+        let work_slots = WorkSlots::new(HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT);
+
         // ── Services ────────────────────────────────────────────────────
         let state = Self {
-            pool_service: Arc::new(PoolService::new(
-                pool_repo.clone(),
-                pool_current_state_repo,
-                pool_analytics_repo,
-                token_metadata_repo.clone(),
-                token_price_repo.clone(),
-                signal_repo.clone(),
+            pool_service: Arc::new(PoolService::new(PoolServiceDeps {
+                pool_repository: pool_repo.clone(),
+                pool_current_state_repository: pool_current_state_repo,
+                pool_analytics_repository: pool_analytics_repo,
+                token_metadata_repository: token_metadata_repo.clone(),
+                token_price_repository: token_price_repo.clone(),
+                signal_feed: signal_repo.clone(),
                 pool_properties_lookups,
-            )),
+                work_slots: work_slots.clone(),
+            })),
             swap_service: Arc::new(MeteoraDammV2SwapService::new(swap_event_repo)),
             liquidity_service: Arc::new(MeteoraDammV2LiquidityService::new(liquidity_event_repo)),
             network_status_service: Arc::new(NetworkStatusService::new(
@@ -151,7 +159,12 @@ impl AppState {
             signal_service,
             signal_stream,
             stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),
-            stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
+            stats_service: Arc::new(StatsService::new(
+                global_analytics_repo,
+                pool_repo,
+                work_slots.clone(),
+            )),
+            work_slots,
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
             announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),

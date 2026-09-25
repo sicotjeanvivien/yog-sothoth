@@ -26,7 +26,9 @@ use yog_core::{
     },
 };
 
+use crate::application::WorkSlots;
 use crate::application::cache::{SHARED_RESULT_TTL, TtlCache};
+use crate::application::work_slots::no_work_slot;
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 
 /// Window of the pools-list signal indicator. Signals are append-only
@@ -91,27 +93,36 @@ pub(crate) struct PoolService {
     /// rankings are ever computed at once — keyed on `limit` too, a client
     /// cycling 1..=20 over three metrics would start sixty.
     top_pools_cache: TtlCache<PoolRankMetric, Vec<EnrichedPool>>,
+    /// Taken by a ranking while it computes, never by a caller waiting for
+    /// the cached one.
+    work_slots: WorkSlots,
+}
+
+/// What a [`PoolService`] reads from, and the slots its computations share —
+/// named fields rather than eight positional arguments.
+pub(crate) struct PoolServiceDeps {
+    pub(crate) pool_repository: Arc<dyn PoolCatalog>,
+    pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
+    pub(crate) pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
+    pub(crate) token_metadata_repository: Arc<dyn TokenMetadataLookup>,
+    pub(crate) token_price_repository: Arc<dyn TokenPriceLookup>,
+    pub(crate) signal_feed: Arc<dyn SignalFeed>,
+    pub(crate) pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
+    pub(crate) work_slots: WorkSlots,
 }
 
 impl PoolService {
-    pub(crate) fn new(
-        pool_repository: Arc<dyn PoolCatalog>,
-        pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
-        pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
-        token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-        token_price_repository: Arc<dyn TokenPriceLookup>,
-        signal_feed: Arc<dyn SignalFeed>,
-        pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
-    ) -> Self {
+    pub(crate) fn new(deps: PoolServiceDeps) -> Self {
         Self {
-            pool_repository,
-            pool_properties_lookups,
-            pool_current_state_repository,
-            pool_analytics_repository,
-            token_metadata_repository,
-            token_price_repository,
-            signal_feed,
+            pool_repository: deps.pool_repository,
+            pool_properties_lookups: deps.pool_properties_lookups,
+            pool_current_state_repository: deps.pool_current_state_repository,
+            pool_analytics_repository: deps.pool_analytics_repository,
+            token_metadata_repository: deps.token_metadata_repository,
+            token_price_repository: deps.token_price_repository,
+            signal_feed: deps.signal_feed,
             top_pools_cache: TtlCache::new(SHARED_RESULT_TTL),
+            work_slots: deps.work_slots,
         }
     }
 
@@ -204,7 +215,10 @@ impl PoolService {
     ) -> RepositoryResult<Vec<EnrichedPool>> {
         let ranked = self
             .top_pools_cache
-            .get_or_try_compute(metric, || self.compute_top_pools(metric, TOP_POOLS_MAX))
+            .get_or_try_compute(metric, || async {
+                let _slot = self.work_slots.acquire().await.ok_or_else(no_work_slot)?;
+                self.compute_top_pools(metric, TOP_POOLS_MAX).await
+            })
             .await?;
         let keep = usize::try_from(limit).unwrap_or(0);
         Ok(ranked.into_iter().take(keep).collect())

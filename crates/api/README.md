@@ -308,10 +308,11 @@ Each bound is named once, with its measurement, in
 |---|---|---|
 | `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
 | `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the signal stream is not cut |
-| `HEAVY_ROUTE_PERMITS` | 6 | The slow routes — `/api/pools`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — share 6 slots on a 10-connection pool; the light routes keep the rest |
-| `HEAVY_ROUTE_WAIT` | 2 s | How long a slow request waits for a slot before `503` — enough for a page's own burst |
+| `HEAVY_ROUTE_PERMITS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow routes — `/api/pools`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — and the cached computations below. With the signal poller's connection, the light routes always keep 3 |
+| `HEAVY_ROUTE_WAIT` | 2 s | How long expensive work waits for a slot before `503` — enough for a page's own burst |
 | `SSE_MAX_STREAMS` | 200 | ~62 KiB an open stream; half of `MAX_CONNECTIONS`, so streams never take the connections ordinary requests need |
 | `MAX_CONNECTIONS` | 400 | Connections held at once; the next wait in the kernel's accept queue (`CappedListener`). Capping streams was not enough: a burst of connections costs memory even when refused, and the allocator keeps the peak — 1000 at once got the process OOM-killed under 32 MiB with the stream cap in place. The `yog-api` image sets `MALLOC_ARENA_MAX=2`: without it glibc kept each burst's peak in a new arena (29.7 → 49 MiB → OOM over three rounds of 1000 opens); with it, twelve rounds level off at 44.1 MiB, inside the production `mem_limit`, raised to 64 MiB for it |
+| `IDLE_TIMEOUT` | 30 s | A connection with no byte either way for this long is closed, and its slot comes back. Without it the connection cap was a cheaper outage than the one it prevents: axum's `serve` sets no header-read nor keep-alive timeout, so 400 silent sockets would hold every slot. Both directions count — an SSE client sends nothing, its 15 s ping keeps it alive. It bounds that outage (400 silent sockets: `/healthz` answered after 28 s), it does not remove it for a client that can reach the process directly — in production only Caddy can, and it opens an upstream connection only for a complete request |
 
 And two results are shared rather than bounded: **`/api/pools/top` and
 `/api/stats`** return the same body to every visitor, so `application/cache.rs`
@@ -319,11 +320,13 @@ computes each once per key and `SHARED_RESULT_TTL` (30 s), however many
 requests arrive together — the first caller computes, the others wait for the
 same value, and an error is never cached. The top-pools key is the metric
 alone: the ranking is computed at 20 and cut to each `limit`, so at most four
-computations (three metrics, plus the stats) can run at once.
+computations (three metrics, plus the stats) can exist at once.
 
-These two stay **outside** the slow-route slots, bounded by the cache
-instead. Measured behind the slots: 30 parallel `/top` on a cold cache gave
-24 × `503` for a single computation, each waiting caller holding a slot.
+Their **routes** stay outside the slow-route middleware; their
+**computations** take a work slot, inside the cache. So the caller that
+computes holds a slot and the callers waiting for its value hold none.
+Measured with the routes behind the middleware: 30 parallel `/top` on a cold
+cache gave 24 × `503` for a single computation, each waiter holding a slot.
 
 What this does not do: limit a client by IP or key. That is the edge's job in
 production, and the platform API's later.

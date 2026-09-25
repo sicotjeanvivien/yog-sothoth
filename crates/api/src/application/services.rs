@@ -29,7 +29,7 @@ pub(crate) use meteora::damm_v2::{
     MeteoraDammV2SwapService,
 };
 pub(crate) use network_status_service::{NetworkStatusAggregate, NetworkStatusService};
-pub(crate) use pool_service::{PoolCurrentStateView, PoolService, TOP_POOLS_MAX};
+pub(crate) use pool_service::{PoolCurrentStateView, PoolService, PoolServiceDeps, TOP_POOLS_MAX};
 pub(crate) use signal_service::{SignalListParams, SignalService};
 pub(crate) use stats_service::{StatsAggregate, StatsService};
 pub(crate) use token_service::{TokenAggregate, TokenService};

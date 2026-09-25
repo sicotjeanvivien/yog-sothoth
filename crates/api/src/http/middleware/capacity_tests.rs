@@ -9,7 +9,8 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use super::{HeavyRouteLimit, heavy_route_limit, request_deadline};
+use super::{heavy_route_limit, request_deadline};
+use crate::application::WorkSlots;
 
 async fn slow() -> &'static str {
     tokio::time::sleep(Duration::from_millis(400)).await;
@@ -28,7 +29,7 @@ async fn call(router: Router, path: &str) -> axum::response::Response {
 /// holders complete.
 #[tokio::test]
 async fn a_slow_request_past_the_slots_is_refused_with_a_503() {
-    let limit = HeavyRouteLimit::new(2, Duration::from_millis(100));
+    let limit = WorkSlots::new(2, Duration::from_millis(100));
     let router = Router::new()
         .route("/slow", get(slow))
         .route_layer(from_fn_with_state(limit, heavy_route_limit));
@@ -57,7 +58,7 @@ async fn a_slow_request_past_the_slots_is_refused_with_a_503() {
 /// the next slow request runs.
 #[tokio::test]
 async fn a_freed_slot_serves_the_next_request() {
-    let limit = HeavyRouteLimit::new(1, Duration::from_millis(100));
+    let limit = WorkSlots::new(1, Duration::from_millis(100));
     let router = Router::new()
         .route("/slow", get(slow))
         .route_layer(from_fn_with_state(limit, heavy_route_limit));
@@ -70,7 +71,7 @@ async fn a_freed_slot_serves_the_next_request() {
 /// is what lets a page's own burst through.
 #[tokio::test]
 async fn a_request_that_gets_a_slot_within_its_wait_is_served() {
-    let limit = HeavyRouteLimit::new(1, Duration::from_secs(2));
+    let limit = WorkSlots::new(1, Duration::from_secs(2));
     let router = Router::new()
         .route("/slow", get(slow))
         .route_layer(from_fn_with_state(limit, heavy_route_limit));
@@ -142,7 +143,7 @@ async fn past_the_connection_cap_a_client_waits_until_one_closes() {
 
     let inner = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = inner.local_addr().unwrap();
-    let mut listener = CappedListener::new(inner, 1);
+    let mut listener = CappedListener::new(inner, 1, Duration::from_secs(30));
 
     let _first_client = TcpStream::connect(addr).await.unwrap();
     let (first, _) = listener.accept().await;
@@ -159,4 +160,65 @@ async fn past_the_connection_cap_a_client_waits_until_one_closes() {
     tokio::time::timeout(Duration::from_secs(1), listener.accept())
         .await
         .expect("the freed slot takes the waiting client");
+}
+
+/// A connection that sends nothing is closed once idle, and its slot comes
+/// back — otherwise 400 silent sockets would hold the API shut.
+///
+/// Mutation: never check the deadline, and the read stays pending.
+#[tokio::test]
+async fn a_silent_connection_is_closed_once_idle() {
+    use axum::serve::Listener;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::{TcpListener, TcpStream};
+
+    use super::CappedListener;
+
+    let inner = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = inner.local_addr().unwrap();
+    let mut listener = CappedListener::new(inner, 1, Duration::from_millis(100));
+
+    let _silent = TcpStream::connect(addr).await.unwrap();
+    let (mut server_side, _) = listener.accept().await;
+
+    let read = tokio::time::timeout(Duration::from_secs(2), server_side.read(&mut [0u8; 8]))
+        .await
+        .expect("the idle deadline must end the read");
+    assert_eq!(read.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
+
+    // Closing it gives the only slot back.
+    drop(server_side);
+    let _next = TcpStream::connect(addr).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(1), listener.accept())
+        .await
+        .expect("the slot came back");
+}
+
+/// Idle means neither way: a connection the server keeps writing to — an SSE
+/// stream and its keep-alive ping, whose client sends nothing — stays open
+/// well past the deadline.
+#[tokio::test]
+async fn a_connection_that_is_written_to_is_not_idle() {
+    use axum::serve::Listener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
+
+    use super::CappedListener;
+
+    let inner = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = inner.local_addr().unwrap();
+    let mut listener = CappedListener::new(inner, 1, Duration::from_millis(100));
+
+    let _reader = TcpStream::connect(addr).await.unwrap();
+    let (mut server_side, _) = listener.accept().await;
+
+    // Six writes 50 ms apart: 300 ms, three times the idle deadline.
+    for _ in 0..6 {
+        let mut buf = [0u8; 8];
+        tokio::select! {
+            read = server_side.read(&mut buf) => panic!("closed while written to: {read:?}"),
+            () = tokio::time::sleep(Duration::from_millis(50)) => {}
+        }
+        server_side.write_all(b"ping").await.unwrap();
+    }
 }
