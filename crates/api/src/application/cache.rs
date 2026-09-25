@@ -60,6 +60,16 @@ impl<K: Eq + Hash + Clone, V: Clone, E: Clone> TtlCache<K, V, E> {
     /// inside the flight instead — what `OnceCell::get_or_try_init` does —
     /// had each waiter redo the computation after the previous one failed,
     /// its own slot wait included: under load, 2, 4, 6… seconds to refuse.
+    ///
+    /// The computation runs inside the request that started it. If that
+    /// request is dropped — its client gone, or past `REQUEST_TIMEOUT` — the
+    /// computation goes with it and the next waiter starts it again. At
+    /// 3.7–4.4 s per computation (measured September 2026) that costs one
+    /// redone computation; on a database slow enough to push one past the
+    /// 10 s deadline, `/top` and `/stats` answer `503` until it recovers,
+    /// like the other slow routes. Running it in a detached task would let it
+    /// finish and fill the cache meanwhile — judged not worth reshaping the
+    /// services for, on these numbers.
     pub(crate) async fn get_or_try_compute<F, Fut>(&self, key: K, compute: F) -> Result<V, E>
     where
         F: FnOnce() -> Fut,
