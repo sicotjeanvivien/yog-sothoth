@@ -674,12 +674,12 @@ it can return; what each means for a run is the caller's decision.
 - **Nothing about versions.** The target must run the **same Postgres major
   and the same TimescaleDB version** as the source, and `pg_dump` and
   `pg_restore` must be the server's major (a 14 client refuses a 16 server).
-  ⚠️ The image *tag* does not pin that: `timescale/timescaledb:latest-pg16`
+  ⚠️ A floating image *tag* does not pin that: `timescale/timescaledb:latest-pg18`
   fixes the Postgres major only, and a later pull can bring a newer
   TimescaleDB. Record the source's version next to every dump —
   `SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'` — and
   start the target from that exact version (a versioned tag such as
-  `2.27.1-pg16`, or the image digest). The proof above used the source's image
+  `2.30.1-pg18`, which both compose files use, or the image digest). The proof above used the source's image
   by its ID, not by its tag.
 
 ### The sequence
@@ -763,6 +763,40 @@ Compare the target against the source, not against expectations:
   proves the privileges followed. It proves nothing about passwords when run
   through `docker exec … psql`, for the reason given under
   [`setup_roles.sql`](#setup_rolessql).
+
+### Moving to a new Postgres major, or a new TimescaleDB
+
+A dump restores only into the same Postgres major **and** the same TimescaleDB
+version, so data does not cross an image change on its own. Pointing compose at
+a new image and a new volume starts an **empty** database, silently: the
+bootstrap creates a fresh schema, the daemons run, and the history stays behind
+in the old volume. Move it first:
+
+1. **TimescaleDB first, on the old major.** Restart the old volume on the image
+   that has the *new* TimescaleDB and the *old* Postgres
+   (`timescale/timescaledb:<new>-pg<old>`, same mount point), then, as the first
+   statement of a fresh session:
+   `psql -X <admin-url> -c "ALTER EXTENSION timescaledb UPDATE"`.
+2. **Dump it with the new major's `pg_dump`.** A newer client reads an older
+   server, and the reverse is refused.
+3. **Restore into the new image**, on a new volume, with
+   [the sequence](#the-sequence) above, and verify it as
+   [above](#verifying-a-restore).
+
+Measured on 25 September 2026, going from 2.27.1-pg16 to 2.30.1-pg18 on a copy
+seeded with dev data (7231 pools, 476k prices, 52k swaps, a compressed chunk,
+two materialised aggregates):
+- step 1 left all 163 comparison lines unchanged;
+- after steps 2 and 3, the pg18 target matched the original pg16 source on all
+  163 lines, and step 5 of the sequence applied nothing.
+
+⚠️ **The Postgres 18 images moved their data directory.** It is now
+`/var/lib/postgresql/18/docker`, under a volume declared on
+`/var/lib/postgresql`. A volume mounted at the old `/var/lib/postgresql/data`
+makes the container refuse to start ("in 18+, these Docker images are
+configured to store database data in a …"). Hence the new mount point and the
+new volume (`timescaledb_pg18`) in `docker-compose.yml`, which also leaves the
+pg16 volume untouched for step 1.
 
 ## SQLx offline cache
 
