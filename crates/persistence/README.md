@@ -673,12 +673,12 @@ it can return; what each means for a run is the caller's decision.
 - **Nothing about versions.** The target must run the **same Postgres major
   and the same TimescaleDB version** as the source, and `pg_dump` and
   `pg_restore` must be the server's major (a 14 client refuses a 16 server).
-  ⚠️ The image *tag* does not pin that: `timescale/timescaledb:latest-pg16`
+  ⚠️ A floating image *tag* does not pin that: `timescale/timescaledb:latest-pg18`
   fixes the Postgres major only, and a later pull can bring a newer
   TimescaleDB. Record the source's version next to every dump —
   `SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'` — and
   start the target from that exact version (a versioned tag such as
-  `2.27.1-pg16`, or the image digest). The proof above used the source's image
+  `2.30.1-pg18`, which both compose files use, or the image digest). The proof above used the source's image
   by its ID, not by its tag.
 
 ### The sequence

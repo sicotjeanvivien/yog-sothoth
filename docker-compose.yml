@@ -47,7 +47,10 @@
 services:
   # ── Database ───────────────────────────────────────────────────
   postgres:
-    image: timescale/timescaledb:latest-pg16
+    # The same versioned tag as docker-compose.prod.yml, not `latest-pg18`: a
+    # floating tag pins only the Postgres major, so a `pull` could move dev to
+    # a TimescaleDB that production does not run.
+    image: timescale/timescaledb:2.30.1-pg18
     # max_background_workers = 0 disables the TimescaleDB job scheduler. It is
     # required by the DB-backed integration tests: sqlx::test creates a fresh
     # database per test, each adding continuous-aggregate refresh policies
@@ -65,7 +68,12 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - timescaledb_data:/var/lib/postgresql/data
+      # Postgres 18 images keep their data in /var/lib/postgresql/18/docker and
+      # refuse to start with a volume on the old /var/lib/postgresql/data
+      # ("in 18+, these Docker images are configured to store database data
+      # in a ... (unused mount/volume)"). The volume is new too: the pg16 one,
+      # `timescaledb_data`, is left as it was rather than initialised over.
+      - timescaledb_pg18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yog} -d ${POSTGRES_DB:-yog_sothoth}"]
       interval: 5s
@@ -348,4 +356,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  timescaledb_data:
+  timescaledb_pg18:

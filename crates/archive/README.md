@@ -116,7 +116,7 @@ and the previous one stays, and a write-only key cannot delete versions. See
 | `ARCHIVE_PG_DUMP` / `ARCHIVE_PG_RESTORE` | no, `pg_dump` / `pg_restore` | The client programs. They must be the server's major |
 
 The image (`docker/backend.Dockerfile`, target `yog-archive`) starts from
-`postgres:16-bookworm`, which carries both programs. **Moving the database to a
+`postgres:18-bookworm`, which carries both programs. **Moving the database to a
 new Postgres major means moving this image with it** — the archiver refuses to
 run otherwise, and says so.
 
