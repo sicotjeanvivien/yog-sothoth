@@ -113,9 +113,19 @@ pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
 
         SqlxError::PoolTimedOut => RepositoryError::Timeout(err.to_string()),
 
+        // `statement_timeout` expired: Postgres cancelled the statement itself.
+        // A time budget exceeded, like the pool's — not a backend fault.
+        SqlxError::Database(db_err) if db_err.code().as_deref() == Some(QUERY_CANCELED) => {
+            RepositoryError::Timeout(err.to_string())
+        }
+
         _ => RepositoryError::Backend(err.to_string()),
     }
 }
+
+/// SQLSTATE `57014` — `query_canceled`, what a statement cut short by
+/// `statement_timeout` fails with.
+const QUERY_CANCELED: &str = "57014";
 
 /// Convert a `u128` into a `BigDecimal`, lossless. Used when binding u128
 /// values to PostgreSQL `NUMERIC(39, 0)` columns.
