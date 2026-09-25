@@ -73,6 +73,9 @@ services:
       # ("in 18+, these Docker images are configured to store database data
       # in a ... (unused mount/volume)"). The volume is new too: the pg16 one,
       # `timescaledb_data`, is left as it was rather than initialised over.
+      # ⚠️ So this starts on an EMPTY database, and nothing says so: move the
+      # data first — crates/persistence/README.md, "Moving to a new Postgres
+      # major, or a new TimescaleDB".
       - timescaledb_pg18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yog} -d ${POSTGRES_DB:-yog_sothoth}"]
