@@ -111,6 +111,14 @@ ENTRYPOINT ["/usr/local/bin/yog-indexer"]
 # yog-api — axum HTTP server.
 FROM runtime AS yog-api
 COPY --from=builder /app/target/release/yog-api /usr/local/bin/yog-api
+# Two glibc malloc arenas instead of one per thread. A burst of connections
+# leaves its peak fragmented across per-thread arenas, and the next burst
+# builds a new one on top: measured on 25 September 2026, 1000 signal-stream
+# opens at a time took the process to 29.7, then 49 MiB, then OOM under a
+# 64 MiB limit. With two arenas it levels off: twelve rounds climbed in
+# steps to 44.1 MiB and held there over the last three, never OOM. A
+# setting, not an allocator swap.
+ENV MALLOC_ARENA_MAX=2
 EXPOSE 5000
 ENTRYPOINT ["/usr/local/bin/yog-api"]
 

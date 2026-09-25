@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use tokio::sync::broadcast;
+use tokio::sync::{Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use yog_core::domain::{
     AnnouncementLookup, EventFreshnessRepository, GlobalAnalyticsRepository,
     MeteoraDammV2LiquidityEventFeed, MeteoraDammV2SwapEventFeed, NetworkStatusLookup,
     PoolAnalyticsRepository, PoolCatalog, PoolCurrentStateLookup, PoolPropertiesLookup, SignalFeed,
-    SignalRecord, TokenMetadataLookup, TokenPriceLookup,
+    TokenMetadataLookup, TokenPriceLookup,
 };
 use yog_persistence::{
     Database, PgAnnouncementRepository, PgEventFreshnessRepository, PgGlobalAnalyticsRepository,
@@ -14,15 +14,16 @@ use yog_persistence::{
     PgMeteoraDammV2PoolPropertiesRepository, PgMeteoraDammV2SwapEventRepository,
     PgMeteoraDlmmPoolPropertiesRepository, PgNetworkStatusRepository, PgPoolAnalyticsRepository,
     PgPoolCurrentStateRepository, PgPoolRepository, PgSignalRepository, PgTokenMetadataRepository,
-    PgTokenPriceRepository,
+    PgTokenPriceRepository, PoolSettings,
 };
 
 use crate::application::{
-    AnnouncementService, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
-    NetworkStatusService, PoolService, STREAM_CHANNEL_CAPACITY, SignalService, SignalStreamPoller,
-    StatsService, TokenService,
+    AnnouncementService, EnrichedSignal, MeteoraDammV2LiquidityService, MeteoraDammV2SwapService,
+    NetworkStatusService, PoolService, PoolServiceDeps, STREAM_CHANNEL_CAPACITY, SignalService,
+    SignalStreamPoller, StatsService, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
+use crate::http::{HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, SSE_MAX_STREAMS, STATEMENT_TIMEOUT};
 use anyhow::Context;
 
 /// Application-level dependencies shared across HTTP handlers.
@@ -42,7 +43,13 @@ pub(crate) struct AppState {
     pub(crate) signal_service: Arc<SignalService>,
     /// Live end of the signal feed: SSE handlers `subscribe()` here;
     /// the [`SignalStreamPoller`] spawned by the binary is the producer.
-    pub(crate) signal_stream: broadcast::Sender<SignalRecord>,
+    /// Signals travel enriched, once, behind an `Arc`.
+    pub(crate) signal_stream: broadcast::Sender<Arc<EnrichedSignal>>,
+    /// One permit per open signal stream, [`SSE_MAX_STREAMS`] in all.
+    pub(crate) stream_slots: Arc<Semaphore>,
+    /// The slots of every expensive read — the slow routes' middleware takes
+    /// them, and so do the services' cached computations.
+    pub(crate) work_slots: WorkSlots,
     pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
@@ -64,9 +71,15 @@ impl AppState {
         config: Config,
         shutdown: CancellationToken,
     ) -> anyhow::Result<(Self, SignalStreamPoller)> {
-        let database = Database::connect(config.database_url.expose())
-            .await
-            .context("failed to connect to database")?;
+        let database = Database::connect_with(
+            config.database_url.expose(),
+            PoolSettings {
+                statement_timeout: Some(STATEMENT_TIMEOUT),
+                ..PoolSettings::DEFAULT
+            },
+        )
+        .await
+        .context("failed to connect to database")?;
 
         let db_pool = database.pool().clone();
 
@@ -105,39 +118,53 @@ impl AppState {
         let announcement_repo: Arc<dyn AnnouncementLookup> =
             Arc::new(PgAnnouncementRepository::new(db_pool.clone()));
 
-        // ── Signal stream (poller → broadcast → SSE handlers) ──────────
+        let signal_service = Arc::new(SignalService::new(
+            signal_repo.clone(),
+            pool_repo.clone(),
+            token_metadata_repo.clone(),
+            token_price_repo.clone(),
+        ));
+
+        // ── Signal stream (poller → enrich once → broadcast → SSE) ─────
         let (signal_stream, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);
         let signal_poller = SignalStreamPoller::new(
             signal_repo.clone(),
+            signal_service.clone(),
             signal_stream.clone(),
             config.signal_stream_poll,
         );
 
+        // One set of slots for every expensive read: the slow routes and the
+        // cached computations. See `application/work_slots.rs`.
+        let work_slots = WorkSlots::new(HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT);
+
         // ── Services ────────────────────────────────────────────────────
         let state = Self {
-            pool_service: Arc::new(PoolService::new(
-                pool_repo.clone(),
-                pool_current_state_repo,
-                pool_analytics_repo,
-                token_metadata_repo.clone(),
-                token_price_repo.clone(),
-                signal_repo.clone(),
+            pool_service: Arc::new(PoolService::new(PoolServiceDeps {
+                pool_repository: pool_repo.clone(),
+                pool_current_state_repository: pool_current_state_repo,
+                pool_analytics_repository: pool_analytics_repo,
+                token_metadata_repository: token_metadata_repo.clone(),
+                token_price_repository: token_price_repo.clone(),
+                signal_feed: signal_repo.clone(),
                 pool_properties_lookups,
-            )),
+                work_slots: work_slots.clone(),
+            })),
             swap_service: Arc::new(MeteoraDammV2SwapService::new(swap_event_repo)),
             liquidity_service: Arc::new(MeteoraDammV2LiquidityService::new(liquidity_event_repo)),
             network_status_service: Arc::new(NetworkStatusService::new(
                 network_status_repo,
                 event_freshness_repo,
             )),
-            signal_service: Arc::new(SignalService::new(
-                signal_repo,
-                pool_repo.clone(),
-                token_metadata_repo.clone(),
-                token_price_repo.clone(),
-            )),
+            signal_service,
             signal_stream,
-            stats_service: Arc::new(StatsService::new(global_analytics_repo, pool_repo)),
+            stream_slots: Arc::new(Semaphore::new(SSE_MAX_STREAMS)),
+            stats_service: Arc::new(StatsService::new(
+                global_analytics_repo,
+                pool_repo,
+                work_slots.clone(),
+            )),
+            work_slots,
             token_service: Arc::new(TokenService::new(token_metadata_repo, token_price_repo)),
             announcement_service: Arc::new(AnnouncementService::new(announcement_repo)),
             health_checker: Arc::new(PgHealthChecker::new(db_pool)),

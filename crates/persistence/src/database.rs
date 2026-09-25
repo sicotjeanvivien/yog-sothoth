@@ -16,6 +16,36 @@ pub struct Database {
     pool: PgPool,
 }
 
+/// How [`Database::connect_with`] opens its pool.
+///
+/// Start from [`PoolSettings::DEFAULT`] and override what differs, so that a
+/// caller names only the settings it has a reason for.
+#[derive(Debug, Clone, Copy)]
+pub struct PoolSettings {
+    /// The pool size. See [`Database::DEFAULT_MAX_CONNECTIONS`].
+    pub max_connections: u32,
+    /// How long a caller waits for a free connection before
+    /// `PoolTimedOut`. See [`Database::DEFAULT_ACQUIRE_TIMEOUT`].
+    pub acquire_timeout: Duration,
+    /// How long Postgres lets one statement run before cancelling it with
+    /// SQLSTATE `57014`. `None` leaves the server's setting (no limit, by
+    /// default).
+    ///
+    /// The one bound a caller cannot build on its own: dropping a query's
+    /// future stops the client waiting, not the server executing. A runaway
+    /// statement keeps its connection and its CPU until Postgres ends it.
+    pub statement_timeout: Option<Duration>,
+}
+
+impl PoolSettings {
+    /// What [`Database::connect`] uses.
+    pub const DEFAULT: Self = Self {
+        max_connections: Database::DEFAULT_MAX_CONNECTIONS,
+        acquire_timeout: Database::DEFAULT_ACQUIRE_TIMEOUT,
+        statement_timeout: None,
+    };
+}
+
 impl Database {
     /// How many connections [`Database::connect`] opens.
     ///
@@ -23,7 +53,7 @@ impl Database {
     /// ask [`Database::max_connections`], which is the pool that was actually
     /// opened. This constant says what `connect` uses when nobody chose;
     /// reading it as "the pool size" is wrong the moment someone calls
-    /// `connect_with_options`.
+    /// [`Database::connect_with`].
     ///
     /// Public so that the two can be compared and so that a caller can size a
     /// pool deliberately — not as a number for other components to copy.
@@ -46,32 +76,29 @@ impl Database {
     ///   - [`Database::DEFAULT_ACQUIRE_TIMEOUT`]: fail fast rather than queue
     ///     indefinitely.
     ///
-    /// Callers needing different sizing should use `connect_with_options`.
+    /// Callers needing different settings use [`Database::connect_with`].
     ///
     /// Returns [`sqlx::Error`] directly: connection failures at boot time are
     /// best surfaced with their original context (configuration, IO, TLS,
     /// authentication…) rather than wrapped behind a generic error type.
     pub async fn connect(url: &str) -> Result<Self, sqlx::Error> {
-        Self::connect_with_options(
-            url,
-            Self::DEFAULT_MAX_CONNECTIONS,
-            Self::DEFAULT_ACQUIRE_TIMEOUT,
-        )
-        .await
+        Self::connect_with(url, PoolSettings::DEFAULT).await
     }
 
-    /// Connect with explicit pool sizing. The api may want a higher
-    /// `max_connections` than the indexer, since requests are bursty
-    /// while indexing is steady-state.
-    pub async fn connect_with_options(
-        url: &str,
-        max_connections: u32,
-        acquire_timeout: Duration,
-    ) -> Result<Self, sqlx::Error> {
+    /// Connect with explicit [`PoolSettings`].
+    pub async fn connect_with(url: &str, settings: PoolSettings) -> Result<Self, sqlx::Error> {
+        let mut options = PgConnectOptions::from_str(url)?;
+        if let Some(limit) = settings.statement_timeout {
+            // Sent as a startup parameter, so it holds for every statement of
+            // every connection the pool opens. sqlx escapes the value itself
+            // since 0.9.
+            options = options.options([("statement_timeout", format!("{}ms", limit.as_millis()))]);
+        }
+
         let pool = PgPoolOptions::new()
-            .max_connections(max_connections)
-            .acquire_timeout(acquire_timeout)
-            .connect(url)
+            .max_connections(settings.max_connections)
+            .acquire_timeout(settings.acquire_timeout)
+            .connect_with(options)
             .await?;
 
         Ok(Self { pool })
@@ -106,7 +133,7 @@ impl Database {
     /// ⚠️ **Read this, do not assume [`Database::DEFAULT_MAX_CONNECTIONS`].**
     /// A caller sizing itself against the pool — the indexer's bounded worker
     /// does — must ask the pool it was handed, or the two silently part ways
-    /// the day someone calls `connect_with_options`. The constant is the
+    /// the day someone calls [`Database::connect_with`]. The constant is the
     /// default; this is the fact.
     pub fn max_connections(&self) -> u32 {
         self.pool.options().get_max_connections()

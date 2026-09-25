@@ -943,3 +943,8 @@ pub(crate) fn make_signal_page(records: Vec<SignalRecord>, is_last: bool) -> Pag
         is_last,
     }
 }
+
+/// Slots for tests that do not exercise them: plenty, and a short wait.
+pub(crate) fn work_slots() -> crate::application::WorkSlots {
+    crate::application::WorkSlots::new(8, std::time::Duration::from_millis(100))
+}

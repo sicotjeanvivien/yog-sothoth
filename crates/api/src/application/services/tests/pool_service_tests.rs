@@ -1,8 +1,9 @@
 //! Unit tests for `PoolService`. Mocks and fixtures come from
 //! `crate::testing`; this file holds only the scenarios.
 
-use super::PoolService;
+use super::{PoolService, PoolServiceDeps};
 use crate::testing::make_pool_current_state;
+use crate::testing::work_slots;
 use crate::testing::{
     MockAnalyticsRepo, MockMetadataRepo, MockPoolCurrentStateRepo, MockPriceRepo, MockSignalRepo,
     PoolRepoOnce, make_metadata, make_page, make_pool, make_price, make_signal_record, pk,
@@ -15,7 +16,7 @@ use yog_core::domain::{
     MeteoraDammV2PoolProperties, Pool, PoolAnalytics, PoolListQuery, PoolProperties,
     PoolPropertiesLookup, PoolRankMetric, Protocol,
 };
-use yog_core::{PageDirection, PoolSort};
+use yog_core::{PageDirection, PoolSort, RepositoryError};
 
 fn service(
     pool_repo: PoolRepoOnce,
@@ -44,17 +45,18 @@ fn service_with_signals(
     price: MockPriceRepo,
     signals: MockSignalRepo,
 ) -> PoolService {
-    PoolService::new(
-        Arc::new(pool_repo),
-        Arc::new(pool_current_state_repo),
-        Arc::new(analytics),
-        Arc::new(metadata),
-        Arc::new(price),
-        Arc::new(signals),
-        vec![Arc::new(MockPropertiesLookup::empty(
+    PoolService::new(PoolServiceDeps {
+        pool_repository: Arc::new(pool_repo),
+        pool_current_state_repository: Arc::new(pool_current_state_repo),
+        pool_analytics_repository: Arc::new(analytics),
+        token_metadata_repository: Arc::new(metadata),
+        token_price_repository: Arc::new(price),
+        signal_feed: Arc::new(signals),
+        pool_properties_lookups: vec![Arc::new(MockPropertiesLookup::empty(
             Protocol::MeteoraDammV2,
         ))],
-    )
+        work_slots: work_slots(),
+    })
 }
 
 /// A `PoolPropertiesLookup` for one protocol, recording whether it was consulted.
@@ -310,19 +312,20 @@ async fn get_pool_detail_routes_to_the_matching_protocol_lookup() {
         damm_v2_properties(addr),
     ));
 
-    let svc = PoolService::new(
-        Arc::new(PoolRepoOnce::with_pool(Some(make_pool(
+    let svc = PoolService::new(PoolServiceDeps {
+        pool_repository: Arc::new(PoolRepoOnce::with_pool(Some(make_pool(
             addr,
             pk(10),
             pk(11),
         )))),
-        Arc::new(MockPoolCurrentStateRepo::not_found()),
-        Arc::new(MockAnalyticsRepo::empty()),
-        Arc::new(MockMetadataRepo::empty()),
-        Arc::new(MockPriceRepo::empty()),
-        Arc::new(MockSignalRepo::recent_empty()),
-        vec![lookup.clone()],
-    );
+        pool_current_state_repository: Arc::new(MockPoolCurrentStateRepo::not_found()),
+        pool_analytics_repository: Arc::new(MockAnalyticsRepo::empty()),
+        token_metadata_repository: Arc::new(MockMetadataRepo::empty()),
+        token_price_repository: Arc::new(MockPriceRepo::empty()),
+        signal_feed: Arc::new(MockSignalRepo::recent_empty()),
+        pool_properties_lookups: vec![lookup.clone()],
+        work_slots: work_slots(),
+    });
 
     let detail = svc.get_pool_detail(&addr).await.unwrap().unwrap();
 
@@ -349,15 +352,16 @@ async fn get_pool_detail_skips_a_protocol_with_no_lookup() {
         damm_v2_properties(addr),
     ));
 
-    let svc = PoolService::new(
-        Arc::new(PoolRepoOnce::with_pool(Some(pool))),
-        Arc::new(MockPoolCurrentStateRepo::not_found()),
-        Arc::new(MockAnalyticsRepo::empty()),
-        Arc::new(MockMetadataRepo::empty()),
-        Arc::new(MockPriceRepo::empty()),
-        Arc::new(MockSignalRepo::recent_empty()),
-        vec![damm_v2_lookup.clone()],
-    );
+    let svc = PoolService::new(PoolServiceDeps {
+        pool_repository: Arc::new(PoolRepoOnce::with_pool(Some(pool))),
+        pool_current_state_repository: Arc::new(MockPoolCurrentStateRepo::not_found()),
+        pool_analytics_repository: Arc::new(MockAnalyticsRepo::empty()),
+        token_metadata_repository: Arc::new(MockMetadataRepo::empty()),
+        token_price_repository: Arc::new(MockPriceRepo::empty()),
+        signal_feed: Arc::new(MockSignalRepo::recent_empty()),
+        pool_properties_lookups: vec![damm_v2_lookup.clone()],
+        work_slots: work_slots(),
+    });
 
     let detail = svc.get_pool_detail(&addr).await.unwrap().unwrap();
 
@@ -622,6 +626,39 @@ async fn top_pools_emits_in_rank_order() {
     assert_eq!(top[1].pool.pool_address, a2);
 }
 
+/// The shared ranking is keyed on the metric alone: requests with different
+/// `limit`s are cut from **one** computation — `PoolRepoOnce` panics on a
+/// second `find_by_addresses`. Keyed on `limit` too, a client cycling
+/// 1..=20 over the two metrics would start forty rankings at once.
+#[tokio::test]
+async fn top_pools_cuts_every_limit_from_one_ranking() {
+    let (a1, a2, a3) = (pk(1), pk(2), pk(3));
+    let pools = vec![
+        make_pool(a1, pk(10), pk(11)),
+        make_pool(a2, pk(12), pk(13)),
+        make_pool(a3, pk(14), pk(15)),
+    ];
+    let map = [a1, a2, a3]
+        .into_iter()
+        .map(|a| (a, PoolAnalytics::empty()))
+        .collect();
+
+    let svc = service(
+        PoolRepoOnce::with_pools(pools),
+        MockPoolCurrentStateRepo::not_found(),
+        MockAnalyticsRepo::with(map).with_top(vec![a1, a2, a3]),
+        MockMetadataRepo::empty(),
+        MockPriceRepo::empty(),
+    );
+
+    let three = svc.top_pools(PoolRankMetric::Volume24h, 3).await.unwrap();
+    let one = svc.top_pools(PoolRankMetric::Volume24h, 1).await.unwrap();
+
+    assert_eq!(three.len(), 3);
+    assert_eq!(one.len(), 1);
+    assert_eq!(one[0].pool.pool_address, a1, "the cut keeps the rank order");
+}
+
 #[tokio::test]
 async fn top_pools_empty_when_no_ranking() {
     // No ranked addresses → short-circuit to an empty list, no pool/analytics
@@ -649,4 +686,34 @@ async fn top_pools_ranking_error_propagates() {
     );
 
     assert!(svc.top_pools(PoolRankMetric::Volume24h, 10).await.is_err());
+}
+
+/// The cached ranking takes one of the shared work slots while it computes:
+/// with every slot held by the slow routes, it waits, then gives up with a
+/// `Timeout` (a 503 on the wire) instead of taking one more connection than
+/// the slots allow.
+///
+/// Mutation: compute without taking a slot, and the ranking goes through.
+#[tokio::test]
+async fn the_cached_ranking_waits_for_a_work_slot() {
+    let slots = crate::application::WorkSlots::new(1, std::time::Duration::from_millis(50));
+    let _held_by_a_slow_route = slots.acquire().await.unwrap();
+
+    let svc = PoolService::new(PoolServiceDeps {
+        pool_repository: Arc::new(PoolRepoOnce::with_pools(vec![])),
+        pool_current_state_repository: Arc::new(MockPoolCurrentStateRepo::not_found()),
+        pool_analytics_repository: Arc::new(MockAnalyticsRepo::empty()),
+        token_metadata_repository: Arc::new(MockMetadataRepo::empty()),
+        token_price_repository: Arc::new(MockPriceRepo::empty()),
+        signal_feed: Arc::new(MockSignalRepo::recent_empty()),
+        pool_properties_lookups: vec![],
+        work_slots: slots.clone(),
+    });
+
+    let outcome = svc.top_pools(PoolRankMetric::Volume24h, 5).await;
+
+    assert!(
+        matches!(outcome, Err(RepositoryError::Timeout(_))),
+        "no slot is free: the ranking must give up"
+    );
 }

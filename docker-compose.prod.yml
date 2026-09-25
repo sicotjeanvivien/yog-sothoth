@@ -56,8 +56,10 @@
 # and without limits the first service to grow gets Postgres killed by the
 # OOM killer. The binaries' limits are about 4x to 8x their measured peaks
 # (September 2026: web 62 MiB under HTTP load, indexer 7.7, context 9.9,
-# api 6.3, signals 4.7, archive 31 with its pg_dump). The limits add up to
-# 1472 MiB, inside the 2.5 GB the machine reserves for this stack.
+# api 6.3, signals 4.7, archive 31 with its pg_dump) — except the API's, which
+# is sized against its capacity bounds rather than a peak (see below). The
+# limits add up to 1504 MiB, inside the 2.5 GB the machine reserves for this
+# stack.
 #
 # Postgres's memory and connection settings are written here, not left to
 # `timescaledb-tune`. The image runs it once, when the volume is created, and
@@ -131,7 +133,13 @@ services:
     environment:
       API_CORS_ALLOWED_ORIGINS: https://${YOG_WEB_DOMAIN:?set it in the server's .env (e.g. yog-scope.xyz)}
     ports: !reset []
-    mem_limit: 32m
+    # Sized against the API's own bounds, not its idle peak: with at most
+    # MAX_CONNECTIONS (400) connections and MALLOC_ARENA_MAX=2 (both in
+    # crates/api/src/http/middleware/capacity.rs and the yog-api image),
+    # twelve rounds of 1000 signal-stream opens level off at 44.1 MiB. 32 MiB,
+    # sized on the 6.3 MiB peak of a run without streams, was OOM-killed by
+    # one client opening streams (measured 25 September 2026).
+    mem_limit: 64m
 
   yog-context:
     ports: !reset []

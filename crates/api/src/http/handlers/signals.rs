@@ -4,15 +4,17 @@ use std::time::Duration;
 use axum::{
     Json,
     extract::{Query, State},
-    response::sse::{Event, KeepAlive, Sse},
+    response::{
+        IntoResponse, Response,
+        sse::{Event, KeepAlive, Sse},
+    },
 };
 use futures_util::{Stream, StreamExt};
-use tokio::sync::broadcast;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
-use yog_core::domain::SignalRecord;
+use tracing::info;
 
-use crate::application::{EnrichedSignal, SignalService};
+use crate::application::EnrichedSignal;
 use crate::bootstrap::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
@@ -64,16 +66,34 @@ pub(crate) async fn list_signals(
 /// (a too-slow client would otherwise silently miss alerts) — the
 /// browser's EventSource then reconnects on its own.
 ///
+/// **At most [`SSE_MAX_STREAMS`] are open at once**; past that the answer is
+/// `503` with `Retry-After`. Each stream costs memory for as long as it
+/// lives, and ~500 of them OOM-killed the process under its production
+/// limit (measured 25 September 2026).
+///
 /// [`SignalStreamPoller`]: crate::application::SignalStreamPoller
-pub(crate) async fn stream_signals(
-    State(state): State<AppState>,
-) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
-    info!("signal stream client connected");
-    signal_sse(
+/// [`SSE_MAX_STREAMS`]: crate::http::SSE_MAX_STREAMS
+pub(crate) async fn stream_signals(State(state): State<AppState>) -> Response {
+    open_signal_stream(
+        state.stream_slots.clone(),
         state.signal_stream.subscribe(),
-        state.signal_service.clone(),
         state.shutdown.clone(),
     )
+}
+
+/// Open a stream if a slot is free, or refuse with `503` — apart from the
+/// state, so that a test can drive the cap without a database.
+pub(crate) fn open_signal_stream(
+    slots: Arc<Semaphore>,
+    receiver: broadcast::Receiver<Arc<EnrichedSignal>>,
+    shutdown: CancellationToken,
+) -> Response {
+    let Ok(slot) = slots.try_acquire_owned() else {
+        return ApiError::Unavailable("too many open signal streams; retry shortly")
+            .into_response();
+    };
+    info!("signal stream client connected");
+    signal_sse(receiver, slot, shutdown).into_response()
 }
 
 /// The SSE response itself, apart from the state it is read from — so that a
@@ -87,36 +107,26 @@ pub(crate) async fn stream_signals(
 /// response cleanly, and the browser's EventSource reconnects on its own — to
 /// the next instance, once it is up. No terminal event is sent: the client
 /// has nothing to do with it that reconnecting does not already do.
+///
+/// `slot` travels in the stream's state and is released when the stream is
+/// dropped — the client leaving, lagging, or the process stopping.
 pub(crate) fn signal_sse(
-    receiver: broadcast::Receiver<SignalRecord>,
-    service: Arc<SignalService>,
+    receiver: broadcast::Receiver<Arc<EnrichedSignal>>,
+    slot: OwnedSemaphorePermit,
     shutdown: CancellationToken,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
-    let stream = futures_util::stream::unfold(
-        (receiver, service),
-        |(mut receiver, service)| async move {
+    let stream =
+        futures_util::stream::unfold((receiver, slot), |(mut receiver, slot)| async move {
             match receiver.recv().await {
-                Ok(record) => {
-                    // The poller broadcasts bare records; the token pair is
-                    // resolved per event, at delivery. On failure the alert
-                    // still goes out, just without its pair — delivering
-                    // beats decorating.
-                    let enriched = match service.enrich_one(record.clone()).await {
-                        Ok(enriched) => enriched,
-                        Err(error) => {
-                            warn!(error = %error, "signal stream: token enrichment failed — emitting bare signal");
-                            EnrichedSignal::bare(record)
-                        }
-                    };
-                    Some((make_event(enriched), (receiver, service)))
-                }
+                // Enriched once by the poller, shared by every stream: no
+                // database work happens here.
+                Ok(signal) => Some((make_event(&signal), (receiver, slot))),
                 // Lagged (client too slow) or Closed (poller gone): end the
                 // stream and let the client reconnect.
                 Err(_) => None,
             }
-        },
-    )
-    .take_until(shutdown.cancelled_owned());
+        })
+        .take_until(shutdown.cancelled_owned());
 
     Sse::new(stream).keep_alive(
         // Comment ping through proxies that would otherwise reap an
@@ -128,9 +138,13 @@ pub(crate) fn signal_sse(
     )
 }
 
-fn make_event(enriched: EnrichedSignal) -> Result<Event, axum::Error> {
-    let id = enriched.record.id.to_string();
+fn make_event(signal: &EnrichedSignal) -> Result<Event, axum::Error> {
+    let id = signal.record.id.to_string();
     Event::default()
-        .json_data(SignalResponse::from(enriched))
+        .json_data(SignalResponse::from(signal.clone()))
         .map(|event| event.id(id))
 }
+
+#[cfg(test)]
+#[path = "signals_tests.rs"]
+mod tests;

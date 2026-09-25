@@ -9,7 +9,7 @@ use yog_core::{
 };
 
 use super::super::StatsService;
-use crate::testing::{MockGlobalAnalyticsRepo, PoolCountsRepo};
+use crate::testing::{MockGlobalAnalyticsRepo, PoolCountsRepo, work_slots};
 
 fn analytics() -> GlobalAnalytics {
     GlobalAnalytics {
@@ -30,6 +30,7 @@ async fn composes_analytics_and_counts() {
             observed: 359,
             discovered_24h: 55,
         })),
+        work_slots(),
     );
 
     let agg = svc.get_stats().await.unwrap();
@@ -49,6 +50,7 @@ async fn analytics_repo_error_propagates() {
             observed: 1,
             discovered_24h: 0,
         })),
+        work_slots(),
     );
 
     assert!(matches!(
@@ -62,6 +64,7 @@ async fn counts_repo_error_propagates() {
     let svc = StatsService::new(
         Arc::new(MockGlobalAnalyticsRepo::with(analytics())),
         Arc::new(PoolCountsRepo::failing()),
+        work_slots(),
     );
 
     assert!(matches!(

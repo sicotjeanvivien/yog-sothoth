@@ -28,6 +28,9 @@ serde_json = { workspace = true }
 solana-pubkey = { workspace = true }
 solana-signature = { workspace = true }
 
+# Shared-result cache
+moka = { workspace = true }
+
 # Misc
 anyhow = { workspace = true }
 tracing = { workspace = true }
@@ -38,4 +41,7 @@ rust_decimal = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
-tokio = { workspace = true }
+# `test-util`: `tokio::time::pause`/`advance`, to age the shared-result cache
+# without sleeping through its TTL.
+tokio = { workspace = true, features = ["test-util"] }
+tower = { workspace = true }

@@ -24,7 +24,8 @@ api/src/
 │   │   │                    NetworkStatusService, AnnouncementService)…
 │   │   └── meteora/damm_v2/ …per-protocol ones under their protocol
 │   │                        (swap.rs, liquidity.rs) — mirrors core/domain
-│   ├── signal_stream.rs   ← SignalStreamPoller (feeds the SSE broadcast)
+│   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
+│   ├── cache.rs           ← SharedCache (moka) and its named CachePolicy per use
 │   ├── enriched_pool.rs   ← pool + embedded token/price composition
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
@@ -33,8 +34,9 @@ api/src/
 │   ├── dto/response/      ← wire shapes, decoupled from the domain
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── query.rs           ← shared query-param validation helpers
-│   ├── middleware.rs      ← CORS, security headers, request-id tracing
-│   └── error.rs           ← ApiError, IntoResponse (RFC 9457)
+│   ├── middleware.rs      ← CORS, security headers, request-id tracing,
+│   │                        capacity bounds (middleware/capacity.rs)
+│   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 └── main.rs
 ```
 
@@ -258,11 +260,15 @@ by per-client DB queries:
 - The handler emits each signal as an SSE event (`data` = the JSON
   `SignalResponse`, `id` = the signal id) with a 15 s keep-alive; a lagged or
   closed receiver ends the stream and the browser's `EventSource` reconnects.
-- The poller broadcasts bare `SignalRecord`s; the handler resolves the pool's
-  token pair per event at delivery (`SignalService::enrich_one`), so stream
-  items carry the same embedded `tokenA`/`tokenB` as the paginated feed. If
-  that enrichment fails, the signal is emitted with unresolved sides rather
-  than dropped — delivering the alert beats decorating it.
+- The poller resolves each tick's token pairs **once**, in one batch
+  (`SignalService::enrich_batch`, the same code as the paginated feed), and
+  broadcasts the enriched signals behind an `Arc`: a stream does no database
+  work. Until September 2026 each stream enriched every signal itself, so N
+  open streams turned one signal into N rounds of lookups on a 10-connection
+  pool. If the enrichment fails, the signals go out with unresolved sides
+  rather than being dropped — delivering the alert beats decorating it.
+- At most `SSE_MAX_STREAMS` (200) streams are open at once; the next one is
+  refused with `503`. See [Capacity bounds](#capacity-bounds).
 
 Poller failures are skip-and-log: a failed tick is logged and the next one
 proceeds.
@@ -287,6 +293,50 @@ Before this, the binary installed no signal handler at all. In its container it
 is PID 1, and the kernel does not apply a signal's default action to PID 1, so
 SIGTERM was ignored and Docker killed it ten seconds later (`Exited (137)`).
 
+## Capacity bounds
+
+One client must not be able to take the API down for everyone. Measured on
+25 September 2026, before these bounds, with the dev database: 30 parallel
+`/api/pools/top` requests answered `500` ten times and made a 4 ms route
+answer `500` after 5 s; ~500 signal streams got the process OOM-killed under
+its production `mem_limit` of 32 MiB.
+
+Each bound is named once, with its measurement, in
+`src/http/middleware/capacity.rs`:
+
+| Bound | Value | Why |
+|---|---|---|
+| `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
+| `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the signal stream is not cut |
+| `HEAVY_ROUTE_PERMITS` | 6 | All expensive reads share 6 `WorkSlots` on a 10-connection pool: the slow routes — `/api/pools`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — and the cached computations below. With the signal poller's connection, the light routes always keep 3 |
+| `HEAVY_ROUTE_WAIT` | 2 s | How long expensive work waits for a slot before `503` — enough for a page's own burst |
+| `SSE_MAX_STREAMS` | 200 | ~62 KiB an open stream; half of `MAX_CONNECTIONS`, so streams never take the connections ordinary requests need |
+| `MAX_CONNECTIONS` | 400 | Connections held at once; the next wait in the kernel's accept queue (`CappedListener`). Capping streams was not enough: a burst of connections costs memory even when refused, and the allocator keeps the peak — 1000 at once got the process OOM-killed under 32 MiB with the stream cap in place. The `yog-api` image sets `MALLOC_ARENA_MAX=2`: without it glibc kept each burst's peak in a new arena (29.7 → 49 MiB → OOM over three rounds of 1000 opens); with it, twelve rounds level off at 44.1 MiB, inside the production `mem_limit`, raised to 64 MiB for it |
+| `IDLE_TIMEOUT` | 30 s | A connection with no byte either way for this long is closed, and its slot comes back. Without it the connection cap was a cheaper outage than the one it prevents: axum's `serve` sets no header-read nor keep-alive timeout, so 400 silent sockets would hold every slot. Both directions count — an SSE client sends nothing, its 15 s ping keeps it alive. It bounds that outage (400 silent sockets: `/healthz` answered after 28 s), it does not remove it for a client that can reach the process directly — in production only Caddy can, and it opens an upstream connection only for a complete request |
+
+And two results are shared rather than bounded: **`/api/pools/top` and
+`/api/stats`** return the same body to every visitor, so they go through
+`SharedCache` (`application/cache.rs`, on `moka`): the first caller of a cold
+key computes, the others wait for the same outcome — an error included, and
+nothing failed is kept. Each use declares a named `CachePolicy` (time to
+live, capacity) in that file: `TOP_POOLS` (30 s, 2 entries, one per `PoolRankMetric` —
+the ranking is computed at 20 and cut to each `limit`) and `STATS` (30 s,
+1 entry). The capacity, with eviction, is what makes the cache safe on keys
+that are not a fixed set.
+
+To cache a new result: add its policy to `cache.rs` with the reason for each
+number, hold a `SharedCache` in the service, and take a work slot **inside**
+the computation, never around the call.
+
+Their **routes** stay outside the slow-route middleware; their
+**computations** take a work slot, inside the cache. So the caller that
+computes holds a slot and the callers waiting for its value hold none.
+Measured with the routes behind the middleware: 30 parallel `/top` on a cold
+cache gave 24 × `503` for a single computation, each waiter holding a slot.
+
+What this does not do: limit a client by IP or key. That is the edge's job in
+production, and the platform API's later.
+
 ## Error responses
 
 Errors use [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457),
@@ -305,6 +355,7 @@ served as `application/problem+json`:
 |--------|---------|---------------|
 | 400 | `Bad Request` | Invalid address, malformed cursor, limit out of range, unknown `severity`/`metric`, mutually exclusive params |
 | 404 | `Not Found` | Pool or token unknown, no observed state yet for a known pool |
+| 503 | `Service Unavailable` | Over capacity: no slow-route slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
 ## Cursor wire format

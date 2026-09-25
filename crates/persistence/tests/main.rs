@@ -50,6 +50,7 @@ mod set_pool_status;
 mod signal_dedup;
 mod signal_list;
 mod split_position;
+mod statement_timeout;
 mod swap_flow;
 mod token_metadata;
 mod update_pool_fees;

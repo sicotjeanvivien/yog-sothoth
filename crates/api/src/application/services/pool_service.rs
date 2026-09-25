@@ -26,6 +26,9 @@ use yog_core::{
     },
 };
 
+use crate::application::WorkSlots;
+use crate::application::cache::{SharedCache, TOP_POOLS};
+use crate::application::work_slots::no_work_slot;
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 
 /// Window of the pools-list signal indicator. Signals are append-only
@@ -67,6 +70,11 @@ pub(crate) struct PoolCurrentStateView {
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
+/// The most pools `/api/pools/top` ranks. The shared ranking is computed at
+/// this size and cut to each request's `limit`; the HTTP layer refuses a
+/// larger one.
+pub(crate) const TOP_POOLS_MAX: i64 = 20;
+
 pub(crate) struct PoolService {
     pool_repository: Arc<dyn PoolCatalog>,
     pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
@@ -79,26 +87,42 @@ pub(crate) struct PoolService {
     /// [`PoolPropertiesLookup::protocol`] matches. A protocol with no satellite
     /// contributes no entry and costs no round-trip.
     pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
+    /// `/api/pools/top` is the same for every visitor: computed once per
+    /// metric and time to live ([`TOP_POOLS`]), at [`TOP_POOLS_MAX`], and cut
+    /// to each caller's `limit`. Keyed on the metric alone so that at most two
+    /// rankings are ever computed at once — keyed on `limit` too, a client
+    /// cycling 1..=20 over the two metrics would start forty.
+    top_pools_cache: SharedCache<PoolRankMetric, Vec<EnrichedPool>>,
+    /// Taken by a ranking while it computes, never by a caller waiting for
+    /// the cached one.
+    work_slots: WorkSlots,
+}
+
+/// What a [`PoolService`] reads from, and the slots its computations share —
+/// named fields rather than eight positional arguments.
+pub(crate) struct PoolServiceDeps {
+    pub(crate) pool_repository: Arc<dyn PoolCatalog>,
+    pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
+    pub(crate) pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
+    pub(crate) token_metadata_repository: Arc<dyn TokenMetadataLookup>,
+    pub(crate) token_price_repository: Arc<dyn TokenPriceLookup>,
+    pub(crate) signal_feed: Arc<dyn SignalFeed>,
+    pub(crate) pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
+    pub(crate) work_slots: WorkSlots,
 }
 
 impl PoolService {
-    pub(crate) fn new(
-        pool_repository: Arc<dyn PoolCatalog>,
-        pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
-        pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
-        token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-        token_price_repository: Arc<dyn TokenPriceLookup>,
-        signal_feed: Arc<dyn SignalFeed>,
-        pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
-    ) -> Self {
+    pub(crate) fn new(deps: PoolServiceDeps) -> Self {
         Self {
-            pool_repository,
-            pool_properties_lookups,
-            pool_current_state_repository,
-            pool_analytics_repository,
-            token_metadata_repository,
-            token_price_repository,
-            signal_feed,
+            pool_repository: deps.pool_repository,
+            pool_properties_lookups: deps.pool_properties_lookups,
+            pool_current_state_repository: deps.pool_current_state_repository,
+            pool_analytics_repository: deps.pool_analytics_repository,
+            token_metadata_repository: deps.token_metadata_repository,
+            token_price_repository: deps.token_price_repository,
+            signal_feed: deps.signal_feed,
+            top_pools_cache: SharedCache::new(TOP_POOLS),
+            work_slots: deps.work_slots,
         }
     }
 
@@ -185,6 +209,24 @@ impl PoolService {
     ///   3. emit in **rank order**, re-imposing it over the unordered batch
     ///      reads. A ranked address with no pool row is skipped defensively.
     pub(crate) async fn top_pools(
+        &self,
+        metric: PoolRankMetric,
+        limit: i64,
+    ) -> RepositoryResult<Vec<EnrichedPool>> {
+        let ranked = self
+            .top_pools_cache
+            .get_or_compute(metric, async {
+                let _slot = self.work_slots.acquire().await.ok_or_else(no_work_slot)?;
+                self.compute_top_pools(metric, TOP_POOLS_MAX).await
+            })
+            .await?;
+        let keep = usize::try_from(limit).unwrap_or(0);
+        Ok(ranked.into_iter().take(keep).collect())
+    }
+
+    /// The ranking itself — four round-trips, 2–4 s on the dev database
+    /// (September 2026). Only [`Self::top_pools`] calls it, through the cache.
+    async fn compute_top_pools(
         &self,
         metric: PoolRankMetric,
         limit: i64,
