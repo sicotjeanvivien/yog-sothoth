@@ -115,3 +115,33 @@ async fn no_receiver_still_advances_the_watermark() {
 
     assert_eq!(watermark, Some(expected));
 }
+
+/// Mutation: remove the cancellation arm of `run`, and the loop never ends —
+/// the timeout below turns that into a failure instead of a hang.
+#[tokio::test]
+async fn the_poller_stops_when_the_token_is_cancelled() {
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    use super::SignalStreamPoller;
+
+    let (tx, _) = broadcast::channel(8);
+    let poller = SignalStreamPoller::new(
+        Arc::new(MockSignalRepo::feed(Ok(None), Ok(vec![]))),
+        tx,
+        Duration::from_secs(3600),
+    );
+    let shutdown = CancellationToken::new();
+    let running = tokio::spawn(poller.run(shutdown.clone()));
+
+    // Let the first tick go by, so the loop is parked on the next one.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    shutdown.cancel();
+
+    tokio::time::timeout(Duration::from_secs(1), running)
+        .await
+        .expect("the poller did not stop")
+        .unwrap()
+        .unwrap();
+}

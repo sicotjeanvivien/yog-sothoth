@@ -12,11 +12,13 @@
 //! feed's tip, and the page loads its backlog through the paginated
 //! `GET /api/signals` instead.
 
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use yog_core::domain::{SignalCursor, SignalFeed, SignalRecord};
 
@@ -31,8 +33,7 @@ pub(crate) const STREAM_CHANNEL_CAPACITY: usize = 256;
 const POLL_BATCH_LIMIT: i64 = 256;
 
 /// The shared feed poller. Holds the feed lens and the broadcast
-/// sender; [`run`](Self::run) loops until the process dies (the api has
-/// no graceful-shutdown path to hook into).
+/// sender; [`run`](Self::run) loops until the shutdown token is cancelled.
 pub(crate) struct SignalStreamPoller {
     repo: Arc<dyn SignalFeed>,
     sender: broadcast::Sender<SignalRecord>,
@@ -52,14 +53,26 @@ impl SignalStreamPoller {
         }
     }
 
-    pub(crate) async fn run(self) {
+    /// Poll until `shutdown` is cancelled.
+    ///
+    /// `Infallible`: a failed tick is skipped and logged, never returned, so
+    /// the only way out is the stop. The `Result` is there for
+    /// [`yog_bootstrap::Stop::settle`], which waits on it like on any stage.
+    pub(crate) async fn run(self, shutdown: CancellationToken) -> Result<(), Infallible> {
         let mut ticker = tokio::time::interval(self.interval);
         // `None` = the watermark needs (re)anchoring at the feed's tip.
         let mut watermark: Option<SignalCursor> = None;
         info!(interval = ?self.interval, "signal stream poller started");
 
         loop {
-            ticker.tick().await;
+            tokio::select! {
+                // `biased`: a stop that arrives with a tick due must not start
+                // one more read of the feed.
+                biased;
+
+                () = shutdown.cancelled() => break,
+                _ = ticker.tick() => {}
+            }
 
             // Nobody connected: skip the DB entirely, and drop the
             // watermark so the next active tick re-anchors at the tip
@@ -71,6 +84,7 @@ impl SignalStreamPoller {
 
             watermark = poll_once(self.repo.as_ref(), &self.sender, watermark).await;
         }
+        Ok(())
     }
 }
 
