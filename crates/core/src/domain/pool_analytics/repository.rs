@@ -13,7 +13,7 @@ use crate::{
 /// answer different questions: `Volume24h` is *flow* (what is actively traded
 /// right now), `Tvl` is *stock* (where liquidity is parked — the deepest,
 /// most established pools).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PoolRankMetric {
     /// Realized 24h volume in USD (trade-time valued), descending.
     Volume24h,

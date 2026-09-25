@@ -66,6 +66,10 @@ impl EnrichedToken {
 /// A pool composed with its two enriched token sides and its
 /// pre-computed analytics. Produced by `PoolService`, consumed by the
 /// HTTP layer for DTO mapping.
+///
+/// `Clone`: the ranked list is computed once and served to every caller of
+/// the top-pools cache.
+#[derive(Clone)]
 pub(crate) struct EnrichedPool {
     pub(crate) pool: Pool,
     pub(crate) token_a: EnrichedToken,

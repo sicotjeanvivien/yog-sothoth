@@ -24,7 +24,8 @@ api/src/
 │   │   │                    NetworkStatusService, AnnouncementService)…
 │   │   └── meteora/damm_v2/ …per-protocol ones under their protocol
 │   │                        (swap.rs, liquidity.rs) — mirrors core/domain
-│   ├── signal_stream.rs   ← SignalStreamPoller (feeds the SSE broadcast)
+│   ├── signal_stream.rs   ← SignalStreamPoller (enriches once, feeds the SSE broadcast)
+│   ├── cache.rs           ← TtlCache — one computation shared by every caller
 │   ├── enriched_pool.rs   ← pool + embedded token/price composition
 │   └── enriched_signal.rs ← signal + embedded token pair of its pool
 ├── http/
@@ -33,8 +34,9 @@ api/src/
 │   ├── dto/response/      ← wire shapes, decoupled from the domain
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── query.rs           ← shared query-param validation helpers
-│   ├── middleware.rs      ← CORS, security headers, request-id tracing
-│   └── error.rs           ← ApiError, IntoResponse (RFC 9457)
+│   ├── middleware.rs      ← CORS, security headers, request-id tracing,
+│   │                        capacity bounds (middleware/capacity.rs)
+│   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
 └── main.rs
 ```
 
@@ -258,11 +260,15 @@ by per-client DB queries:
 - The handler emits each signal as an SSE event (`data` = the JSON
   `SignalResponse`, `id` = the signal id) with a 15 s keep-alive; a lagged or
   closed receiver ends the stream and the browser's `EventSource` reconnects.
-- The poller broadcasts bare `SignalRecord`s; the handler resolves the pool's
-  token pair per event at delivery (`SignalService::enrich_one`), so stream
-  items carry the same embedded `tokenA`/`tokenB` as the paginated feed. If
-  that enrichment fails, the signal is emitted with unresolved sides rather
-  than dropped — delivering the alert beats decorating it.
+- The poller resolves each tick's token pairs **once**, in one batch
+  (`SignalService::enrich_batch`, the same code as the paginated feed), and
+  broadcasts the enriched signals behind an `Arc`: a stream does no database
+  work. Until September 2026 each stream enriched every signal itself, so N
+  open streams turned one signal into N rounds of lookups on a 10-connection
+  pool. If the enrichment fails, the signals go out with unresolved sides
+  rather than being dropped — delivering the alert beats decorating it.
+- At most `SSE_MAX_STREAMS` (200) streams are open at once; the next one is
+  refused with `503`. See [Capacity bounds](#capacity-bounds).
 
 Poller failures are skip-and-log: a failed tick is logged and the next one
 proceeds.
@@ -287,6 +293,34 @@ Before this, the binary installed no signal handler at all. In its container it
 is PID 1, and the kernel does not apply a signal's default action to PID 1, so
 SIGTERM was ignored and Docker killed it ten seconds later (`Exited (137)`).
 
+## Capacity bounds
+
+One client must not be able to take the API down for everyone. Measured on
+25 September 2026, before these bounds, with the dev database: 30 parallel
+`/api/pools/top` requests answered `500` ten times and made a 4 ms route
+answer `500` after 5 s; ~500 signal streams got the process OOM-killed under
+its production `mem_limit` of 32 MiB.
+
+Each bound is named once, with its measurement, in
+`src/http/middleware/capacity.rs`:
+
+| Bound | Value | Why |
+|---|---|---|
+| `STATEMENT_TIMEOUT` | 8 s | Postgres cancels a statement itself (`57014`): cutting the request client-side leaves its statement running |
+| `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the signal stream is not cut |
+| `HEAVY_ROUTE_PERMITS` | 6 | The slow routes — `/api/pools`, `/api/pools/top`, `/api/stats`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — share 6 slots on a 10-connection pool; the light routes keep the rest |
+| `HEAVY_ROUTE_WAIT` | 2 s | How long a slow request waits for a slot before `503` — enough for a page's own burst |
+| `SSE_MAX_STREAMS` | 200 | ~60 KiB a stream; 200 fit in 32 MiB with the process's baseline |
+
+And two results are shared rather than bounded: **`/api/pools/top` and
+`/api/stats`** return the same body to every visitor, so `application/cache.rs`
+computes each once per key and `SHARED_RESULT_TTL` (30 s), however many
+requests arrive together — the first caller computes, the others wait for the
+same value, and an error is never cached.
+
+What this does not do: limit a client by IP or key. That is the edge's job in
+production, and the platform API's later.
+
 ## Error responses
 
 Errors use [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457),
@@ -305,6 +339,7 @@ served as `application/problem+json`:
 |--------|---------|---------------|
 | 400 | `Bad Request` | Invalid address, malformed cursor, limit out of range, unknown `severity`/`metric`, mutually exclusive params |
 | 404 | `Not Found` | Pool or token unknown, no observed state yet for a known pool |
+| 503 | `Service Unavailable` | Over capacity: no slow-route slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
 
 ## Cursor wire format

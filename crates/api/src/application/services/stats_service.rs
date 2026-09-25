@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 
+use crate::application::cache::{SHARED_RESULT_TTL, TtlCache};
 use yog_core::{
     RepositoryError,
     domain::{GlobalAnalytics, GlobalAnalyticsRepository, PoolCatalog, PoolCounts},
@@ -18,7 +19,8 @@ use yog_core::{
 // ---------------------------------------------------------------------------
 
 /// The assembled protocol-wide statistics: USD analytics + pool counts.
-#[derive(Debug)]
+/// `Clone`: one computation is shared by every caller of the cache.
+#[derive(Debug, Clone)]
 pub(crate) struct StatsAggregate {
     pub analytics: GlobalAnalytics,
     pub counts: PoolCounts,
@@ -32,6 +34,9 @@ pub(crate) struct StatsAggregate {
 pub(crate) struct StatsService {
     global_analytics_repo: Arc<dyn GlobalAnalyticsRepository>,
     pool_repo: Arc<dyn PoolCatalog>,
+    /// `/api/stats` is the same for every visitor: computed once per
+    /// [`SHARED_RESULT_TTL`], however many requests arrive together.
+    cache: TtlCache<(), StatsAggregate>,
 }
 
 impl StatsService {
@@ -42,11 +47,20 @@ impl StatsService {
         Self {
             global_analytics_repo,
             pool_repo,
+            cache: TtlCache::new(SHARED_RESULT_TTL),
         }
     }
 
     /// Assemble the current protocol-wide statistics.
     pub(crate) async fn get_stats(&self) -> Result<StatsAggregate, RepositoryError> {
+        self.cache
+            .get_or_try_compute((), || self.compute_stats())
+            .await
+    }
+
+    /// The two reads themselves; only [`Self::get_stats`] calls it, through
+    /// the cache.
+    async fn compute_stats(&self) -> Result<StatsAggregate, RepositoryError> {
         let analytics = self.global_analytics_repo.global_analytics().await?;
         let counts = self.pool_repo.counts().await?;
 

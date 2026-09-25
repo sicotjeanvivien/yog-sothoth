@@ -1,3 +1,4 @@
+pub(crate) mod cache;
 pub(crate) mod enriched_pool;
 pub(crate) mod enriched_signal;
 pub(crate) mod services;

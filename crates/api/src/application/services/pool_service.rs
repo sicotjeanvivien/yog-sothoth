@@ -26,6 +26,7 @@ use yog_core::{
     },
 };
 
+use crate::application::cache::{SHARED_RESULT_TTL, TtlCache};
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 
 /// Window of the pools-list signal indicator. Signals are append-only
@@ -79,6 +80,10 @@ pub(crate) struct PoolService {
     /// [`PoolPropertiesLookup::protocol`] matches. A protocol with no satellite
     /// contributes no entry and costs no round-trip.
     pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
+    /// `/api/pools/top` is the same for every visitor: computed once per key
+    /// and [`SHARED_RESULT_TTL`], however many requests arrive together.
+    /// The key space is bounded — three metrics, `limit` capped at 20.
+    top_pools_cache: TtlCache<(PoolRankMetric, i64), Vec<EnrichedPool>>,
 }
 
 impl PoolService {
@@ -99,6 +104,7 @@ impl PoolService {
             token_metadata_repository,
             token_price_repository,
             signal_feed,
+            top_pools_cache: TtlCache::new(SHARED_RESULT_TTL),
         }
     }
 
@@ -185,6 +191,18 @@ impl PoolService {
     ///   3. emit in **rank order**, re-imposing it over the unordered batch
     ///      reads. A ranked address with no pool row is skipped defensively.
     pub(crate) async fn top_pools(
+        &self,
+        metric: PoolRankMetric,
+        limit: i64,
+    ) -> RepositoryResult<Vec<EnrichedPool>> {
+        self.top_pools_cache
+            .get_or_try_compute((metric, limit), || self.compute_top_pools(metric, limit))
+            .await
+    }
+
+    /// The ranking itself — four round-trips, 2–4 s on the dev database
+    /// (September 2026). Only [`Self::top_pools`] calls it, through the cache.
+    async fn compute_top_pools(
         &self,
         metric: PoolRankMetric,
         limit: i64,
