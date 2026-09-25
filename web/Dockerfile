@@ -9,7 +9,7 @@
 # ---------------------------------------------------------------------
 
 # ---- Stage 1: deps ----
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 
 # Alpine is missing libc-compat, which the Next.js binary expects.
@@ -19,7 +19,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 
 # ---- Stage 2: builder ----
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -45,7 +45,7 @@ ENV NEXT_PUBLIC_YOG_API_URL=$NEXT_PUBLIC_YOG_API_URL
 RUN npm run build
 
 # ---- Stage 3: runner ----
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
