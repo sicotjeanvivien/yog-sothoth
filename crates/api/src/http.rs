@@ -22,8 +22,11 @@ mod query;
 pub(crate) use handlers::signals::signal_sse;
 
 /// The bounds the bootstrap applies outside the router: the statement limit
-/// on the database connection, and the cap on open signal streams.
-pub(crate) use middleware::capacity::{SSE_MAX_STREAMS, STATEMENT_TIMEOUT};
+/// on the database connection, the cap on open signal streams, and the cap on
+/// connections.
+pub(crate) use middleware::capacity::{
+    CappedListener, MAX_CONNECTIONS, SSE_MAX_STREAMS, STATEMENT_TIMEOUT,
+};
 
 use std::net::SocketAddr;
 

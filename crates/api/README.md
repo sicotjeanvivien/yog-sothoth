@@ -310,7 +310,8 @@ Each bound is named once, with its measurement, in
 | `REQUEST_TIMEOUT` | 10 s | A request that has not produced its response is answered `503`. It bounds the response's production, not its body, so the signal stream is not cut |
 | `HEAVY_ROUTE_PERMITS` | 6 | The slow routes — `/api/pools`, `/api/pools/{address}`, `/api/pools/{address}/history`, `/api/signals` — share 6 slots on a 10-connection pool; the light routes keep the rest |
 | `HEAVY_ROUTE_WAIT` | 2 s | How long a slow request waits for a slot before `503` — enough for a page's own burst |
-| `SSE_MAX_STREAMS` | 200 | ~60 KiB a stream; 200 fit in 32 MiB with the process's baseline |
+| `SSE_MAX_STREAMS` | 200 | ~62 KiB an open stream; half of `MAX_CONNECTIONS`, so streams never take the connections ordinary requests need |
+| `MAX_CONNECTIONS` | 400 | Connections held at once; the next wait in the kernel's accept queue (`CappedListener`). Capping streams was not enough: a burst of connections costs memory even when refused, and the allocator keeps the peak — 1000 at once got the process OOM-killed under 32 MiB with the stream cap in place. The `yog-api` image sets `MALLOC_ARENA_MAX=2`: without it glibc kept each burst's peak in a new arena (29.7 → 49 MiB → OOM over three rounds of 1000 opens); with it, twelve rounds level off at 44.1 MiB, inside the production `mem_limit`, raised to 64 MiB for it |
 
 And two results are shared rather than bounded: **`/api/pools/top` and
 `/api/stats`** return the same body to every visitor, so `application/cache.rs`

@@ -126,3 +126,37 @@ async fn the_deadline_does_not_cut_a_streaming_body() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     assert_eq!(&body[..], b"0123");
 }
+
+/// Past the cap, a connection is not accepted until one closes: the second
+/// client's handshake completes in the kernel's queue, but the process does
+/// not take it — and takes it as soon as the first one leaves.
+///
+/// Mutation: accept without taking a slot, and the second accept returns at
+/// once.
+#[tokio::test]
+async fn past_the_connection_cap_a_client_waits_until_one_closes() {
+    use axum::serve::Listener;
+    use tokio::net::{TcpListener, TcpStream};
+
+    use super::CappedListener;
+
+    let inner = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = inner.local_addr().unwrap();
+    let mut listener = CappedListener::new(inner, 1);
+
+    let _first_client = TcpStream::connect(addr).await.unwrap();
+    let (first, _) = listener.accept().await;
+    let _second_client = TcpStream::connect(addr).await.unwrap();
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), listener.accept())
+            .await
+            .is_err(),
+        "the cap is 1 and the first connection is still open"
+    );
+
+    drop(first);
+    tokio::time::timeout(Duration::from_secs(1), listener.accept())
+        .await
+        .expect("the freed slot takes the waiting client");
+}
