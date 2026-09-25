@@ -18,7 +18,7 @@ use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::{
-    RepositoryResult,
+    RepositoryError, RepositoryResult,
     domain::{
         FeeTier, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
         PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolPage, PoolPropertiesLookup,
@@ -92,7 +92,7 @@ pub(crate) struct PoolService {
     /// caller's `limit`. Keyed on the metric alone so that at most three
     /// rankings are ever computed at once — keyed on `limit` too, a client
     /// cycling 1..=20 over three metrics would start sixty.
-    top_pools_cache: TtlCache<PoolRankMetric, Vec<EnrichedPool>>,
+    top_pools_cache: TtlCache<PoolRankMetric, Vec<EnrichedPool>, RepositoryError>,
     /// Taken by a ranking while it computes, never by a caller waiting for
     /// the cached one.
     work_slots: WorkSlots,

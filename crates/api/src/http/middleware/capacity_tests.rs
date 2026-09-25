@@ -222,3 +222,38 @@ async fn a_connection_that_is_written_to_is_not_idle() {
         server_side.write_all(b"ping").await.unwrap();
     }
 }
+
+/// A client that stops reading leaves the server's writes pending, and hyper
+/// may never read again while it sends a response. The write side checks the
+/// deadline too, so such a connection ends instead of keeping its slot.
+///
+/// Mutation: drop the check on pending writes, and the write waits forever.
+#[tokio::test]
+async fn a_client_that_stops_reading_is_closed_once_idle() {
+    use axum::serve::Listener;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::{TcpListener, TcpStream};
+
+    use super::CappedListener;
+
+    let inner = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = inner.local_addr().unwrap();
+    let mut listener = CappedListener::new(inner, 1, Duration::from_millis(200));
+
+    let _never_reads = TcpStream::connect(addr).await.unwrap();
+    let (mut server_side, _) = listener.accept().await;
+
+    /// Write until the socket buffers are full and the write waits; only an
+    /// error ends it.
+    async fn fill(stream: &mut super::CappedStream) -> std::io::Result<()> {
+        let chunk = vec![0u8; 64 * 1024];
+        loop {
+            stream.write_all(&chunk).await?;
+        }
+    }
+    let outcome = tokio::time::timeout(Duration::from_secs(10), fill(&mut server_side))
+        .await
+        .expect("the idle deadline must end the stalled write");
+
+    assert_eq!(outcome.unwrap_err().kind(), std::io::ErrorKind::TimedOut);
+}

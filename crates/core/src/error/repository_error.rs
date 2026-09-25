@@ -8,7 +8,7 @@
 
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum RepositoryError {
     /// The underlying storage backend failed (DB unreachable, connection
     /// dropped, query execution error). Caller should generally retry or

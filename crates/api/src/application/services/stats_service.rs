@@ -38,7 +38,7 @@ pub(crate) struct StatsService {
     pool_repo: Arc<dyn PoolCatalog>,
     /// `/api/stats` is the same for every visitor: computed once per
     /// [`SHARED_RESULT_TTL`], however many requests arrive together.
-    cache: TtlCache<(), StatsAggregate>,
+    cache: TtlCache<(), StatsAggregate, RepositoryError>,
     /// Taken while the stats compute, never by a caller waiting for them.
     work_slots: WorkSlots,
 }

@@ -30,21 +30,21 @@ pub(crate) const SHARED_RESULT_TTL: Duration = Duration::from_secs(30);
 ///
 /// ⚠️ **The key space must be bounded.** An expired entry is replaced when its
 /// key is asked for again, never swept: a key taken from free user input
-/// would grow the map without limit. The callers' keys are an enum and a
-/// capped `limit`, or `()`.
-pub(crate) struct TtlCache<K, V> {
+/// would grow the map without limit. The callers' keys are an enum, or `()`.
+pub(crate) struct TtlCache<K, V, E> {
     ttl: Duration,
-    entries: Mutex<HashMap<K, Entry<V>>>,
+    entries: Mutex<HashMap<K, Entry<V, E>>>,
 }
 
-struct Entry<V> {
+struct Entry<V, E> {
     created: Instant,
     /// Shared by every caller that arrives while it is fresh: the first to
-    /// reach it computes, the others wait for the same value.
-    cell: Arc<OnceCell<V>>,
+    /// reach it computes, the others wait for the same **outcome** — an
+    /// error included, as a single flight does.
+    cell: Arc<OnceCell<Result<V, E>>>,
 }
 
-impl<K: Eq + Hash, V: Clone> TtlCache<K, V> {
+impl<K: Eq + Hash + Clone, V: Clone, E: Clone> TtlCache<K, V, E> {
     pub(crate) fn new(ttl: Duration) -> Self {
         Self {
             ttl,
@@ -55,9 +55,12 @@ impl<K: Eq + Hash, V: Clone> TtlCache<K, V> {
     /// The value for `key`: fresh from the cache, or computed by `compute` —
     /// once, however many callers are waiting for it.
     ///
-    /// An error is not cached: the cell stays empty, and the next caller
-    /// computes again.
-    pub(crate) async fn get_or_try_compute<E, F, Fut>(&self, key: K, compute: F) -> Result<V, E>
+    /// An error reaches every caller that was waiting for that computation,
+    /// then the entry is dropped: the next caller computes again. Retrying
+    /// inside the flight instead — what `OnceCell::get_or_try_init` does —
+    /// had each waiter redo the computation after the previous one failed,
+    /// its own slot wait included: under load, 2, 4, 6… seconds to refuse.
+    pub(crate) async fn get_or_try_compute<F, Fut>(&self, key: K, compute: F) -> Result<V, E>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<V, E>>,
@@ -72,7 +75,7 @@ impl<K: Eq + Hash, V: Clone> TtlCache<K, V> {
                 _ => {
                     let cell = Arc::new(OnceCell::new());
                     entries.insert(
-                        key,
+                        key.clone(),
                         Entry {
                             created: now,
                             cell: cell.clone(),
@@ -82,7 +85,19 @@ impl<K: Eq + Hash, V: Clone> TtlCache<K, V> {
                 }
             }
         };
-        cell.get_or_try_init(compute).await.cloned()
+
+        let outcome = cell.get_or_init(compute).await.clone();
+        if outcome.is_err() {
+            let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+            // Only this flight's entry: a newer one may have replaced it.
+            if entries
+                .get(&key)
+                .is_some_and(|entry| Arc::ptr_eq(&entry.cell, &cell))
+            {
+                entries.remove(&key);
+            }
+        }
+        outcome
     }
 }
 

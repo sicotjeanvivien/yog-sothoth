@@ -209,14 +209,32 @@ impl CappedStream {
         self.deadline.as_mut().reset(next);
     }
 
-    /// Account for a write's outcome.
-    fn written(&mut self, outcome: Poll<io::Result<usize>>) -> Poll<io::Result<usize>> {
-        if let Poll::Ready(Ok(n)) = outcome
-            && n > 0
-        {
-            self.touch();
+    /// Account for a write's outcome: bytes out make the connection live; a
+    /// write still waiting past the deadline ends it.
+    ///
+    /// The write side needs its own check. A client that stops reading
+    /// leaves every write pending, and while hyper sends a response it may
+    /// never read again — the read-side check alone let such a connection
+    /// keep its slot forever (found in review).
+    fn written(
+        &mut self,
+        cx: &mut Context<'_>,
+        outcome: Poll<io::Result<usize>>,
+    ) -> Poll<io::Result<usize>> {
+        match outcome {
+            Poll::Ready(Ok(n)) if n > 0 => {
+                self.touch();
+                outcome
+            }
+            Poll::Pending if self.idle_expired(cx) => Poll::Ready(Err(idle_error())),
+            _ => outcome,
         }
-        outcome
+    }
+
+    /// Whether the deadline has passed. Registers the waker when it has not,
+    /// so a stalled connection is woken — and closed — when it does.
+    fn idle_expired(&mut self, cx: &mut Context<'_>) -> bool {
+        self.deadline.as_mut().poll(cx).is_ready()
     }
 }
 
@@ -238,13 +256,8 @@ impl AsyncRead for CappedStream {
             // Nothing to read yet: close the connection if it has been idle
             // too long. The sleep registers the waker, so an idle connection
             // is woken — and closed — when the deadline passes.
-            Poll::Pending => match this.deadline.as_mut().poll(cx) {
-                Poll::Ready(()) => Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "connection idle past IDLE_TIMEOUT",
-                ))),
-                Poll::Pending => Poll::Pending,
-            },
+            Poll::Pending if this.idle_expired(cx) => Poll::Ready(Err(idle_error())),
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -257,7 +270,7 @@ impl AsyncWrite for CappedStream {
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
         let outcome = Pin::new(&mut this.stream).poll_write(cx, buf);
-        this.written(outcome)
+        this.written(cx, outcome)
     }
 
     fn poll_write_vectored(
@@ -267,20 +280,29 @@ impl AsyncWrite for CappedStream {
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
         let outcome = Pin::new(&mut this.stream).poll_write_vectored(cx, bufs);
-        this.written(outcome)
+        this.written(cx, outcome)
     }
 
     fn is_write_vectored(&self) -> bool {
         self.stream.is_write_vectored()
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_flush(cx)
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.stream).poll_flush(cx) {
+            Poll::Pending if this.idle_expired(cx) => Poll::Ready(Err(idle_error())),
+            outcome => outcome,
+        }
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.stream).poll_shutdown(cx)
     }
+}
+
+/// The error an idle connection ends with.
+fn idle_error() -> io::Error {
+    io::Error::new(io::ErrorKind::TimedOut, "connection idle past IDLE_TIMEOUT")
 }
 
 #[cfg(test)]
