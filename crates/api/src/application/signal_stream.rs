@@ -92,8 +92,16 @@ impl SignalStreamPoller {
                 continue;
             }
 
-            watermark =
-                poll_once(self.repo.as_ref(), &self.enricher, &self.sender, watermark).await;
+            // The tick itself answers the stop too. It reads the feed and
+            // enriches the batch — several queries, each allowed
+            // `STATEMENT_TIMEOUT` — and a stop that waited for it could
+            // outlast `SHUTDOWN_GRACE` on a slow database (found in review).
+            watermark = tokio::select! {
+                biased;
+
+                () = shutdown.cancelled() => break,
+                next = poll_once(self.repo.as_ref(), &self.enricher, &self.sender, watermark) => next,
+            };
         }
         Ok(())
     }
@@ -141,6 +149,12 @@ async fn poll_once(
 
     // On failure the alerts still go out, without their pairs — delivering
     // beats decorating, as the per-stream enrichment did before.
+    //
+    // The trade, knowingly: one failed lookup now leaves the whole tick bare,
+    // where the per-signal enrichment lost only the affected alert's pair.
+    // Enriching signal by signal again would bring back the per-signal
+    // queries this batch exists to remove; a tick is a few seconds of
+    // signals, and the paginated feed re-enriches them on the next load.
     let enriched = match enricher.enrich_batch(records.clone()).await {
         Ok(enriched) => enriched,
         Err(e) => {

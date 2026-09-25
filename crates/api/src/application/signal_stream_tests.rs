@@ -240,3 +240,74 @@ async fn a_failed_enrichment_still_delivers_the_signals_bare() {
     assert_eq!(signal.record.id, 10);
     assert_eq!(symbol(&signal.token_a), None);
 }
+
+/// A feed that never answers: a tick stuck on a slow database.
+struct StuckFeed;
+
+#[async_trait::async_trait]
+impl yog_core::domain::SignalFeed for StuckFeed {
+    async fn list(
+        &self,
+        _severity: Option<yog_core::domain::Severity>,
+        _pool: Option<solana_pubkey::Pubkey>,
+        _cursor: Option<SignalCursor>,
+        _direction: yog_core::PageDirection,
+        _position: Option<yog_core::PagePosition>,
+        _limit: i64,
+    ) -> yog_core::RepositoryResult<yog_core::Page<SignalRecord>> {
+        unreachable!("the poller never lists")
+    }
+    async fn latest_cursor(&self) -> yog_core::RepositoryResult<Option<SignalCursor>> {
+        std::future::pending().await
+    }
+    async fn newer_than(
+        &self,
+        _after: &SignalCursor,
+        _limit: i64,
+    ) -> yog_core::RepositoryResult<Vec<SignalRecord>> {
+        std::future::pending().await
+    }
+    async fn recent_by_pools(
+        &self,
+        _pools: &[solana_pubkey::Pubkey],
+        _since: chrono::DateTime<chrono::Utc>,
+        _per_pool_limit: i64,
+    ) -> yog_core::RepositoryResult<
+        std::collections::HashMap<solana_pubkey::Pubkey, Vec<SignalRecord>>,
+    > {
+        unreachable!("the poller never reads recent signals")
+    }
+}
+
+/// A stop that arrives mid-tick ends the poller at once: the tick's reads are
+/// cancelled rather than waited for — on a slow database they could outlast
+/// the shutdown grace.
+///
+/// Mutation: await the tick outside the `select!`, and the poller hangs.
+#[tokio::test]
+async fn a_stop_mid_tick_does_not_wait_for_the_tick() {
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    use super::SignalStreamPoller;
+
+    let (tx, _subscriber) = broadcast::channel(8);
+    let poller = SignalStreamPoller::new(
+        Arc::new(StuckFeed),
+        Arc::new(idle_enricher()),
+        tx,
+        Duration::from_millis(10),
+    );
+    let shutdown = CancellationToken::new();
+    let running = tokio::spawn(poller.run(shutdown.clone()));
+
+    // Let a tick start and get stuck on the feed.
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    shutdown.cancel();
+
+    tokio::time::timeout(Duration::from_secs(1), running)
+        .await
+        .expect("the poller waited for its stuck tick")
+        .unwrap()
+        .unwrap();
+}
