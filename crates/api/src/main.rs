@@ -38,7 +38,9 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = ?e, "failed to build application state"))?;
 
     // ── HTTP server and signal stream poller ──────────────────────────────────
-    let listener = http::bind(config.bind_addr).await?;
+    let listener = http::bind(config.bind_addr)
+        .await
+        .inspect_err(|e| error!(error = ?e, "failed to bind the API listener"))?;
     let router = http::build_router(app_state, config.cors_allowed_origins);
     bootstrap::serve(listener, router, signal_poller, token)
         .await
