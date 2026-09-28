@@ -40,7 +40,6 @@ use yog_core::RepositoryError;
 
 /// How long a shared result is served before it is computed again.
 ///
-/// The value the deployment already gives `Cache-Control` on `/api/pools`.
 /// What is cached reads hourly aggregates and a 24 h window: thirty seconds
 /// of staleness is invisible in it.
 pub(crate) const SHARED_RESULT_TTL: Duration = Duration::from_secs(30);
