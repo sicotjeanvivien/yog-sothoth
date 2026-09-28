@@ -30,6 +30,31 @@ pub const CHECK_VIOLATION: &str = "23514";
 pub const NUMERIC_OVERFLOW: &str = "22003";
 /// `23505` — unique_violation.
 pub const UNIQUE_VIOLATION: &str = "23505";
+/// `42501` — insufficient_privilege.
+pub const INSUFFICIENT_PRIVILEGE: &str = "42501";
+
+/// The provisioning script, which no migration runs: a test that needs the
+/// roles or what the file takes back from `PUBLIC` applies it itself.
+pub const SETUP_ROLES_SQL: &str = include_str!("../src/bin/scripts/setup_roles.sql");
+
+/// Held by every test that applies [`SETUP_ROLES_SQL`].
+///
+/// Half of that file is cluster-wide — `CREATE ROLE`, the `pg_read_all_data`
+/// membership — while `sqlx::test` gives each test its own database and runs
+/// them in parallel. Two tests creating the same absent role race to `role …
+/// already exists`, and a lock taken in SQL cannot stop them: advisory locks
+/// are per-database. Every integration test runs in this one binary, so a
+/// process-wide lock can.
+pub static CLUSTER_ROLES: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Apply [`SETUP_ROLES_SQL`] to the test's database, under [`CLUSTER_ROLES`].
+pub async fn apply_setup_roles(pool: &PgPool) {
+    let _cluster = CLUSTER_ROLES.lock().await;
+    sqlx::raw_sql(SETUP_ROLES_SQL)
+        .execute(pool)
+        .await
+        .expect("apply setup_roles.sql");
+}
 pub fn sg() -> Signature {
     Signature::from([7u8; 64])
 }

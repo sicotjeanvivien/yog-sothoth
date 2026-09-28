@@ -31,11 +31,16 @@
 --
 --   yog_migrate  : DDL — owns the schema, applies migrations.
 --                  Used by the yog-migrate binary; never by runtime services.
---   yog_indexer  : RW on event tables, RO on watched_pools.
---   yog_api      : RO across the board.
---   yog_context  : RW on token enrichment tables, RO on pools.
---   yog_signals  : RW (append-only) on signals, RO on the read sources it
---                  evaluates (caggs, pool_current_state, token_prices).
+--   Every runtime role below reads every table: the default privileges at
+--   the end of this file grant SELECT to all four. What differs is what each
+--   one writes, and the per-table grants in the migrations are the list.
+--
+--   yog_indexer  : writes the event tables, pools, pool_current_state and
+--                  network_status.
+--   yog_api      : writes nothing.
+--   yog_context  : writes the token enrichment tables, the pool-properties
+--                  satellites and the pool-property columns of pools.
+--   yog_signals  : appends to signals.
 --   yog_archive  : RO on everything, writes nothing. Used by yog-archive to
 --                  run `pg_dump`, which must read every table — TimescaleDB's
 --                  chunks and catalog included — so it is a member of the
@@ -147,3 +152,42 @@ ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
 -- time. Default USAGE + SELECT keeps future tables consistent.
 ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO yog_indexer;
+
+
+-- ---------------------------------------------------------------------------
+-- What PUBLIC holds by default, taken back — DATABASE scope
+--
+-- Two rights every role receives through PUBLIC let a runtime role write,
+-- where the matrix says it writes nothing (yog_api, yog_archive) or only its
+-- own tables:
+--
+--   * TimescaleDB's job API. Every function of the extension is executable by
+--     PUBLIC, so `add_job` succeeded under yog_api and yog_archive — every
+--     second, on `pg_sleep` (measured 25 Sept 2026). A job runs with its
+--     owner's rights, so it cannot reach a table the role could not; what it
+--     can do is persist in the scheduler's catalog past a password change and
+--     hold the workers that compress, drop and materialise. Nothing here uses
+--     the four routines: the migrations go through the `add_*_policy`
+--     functions, which do not call them.
+--   * TEMP on the database, a Postgres default: every role could create
+--     temporary tables.
+--
+-- The extension is created first so the REVOKE does not depend on the image
+-- having installed it: the migrations create it too, but they run after this
+-- file. `ROUTINE`, not `FUNCTION`: `run_job` is a procedure, and one wrong kind
+-- fails the whole statement. No signatures, so the names survive a change of
+-- arguments.
+--
+-- ⚠️ An `ALTER EXTENSION timescaledb UPDATE` can undo this. Measured going
+-- from 2.27.1 to 2.30.1: `alter_job` gains an argument, is recreated, and comes
+-- back executable by PUBLIC; the other three keep the REVOKE. Re-run this file
+-- after every extension update — it is idempotent.
+-- ---------------------------------------------------------------------------
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+REVOKE EXECUTE ON ROUTINE add_job, alter_job, delete_job, run_job FROM PUBLIC;
+
+DO $$
+BEGIN
+    EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END $$;

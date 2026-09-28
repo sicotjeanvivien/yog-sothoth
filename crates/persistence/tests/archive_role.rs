@@ -14,17 +14,17 @@
 //! see is what the file grants *now*. Measured by mutation — with the `GRANT`
 //! line removed, the read test fails on `42501`.
 
-use super::helpers::sqlstate;
+use super::helpers::{CLUSTER_ROLES, INSUFFICIENT_PRIVILEGE, SETUP_ROLES_SQL, sqlstate};
 use sqlx::PgPool;
 use yog_persistence::PgServerInfo;
 
-const SETUP_ROLES_SQL: &str = include_str!("../src/bin/scripts/setup_roles.sql");
-
-/// `42501` — insufficient_privilege.
-const INSUFFICIENT_PRIVILEGE: &str = "42501";
-
 /// Apply `setup_roles.sql` from a state where `yog_archive` holds nothing.
+///
+/// The revoke and the file run under one hold of [`CLUSTER_ROLES`]: another
+/// test applying the file in between would grant the membership back, and the
+/// assertions would see its grant instead of this one.
 async fn setup_roles_from_scratch(pool: &PgPool) {
+    let _cluster = CLUSTER_ROLES.lock().await;
     sqlx::raw_sql(
         "DO $$ BEGIN
             IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'yog_archive') THEN

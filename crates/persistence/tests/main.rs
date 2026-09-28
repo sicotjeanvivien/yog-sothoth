@@ -46,6 +46,7 @@ mod price_positivity;
 mod price_staleness;
 mod privileges;
 mod reward_valuation;
+mod runtime_role_writes;
 mod set_pool_status;
 mod signal_dedup;
 mod signal_list;
