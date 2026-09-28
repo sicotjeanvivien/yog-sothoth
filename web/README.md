@@ -436,6 +436,26 @@ image is never reused (rebuild with `up -d --build` after every change).
 runs the server schema on the compose's values, and checks every build
 argument the compose passes is declared in the Dockerfile.
 
+## Security headers
+
+Every response carries `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin` and a Content Security
+Policy, defined once in `src/lib/config/security-headers.ts` and applied by
+`headers()` in `next.config.ts`; `X-Powered-By` is turned off.
+
+The CSP is `frame-ancestors 'none'; object-src 'none'; base-uri 'self';
+connect-src 'self' <API origin>`. Two things it leaves out on purpose:
+
+- **no script policy** — Next.js inlines its own bootstrap scripts, so one
+  that holds needs a per-request nonce, and with it every page rendered
+  through `proxy.ts` instead of served pre-rendered;
+- **no `img-src`** — token logos come from arbitrary registry hosts.
+
+The API origin in `connect-src` comes from `NEXT_PUBLIC_YOG_API_URL`, so,
+like the client bundle, it is **fixed at build time**: an image built for one
+API origin blocks every other. HSTS is set by the TLS edge,
+`docker/Caddyfile`, not here.
+
 ## Note on the `proxy.ts` naming
 
 In Next.js 16, the file convention `middleware.ts` was renamed to
