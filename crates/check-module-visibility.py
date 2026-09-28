@@ -23,6 +23,11 @@ glob or a moved tree would otherwise find nothing to check and pass.
 Limits (the same heuristic as the measurement the rule was chosen from):
   - a re-export written in another file than the declaration escapes it;
   - so does an inline `mod x { ... }`;
+  - the walk up to the marker steps over one-line attributes only: an
+    attribute rustfmt wraps over several lines stops it. Both effects fail
+    loudly, never silently: a justified module reads as unjustified, and a
+    `cfg(test)` module is checked as production code. Keep the marker's
+    attributes on one line, or put the marker below them;
   - test code is skipped: `tests/` directories, `*_tests.rs`, and any
     `mod` under a `cfg(test)` attribute. `yog-wasm` (deferred scaffold) is
     skipped too.
