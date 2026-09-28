@@ -9,9 +9,10 @@
  *
  * Card order:
  *
- *   1. Editor — corporate identity of the publisher
+ *   1. Editor — corporate identity of the publisher, with the
+ *      registration number and phone LCEN article 1-1 requires
  *   2. Publishing director — legal representative
- *   3. Contact — email, optionally phone
+ *   3. Contact — email (the phone sits with the editor)
  *   4. Hosting — hosting provider's identity
  *   5. Intellectual property — short statement on rights
  *
@@ -30,7 +31,7 @@ import {
   type IconProps,
 } from "@/components/shared/icon";
 
-const CONTACT_EMAIL_HREF = "mailto:[contact-email]";
+const CONTACT_EMAIL_HREF = "mailto:awsd.contact@gmail.com";
 
 const INLINE_LINK_CLASS =
   "text-sothoth-400 underline decoration-sothoth-500/40 underline-offset-4 transition-colors hover:text-sothoth-300 hover:decoration-sothoth-400";
@@ -68,7 +69,14 @@ const CARDS: readonly CardSchema[] = [
     // No VAT line: AWSD is not subject to intra-EU VAT (franchise en
     // base de TVA) — the standard practice is to omit the field
     // rather than display a permanent "not applicable".
-    fields: ["name", "legalForm", "capital", "registeredOffice", "siren"],
+    fields: [
+      "name",
+      "legalForm",
+      "capital",
+      "registeredOffice",
+      "registration",
+      "phone",
+    ],
   },
   {
     key: "publishingDirector",

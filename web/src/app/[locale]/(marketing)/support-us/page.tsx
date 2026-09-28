@@ -11,8 +11,6 @@
  * feedback; sponsoring is offered but not pushed.
  *
  * Pre-deployment review checklist:
- *   - confirm contact email (in support-us-actions.tsx)
- *   - confirm Solana wallet address (in support-us-actions.tsx)
  *   - confirm GitHub Sponsors page is set up at the URL referenced
  *   - confirm site canonical URL (in support-us-make-known.tsx)
  */

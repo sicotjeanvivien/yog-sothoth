@@ -2,34 +2,46 @@
   "Privacy": {
     "meta": {
       "title": "Confidentialité — Yog-Scope",
-      "description": "Comment Yog-Scope traite vos données. Version courte : quasiment rien n'est collecté."
+      "description": "Comment Yog-Scope traite vos données. Version courte : nos serveurs n'enregistrent pas votre adresse IP, et les seules données conservées sont les emails que vous nous envoyez."
     },
     "header": {
       "eyebrow": "Politique de confidentialité",
       "title": "Ce que nous faisons de vos données.",
       "lead": "Yog-Scope est un dashboard public en lecture seule. Aucun compte n'est requis, aucun outil d'analytique n'est utilisé, aucun visiteur n'est tracké. Cette page explique en termes clairs les très rares données que la plateforme manipule.",
-      "lastUpdated": "Dernière mise à jour : [date]"
+      "lastUpdated": "Dernière mise à jour : 28 septembre 2026"
     },
     "prose": {
       "inShort": {
         "title": "En bref",
-        "body": "Yog-Scope ne demande pas de compte, n'utilise pas d'outil d'analytique et ne dépose pas de cookies non essentiels. Les seules données personnelles que la plateforme voit jamais sont les logs techniques du serveur (conservés brièvement pour la sécurité et l'exploitation) et les emails que vous nous envoyez. C'est toute la liste."
+        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Nous ne voyons de données personnelles vous concernant que si vous nous écrivez ou soutenez le projet. Une exception à connaître : les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
       },
       "responsible": {
         "title": "Qui est responsable",
-        "body": "Le responsable du traitement est AWSD, une société immatriculée en France (SIREN 100 091 446), dont le siège social est situé 60 rue François Ier, 75008 Paris. Pour toute question relative à la vie privée, vous pouvez écrire à <email>[email de contact]</email>."
+        "body": "Le responsable du traitement est AWSD, SASU immatriculée au RCS de Paris sous le numéro 100 091 446, dont le siège social est situé 60 rue François Ier, 75008 Paris, joignable au 09 82 75 14 25. Pour toute question relative à vos données, écrivez à <email>awsd.contact@gmail.com</email>. AWSD n'a pas désigné de délégué à la protection des données."
       },
-      "collected": {
-        "title": "Ce que nous collectons, et pourquoi",
-        "body": "Le serveur web qui héberge Yog-Scope enregistre des logs techniques standards — adresse IP, user agent, URL demandée, statut de la réponse, horodatage — strictement pour faire fonctionner le service et détecter les abus. Ces logs sont conservés douze mois maximum et ne sont partagés avec personne en dehors de l'hébergeur. Si vous écrivez à l'adresse de contact, votre email et son contenu sont conservés le temps strictement nécessaire au traitement de votre demande. Aucune autre donnée personnelle n'est collectée. Il n'y a pas de système de compte, pas de pixel de tracking, pas d'analytique tiers, pas de publicité."
+      "browsing": {
+        "title": "Quand vous consultez le site",
+        "body": "Pour vous envoyer une page ou répondre à un appel de l'API, nos serveurs, hébergés par Scaleway dans l'Union européenne, reçoivent votre adresse IP : aucune connexion n'est possible sans elle. Elle n'est écrite dans aucun journal. Nos journaux techniques contiennent seulement l'adresse demandée, le code de réponse et le temps de traitement, et rien qui vous identifie. Il n'y a pas de système de compte, pas de pixel de tracking, pas d'analytique tiers."
+      },
+      "contact": {
+        "title": "Quand vous nous écrivez",
+        "body": "Si vous écrivez à l'adresse de contact, nous traitons votre adresse email et le contenu de votre message pour vous répondre. La base juridique est notre intérêt légitime à traiter les demandes qu'on nous adresse (article 6.1.f du RGPD). Nous écrire est facultatif : le site s'utilise exactement de la même façon sans le faire. Vos messages sont conservés le temps nécessaire au traitement de votre demande, puis supprimés. Ils transitent par notre messagerie, fournie par Google (Gmail), et peuvent donc être transférés aux États-Unis. Ce transfert est encadré par le Data Privacy Framework UE–États-Unis, qui fait l'objet d'une décision d'adéquation de la Commission européenne du 10 juillet 2023."
+      },
+      "sponsors": {
+        "title": "Quand vous soutenez le projet",
+        "body": "Si vous parrainez le projet sur GitHub Sponsors, le paiement est traité par GitHub (États-Unis), selon sa propre politique de confidentialité. GitHub nous communique votre nom d'utilisateur et le montant du parrainage, pour que nous sachions qui soutient le projet. La base juridique est notre intérêt légitime (article 6.1.f du RGPD). Nous ne copions pas ces informations ailleurs : elles restent sur GitHub, qui les conserve selon ses propres règles. Si vous faites un don en SOL à l'adresse affichée sur la page « Nous soutenir », la blockchain Solana rend publics, de façon permanente, l'adresse du wallet émetteur, le montant et la date. Nous les voyons comme tout le monde, pour savoir qui soutient le projet, sur la même base d'intérêt légitime. Ni nous ni personne ne pouvons les effacer : le droit à l'effacement ne peut pas s'exercer sur une transaction on-chain. Nous ne cherchons pas à relier une adresse de wallet à une personne."
+      },
+      "thirdParties": {
+        "title": "Logos des tokens",
+        "body": "Les pages du dashboard affichent le logo de chaque token. Ce logo n'est pas servi par Yog-Scope : votre navigateur le télécharge directement à l'adresse que le créateur du token a inscrite dans les métadonnées on-chain. Comme pour toute image chargée sur le web, chacun de ces serveurs reçoit votre adresse IP, l'identifiant de votre navigateur (user agent) et le nom de notre site, sans le chemin de la page consultée. Nous ne choisissons pas ces serveurs et nous ne les connaissons pas à l'avance. Ils peuvent se trouver hors de l'Union européenne, y compris dans des pays qui ne font l'objet d'aucune décision d'adéquation. Nous ne leur transmettons rien d'autre et ne recevons rien d'eux. La base juridique est notre intérêt légitime à montrer l'identité visuelle des tokens (article 6.1.f du RGPD). Pour l'éviter, bloquez les images tierces dans votre navigateur : le site reste entièrement utilisable, seuls les logos restent vides."
       },
       "cookies": {
         "title": "Cookies",
-        "body": "Le site ne dépose aucun cookie soumis à consentement. Quelques cookies techniques strictement nécessaires peuvent être utilisés pour mémoriser votre préférence de langue et faire fonctionner le site correctement — ces cookies sont exemptés de consentement par la directive ePrivacy. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
+        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer un seul cookie technique, NEXT_LOCALE, qui mémorise la langue du site. Il n'est posé que si la page que vous ouvrez est dans une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. Strictement nécessaire au fonctionnement du site, il est exempté de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
       },
       "rights": {
         "title": "Vos droits",
-        "body": "Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition au traitement de vos données personnelles, ainsi que du droit de définir des directives sur le sort de vos données après votre décès. Pour exercer l'un de ces droits, écrivez à <email>[email de contact]</email>. Vous pouvez également introduire une réclamation auprès de la CNIL (www.cnil.fr) si vous estimez que vos droits ne sont pas respectés."
+        "body": "Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition au traitement de vos données personnelles, ainsi que du droit de définir des directives sur le sort de vos données après votre décès. Pour exercer l'un de ces droits, écrivez à <email>awsd.contact@gmail.com</email>. Vous pouvez également introduire une réclamation auprès de la CNIL (www.cnil.fr) si vous estimez que vos droits ne sont pas respectés."
       },
       "changes": {
         "title": "Évolutions de cette politique",
