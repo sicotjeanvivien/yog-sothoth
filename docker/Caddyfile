@@ -6,6 +6,27 @@
 #
 # The domains come from the environment, set in the server's .env.
 #
+# No visitor IP in the logs. Caddy keeps no access log without a `log`
+# directive, but its default logger still writes every failed request
+# (`http.log.error`, e.g. a 502 while yog-web or yog-api restarts) with
+# the client's IP, port and headers, User-Agent included — measured on
+# 2.11.4. The privacy page says the IP is written to no log, and Docker
+# keeps these lines with no rotation. The filter drops those fields and
+# keeps what diagnoses the error: method, host, uri, status, cause.
+{
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+				request>headers delete
+			}
+		}
+	}
+}
+
 # HSTS on both sites: the browser keeps to HTTPS for a year once it has seen
 # one answer. Without `includeSubDomains`, which set on the apex would bind
 # every future subdomain to HTTPS, and without `preload`, a commitment that
