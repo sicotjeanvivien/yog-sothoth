@@ -2,34 +2,46 @@
   "Privacy": {
     "meta": {
       "title": "Privacy — Yog-Scope",
-      "description": "How Yog-Scope handles your data. Short answer: almost nothing is collected."
+      "description": "How Yog-Scope handles your data. Short answer: our servers do not record your IP address, and the only data we keep are the emails you send us."
     },
     "header": {
       "eyebrow": "Privacy policy",
       "title": "What we do with your data.",
       "lead": "Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
-      "lastUpdated": "Last updated: [date]"
+      "lastUpdated": "Last updated: 28 September 2026"
     },
     "prose": {
       "inShort": {
         "title": "In short",
-        "body": "Yog-Scope does not require an account, does not use analytics, and does not set non-essential cookies. The only personal data the platform ever sees are technical server logs (kept briefly for security and operations) and any email you choose to send to the contact address. That is the whole list."
+        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. The only personal data we keep are the emails you choose to send us. One exception worth knowing: token logos are loaded directly from third-party servers, which therefore see your IP address (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
       },
       "responsible": {
         "title": "Who is responsible",
-        "body": "The data controller is AWSD, a company registered in France (SIREN 100 091 446), whose registered office is at 60 rue François Ier, 75008 Paris, France. For any privacy-related question, you can reach out at <email>[contact-email]</email>."
+        "body": "The data controller is AWSD, a SASU registered with the Paris Trade and Companies Register (RCS) under number 100 091 446, whose registered office is at 60 rue François Ier, 75008 Paris, France, reachable at +33 9 82 75 14 25. For any question about your data, write to <email>awsd.contact@gmail.com</email>. AWSD has not appointed a data protection officer."
       },
-      "collected": {
-        "title": "What we collect, and why",
-        "body": "The web server hosting Yog-Scope records standard technical logs — IP address, user agent, requested URL, response status, timestamp — strictly to keep the service running and to detect abuse. These logs are retained for a maximum of twelve months and are not shared with anyone outside the hosting provider. If you send an email to the contact address, that email and its contents are kept for the time strictly needed to handle your request. No other personal data is collected. There is no account system, no tracking pixel, no third-party analytics, and no advertising."
+      "browsing": {
+        "title": "When you browse the site",
+        "body": "To send you a page or answer an API call, our servers, hosted by Scaleway in the European Union, receive your IP address: no connection is possible without it. It is not written to any log. Our technical logs only contain the requested address, the response status and the processing time, and nothing that identifies you. There is no account system, no tracking pixel, and no third-party analytics."
+      },
+      "contact": {
+        "title": "When you write to us",
+        "body": "If you write to the contact address, we process your email address and the content of your message in order to reply. The legal basis is our legitimate interest in handling the requests sent to us (GDPR, article 6(1)(f)). Writing to us is optional: the site works exactly the same without it. Your messages are kept for as long as it takes to handle your request, then deleted. They go through our mailbox, provided by Google (Gmail), and may therefore be transferred to the United States. That transfer is covered by the EU–US Data Privacy Framework, the subject of a European Commission adequacy decision of 10 July 2023."
+      },
+      "sponsors": {
+        "title": "When you sponsor the project",
+        "body": "If you sponsor the project on GitHub Sponsors, the payment is processed by GitHub (United States), under its own privacy policy. GitHub tells us your username and the amount of your sponsorship, so that we know who supports the project. The legal basis is our legitimate interest (GDPR, article 6(1)(f)). We do not copy this information anywhere else: it stays on GitHub, which keeps it under its own rules."
+      },
+      "thirdParties": {
+        "title": "Token logos",
+        "body": "The dashboard pages show each token's logo. That logo is not served by Yog-Scope: your browser downloads it directly from the address the token's creator wrote into its on-chain metadata. As with any image loaded on the web, each of these servers receives your IP address, your browser's identifier (user agent) and our site's name, without the path of the page you are viewing. We do not choose these servers and do not know them in advance. They may be located outside the European Union, including in countries not covered by any adequacy decision. We send them nothing else and receive nothing from them. The legal basis is our legitimate interest in showing the tokens' visual identity (GDPR, article 6(1)(f)). To avoid it, block third-party images in your browser: the site remains fully usable, only the logos stay blank."
       },
       "cookies": {
         "title": "Cookies",
-        "body": "The site does not set any cookie that requires consent. A small number of strictly necessary technical cookies may be used to remember your language preference and to make the site work correctly — these are exempt from consent under the ePrivacy directive. The list will be updated if non-essential cookies are ever introduced."
+        "body": "The site sets no cookie that requires consent. It may set a single technical cookie, NEXT_LOCALE, which remembers the site's language. It is only set if you choose a language different from your browser's, and it is deleted when you close your browser. Being strictly necessary for the site to work, it is exempt from consent. This list will be updated if non-essential cookies are ever introduced."
       },
       "rights": {
         "title": "Your rights",
-        "body": "Under the GDPR you have the right to access, rectify, erase, restrict, port, or object to the processing of your personal data, and to define directives about your data after your death. To exercise any of these rights, write to <email>[contact-email]</email>. You also have the right to lodge a complaint with the French data protection authority (CNIL, www.cnil.fr) if you believe your rights are not respected."
+        "body": "Under the GDPR you have the right to access, rectify, erase, restrict, port, or object to the processing of your personal data, and to define directives about your data after your death. To exercise any of these rights, write to <email>awsd.contact@gmail.com</email>. You also have the right to lodge a complaint with the French data protection authority (CNIL, www.cnil.fr) if you believe your rights are not respected."
       },
       "changes": {
         "title": "Changes to this policy",

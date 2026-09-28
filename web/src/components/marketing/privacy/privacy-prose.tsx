@@ -1,15 +1,22 @@
 /**
  * Privacy — prose section.
  *
- * Six stacked cards, each answering one question in plain prose,
+ * Nine stacked cards, each answering one question in plain prose,
  * prefixed with a small icon badge:
  *
- *   1. In short        — InfoIcon
- *   2. Who is responsible — UserCardIcon
- *   3. What we collect — EyeIcon (reused from About)
- *   4. Cookies         — CookieIcon
- *   5. Your rights     — ShieldIcon
- *   6. Changes         — RefreshIcon
+ *   1. In short                   — InfoIcon
+ *   2. Who is responsible         — UserCardIcon
+ *   3. When you browse the site   — EyeIcon (reused from About)
+ *   4. When you write to us       — MailIcon
+ *   5. When you sponsor           — UsersIcon
+ *   6. Token logos                — ExternalLinkIcon
+ *   7. Cookies                    — CookieIcon
+ *   8. Your rights                — ShieldIcon
+ *   9. Changes                    — RefreshIcon
+ *
+ * One card per processing, because GDPR article 13 asks the same
+ * questions of each (purpose, legal basis, recipients, retention):
+ * a card that mixes two processings cannot answer them separately.
  *
  * Constrained to a comfortable reading width. Copy lives under
  * `Privacy.prose` in `messages/{en,fr}.json`.
@@ -20,15 +27,18 @@ import type { FC, ReactNode } from "react";
 
 import {
   CookieIcon,
+  ExternalLinkIcon,
   EyeIcon,
   InfoIcon,
+  MailIcon,
   RefreshIcon,
   ShieldIcon,
   UserCardIcon,
+  UsersIcon,
   type IconProps,
 } from "@/components/shared/icon";
 
-const CONTACT_EMAIL_HREF = "mailto:[contact-email]";
+const CONTACT_EMAIL_HREF = "mailto:awsd.contact@gmail.com";
 
 const INLINE_LINK_CLASS =
   "text-sothoth-400 underline decoration-sothoth-500/40 underline-offset-4 transition-colors hover:text-sothoth-300 hover:decoration-sothoth-400";
@@ -48,8 +58,9 @@ const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
 //
 // The reading flow mirrors what a visitor naturally asks:
 // "what's the short version?" → "who is responsible?" →
-// "what do you collect?" → "what about cookies?" → "what are my
-// rights?" → "what happens if this changes?"
+// "what happens when I browse / write / sponsor?" → "who else sees
+// me?" → "what about cookies?" → "what are my rights?" → "what
+// happens if this changes?"
 
 type CardConfig = {
   key: string;
@@ -59,7 +70,10 @@ type CardConfig = {
 const CARDS: readonly CardConfig[] = [
   { key: "inShort", Icon: InfoIcon },
   { key: "responsible", Icon: UserCardIcon },
-  { key: "collected", Icon: EyeIcon },
+  { key: "browsing", Icon: EyeIcon },
+  { key: "contact", Icon: MailIcon },
+  { key: "sponsors", Icon: UsersIcon },
+  { key: "thirdParties", Icon: ExternalLinkIcon },
   { key: "cookies", Icon: CookieIcon },
   { key: "rights", Icon: ShieldIcon },
   { key: "changes", Icon: RefreshIcon },

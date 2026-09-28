@@ -7,8 +7,8 @@
     "header": {
       "eyebrow": "Mentions légales",
       "title": "Mentions légales.",
-      "lead": "Informations d'identification du site Yog-Scope, conformément à la Loi pour la Confiance dans l'Économie Numérique (LCEN, article 6-III).",
-      "lastUpdated": "Dernière mise à jour : [date]"
+      "lead": "Informations d'identification du site Yog-Scope, conformément à la Loi pour la Confiance dans l'Économie Numérique (LCEN, article 1-1).",
+      "lastUpdated": "Dernière mise à jour : 28 septembre 2026"
     },
     "cards": {
       "editor": {
@@ -22,8 +22,10 @@
           "capital": "1 000 €",
           "registeredOfficeLabel": "Siège social",
           "registeredOffice": "60 rue François Ier, 75008 Paris",
-          "sirenLabel": "SIREN",
-          "siren": "100 091 446"
+          "registrationLabel": "Immatriculation",
+          "registration": "RCS Paris 100 091 446",
+          "phoneLabel": "Téléphone",
+          "phone": "09 82 75 14 25"
         }
       },
       "publishingDirector": {
@@ -37,7 +39,7 @@
         "title": "Contact",
         "fields": {
           "emailLabel": "Email",
-          "email": "[email de contact]"
+          "email": "awsd.contact@gmail.com"
         }
       },
       "hosting": {
@@ -46,7 +48,7 @@
           "nameLabel": "Raison sociale",
           "name": "Scaleway SAS",
           "addressLabel": "Adresse",
-          "address": "8 rue de la Ville l'Évêque, 75008 Paris, France",
+          "address": "8 rue de la Ville-l'Évêque, 75008 Paris, France",
           "phoneLabel": "Téléphone",
           "phone": "+33 1 84 13 00 00"
         }

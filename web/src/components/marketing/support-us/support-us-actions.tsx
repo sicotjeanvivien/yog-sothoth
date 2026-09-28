@@ -30,7 +30,7 @@ import { CopyButton } from "@/components/shared/copy-button";
 
 const GITHUB_ISSUES_URL = "https://github.com/sicotjeanvivien/yog-sothoth/issues";
 const GITHUB_SPONSORS_URL = "https://github.com/sponsors/sicotjeanvivien";
-const CONTACT_EMAIL_HREF = "mailto:[contact-email]";
+const CONTACT_EMAIL_HREF = "mailto:awsd.contact@gmail.com";
 const SOLANA_WALLET_ADDRESS = "[solana-wallet-address]";
 
 const CARD_CLASS =
