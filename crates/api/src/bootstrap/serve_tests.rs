@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use axum::{Router, routing::get};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{Notify, broadcast};
+use tokio::sync::{Notify, Semaphore, broadcast};
 use tokio_util::sync::CancellationToken;
 use yog_bootstrap::SHUTDOWN_GRACE;
 
@@ -26,6 +26,7 @@ fn idle_poller() -> SignalStreamPoller {
     let (sender, _) = broadcast::channel(8);
     SignalStreamPoller::new(
         Arc::new(MockSignalRepo::feed(Ok(None), Ok(vec![]))),
+        unused_signal_service(),
         sender,
         Duration::from_secs(3600),
     )
@@ -82,12 +83,13 @@ async fn read_head(stream: &mut TcpStream) -> String {
 async fn an_open_signal_stream_does_not_hold_the_stop() {
     let shutdown = CancellationToken::new();
     let (feed, _) = broadcast::channel(8);
-    let (service, token) = (unused_signal_service(), shutdown.clone());
+    let (slots, token) = (Arc::new(Semaphore::new(1)), shutdown.clone());
     let router = Router::new().route(
         "/api/signals/stream",
         get(move || {
-            let (receiver, service, token) = (feed.subscribe(), service.clone(), token.clone());
-            async move { signal_sse(receiver, service, token) }
+            let (receiver, token) = (feed.subscribe(), token.clone());
+            let slot = slots.clone().try_acquire_owned().unwrap();
+            async move { signal_sse(receiver, slot, token) }
         }),
     );
     let (addr, server) = start(router, &shutdown).await;

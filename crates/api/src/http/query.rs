@@ -18,7 +18,8 @@ pub(crate) const MAX_LIMIT: i64 = 200;
 pub(crate) const MAX_SEARCH_LEN: usize = 100;
 
 pub(crate) const DEFAULT_TOP_LIMIT: i64 = 10;
-pub(crate) const MAX_TOP_LIMIT: i64 = 20;
+/// The service computes the shared ranking at this size.
+pub(crate) const MAX_TOP_LIMIT: i64 = crate::application::TOP_POOLS_MAX;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct PageQuery {

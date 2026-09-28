@@ -290,7 +290,7 @@ than clamped.
 
 With today's pool of 10 the bound is 9. ⚠️ **And it is not configurable**:
 `init_db` calls `Database::connect`, whose size is fixed, and no environment
-variable reaches `connect_with_options`. Raising the write concurrency therefore
+variable reaches `connect_with` and its `PoolSettings`. Raising the write concurrency therefore
 still takes a code change today — what changed is *which* change: sizing the
 pool rather than editing a worker constant, with the reservation following
 automatically. `index_concurrency`'s startup refusal exists for the pool sizes

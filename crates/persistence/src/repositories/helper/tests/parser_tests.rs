@@ -264,3 +264,52 @@ fn convert_string_to_signature_should_convert() {
 
     assert_eq!(result, signature);
 }
+
+/// A database error carrying only a SQLSTATE — what `map_sqlx_error` keys on.
+#[derive(Debug)]
+struct CodedDbError(&'static str);
+
+impl std::fmt::Display for CodedDbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "database error {}", self.0)
+    }
+}
+
+impl std::error::Error for CodedDbError {}
+
+impl sqlx::error::DatabaseError for CodedDbError {
+    fn message(&self) -> &str {
+        "coded"
+    }
+    fn code(&self) -> Option<std::borrow::Cow<'_, str>> {
+        Some(self.0.into())
+    }
+    fn as_error(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+        self
+    }
+    fn as_error_mut(&mut self) -> &mut (dyn std::error::Error + Send + Sync + 'static) {
+        self
+    }
+    fn into_error(self: Box<Self>) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+        self
+    }
+    fn kind(&self) -> sqlx::error::ErrorKind {
+        sqlx::error::ErrorKind::Other
+    }
+}
+
+#[test]
+fn a_statement_cancelled_by_statement_timeout_is_a_timeout() {
+    let err = SqlxError::Database(Box::new(CodedDbError("57014")));
+
+    assert!(matches!(map_sqlx_error(err), RepositoryError::Timeout(_)));
+}
+
+/// The other half of the rule: only `57014` is a time budget. A refusal
+/// (`42501`) stays a backend failure, not something a client should retry.
+#[test]
+fn another_database_error_stays_a_backend_failure() {
+    let err = SqlxError::Database(Box::new(CodedDbError("42501")));
+
+    assert!(matches!(map_sqlx_error(err), RepositoryError::Backend(_)));
+}

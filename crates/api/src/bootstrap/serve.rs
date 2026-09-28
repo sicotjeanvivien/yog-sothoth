@@ -7,6 +7,7 @@ use tracing::info;
 use yog_bootstrap::{Stop, handle_task_result};
 
 use crate::application::SignalStreamPoller;
+use crate::http::{CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS};
 
 const HTTP_SERVER: &str = "http server";
 const SIGNAL_POLLER: &str = "signal stream poller";
@@ -30,9 +31,12 @@ pub(crate) async fn serve(
     shutdown: CancellationToken,
 ) -> anyhow::Result<()> {
     let mut server_task = tokio::spawn(
-        axum::serve(listener, router)
-            .with_graceful_shutdown(shutdown.clone().cancelled_owned())
-            .into_future(),
+        axum::serve(
+            CappedListener::new(listener, MAX_CONNECTIONS, IDLE_TIMEOUT),
+            router,
+        )
+        .with_graceful_shutdown(shutdown.clone().cancelled_owned())
+        .into_future(),
     );
     let mut poller_task = tokio::spawn(poller.run(shutdown.clone()));
 

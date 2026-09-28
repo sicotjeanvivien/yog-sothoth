@@ -128,6 +128,16 @@ rust_decimal = "1.43"
 
 # Axum
 axum = "0.8.9"
+# Test-only: `ServiceExt::oneshot` drives a router without a socket. Already
+# compiled with `util` through axum, so declaring it costs no new crate.
+tower = { version = "0.5", default-features = false, features = ["util"] }
+# yog-api's shared-result cache (`application/cache.rs`). Chosen over the
+# hand-written cache it replaces for a bounded capacity with eviction — what
+# lets a cache sit on keys that are not a fixed set — and a single flight
+# long proven: concurrent callers share one computation and its error, and
+# nothing failed is kept. Measured in a throwaway project before adopting it
+# (September 2026). `future` is its async API; nothing else is enabled.
+moka = { version = "0.12", features = ["future"] }
 tower-http = { version = "0.7", features = [
   "cors",
   "trace",
