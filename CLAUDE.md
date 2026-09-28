@@ -152,11 +152,13 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | Role | Rights | Process |
 |---|---|---|
 | `yog_migrate` | DDL, owns schema | `yog-migrate` |
-| `yog_indexer` | RW on event/pool tables, RO `watched_pools` | indexer |
-| `yog_api` | RO everywhere | api |
-| `yog_context` | RW on `token_metadata` / `token_prices`, UPDATE on pool-property columns, RO `pools` | context |
-| `yog_signals` | INSERT (append-only) on `signals`, RO on its read VIEWs | signals |
+| `yog_indexer` | writes event tables, `pools`, `pool_current_state`, `network_status` | indexer |
+| `yog_api` | writes nothing | api |
+| `yog_context` | writes `token_metadata`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
+| `yog_signals` | INSERT (append-only) on `signals` | signals |
 | `yog_archive` | RO on everything (member of `pg_read_all_data`), writes nothing | archive |
+
+Every runtime role **reads everything** (default `SELECT` in `setup_roles.sql`); the column above is what it may write. `setup_roles.sql` also revokes from `PUBLIC` TimescaleDB's job API and `TEMP` — re-run it after any `ALTER EXTENSION timescaledb UPDATE`, which can restore them.
 
 Consequence: calling `insert` from the `api` process fails with `permission denied` *by design* — the role split is the safety net, not a bug. When you add a table in a migration, add its `GRANT INSERT, UPDATE ... TO yog_indexer;` in the same migration (`SELECT` is covered by default privileges in `setup_roles.sql`).
 

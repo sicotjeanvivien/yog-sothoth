@@ -613,6 +613,34 @@ one** — while the same check from the host over `:5433` authenticates normally
 The first version of this verification connected from inside the container and
 was green in both directions; only the negative control exposed it.
 
+### What `PUBLIC` holds, taken back — and re-taken after an extension update
+
+Two rights reach every role through `PUBLIC`, and both let a role the matrix
+calls read-only write: `EXECUTE` on TimescaleDB's job API (`add_job`,
+`alter_job`, `delete_job`, `run_job` — measured: `add_job` succeeded under
+`yog_api` and `yog_archive`, every second, on `pg_sleep`), and `TEMP` on the
+database. The script revokes both. A job runs with its owner's rights, so the
+exposure was bounded, but a scheduled job persists past a password change and
+holds the workers that compress, drop and materialise. The migrations are
+unaffected: the `add_*_policy` functions do not go through `add_job` — measured
+by a `bootstrap` under `yog_migrate`, which created its 29 policy jobs with
+`add_job` revoked. `tests/runtime_role_writes.rs` proves each refusal under
+every runtime role.
+
+⚠️ **`ALTER EXTENSION timescaledb UPDATE` can hand a right back.** An update
+script that recreates a function recreates its ACL too. Measured on 28 September
+2026, going from 2.27.1 to 2.30.1 on Postgres 16 and 18: `alter_job` gains an
+argument, is recreated, and is executable by `PUBLIC` again; the other three
+keep the revoke. So after every extension update, re-run the script — it is
+idempotent — and check:
+
+```bash
+DATABASE_URL_ADMIN=… cargo run -p yog-persistence --bin yog-migrate -- setup-roles
+psql <admin-url> -Atc "SELECT proname FROM pg_proc
+  WHERE proname IN ('add_job','alter_job','delete_job','run_job')
+    AND has_function_privilege('yog_api', oid, 'EXECUTE')"   # must print nothing
+```
+
 ### The privilege matrix is tested
 
 `tests/privileges.rs` declares the intended privilege surface by hand and asserts
@@ -776,7 +804,9 @@ in the old volume. Move it first:
    that has the *new* TimescaleDB and the *old* Postgres
    (`timescale/timescaledb:<new>-pg<old>`, same mount point), then, as the first
    statement of a fresh session:
-   `psql -X <admin-url> -c "ALTER EXTENSION timescaledb UPDATE"`.
+   `psql -X <admin-url> -c "ALTER EXTENSION timescaledb UPDATE"`, then
+   `yog-migrate -- setup-roles`: the update can give `PUBLIC` back a right the
+   script revoked (see [`setup_roles.sql`](#what-public-holds-taken-back--and-re-taken-after-an-extension-update)).
 2. **Dump it with the new major's `pg_dump`.** A newer client reads an older
    server, and the reverse is refused.
 3. **Restore into the new image**, on a new volume, with

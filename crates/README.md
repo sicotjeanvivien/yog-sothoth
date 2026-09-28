@@ -81,19 +81,19 @@ The dependency graph is strict and one-directional:
 
 ## Database roles
 
-All coordination between the binaries happens through the schema, and the schema enforces who may write what. Migrations are forward-only and flow exclusively through `yog-migrate`; each runtime process connects under its own least-privilege role:
+All coordination between the binaries happens through the schema, and the schema enforces who may write what. Migrations are forward-only and flow exclusively through `yog-migrate`; each runtime process connects under its own least-privilege role. **Every runtime role reads every table and VIEW** — the default privileges of `setup_roles.sql` grant `SELECT` to all of them — so the table below lists what each one may *write*, and nothing outside it:
 
 | Role | Permissions | Used by |
 |---|---|---|
 | `yog_migrate` | DDL — owns the schema, applies migrations | `yog-migrate` binary, `cargo sqlx migrate run` |
-| `yog_indexer` | `SELECT, INSERT, UPDATE` on event tables and on `pools` (table-level); `SELECT` on `watched_pools` | indexer |
-| `yog_api` | `SELECT` across tables and VIEWs — nothing else | api |
-| `yog_context` | `SELECT, INSERT, UPDATE` on `token_metadata` / `token_prices` and every per-protocol pool-properties satellite; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties**; `SELECT` on `pools` | context |
-| `yog_signals` | `INSERT` (append-only) on `signals`; `SELECT` on its read VIEWs | signals |
+| `yog_indexer` | `INSERT, UPDATE` on the event tables, `pools` (table-level), `pool_current_state` and `network_status`; `nextval` on the sequences of the event tables only | indexer |
+| `yog_api` | writes nothing | api |
+| `yog_context` | `INSERT, UPDATE` on `token_metadata` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
+| `yog_signals` | `INSERT` (append-only) on `signals` | signals |
 | `yog_archive` | `SELECT` on everything through `pg_read_all_data`, writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 
-The role split is the safety net, not a bug: calling a write method from the api process fails with `permission denied` from Postgres itself, by design. Provisioning mechanics (`setup_roles.sql`, default privileges) are documented in [`persistence/README.md`](./persistence/README.md#setup_rolessql).
+The role split is the safety net, not a bug: calling a write method from the api process fails with `permission denied` from Postgres itself, by design. Nor can a runtime role write through what `PUBLIC` holds by default: `setup_roles.sql` takes back TimescaleDB's job API (`add_job` and its siblings) and `TEMP` on the database, and `tests/runtime_role_writes.rs` proves each refusal under the role itself. Provisioning mechanics (`setup_roles.sql`, default privileges) are documented in [`persistence/README.md`](./persistence/README.md#setup_rolessql).
 
 **Where the grant stops and discipline starts.** `yog_context` is the sole writer of the account-derived properties *by grant*: on `pools` it holds `UPDATE` on four named columns only (`token_a_mint`, `token_b_mint`, `fee_bps`, `needs_refresh`), which is what keeps `protocol` and the `*_seen_at` timestamps the indexer's. The reverse is not enforced: `yog_indexer` holds table-level `UPDATE` on `pools`, so nothing in Postgres stops it writing a property value — that it only ever writes identity and raises `needs_refresh` is a property of the code, not of the schema. The satellites are the enforced half: the indexer has no grant on them at all. Both directions are pinned by `tests/privileges.rs`.
 
