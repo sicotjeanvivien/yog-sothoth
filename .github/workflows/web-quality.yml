@@ -1,6 +1,6 @@
 # Static quality checks for the /web Next.js package.
-# Runs typecheck, lint and unit tests as parallel jobs so a failure
-# in one does not mask issues in the others.
+# Runs typecheck, lint, unit tests and the dependency audit as parallel
+# jobs so a failure in one does not mask issues in the others.
 
 name: web-quality
 
@@ -91,3 +91,27 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  # The web counterpart of the Rust `audit` job (crates.yml): a known advisory
+  # at moderate or above on a runtime dependency fails the build, unless
+  # `web/audit-exceptions.json` accepts it with a written reason. The logic is
+  # in `web/audit.sh`, runnable locally as is.
+  #
+  # Dev dependencies are not audited, by decision: the image ships Next.js's
+  # standalone output, not `node_modules`, and no devDependency is imported
+  # outside the tests (checked 28 Sept 2026) — an advisory there reaches no
+  # visitor. It reads the lockfile alone, so no `npm ci`.
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Audit runtime dependencies
+        run: bash audit.sh

@@ -365,6 +365,8 @@ web/
 │   │   └── env.d.ts                 # process.env type augmentation
 │   └── proxy.ts                     # locale negotiation (Next 16)
 ├── Dockerfile
+├── audit-exceptions.json            # accepted npm advisories, each with its reason
+├── audit.sh                         # the CI's npm audit, runnable locally
 ├── eslint.config.mjs
 ├── next.config.ts
 ├── package.json
@@ -445,12 +447,18 @@ to `proxy`. next-intl still exposes its helper under
 
 ## CI
 
-GitHub Actions runs three jobs in parallel on every push and PR that
+GitHub Actions runs four jobs in parallel on every push and PR that
 touches this package — see `.github/workflows/web-quality.yml`:
 
 - **TypeScript** — `npm run typecheck`
 - **ESLint** — `npm run lint`
 - **Vitest** — `npm test`
+- **npm audit** — `bash audit.sh`: fails on a known advisory, moderate or
+  above, against a runtime dependency. Dev dependencies are left out on
+  purpose: the image ships the standalone output, not `node_modules`. An
+  advisory can only be accepted through `audit-exceptions.json`, with a
+  written `reason` and a `revisit` condition (format in the script's header),
+  in the spirit of `.cargo/audit.toml`.
 
 A separate workflow (`.github/workflows/web-docker.yml`) builds the
 production Docker image and runs a smoke test against the locale
