@@ -8,7 +8,7 @@
  *   2. Who is responsible         — UserCardIcon
  *   3. When you browse the site   — EyeIcon (reused from About)
  *   4. When you write to us       — MailIcon
- *   5. When you sponsor           — UsersIcon
+ *   5. When you support (GitHub Sponsors, SOL donations) — UsersIcon
  *   6. Token logos                — ExternalLinkIcon
  *   7. Cookies                    — CookieIcon
  *   8. Your rights                — ShieldIcon
@@ -58,7 +58,7 @@ const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
 //
 // The reading flow mirrors what a visitor naturally asks:
 // "what's the short version?" → "who is responsible?" →
-// "what happens when I browse / write / sponsor?" → "who else sees
+// "what happens when I browse / write / donate?" → "who else sees
 // me?" → "what about cookies?" → "what are my rights?" → "what
 // happens if this changes?"
 

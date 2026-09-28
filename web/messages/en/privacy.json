@@ -13,7 +13,7 @@
     "prose": {
       "inShort": {
         "title": "In short",
-        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. The only personal data we keep are the emails you choose to send us. One exception worth knowing: token logos are loaded directly from third-party servers, which therefore see your IP address (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
+        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. We only see personal data about you if you write to us or support the project. One exception worth knowing: token logos are loaded directly from third-party servers, which therefore see your IP address (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
       },
       "responsible": {
         "title": "Who is responsible",
@@ -28,8 +28,8 @@
         "body": "If you write to the contact address, we process your email address and the content of your message in order to reply. The legal basis is our legitimate interest in handling the requests sent to us (GDPR, article 6(1)(f)). Writing to us is optional: the site works exactly the same without it. Your messages are kept for as long as it takes to handle your request, then deleted. They go through our mailbox, provided by Google (Gmail), and may therefore be transferred to the United States. That transfer is covered by the EU–US Data Privacy Framework, the subject of a European Commission adequacy decision of 10 July 2023."
       },
       "sponsors": {
-        "title": "When you sponsor the project",
-        "body": "If you sponsor the project on GitHub Sponsors, the payment is processed by GitHub (United States), under its own privacy policy. GitHub tells us your username and the amount of your sponsorship, so that we know who supports the project. The legal basis is our legitimate interest (GDPR, article 6(1)(f)). We do not copy this information anywhere else: it stays on GitHub, which keeps it under its own rules."
+        "title": "When you support the project",
+        "body": "If you sponsor the project on GitHub Sponsors, the payment is processed by GitHub (United States), under its own privacy policy. GitHub tells us your username and the amount of your sponsorship, so that we know who supports the project. The legal basis is our legitimate interest (GDPR, article 6(1)(f)). We do not copy this information anywhere else: it stays on GitHub, which keeps it under its own rules. If you donate SOL to the address shown on the \"Support us\" page, the Solana blockchain makes the sending wallet's address, the amount and the date public and permanent. We see them like everyone else, so that we know who supports the project, on the same legitimate-interest basis. Neither we nor anyone else can erase them: the right to erasure cannot be exercised on an on-chain transaction. We make no attempt to link a wallet address to a person."
       },
       "thirdParties": {
         "title": "Token logos",
@@ -37,7 +37,7 @@
       },
       "cookies": {
         "title": "Cookies",
-        "body": "The site sets no cookie that requires consent. It may set a single technical cookie, NEXT_LOCALE, which remembers the site's language. It is only set if you choose a language different from your browser's, and it is deleted when you close your browser. Being strictly necessary for the site to work, it is exempt from consent. This list will be updated if non-essential cookies are ever introduced."
+        "body": "The site sets no cookie that requires consent. It may set a single technical cookie, NEXT_LOCALE, which remembers the site's language. It is only set if the page you open is in a language different from your browser's, and it is deleted when you close your browser. Being strictly necessary for the site to work, it is exempt from consent. This list will be updated if non-essential cookies are ever introduced."
       },
       "rights": {
         "title": "Your rights",

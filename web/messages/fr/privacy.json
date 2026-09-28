@@ -13,7 +13,7 @@
     "prose": {
       "inShort": {
         "title": "En bref",
-        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Les seules données personnelles que nous conservons sont les emails que vous choisissez de nous envoyer. Une exception à connaître : les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
+        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Nous ne voyons de données personnelles vous concernant que si vous nous écrivez ou soutenez le projet. Une exception à connaître : les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
       },
       "responsible": {
         "title": "Qui est responsable",
@@ -28,8 +28,8 @@
         "body": "Si vous écrivez à l'adresse de contact, nous traitons votre adresse email et le contenu de votre message pour vous répondre. La base juridique est notre intérêt légitime à traiter les demandes qu'on nous adresse (article 6.1.f du RGPD). Nous écrire est facultatif : le site s'utilise exactement de la même façon sans le faire. Vos messages sont conservés le temps nécessaire au traitement de votre demande, puis supprimés. Ils transitent par notre messagerie, fournie par Google (Gmail), et peuvent donc être transférés aux États-Unis. Ce transfert est encadré par le Data Privacy Framework UE–États-Unis, qui fait l'objet d'une décision d'adéquation de la Commission européenne du 10 juillet 2023."
       },
       "sponsors": {
-        "title": "Quand vous parrainez le projet",
-        "body": "Si vous parrainez le projet sur GitHub Sponsors, le paiement est traité par GitHub (États-Unis), selon sa propre politique de confidentialité. GitHub nous communique votre nom d'utilisateur et le montant du parrainage, pour que nous sachions qui soutient le projet. La base juridique est notre intérêt légitime (article 6.1.f du RGPD). Nous ne copions pas ces informations ailleurs : elles restent sur GitHub, qui les conserve selon ses propres règles."
+        "title": "Quand vous soutenez le projet",
+        "body": "Si vous parrainez le projet sur GitHub Sponsors, le paiement est traité par GitHub (États-Unis), selon sa propre politique de confidentialité. GitHub nous communique votre nom d'utilisateur et le montant du parrainage, pour que nous sachions qui soutient le projet. La base juridique est notre intérêt légitime (article 6.1.f du RGPD). Nous ne copions pas ces informations ailleurs : elles restent sur GitHub, qui les conserve selon ses propres règles. Si vous faites un don en SOL à l'adresse affichée sur la page « Nous soutenir », la blockchain Solana rend publics, de façon permanente, l'adresse du wallet émetteur, le montant et la date. Nous les voyons comme tout le monde, pour savoir qui soutient le projet, sur la même base d'intérêt légitime. Ni nous ni personne ne pouvons les effacer : le droit à l'effacement ne peut pas s'exercer sur une transaction on-chain. Nous ne cherchons pas à relier une adresse de wallet à une personne."
       },
       "thirdParties": {
         "title": "Logos des tokens",
@@ -37,7 +37,7 @@
       },
       "cookies": {
         "title": "Cookies",
-        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer un seul cookie technique, NEXT_LOCALE, qui mémorise la langue du site. Il n'est posé que si vous choisissez une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. Strictement nécessaire au fonctionnement du site, il est exempté de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
+        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer un seul cookie technique, NEXT_LOCALE, qui mémorise la langue du site. Il n'est posé que si la page que vous ouvrez est dans une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. Strictement nécessaire au fonctionnement du site, il est exempté de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
       },
       "rights": {
         "title": "Vos droits",
