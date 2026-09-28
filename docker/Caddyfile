@@ -5,8 +5,18 @@
 # obtains and renews their certificates on its own.
 #
 # The domains come from the environment, set in the server's .env.
+#
+# HSTS on both sites: the browser keeps to HTTPS for a year once it has seen
+# one answer. Without `includeSubDomains`, which set on the apex would bind
+# every future subdomain to HTTPS, and without `preload`, a commitment that
+# takes months to undo. The other security headers are set by the services
+# themselves (next.config.ts, yog-api's middleware).
+(hsts) {
+	header Strict-Transport-Security "max-age=31536000"
+}
 
 {$YOG_WEB_DOMAIN} {
+	import hsts
 	encode zstd gzip
 	reverse_proxy yog-web:3000
 }
@@ -16,5 +26,6 @@
 # events would arrive late and in bursts. Without it, Caddy flushes a
 # `text/event-stream` response as it arrives.
 {$YOG_API_DOMAIN} {
+	import hsts
 	reverse_proxy yog-api:5000
 }
