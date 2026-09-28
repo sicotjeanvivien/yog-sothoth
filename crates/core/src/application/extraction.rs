@@ -3,6 +3,7 @@ mod anchor_event;
 pub mod conformance;
 mod event_extractor;
 mod extraction_dispatcher;
+// Visible: callers need items that are not re-exported here.
 pub mod meteora;
 mod on_chain_transaction;
 mod outcome;

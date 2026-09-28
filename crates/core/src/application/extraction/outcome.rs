@@ -55,8 +55,8 @@ pub enum ExtractionFailure {
     },
 
     /// Wire event was decoded successfully but could not be translated
-    /// into a domain event — for example, the transferChecked context
-    /// expected by the translator was missing.
+    /// into a domain event — for example, an enum field carried a value
+    /// the translator does not know.
     #[error("translation of {event_name}: {reason}")]
     Translation {
         event_name: &'static str,

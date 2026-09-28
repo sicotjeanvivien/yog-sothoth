@@ -1,5 +1,5 @@
-pub mod damm_v2;
-pub mod dlmm;
+mod damm_v2;
+mod dlmm;
 
 pub use dlmm::{MeteoraDlmmPoolAccountProperties, MeteoraDlmmPoolProperties};
 

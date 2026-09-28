@@ -1,6 +1,7 @@
-pub(crate) mod app_state;
+mod app_state;
+// Visible: target of a doc link (http/middleware.rs).
 pub(crate) mod config;
-pub(crate) mod serve;
+mod serve;
 
 pub(crate) use app_state::AppState;
 pub(crate) use config::Config;

@@ -8,9 +8,8 @@ use std::sync::Arc;
 
 use solana_pubkey::Pubkey;
 use yog_core::{
-    PageDirection, PagePosition, RepositoryError,
+    Page, PageDirection, PagePosition, RepositoryError,
     domain::{MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed},
-    tools::Page,
 };
 
 // ---------------------------------------------------------------------------

@@ -213,7 +213,7 @@ whatever the source delivered
 ExtractionOutcome { events, unknown, failures }
 ```
 
-Three failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (prefix or payload-size mismatch), `Borsh` (schema mismatch), `Translation` (missing transferChecked context, invalid enum value).
+Three failure types are distinguished in `ExtractionFailure` and counted as separate metric labels: `AnchorDecode` (prefix or payload-size mismatch), `Borsh` (schema mismatch), `Translation` (invalid enum value).
 
 ## The `SignalDetector` trait
 

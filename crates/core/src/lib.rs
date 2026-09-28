@@ -1,8 +1,8 @@
 pub mod amm;
 pub mod application;
 pub mod domain;
-pub mod error;
-pub mod tools;
+mod error;
+mod tools;
 
 pub use error::{CoreError, CoreResult, RepositoryError, RepositoryResult};
 
