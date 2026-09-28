@@ -57,14 +57,14 @@ pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(8);
 ///
 /// Below the pool's 10 connections ([`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`]):
 /// with the signal poller's one, the light routes always keep 3.
-pub(crate) const HEAVY_ROUTE_PERMITS: usize = 6;
+pub(crate) const WORK_SLOTS: usize = 6;
 
 /// How long expensive work waits for a slot before being refused.
 ///
 /// Long enough for the bursts a page makes on its own (a dashboard loads
 /// three slow routes at once), short enough that a refused client learns so
 /// quickly rather than piling up.
-pub(crate) const HEAVY_ROUTE_WAIT: Duration = Duration::from_secs(2);
+pub(crate) const WORK_SLOT_WAIT: Duration = Duration::from_secs(2);
 
 /// How many `/api/signals/stream` connections may be open at once.
 ///
@@ -99,7 +99,7 @@ pub(crate) const MAX_CONNECTIONS: usize = 400;
 /// sockets would hold every slot for good. It counts **both** directions:
 /// an SSE client sends nothing after its request, and the 15 s keep-alive
 /// ping is what keeps its stream alive. Above that ping, and above the worst
-/// request ([`HEAVY_ROUTE_WAIT`] + [`REQUEST_TIMEOUT`]), during which nothing
+/// request ([`WORK_SLOT_WAIT`] + [`REQUEST_TIMEOUT`]), during which nothing
 /// is written.
 ///
 /// ⚠️ **It bounds the outage, it does not remove it.** Measured on
@@ -129,7 +129,7 @@ pub(crate) async fn request_deadline(
 /// (`application/work_slots.rs`): `tower::limit::ConcurrencyLimitLayer` would
 /// give each route its own semaphore under axum, and refuse outside Problem
 /// Details.
-pub(crate) async fn heavy_route_limit(
+pub(crate) async fn work_slot_limit(
     State(slots): State<WorkSlots>,
     request: Request,
     next: Next,

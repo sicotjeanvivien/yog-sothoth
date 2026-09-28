@@ -9,7 +9,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use super::{heavy_route_limit, request_deadline};
+use super::{request_deadline, work_slot_limit};
 use crate::application::WorkSlots;
 
 async fn slow() -> &'static str {
@@ -32,7 +32,7 @@ async fn a_slow_request_past_the_slots_is_refused_with_a_503() {
     let limit = WorkSlots::new(2, Duration::from_millis(100));
     let router = Router::new()
         .route("/slow", get(slow))
-        .route_layer(from_fn_with_state(limit, heavy_route_limit));
+        .route_layer(from_fn_with_state(limit, work_slot_limit));
 
     let (a, b, c) = tokio::join!(
         call(router.clone(), "/slow"),
@@ -61,7 +61,7 @@ async fn a_freed_slot_serves_the_next_request() {
     let limit = WorkSlots::new(1, Duration::from_millis(100));
     let router = Router::new()
         .route("/slow", get(slow))
-        .route_layer(from_fn_with_state(limit, heavy_route_limit));
+        .route_layer(from_fn_with_state(limit, work_slot_limit));
 
     assert_eq!(call(router.clone(), "/slow").await.status(), StatusCode::OK);
     assert_eq!(call(router, "/slow").await.status(), StatusCode::OK);
@@ -74,7 +74,7 @@ async fn a_request_that_gets_a_slot_within_its_wait_is_served() {
     let limit = WorkSlots::new(1, Duration::from_secs(2));
     let router = Router::new()
         .route("/slow", get(slow))
-        .route_layer(from_fn_with_state(limit, heavy_route_limit));
+        .route_layer(from_fn_with_state(limit, work_slot_limit));
 
     let (a, b) = tokio::join!(call(router.clone(), "/slow"), call(router, "/slow"));
 

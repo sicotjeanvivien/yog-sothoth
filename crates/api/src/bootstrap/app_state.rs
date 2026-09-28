@@ -23,7 +23,7 @@ use crate::application::{
     SignalStreamPoller, StatsService, TokenService, WorkSlots,
 };
 use crate::bootstrap::Config;
-use crate::http::{HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, SSE_MAX_STREAMS, STATEMENT_TIMEOUT};
+use crate::http::{SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
 use anyhow::Context;
 
 /// Application-level dependencies shared across HTTP handlers.
@@ -136,7 +136,7 @@ impl AppState {
 
         // One set of slots for every expensive read: the slow routes and the
         // cached computations. See `application/work_slots.rs`.
-        let work_slots = WorkSlots::new(HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT);
+        let work_slots = WorkSlots::new(WORK_SLOTS, WORK_SLOT_WAIT);
 
         // ── Services ────────────────────────────────────────────────────
         let state = Self {

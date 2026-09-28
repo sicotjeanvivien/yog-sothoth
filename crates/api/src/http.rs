@@ -25,8 +25,8 @@ pub(crate) use handlers::signals::signal_sse;
 /// on the database connection, the cap on open signal streams, and the cap on
 /// connections.
 pub(crate) use middleware::capacity::{
-    CappedListener, HEAVY_ROUTE_PERMITS, HEAVY_ROUTE_WAIT, IDLE_TIMEOUT, MAX_CONNECTIONS,
-    SSE_MAX_STREAMS, STATEMENT_TIMEOUT,
+    CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS, SSE_MAX_STREAMS, STATEMENT_TIMEOUT,
+    WORK_SLOT_WAIT, WORK_SLOTS,
 };
 
 use std::net::SocketAddr;
@@ -39,7 +39,7 @@ use tower_http::{
 use tracing::info;
 
 use crate::bootstrap::AppState;
-use crate::http::middleware::capacity::{REQUEST_TIMEOUT, heavy_route_limit, request_deadline};
+use crate::http::middleware::capacity::{REQUEST_TIMEOUT, request_deadline, work_slot_limit};
 use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,
 };
@@ -53,8 +53,8 @@ use crate::http::middleware::tracing::{
 ///    leaving a trace in the logs.
 /// 2. `app` — every business endpoint. Wrapped in `TraceLayer` for
 ///    per-request spans and in the request-id layers for correlation,
-///    and bounded by [`REQUEST_TIMEOUT`]. Its slow routes form a
-///    sub-router sharing the [`crate::application::WorkSlots`] — see
+///    and bounded by [`REQUEST_TIMEOUT`]. Its slow routes form the
+///    `slotted` sub-router, sharing the [`crate::application::WorkSlots`] — see
 ///    [`middleware::capacity`] for the measurements behind each bound.
 ///
 /// Cross-cutting headers (security, CORS, frame-options) apply to
@@ -64,17 +64,17 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/healthz", get(handlers::health::healthz))
         .route("/readyz", get(handlers::health::readyz));
 
-    // ── Slow routes: behind the shared slots ────────────────────────────
+    // ── Slotted routes: each request takes a work slot first ────────────
     // The routes measured above 0.5 s at rest (25 September 2026). They
-    // share `HEAVY_ROUTE_PERMITS` slots, below the pool's size, so that a
-    // burst on them cannot take the connections the light routes need.
+    // share the `WORK_SLOTS` slots, below the pool's size, so that a burst
+    // on them cannot take the connections the light routes need.
     //
     // `/api/pools/top` and `/api/stats` are slow too, and stay out on
     // purpose: their computation takes a slot itself, inside the cache, so
     // the callers waiting on it hold none. Behind the route slots, each
     // waiter held one — measured: 30 parallel `/top` on a cold cache gave
     // 24 × 503 for a single ranking.
-    let heavy = Router::new()
+    let slotted = Router::new()
         // ── Pool collection ─────────────────────────────────────────────
         .route("/api/pools", get(handlers::pools::list_pools))
         // ── Single-pool resources ───────────────────────────────────────
@@ -87,7 +87,7 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/api/signals", get(handlers::signals::list_signals))
         .route_layer(from_fn_with_state(
             state.work_slots.clone(),
-            heavy_route_limit,
+            work_slot_limit,
         ));
 
     let app = Router::new()
@@ -96,7 +96,7 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
             "/api/announcements/active",
             get(handlers::announcements::list_active_announcements),
         )
-        // ── Shared results (cached, see the note on `heavy` above) ────────
+        // ── Shared results (cached, see the note on `slotted` above) ──────
         .route("/api/pools/top", get(handlers::pools::list_top_pools))
         .route("/api/stats", get(handlers::stats::get_stats))
         // ── Fee-tier option list (non-paginated) — powers the fee filter ──
@@ -124,7 +124,7 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
             get(handlers::signals::stream_signals),
         )
         .route("/api/tokens/{mint}", get(handlers::token::get_token))
-        .merge(heavy)
+        .merge(slotted)
         // ── Deadline (innermost: the tracing span records its 503) ───────
         .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
         // ── Tracing and request id (applied only here) ───────────────────
