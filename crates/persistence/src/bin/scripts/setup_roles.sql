@@ -169,6 +169,10 @@ ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
 --     hold the workers that compress, drop and materialise. Nothing here uses
 --     the four routines: the migrations go through the `add_*_policy`
 --     functions, which do not call them.
+--     ⚠️ yog_migrate loses them too. A future migration that calls one —
+--     `alter_job` is the usual way to reschedule a policy — needs its own
+--     `GRANT EXECUTE … TO yog_migrate` first, and CI will not tell you:
+--     `sqlx::test` applies migrations as the superuser.
 --   * TEMP on the database, a Postgres default: every role could create
 --     temporary tables.
 --
