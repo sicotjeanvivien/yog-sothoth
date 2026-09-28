@@ -1,20 +1,21 @@
-pub(crate) mod announcement;
-pub(crate) mod embedded_price;
-pub(crate) mod embedded_token;
-pub(crate) mod fee_tier;
-pub(crate) mod liquidity_event;
-pub(crate) mod network_status;
-pub(crate) mod page;
-pub(crate) mod pool;
-pub(crate) mod pool_current_state;
-pub(crate) mod pool_history;
+mod announcement;
+mod embedded_price;
+mod embedded_token;
+mod fee_tier;
+mod liquidity_event;
+mod network_status;
+mod page;
+mod pool;
+mod pool_current_state;
+mod pool_history;
+// Visible: target of a doc link (http/error.rs).
 pub(crate) mod problem;
-pub(crate) mod readiness;
-pub(crate) mod signal;
-pub(crate) mod stats;
-pub(crate) mod swap_event;
-pub(crate) mod token;
-pub(crate) mod token_price;
+mod readiness;
+mod signal;
+mod stats;
+mod swap_event;
+mod token;
+mod token_price;
 
 pub(crate) use announcement::AnnouncementResponse;
 pub(crate) use embedded_price::EmbeddedPriceResponse;

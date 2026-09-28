@@ -24,7 +24,7 @@ use crate::{
 /// an [`ExtractionOutcome`] that ventilates successes / unknowns / failures.
 ///
 /// The implementation MUST NOT panic on partial failures (unrecognized
-/// discriminators, borsh errors, missing transferChecked context, etc.).
+/// discriminators, borsh errors, invalid enum values, etc.).
 /// Those go into `unknown` or `failures`. A returned `Err` is reserved
 /// for a malformation of the transaction as a whole, and neither
 /// implementation has one today: the DAMM v2 extractor always returns `Ok`,

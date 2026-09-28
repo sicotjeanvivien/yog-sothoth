@@ -1,3 +1,3 @@
-pub(crate) mod event_persistor;
+mod event_persistor;
 
 pub(crate) use event_persistor::{DammV2Repos, MeteoraDammV2EventPersistor};

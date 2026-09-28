@@ -6,7 +6,4 @@
 pub enum TranslationError {
     #[error("invalid {field} value: {value}")]
     InvalidEnum { field: &'static str, value: u8 },
-
-    #[error("missing transferChecked context: {0}")]
-    MissingTransferContext(String),
 }

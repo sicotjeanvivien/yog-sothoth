@@ -13,12 +13,11 @@ use std::sync::Arc;
 
 use solana_pubkey::Pubkey;
 use yog_core::{
-    PageDirection, PagePosition, RepositoryError, RepositoryResult,
+    Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Pool, PoolCatalog, Severity, SignalCursor, SignalFeed, SignalRecord, TokenMetadataLookup,
         TokenPriceLookup,
     },
-    tools::Page,
 };
 
 use crate::application::{EnrichedSignal, EnrichedToken};

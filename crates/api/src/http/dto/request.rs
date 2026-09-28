@@ -17,15 +17,15 @@
 //! [`http::query`]: crate::http::query
 //! [`http::cursor`]: crate::http::cursor
 
-pub(crate) mod get_pool;
-pub(crate) mod get_pool_history;
-pub(crate) mod get_pool_latest_state;
-pub(crate) mod get_token;
-pub(crate) mod list_pool_liquidity;
-pub(crate) mod list_pool_swaps;
-pub(crate) mod list_pools;
-pub(crate) mod list_signals;
-pub(crate) mod list_top_pools;
+mod get_pool;
+mod get_pool_history;
+mod get_pool_latest_state;
+mod get_token;
+mod list_pool_liquidity;
+mod list_pool_swaps;
+mod list_pools;
+mod list_signals;
+mod list_top_pools;
 
 pub(crate) use get_pool::GetPoolRequest;
 pub(crate) use get_pool_history::GetPoolHistoryRequest;

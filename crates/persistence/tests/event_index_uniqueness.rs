@@ -159,7 +159,7 @@ async fn position_columns_are_stored_as_extracted(pool: PgPool) {
 #[sqlx::test]
 async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
     use yog_core::domain::MeteoraDammV2SwapEventFeed;
-    use yog_core::tools::{Cursor, PageDirection};
+    use yog_core::{Cursor, PageDirection};
 
     let swaps = swap_double_swaps();
     let pool_address = swaps[0].pool_address;
@@ -216,7 +216,7 @@ async fn paging_across_two_hops_of_one_transaction_skips_nothing(pool: PgPool) {
 #[sqlx::test]
 async fn paging_backward_across_two_hops_skips_nothing(pool: PgPool) {
     use yog_core::domain::MeteoraDammV2SwapEventFeed;
-    use yog_core::tools::{Cursor, PageDirection, PagePosition};
+    use yog_core::{Cursor, PageDirection, PagePosition};
 
     let swaps = swap_double_swaps();
     let pool_address = swaps[0].pool_address;
@@ -279,7 +279,7 @@ async fn liquidity_feed_stores_and_pages_two_hops_of_one_transaction(pool: PgPoo
         MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventFeed,
         MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventRepository,
     };
-    use yog_core::tools::{Cursor, PageDirection};
+    use yog_core::{Cursor, PageDirection};
     use yog_persistence::PgMeteoraDammV2LiquidityEventRepository;
 
     let reference = swap_double_swaps().remove(0);

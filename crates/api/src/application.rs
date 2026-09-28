@@ -1,9 +1,9 @@
 pub(crate) mod cache;
-pub(crate) mod enriched_pool;
-pub(crate) mod enriched_signal;
-pub(crate) mod services;
-pub(crate) mod signal_stream;
-pub(crate) mod work_slots;
+mod enriched_pool;
+mod enriched_signal;
+mod services;
+mod signal_stream;
+mod work_slots;
 
 pub(crate) use enriched_pool::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 pub(crate) use enriched_signal::EnrichedSignal;

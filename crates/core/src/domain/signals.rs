@@ -1,6 +1,6 @@
-pub mod detector;
-pub mod model;
-pub mod repository;
+mod detector;
+mod model;
+mod repository;
 
 pub use detector::{DetectorError, EvalContext, SignalDetector};
 pub use model::{Severity, Signal, SignalRecord};

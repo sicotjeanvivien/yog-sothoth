@@ -1,7 +1,7 @@
 use crate::infra::rpc::RawLogEvent;
 
-pub(crate) mod failed_transaction;
-pub(crate) mod invocation;
+mod failed_transaction;
+mod invocation;
 
 pub(crate) use failed_transaction::FailedTransactionFilter;
 pub(crate) use invocation::InvocationFilter;

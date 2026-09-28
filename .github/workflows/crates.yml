@@ -1,6 +1,6 @@
 # Quality checks for the Rust workspace.
 #
-# Eight jobs in parallel:
+# Nine jobs in parallel:
 #   - check            : `cargo check` across the whole workspace (catches
 #                        anything that doesn't compile, including the WASM
 #                        crate's host build), then `cargo doc`, which fails on
@@ -8,6 +8,9 @@
 #   - check-per-crate  : `cargo check -p <crate>`, once per workspace member —
 #                        catches a crate that only compiles because a sibling
 #                        in the same invocation enables a feature for it.
+#   - module-visibility: a module whose content is re-exported is private,
+#                        unless a `// Visible:` comment says why
+#                        (crates/check-module-visibility.py).
 #   - fmt              : `cargo fmt --check`.
 #   - clippy           : `cargo clippy` over the eight native crates (the
 #                        WASM crate is a scaffold, disabled for now).
@@ -175,6 +178,18 @@ jobs:
             echo "::endgroup::"
           done
           exit $fail
+
+  # No Rust toolchain: the rule is read from the sources, not compiled.
+  # The compiler already refuses the opposite fault (a private module a
+  # caller needs, E0603); this job refuses the one it accepts — a visible
+  # module nobody needs visible — which is how the two conventions drifted
+  # apart before the rule was written (crates/README.md, *Conventions*).
+  module-visibility:
+    name: Module visibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 crates/check-module-visibility.py
 
   fmt:
     name: Format

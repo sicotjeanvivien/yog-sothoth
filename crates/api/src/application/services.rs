@@ -15,13 +15,13 @@
 //! next to `pool_service.rs`), which made it invisible in a directory listing and
 //! easy to erode. It is a path now.
 
-pub(crate) mod announcement_service;
-pub(crate) mod meteora;
-pub(crate) mod network_status_service;
-pub(crate) mod pool_service;
-pub(crate) mod signal_service;
-pub(crate) mod stats_service;
-pub(crate) mod token_service;
+mod announcement_service;
+mod meteora;
+mod network_status_service;
+mod pool_service;
+mod signal_service;
+mod stats_service;
+mod token_service;
 
 pub(crate) use announcement_service::AnnouncementService;
 pub(crate) use meteora::damm_v2::{
