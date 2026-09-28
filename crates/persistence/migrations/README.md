@@ -523,6 +523,20 @@ the same row, and the 30-day history read of one pool goes from 1.19 s to
 measured, the table §7 describes had grown to 90.6 % of the database. That is
 how an unmeasured clause gets expensive rather than merely wrong.
 
+**"`setup_roles.sql` issues no `REVOKE ... FROM PUBLIC`",
+`005_price_staleness_policy.sql:65`** — the premise is no longer true; the
+conclusion drawn from it still is. Since the change that shipped migration 012,
+`setup_roles.sql` revokes from `PUBLIC` two things: `EXECUTE` on four named
+TimescaleDB routines (`add_job`, `alter_job`, `delete_job`, `run_job`) and
+`TEMP` on the database. Both are narrow. There is no `ALTER DEFAULT PRIVILEGES
+… REVOKE EXECUTE ON FUNCTIONS`, so a function a migration creates is still
+executable by every role without a `GRANT` — 005's `yog_price_max_age_asof()`
+and `yog_price_max_age_latest()` included. Measured on 28 September 2026: on a
+database set up by the current script, a function created by `yog_migrate`
+answers `true` to `has_function_privilege('yog_api', …, 'EXECUTE')`, and
+`add_job` answers `false`. Read the sentence as *"`setup_roles.sql` revokes
+nothing a new function depends on"*.
+
 This is the right discipline for production safety:
 
 - Reversing schema changes generally loses data anyway (a dropped
