@@ -109,7 +109,13 @@ fills), and would blame the materialisation. The newest row minus the
 watermark freezes when a table stops receiving rows, however long those rows
 then wait — on 29 September 2026 it read 28 minutes for six `claim_reward` rows
 unmaterialised for eight days. A pending row only grows old if a refresh did not
-run, whatever the indexer does.
+run.
+
+⚠️ **One exception: rows written late.** The wait runs from a row's block time,
+not from its insertion. When the indexer catches up after an outage longer than
+the limit, the rows it writes arrive already "old", and the check fails until
+the next hourly refresh materialises them — at most an hour. The outage itself
+is the indexer's dead man's switch to report; this one follows it briefly.
 
 **The limit.** A healthy aggregate peaks at three hours: the refresh policy's
 `end_offset` (1 h), up to an hour until the next hourly run, and the bucket

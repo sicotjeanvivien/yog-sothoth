@@ -57,3 +57,13 @@ fn a_never_materialised_aggregate_is_late_only_once_its_rows_have_waited() {
     assert!(!materialization.is_late(at(11), Duration::hours(4)));
     assert!(materialization.is_late(at(14), Duration::hours(4)));
 }
+
+#[test]
+fn late_by_gives_the_wait_only_past_the_limit() {
+    let materialization = pending_since(Some(at(7)));
+    assert_eq!(materialization.late_by(at(11), Duration::hours(4)), None);
+    assert_eq!(
+        materialization.late_by(at(12), Duration::hours(4)),
+        Some(Duration::hours(5))
+    );
+}

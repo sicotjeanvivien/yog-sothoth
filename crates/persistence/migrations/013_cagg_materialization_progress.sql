@@ -24,7 +24,10 @@
 --     the lag at whatever it was. Measured here on 29 Sept 2026:
 --     `claim_reward` holds six rows from 21 September that no refresh ever
 --     materialised, and "newest row minus oldest" read 28 minutes, forever.
---   A row that waits is a refresh that did not run, whatever the indexer does.
+--   A row that waits is a refresh that did not run — with one exception: rows
+--   the indexer writes late (catching up after an outage) carry their block
+--   time, so they arrive already "old", and read as late until the next
+--   hourly refresh takes them, at most an hour later.
 --
 -- `ORDER BY … LIMIT 1` rather than `min()`: the time index answers it from the
 -- watermark onwards, and the ordered append over chunks stops at the first.

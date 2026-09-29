@@ -88,7 +88,9 @@ check to report to. Only `yog-archive` and `yog-signals` turn it on.
 secrets' `for_tests`. ⚠️ The CI's per-crate check compiles each crate with its
 **default** features, so it compiles this module through `yog-archive` and
 `yog-signals`, not through `yog-bootstrap` alone; `cargo clippy
---all-features` is what lints it here.
+--all-features` is what lints it here. Its tests likewise run only with the
+feature on: `cargo test -p yog-bootstrap --features heartbeat,test-support` —
+a bare `cargo test -p yog-bootstrap` is green without them.
 
 ## Secrets — one invariant, two types
 

@@ -179,6 +179,11 @@ async fn only_yog_signals_may_read_the_progress(pool: PgPool) {
     .await
     .expect("hand the function to its production owner");
 
+    // A row, so the function reads a real chunk under its owner's rights — an
+    // empty hypertable has no chunk, and the read of one would never be tried.
+    let address = seed_pool(&pool).await;
+    swap_at(&pool, &address, "sig-privileges", at(10, 15)).await;
+
     let mut conn = pool.acquire().await.unwrap();
 
     sqlx::query("SET ROLE yog_signals")

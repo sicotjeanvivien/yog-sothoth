@@ -32,16 +32,24 @@ impl AggregateMaterialization {
     /// newest row minus the watermark freezes when a table stops receiving
     /// rows, however long those rows then wait: on 29 September 2026 it read
     /// 28 minutes for six `claim_reward` rows that had waited eight days. A
-    /// pending row only grows old if a refresh did not run.
+    /// pending row only grows old if a refresh did not run — or if the indexer
+    /// wrote it late: the wait runs from its block time, so rows caught up
+    /// after an outage arrive already old, until the next refresh takes them.
     pub fn pending_for(&self, now: DateTime<Utc>) -> Option<Duration> {
         let oldest = self.oldest_pending_at?;
         Some((now - oldest).max(Duration::zero()))
     }
 
-    /// Whether a row has waited longer than `max_wait` at `now`. An aggregate
-    /// with nothing pending never has.
+    /// How long the oldest pending row has waited, **only** when that is longer
+    /// than `max_wait` — the one place the lateness rule is written. An
+    /// aggregate with nothing pending is never late.
+    pub fn late_by(&self, now: DateTime<Utc>, max_wait: Duration) -> Option<Duration> {
+        self.pending_for(now).filter(|wait| *wait > max_wait)
+    }
+
+    /// Whether a row has waited longer than `max_wait` at `now`.
     pub fn is_late(&self, now: DateTime<Utc>, max_wait: Duration) -> bool {
-        self.pending_for(now).is_some_and(|wait| wait > max_wait)
+        self.late_by(now, max_wait).is_some()
     }
 }
 

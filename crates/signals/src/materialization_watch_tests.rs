@@ -169,3 +169,18 @@ async fn a_read_that_never_answers_fails_the_check() {
         ["failure: unreadable: no answer within 60 s"]
     );
 }
+
+/// An empty answer means the function no longer finds the aggregates — not
+/// that they are all on time. Success here would be a check watching nothing.
+#[tokio::test]
+async fn no_aggregate_reported_fails_the_check() {
+    let (watch, heartbeat) = watch(Ok(Vec::new()));
+
+    let verdict = watch.check(at(12, 0)).await;
+
+    assert_eq!(verdict.label(), "unreadable");
+    assert_eq!(
+        signals(&heartbeat),
+        ["failure: unreadable: no continuous aggregate reported"]
+    );
+}

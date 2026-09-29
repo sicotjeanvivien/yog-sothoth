@@ -128,8 +128,9 @@ impl Daemon {
         Ok(Self { engine, watch })
     }
 
-    /// Run the engine until the process is asked to stop, then let every
-    /// detector loop finish its tick.
+    /// Run the engine and the materialisation watch until the process is asked
+    /// to stop, then let every detector loop finish its tick. The watch ends
+    /// at once: its check races the stop.
     ///
     /// ⚠️ **SIGTERM, not only Ctrl-C.** This waited on `tokio::signal::ctrl_c()`
     /// alone — SIGINT — while `docker compose stop` sends SIGTERM. As PID 1 in

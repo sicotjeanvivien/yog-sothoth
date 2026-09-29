@@ -57,10 +57,17 @@ impl Verdict {
         now: DateTime<Utc>,
         max_wait: ChronoDuration,
     ) -> Self {
+        // ⚠️ **Nothing reported is not "on time".** The function finds the
+        // aggregates in TimescaleDB's catalog; if an upgrade changed what it
+        // joins on, it would return no row, and every check would ping success
+        // while watching nothing — the silent green this alarm exists to end.
+        // The schema always holds aggregates, so an empty answer is a fault.
+        if progress.is_empty() {
+            return Self::Unreadable("no continuous aggregate reported".to_string());
+        }
         let late: Vec<_> = progress
             .iter()
-            .filter(|m| m.is_late(now, max_wait))
-            .filter_map(|m| Some((m.aggregate.clone(), m.pending_for(now)?)))
+            .filter_map(|m| Some((m.aggregate.clone(), m.late_by(now, max_wait)?)))
             .collect();
         if late.is_empty() {
             Self::OnTime
