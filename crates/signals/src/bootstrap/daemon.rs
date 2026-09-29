@@ -10,29 +10,30 @@ use std::sync::Arc;
 use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use yog_bootstrap::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings};
 use yog_core::domain::{
-    LiquidityFlowRepository, MaterializationRepository, PoolPriceSnapshotRepository, Protocol,
-    SignalDetector, SignalRepository, SwapFlowRepository,
+    LiquidityFlowRepository, MaterializationBacklogRepository, PoolPriceSnapshotRepository,
+    Protocol, SignalDetector, SignalRepository, SwapFlowRepository,
 };
 use yog_persistence::{
-    Database, PgLiquidityFlowRepository, PgMaterializationRepository,
+    Database, PgLiquidityFlowRepository, PgMaterializationBacklogRepository,
     PgPoolPriceSnapshotRepository, PgSignalRepository, PgSwapFlowRepository,
 };
 
+mod init;
+
 use crate::bootstrap::Config;
 use crate::detectors::{
-    FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
+    DetectorMetrics, FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
     PriceOracleDeviationSettings, TvlDrainDetector, TvlDrainSettings,
 };
-use crate::engine::SignalEngine;
-use crate::materialization_watch::{MaterializationWatch, MaterializationWatchSettings};
-use crate::metrics::{self, EngineMetrics, MaterializationMetrics};
+use crate::engine::{EngineMetrics, SignalEngine};
+use crate::materialization_alarm::{AlarmMetrics, MaterializationAlarm};
+use init::init_materialization_alarm;
 
-/// Owns the assembled engine and the materialisation watch, ready to run.
+/// Owns the assembled engine and the materialisation alarm, ready to run.
 pub(crate) struct Daemon {
     engine: SignalEngine,
-    watch: MaterializationWatch,
+    alarm: MaterializationAlarm,
 }
 
 impl Daemon {
@@ -53,8 +54,8 @@ impl Daemon {
             Arc::new(PgPoolPriceSnapshotRepository::new(pool.clone()));
         let liquidity_flow_repository: Arc<dyn LiquidityFlowRepository> =
             Arc::new(PgLiquidityFlowRepository::new(pool.clone()));
-        let materialization_repository: Arc<dyn MaterializationRepository> =
-            Arc::new(PgMaterializationRepository::new(pool));
+        let backlog_repository: Arc<dyn MaterializationBacklogRepository> =
+            Arc::new(PgMaterializationBacklogRepository::new(pool));
 
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
@@ -96,40 +97,20 @@ impl Daemon {
         ));
 
         EngineMetrics::register_descriptions();
-        MaterializationMetrics::register_descriptions();
+        DetectorMetrics::register_descriptions();
+        AlarmMetrics::register_descriptions();
 
         let engine = SignalEngine::new(
             signal_repository,
             vec![flow_imbalance, price_oracle_deviation, tvl_drain],
         );
+        let alarm = init_materialization_alarm(backlog_repository, &config.materialization_alarm)?;
 
-        let heartbeat = config
-            .materialization_heartbeat_url
-            .clone()
-            .map(|url| {
-                let settings = HeartbeatSettings {
-                    variable: "SIGNALS_MATERIALIZATION_HEARTBEAT_URL",
-                    undelivered_counter: metrics::HEARTBEAT_FAILURES,
-                };
-                HealthchecksHeartbeat::new(url, settings)
-                    .map(|heartbeat| Arc::new(heartbeat) as Arc<dyn Heartbeat>)
-            })
-            .transpose()
-            .context("failed to build the heartbeat client")?;
-        let watch = MaterializationWatch::new(
-            materialization_repository,
-            heartbeat,
-            MaterializationWatchSettings {
-                interval: config.materialization_interval,
-                max_wait: config.materialization_max_wait,
-            },
-        );
-
-        Ok(Self { engine, watch })
+        Ok(Self { engine, alarm })
     }
 
-    /// Run the engine and the materialisation watch until the process is asked
-    /// to stop, then let every detector loop finish its tick. The watch ends
+    /// Run the engine and the materialisation alarm until the process is asked
+    /// to stop, then let every detector loop finish its tick. The alarm ends
     /// at once: its check races the stop.
     ///
     /// ⚠️ **SIGTERM, not only Ctrl-C.** This waited on `tokio::signal::ctrl_c()`
@@ -152,11 +133,11 @@ impl Daemon {
             signal.cancel();
         });
 
-        // The watch shares the stop, and ends as soon as it fires — its check
+        // The alarm shares the stop, and ends as soon as it fires — its check
         // races the token — so it never outlasts the engine it runs beside.
         let (engine, ()) = tokio::join!(
             self.engine.run(shutdown.clone()),
-            self.watch.run(shutdown.clone()),
+            self.alarm.run(shutdown.clone()),
         );
         engine.map_err(anyhow::Error::new)
     }

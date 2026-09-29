@@ -50,7 +50,7 @@
 #   SIGNALS_MATERIALIZATION_HEARTBEAT_URL
 #                      the check yog-signals fails when a continuous aggregate
 #                      stops being materialised (period 10 min, grace 20 min);
-#                      crates/signals/README.md, "The materialisation watch"
+#                      crates/signals/README.md, "The materialisation alarm"
 # The CORS origin and the browser's API URL are derived from the two domains
 # rather than set separately: three values that must agree are one value.
 #
@@ -151,7 +151,7 @@ services:
 
   yog-signals:
     ports: !reset []
-    # The materialisation watch's dead man's switch. Required here, as the
+    # The materialisation alarm's dead man's switch. Required here, as the
     # archive's is: without it a stalled continuous aggregate is logged in a
     # container nobody reads, and the whole point is that someone is told.
     environment:

@@ -1,4 +1,4 @@
-//! `yog_cagg_materialization_progress()` (migration 013): which raw rows each
+//! `yog_cagg_materialization_backlog()` (migration 013): which raw rows each
 //! continuous aggregate has not materialised yet, and who may ask.
 //!
 //! The function is the whole distinction between the two stalls `yog-signals`
@@ -11,8 +11,8 @@
 use super::helpers::{INSUFFICIENT_PRIVILEGE, apply_setup_roles, pk, sqlstate};
 use chrono::{DateTime, TimeZone, Utc};
 use sqlx::PgPool;
-use yog_core::domain::{AggregateMaterialization, MaterializationRepository};
-use yog_persistence::PgMaterializationRepository;
+use yog_core::domain::{MaterializationBacklog, MaterializationBacklogRepository};
+use yog_persistence::PgMaterializationBacklogRepository;
 
 const SWAPS: &str = "meteora_damm_v2_swap_events_hourly";
 
@@ -66,26 +66,26 @@ async fn refresh_the_day(pool: &PgPool) {
         .expect("a bounded refresh must materialise the seeded day");
 }
 
-async fn progress_of(pool: &PgPool, aggregate: &str) -> AggregateMaterialization {
-    let progress = PgMaterializationRepository::new(pool.clone())
-        .progress()
+async fn backlog_of(pool: &PgPool, aggregate: &str) -> MaterializationBacklog {
+    let backlogs = PgMaterializationBacklogRepository::new(pool.clone())
+        .backlogs()
         .await
-        .expect("read the progress");
-    progress
+        .expect("read the backlogs");
+    backlogs
         .into_iter()
         .find(|m| m.aggregate == aggregate)
-        .unwrap_or_else(|| panic!("{aggregate} is missing from the progress"))
+        .unwrap_or_else(|| panic!("{aggregate} is missing from the backlogs"))
 }
 
 /// Every aggregate the catalog holds is reported — none listed by hand.
 #[sqlx::test]
 async fn every_aggregate_is_reported_and_an_empty_one_has_nothing_pending(pool: PgPool) {
-    let progress = PgMaterializationRepository::new(pool.clone())
-        .progress()
+    let backlogs = PgMaterializationBacklogRepository::new(pool.clone())
+        .backlogs()
         .await
-        .expect("read the progress");
+        .expect("read the backlogs");
 
-    let names: Vec<&str> = progress.iter().map(|m| m.aggregate.as_str()).collect();
+    let names: Vec<&str> = backlogs.iter().map(|m| m.aggregate.as_str()).collect();
     assert_eq!(
         names,
         [
@@ -95,12 +95,12 @@ async fn every_aggregate_is_reported_and_an_empty_one_has_nothing_pending(pool: 
             "meteora_damm_v2_swap_events_hourly",
         ]
     );
-    for materialization in &progress {
+    for backlog in &backlogs {
         assert_eq!(
-            (materialization.watermark, materialization.oldest_pending_at),
+            (backlog.watermark, backlog.oldest_pending_at),
             (None, None),
             "{}: no bucket, no raw row",
-            materialization.aggregate
+            backlog.aggregate
         );
     }
 }
@@ -114,7 +114,7 @@ async fn before_any_refresh_the_oldest_raw_row_is_pending(pool: PgPool) {
     swap_at(&pool, &address, "sig-late", at(11, 20)).await;
     swap_at(&pool, &address, "sig-early", at(10, 15)).await;
 
-    let swaps = progress_of(&pool, SWAPS).await;
+    let swaps = backlog_of(&pool, SWAPS).await;
     assert_eq!(swaps.watermark, None);
     assert_eq!(swaps.oldest_pending_at, Some(at(10, 15)));
 }
@@ -130,7 +130,7 @@ async fn once_refreshed_nothing_is_pending_and_the_watermark_stops_at_the_data(p
     swap_at(&pool, &address, "sig-late", at(11, 20)).await;
     refresh_the_day(&pool).await;
 
-    let swaps = progress_of(&pool, SWAPS).await;
+    let swaps = backlog_of(&pool, SWAPS).await;
     assert_eq!(swaps.watermark, Some(at(12, 0)));
     assert_eq!(swaps.oldest_pending_at, None);
 }
@@ -147,13 +147,13 @@ async fn a_row_at_or_past_the_watermark_is_pending(pool: PgPool) {
 
     swap_at(&pool, &address, "sig-after", at(13, 30)).await;
     assert_eq!(
-        progress_of(&pool, SWAPS).await.oldest_pending_at,
+        backlog_of(&pool, SWAPS).await.oldest_pending_at,
         Some(at(13, 30))
     );
 
     swap_at(&pool, &address, "sig-on-the-edge", at(12, 0)).await;
     assert_eq!(
-        progress_of(&pool, SWAPS).await.oldest_pending_at,
+        backlog_of(&pool, SWAPS).await.oldest_pending_at,
         Some(at(12, 0))
     );
 }
@@ -162,7 +162,7 @@ async fn a_row_at_or_past_the_watermark_is_pending(pool: PgPool) {
 /// roles themselves: a privilege is only shown by the statement it lets
 /// through or stops.
 #[sqlx::test]
-async fn only_yog_signals_may_read_the_progress(pool: PgPool) {
+async fn only_yog_signals_may_read_the_backlogs(pool: PgPool) {
     apply_setup_roles(&pool).await;
 
     // ⚠️ The function is SECURITY DEFINER, so it runs with its OWNER's rights.
@@ -172,7 +172,7 @@ async fn only_yog_signals_may_read_the_progress(pool: PgPool) {
     // the schema — so the test hands the function to it, and gives it the read
     // on the tables that ownership gives it there.
     sqlx::raw_sql(
-        "ALTER FUNCTION yog_cagg_materialization_progress() OWNER TO yog_migrate;
+        "ALTER FUNCTION yog_cagg_materialization_backlog() OWNER TO yog_migrate;
          GRANT SELECT ON ALL TABLES IN SCHEMA public TO yog_migrate;",
     )
     .execute(&pool)
@@ -190,20 +190,20 @@ async fn only_yog_signals_may_read_the_progress(pool: PgPool) {
         .execute(&mut *conn)
         .await
         .unwrap();
-    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM yog_cagg_materialization_progress()")
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM yog_cagg_materialization_backlog()")
         .fetch_one(&mut *conn)
         .await
-        .expect("yog_signals must be able to read the progress");
+        .expect("yog_signals must be able to read the backlogs");
     assert_eq!(rows, 4);
 
     sqlx::query("SET ROLE yog_api")
         .execute(&mut *conn)
         .await
         .unwrap();
-    let refused = sqlx::query("SELECT count(*) FROM yog_cagg_materialization_progress()")
+    let refused = sqlx::query("SELECT count(*) FROM yog_cagg_materialization_backlog()")
         .execute(&mut *conn)
         .await
-        .expect_err("yog_api must not read the progress");
+        .expect_err("yog_api must not read the backlogs");
     assert_eq!(sqlstate(&refused), INSUFFICIENT_PRIVILEGE);
 
     sqlx::query("RESET ROLE").execute(&mut *conn).await.unwrap();

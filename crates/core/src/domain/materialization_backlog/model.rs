@@ -8,9 +8,10 @@
 
 use chrono::{DateTime, Duration, Utc};
 
-/// One continuous aggregate, as the database reports it.
+/// What one continuous aggregate still has to materialise, as the database
+/// reports it: where its materialisation ends, and the oldest raw row past it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AggregateMaterialization {
+pub struct MaterializationBacklog {
     /// The aggregate's view name.
     pub aggregate: String,
     /// Where its materialisation ends. `None` while it has never materialised
@@ -22,7 +23,7 @@ pub struct AggregateMaterialization {
     pub oldest_pending_at: Option<DateTime<Utc>>,
 }
 
-impl AggregateMaterialization {
+impl MaterializationBacklog {
     /// How long the oldest pending raw row has been waiting at `now`, or
     /// `None` when nothing waits.
     ///

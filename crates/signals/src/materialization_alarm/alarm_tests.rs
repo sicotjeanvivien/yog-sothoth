@@ -1,4 +1,4 @@
-//! The watch against a scripted repository and a heartbeat that records what
+//! The alarm against a scripted repository and a heartbeat that records what
 //! it is told. Every case asserts the **exact** signal — the reason included —
 //! because a check that went to `/fail` for the wrong reason, or to success
 //! with an aggregate late, reads as green anywhere else.
@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use chrono::TimeZone;
 use yog_bootstrap::RecordingHeartbeat;
-use yog_core::{RepositoryError, RepositoryResult};
+use yog_core::{RepositoryError, RepositoryResult, domain::MaterializationBacklog};
 
 use super::*;
 
@@ -16,8 +16,8 @@ fn at(hour: u32, minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, 15, hour, minute, 0).unwrap()
 }
 
-fn aggregate(name: &str, oldest_pending_at: Option<DateTime<Utc>>) -> AggregateMaterialization {
-    AggregateMaterialization {
+fn aggregate(name: &str, oldest_pending_at: Option<DateTime<Utc>>) -> MaterializationBacklog {
+    MaterializationBacklog {
         aggregate: name.to_string(),
         watermark: Some(at(6, 0)),
         oldest_pending_at,
@@ -25,28 +25,28 @@ fn aggregate(name: &str, oldest_pending_at: Option<DateTime<Utc>>) -> AggregateM
 }
 
 /// Hands back what it was given, once per call.
-struct ScriptedRepository(Mutex<RepositoryResult<Vec<AggregateMaterialization>>>);
+struct ScriptedRepository(Mutex<RepositoryResult<Vec<MaterializationBacklog>>>);
 
 #[async_trait]
-impl MaterializationRepository for ScriptedRepository {
-    async fn progress(&self) -> RepositoryResult<Vec<AggregateMaterialization>> {
+impl MaterializationBacklogRepository for ScriptedRepository {
+    async fn backlogs(&self) -> RepositoryResult<Vec<MaterializationBacklog>> {
         self.0.lock().unwrap().clone()
     }
 }
 
-fn watch(
-    progress: RepositoryResult<Vec<AggregateMaterialization>>,
-) -> (MaterializationWatch, Arc<RecordingHeartbeat>) {
+fn alarm(
+    backlogs: RepositoryResult<Vec<MaterializationBacklog>>,
+) -> (MaterializationAlarm, Arc<RecordingHeartbeat>) {
     let heartbeat = Arc::new(RecordingHeartbeat::default());
-    let watch = MaterializationWatch::new(
-        Arc::new(ScriptedRepository(Mutex::new(progress))),
+    let alarm = MaterializationAlarm::new(
+        Arc::new(ScriptedRepository(Mutex::new(backlogs))),
         Some(heartbeat.clone()),
-        MaterializationWatchSettings {
+        MaterializationAlarmSettings {
             interval: Duration::from_secs(600),
             max_wait: ChronoDuration::hours(4),
         },
     );
-    (watch, heartbeat)
+    (alarm, heartbeat)
 }
 
 fn signals(heartbeat: &RecordingHeartbeat) -> Vec<String> {
@@ -55,12 +55,12 @@ fn signals(heartbeat: &RecordingHeartbeat) -> Vec<String> {
 
 #[tokio::test]
 async fn every_aggregate_within_the_limit_signals_success() {
-    let (watch, heartbeat) = watch(Ok(vec![
+    let (alarm, heartbeat) = alarm(Ok(vec![
         aggregate("swaps_hourly", Some(at(9, 0))),
         aggregate("claims_hourly", None),
     ]));
 
-    let verdict = watch.check(at(12, 0)).await;
+    let verdict = alarm.check(at(12, 0)).await;
 
     assert_eq!(verdict, Verdict::OnTime);
     assert_eq!(signals(&heartbeat), ["success"]);
@@ -70,13 +70,13 @@ async fn every_aggregate_within_the_limit_signals_success() {
 /// and the one at rest are not named at all.
 #[tokio::test]
 async fn a_late_aggregate_fails_the_check_by_name() {
-    let (watch, heartbeat) = watch(Ok(vec![
+    let (alarm, heartbeat) = alarm(Ok(vec![
         aggregate("swaps_hourly", Some(at(6, 48))),
         aggregate("liquidity_hourly", Some(at(10, 0))),
         aggregate("claims_hourly", None),
     ]));
 
-    watch.check(at(12, 0)).await;
+    alarm.check(at(12, 0)).await;
 
     assert_eq!(
         signals(&heartbeat),
@@ -87,12 +87,12 @@ async fn a_late_aggregate_fails_the_check_by_name() {
 /// A database that refuses is not a quiet tick: the check fails, and says
 /// what the database said.
 #[tokio::test]
-async fn an_unreadable_progress_fails_the_check_with_the_error() {
-    let (watch, heartbeat) = watch(Err(RepositoryError::Backend(
+async fn unreadable_backlogs_fail_the_check_with_the_error() {
+    let (alarm, heartbeat) = alarm(Err(RepositoryError::Backend(
         "connection refused".to_string(),
     )));
 
-    let verdict = watch.check(at(12, 0)).await;
+    let verdict = alarm.check(at(12, 0)).await;
 
     assert_eq!(verdict.label(), "unreadable");
     assert_eq!(
@@ -105,19 +105,19 @@ async fn an_unreadable_progress_fails_the_check_with_the_error() {
 /// only the signal is skipped.
 #[tokio::test]
 async fn without_a_heartbeat_the_verdict_is_still_reached() {
-    let watch = MaterializationWatch::new(
+    let alarm = MaterializationAlarm::new(
         Arc::new(ScriptedRepository(Mutex::new(Ok(vec![aggregate(
             "swaps_hourly",
             Some(at(1, 0)),
         )])))),
         None,
-        MaterializationWatchSettings {
+        MaterializationAlarmSettings {
             interval: Duration::from_secs(600),
             max_wait: ChronoDuration::hours(4),
         },
     );
 
-    let verdict = watch.check(at(12, 0)).await;
+    let verdict = alarm.check(at(12, 0)).await;
 
     assert_eq!(verdict.label(), "late");
 }
@@ -126,13 +126,13 @@ async fn without_a_heartbeat_the_verdict_is_still_reached() {
 /// nothing is read, nothing is signalled.
 #[tokio::test]
 async fn a_stop_ends_the_loop_without_a_check() {
-    let (watch, heartbeat) = watch(Ok(vec![aggregate("swaps_hourly", None)]));
+    let (alarm, heartbeat) = alarm(Ok(vec![aggregate("swaps_hourly", None)]));
     let shutdown = CancellationToken::new();
     shutdown.cancel();
 
-    tokio::time::timeout(Duration::from_secs(5), watch.run(shutdown))
+    tokio::time::timeout(Duration::from_secs(5), alarm.run(shutdown))
         .await
-        .expect("the watch must stop when asked");
+        .expect("the alarm must stop when asked");
 
     assert!(signals(&heartbeat).is_empty());
 }
@@ -141,8 +141,8 @@ async fn a_stop_ends_the_loop_without_a_check() {
 struct HangingRepository;
 
 #[async_trait]
-impl MaterializationRepository for HangingRepository {
-    async fn progress(&self) -> RepositoryResult<Vec<AggregateMaterialization>> {
+impl MaterializationBacklogRepository for HangingRepository {
+    async fn backlogs(&self) -> RepositoryResult<Vec<MaterializationBacklog>> {
         std::future::pending().await
     }
 }
@@ -152,16 +152,16 @@ impl MaterializationRepository for HangingRepository {
 #[tokio::test(start_paused = true)]
 async fn a_read_that_never_answers_fails_the_check() {
     let heartbeat = Arc::new(RecordingHeartbeat::default());
-    let watch = MaterializationWatch::new(
+    let alarm = MaterializationAlarm::new(
         Arc::new(HangingRepository),
         Some(heartbeat.clone()),
-        MaterializationWatchSettings {
+        MaterializationAlarmSettings {
             interval: Duration::from_secs(600),
             max_wait: ChronoDuration::hours(4),
         },
     );
 
-    let verdict = watch.check(at(12, 0)).await;
+    let verdict = alarm.check(at(12, 0)).await;
 
     assert_eq!(verdict.label(), "unreadable");
     assert_eq!(
@@ -174,9 +174,9 @@ async fn a_read_that_never_answers_fails_the_check() {
 /// that they are all on time. Success here would be a check watching nothing.
 #[tokio::test]
 async fn no_aggregate_reported_fails_the_check() {
-    let (watch, heartbeat) = watch(Ok(Vec::new()));
+    let (alarm, heartbeat) = alarm(Ok(Vec::new()));
 
-    let verdict = watch.check(at(12, 0)).await;
+    let verdict = alarm.check(at(12, 0)).await;
 
     assert_eq!(verdict.label(), "unreadable");
     assert_eq!(

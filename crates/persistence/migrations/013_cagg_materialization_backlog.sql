@@ -40,7 +40,7 @@
 -- `_timescaledb_functions.to_timestamp` reads the watermark as microseconds.
 -- ============================================================================
 
-CREATE FUNCTION yog_cagg_materialization_progress()
+CREATE FUNCTION yog_cagg_materialization_backlog()
 RETURNS TABLE (
     aggregate         TEXT,
     watermark         TIMESTAMPTZ,
@@ -96,10 +96,10 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION yog_cagg_materialization_progress() IS
+COMMENT ON FUNCTION yog_cagg_materialization_backlog() IS
     'Per continuous aggregate: its watermark (NULL before a first bucket) and '
     'the oldest raw row not materialised yet (NULL when nothing waits). Read by '
     'yog-signals to tell a stalled materialisation from a stalled ingestion.';
 
-REVOKE ALL ON FUNCTION yog_cagg_materialization_progress() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION yog_cagg_materialization_progress() TO yog_signals;
+REVOKE ALL ON FUNCTION yog_cagg_materialization_backlog() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION yog_cagg_materialization_backlog() TO yog_signals;

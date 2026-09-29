@@ -75,7 +75,7 @@ The dependency graph is strict and one-directional:
 - **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Sixteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
 - **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill. The last one names no protocol — it iterates one `PoolAccountResolver` per protocol (cp-amm and DLMM today), each owning its queue and its satellite table.
 - **[`archive` (`yog-archive`)](./archive/README.md)** — the backup daemon. Every six hours, `pg_dump` under the read-only `yog_archive` role, streamed to an S3-compatible bucket, checked by a `pg_restore` that reads every block, and signalled to a dead man's switch. It never restores: the proven procedure is in [`persistence/README.md`](./persistence/README.md#backup-and-restore).
-- **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain. Beside them, the materialisation watch: a Healthchecks.io check fails when a continuous aggregate stops being materialised.
+- **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain. Beside them, the materialisation alarm: a Healthchecks.io check fails when a continuous aggregate stops being materialised.
 - **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed once user accounts exist.
 
 ---
@@ -90,7 +90,7 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_indexer` | `INSERT, UPDATE` on the event tables, `pools` (table-level), `pool_current_state` and `network_status`; `nextval` on the sequences of the event tables only | indexer |
 | `yog_api` | writes nothing | api |
 | `yog_context` | `INSERT, UPDATE` on `token_metadata` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
-| `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_progress()`, which no other role holds | signals |
+| `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_backlog()`, which no other role holds | signals |
 | `yog_archive` | `SELECT` on everything through `pg_read_all_data`, writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 

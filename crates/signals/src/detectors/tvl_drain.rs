@@ -32,7 +32,7 @@ use yog_core::domain::{
     DetectorError, EvalContext, LiquidityFlowRepository, Protocol, Severity, Signal, SignalDetector,
 };
 
-use crate::metrics::{EngineMetrics, SkipReason};
+use super::metrics::{DetectorMetrics, SkipReason};
 
 /// Tuning knobs of the TVL-drain detector, as loaded from the environment
 /// by the bootstrap config. A named-field struct rather than constructor
@@ -100,7 +100,7 @@ impl SignalDetector for TvlDrainDetector {
     async fn evaluate(&self, ctx: &EvalContext) -> Result<Vec<Signal>, DetectorError> {
         let since = ctx.evaluated_at - self.settings.window;
         let flows = self.flow_repo.liquidity_flow_since(since).await?;
-        EngineMetrics::record_considered(self.name(), flows.len());
+        DetectorMetrics::record_considered(self.name(), flows.len());
 
         let mut signals = Vec::new();
         for flow in flows {
@@ -109,7 +109,7 @@ impl SignalDetector for TvlDrainDetector {
             // drain detected" and "cannot see this pool" are not the same
             // statement and only one of them is reassuring.
             let Some(tvl) = flow.tvl_usd else {
-                EngineMetrics::record_skipped(self.name(), SkipReason::NoTvl);
+                DetectorMetrics::record_skipped(self.name(), SkipReason::NoTvl);
                 continue;
             };
 
@@ -119,7 +119,7 @@ impl SignalDetector for TvlDrainDetector {
             // TVL guard above whenever the window was merely PARTLY unpriced,
             // and under-estimated the drain — a missed signal, in silence.
             let (Some(added), Some(removed)) = (flow.added_usd, flow.removed_usd) else {
-                EngineMetrics::record_skipped(self.name(), SkipReason::Unpriced);
+                DetectorMetrics::record_skipped(self.name(), SkipReason::Unpriced);
                 continue;
             };
 

@@ -12,8 +12,7 @@
 mod bootstrap;
 mod detectors;
 mod engine;
-mod materialization_watch;
-mod metrics;
+mod materialization_alarm;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::{error, info};

@@ -17,15 +17,23 @@ and the `Signal`/`Severity` domain types live in
 
 ```
 signals/src/
-├── engine.rs      ← SignalEngine: one poll loop per detector, dedup, persist
-├── materialization_watch.rs ← the continuous aggregates' alarm (see below)
+├── engine/        ← SignalEngine: one poll loop per detector, dedup, persist
+│   └── metrics.rs ← tick and emitted counters
 ├── detectors/     ← one module per detector
 │   ├── flow_imbalance.rs
 │   ├── price_oracle_deviation.rs
-│   └── tvl_drain.rs
-├── bootstrap/     ← Config::load(), Daemon (wires the Pg repos into detectors)
-├── metrics.rs     ← Prometheus counters/histograms
+│   ├── tvl_drain.rs
+│   └── metrics.rs ← considered and skipped counters, SkipReason
+├── materialization_alarm/ ← the continuous aggregates' alarm (see below)
+│   ├── alarm.rs   ← the loop and one check: read, measure, judge, signal
+│   ├── verdict.rs ← Verdict / Failure, and what a failure says
+│   └── metrics.rs ← pending gauge, checks counter, undelivered pings
+├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
+│                    Daemon (daemon/init.rs: the alarm's wiring)
 └── main.rs
+
+Each metric lives beside what it measures; the names on `/metrics` are all
+`yog_signals_*`.
 ```
 
 ## Evaluation model — batch, per-detector cadence, stateless
@@ -62,7 +70,7 @@ carries the dedup state too.
 SIGTERM** (`yog_bootstrap::shutdown_signal`); every detector loop then returns
 at its next turn, and `SignalEngine::run` joins them. A tick runs in the body
 of its `select!` arm, not inside the `select!`, so a tick already started
-always finishes. The materialisation watch is the exception, on purpose: its
+always finishes. The materialisation alarm is the exception, on purpose: its
 check — a read, then a ping with a 15 s timeout — races the token, since a ping
 cut short costs nothing and a stop held by a slow endpoint is what Docker ends
 with SIGKILL.
@@ -87,20 +95,20 @@ later, mid-tick.
 holds the stop open until Docker's SIGKILL, and nothing in the logs names it.
 Not fixed yet.
 
-## The materialisation watch
+## The materialisation alarm
 
 The detectors read hourly continuous aggregates that TimescaleDB's scheduler
 keeps materialised. When it stops — or one refresh policy keeps failing —
 nothing errors anywhere: the aggregates freeze, and every detector goes on
 evaluating hours that no longer change. From 16 June to 10 August 2026 all four
-sat that way unnoticed. `materialization_watch.rs` is the alarm for it: a loop
+sat that way unnoticed. `materialization_alarm/` is the alarm for it: a loop
 beside the engine, on the same stop.
 
 Every `SIGNALS_MATERIALIZATION_INTERVAL_SECS` it calls
-`yog_cagg_materialization_progress()` (migration 013), which reports, for every
+`yog_cagg_materialization_backlog()` (migration 013), which reports, for every
 aggregate the catalog holds, the **oldest raw row not yet materialised**. An
 aggregate is late when that row has waited longer than
-`SIGNALS_MATERIALIZATION_MAX_WAIT_MINS` — `AggregateMaterialization::is_late`
+`SIGNALS_MATERIALIZATION_MAX_WAIT_MINS` — `MaterializationBacklog::late_by`
 in `yog-core`.
 
 ⚠️ **The oldest pending row, and neither the clock nor the newest row.** The
@@ -127,7 +135,7 @@ estimate.
 in production. Each check ends in a ping to
 `SIGNALS_MATERIALIZATION_HEARTBEAT_URL`: success when nothing is late,
 `/fail` naming each late aggregate and its wait, or `/fail` with the database's
-error when the progress cannot be read — or does not answer within a minute
+error when the backlogs cannot be read — or does not answer within a minute
 (the pool sets no `statement_timeout`). A stopped daemon is the silence the
 check notices on its own. The heartbeat is `yog_bootstrap`'s, shared with
 `yog-archive`. Create the check with a **10-minute period and a 20-minute
@@ -198,7 +206,7 @@ SIGNALS_TVL_DRAIN_THRESHOLD=0.5       # Warning
 SIGNALS_TVL_DRAIN_CRITICAL=0.8        # Critical
 SIGNALS_TVL_DRAIN_COOLDOWN_HOURS=6
 
-# materialisation watch
+# materialisation alarm
 SIGNALS_MATERIALIZATION_INTERVAL_SECS=600       # > 0, refused at startup otherwise
 SIGNALS_MATERIALIZATION_MAX_WAIT_MINS=240       # how long a raw row may wait
 SIGNALS_MATERIALIZATION_HEARTBEAT_URL=https://hc-ping.com/...  # optional; required in prod
@@ -206,7 +214,7 @@ SIGNALS_MATERIALIZATION_HEARTBEAT_URL=https://hc-ping.com/...  # optional; requi
 
 Connects to Postgres as `yog_signals` — `INSERT` (append-only) on `signals`,
 `SELECT` on the read VIEWs it evaluates, and `EXECUTE` on
-`yog_cagg_materialization_progress()`, which no other role holds. It cannot
+`yog_cagg_materialization_backlog()`, which no other role holds. It cannot
 update or delete anything.
 
 ## Observability

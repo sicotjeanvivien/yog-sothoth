@@ -307,11 +307,11 @@ SELECT ca.view_name,
     ON h.table_name = ca.materialization_hypertable_name;
 ```
 
-In production this is not read by hand: `yog_cagg_materialization_progress()`
+In production this is not read by hand: `yog_cagg_materialization_backlog()`
 (migration 013) reports, per aggregate, the watermark and the **oldest raw row
 not yet materialised**, and `yog-signals` turns a row that has waited too long
 into a failed Healthchecks.io check (`crates/signals/README.md`, *The
-materialisation watch*). ⚠️ An aggregate that never materialised a bucket does
+materialisation alarm*). ⚠️ An aggregate that never materialised a bucket does
 not show `-infinity` under TimescaleDB 2.30.1: `to_timestamp` of its watermark
 is `4714-11-24 00:00:00+00 BC`, the lowest timestamptz Postgres represents
 (measured 29 September 2026). The function reads both as "never".

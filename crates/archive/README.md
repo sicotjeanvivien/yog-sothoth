@@ -37,7 +37,7 @@ archive/src/
 ```
 
 The heartbeat — success, or `/fail` with the reason — is not here either: it is
-`yog_bootstrap`'s (feature `heartbeat`), shared with `yog-signals`' watch on
+`yog_bootstrap`'s (feature `heartbeat`), shared with `yog-signals`' alarm on
 the continuous aggregates. The archive hands it its variable's name and its
 counter, `yog_archive_heartbeat_failures_total`, so what it reports is unchanged.
 

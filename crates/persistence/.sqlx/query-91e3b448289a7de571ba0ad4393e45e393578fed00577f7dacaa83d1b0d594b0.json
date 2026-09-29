@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT aggregate AS \"aggregate!\",\n                   watermark AS \"watermark?: chrono::DateTime<chrono::Utc>\",\n                   oldest_pending_at AS \"oldest_pending_at?: chrono::DateTime<chrono::Utc>\"\n              FROM yog_cagg_materialization_progress()\n            ",
+  "query": "\n            SELECT aggregate AS \"aggregate!\",\n                   watermark AS \"watermark?: chrono::DateTime<chrono::Utc>\",\n                   oldest_pending_at AS \"oldest_pending_at?: chrono::DateTime<chrono::Utc>\"\n              FROM yog_cagg_materialization_backlog()\n            ",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       null
     ]
   },
-  "hash": "2ccfbe28d1acbeaafe2fcac73b18f0b11717c1f1e4fab796e60db994dda42d0c"
+  "hash": "91e3b448289a7de571ba0ad4393e45e393578fed00577f7dacaa83d1b0d594b0"
 }

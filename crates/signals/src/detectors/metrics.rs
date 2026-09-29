@@ -1,21 +1,13 @@
-//! Metrics emitted by the signal engine.
+//! What the detectors count while they evaluate: the pools they were handed,
+//! and the ones they declined to evaluate, with the reason.
 //!
-//! Mirrors the other daemons: cumulative counters exposed on the
-//! Prometheus `/metrics` endpoint the binary installs. The lib emits
-//! through the `metrics` facade (a no-op if no recorder is installed, so
-//! unit tests need no exporter); the binary installs the exporter and
-//! calls [`EngineMetrics::register_descriptions`] once at startup.
+//! Described once by [`DetectorMetrics::register_descriptions`]; the
+//! `# HELP` text of the skip counter is built from [`SkipReason`] itself.
 
-use metrics::{counter, describe_counter, describe_gauge, gauge};
+use metrics::{counter, describe_counter};
 
-const TICK_TOTAL: &str = "yog_signals_tick_total";
-const EMITTED_TOTAL: &str = "yog_signals_emitted_total";
 const SKIPPED_TOTAL: &str = "yog_signals_skipped_total";
 const CONSIDERED_TOTAL: &str = "yog_signals_considered_total";
-const MATERIALIZATION_PENDING: &str = "yog_signals_materialization_pending_seconds";
-const MATERIALIZATION_CHECKS: &str = "yog_signals_materialization_checks_total";
-/// Counted by `yog_bootstrap`'s heartbeat, which is handed this name.
-pub(crate) const HEARTBEAT_FAILURES: &str = "yog_signals_heartbeat_failures_total";
 
 /// Why a detector declined to evaluate a pool — the `reason` label of
 /// [`SKIPPED_TOTAL`].
@@ -66,21 +58,12 @@ skip_reasons! {
     Undecodable => "undecodable",
 }
 
-/// Counters for the engine's per-detector poll loops.
-pub struct EngineMetrics;
+/// Counters for what a detector saw on a tick.
+pub(crate) struct DetectorMetrics;
 
-impl EngineMetrics {
+impl DetectorMetrics {
     /// Register human-readable descriptions. Call once, before any tick.
-    pub fn register_descriptions() {
-        describe_counter!(
-            TICK_TOTAL,
-            "Detector ticks completed (labels: detector, \
-             outcome=ok|suppressed|eval_failed|dedup_failed|persist_failed)"
-        );
-        describe_counter!(
-            EMITTED_TOTAL,
-            "Signals persisted, cumulative (label: detector)"
-        );
+    pub(crate) fn register_descriptions() {
         let reasons = SkipReason::ALL
             .iter()
             .map(|r| r.as_str())
@@ -98,16 +81,6 @@ impl EngineMetrics {
             "Pools a detector was handed, cumulative (label: detector) — the \
              denominator SKIPPED_TOTAL needs to mean anything"
         );
-    }
-
-    /// Record one completed tick with its outcome.
-    pub(crate) fn record_tick(detector: &'static str, outcome: &'static str) {
-        counter!(TICK_TOTAL, "detector" => detector, "outcome" => outcome).increment(1);
-    }
-
-    /// Record signals successfully persisted on a tick.
-    pub(crate) fn record_emitted(detector: &'static str, count: usize) {
-        counter!(EMITTED_TOTAL, "detector" => detector).increment(count as u64);
     }
 
     /// Record one pool a detector declined to evaluate.
@@ -131,42 +104,5 @@ impl EngineMetrics {
     /// the universe a detector cannot see, which is the thing worth watching.
     pub(crate) fn record_considered(detector: &'static str, count: usize) {
         counter!(CONSIDERED_TOTAL, "detector" => detector).increment(count as u64);
-    }
-}
-
-/// The materialisation watch's metrics. Nothing scrapes them in production —
-/// the Healthchecks.io check is the alarm — but they say on `/metrics` how long
-/// each aggregate has had a row waiting, without reading the logs.
-pub(crate) struct MaterializationMetrics;
-
-impl MaterializationMetrics {
-    /// Register human-readable descriptions. Call once, before any check.
-    pub(crate) fn register_descriptions() {
-        describe_gauge!(
-            MATERIALIZATION_PENDING,
-            "How long the oldest raw row not yet materialised has waited, in \
-             seconds; 0 when nothing waits (label: aggregate). Keeps its last \
-             reading while the progress is unreadable — see outcome=unreadable"
-        );
-        describe_counter!(
-            MATERIALIZATION_CHECKS,
-            "Materialisation checks, by outcome=on_time|late|unreadable"
-        );
-        describe_counter!(
-            HEARTBEAT_FAILURES,
-            "Heartbeat signals that could not be delivered, by kind"
-        );
-    }
-
-    /// Record how long `aggregate`'s oldest pending row has waited — zero when
-    /// none waits, so a gauge that went up comes back down.
-    pub(crate) fn record_pending(aggregate: &str, wait: chrono::Duration) {
-        gauge!(MATERIALIZATION_PENDING, "aggregate" => aggregate.to_string())
-            .set(wait.num_seconds() as f64);
-    }
-
-    /// Record how one check ended.
-    pub(crate) fn record_check(outcome: &'static str) {
-        counter!(MATERIALIZATION_CHECKS, "outcome" => outcome).increment(1);
     }
 }
