@@ -31,10 +31,10 @@ signals/src/
 ├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
 │                    Daemon (daemon/init.rs: the alarm's wiring)
 └── main.rs
+```
 
 Each metric lives beside what it measures; the names on `/metrics` are all
 `yog_signals_*`.
-```
 
 ## Evaluation model — batch, per-detector cadence, stateless
 
@@ -136,7 +136,10 @@ in production. Each check ends in a ping to
 `SIGNALS_MATERIALIZATION_HEARTBEAT_URL`: success when nothing is late,
 `/fail` naming each late aggregate and its wait, or `/fail` with the database's
 error when the backlogs cannot be read — or does not answer within a minute
-(the pool sets no `statement_timeout`). A stopped daemon is the silence the
+(the pool sets no `statement_timeout`) — or `/fail` saying *nothing reported*
+when the read succeeds but names no aggregate: the function no longer finds
+them in TimescaleDB's catalog, and a success there would be a check watching
+nothing. A stopped daemon is the silence the
 check notices on its own. The heartbeat is `yog_bootstrap`'s, shared with
 `yog-archive`. Create the check with a **10-minute period and a 20-minute
 grace**.
@@ -229,7 +232,7 @@ declined to evaluate — `unpriced` (the window was not entirely valuable),
 gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
 missing code, not a data problem), `undecodable` (an oracle ratio that will not
 compute). The labels are defined once, by the `SkipReason` enum in
-`metrics.rs`, and the counter's `# HELP` text is built from it — this list
+`detectors/metrics.rs`, and the counter's `# HELP` text is built from it — this list
 copies it for the reader, not for the code. Emitting nothing is the right answer
 to a pool we cannot value; staying *quiet* about how often that happens is not,
 because degrading price coverage would then look exactly like a calm market.
@@ -256,10 +259,10 @@ more mints, and nowhere else.
 
 **`yog_signals_materialization_pending_seconds{aggregate}`** — how long each
 aggregate's oldest unmaterialised row has waited, `0` when none waits. ⚠️ A
-check that cannot read the progress has no reading to give, so the gauge keeps
+check that cannot read the backlogs has no reading to give, so the gauge keeps
 its last one: read it next to `…_checks_total{outcome="unreadable"}`;
 **`yog_signals_materialization_checks_total{outcome}`** — `on_time`, `late`,
-`unreadable`; **`yog_signals_heartbeat_failures_total{kind}`** — pings that
+`unreadable`, `nothing_reported`; **`yog_signals_heartbeat_failures_total{kind}`** — pings that
 could not be delivered.
 
 ## Run

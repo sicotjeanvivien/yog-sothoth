@@ -22,7 +22,7 @@ impl AlarmMetrics {
         );
         describe_counter!(
             CHECKS,
-            "Materialisation checks, by outcome=on_time|late|unreadable"
+            "Materialisation checks, by outcome=on_time|late|unreadable|nothing_reported"
         );
         describe_counter!(
             HEARTBEAT_FAILURES,

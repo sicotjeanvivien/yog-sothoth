@@ -178,9 +178,41 @@ async fn no_aggregate_reported_fails_the_check() {
 
     let verdict = alarm.check(at(12, 0)).await;
 
-    assert_eq!(verdict.label(), "unreadable");
+    assert_eq!(verdict.label(), "nothing_reported");
     assert_eq!(
         signals(&heartbeat),
-        ["failure: unreadable: no continuous aggregate reported"]
+        ["failure: nothing reported: no continuous aggregate found"]
+    );
+}
+
+/// A stop that arrives while a check is under way ends the loop at once — the
+/// check races the stop, it does not hold it. Here the read hangs: were the
+/// check awaited outside the race, the stop would wait out the minute of
+/// `READ_TIMEOUT`, then a ping, well past Docker's ten seconds.
+#[tokio::test(start_paused = true)]
+async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
+    let heartbeat = Arc::new(RecordingHeartbeat::default());
+    let alarm = MaterializationAlarm::new(
+        Arc::new(HangingRepository),
+        Some(heartbeat.clone()),
+        MaterializationAlarmSettings {
+            interval: Duration::from_secs(600),
+            max_wait: ChronoDuration::hours(4),
+        },
+    );
+    let shutdown = CancellationToken::new();
+    let running = tokio::spawn(alarm.run(shutdown.clone()));
+
+    // The first tick fires at once; one second in, the read is hanging.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    shutdown.cancel();
+
+    tokio::time::timeout(Duration::from_secs(5), running)
+        .await
+        .expect("the stop must not wait for the check")
+        .expect("the alarm task must not panic");
+    assert!(
+        signals(&heartbeat).is_empty(),
+        "a cut check signals nothing"
     );
 }

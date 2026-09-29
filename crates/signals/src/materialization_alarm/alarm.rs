@@ -151,6 +151,10 @@ fn log_change(previous: Option<&Verdict>, verdict: &Verdict) {
             reason = %failure.reason(),
             "the materialisation backlogs could not be read"
         ),
+        Verdict::Failed(failure @ Failure::NothingReported) => warn!(
+            reason = %failure.reason(),
+            "the materialisation backlogs name no aggregate — nothing is being watched"
+        ),
     }
 }
 

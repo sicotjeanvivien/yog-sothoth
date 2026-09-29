@@ -23,6 +23,11 @@ pub(crate) enum Failure {
     },
     /// The backlogs could not be read; the text says why.
     Unreadable(String),
+    /// The read succeeded and reported no aggregate at all — the function no
+    /// longer finds them in TimescaleDB's catalog. Not `Unreadable`: the
+    /// database answered, and a connection or privilege fault would be the
+    /// wrong thing to look for.
+    NothingReported,
 }
 
 impl Verdict {
@@ -38,9 +43,7 @@ impl Verdict {
         // while watching nothing — the silent green this alarm exists to end.
         // The schema always holds aggregates, so an empty answer is a fault.
         if backlogs.is_empty() {
-            return Self::Failed(Failure::Unreadable(
-                "no continuous aggregate reported".to_string(),
-            ));
+            return Self::Failed(Failure::NothingReported);
         }
         let aggregates: Vec<_> = backlogs
             .iter()
@@ -62,6 +65,7 @@ impl Verdict {
             Self::OnTime => "on_time",
             Self::Failed(Failure::Late { .. }) => "late",
             Self::Failed(Failure::Unreadable(_)) => "unreadable",
+            Self::Failed(Failure::NothingReported) => "nothing_reported",
         }
     }
 
@@ -91,6 +95,7 @@ impl Failure {
                 format!("late (limit {}): {names}", hours_minutes(*limit))
             }
             Self::Unreadable(error) => format!("unreadable: {error}"),
+            Self::NothingReported => "nothing reported: no continuous aggregate found".to_string(),
         }
     }
 }
