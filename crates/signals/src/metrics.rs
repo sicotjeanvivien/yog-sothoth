@@ -145,7 +145,8 @@ impl MaterializationMetrics {
         describe_gauge!(
             MATERIALIZATION_PENDING,
             "How long the oldest raw row not yet materialised has waited, in \
-             seconds; 0 when nothing waits (label: aggregate)"
+             seconds; 0 when nothing waits (label: aggregate). Keeps its last \
+             reading while the progress is unreadable — see outcome=unreadable"
         );
         describe_counter!(
             MATERIALIZATION_CHECKS,

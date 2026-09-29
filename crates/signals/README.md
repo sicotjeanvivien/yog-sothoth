@@ -121,7 +121,8 @@ estimate.
 in production. Each check ends in a ping to
 `SIGNALS_MATERIALIZATION_HEARTBEAT_URL`: success when nothing is late,
 `/fail` naming each late aggregate and its wait, or `/fail` with the database's
-error when the progress cannot be read. A stopped daemon is the silence the
+error when the progress cannot be read — or does not answer within a minute
+(the pool sets no `statement_timeout`). A stopped daemon is the silence the
 check notices on its own. The heartbeat is `yog_bootstrap`'s, shared with
 `yog-archive`. Create the check with a **10-minute period and a 20-minute
 grace**.
@@ -240,7 +241,9 @@ valued, not one that was given up on; the number moves when `yog-context` prices
 more mints, and nowhere else.
 
 **`yog_signals_materialization_pending_seconds{aggregate}`** — how long each
-aggregate's oldest unmaterialised row has waited, `0` when none waits;
+aggregate's oldest unmaterialised row has waited, `0` when none waits. ⚠️ A
+check that cannot read the progress has no reading to give, so the gauge keeps
+its last one: read it next to `…_checks_total{outcome="unreadable"}`;
 **`yog_signals_materialization_checks_total{outcome}`** — `on_time`, `late`,
 `unreadable`; **`yog_signals_heartbeat_failures_total{kind}`** — pings that
 could not be delivered.

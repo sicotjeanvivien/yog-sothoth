@@ -136,3 +136,36 @@ async fn a_stop_ends_the_loop_without_a_check() {
 
     assert!(signals(&heartbeat).is_empty());
 }
+
+/// Never answers.
+struct HangingRepository;
+
+#[async_trait]
+impl MaterializationRepository for HangingRepository {
+    async fn progress(&self) -> RepositoryResult<Vec<AggregateMaterialization>> {
+        std::future::pending().await
+    }
+}
+
+/// A read that hangs ends the check in `/fail`, with the reason — not in a
+/// silence the check would read as a stopped daemon.
+#[tokio::test(start_paused = true)]
+async fn a_read_that_never_answers_fails_the_check() {
+    let heartbeat = Arc::new(RecordingHeartbeat::default());
+    let watch = MaterializationWatch::new(
+        Arc::new(HangingRepository),
+        Some(heartbeat.clone()),
+        MaterializationWatchSettings {
+            interval: Duration::from_secs(600),
+            max_wait: ChronoDuration::hours(4),
+        },
+    );
+
+    let verdict = watch.check(at(12, 0)).await;
+
+    assert_eq!(verdict.label(), "unreadable");
+    assert_eq!(
+        signals(&heartbeat),
+        ["failure: unreadable: no answer within 60 s"]
+    );
+}

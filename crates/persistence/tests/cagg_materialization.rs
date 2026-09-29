@@ -164,6 +164,21 @@ async fn a_row_at_or_past_the_watermark_is_pending(pool: PgPool) {
 #[sqlx::test]
 async fn only_yog_signals_may_read_the_progress(pool: PgPool) {
     apply_setup_roles(&pool).await;
+
+    // ⚠️ The function is SECURITY DEFINER, so it runs with its OWNER's rights.
+    // Here the migrations ran as the admin superuser, who bypasses every
+    // check: the catalog reads and `cagg_watermark` would pass whatever
+    // TimescaleDB grants. In production the owner is `yog_migrate`, which owns
+    // the schema — so the test hands the function to it, and gives it the read
+    // on the tables that ownership gives it there.
+    sqlx::raw_sql(
+        "ALTER FUNCTION yog_cagg_materialization_progress() OWNER TO yog_migrate;
+         GRANT SELECT ON ALL TABLES IN SCHEMA public TO yog_migrate;",
+    )
+    .execute(&pool)
+    .await
+    .expect("hand the function to its production owner");
+
     let mut conn = pool.acquire().await.unwrap();
 
     sqlx::query("SET ROLE yog_signals")

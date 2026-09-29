@@ -23,6 +23,13 @@ use yog_core::domain::{AggregateMaterialization, MaterializationRepository};
 
 use crate::metrics::MaterializationMetrics;
 
+/// How long one read of the progress may take before the check fails with
+/// `unreadable`. The pool sets no `statement_timeout`: a read stuck on a lock
+/// would otherwise hold the check forever, and Healthchecks.io would report a
+/// stopped daemon instead of the reason. Measured at 3.5 ms warm on the dev
+/// database (29 September 2026), so a minute is margin, not a budget.
+const READ_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// The two numbers an operator tunes.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MaterializationWatchSettings {
@@ -130,6 +137,9 @@ impl MaterializationWatch {
     /// stop held by a slow endpoint is the delay Docker ends with SIGKILL.
     pub(crate) async fn run(self, shutdown: CancellationToken) {
         let mut ticker = tokio::time::interval(self.settings.interval);
+        // After a slow check, the next one waits a full interval rather than
+        // firing the missed ones back to back — each would read and ping again.
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         info!(
             interval = ?self.settings.interval,
             max_wait = %hours_minutes(self.settings.max_wait),
@@ -165,8 +175,9 @@ impl MaterializationWatch {
 
     /// One check: read, measure, judge, signal. Returns the verdict.
     pub(crate) async fn check(&self, now: DateTime<Utc>) -> Verdict {
-        let verdict = match self.repository.progress().await {
-            Ok(progress) => {
+        let read = tokio::time::timeout(READ_TIMEOUT, self.repository.progress()).await;
+        let verdict = match read {
+            Ok(Ok(progress)) => {
                 for materialization in &progress {
                     let wait = materialization
                         .pending_for(now)
@@ -175,7 +186,8 @@ impl MaterializationWatch {
                 }
                 Verdict::judge(&progress, now, self.settings.max_wait)
             }
-            Err(e) => Verdict::Unreadable(e.to_string()),
+            Ok(Err(e)) => Verdict::Unreadable(e.to_string()),
+            Err(_) => Verdict::Unreadable(format!("no answer within {} s", READ_TIMEOUT.as_secs())),
         };
         MaterializationMetrics::record_check(verdict.label());
 

@@ -225,10 +225,10 @@ impl Config {
                 "SIGNALS_MATERIALIZATION_INTERVAL_SECS",
                 DEFAULT_MATERIALIZATION_INTERVAL_SECS,
             )?),
-            materialization_max_wait: ChronoDuration::minutes(duration_var(
+            materialization_max_wait: max_wait_minutes(duration_var(
                 "SIGNALS_MATERIALIZATION_MAX_WAIT_MINS",
                 DEFAULT_MATERIALIZATION_MAX_WAIT_MINS,
-            )? as i64),
+            )?)?,
             materialization_heartbeat_url: optional_secret_url(
                 "SIGNALS_MATERIALIZATION_HEARTBEAT_URL",
             ),
@@ -270,6 +270,24 @@ impl Config {
 }
 
 /// Reject a Warning threshold that reaches its detector's Critical cutoff.
+/// The watch's limit, refused at startup rather than trusted.
+///
+/// Zero would make every check fail — a row is always pending in the bucket
+/// that is still filling — and a value past chrono's range would panic in
+/// `Duration::minutes` instead of naming the variable. `as i64` would also wrap
+/// a huge value into a negative one.
+fn max_wait_minutes(minutes: u64) -> Result<ChronoDuration, ConfigError> {
+    i64::try_from(minutes)
+        .ok()
+        .filter(|m| *m > 0)
+        .and_then(ChronoDuration::try_minutes)
+        .ok_or_else(|| ConfigError::InvalidValue {
+            key: "SIGNALS_MATERIALIZATION_MAX_WAIT_MINS".to_string(),
+            value: minutes.to_string(),
+            expected: "a number of minutes greater than zero that fits a duration",
+        })
+}
+
 fn validate_ladder(
     threshold_key: &'static str,
     threshold: Decimal,
@@ -320,5 +338,13 @@ mod tests {
         assert!(validate_ladder("KEY", Decimal::new(2, 1), Decimal::new(2, 1)).is_err());
         // Above: every emitted signal would be Critical.
         assert!(validate_ladder("KEY", Decimal::new(3, 1), Decimal::new(2, 1)).is_err());
+    }
+
+    #[test]
+    fn max_wait_refuses_zero_and_what_a_duration_cannot_hold() {
+        assert_eq!(max_wait_minutes(240).unwrap(), ChronoDuration::hours(4));
+        assert!(max_wait_minutes(0).is_err());
+        assert!(max_wait_minutes(u64::MAX).is_err());
+        assert!(max_wait_minutes(i64::MAX as u64).is_err());
     }
 }

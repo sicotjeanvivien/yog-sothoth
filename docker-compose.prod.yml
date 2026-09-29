@@ -47,6 +47,10 @@
 #                      the backup daemon's role, bucket and dead man's switch;
 #                      what the bucket and its key must be is in
 #                      crates/archive/README.md, "Deploying"
+#   SIGNALS_MATERIALIZATION_HEARTBEAT_URL
+#                      the check yog-signals fails when a continuous aggregate
+#                      stops being materialised (period 10 min, grace 20 min);
+#                      crates/signals/README.md, "The materialisation watch"
 # The CORS origin and the browser's API URL are derived from the two domains
 # rather than set separately: three values that must agree are one value.
 #

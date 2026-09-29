@@ -39,3 +39,6 @@ yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"
 # `DebuggingRecorder` lets the detector tests assert that a skip is actually
 # COUNTED, not merely not-signalled. Same recipe as yog-indexer and yog-context.
 metrics-util = { workspace = true, features = ["debugging"] }
+# `start_paused`: lets the watch's read timeout expire without waiting a real
+# minute. A feature of a crate already in the tree, dev-only.
+tokio = { workspace = true, features = ["test-util"] }
