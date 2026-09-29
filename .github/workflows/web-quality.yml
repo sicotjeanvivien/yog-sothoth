@@ -1,6 +1,12 @@
 # Static quality checks for the /web Next.js package.
 # Runs typecheck, lint, unit tests and the dependency audit as parallel
 # jobs so a failure in one does not mask issues in the others.
+#
+# Every job first installs the npm that `devEngines` in web/package.json
+# names: the one Node 24 ships is older, and npm refuses to run in web/
+# under another major (EBADDEVENGINES). The guard is the point — two majors
+# write the lockfile differently, and a lock one accepts the other can
+# reject (`npm ci`: "Missing: … from lock file").
 
 name: web-quality
 
@@ -46,6 +52,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install the npm package.json asks for
+        run: npm install -g "npm@$(jq -r .devEngines.packageManager.version package.json)"
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
@@ -66,6 +75,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install the npm package.json asks for
+        run: npm install -g "npm@$(jq -r .devEngines.packageManager.version package.json)"
+
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
@@ -85,6 +97,9 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Install the npm package.json asks for
+        run: npm install -g "npm@$(jq -r .devEngines.packageManager.version package.json)"
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
@@ -112,6 +127,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+
+      - name: Install the npm package.json asks for
+        run: npm install -g "npm@$(jq -r .devEngines.packageManager.version package.json)"
 
       - name: Audit runtime dependencies
         run: bash audit.sh

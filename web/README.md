@@ -383,6 +383,13 @@ npm install
 npm run dev
 ```
 
+npm itself must be 12.x: `devEngines` in `package.json` makes any other
+major refuse to run here (`EBADDEVENGINES`), in CI and in the Docker image
+as on your machine. Node 24 ships an older one — `npm install -g npm@12`,
+which itself needs Node 24.15 or later.
+The reason is the lockfile: two majors write it differently, and a lock one
+accepts the other can reject.
+
 Visit <http://localhost:3000>; you will be redirected to `/en` by the
 locale proxy. Switch to `/fr` in the URL to see the French version.
 
