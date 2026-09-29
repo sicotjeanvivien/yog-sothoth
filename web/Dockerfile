@@ -2,15 +2,24 @@
 # ---------------------------------------------------------------------
 # Yog-Sothoth web — multi-stage Dockerfile
 #
+# Stage 0 (npm):     the npm version package.json asks for.
 # Stage 1 (deps):    install npm dependencies in isolation so that
 #                    layer caching kicks in on every code-only change.
 # Stage 2 (builder): compile the Next.js standalone output.
 # Stage 3 (runner):  minimal Alpine image that runs the built server.
 # ---------------------------------------------------------------------
 
-# ---- Stage 1: deps ----
-FROM node:24-alpine AS deps
+# ---- Stage 0: npm ----
+# The npm that `devEngines` in package.json names. The image ships an older
+# one, and npm refuses to run here under another major (EBADDEVENGINES) — both
+# `npm ci` and `npm run build` below need it.
+FROM node:24-alpine AS npm
 WORKDIR /app
+COPY package.json ./
+RUN npm install -g "npm@$(node -p 'require("./package.json").devEngines.packageManager.version')"
+
+# ---- Stage 1: deps ----
+FROM npm AS deps
 
 # Alpine is missing libc-compat, which the Next.js binary expects.
 RUN apk add --no-cache libc6-compat
@@ -19,8 +28,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 
 # ---- Stage 2: builder ----
-FROM node:24-alpine AS builder
-WORKDIR /app
+FROM npm AS builder
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
