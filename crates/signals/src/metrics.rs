@@ -6,12 +6,16 @@
 //! unit tests need no exporter); the binary installs the exporter and
 //! calls [`EngineMetrics::register_descriptions`] once at startup.
 
-use metrics::{counter, describe_counter};
+use metrics::{counter, describe_counter, describe_gauge, gauge};
 
 const TICK_TOTAL: &str = "yog_signals_tick_total";
 const EMITTED_TOTAL: &str = "yog_signals_emitted_total";
 const SKIPPED_TOTAL: &str = "yog_signals_skipped_total";
 const CONSIDERED_TOTAL: &str = "yog_signals_considered_total";
+const MATERIALIZATION_PENDING: &str = "yog_signals_materialization_pending_seconds";
+const MATERIALIZATION_CHECKS: &str = "yog_signals_materialization_checks_total";
+/// Counted by `yog_bootstrap`'s heartbeat, which is handed this name.
+pub(crate) const HEARTBEAT_FAILURES: &str = "yog_signals_heartbeat_failures_total";
 
 /// Why a detector declined to evaluate a pool — the `reason` label of
 /// [`SKIPPED_TOTAL`].
@@ -127,5 +131,41 @@ impl EngineMetrics {
     /// the universe a detector cannot see, which is the thing worth watching.
     pub(crate) fn record_considered(detector: &'static str, count: usize) {
         counter!(CONSIDERED_TOTAL, "detector" => detector).increment(count as u64);
+    }
+}
+
+/// The materialisation watch's metrics. Nothing scrapes them in production —
+/// the Healthchecks.io check is the alarm — but they say on `/metrics` how long
+/// each aggregate has had a row waiting, without reading the logs.
+pub(crate) struct MaterializationMetrics;
+
+impl MaterializationMetrics {
+    /// Register human-readable descriptions. Call once, before any check.
+    pub(crate) fn register_descriptions() {
+        describe_gauge!(
+            MATERIALIZATION_PENDING,
+            "How long the oldest raw row not yet materialised has waited, in \
+             seconds; 0 when nothing waits (label: aggregate)"
+        );
+        describe_counter!(
+            MATERIALIZATION_CHECKS,
+            "Materialisation checks, by outcome=on_time|late|unreadable"
+        );
+        describe_counter!(
+            HEARTBEAT_FAILURES,
+            "Heartbeat signals that could not be delivered, by kind"
+        );
+    }
+
+    /// Record how long `aggregate`'s oldest pending row has waited — zero when
+    /// none waits, so a gauge that went up comes back down.
+    pub(crate) fn record_pending(aggregate: &str, wait: chrono::Duration) {
+        gauge!(MATERIALIZATION_PENDING, "aggregate" => aggregate.to_string())
+            .set(wait.num_seconds() as f64);
+    }
+
+    /// Record how one check ended.
+    pub(crate) fn record_check(outcome: &'static str) {
+        counter!(MATERIALIZATION_CHECKS, "outcome" => outcome).increment(1);
     }
 }

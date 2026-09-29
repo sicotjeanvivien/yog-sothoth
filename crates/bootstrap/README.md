@@ -4,11 +4,14 @@ Library. Shared startup utilities for the native binaries (`yog-indexer`,
 `yog-context`, `yog-signals`, `yog-api`) and `yog-migrate`: env parsing
 primitives, the two secret types and the `Endpoint` that holds an address apart
 from its credential, `ConfigError`, `init_rustls()`, `init_tracing()` — and the
-other end of the same lifecycle, the shared stop.
+other end of the same lifecycle, the shared stop — and, behind a feature, the
+dead man's switch a running daemon reports to.
 
 The decision rule for adding anything: *does this run identically in every
 binary's `main()`?* If it varies even slightly, it stays in the binary. Each
-binary keeps its own `Config` struct; only the building blocks live here.
+binary keeps its own `Config` struct; only the building blocks live here. The
+stop and the heartbeat widened the rule by the same door: **one rule that two
+daemons already apply** moves here once, rather than being restated in each.
 
 For the workspace-level picture (dependency graph, conventions, database
 roles), see [`crates/README.md`](../README.md).
@@ -19,7 +22,7 @@ roles), see [`crates/README.md`](../README.md).
 
 ```
 bootstrap/src/
-├── env.rs        ← required*, required_endpoint*, parse_required_*,
+├── env.rs        ← required*, optional*, required_endpoint*, parse_required_*,
 │                   duration_var — see the note below the tree
 ├── secret.rs     ← SecretUrl, SecretKey — redaction, scrub, expose()
 ├── endpoint.rs   ← Endpoint: <FUNCTION>_URL + optional header pair + key
@@ -27,6 +30,8 @@ bootstrap/src/
 ├── runtime.rs    ← init_rustls(), init_tracing() and its filter
 ├── shutdown.rs   ← shutdown_signal(), TaskEnd, handle_task_result, Stop,
 │                   SHUTDOWN_GRACE
+├── heartbeat.rs  ← Heartbeat, HealthchecksHeartbeat, HeartbeatSettings
+│                   (feature `heartbeat`); RecordingHeartbeat (`test-support`)
 └── lib.rs        ← re-exports, and the exposure_tests.rs guard
 ```
 
@@ -63,6 +68,28 @@ times across two binaries. `Stop::new` takes that name now and `settle` steps
 over it, so a call site lists its stages in the order it wants them served and
 says nothing else.
 
+## The heartbeat — behind a feature
+
+`heartbeat.rs` is Healthchecks.io's ping API: `POST <check-url>` on success,
+`POST <check-url>/fail` with the reason on failure, `/fail` pushed onto the
+URL's **path** so a slug URL's `?create=1` stays a query. An undelivered signal
+is logged and counted, and changes nothing else: the missing ping raises the
+alarm on the other side.
+
+It moved here from `yog-archive` on 29 September 2026, when `yog-signals` became
+its second user — the same "two real users" that settled the stop. What differed
+between the two is data, not code: `HeartbeatSettings` carries the variable a
+refused URL is named by and the counter an undelivered signal increments, so
+each daemon keeps its own metric name.
+
+**Why a feature.** It brings `reqwest`, and `yog-api` and `yog-migrate` have no
+check to report to. Only `yog-archive` and `yog-signals` turn it on.
+`RecordingHeartbeat`, the test double, is behind `test-support` like the
+secrets' `for_tests`. ⚠️ The CI's per-crate check compiles each crate with its
+**default** features, so it compiles this module through `yog-archive` and
+`yog-signals`, not through `yog-bootstrap` alone; `cargo clippy
+--all-features` is what lints it here.
+
 ## Secrets — one invariant, two types
 
 *The secret part is never printable; only the non-secret carrier is.*
@@ -89,7 +116,8 @@ earlier attempt to disambiguate instead printed `postgresql://yog:pa#ss@…` in
 full.
 
 Neither is constructible outside the crate: a `Config` gets one from
-`required_secret_url` / `required_secret_key`, and by no other route, so "a
+`required_secret_url` / `required_secret_key` — or `optional_secret_url`, for a
+URL the daemon can run without — and by no other route, so "a
 secret is wrapped" is a compiler guarantee rather than a habit repeated at nine
 sites. `expose()` is the one door out, and it belongs **on the line that
 consumes the secret** — a `connect`, a request builder, a third-party client

@@ -9,7 +9,9 @@ use std::time::Duration;
 
 use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
-use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required_secret_url};
+use yog_bootstrap::{
+    ConfigError, SecretUrl, duration_var, optional_secret_url, required_secret_url,
+};
 
 /// How often the flow-imbalance detector ticks, in seconds.
 /// Overridable via `SIGNALS_FLOW_INTERVAL_SECS`.
@@ -62,6 +64,17 @@ const DEFAULT_TVL_DRAIN_COOLDOWN_HOURS: u64 = 6;
 /// Minimum starting TVL (USD) for a pool to be considered.
 /// Overridable via `SIGNALS_TVL_DRAIN_MIN_TVL_USD`.
 const DEFAULT_TVL_DRAIN_MIN_TVL_USD: i64 = 10_000;
+
+/// How often the materialisation watch checks, in seconds. Overridable via
+/// `SIGNALS_MATERIALIZATION_INTERVAL_SECS`.
+const DEFAULT_MATERIALIZATION_INTERVAL_SECS: u64 = 600;
+
+/// How long a raw row may wait to be materialised before its aggregate is
+/// late, in minutes. A healthy aggregate peaks at three hours — `end_offset`
+/// one hour, up to one hour until the next hourly refresh, one hour of bucket
+/// (migration 008) — so four leaves an hour of margin. Overridable via
+/// `SIGNALS_MATERIALIZATION_MAX_WAIT_MINS`.
+const DEFAULT_MATERIALIZATION_MAX_WAIT_MINS: u64 = 240;
 
 /// Runtime configuration for the `yog-signals` binary.
 #[derive(Debug, Clone)]
@@ -122,6 +135,17 @@ pub(crate) struct Config {
 
     /// Drain ratio at or above which the signal escalates to Critical.
     pub(crate) tvl_drain_critical: Decimal,
+
+    /// Materialisation watch cadence.
+    pub(crate) materialization_interval: Duration,
+
+    /// How long a raw row may wait before its aggregate is late.
+    pub(crate) materialization_max_wait: ChronoDuration,
+
+    /// The Healthchecks.io check the watch reports to. Optional: development
+    /// runs the scheduler off and has no check. Production requires it —
+    /// `docker-compose.prod.yml` refuses to start without it.
+    pub(crate) materialization_heartbeat_url: Option<SecretUrl>,
 }
 
 impl Config {
@@ -197,6 +221,17 @@ impl Config {
             tvl_drain_threshold: decimal_var("SIGNALS_TVL_DRAIN_THRESHOLD", Decimal::new(5, 1))?,
             // 0.8 — the pool is nearly emptied.
             tvl_drain_critical: decimal_var("SIGNALS_TVL_DRAIN_CRITICAL", Decimal::new(8, 1))?,
+            materialization_interval: Duration::from_secs(duration_var(
+                "SIGNALS_MATERIALIZATION_INTERVAL_SECS",
+                DEFAULT_MATERIALIZATION_INTERVAL_SECS,
+            )?),
+            materialization_max_wait: ChronoDuration::minutes(duration_var(
+                "SIGNALS_MATERIALIZATION_MAX_WAIT_MINS",
+                DEFAULT_MATERIALIZATION_MAX_WAIT_MINS,
+            )? as i64),
+            materialization_heartbeat_url: optional_secret_url(
+                "SIGNALS_MATERIALIZATION_HEARTBEAT_URL",
+            ),
         };
 
         // The two cutoffs of one detector form a ladder: Warning strictly
@@ -218,6 +253,17 @@ impl Config {
             config.tvl_drain_threshold,
             config.tvl_drain_critical,
         )?;
+
+        // `tokio::time::interval` panics on a zero period — and the watch runs
+        // beside the engine, not in a task of its own, so the panic would take
+        // the whole daemon down after startup rather than refuse it here.
+        if config.materialization_interval.is_zero() {
+            return Err(ConfigError::InvalidValue {
+                key: "SIGNALS_MATERIALIZATION_INTERVAL_SECS".to_string(),
+                value: "0".to_string(),
+                expected: "a number of seconds greater than zero",
+            });
+        }
 
         Ok(config)
     }

@@ -31,11 +31,15 @@ archive/src/
 │   ├── run_outcome.rs ← RunOutcome, RunFailure, FailureKind: how a run ended
 │   └── stream.rs      ← the archive: pg_dump read into the upload, pg_restore fed alongside
 ├── infra/             ← what a run calls outside the process
-│   ├── heartbeat.rs   ← Healthchecks.io: success, or /fail with the reason
 │   ├── store.rs       ← the bucket — the only file that knows it is S3
 │   └── versions.rs    ← the server's versions, over a connection opened per run
 └── metrics.rs
 ```
+
+The heartbeat — success, or `/fail` with the reason — is not here either: it is
+`yog_bootstrap`'s (feature `heartbeat`), shared with `yog-signals`' watch on
+the continuous aggregates. The archive hands it its variable's name and its
+counter, `yog_archive_heartbeat_failures_total`, so what it reports is unchanged.
 
 `pg_dump` and `pg_restore` are not here:
 they are knowledge of the database, and live in `yog-persistence`'s `backup`

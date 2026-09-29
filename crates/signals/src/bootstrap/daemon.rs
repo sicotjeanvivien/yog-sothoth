@@ -10,13 +10,14 @@ use std::sync::Arc;
 use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use yog_bootstrap::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings};
 use yog_core::domain::{
-    LiquidityFlowRepository, PoolPriceSnapshotRepository, Protocol, SignalDetector,
-    SignalRepository, SwapFlowRepository,
+    LiquidityFlowRepository, MaterializationRepository, PoolPriceSnapshotRepository, Protocol,
+    SignalDetector, SignalRepository, SwapFlowRepository,
 };
 use yog_persistence::{
-    Database, PgLiquidityFlowRepository, PgPoolPriceSnapshotRepository, PgSignalRepository,
-    PgSwapFlowRepository,
+    Database, PgLiquidityFlowRepository, PgMaterializationRepository,
+    PgPoolPriceSnapshotRepository, PgSignalRepository, PgSwapFlowRepository,
 };
 
 use crate::bootstrap::Config;
@@ -25,11 +26,13 @@ use crate::detectors::{
     PriceOracleDeviationSettings, TvlDrainDetector, TvlDrainSettings,
 };
 use crate::engine::SignalEngine;
-use crate::metrics::EngineMetrics;
+use crate::materialization_watch::{MaterializationWatch, MaterializationWatchSettings};
+use crate::metrics::{self, EngineMetrics, MaterializationMetrics};
 
-/// Owns the assembled engine, ready to run.
+/// Owns the assembled engine and the materialisation watch, ready to run.
 pub(crate) struct Daemon {
     engine: SignalEngine,
+    watch: MaterializationWatch,
 }
 
 impl Daemon {
@@ -49,7 +52,9 @@ impl Daemon {
         let snapshot_repository: Arc<dyn PoolPriceSnapshotRepository> =
             Arc::new(PgPoolPriceSnapshotRepository::new(pool.clone()));
         let liquidity_flow_repository: Arc<dyn LiquidityFlowRepository> =
-            Arc::new(PgLiquidityFlowRepository::new(pool));
+            Arc::new(PgLiquidityFlowRepository::new(pool.clone()));
+        let materialization_repository: Arc<dyn MaterializationRepository> =
+            Arc::new(PgMaterializationRepository::new(pool));
 
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
@@ -91,12 +96,36 @@ impl Daemon {
         ));
 
         EngineMetrics::register_descriptions();
+        MaterializationMetrics::register_descriptions();
 
         let engine = SignalEngine::new(
             signal_repository,
             vec![flow_imbalance, price_oracle_deviation, tvl_drain],
         );
-        Ok(Self { engine })
+
+        let heartbeat = config
+            .materialization_heartbeat_url
+            .clone()
+            .map(|url| {
+                let settings = HeartbeatSettings {
+                    variable: "SIGNALS_MATERIALIZATION_HEARTBEAT_URL",
+                    undelivered_counter: metrics::HEARTBEAT_FAILURES,
+                };
+                HealthchecksHeartbeat::new(url, settings)
+                    .map(|heartbeat| Arc::new(heartbeat) as Arc<dyn Heartbeat>)
+            })
+            .transpose()
+            .context("failed to build the heartbeat client")?;
+        let watch = MaterializationWatch::new(
+            materialization_repository,
+            heartbeat,
+            MaterializationWatchSettings {
+                interval: config.materialization_interval,
+                max_wait: config.materialization_max_wait,
+            },
+        );
+
+        Ok(Self { engine, watch })
     }
 
     /// Run the engine until the process is asked to stop, then let every
@@ -122,6 +151,12 @@ impl Daemon {
             signal.cancel();
         });
 
-        self.engine.run(shutdown).await.map_err(anyhow::Error::new)
+        // The watch shares the stop, and ends as soon as it fires — its check
+        // races the token — so it never outlasts the engine it runs beside.
+        let (engine, ()) = tokio::join!(
+            self.engine.run(shutdown.clone()),
+            self.watch.run(shutdown.clone()),
+        );
+        engine.map_err(anyhow::Error::new)
     }
 }

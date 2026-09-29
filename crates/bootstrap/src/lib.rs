@@ -13,6 +13,8 @@
 //! - the other end of that lifecycle: which signals mean "stop", what a
 //!   finished task's result says, and how long a daemon waits for its stages
 //!   before the runtime destroys them (`shutdown`)
+//! - and what a running daemon tells a dead man's switch (`heartbeat`, behind
+//!   the feature of the same name)
 //!
 //! Each binary keeps its own `Config` struct describing the variables
 //! it cares about — only the building blocks live here. The `Config`
@@ -23,6 +25,8 @@
 mod endpoint;
 mod env;
 mod error;
+#[cfg(feature = "heartbeat")]
+mod heartbeat;
 mod runtime;
 mod secret;
 mod shutdown;
@@ -38,11 +42,15 @@ mod exposure_tests;
 
 pub use endpoint::Endpoint;
 pub use env::{
-    EnvEnum, duration_var, optional, parse_required_bool, parse_required_enum, parse_required_u32,
-    required, required_endpoint, required_endpoint_allowing_header, required_secret_key,
-    required_secret_url,
+    EnvEnum, duration_var, optional, optional_secret_url, parse_required_bool, parse_required_enum,
+    parse_required_u32, required, required_endpoint, required_endpoint_allowing_header,
+    required_secret_key, required_secret_url,
 };
 pub use error::ConfigError;
+#[cfg(all(feature = "heartbeat", feature = "test-support"))]
+pub use heartbeat::RecordingHeartbeat;
+#[cfg(feature = "heartbeat")]
+pub use heartbeat::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings};
 pub use runtime::{init_rustls, init_tracing};
 pub use secret::{SecretKey, SecretUrl};
 pub use shutdown::{SHUTDOWN_GRACE, Stop, TaskEnd, handle_task_result, shutdown_signal};

@@ -10,6 +10,10 @@ license.workspace = true
 # constructors stay unreachable from production code, which is what makes
 # "a secret is wrapped by the helper" a compiler guarantee rather than a habit.
 test-support = []
+# The Healthchecks.io dead man's switch (`heartbeat`). Opt-in: it brings an HTTP
+# client, which only the daemons that report to a check should pay for — not
+# `yog-api` nor `yog-migrate`.
+heartbeat = ["dep:reqwest", "dep:async-trait", "dep:metrics"]
 
 [dependencies]
 # Errors
@@ -30,6 +34,11 @@ percent-encoding = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 rustls = { workspace = true }
+
+# `heartbeat` (feature): the ping, its trait, the undelivered-signal counter.
+reqwest = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+metrics = { workspace = true, optional = true }
 
 [dev-dependencies]
 # `start_paused`: lets the grace expire without waiting five real seconds, and

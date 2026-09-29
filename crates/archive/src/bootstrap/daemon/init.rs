@@ -5,16 +5,17 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use object_store::ObjectStore;
-use yog_bootstrap::SecretUrl;
+use yog_bootstrap::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings, SecretUrl};
 
-use crate::{
-    bootstrap::config::StoreConfig,
-    infra::{HealthchecksHeartbeat, Heartbeat, open_store},
-};
+use crate::{bootstrap::config::StoreConfig, infra::open_store, metrics};
 
 /// The heartbeat comes first: from here on, whatever fails can be told.
 pub(super) fn init_heartbeat(url: SecretUrl) -> anyhow::Result<HealthchecksHeartbeat> {
-    HealthchecksHeartbeat::new(url).context("failed to build the heartbeat client")
+    let settings = HeartbeatSettings {
+        variable: "ARCHIVE_HEARTBEAT_URL",
+        undelivered_counter: metrics::HEARTBEAT_FAILURES,
+    };
+    HealthchecksHeartbeat::new(url, settings).context("failed to build the heartbeat client")
 }
 
 /// Open the bucket, or signal why it cannot be before the process stops: a

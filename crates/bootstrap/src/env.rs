@@ -62,6 +62,17 @@ pub fn required_secret_key(key: &str) -> Result<SecretKey, ConfigError> {
     required(key).map(SecretKey::new)
 }
 
+/// Read an optional environment variable and wrap it as a [`SecretUrl`] — for
+/// a URL whose absence the daemon knows how to run without, such as a
+/// dead man's switch it only reports to in production.
+///
+/// Absent or blank reads as `None`, by [`optional`]'s rule. It cannot fail at
+/// all, which keeps it inside the constraint [`required_secret_url`] states:
+/// no path from here reaches a `value` field.
+pub fn optional_secret_url(key: &str) -> Option<SecretUrl> {
+    optional(key).map(SecretUrl::new)
+}
+
 /// Read an optional environment variable, trimmed, with a blank value read as
 /// absent.
 ///

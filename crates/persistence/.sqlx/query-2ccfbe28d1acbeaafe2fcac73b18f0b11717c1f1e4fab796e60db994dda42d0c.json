@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT aggregate AS \"aggregate!\",\n                   watermark AS \"watermark?: chrono::DateTime<chrono::Utc>\",\n                   oldest_pending_at AS \"oldest_pending_at?: chrono::DateTime<chrono::Utc>\"\n              FROM yog_cagg_materialization_progress()\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "aggregate!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "watermark?: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "oldest_pending_at?: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2ccfbe28d1acbeaafe2fcac73b18f0b11717c1f1e4fab796e60db994dda42d0c"
+}

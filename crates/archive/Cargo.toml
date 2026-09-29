@@ -8,7 +8,7 @@ license.workspace = true
 # Workspace crates. `yog-persistence` holds everything that reaches
 # Postgres — the versions, `pg_dump`, `pg_restore` (its `backup` module).
 yog-persistence = { path = "../persistence" }
-yog-bootstrap = { path = "../bootstrap" }
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat"] }
 
 # Async runtime
 tokio = { workspace = true }
@@ -24,16 +24,14 @@ async-trait = { workspace = true }
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
 
-# Storage, heartbeat
+# Storage. The heartbeat, and its HTTP client, are yog-bootstrap's.
 object_store = { workspace = true }
-reqwest = { workspace = true }
-url = { workspace = true }
 chrono = { workspace = true }
 
 [dev-dependencies]
 # `SecretUrl::for_tests`, reachable from tests only — see yog-bootstrap's
 # Cargo.toml for why it is a dev-dependency feature.
-yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"] }
 # Already in the lock: the fake `pg_dump` / `pg_restore` scripts the tests run
 # live in a temporary directory.
 tempfile = "3"

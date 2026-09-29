@@ -147,6 +147,11 @@ services:
 
   yog-signals:
     ports: !reset []
+    # The materialisation watch's dead man's switch. Required here, as the
+    # archive's is: without it a stalled continuous aggregate is logged in a
+    # container nobody reads, and the whole point is that someone is told.
+    environment:
+      SIGNALS_MATERIALIZATION_HEARTBEAT_URL: ${SIGNALS_MATERIALIZATION_HEARTBEAT_URL:?set it in the server's .env}
     mem_limit: 32m
 
   yog-web:

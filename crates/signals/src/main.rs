@@ -12,6 +12,7 @@
 mod bootstrap;
 mod detectors;
 mod engine;
+mod materialization_watch;
 mod metrics;
 
 use metrics_exporter_prometheus::PrometheusBuilder;

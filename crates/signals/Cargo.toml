@@ -10,7 +10,7 @@ license.workspace = true
 # the concrete Pg repositories and yog-bootstrap for the runtime plumbing.
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
-yog-bootstrap = { path = "../bootstrap" }
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat"] }
 
 # Async runtime
 tokio = { workspace = true }
@@ -33,6 +33,9 @@ async-trait = { workspace = true }
 solana-pubkey = { workspace = true }
 
 [dev-dependencies]
+# `RecordingHeartbeat`, reachable from tests only — see yog-bootstrap's
+# Cargo.toml for why it is a dev-dependency feature.
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"] }
 # `DebuggingRecorder` lets the detector tests assert that a skip is actually
 # COUNTED, not merely not-signalled. Same recipe as yog-indexer and yog-context.
 metrics-util = { workspace = true, features = ["debugging"] }

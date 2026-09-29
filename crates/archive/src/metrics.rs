@@ -15,7 +15,8 @@ const RUNS: &str = "yog_archive_runs_total";
 const LAST_SUCCESS: &str = "yog_archive_last_success_timestamp_seconds";
 const DUMP_BYTES: &str = "yog_archive_dump_bytes";
 const DURATION: &str = "yog_archive_duration_seconds";
-const HEARTBEAT_FAILURES: &str = "yog_archive_heartbeat_failures_total";
+/// Counted by `yog_bootstrap`'s heartbeat, which is handed this name.
+pub(crate) const HEARTBEAT_FAILURES: &str = "yog_archive_heartbeat_failures_total";
 
 pub(crate) fn register_descriptions() {
     describe_counter!(RUNS, "Archiving runs, by outcome");
@@ -42,8 +43,4 @@ pub(crate) fn record(outcome: &RunOutcome, elapsed: Duration) {
             .unwrap_or_default();
         gauge!(LAST_SUCCESS).set(now.as_secs_f64());
     }
-}
-
-pub(crate) fn heartbeat_failed(kind: &'static str) {
-    counter!(HEARTBEAT_FAILURES, "kind" => kind).increment(1);
 }

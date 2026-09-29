@@ -18,6 +18,7 @@ and the `Signal`/`Severity` domain types live in
 ```
 signals/src/
 ├── engine.rs      ← SignalEngine: one poll loop per detector, dedup, persist
+├── materialization_watch.rs ← the continuous aggregates' alarm (see below)
 ├── detectors/     ← one module per detector
 │   ├── flow_imbalance.rs
 │   ├── price_oracle_deviation.rs
@@ -61,7 +62,10 @@ carries the dedup state too.
 SIGTERM** (`yog_bootstrap::shutdown_signal`); every detector loop then returns
 at its next turn, and `SignalEngine::run` joins them. A tick runs in the body
 of its `select!` arm, not inside the `select!`, so a tick already started
-always finishes.
+always finishes. The materialisation watch is the exception, on purpose: its
+check — a read, then a ping with a 15 s timeout — races the token, since a ping
+cut short costs nothing and a stop held by a slow endpoint is what Docker ends
+with SIGKILL.
 
 - **The stop wins a tie.** The loop's `select!` is `biased`, with the
   cancellation arm first. The ticker keeps tokio's default
@@ -82,6 +86,50 @@ later, mid-tick.
 `yog_bootstrap::Stop`, no `SHUTDOWN_GRACE`. A detector stuck in a slow query
 holds the stop open until Docker's SIGKILL, and nothing in the logs names it.
 Not fixed yet.
+
+## The materialisation watch
+
+The detectors read hourly continuous aggregates that TimescaleDB's scheduler
+keeps materialised. When it stops — or one refresh policy keeps failing —
+nothing errors anywhere: the aggregates freeze, and every detector goes on
+evaluating hours that no longer change. From 16 June to 10 August 2026 all four
+sat that way unnoticed. `materialization_watch.rs` is the alarm for it: a loop
+beside the engine, on the same stop.
+
+Every `SIGNALS_MATERIALIZATION_INTERVAL_SECS` it calls
+`yog_cagg_materialization_progress()` (migration 013), which reports, for every
+aggregate the catalog holds, the **oldest raw row not yet materialised**. An
+aggregate is late when that row has waited longer than
+`SIGNALS_MATERIALIZATION_MAX_WAIT_MINS` — `AggregateMaterialization::is_late`
+in `yog-core`.
+
+⚠️ **The oldest pending row, and neither the clock nor the newest row.** The
+watermark's age against the clock grows when the *indexer* stops (no bucket
+fills), and would blame the materialisation. The newest row minus the
+watermark freezes when a table stops receiving rows, however long those rows
+then wait — on 29 September 2026 it read 28 minutes for six `claim_reward` rows
+unmaterialised for eight days. A pending row only grows old if a refresh did not
+run, whatever the indexer does.
+
+**The limit.** A healthy aggregate peaks at three hours: the refresh policy's
+`end_offset` (1 h), up to an hour until the next hourly run, and the bucket
+itself (1 h) — migration 008. The default of four leaves an hour of margin.
+The peak observed in production is the number that should replace this
+estimate.
+
+**The alarm is Healthchecks.io, not Prometheus** — nothing scrapes `/metrics`
+in production. Each check ends in a ping to
+`SIGNALS_MATERIALIZATION_HEARTBEAT_URL`: success when nothing is late,
+`/fail` naming each late aggregate and its wait, or `/fail` with the database's
+error when the progress cannot be read. A stopped daemon is the silence the
+check notices on its own. The heartbeat is `yog_bootstrap`'s, shared with
+`yog-archive`. Create the check with a **10-minute period and a 20-minute
+grace**.
+
+Without that URL — development, where the scheduler is off by design and every
+aggregate is late for good — nothing is signalled; the verdict is logged **when
+it changes**, not on every check, and measured.
+`docker-compose.prod.yml` refuses to start without it.
 
 ## Detectors
 
@@ -142,10 +190,17 @@ SIGNALS_TVL_DRAIN_MIN_TVL_USD=10000   # floor on the STARTING TVL
 SIGNALS_TVL_DRAIN_THRESHOLD=0.5       # Warning
 SIGNALS_TVL_DRAIN_CRITICAL=0.8        # Critical
 SIGNALS_TVL_DRAIN_COOLDOWN_HOURS=6
+
+# materialisation watch
+SIGNALS_MATERIALIZATION_INTERVAL_SECS=600       # > 0, refused at startup otherwise
+SIGNALS_MATERIALIZATION_MAX_WAIT_MINS=240       # how long a raw row may wait
+SIGNALS_MATERIALIZATION_HEARTBEAT_URL=https://hc-ping.com/...  # optional; required in prod
 ```
 
 Connects to Postgres as `yog_signals` — `INSERT` (append-only) on `signals`,
-`SELECT` on the read VIEWs it evaluates. It cannot update or delete anything.
+`SELECT` on the read VIEWs it evaluates, and `EXECUTE` on
+`yog_cagg_materialization_progress()`, which no other role holds. It cannot
+update or delete anything.
 
 ## Observability
 
@@ -183,6 +238,12 @@ any price at all**, so the implied rate of migration 002 has nothing to anchor
 on. None came from unresolved metadata. A skip is a pool nothing could have
 valued, not one that was given up on; the number moves when `yog-context` prices
 more mints, and nowhere else.
+
+**`yog_signals_materialization_pending_seconds{aggregate}`** — how long each
+aggregate's oldest unmaterialised row has waited, `0` when none waits;
+**`yog_signals_materialization_checks_total{outcome}`** — `on_time`, `late`,
+`unreadable`; **`yog_signals_heartbeat_failures_total{kind}`** — pings that
+could not be delivered.
 
 ## Run
 

@@ -18,7 +18,7 @@ use tracing::warn;
 use yog_bootstrap::SecretUrl;
 use yog_persistence::{PgTools, ServerVersions};
 
-use crate::infra::Heartbeat;
+use yog_bootstrap::Heartbeat;
 
 mod run_outcome;
 mod stream;
