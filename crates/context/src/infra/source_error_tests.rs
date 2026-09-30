@@ -1,10 +1,10 @@
 use super::*;
-use crate::providers::http_client;
+use crate::infra::http_client;
 
 /// Stands in for the API key. Deliberately unlike anything else in the
 /// message, so `contains` cannot pass by accident.
 ///
-/// A twin of this constant lives in `providers/jupiter_price_tests.rs`, which
+/// A twin of this constant lives in `infra/jupiter_price_tests.rs`, which
 /// covers the two error kinds this file cannot produce without a server. They
 /// are independent on purpose: neither test should break because the other
 /// changed its fixture.

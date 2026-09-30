@@ -34,8 +34,8 @@ use tracing::{debug, info, warn};
 
 use yog_core::domain::{KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository};
 
+use crate::application::source::{FetchedPrice, PriceSource};
 use crate::error::WorkerError;
-use crate::source::{FetchedPrice, PriceSource};
 
 /// Worker that records a USD price for every known mint on a fixed
 /// interval.

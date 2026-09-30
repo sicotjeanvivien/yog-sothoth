@@ -20,14 +20,13 @@ use yog_persistence::{
     PgPoolRepository, PgTokenMetadataRepository, PgTokenPriceRepository,
 };
 
+use crate::application::source::{MetadataSource, PoolAccountSource, PriceSource};
+use crate::application::workers::{
+    MetadataWorker, MetadataWorkerMetrics, PoolAccountWorker, PriceWorker, PriceWorkerMetrics,
+};
 use crate::bootstrap::Config;
 use crate::error::WorkerError;
-use crate::providers::ProviderMetrics;
-use crate::providers::{HeliusDasClient, JupiterPriceClient, SolanaAccountClient};
-use crate::source::{MetadataSource, PoolAccountSource, PriceSource};
-use crate::workers::MetadataWorkerMetrics;
-use crate::workers::PriceWorkerMetrics;
-use crate::workers::{MetadataWorker, PoolAccountWorker, PriceWorker};
+use crate::infra::{HeliusDasClient, JupiterPriceClient, ProviderMetrics, SolanaAccountClient};
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
@@ -143,13 +142,13 @@ impl Daemon {
     /// one lost it.
     ///
     /// ⚠️ **That is not a missing timeout.** Every provider request is already
-    /// bounded (15 s total, 5 s connect — [`providers::http_client`]). The tick
+    /// bounded (15 s total, 5 s connect — [`infra::http_client`]). The tick
     /// is long because it is ~19 chunks sent back to back plus the capped
     /// backoff the rate-limited ones earn, and **nothing between two chunks
     /// looks at the token**. Shortening it is a question for the worker and
     /// its client, not for the grace.
     ///
-    /// [`providers::http_client`]: crate::providers::http_client
+    /// [`infra::http_client`]: crate::infra::http_client
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),

@@ -24,8 +24,8 @@ use yog_bootstrap::SecretUrl;
 use yog_core::domain::MetadataProvider;
 
 use crate::{
+    application::source::{FetchedMetadata, MetadataSource},
     error::SourceError,
-    source::{FetchedMetadata, MetadataSource},
 };
 
 /// Maximum number of IDs accepted by `getAssetBatch` in a single

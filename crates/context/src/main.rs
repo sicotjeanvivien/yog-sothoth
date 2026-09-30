@@ -1,17 +1,18 @@
 //! `yog-context` — token enrichment daemon.
 //!
-//! A standalone process: the 4th binary alongside `indexer`, `api`
-//! and `web`. It enriches the raw on-chain data the indexer records:
+//! One of the five backend binaries, beside `indexer`, `api`, `signals` and
+//! `archive`. It enriches the raw on-chain data the indexer records:
 //!
 //!   - the metadata worker polls `pools` for new mints and fetches
 //!     their identity (symbol, name, decimals, logo) from Helius DAS;
-//!   - the price worker periodically fetches USD prices from Jupiter.
+//!   - the price worker periodically fetches USD prices from Jupiter;
+//!   - the pool-account worker reads each pool's on-chain account and
+//!     fills the pool properties the indexer's events do not carry.
 //!
-//! Both persist through the `yog-persistence` repositories.
+//! All three persist through the `yog-persistence` repositories.
 //!
-//! Bootstrap follows the same shape as the other crates:
-//! `init_rustls -> dotenv -> init_tracing -> Config -> AppState ->
-//! run`.
+//! Startup: `init_rustls -> dotenv -> init_tracing -> metrics -> Config ->
+//! Daemon -> run`.
 //!
 //! ## Graceful shutdown
 //!
@@ -22,11 +23,10 @@
 //! which the workers still running are named in the logs and destroyed with the
 //! runtime.
 
+mod application;
 mod bootstrap;
 mod error;
-mod providers;
-mod source;
-mod workers;
+mod infra;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio_util::sync::CancellationToken;

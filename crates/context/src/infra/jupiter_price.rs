@@ -23,8 +23,8 @@ use yog_bootstrap::SecretKey;
 use yog_core::domain::PriceProvider;
 
 use crate::{
+    application::source::{FetchedPrice, PriceSource},
     error::SourceError,
-    source::{FetchedPrice, PriceSource},
 };
 
 /// Maximum number of `ids` accepted by Price API V3 in a single

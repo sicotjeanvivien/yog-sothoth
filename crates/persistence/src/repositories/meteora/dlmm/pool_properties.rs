@@ -157,10 +157,10 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
     ///
     /// It is not the only guard, and it is not the last one. It answers "is this
     /// payload mine?"; the worker screens "is this *pool* mine" upstream
-    /// (`context/src/workers/pool_account.rs` skips a pool whose decoded account
-    /// disagrees with the queue's protocol); and since migration 040 the schema
-    /// backs both — a generated `protocol` column and a composite foreign key
-    /// onto `pools (pool_address, protocol)`.
+    /// (`context/src/application/workers/pool_account.rs` skips a pool whose
+    /// decoded account disagrees with the queue's protocol); and since
+    /// migration 040 the schema backs both — a generated `protocol` column and
+    /// a composite foreign key onto `pools (pool_address, protocol)`.
     ///
     /// So a DLMM payload aimed at a cp-amm pool is unreachable through the
     /// worker *and* refused by the database. The constraint is there for what

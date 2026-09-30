@@ -1,4 +1,5 @@
-//! Metrics shared across `yog-context` providers (Helius DAS, Jupiter).
+//! Metrics shared across `yog-context` providers (Helius DAS, Jupiter,
+//! Solana RPC).
 //!
 //! Every chunk-level HTTP call records one `call_total` increment and
 //! one `call_duration_seconds` observation, labelled by provider and
@@ -16,7 +17,7 @@ impl ProviderMetrics {
     pub(crate) fn register_descriptions() {
         describe_counter!(
             CALL_TOTAL,
-            "Provider HTTP calls (one per chunk). Labels: provider=helius_das|jupiter, outcome=ok|http|decode"
+            "Provider HTTP calls (one per chunk). Labels: provider=helius_das|jupiter|solana_account, outcome=ok|http|rate_limited|decode"
         );
         describe_histogram!(
             CALL_DURATION,

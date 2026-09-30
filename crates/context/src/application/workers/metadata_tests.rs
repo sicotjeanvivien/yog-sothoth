@@ -25,8 +25,8 @@ use yog_core::{
 };
 
 use super::*;
+use crate::application::source::{FetchedMetadata, MetadataSource};
 use crate::error::SourceError;
-use crate::source::{FetchedMetadata, MetadataSource};
 
 // ── Helpers ───────────────────────────────────────────────────────────
 

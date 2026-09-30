@@ -68,17 +68,17 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "`init_db` takes the wrapped URL and exposes it at `Database::connect`",
     ),
     (
-        "crates/context/src/providers/helius_das.rs",
+        "crates/context/src/infra/helius_das.rs",
         1,
         "reqwest owns the request — the URL is the argument of `.post`",
     ),
     (
-        "crates/context/src/providers/jupiter_price.rs",
+        "crates/context/src/infra/jupiter_price.rs",
         1,
         "the key is the value of the `x-api-key` header, built on this line",
     ),
     (
-        "crates/context/src/providers/solana_account.rs",
+        "crates/context/src/infra/solana_account.rs",
         1,
         "reqwest owns the request — the URL is the argument of `.post`",
     ),
