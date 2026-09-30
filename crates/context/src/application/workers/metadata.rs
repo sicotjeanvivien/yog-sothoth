@@ -37,8 +37,8 @@ use tracing::{debug, info, warn};
 use yog_core::domain::{TokenMetadata, TokenMetadataRepository};
 
 use super::metadata_metrics::MetadataWorkerMetrics;
+use crate::application::source::{FetchedMetadata, MetadataSource};
 use crate::error::WorkerError;
-use crate::source::{FetchedMetadata, MetadataSource};
 
 pub struct MetadataWorker {
     repository: Arc<dyn TokenMetadataRepository>,

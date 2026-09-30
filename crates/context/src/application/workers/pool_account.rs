@@ -43,8 +43,8 @@ use tracing::{debug, info, warn};
 use yog_core::application::decode_pool_account;
 use yog_core::domain::{PoolAccountResolver, PoolRepository};
 
+use crate::application::source::PoolAccountSource;
 use crate::error::WorkerError;
-use crate::source::PoolAccountSource;
 
 /// Max pools resolved per tick. Matches `getMultipleAccounts`' 100-key cap,
 /// so a tick is a single RPC round-trip.

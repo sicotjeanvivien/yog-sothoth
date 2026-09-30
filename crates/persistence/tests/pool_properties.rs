@@ -635,12 +635,12 @@ async fn the_satellite_protocol_column_cannot_be_written(pool: PgPool) {
 /// holds.
 ///
 /// This scenario is **not reachable through the worker today**:
-/// `context/src/workers/pool_account.rs` skips any pool whose decoded account
-/// disagrees with the queue's protocol, before the resolver is called. What the
-/// test pins is the contract the repository now offers regardless of who calls
-/// it — a refused write, mapped to [`RepositoryError::Conflict`] like any other
-/// foreign-key violation, so a future caller inherits skip-and-log rather than a
-/// silent success.
+/// `context/src/application/workers/pool_account.rs` skips any pool whose
+/// decoded account disagrees with the queue's protocol, before the resolver is
+/// called. What the test pins is the contract the repository now offers
+/// regardless of who calls it — a refused write, mapped to
+/// [`RepositoryError::Conflict`] like any other foreign-key violation, so a
+/// future caller inherits skip-and-log rather than a silent success.
 ///
 /// Its mirror image, a *foreign payload* caught in Rust, is
 /// `each_resolver_rejects_the_other_protocols_payload`.

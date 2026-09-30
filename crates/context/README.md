@@ -13,20 +13,22 @@ roles), see [`crates/README.md`](../README.md).
 
 ```
 context/src/
-├── source/       ← ports: MetadataSource, PriceSource, PoolAccountSource
-├── providers/    ← adapters: HeliusDasClient, JupiterPriceClient,
-│                   SolanaAccountClient (+ provider metrics)
-├── workers/      ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
-│                   (+ per-worker metrics, and tick_outcome: TickOutcome, the
-│                   seven ways a pricing cycle ends — returning one is what
-│                   makes a silent exit fail to compile)
-├── bootstrap/    ← Config::load(), Daemon::new — composition root, and the
-│                   stop: run() joins its three workers under the shared grace
-├── error/        ← SourceError, WorkerError
+├── application/     ← what the daemon does once wired
+│   ├── source/      ← ports: MetadataSource, PriceSource, PoolAccountSource
+│   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
+│                      (+ per-worker metrics, and tick_outcome: TickOutcome, the
+│                      seven ways a pricing cycle ends — returning one is what
+│                      makes a silent exit fail to compile)
+├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
+│                      SolanaAccountClient (+ provider metrics; infra.rs holds
+│                      the shared http_client and its timeouts)
+├── bootstrap/       ← Config::load(), Daemon::new — composition root, and the
+│                      stop: run() joins its three workers under the shared grace
+├── error/           ← SourceError, WorkerError — shared by the layers
 └── main.rs
 ```
 
-The ports/providers split keeps the workers testable: a worker depends on a
+The ports/adapters split keeps the workers testable: a worker depends on a
 `source` trait, never on the concrete HTTP client. Providers chunk and fetch
 internally; a worker makes a single `fetch_*` call per tick and upserts what
 came back.
@@ -206,7 +208,7 @@ than hiding it.** Measured 14 September 2026: a tick takes 10.7–19.9 s against
 a rate-limiting Jupiter, so a stop taken inside one ends with
 `shutdown grace expired … tasks=["price worker"]` and the tick is still
 destroyed. That is not a missing timeout — every request is bounded by
-`providers::http_client` — it is ~19 chunks sent back to back plus backoff,
+`infra::http_client` — it is ~19 chunks sent back to back plus backoff,
 with nothing between two chunks looking at the token.
 
 ⚠️ Until 14 September 2026 the daemon selected on `ctrl_c()` and returned on it:
@@ -219,7 +221,7 @@ There is deliberately no in-process respawn logic: a worker never returns
 `Err` from its loop, and a panic exits the whole process, which the container
 restart policy relaunches with a fresh budget. The failure mode that policy
 cannot see — a provider call hanging forever with the process still alive —
-is closed by the shared `providers::http_client()`: every provider client
+is closed by the shared `infra::http_client()`: every provider client
 carries a total-request timeout (15 s) and a connect timeout (5 s), so a hang
 degrades into a tick-level `SourceError` absorbed like any other.
 

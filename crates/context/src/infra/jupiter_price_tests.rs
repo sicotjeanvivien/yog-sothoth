@@ -329,7 +329,7 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
     // of one that fails in 15 s with a diagnosis.
 
     // 1. Non-2xx → transport error, secret gone.
-    let raw_status = crate::providers::http_client()
+    let raw_status = crate::infra::http_client()
         .get(&url)
         .send()
         .await
@@ -346,7 +346,7 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
 
     // 2. 2xx with a body that is not JSON → decode error, secret gone, and
     //    the variant still distinguishes it from a transport failure.
-    let raw_decode = crate::providers::http_client()
+    let raw_decode = crate::infra::http_client()
         .get(&url)
         .send()
         .await

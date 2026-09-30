@@ -24,8 +24,8 @@ use solana_pubkey::Pubkey;
 use yog_bootstrap::SecretUrl;
 
 use super::metrics::ProviderMetrics;
+use crate::application::source::{PoolAccountSource, RawAccount};
 use crate::error::SourceError;
-use crate::source::{PoolAccountSource, RawAccount};
 use std::time::Instant;
 
 /// `getMultipleAccounts` accepts at most 100 keys per call.

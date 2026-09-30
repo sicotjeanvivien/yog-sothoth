@@ -22,8 +22,8 @@ use yog_core::{
 };
 
 use super::*;
+use crate::application::source::{FetchedPrice, PriceSource};
 use crate::error::SourceError;
-use crate::source::{FetchedPrice, PriceSource};
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
