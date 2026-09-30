@@ -5,8 +5,7 @@
 //! the bucket is S3-compatible — Scaleway Object Storage in production, MinIO
 //! in a local test — so changing provider means changing this file and its
 //! [`StoreSettings`], and nothing the run does. Which variables fill them is
-//! the configuration's business: `StoreSettings::load`, in
-//! `bootstrap/config/types/store_config.rs`.
+//! the configuration's business (`bootstrap/config.rs`).
 
 use std::sync::Arc;
 

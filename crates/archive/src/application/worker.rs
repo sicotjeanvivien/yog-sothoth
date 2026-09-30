@@ -65,8 +65,9 @@ impl ArchiveWorker {
                 return false;
             }
         };
-        metrics::record(&outcome, started.elapsed());
-        log_outcome(&outcome, started.elapsed());
+        let elapsed = started.elapsed();
+        metrics::record(&outcome, elapsed);
+        log_outcome(&outcome, elapsed);
         true
     }
 }
@@ -94,3 +95,7 @@ fn log_outcome(outcome: &RunOutcome, elapsed: Duration) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "worker_tests.rs"]
+mod tests;

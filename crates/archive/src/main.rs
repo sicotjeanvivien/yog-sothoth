@@ -36,9 +36,9 @@ async fn main() -> anyhow::Result<()> {
     info!("archiver initialized");
 
     // SIGTERM or Ctrl-C cancels the token; `ArchiveWorker::run` stops between
-    // two dumps, or kills the one in progress. `shutdown_signal` listens for both:
-    // under `docker compose stop` this process is PID 1, and SIGTERM is the
-    // signal that arrives.
+    // two dumps, or kills the one in progress. `shutdown_signal` listens for
+    // both: under `docker compose stop` this process is PID 1, and SIGTERM is
+    // the signal that arrives.
     let token = CancellationToken::new();
     let shutdown_token = token.clone();
     tokio::spawn(async move {

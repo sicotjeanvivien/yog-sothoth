@@ -17,7 +17,7 @@ For the workspace-level picture, see [`crates/README.md`](../README.md).
 
 ```
 archive/src/
-├── main.rs            ← bootstrap: tracing → Config → init_metrics → Daemon →
+├── main.rs            ← bootstrap: tracing → init_metrics → Config → Daemon →
 │                         shutdown token → run
 ├── application/       ← what the daemon does once wired
 │   ├── archiver.rs    ← one run, ending in a RunOutcome that decides the signal
@@ -31,9 +31,7 @@ archive/src/
 │   ├── store.rs       ← the bucket and its StoreSettings — the only file that knows it is S3
 │   └── versions.rs    ← the server's versions, over a connection opened per run
 └── bootstrap/
-    ├── config.rs      ← Config::load (every ARCHIVE_* variable)
-    ├── config/types/
-    │   └── store_config.rs ← StoreSettings::load (the ARCHIVE_STORE_* variables)
+    ├── config.rs      ← Config::load (every ARCHIVE_* variable, the bucket's included)
     ├── daemon.rs      ← assembles the worker and runs it
     └── daemon/
         └── init.rs    ← init_heartbeat, init_store (signals a bad bucket before exiting)
@@ -184,3 +182,10 @@ what it is told. Every failure case asserts the reason, an empty bucket, and
 exactly one failure signal carrying that reason. They run one at a time: a
 script written then executed while another test forks can fail with
 `ETXTBSY`.
+
+The loop's tests (`application/worker_tests.rs`) need no script: a version
+read that sleeps in tokio's paused time, then refuses, gives each run the
+length the test chooses. They pin the three things the loop promises — the
+next dump a full interval after the last one *ended* (`reset`), no dump when
+a stop ties with a due tick (`biased`), and a run left behind at the shutdown
+grace — and each turns red when its line is removed.
