@@ -606,8 +606,8 @@ born**, not where it is later logged: `TransactionFetcher` and
 `NetworkStatusReporter` hold the endpoint for that single purpose, and
 `SubscriptionWorker` already had it. Nothing carrying a URL reaches a `warn!`,
 so no log site has a rule to remember — the placement `yog-context` arrived at
-in `error/source.rs`, after nine call sites each recopied an unredacted error
-and leaked its API key into 38 log lines.
+in `infra/source_error.rs`, after nine call sites each recopied an unredacted
+error and leaked its API key into 38 log lines.
 
 It replaces `utils/redact.rs`, deleted here, whose `redact_api_key` searched for
 the literal `api-key=`. That function could not see a credential in a path, and

@@ -172,8 +172,8 @@ before falling back to skip-and-log.
 **Never build `SourceError::Http` or `SourceError::Decode` from a
 `reqwest::Error` by hand.** Use `?`, which goes through
 `impl From<reqwest::Error> for SourceError` in `infra/source_error.rs` —
-with the clients, since it is transport knowledge; `error/` keeps only the
-enum the ports return.
+with the clients, since it is transport knowledge; `error/source.rs` keeps
+only the enum the ports return.
 
 That conversion calls `reqwest::Error::without_url()` before formatting, and
 that is the only thing standing between an API key and the logs: reqwest puts
