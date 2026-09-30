@@ -138,6 +138,15 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         1,
         "sqlx owns the pool — the URL is the argument of `Database::connect`",
     ),
+    (
+        "crates/signals/src/bootstrap/daemon/init.rs",
+        1,
+        "sqlx owns the pool — the URL is the argument of `Database::connect_with` \
+         for the materialisation alarm's own pool. The same address as \
+         `daemon.rs`'s, exposed a second time on purpose: the alarm reads under \
+         its own `statement_timeout` rather than through the pool it watches \
+         over",
+    ),
 ];
 
 /// Repository root, reached from this crate's manifest directory.
