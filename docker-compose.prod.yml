@@ -76,8 +76,10 @@
 #   - a volume created WITH it is tuned to 832 MB, which gives
 #     max_connections = 25 (measured on 2.27.1-pg16, and again on 2.30.1-pg18
 #     on 25 September 2026). The four
-#     daemons hold pools of ten connections each, so under load the pools
-#     would be refused "too many clients".
+#     daemons hold pools of ten connections each — yog-signals one more, the
+#     materialisation alarm's own pool — and yog-archive one while a dump
+#     runs: 42 in all, so under load the pools would be refused "too many
+#     clients".
 # Command-line `-c` settings override postgresql.conf, so these hold whichever
 # way the volume was created. 256MB of shared_buffers inside 832M leaves room
 # for 50 connections at 4MB of work_mem each and for the compression jobs'
