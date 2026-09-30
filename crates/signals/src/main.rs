@@ -1,9 +1,9 @@
 //! `yog-signals` — the Signal Engine daemon.
 //!
-//! The 5th backend binary alongside `indexer`, `api`, `context` and the
-//! `web` BFF. It runs the detectors from the `yog-signals` library on their
-//! own cadences and persists the signals they emit to the `signals` table,
-//! under the least-privilege `yog_signals` role.
+//! One of the five backend binaries, beside `indexer`, `api`, `context` and
+//! `archive`. It runs its detectors on their own cadences and persists the
+//! signals they emit to the `signals` table, under the least-privilege
+//! `yog_signals` role.
 //!
 //! Bootstrap follows the same shape as the other crates:
 //! `init_rustls -> dotenv -> init_tracing -> metrics -> Config -> Daemon ->
