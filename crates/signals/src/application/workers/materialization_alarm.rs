@@ -24,12 +24,21 @@ use yog_core::domain::{MaterializationBacklog, MaterializationBacklogRepository}
 use super::materialization_alarm_metrics::AlarmMetrics;
 use crate::application::materialization::{Failure, Verdict, hours_minutes};
 
-/// How long one read of the backlogs may take before the check fails with
-/// `unreadable`. The pool sets no `statement_timeout`: a read stuck on a lock
-/// would otherwise hold the check forever, and Healthchecks.io would report a
-/// stopped daemon instead of the reason. Measured at 3.5 ms warm on the dev
-/// database (29 September 2026), so a minute is margin, not a budget.
-const READ_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long Postgres lets one read of the backlogs run before cancelling it —
+/// the `statement_timeout` of the alarm's own pool, opened by the daemon with
+/// one connection. A read stuck on a lock is ended **by the server**, so its
+/// connection comes back usable: stopping only the client's wait would leave
+/// the statement running and the connection held, one more at every check.
+/// Measured at 3.5 ms warm on the dev database (29 September 2026), so a
+/// minute is margin, not a budget.
+pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// How long the alarm waits for a read before failing the check with
+/// `unreadable` on its own — for a server that cannot answer at all, not even
+/// to cancel. Longer than [`STATEMENT_TIMEOUT`] by construction, so that the
+/// server's cancellation, which frees the connection, comes first; otherwise
+/// Healthchecks.io would report a stopped daemon instead of the reason.
+const READ_TIMEOUT: Duration = Duration::from_secs(STATEMENT_TIMEOUT.as_secs() + 30);
 
 /// The two numbers an operator tunes.
 #[derive(Debug, Clone, Copy)]

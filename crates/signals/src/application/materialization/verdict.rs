@@ -3,7 +3,7 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use yog_core::domain::MaterializationBacklog;
 
-use super::Failure;
+use super::{Failure, LateAggregate};
 
 /// How one check ended — and what the heartbeat is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,7 +31,13 @@ impl Verdict {
         }
         let aggregates: Vec<_> = backlogs
             .iter()
-            .filter_map(|b| Some((b.aggregate.clone(), b.late_by(now, max_wait)?)))
+            .filter_map(|b| {
+                Some(LateAggregate {
+                    name: b.aggregate.clone(),
+                    pending_for: b.late_by(now, max_wait)?,
+                    watermark: b.watermark,
+                })
+            })
             .collect();
         if aggregates.is_empty() {
             Self::OnTime
@@ -58,7 +64,7 @@ impl Verdict {
     pub(crate) fn state(&self) -> (&'static str, Vec<&str>) {
         let names = match self {
             Self::Failed(Failure::Late { aggregates, .. }) => {
-                aggregates.iter().map(|(name, _)| name.as_str()).collect()
+                aggregates.iter().map(|late| late.name.as_str()).collect()
             }
             _ => Vec::new(),
         };

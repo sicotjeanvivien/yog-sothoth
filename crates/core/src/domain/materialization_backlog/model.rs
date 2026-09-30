@@ -15,8 +15,8 @@ pub struct MaterializationBacklog {
     /// The aggregate's view name.
     pub aggregate: String,
     /// Where its materialisation ends. `None` while it has never materialised
-    /// a single bucket. Reported for the diagnosis; the verdict does not read
-    /// it.
+    /// a single bucket. For the diagnosis — the alarm names it when an
+    /// aggregate is late — and not part of the lateness rule.
     pub watermark: Option<DateTime<Utc>>,
     /// The oldest raw row the aggregate has not materialised yet. `None` when
     /// nothing is waiting.
@@ -46,11 +46,6 @@ impl MaterializationBacklog {
     /// aggregate with nothing pending is never late.
     pub fn late_by(&self, now: DateTime<Utc>, max_wait: Duration) -> Option<Duration> {
         self.pending_for(now).filter(|wait| *wait > max_wait)
-    }
-
-    /// Whether a row has waited longer than `max_wait` at `now`.
-    pub fn is_late(&self, now: DateTime<Utc>, max_wait: Duration) -> bool {
-        self.late_by(now, max_wait).is_some()
     }
 }
 

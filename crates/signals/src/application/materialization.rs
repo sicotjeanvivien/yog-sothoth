@@ -5,5 +5,5 @@
 mod failure;
 mod verdict;
 
-pub(crate) use failure::{Failure, hours_minutes};
+pub(crate) use failure::{Failure, LateAggregate, hours_minutes};
 pub(crate) use verdict::Verdict;

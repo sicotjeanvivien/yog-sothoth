@@ -67,8 +67,8 @@ async fn every_aggregate_within_the_limit_signals_success() {
     assert_eq!(signals(&heartbeat), ["success"]);
 }
 
-/// The late aggregate is named with its wait and the limit; the one on time
-/// and the one at rest are not named at all.
+/// The late aggregate is named with its wait, where its materialisation ends,
+/// and the limit; the one on time and the one at rest are not named at all.
 #[tokio::test]
 async fn a_late_aggregate_fails_the_check_by_name() {
     let (alarm, heartbeat) = alarm(Ok(vec![
@@ -81,7 +81,28 @@ async fn a_late_aggregate_fails_the_check_by_name() {
 
     assert_eq!(
         signals(&heartbeat),
-        ["failure: late (limit 4h00m): swaps_hourly pending for 5h12m"]
+        [
+            "failure: late (limit 4h00m): swaps_hourly pending for 5h12m, materialised up to 2026-01-15 06:00 UTC"
+        ]
+    );
+}
+
+/// An aggregate that never materialised a bucket says so — not a date, which
+/// would send the operator looking for a refresh that stopped rather than one
+/// that never ran.
+#[tokio::test]
+async fn a_late_aggregate_never_materialised_says_so() {
+    let never = MaterializationBacklog {
+        watermark: None,
+        ..aggregate("claims_hourly", Some(at(6, 48)))
+    };
+    let (alarm, heartbeat) = alarm(Ok(vec![never]));
+
+    alarm.check(at(12, 0)).await;
+
+    assert_eq!(
+        signals(&heartbeat),
+        ["failure: late (limit 4h00m): claims_hourly pending for 5h12m, never materialised"]
     );
 }
 
@@ -167,7 +188,7 @@ async fn a_read_that_never_answers_fails_the_check() {
     assert_eq!(verdict.label(), "unreadable");
     assert_eq!(
         signals(&heartbeat),
-        ["failure: unreadable: no answer within 60 s"]
+        ["failure: unreadable: no answer within 90 s"]
     );
 }
 

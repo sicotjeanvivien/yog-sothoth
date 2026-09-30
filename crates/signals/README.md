@@ -137,13 +137,20 @@ estimate.
 **The alarm is Healthchecks.io, not Prometheus** — nothing scrapes `/metrics`
 in production. Each check ends in a ping to
 `SIGNALS_MATERIALIZATION_HEARTBEAT_URL`: success when nothing is late,
-`/fail` naming each late aggregate and its wait, or `/fail` with the database's
-error when the backlogs cannot be read — or does not answer within a minute
-(the pool sets no `statement_timeout`) — or `/fail` saying *nothing reported*
-when the read succeeds but names no aggregate: the function no longer finds
-them in TimescaleDB's catalog, and a success there would be a check watching
-nothing. A stopped daemon is the silence the
-check notices on its own. The heartbeat is `yog_bootstrap`'s, shared with
+`/fail` naming each late aggregate, its wait and where its materialisation
+ends (or that it never materialised), or `/fail` with the database's error
+when the backlogs cannot be read, or `/fail` saying *nothing reported* when
+the read succeeds but names no aggregate: the function no longer finds them in
+TimescaleDB's catalog, and a success there would be a check watching nothing.
+A stopped daemon is the silence the check notices on its own.
+
+⚠️ **The alarm reads through its own pool**, of one connection, opened with a
+60 s `statement_timeout`. A read stuck on a lock is then cancelled by Postgres,
+and fails the check as `unreadable`. Timing out on the client side alone would
+not be enough: the statement keeps running on the server, and the connection
+stays held, one more at every check, taken from the detectors if the pool were
+shared. The alarm also stops waiting on its own after 90 s, for a server that
+cannot answer at all. The heartbeat is `yog_bootstrap`'s, shared with
 `yog-archive`. Create the check with a **10-minute period and a 20-minute
 grace**.
 

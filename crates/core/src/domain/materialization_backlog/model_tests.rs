@@ -25,7 +25,7 @@ fn the_wait_runs_from_the_oldest_pending_row_to_now() {
 fn nothing_pending_is_never_late() {
     let backlog = pending_since(None);
     assert_eq!(backlog.pending_for(at(23)), None);
-    assert!(!backlog.is_late(at(23), Duration::zero()));
+    assert!(backlog.late_by(at(23), Duration::zero()).is_none());
 }
 
 #[test]
@@ -38,8 +38,12 @@ fn a_row_from_the_future_waits_zero_rather_than_a_negative_time() {
 #[test]
 fn late_means_strictly_beyond_the_limit() {
     let backlog = pending_since(Some(at(7)));
-    assert!(!backlog.is_late(at(11), Duration::hours(4)));
-    assert!(backlog.is_late(at(11) + Duration::seconds(1), Duration::hours(4)));
+    assert!(backlog.late_by(at(11), Duration::hours(4)).is_none());
+    assert!(
+        backlog
+            .late_by(at(11) + Duration::seconds(1), Duration::hours(4))
+            .is_some()
+    );
 }
 
 /// A never-materialised aggregate is judged like any other: by its oldest
@@ -51,8 +55,8 @@ fn a_never_materialised_aggregate_is_late_only_once_its_rows_have_waited() {
         watermark: None,
         oldest_pending_at: Some(at(9)),
     };
-    assert!(!backlog.is_late(at(11), Duration::hours(4)));
-    assert!(backlog.is_late(at(14), Duration::hours(4)));
+    assert!(backlog.late_by(at(11), Duration::hours(4)).is_none());
+    assert!(backlog.late_by(at(14), Duration::hours(4)).is_some());
 }
 
 #[test]

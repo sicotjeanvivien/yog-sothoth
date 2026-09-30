@@ -34,7 +34,9 @@
 --
 -- SECURITY DEFINER, so the caller needs EXECUTE and nothing else: it returns
 -- two timestamps per aggregate, not rows. `search_path` is pinned, as every
--- SECURITY DEFINER function must. EXECUTE goes to `yog_signals` alone.
+-- SECURITY DEFINER function must, with `pg_temp` LAST: left out, the caller's
+-- temporary schema is searched FIRST for tables and types, and could shadow
+-- the `::TIMESTAMPTZ` below. EXECUTE goes to `yog_signals` alone.
 --
 -- ⚠️ Assumes a TIMESTAMPTZ time dimension, which every hypertable here has:
 -- `_timescaledb_functions.to_timestamp` reads the watermark as microseconds.
@@ -47,7 +49,7 @@ RETURNS TABLE (
     oldest_pending_at TIMESTAMPTZ
 )
 LANGUAGE plpgsql STABLE SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     cagg RECORD;

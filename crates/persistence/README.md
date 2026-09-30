@@ -37,6 +37,8 @@ persistence/
 │   │   ├── signal/, swap_flow/, liquidity_flow/, pool_price_snapshot/
 │   │   ├── token_metadata/, token_price/, network_status/, watched_pool/
 │   │   ├── announcement/
+│   │   ├── materialization_backlog/ (reads `yog_cagg_materialization_backlog()`,
+│   │   │                     migration 013)
 │   │   └── event_freshness.rs
 │   └── bin/
 │       ├── migrate.rs       ← yog-migrate binary (migrate / setup-roles /

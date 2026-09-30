@@ -11,12 +11,12 @@ use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use yog_core::domain::{
-    LiquidityFlowRepository, MaterializationBacklogRepository, PoolPriceSnapshotRepository,
-    Protocol, SignalDetector, SignalRepository, SwapFlowRepository,
+    LiquidityFlowRepository, PoolPriceSnapshotRepository, Protocol, SignalDetector,
+    SignalRepository, SwapFlowRepository,
 };
 use yog_persistence::{
-    Database, PgLiquidityFlowRepository, PgMaterializationBacklogRepository,
-    PgPoolPriceSnapshotRepository, PgSignalRepository, PgSwapFlowRepository,
+    Database, PgLiquidityFlowRepository, PgPoolPriceSnapshotRepository, PgSignalRepository,
+    PgSwapFlowRepository,
 };
 
 mod init;
@@ -54,9 +54,7 @@ impl Daemon {
         let snapshot_repository: Arc<dyn PoolPriceSnapshotRepository> =
             Arc::new(PgPoolPriceSnapshotRepository::new(pool.clone()));
         let liquidity_flow_repository: Arc<dyn LiquidityFlowRepository> =
-            Arc::new(PgLiquidityFlowRepository::new(pool.clone()));
-        let backlog_repository: Arc<dyn MaterializationBacklogRepository> =
-            Arc::new(PgMaterializationBacklogRepository::new(pool));
+            Arc::new(PgLiquidityFlowRepository::new(pool));
 
         let flow_imbalance: Arc<dyn SignalDetector> = Arc::new(FlowImbalanceDetector::new(
             flow_repository,
@@ -105,7 +103,8 @@ impl Daemon {
             signal_repository,
             vec![flow_imbalance, price_oracle_deviation, tvl_drain],
         );
-        let alarm = init_materialization_alarm(backlog_repository, &config.materialization_alarm)?;
+        let alarm =
+            init_materialization_alarm(&config.database_url, &config.materialization_alarm).await?;
 
         Ok(Self { engine, alarm })
     }

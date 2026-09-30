@@ -8,7 +8,9 @@ mod materialization_alarm_metrics;
 mod signal_engine;
 mod signal_engine_metrics;
 
-pub(crate) use materialization_alarm::{MaterializationAlarm, MaterializationAlarmSettings};
+pub(crate) use materialization_alarm::{
+    MaterializationAlarm, MaterializationAlarmSettings, STATEMENT_TIMEOUT,
+};
 pub(crate) use materialization_alarm_metrics::{AlarmMetrics, HEARTBEAT_FAILURES};
 pub(crate) use signal_engine::SignalEngine;
 pub(crate) use signal_engine_metrics::EngineMetrics;
