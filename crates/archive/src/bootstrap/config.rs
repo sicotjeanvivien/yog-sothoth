@@ -7,11 +7,12 @@
 
 use std::{path::PathBuf, time::Duration};
 
-use yog_bootstrap::{ConfigError, SecretUrl, duration_var, optional, required_secret_url};
+use yog_bootstrap::{
+    ConfigError, SecretUrl, duration_var, optional, required, required_secret_key,
+    required_secret_url,
+};
 
-mod types;
-
-pub(crate) use types::StoreConfig;
+use crate::infra::StoreSettings;
 
 /// Six hours between dumps: the largest hole the history can take when the
 /// database is lost, since the indexer cannot re-ingest the past.
@@ -34,7 +35,7 @@ pub(crate) struct Config {
     pub(crate) interval: Duration,
 
     /// The bucket the dumps go to.
-    pub(crate) store: StoreConfig,
+    pub(crate) store: StoreSettings,
 
     /// The dead man's switch. Required: an archiver that fails in silence
     /// looks exactly like one that works. A `SecretUrl` because the check's
@@ -56,12 +57,24 @@ impl Config {
                 "ARCHIVE_INTERVAL_SECS",
                 DEFAULT_INTERVAL_SECS,
             )?)?,
-            store: StoreConfig::load()?,
+            store: store_settings()?,
             heartbeat_url: required_secret_url("ARCHIVE_HEARTBEAT_URL")?,
             pg_dump: program("ARCHIVE_PG_DUMP", "pg_dump"),
             pg_restore: program("ARCHIVE_PG_RESTORE", "pg_restore"),
         })
     }
+}
+
+/// Every `ARCHIVE_STORE_*` variable, all required. What each one is, and what
+/// the access key must be allowed to do, is said on [`StoreSettings`].
+fn store_settings() -> Result<StoreSettings, ConfigError> {
+    Ok(StoreSettings {
+        url: required("ARCHIVE_STORE_URL")?,
+        bucket: required("ARCHIVE_STORE_BUCKET")?,
+        region: required("ARCHIVE_STORE_REGION")?,
+        access_key: required_secret_key("ARCHIVE_STORE_ACCESS_KEY")?,
+        secret_key: required_secret_key("ARCHIVE_STORE_SECRET_KEY")?,
+    })
 }
 
 /// A client program: the variable when set, the plain name resolved on

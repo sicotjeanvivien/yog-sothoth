@@ -3,10 +3,10 @@
 //! `yog_bootstrap`'s ([`yog_bootstrap::Heartbeat`]), shared with `yog-signals`.
 //! The dump itself is `yog_persistence`'s ([`yog_persistence::PgTools`]). The
 //! run, which decides what to call and what each outcome signals, is
-//! [`crate::archiver`].
+//! [`crate::application`].
 
 mod store;
 mod versions;
 
-pub(crate) use store::open_store;
+pub(crate) use store::{StoreSettings, open_store};
 pub(crate) use versions::PgVersions;

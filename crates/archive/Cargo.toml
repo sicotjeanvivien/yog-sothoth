@@ -38,3 +38,7 @@ tempfile = "3"
 # The fake bucket of the tests implements `ObjectStore`, whose listing is a
 # `BoxStream`.
 futures-util = { workspace = true }
+# `start_paused`: lets the loop's tests run an interval, a long run and the
+# shutdown grace without waiting for them. A feature of a crate already in the
+# tree, dev-only.
+tokio = { workspace = true, features = ["test-util"] }

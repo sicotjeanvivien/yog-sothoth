@@ -10,10 +10,9 @@
 //! choose the dump and the target; the proven sequence is in
 //! `crates/persistence/README.md`, *Backup and restore*.
 
-mod archiver;
+mod application;
 mod bootstrap;
 mod infra;
-mod metrics;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio_util::sync::CancellationToken;
@@ -36,10 +35,10 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to initialize the archiver"))?;
     info!("archiver initialized");
 
-    // SIGTERM or Ctrl-C cancels the token; `Daemon::run` stops between two
-    // dumps, or kills the one in progress. `shutdown_signal` listens for both:
-    // under `docker compose stop` this process is PID 1, and SIGTERM is the
-    // signal that arrives.
+    // SIGTERM or Ctrl-C cancels the token; `ArchiveWorker::run` stops between
+    // two dumps, or kills the one in progress. `shutdown_signal` listens for
+    // both: under `docker compose stop` this process is PID 1, and SIGTERM is
+    // the signal that arrives.
     let token = CancellationToken::new();
     let shutdown_token = token.clone();
     tokio::spawn(async move {
@@ -47,7 +46,8 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.cancel();
     });
 
-    daemon.run(token).await
+    daemon.run(token).await;
+    Ok(())
 }
 
 /// Install the Prometheus exporter as the global `metrics` recorder, and
@@ -61,6 +61,6 @@ fn init_metrics() -> anyhow::Result<()> {
         .with_http_listener(([0, 0, 0, 0], 9000))
         .install()
         .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))?;
-    metrics::register_descriptions();
+    application::metrics::register_descriptions();
     Ok(())
 }

@@ -1,4 +1,5 @@
-//! How a run ended, and why a failed one failed.
+//! How a run ended, and why a failed one failed — and, inside a run, why it
+//! stopped early.
 
 /// How a run ended: a dump in the bucket, a stop, or a failure. Three
 /// cases, and every `match` on it — the signal, the log, the metrics — has
@@ -80,5 +81,19 @@ impl RunFailure {
 
     pub(crate) fn store_failed(reason: impl std::fmt::Display) -> Self {
         Self::new(FailureKind::StoreFailed, reason)
+    }
+}
+
+/// Why a run stopped before archiving. Internal to the run: a stop is not a
+/// failure, and [`Archiver::archive`](super::archiver::Archiver::archive)
+/// turns each into its [`RunOutcome`].
+pub(super) enum Interrupted {
+    Cancelled,
+    Failed(RunFailure),
+}
+
+impl From<RunFailure> for Interrupted {
+    fn from(failure: RunFailure) -> Self {
+        Self::Failed(failure)
     }
 }
