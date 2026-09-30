@@ -18,17 +18,19 @@ and the `Signal`/`Severity` domain types live in
 ```
 signals/src/
 ├── application/   ← what the daemon does once wired
-│   ├── detectors/ ← the detection rules, one module per detector
+│   ├── detectors/ ← the signals' rules, one module per detector
 │   │   ├── flow_imbalance.rs
 │   │   ├── price_oracle_deviation.rs
 │   │   ├── tvl_drain.rs
 │   │   └── metrics.rs ← considered and skipped counters, SkipReason
-│   └── workers/   ← the loops that run until the stop
-│       ├── signal_engine.rs         ← one poll loop per detector, dedup, persist
-│       ├── materialization_alarm.rs ← the aggregates' alarm (see below):
-│       │                              read, measure, judge, signal
-│       ├── materialization_verdict.rs ← Verdict / Failure, what a failure says
-│       └── *_metrics.rs             ← beside the loop they measure
+│   ├── materialization/ ← the alarm's rule (see below)
+│   │   ├── verdict.rs ← Verdict: how one check of the backlogs ends
+│   │   └── failure.rs ← Failure: why it failed, and what `/fail` says
+│   ├── workers/   ← the loops that run until the stop
+│   │   ├── signal_engine.rs         ← one poll loop per detector, dedup, persist
+│   │   ├── materialization_alarm.rs ← read, measure, judge, signal
+│   │   └── *_metrics.rs             ← beside the loop they measure
+│   └── metrics_probe.rs ← test harness: reads a counter or a gauge
 ├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
 │                    Daemon (daemon/init.rs: the alarm's wiring)
 └── main.rs

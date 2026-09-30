@@ -19,10 +19,10 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use yog_bootstrap::Heartbeat;
-use yog_core::domain::MaterializationBacklogRepository;
+use yog_core::domain::{MaterializationBacklog, MaterializationBacklogRepository};
 
 use super::materialization_alarm_metrics::AlarmMetrics;
-use super::materialization_verdict::{Failure, Verdict, hours_minutes};
+use crate::application::materialization::{Failure, Verdict, hours_minutes};
 
 /// How long one read of the backlogs may take before the check fails with
 /// `unreadable`. The pool sets no `statement_timeout`: a read stuck on a lock
@@ -74,17 +74,7 @@ impl MaterializationAlarm {
         // After a slow check, the next one waits a full interval rather than
         // firing the missed ones back to back — each would read and ping again.
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        info!(
-            interval = ?self.settings.interval,
-            max_wait = %hours_minutes(self.settings.max_wait),
-            heartbeat = self.heartbeat.is_some(),
-            "materialisation alarm started"
-        );
-        if self.heartbeat.is_none() {
-            info!(
-                "no heartbeat configured — a late aggregate is logged and measured, not signalled"
-            );
-        }
+        self.log_start();
 
         let mut previous: Option<Verdict> = None;
         loop {
@@ -108,12 +98,7 @@ impl MaterializationAlarm {
         let read = tokio::time::timeout(READ_TIMEOUT, self.repository.backlogs()).await;
         let verdict = match read {
             Ok(Ok(backlogs)) => {
-                for backlog in &backlogs {
-                    let seconds = backlog
-                        .pending_for(now)
-                        .map_or(0, |wait| wait.num_seconds());
-                    AlarmMetrics::record_pending(&backlog.aggregate, seconds);
-                }
+                record_pending(&backlogs, now);
                 Verdict::judge(&backlogs, now, self.settings.max_wait)
             }
             Ok(Err(e)) => Verdict::Failed(Failure::Unreadable(e.to_string())),
@@ -131,6 +116,32 @@ impl MaterializationAlarm {
             }
         }
         verdict
+    }
+
+    /// Say what the alarm watches, once, and whether anyone will be told.
+    fn log_start(&self) {
+        info!(
+            interval = ?self.settings.interval,
+            max_wait = %hours_minutes(self.settings.max_wait),
+            heartbeat = self.heartbeat.is_some(),
+            "materialisation alarm started"
+        );
+        if self.heartbeat.is_none() {
+            info!(
+                "no heartbeat configured — a late aggregate is logged and measured, not signalled"
+            );
+        }
+    }
+}
+
+/// Set every aggregate's pending gauge — to **zero** when no row waits, so a
+/// gauge that went up comes back down once the aggregate catches up.
+fn record_pending(backlogs: &[MaterializationBacklog], now: DateTime<Utc>) {
+    for backlog in backlogs {
+        let seconds = backlog
+            .pending_for(now)
+            .map_or(0, |wait| wait.num_seconds());
+        AlarmMetrics::record_pending(&backlog.aggregate, seconds);
     }
 }
 

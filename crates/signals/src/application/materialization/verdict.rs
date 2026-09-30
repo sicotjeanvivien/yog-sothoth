@@ -1,7 +1,9 @@
-//! How one check of the backlogs ends, and what it says when it fails.
+//! How one check of the backlogs ends.
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use yog_core::domain::MaterializationBacklog;
+
+use super::Failure;
 
 /// How one check ended — and what the heartbeat is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,24 +12,6 @@ pub(crate) enum Verdict {
     OnTime,
     /// Something is wrong, and [`Failure::reason`] says what.
     Failed(Failure),
-}
-
-/// Why a check failed. Every variant has a reason to give — there is no
-/// failure without one to put in `/fail`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Failure {
-    /// These aggregates have a row waiting beyond `limit`, with how long.
-    Late {
-        aggregates: Vec<(String, ChronoDuration)>,
-        limit: ChronoDuration,
-    },
-    /// The backlogs could not be read; the text says why.
-    Unreadable(String),
-    /// The read succeeded and reported no aggregate at all — the function no
-    /// longer finds them in TimescaleDB's catalog. Not `Unreadable`: the
-    /// database answered, and a connection or privilege fault would be the
-    /// wrong thing to look for.
-    NothingReported,
 }
 
 impl Verdict {
@@ -71,7 +55,7 @@ impl Verdict {
 
     /// What must change for the logs to speak again: the outcome, or which
     /// aggregates are late — not how long they have been.
-    pub(super) fn state(&self) -> (&'static str, Vec<&str>) {
+    pub(crate) fn state(&self) -> (&'static str, Vec<&str>) {
         let names = match self {
             Self::Failed(Failure::Late { aggregates, .. }) => {
                 aggregates.iter().map(|(name, _)| name.as_str()).collect()
@@ -80,27 +64,4 @@ impl Verdict {
         };
         (self.label(), names)
     }
-}
-
-impl Failure {
-    /// What the failure says, in the check's log and in ours.
-    pub(crate) fn reason(&self) -> String {
-        match self {
-            Self::Late { aggregates, limit } => {
-                let names = aggregates
-                    .iter()
-                    .map(|(name, wait)| format!("{name} pending for {}", hours_minutes(*wait)))
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                format!("late (limit {}): {names}", hours_minutes(*limit))
-            }
-            Self::Unreadable(error) => format!("unreadable: {error}"),
-            Self::NothingReported => "nothing reported: no continuous aggregate found".to_string(),
-        }
-    }
-}
-
-pub(super) fn hours_minutes(duration: ChronoDuration) -> String {
-    let minutes = duration.num_minutes();
-    format!("{}h{:02}m", minutes / 60, minutes % 60)
 }

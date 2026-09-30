@@ -3,11 +3,6 @@ mod metrics;
 mod price_oracle_deviation;
 mod tvl_drain;
 
-/// Shared harness for the tests that assert a skip was *counted*, not merely
-/// not-signalled.
-#[cfg(test)]
-mod metrics_probe;
-
 pub use flow_imbalance::{FlowImbalanceDetector, FlowImbalanceSettings};
 pub(crate) use metrics::DetectorMetrics;
 pub use price_oracle_deviation::{PriceOracleDeviationDetector, PriceOracleDeviationSettings};

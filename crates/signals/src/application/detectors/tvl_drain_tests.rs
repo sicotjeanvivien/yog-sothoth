@@ -209,7 +209,7 @@ async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
 // `unpriced` says its *window* could not. Collapsing them would leave an
 // operator unable to tell a dead `yog-context` from a token nobody prices.
 
-use super::super::metrics_probe::{Snapshot, counter, snapshot};
+use crate::application::metrics_probe::{Snapshot, counter, snapshot};
 
 fn snapshot_one_evaluation(det: TvlDrainDetector) -> Snapshot {
     snapshot(|| async move {

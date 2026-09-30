@@ -11,6 +11,7 @@ use yog_bootstrap::RecordingHeartbeat;
 use yog_core::{RepositoryError, RepositoryResult, domain::MaterializationBacklog};
 
 use super::*;
+use crate::application::metrics_probe::{gauge, snapshot};
 
 fn at(hour: u32, minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, 15, hour, minute, 0).unwrap()
@@ -215,4 +216,31 @@ async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
         signals(&heartbeat).is_empty(),
         "a cut check signals nothing"
     );
+}
+
+/// The pending gauge of `aggregate` after one `record_pending` at 10:30.
+fn pending_gauge(backlog: MaterializationBacklog) -> Option<f64> {
+    let name = backlog.aggregate.clone();
+    let snapshot = snapshot(|| async move { record_pending(&[backlog], at(10, 30)) });
+    gauge(
+        &snapshot,
+        "yog_signals_materialization_pending_seconds",
+        &[("aggregate", &name)],
+    )
+}
+
+#[test]
+fn a_waiting_row_sets_the_gauge_to_its_wait() {
+    let gauge = pending_gauge(aggregate("swaps_hourly", Some(at(9, 0))));
+
+    assert_eq!(gauge, Some(5400.0));
+}
+
+#[test]
+fn an_aggregate_with_nothing_waiting_brings_the_gauge_back_to_zero() {
+    let gauge = pending_gauge(aggregate("claims_hourly", None));
+
+    // `Some(0)`, not `None`: a gauge left unset would keep its last reading,
+    // and an aggregate that caught up would still read late on `/metrics`.
+    assert_eq!(gauge, Some(0.0));
 }
