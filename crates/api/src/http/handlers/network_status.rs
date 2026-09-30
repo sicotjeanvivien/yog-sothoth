@@ -10,8 +10,7 @@
 //! (thresholds) lives in `core` (`FreshnessStatus`), keeping the
 //! handler free of business logic.
 
-use crate::bootstrap::AppState;
-use crate::http::{dto::NetworkStatusResponse, error::ApiError};
+use crate::http::{AppState, dto::NetworkStatusResponse, error::ApiError};
 use axum::{Json, extract::State};
 
 /// `GET /api/network/status`

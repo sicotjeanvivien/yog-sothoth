@@ -30,7 +30,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     (
         "crates/api/src/bootstrap/app_state.rs",
         1,
-        "sqlx owns the pool — the URL is the argument of `Database::connect`",
+        "sqlx owns the pool — the URL is the argument of `Database::connect_with`",
     ),
     (
         "crates/archive/src/infra/store.rs",

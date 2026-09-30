@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // ── Application state ─────────────────────────────────────────────────────
-    let (app_state, signal_poller) = bootstrap::AppState::build(config.clone(), token.clone())
+    let (app_state, signal_poller) = bootstrap::build_app_state(config.clone(), token.clone())
         .await
         .inspect_err(|e| error!(error = ?e, "failed to build application state"))?;
 
