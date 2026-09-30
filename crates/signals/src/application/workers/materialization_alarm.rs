@@ -21,8 +21,8 @@ use tracing::{info, warn};
 use yog_bootstrap::Heartbeat;
 use yog_core::domain::MaterializationBacklogRepository;
 
-use super::metrics::AlarmMetrics;
-use super::verdict::{Failure, Verdict, hours_minutes};
+use super::materialization_alarm_metrics::AlarmMetrics;
+use super::materialization_verdict::{Failure, Verdict, hours_minutes};
 
 /// How long one read of the backlogs may take before the check fails with
 /// `unreadable`. The pool sets no `statement_timeout`: a read stuck on a lock
@@ -159,5 +159,5 @@ fn log_change(previous: Option<&Verdict>, verdict: &Verdict) {
 }
 
 #[cfg(test)]
-#[path = "alarm_tests.rs"]
+#[path = "materialization_alarm_tests.rs"]
 mod tests;

@@ -9,10 +9,8 @@
 //! `init_rustls -> dotenv -> init_tracing -> metrics -> Config -> Daemon ->
 //! run`.
 
+mod application;
 mod bootstrap;
-mod detectors;
-mod engine;
-mod materialization_alarm;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::{error, info};

@@ -21,13 +21,14 @@ use yog_persistence::{
 
 mod init;
 
-use crate::bootstrap::Config;
-use crate::detectors::{
+use crate::application::detectors::{
     DetectorMetrics, FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
     PriceOracleDeviationSettings, TvlDrainDetector, TvlDrainSettings,
 };
-use crate::engine::{EngineMetrics, SignalEngine};
-use crate::materialization_alarm::{AlarmMetrics, MaterializationAlarm};
+use crate::application::workers::{
+    AlarmMetrics, EngineMetrics, MaterializationAlarm, SignalEngine,
+};
+use crate::bootstrap::Config;
 use init::init_materialization_alarm;
 
 /// Owns the assembled engine and the materialisation alarm, ready to run.

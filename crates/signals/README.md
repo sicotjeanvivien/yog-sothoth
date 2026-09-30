@@ -17,17 +17,18 @@ and the `Signal`/`Severity` domain types live in
 
 ```
 signals/src/
-├── engine/        ← SignalEngine: one poll loop per detector, dedup, persist
-│   └── metrics.rs ← tick and emitted counters
-├── detectors/     ← one module per detector
-│   ├── flow_imbalance.rs
-│   ├── price_oracle_deviation.rs
-│   ├── tvl_drain.rs
-│   └── metrics.rs ← considered and skipped counters, SkipReason
-├── materialization_alarm/ ← the continuous aggregates' alarm (see below)
-│   ├── alarm.rs   ← the loop and one check: read, measure, judge, signal
-│   ├── verdict.rs ← Verdict / Failure, and what a failure says
-│   └── metrics.rs ← pending gauge, checks counter, undelivered pings
+├── application/   ← what the daemon does once wired
+│   ├── detectors/ ← the detection rules, one module per detector
+│   │   ├── flow_imbalance.rs
+│   │   ├── price_oracle_deviation.rs
+│   │   ├── tvl_drain.rs
+│   │   └── metrics.rs ← considered and skipped counters, SkipReason
+│   └── workers/   ← the loops that run until the stop
+│       ├── signal_engine.rs         ← one poll loop per detector, dedup, persist
+│       ├── materialization_alarm.rs ← the aggregates' alarm (see below):
+│       │                              read, measure, judge, signal
+│       ├── materialization_verdict.rs ← Verdict / Failure, what a failure says
+│       └── *_metrics.rs             ← beside the loop they measure
 ├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
 │                    Daemon (daemon/init.rs: the alarm's wiring)
 └── main.rs
@@ -101,7 +102,7 @@ The detectors read hourly continuous aggregates that TimescaleDB's scheduler
 keeps materialised. When it stops — or one refresh policy keeps failing —
 nothing errors anywhere: the aggregates freeze, and every detector goes on
 evaluating hours that no longer change. From 16 June to 10 August 2026 all four
-sat that way unnoticed. `materialization_alarm/` is the alarm for it: a loop
+sat that way unnoticed. `workers/materialization_alarm.rs` is the alarm for it: a loop
 beside the engine, on the same stop.
 
 Every `SIGNALS_MATERIALIZATION_INTERVAL_SECS` it calls
@@ -232,7 +233,7 @@ declined to evaluate — `unpriced` (the window was not entirely valuable),
 gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
 missing code, not a data problem), `undecodable` (an oracle ratio that will not
 compute). The labels are defined once, by the `SkipReason` enum in
-`detectors/metrics.rs`, and the counter's `# HELP` text is built from it — this list
+`application/detectors/metrics.rs`, and the counter's `# HELP` text is built from it — this list
 copies it for the reader, not for the code. Emitting nothing is the right answer
 to a pool we cannot value; staying *quiet* about how often that happens is not,
 because degrading price coverage would then look exactly like a calm market.
@@ -274,7 +275,7 @@ cargo run -p yog-signals
 ## Adding a detector
 
 1. Implement `SignalDetector` (from `yog-core`) in a new module under
-   `detectors/`, owning the repository traits it reads. If the read shape
+   `application/detectors/`, owning the repository traits it reads. If the read shape
    doesn't exist yet, add a read model + VIEW following the
    `swap_flow`/`pool_price_snapshot` pattern (VIEW in a migration, `GRANT
    SELECT … TO yog_signals`, slim repo in `persistence`).

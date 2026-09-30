@@ -7,10 +7,10 @@ use anyhow::Context;
 use yog_bootstrap::{HealthchecksHeartbeat, Heartbeat, HeartbeatSettings, SecretUrl};
 use yog_core::domain::MaterializationBacklogRepository;
 
-use crate::bootstrap::config::MaterializationAlarmConfig;
-use crate::materialization_alarm::{
+use crate::application::workers::{
     HEARTBEAT_FAILURES, MaterializationAlarm, MaterializationAlarmSettings,
 };
+use crate::bootstrap::config::MaterializationAlarmConfig;
 
 /// The Healthchecks.io check, when one is configured. A URL that cannot take
 /// `/fail` stops the daemon here, with the variable named.

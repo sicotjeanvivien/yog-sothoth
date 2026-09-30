@@ -23,7 +23,7 @@ use yog_bootstrap::TaskEnd;
 
 use yog_core::domain::{EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 
-use super::EngineMetrics;
+use super::signal_engine_metrics::EngineMetrics;
 
 /// Loop-level failure of the engine. Per-tick failures never reach here —
 /// they are skipped-and-logged inside the loop.
