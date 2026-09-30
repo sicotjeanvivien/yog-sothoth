@@ -15,7 +15,7 @@ roles, the add-an-endpoint recipe), see [`crates/README.md`](../README.md).
 ```
 api/src/
 ├── bootstrap/
-│   ├── app_state.rs       ← AppState — dependency container (Arc<dyn Trait>)
+│   ├── app_state.rs       ← build_app_state() — wires the repositories into the services
 │   ├── config.rs          ← Config::load() — env-driven
 │   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
@@ -36,15 +36,19 @@ api/src/
 │   ├── query.rs           ← shared query-param validation helpers
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
 │   │                        capacity bounds (middleware/capacity.rs)
+│   ├── state.rs           ← AppState — what every handler reads through `State`
 │   └── error.rs           ← ApiError, IntoResponse (RFC 9457, 503 + Retry-After)
+├── testing.rs             ← test-only: fixtures and repository mocks
 └── main.rs
 ```
 
 Services compose repository reads with cursor encoding and response DTO
 mapping; handlers are pure async functions taking axum extractors and
-returning `Result<Json<T>, ApiError>`. `AppState` holds every dependency as
-`Arc<dyn Trait>` — `Clone` is cheap, and swapping a `Pg*` repository for a
-mock in tests is free.
+returning `Result<Json<T>, ApiError>`. `AppState` holds the services and the
+few runtime handles the handlers read (signal broadcast, slots, health probe,
+stop token) — `Clone` is cheap. The services take repositories as
+`Arc<dyn Trait>`, so a service test swaps a `Pg*` repository for a mock from
+`testing.rs`.
 
 ### Where a service goes
 

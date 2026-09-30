@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::application::EnrichedSignal;
-use crate::bootstrap::AppState;
+use crate::http::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
     dto::{PageResponse, SignalResponse, request::ListSignalsRequest},

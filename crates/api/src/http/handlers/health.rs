@@ -15,7 +15,7 @@
 
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-use crate::bootstrap::AppState;
+use crate::http::AppState;
 use crate::http::dto::response::{
     ChecksReport, ComponentStatus, ReadinessResponse, ReadinessStatus,
 };

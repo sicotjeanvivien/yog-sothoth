@@ -5,7 +5,7 @@
 //! client. The handler only orchestrates the read and shapes the response;
 //! the composition (analytics + counts) lives in `StatsService`.
 
-use crate::bootstrap::AppState;
+use crate::http::AppState;
 use crate::http::{dto::StatsResponse, error::ApiError};
 use axum::{Json, extract::State};
 

@@ -15,6 +15,9 @@ mod error;
 mod handlers;
 mod middleware;
 mod query;
+mod state;
+
+pub(crate) use state::AppState;
 
 /// The SSE response, mounted by the shutdown tests without the state it is
 /// normally read from.
@@ -38,7 +41,6 @@ use tower_http::{
 };
 use tracing::info;
 
-use crate::bootstrap::AppState;
 use crate::http::middleware::capacity::{REQUEST_TIMEOUT, request_deadline, work_slot_limit};
 use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,

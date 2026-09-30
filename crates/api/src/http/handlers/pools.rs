@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, Query, State},
 };
 
-use crate::bootstrap::AppState;
+use crate::http::AppState;
 use crate::http::{
     cursor::encode_cursor_opt,
     dto::{

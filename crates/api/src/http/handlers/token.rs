@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
 };
 
-use crate::bootstrap::AppState;
+use crate::http::AppState;
 use crate::http::{
     dto::{TokenResponse, request::GetTokenRequest},
     error::ApiError,
