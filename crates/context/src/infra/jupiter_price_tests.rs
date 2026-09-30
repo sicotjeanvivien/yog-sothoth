@@ -311,7 +311,7 @@ fn full_response_handles_empty_object() {
 /// HTTP server above is the only one in the crate — duplicating it to keep
 /// the test "in the right file" would repeat exactly the kind of thing this
 /// whole change is about. The connect-failure half of the proof is in
-/// `error/source_tests.rs`, which needs no server.
+/// `infra/source_error_tests.rs`, which needs no server.
 ///
 /// Covers what that one cannot: a non-2xx status and an undecodable body,
 /// both requested through a URL carrying a secret.
@@ -323,7 +323,7 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
     let url = format!("{base}/?api-key={SECRET}");
 
     // `http_client()` and not `Client::new()`, for the reason spelled out in
-    // `error/source_tests.rs`: the scripted server is a single thread that
+    // `infra/source_error_tests.rs`: the scripted server is a single thread that
     // `expect`s its way through accept/read/write, and a client with no
     // timeout turns any mishap there into a test that hangs for ever instead
     // of one that fails in 15 s with a diagnosis.
@@ -336,9 +336,10 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
         .expect("the scripted server answers")
         .error_for_status()
         .expect_err("500 must be an error");
-    // Premise, asserted for the same reason as in `error/source_tests.rs`:
-    // if reqwest stopped attaching the URL to this kind, the check below
-    // would pass while proving nothing about the conversion.
+    // Premise, asserted for the same reason as in
+    // `infra/source_error_tests.rs`: if reqwest stopped attaching the URL to
+    // this kind, the check below would pass while proving nothing about the
+    // conversion.
     assert!(raw_status.to_string().contains(SECRET), "{raw_status}");
     let status_err = SourceError::from(raw_status);
     assert!(matches!(status_err, SourceError::Http(_)), "{status_err}");

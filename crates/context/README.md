@@ -21,7 +21,8 @@ context/src/
 │                      makes a silent exit fail to compile)
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; infra.rs holds
-│                      the shared http_client and its timeouts)
+│                      the shared http_client and its timeouts; source_error.rs
+│                      turns a reqwest failure into a SourceError, URL stripped)
 ├── bootstrap/       ← Config::load(), Daemon::new — composition root, and the
 │                      stop: run() joins its three workers under the shared grace
 ├── error/           ← SourceError, WorkerError — shared by the layers
@@ -170,7 +171,9 @@ before falling back to skip-and-log.
 
 **Never build `SourceError::Http` or `SourceError::Decode` from a
 `reqwest::Error` by hand.** Use `?`, which goes through
-`impl From<reqwest::Error> for SourceError` in `error/source.rs`.
+`impl From<reqwest::Error> for SourceError` in `infra/source_error.rs` —
+with the clients, since it is transport knowledge; `error/` keeps only the
+enum the ports return.
 
 That conversion calls `reqwest::Error::without_url()` before formatting, and
 that is the only thing standing between an API key and the logs: reqwest puts
@@ -319,8 +322,9 @@ at the same public host.
 Nothing carrying a secret reaches the daemon as a `String`.
 `DATABASE_URL_CONTEXT` is a `SecretUrl` — userinfo, path, query string and
 fragment redacted, scheme, host and port legible, and the Postgres URL also
-keeps its role and database name; so is each endpoint once assembled, which is
-what lets `error/source.rs` scrub it back out of a `reqwest` error.
+keeps its role and database name; so is each endpoint once assembled. A
+`reqwest` error never carries it back: `infra/source_error.rs` strips the URL
+(`without_url`) before anything reads the error.
 `JUPITER_API_KEY` is a `SecretKey`, masked whole: a bare key has no carrier
 worth showing, and it is what `SecretUrl` used to return unredacted for want
 of a `?`. `JUPITER_URL` is a plain `String` on purpose — Jupiter authenticates

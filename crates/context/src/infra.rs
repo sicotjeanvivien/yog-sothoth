@@ -1,7 +1,13 @@
+//! The adapters: one HTTP client per provider (Helius DAS, Jupiter, Solana
+//! RPC), each implementing a port of `application::source`; their metrics;
+//! the shared `http_client` and its timeouts; and the conversion of a
+//! `reqwest` failure into a `SourceError`, which strips the URL.
+
 mod helius_das;
 mod jupiter_price;
 mod metrics;
 mod solana_account;
+mod source_error;
 
 use std::time::Duration;
 

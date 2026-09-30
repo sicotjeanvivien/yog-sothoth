@@ -11,9 +11,8 @@
 //!
 //! All three persist through the `yog-persistence` repositories.
 //!
-//! Bootstrap follows the same shape as the other crates:
-//! `init_rustls -> dotenv -> init_tracing -> metrics -> Config -> Daemon ->
-//! run`.
+//! Startup: `init_rustls -> dotenv -> init_tracing -> metrics -> Config ->
+//! Daemon -> run`.
 //!
 //! ## Graceful shutdown
 //!

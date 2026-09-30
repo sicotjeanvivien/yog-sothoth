@@ -21,13 +21,12 @@ use yog_persistence::{
 };
 
 use crate::application::source::{MetadataSource, PoolAccountSource, PriceSource};
-use crate::application::workers::MetadataWorkerMetrics;
-use crate::application::workers::PriceWorkerMetrics;
-use crate::application::workers::{MetadataWorker, PoolAccountWorker, PriceWorker};
+use crate::application::workers::{
+    MetadataWorker, MetadataWorkerMetrics, PoolAccountWorker, PriceWorker, PriceWorkerMetrics,
+};
 use crate::bootstrap::Config;
 use crate::error::WorkerError;
-use crate::infra::ProviderMetrics;
-use crate::infra::{HeliusDasClient, JupiterPriceClient, SolanaAccountClient};
+use crate::infra::{HeliusDasClient, JupiterPriceClient, ProviderMetrics, SolanaAccountClient};
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
