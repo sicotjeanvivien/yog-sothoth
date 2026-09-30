@@ -198,3 +198,33 @@ fn optional_trims_and_reads_a_blank_value_as_absent() {
     assert_eq!(optional("YOG_TEST_OPTIONAL_BLANK"), None);
     assert_eq!(optional("YOG_TEST_OPTIONAL_ABSENT"), None);
 }
+
+/// Absent and blank both read as "not configured" — a `FOO=` left in a `.env`
+/// must not turn into a URL the daemon then tries to reach.
+#[test]
+fn optional_secret_url_reads_blank_and_absent_as_none() {
+    // SAFETY: unique key, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_OPTIONAL_SECRET_URL_BLANK", " \r\n");
+    }
+    assert!(optional_secret_url("YOG_TEST_OPTIONAL_SECRET_URL_BLANK").is_none());
+    assert!(optional_secret_url("YOG_TEST_OPTIONAL_SECRET_URL_ABSENT").is_none());
+}
+
+/// Present, it is wrapped: the check's secret prints as redacted.
+#[test]
+fn optional_secret_url_wraps_a_present_value() {
+    // SAFETY: unique key, isolated from other tests
+    unsafe {
+        env::set_var(
+            "YOG_TEST_OPTIONAL_SECRET_URL_SET",
+            "https://hc-ping.com/0b7c5a1e-1111-2222-3333-444455556666",
+        );
+    }
+    let url = optional_secret_url("YOG_TEST_OPTIONAL_SECRET_URL_SET").expect("set");
+    assert_eq!(
+        url.expose(),
+        "https://hc-ping.com/0b7c5a1e-1111-2222-3333-444455556666"
+    );
+    assert!(!format!("{url:?}").contains("0b7c5a1e"));
+}

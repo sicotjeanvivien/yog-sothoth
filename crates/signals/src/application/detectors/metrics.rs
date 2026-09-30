@@ -1,15 +1,11 @@
-//! Metrics emitted by the signal engine.
+//! What the detectors count while they evaluate: the pools they were handed,
+//! and the ones they declined to evaluate, with the reason.
 //!
-//! Mirrors the other daemons: cumulative counters exposed on the
-//! Prometheus `/metrics` endpoint the binary installs. The lib emits
-//! through the `metrics` facade (a no-op if no recorder is installed, so
-//! unit tests need no exporter); the binary installs the exporter and
-//! calls [`EngineMetrics::register_descriptions`] once at startup.
+//! Described once by [`DetectorMetrics::register_descriptions`]; the
+//! `# HELP` text of the skip counter is built from [`SkipReason`] itself.
 
 use metrics::{counter, describe_counter};
 
-const TICK_TOTAL: &str = "yog_signals_tick_total";
-const EMITTED_TOTAL: &str = "yog_signals_emitted_total";
 const SKIPPED_TOTAL: &str = "yog_signals_skipped_total";
 const CONSIDERED_TOTAL: &str = "yog_signals_considered_total";
 
@@ -62,21 +58,12 @@ skip_reasons! {
     Undecodable => "undecodable",
 }
 
-/// Counters for the engine's per-detector poll loops.
-pub struct EngineMetrics;
+/// Counters for what a detector saw on a tick.
+pub(crate) struct DetectorMetrics;
 
-impl EngineMetrics {
+impl DetectorMetrics {
     /// Register human-readable descriptions. Call once, before any tick.
-    pub fn register_descriptions() {
-        describe_counter!(
-            TICK_TOTAL,
-            "Detector ticks completed (labels: detector, \
-             outcome=ok|suppressed|eval_failed|dedup_failed|persist_failed)"
-        );
-        describe_counter!(
-            EMITTED_TOTAL,
-            "Signals persisted, cumulative (label: detector)"
-        );
+    pub(crate) fn register_descriptions() {
         let reasons = SkipReason::ALL
             .iter()
             .map(|r| r.as_str())
@@ -94,16 +81,6 @@ impl EngineMetrics {
             "Pools a detector was handed, cumulative (label: detector) — the \
              denominator SKIPPED_TOTAL needs to mean anything"
         );
-    }
-
-    /// Record one completed tick with its outcome.
-    pub(crate) fn record_tick(detector: &'static str, outcome: &'static str) {
-        counter!(TICK_TOTAL, "detector" => detector, "outcome" => outcome).increment(1);
-    }
-
-    /// Record signals successfully persisted on a tick.
-    pub(crate) fn record_emitted(detector: &'static str, count: usize) {
-        counter!(EMITTED_TOTAL, "detector" => detector).increment(count as u64);
     }
 
     /// Record one pool a detector declined to evaluate.

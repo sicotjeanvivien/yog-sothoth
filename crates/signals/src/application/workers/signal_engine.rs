@@ -23,7 +23,7 @@ use yog_bootstrap::TaskEnd;
 
 use yog_core::domain::{EvalContext, Severity, Signal, SignalDetector, SignalRepository};
 
-use crate::metrics::EngineMetrics;
+use super::signal_engine_metrics::EngineMetrics;
 
 /// Loop-level failure of the engine. Per-tick failures never reach here —
 /// they are skipped-and-logged inside the loop.
@@ -211,5 +211,5 @@ fn emittable(candidates: Vec<Signal>, recent: &HashMap<Pubkey, Severity>) -> Vec
 }
 
 #[cfg(test)]
-#[path = "engine_tests.rs"]
+#[path = "signal_engine_tests.rs"]
 mod tests;

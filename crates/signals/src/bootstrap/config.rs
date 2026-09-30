@@ -11,6 +11,10 @@ use chrono::Duration as ChronoDuration;
 use rust_decimal::Decimal;
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required_secret_url};
 
+mod types;
+
+pub(crate) use types::MaterializationAlarmConfig;
+
 /// How often the flow-imbalance detector ticks, in seconds.
 /// Overridable via `SIGNALS_FLOW_INTERVAL_SECS`.
 const DEFAULT_FLOW_INTERVAL_SECS: u64 = 300;
@@ -122,6 +126,9 @@ pub(crate) struct Config {
 
     /// Drain ratio at or above which the signal escalates to Critical.
     pub(crate) tvl_drain_critical: Decimal,
+
+    /// The materialisation alarm: its cadence, its limit and its check.
+    pub(crate) materialization_alarm: MaterializationAlarmConfig,
 }
 
 impl Config {
@@ -197,6 +204,7 @@ impl Config {
             tvl_drain_threshold: decimal_var("SIGNALS_TVL_DRAIN_THRESHOLD", Decimal::new(5, 1))?,
             // 0.8 — the pool is nearly emptied.
             tvl_drain_critical: decimal_var("SIGNALS_TVL_DRAIN_CRITICAL", Decimal::new(8, 1))?,
+            materialization_alarm: MaterializationAlarmConfig::load()?,
         };
 
         // The two cutoffs of one detector form a ladder: Warning strictly
@@ -260,19 +268,5 @@ fn decimal_var(key: &'static str, default: Decimal) -> Result<Decimal, ConfigErr
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ladder_accepts_threshold_below_critical() {
-        assert!(validate_ladder("KEY", Decimal::new(5, 2), Decimal::new(2, 1)).is_ok());
-    }
-
-    #[test]
-    fn ladder_rejects_threshold_at_or_above_critical() {
-        // Equal: Warning would be unreachable.
-        assert!(validate_ladder("KEY", Decimal::new(2, 1), Decimal::new(2, 1)).is_err());
-        // Above: every emitted signal would be Critical.
-        assert!(validate_ladder("KEY", Decimal::new(3, 1), Decimal::new(2, 1)).is_err());
-    }
-}
+#[path = "config_tests.rs"]
+mod tests;

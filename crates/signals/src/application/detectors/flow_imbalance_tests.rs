@@ -184,10 +184,12 @@ async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
 // inside it. Same recipe as yog-indexer's persistor test and yog-context's
 // price-worker test.
 
-use super::super::metrics_probe::{counter, snapshot};
+use crate::application::metrics_probe::{counter, snapshot};
 
 /// Evaluate once under a thread-local recorder and return its snapshot.
-fn snapshot_one_evaluation(det: FlowImbalanceDetector) -> super::super::metrics_probe::Snapshot {
+fn snapshot_one_evaluation(
+    det: FlowImbalanceDetector,
+) -> crate::application::metrics_probe::Snapshot {
     snapshot(|| async move {
         run(&det).await;
     })

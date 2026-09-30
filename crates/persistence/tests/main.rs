@@ -18,6 +18,7 @@
 mod helpers;
 
 mod archive_role;
+mod cagg_materialization;
 mod cagg_retention;
 mod claim_caggs;
 mod claim_protocol_fee;

@@ -6238,12 +6238,10 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "object_store",
- "reqwest 0.13.5",
  "tempfile",
  "tokio",
  "tokio-util",
  "tracing",
- "url",
  "yog-bootstrap",
  "yog-persistence",
 ]
@@ -6253,7 +6251,10 @@ name = "yog-bootstrap"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "metrics",
  "percent-encoding",
+ "reqwest 0.13.5",
  "rustls",
  "thiserror 2.0.21",
  "tokio",

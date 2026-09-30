@@ -30,6 +30,9 @@ core/src/
 │   ├── kept_prices/       (KeptPrices — what the price series already records,
 │   │                       and what a new observation must say to earn a row)
 │   ├── network_status/    (singleton snapshot)
+│   ├── materialization_backlog/ (MaterializationBacklog — how long each
+│   │                       continuous aggregate's oldest raw row has waited,
+│   │                       and the lateness rule; the alarm's read model)
 │   ├── announcements/     (Announcement + AnnouncementLookup — operator → users
 │   │                       banner; severity deliberately distinct from signals')
 │   ├── watched_pool/      (allowlist)

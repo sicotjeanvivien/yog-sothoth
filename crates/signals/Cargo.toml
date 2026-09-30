@@ -5,12 +5,13 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-# Workspace crates. The engine + detectors (engine.rs, detectors/) use only
-# core traits; the process wiring (bootstrap/) pulls in yog-persistence for
-# the concrete Pg repositories and yog-bootstrap for the runtime plumbing.
+# Workspace crates. The application layer (application/) reads through core
+# traits only, never yog-persistence; the process wiring (bootstrap/) pulls in
+# yog-persistence for the concrete Pg repositories. yog-bootstrap is the
+# runtime plumbing both use (the stop, the heartbeat).
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
-yog-bootstrap = { path = "../bootstrap" }
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat"] }
 
 # Async runtime
 tokio = { workspace = true }
@@ -33,6 +34,12 @@ async-trait = { workspace = true }
 solana-pubkey = { workspace = true }
 
 [dev-dependencies]
+# `RecordingHeartbeat`, reachable from tests only — see yog-bootstrap's
+# Cargo.toml for why it is a dev-dependency feature.
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"] }
 # `DebuggingRecorder` lets the detector tests assert that a skip is actually
 # COUNTED, not merely not-signalled. Same recipe as yog-indexer and yog-context.
 metrics-util = { workspace = true, features = ["debugging"] }
+# `start_paused`: lets the alarm's read timeout expire without waiting a real
+# minute. A feature of a crate already in the tree, dev-only.
+tokio = { workspace = true, features = ["test-util"] }

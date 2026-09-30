@@ -19,17 +19,22 @@ use yog_persistence::{
     PgSwapFlowRepository,
 };
 
-use crate::bootstrap::Config;
-use crate::detectors::{
-    FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
+mod init;
+
+use crate::application::detectors::{
+    DetectorMetrics, FlowImbalanceDetector, FlowImbalanceSettings, PriceOracleDeviationDetector,
     PriceOracleDeviationSettings, TvlDrainDetector, TvlDrainSettings,
 };
-use crate::engine::SignalEngine;
-use crate::metrics::EngineMetrics;
+use crate::application::workers::{
+    AlarmMetrics, EngineMetrics, MaterializationAlarm, SignalEngine,
+};
+use crate::bootstrap::Config;
+use init::init_materialization_alarm;
 
-/// Owns the assembled engine, ready to run.
+/// Owns the assembled engine and the materialisation alarm, ready to run.
 pub(crate) struct Daemon {
     engine: SignalEngine,
+    alarm: MaterializationAlarm,
 }
 
 impl Daemon {
@@ -91,16 +96,22 @@ impl Daemon {
         ));
 
         EngineMetrics::register_descriptions();
+        DetectorMetrics::register_descriptions();
+        AlarmMetrics::register_descriptions();
 
         let engine = SignalEngine::new(
             signal_repository,
             vec![flow_imbalance, price_oracle_deviation, tvl_drain],
         );
-        Ok(Self { engine })
+        let alarm =
+            init_materialization_alarm(&config.database_url, &config.materialization_alarm).await?;
+
+        Ok(Self { engine, alarm })
     }
 
-    /// Run the engine until the process is asked to stop, then let every
-    /// detector loop finish its tick.
+    /// Run the engine and the materialisation alarm until the process is asked
+    /// to stop, then let every detector loop finish its tick. The alarm ends
+    /// at once: its check races the stop.
     ///
     /// ⚠️ **SIGTERM, not only Ctrl-C.** This waited on `tokio::signal::ctrl_c()`
     /// alone — SIGINT — while `docker compose stop` sends SIGTERM. As PID 1 in
@@ -122,6 +133,12 @@ impl Daemon {
             signal.cancel();
         });
 
-        self.engine.run(shutdown).await.map_err(anyhow::Error::new)
+        // The alarm shares the stop, and ends as soon as it fires — its check
+        // races the token — so it never outlasts the engine it runs beside.
+        let (engine, ()) = tokio::join!(
+            self.engine.run(shutdown.clone()),
+            self.alarm.run(shutdown.clone()),
+        );
+        engine.map_err(anyhow::Error::new)
     }
 }

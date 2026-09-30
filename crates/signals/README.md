@@ -17,15 +17,27 @@ and the `Signal`/`Severity` domain types live in
 
 ```
 signals/src/
-├── engine.rs      ← SignalEngine: one poll loop per detector, dedup, persist
-├── detectors/     ← one module per detector
-│   ├── flow_imbalance.rs
-│   ├── price_oracle_deviation.rs
-│   └── tvl_drain.rs
-├── bootstrap/     ← Config::load(), Daemon (wires the Pg repos into detectors)
-├── metrics.rs     ← Prometheus counters/histograms
+├── application/   ← what the daemon does once wired
+│   ├── detectors/ ← the signals' rules, one module per detector
+│   │   ├── flow_imbalance.rs
+│   │   ├── price_oracle_deviation.rs
+│   │   ├── tvl_drain.rs
+│   │   └── metrics.rs ← considered and skipped counters, SkipReason
+│   ├── materialization/ ← the alarm's rule (see below)
+│   │   ├── verdict.rs ← Verdict: how one check of the backlogs ends
+│   │   └── failure.rs ← Failure: why it failed, and what `/fail` says
+│   ├── workers/   ← the loops that run until the stop
+│   │   ├── signal_engine.rs         ← one poll loop per detector, dedup, persist
+│   │   ├── materialization_alarm.rs ← read, measure, judge, signal
+│   │   └── *_metrics.rs             ← beside the loop they measure
+│   └── metrics_probe.rs ← test harness: reads a counter or a gauge
+├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
+│                    Daemon (daemon/init.rs: the alarm's wiring)
 └── main.rs
 ```
+
+Each metric lives beside what it measures; the names on `/metrics` are all
+`yog_signals_*`.
 
 ## Evaluation model — batch, per-detector cadence, stateless
 
@@ -61,7 +73,10 @@ carries the dedup state too.
 SIGTERM** (`yog_bootstrap::shutdown_signal`); every detector loop then returns
 at its next turn, and `SignalEngine::run` joins them. A tick runs in the body
 of its `select!` arm, not inside the `select!`, so a tick already started
-always finishes.
+always finishes. The materialisation alarm is the exception, on purpose: its
+check — a read, then a ping with a 15 s timeout — races the token, since a ping
+cut short costs nothing and a stop held by a slow endpoint is what Docker ends
+with SIGKILL.
 
 - **The stop wins a tie.** The loop's `select!` is `biased`, with the
   cancellation arm first. The ticker keeps tokio's default
@@ -82,6 +97,76 @@ later, mid-tick.
 `yog_bootstrap::Stop`, no `SHUTDOWN_GRACE`. A detector stuck in a slow query
 holds the stop open until Docker's SIGKILL, and nothing in the logs names it.
 Not fixed yet.
+
+## The materialisation alarm
+
+The detectors read hourly continuous aggregates that TimescaleDB's scheduler
+keeps materialised. When it stops — or one refresh policy keeps failing —
+nothing errors anywhere: the aggregates freeze, and every detector goes on
+evaluating hours that no longer change. From 16 June to 10 August 2026 all four
+sat that way unnoticed. `workers/materialization_alarm.rs` is the alarm for it: a loop
+beside the engine, on the same stop.
+
+Every `SIGNALS_MATERIALIZATION_INTERVAL_SECS` it calls
+`yog_cagg_materialization_backlog()` (migration 013), which reports, for every
+aggregate the catalog holds, the **oldest raw row not yet materialised**. An
+aggregate is late when that row has waited longer than
+`SIGNALS_MATERIALIZATION_MAX_WAIT_MINS` — `MaterializationBacklog::late_by`
+in `yog-core`.
+
+⚠️ **The oldest pending row, and neither the clock nor the newest row.** The
+watermark's age against the clock grows when the *indexer* stops (no bucket
+fills), and would blame the materialisation. The newest row minus the
+watermark freezes when a table stops receiving rows, however long those rows
+then wait — on 29 September 2026 it read 28 minutes for six `claim_reward` rows
+unmaterialised for eight days. A pending row only grows old if a refresh did not
+run.
+
+⚠️ **Two exceptions, both lifted by the next hourly refresh.**
+
+- **Rows written late.** The wait runs from a row's block time, not from its
+  insertion. When the indexer catches up after an outage longer than the limit,
+  the rows it writes arrive already "old", and the check fails until the next
+  hourly refresh materialises them — at most an hour. ⚠️ Nothing reports the
+  outage itself today: the indexer has no dead man's switch, so this `/fail`,
+  which names the materialisation, may be the first sign of an ingestion stop.
+- **A restart after more than an hour down.** The first check runs as soon as
+  the daemon starts, before the scheduler's next refresh. Rows that were
+  pending when the stack stopped — up to three hours, as designed — have waited
+  the downtime on top, and can cross the limit: one `/fail` at restart, lifted
+  by the refresh. Healthchecks.io will already have reported the silence of the
+  downtime itself.
+
+**The limit.** A healthy aggregate peaks at three hours: the refresh policy's
+`end_offset` (1 h), up to an hour until the next hourly run, and the bucket
+itself (1 h) — migration 008. The default of four leaves an hour of margin.
+The peak observed in production is the number that should replace this
+estimate.
+
+**The alarm is Healthchecks.io, not Prometheus** — nothing scrapes `/metrics`
+in production. Each check ends in a ping to
+`SIGNALS_MATERIALIZATION_HEARTBEAT_URL`: success when nothing is late,
+`/fail` naming each late aggregate, its wait and where its materialisation
+ends (or that it never materialised), or `/fail` with the database's error
+when the backlogs cannot be read, or `/fail` saying *nothing reported* when
+the read succeeds but names no aggregate: the function no longer finds them in
+TimescaleDB's catalog, and a success there would be a check watching nothing.
+A stopped daemon is the silence the check notices on its own.
+
+⚠️ **The alarm reads through its own pool**, of one connection, opened with a
+60 s `statement_timeout`. A read stuck on a lock is then cancelled by Postgres,
+and fails the check as `unreadable`. Timing out on the client side alone would
+not be enough: the statement keeps running on the server, and the connection
+stays held, one more at every check, taken from the detectors if the pool were
+shared. The alarm also stops waiting on its own after 90 s, for a server that
+cannot answer at all. The heartbeat is `yog_bootstrap`'s, shared with
+`yog-archive`. Create the check with a **10-minute period and a 20-minute
+grace**.
+
+Without that URL — development, where the scheduler is off by design and every
+aggregate is late for good — nothing is signalled; the verdict is logged **when
+it changes**, not on every check, and measured.
+`docker-compose.prod.yml` refuses to start without it.
 
 ## Detectors
 
@@ -142,10 +227,17 @@ SIGNALS_TVL_DRAIN_MIN_TVL_USD=10000   # floor on the STARTING TVL
 SIGNALS_TVL_DRAIN_THRESHOLD=0.5       # Warning
 SIGNALS_TVL_DRAIN_CRITICAL=0.8        # Critical
 SIGNALS_TVL_DRAIN_COOLDOWN_HOURS=6
+
+# materialisation alarm
+SIGNALS_MATERIALIZATION_INTERVAL_SECS=600       # 1 to 86400, refused at startup otherwise
+SIGNALS_MATERIALIZATION_MAX_WAIT_MINS=240       # how long a raw row may wait
+SIGNALS_MATERIALIZATION_HEARTBEAT_URL=https://hc-ping.com/...  # optional; required in prod
 ```
 
 Connects to Postgres as `yog_signals` — `INSERT` (append-only) on `signals`,
-`SELECT` on the read VIEWs it evaluates. It cannot update or delete anything.
+`SELECT` on the read VIEWs it evaluates, and `EXECUTE` on
+`yog_cagg_materialization_backlog()`, which no other role holds. It cannot
+update or delete anything.
 
 ## Observability
 
@@ -159,7 +251,7 @@ declined to evaluate — `unpriced` (the window was not entirely valuable),
 gate), `no_decoder` (no `sqrt_price` decoder shipped for that protocol —
 missing code, not a data problem), `undecodable` (an oracle ratio that will not
 compute). The labels are defined once, by the `SkipReason` enum in
-`metrics.rs`, and the counter's `# HELP` text is built from it — this list
+`application/detectors/metrics.rs`, and the counter's `# HELP` text is built from it — this list
 copies it for the reader, not for the code. Emitting nothing is the right answer
 to a pool we cannot value; staying *quiet* about how often that happens is not,
 because degrading price coverage would then look exactly like a calm market.
@@ -184,6 +276,14 @@ on. None came from unresolved metadata. A skip is a pool nothing could have
 valued, not one that was given up on; the number moves when `yog-context` prices
 more mints, and nowhere else.
 
+**`yog_signals_materialization_pending_seconds{aggregate}`** — how long each
+aggregate's oldest unmaterialised row has waited, `0` when none waits. ⚠️ A
+check that cannot read the backlogs has no reading to give, so the gauge keeps
+its last one: read it next to `…_checks_total{outcome="unreadable"}`;
+**`yog_signals_materialization_checks_total{outcome}`** — `on_time`, `late`,
+`unreadable`, `nothing_reported`; **`yog_signals_heartbeat_failures_total{kind}`** — pings that
+could not be delivered.
+
 ## Run
 
 ```bash
@@ -193,7 +293,7 @@ cargo run -p yog-signals
 ## Adding a detector
 
 1. Implement `SignalDetector` (from `yog-core`) in a new module under
-   `detectors/`, owning the repository traits it reads. If the read shape
+   `application/detectors/`, owning the repository traits it reads. If the read shape
    doesn't exist yet, add a read model + VIEW following the
    `swap_flow`/`pool_price_snapshot` pattern (VIEW in a migration, `GRANT
    SELECT … TO yog_signals`, slim repo in `persistence`).

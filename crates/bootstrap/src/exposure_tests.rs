@@ -46,21 +46,21 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          refusal goes back through `SecretUrl::scrub`",
     ),
     (
-        "crates/archive/src/infra/heartbeat.rs",
-        3,
-        "reqwest owns the request — the check's URL is the argument of `.post` \
-         for a success, and of `fail_url` for a failure, which pushes `fail` \
-         onto its path and hands the result straight to `.post`; the third is \
-         the same `fail_url` at startup, refusing a URL that cannot take it. \
-         The errors reqwest builds from it go back through `SecretUrl::scrub`",
-    ),
-    (
         "crates/bootstrap/src/endpoint.rs",
         2,
         "the key's only consumers are its own two carriers — `Endpoint::url` and \
          `Endpoint::header`, where the halves meet, and the only places they do. \
          Both hand the result straight back into a secret type, so neither \
          exposure widens to a printable `String`",
+    ),
+    (
+        "crates/bootstrap/src/heartbeat.rs",
+        3,
+        "reqwest owns the request — the check's URL is the argument of `.post` \
+         for a success, and of `fail_url` for a failure, which pushes `fail` \
+         onto its path and hands the result straight to `.post`; the third is \
+         the same `fail_url` at startup, refusing a URL that cannot take it. \
+         The errors reqwest builds from it go back through `SecretUrl::scrub`",
     ),
     (
         "crates/context/src/bootstrap/daemon.rs",
@@ -137,6 +137,15 @@ const ALLOWED: &[(&str, usize, &str)] = &[
         "crates/signals/src/bootstrap/daemon.rs",
         1,
         "sqlx owns the pool — the URL is the argument of `Database::connect`",
+    ),
+    (
+        "crates/signals/src/bootstrap/daemon/init.rs",
+        1,
+        "sqlx owns the pool — the URL is the argument of `Database::connect_with` \
+         for the materialisation alarm's own pool. The same address as \
+         `daemon.rs`'s, exposed a second time on purpose: the alarm reads under \
+         its own `statement_timeout` rather than through the pool it watches \
+         over",
     ),
 ];
 
