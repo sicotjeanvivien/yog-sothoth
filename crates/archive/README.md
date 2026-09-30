@@ -21,21 +21,22 @@ archive/src/
 │                         shutdown token → run
 ├── application/       ← what the daemon does once wired
 │   ├── archiver.rs    ← one run, ending in a RunOutcome that decides the signal
-│   ├── run_outcome.rs ← RunOutcome, RunFailure, FailureKind: how a run ended
+│   ├── run_outcome.rs ← RunOutcome, RunFailure, FailureKind: how a run ended;
+│   │                     Interrupted: why it stopped early
 │   ├── stream.rs      ← the archive: pg_dump read into the upload, pg_restore fed alongside
 │   ├── worker.rs      ← ArchiveWorker: a dump at startup, then every interval, until the stop
-│   └── metrics.rs
+│   └── metrics.rs     ← run counts by outcome, last success, dump size, duration;
+│                         the name of the heartbeat's undelivered-ping counter
 ├── infra/             ← what a run calls outside the process
 │   ├── store.rs       ← the bucket and its StoreSettings — the only file that knows it is S3
 │   └── versions.rs    ← the server's versions, over a connection opened per run
 └── bootstrap/
     ├── config.rs      ← Config::load (every ARCHIVE_* variable)
     ├── config/types/
-    │   └── store_config.rs ← StoreConfig::load (the ARCHIVE_STORE_* variables)
+    │   └── store_config.rs ← StoreSettings::load (the ARCHIVE_STORE_* variables)
     ├── daemon.rs      ← assembles the worker and runs it
     └── daemon/
-        └── init.rs    ← init_heartbeat, init_store (StoreConfig → StoreSettings;
-                          signals a bad bucket before exiting)
+        └── init.rs    ← init_heartbeat, init_store (signals a bad bucket before exiting)
 ```
 
 The heartbeat — success, or `/fail` with the reason — is not here either: it is

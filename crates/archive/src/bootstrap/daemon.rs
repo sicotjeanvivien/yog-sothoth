@@ -25,7 +25,7 @@ impl Daemon {
     /// [`PgVersions`] for why the connection belongs to the run.
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
         let heartbeat = init_heartbeat(config.heartbeat_url)?;
-        let store = init_store(config.store, &heartbeat).await?;
+        let store = init_store(&config.store, &heartbeat).await?;
 
         Ok(Self {
             worker: ArchiveWorker {
@@ -36,7 +36,7 @@ impl Daemon {
                     store,
                     heartbeat: Arc::new(heartbeat),
                     tools: PgTools::new(config.pg_dump, config.pg_restore),
-                    database_url: config.database_url.clone(),
+                    database_url: config.database_url,
                 },
                 interval: config.interval,
             },
@@ -44,8 +44,7 @@ impl Daemon {
     }
 
     /// Run the worker until `shutdown` is cancelled.
-    pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
+    pub(crate) async fn run(self, shutdown: CancellationToken) {
         self.worker.run(shutdown).await;
-        Ok(())
     }
 }

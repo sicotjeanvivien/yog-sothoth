@@ -1,18 +1,13 @@
-use yog_bootstrap::{ConfigError, SecretKey, required, required_secret_key};
+//! How the bucket's settings are read from the environment. The settings
+//! themselves — what each field is — are the infrastructure's
+//! ([`StoreSettings`]); reading variables is the configuration's job, so it
+//! stays here.
 
-/// The `ARCHIVE_STORE_*` variables, as read. What each one is, and what the
-/// access key must be allowed to do, is said once, on the
-/// [`StoreSettings`](crate::infra::StoreSettings) they become.
-#[derive(Debug)]
-pub(crate) struct StoreConfig {
-    pub(crate) url: String,
-    pub(crate) bucket: String,
-    pub(crate) region: String,
-    pub(crate) access_key: SecretKey,
-    pub(crate) secret_key: SecretKey,
-}
+use yog_bootstrap::{ConfigError, required, required_secret_key};
 
-impl StoreConfig {
+use crate::infra::StoreSettings;
+
+impl StoreSettings {
     /// Read every `ARCHIVE_STORE_*` variable. All are required.
     pub(crate) fn load() -> Result<Self, ConfigError> {
         Ok(Self {

@@ -35,8 +35,8 @@ async fn main() -> anyhow::Result<()> {
         .inspect_err(|e| error!(error = %e, "failed to initialize the archiver"))?;
     info!("archiver initialized");
 
-    // SIGTERM or Ctrl-C cancels the token; `Daemon::run` stops between two
-    // dumps, or kills the one in progress. `shutdown_signal` listens for both:
+    // SIGTERM or Ctrl-C cancels the token; `ArchiveWorker::run` stops between
+    // two dumps, or kills the one in progress. `shutdown_signal` listens for both:
     // under `docker compose stop` this process is PID 1, and SIGTERM is the
     // signal that arrives.
     let token = CancellationToken::new();
@@ -46,7 +46,8 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.cancel();
     });
 
-    daemon.run(token).await
+    daemon.run(token).await;
+    Ok(())
 }
 
 /// Install the Prometheus exporter as the global `metrics` recorder, and

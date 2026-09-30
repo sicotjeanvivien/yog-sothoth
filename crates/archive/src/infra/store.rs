@@ -5,7 +5,8 @@
 //! the bucket is S3-compatible — Scaleway Object Storage in production, MinIO
 //! in a local test — so changing provider means changing this file and its
 //! [`StoreSettings`], and nothing the run does. Which variables fill them is
-//! the configuration's business, not this file's.
+//! the configuration's business: `StoreSettings::load`, in
+//! `bootstrap/config/types/store_config.rs`.
 
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use object_store::{ObjectStore, aws::AmazonS3Builder};
 use yog_bootstrap::SecretKey;
 
 /// An S3-compatible bucket and the credentials that may write to it.
+#[derive(Debug)]
 pub(crate) struct StoreSettings {
     /// The endpoint, e.g. `https://s3.fr-par.scw.cloud`. Plain `http://` is
     /// accepted for a local MinIO.

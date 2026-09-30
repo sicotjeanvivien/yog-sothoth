@@ -9,9 +9,9 @@ use std::{path::PathBuf, time::Duration};
 
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, optional, required_secret_url};
 
-mod types;
+use crate::infra::StoreSettings;
 
-pub(crate) use types::StoreConfig;
+mod types;
 
 /// Six hours between dumps: the largest hole the history can take when the
 /// database is lost, since the indexer cannot re-ingest the past.
@@ -34,7 +34,7 @@ pub(crate) struct Config {
     pub(crate) interval: Duration,
 
     /// The bucket the dumps go to.
-    pub(crate) store: StoreConfig,
+    pub(crate) store: StoreSettings,
 
     /// The dead man's switch. Required: an archiver that fails in silence
     /// looks exactly like one that works. A `SecretUrl` because the check's
@@ -56,7 +56,7 @@ impl Config {
                 "ARCHIVE_INTERVAL_SECS",
                 DEFAULT_INTERVAL_SECS,
             )?)?,
-            store: StoreConfig::load()?,
+            store: StoreSettings::load()?,
             heartbeat_url: required_secret_url("ARCHIVE_HEARTBEAT_URL")?,
             pg_dump: program("ARCHIVE_PG_DUMP", "pg_dump"),
             pg_restore: program("ARCHIVE_PG_RESTORE", "pg_restore"),

@@ -6,12 +6,14 @@ use tokio_util::sync::CancellationToken;
 use yog_bootstrap::SecretUrl;
 use yog_persistence::PgTools;
 
-use super::archiver::Interrupted;
-use super::run_outcome::RunFailure;
+use super::run_outcome::{Interrupted, RunFailure};
 
-/// Parts uploaded concurrently before the reader waits. With
-/// [`PART_SIZE`](super::archiver::PART_SIZE), the upload holds at most
-/// ~24 MiB (two in flight, one filling).
+/// Size of one multipart part. S3 requires at least 5 MiB for every part
+/// but the last; 8 MiB keeps the memory an upload holds small.
+pub(super) const PART_SIZE: usize = 8 * 1024 * 1024;
+
+/// Parts uploaded concurrently before the reader waits. With [`PART_SIZE`],
+/// the upload holds at most ~24 MiB (two in flight, one filling).
 const PARTS_IN_FLIGHT: usize = 2;
 
 /// Dump into the open upload while `pg_restore` checks the same bytes, and
