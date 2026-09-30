@@ -122,11 +122,20 @@ then wait — on 29 September 2026 it read 28 minutes for six `claim_reward` row
 unmaterialised for eight days. A pending row only grows old if a refresh did not
 run.
 
-⚠️ **One exception: rows written late.** The wait runs from a row's block time,
-not from its insertion. When the indexer catches up after an outage longer than
-the limit, the rows it writes arrive already "old", and the check fails until
-the next hourly refresh materialises them — at most an hour. The outage itself
-is the indexer's dead man's switch to report; this one follows it briefly.
+⚠️ **Two exceptions, both lifted by the next hourly refresh.**
+
+- **Rows written late.** The wait runs from a row's block time, not from its
+  insertion. When the indexer catches up after an outage longer than the limit,
+  the rows it writes arrive already "old", and the check fails until the next
+  hourly refresh materialises them — at most an hour. ⚠️ Nothing reports the
+  outage itself today: the indexer has no dead man's switch, so this `/fail`,
+  which names the materialisation, may be the first sign of an ingestion stop.
+- **A restart after more than an hour down.** The first check runs as soon as
+  the daemon starts, before the scheduler's next refresh. Rows that were
+  pending when the stack stopped — up to three hours, as designed — have waited
+  the downtime on top, and can cross the limit: one `/fail` at restart, lifted
+  by the refresh. Healthchecks.io will already have reported the silence of the
+  downtime itself.
 
 **The limit.** A healthy aggregate peaks at three hours: the refresh policy's
 `end_offset` (1 h), up to an hour until the next hourly run, and the bucket
@@ -220,7 +229,7 @@ SIGNALS_TVL_DRAIN_CRITICAL=0.8        # Critical
 SIGNALS_TVL_DRAIN_COOLDOWN_HOURS=6
 
 # materialisation alarm
-SIGNALS_MATERIALIZATION_INTERVAL_SECS=600       # > 0, refused at startup otherwise
+SIGNALS_MATERIALIZATION_INTERVAL_SECS=600       # 1 to 86400, refused at startup otherwise
 SIGNALS_MATERIALIZATION_MAX_WAIT_MINS=240       # how long a raw row may wait
 SIGNALS_MATERIALIZATION_HEARTBEAT_URL=https://hc-ping.com/...  # optional; required in prod
 ```

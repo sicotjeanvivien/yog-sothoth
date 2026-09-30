@@ -45,16 +45,23 @@ impl MaterializationAlarmConfig {
     }
 }
 
-/// The cadence, refused at zero: `tokio::time::interval` panics on a zero
-/// period, and the alarm runs beside the engine, not in a task of its own —
-/// the panic would take the whole daemon down after startup rather than
-/// refuse it here.
+/// The longest cadence accepted: one day. Far beyond any useful check — the
+/// check is also the heartbeat's ping — and far below what tokio can add to
+/// an `Instant`.
+const MAX_INTERVAL_SECS: u64 = 86_400;
+
+/// The cadence, refused at both ends. At zero `tokio::time::interval` panics;
+/// past what an `Instant` can hold, the ticker panics on its next tick, since
+/// `MissedTickBehavior::Delay` computes it as `now + period` unchecked (tokio
+/// 1.53). The alarm runs beside the engine, not in a task of its own — either
+/// panic would take the whole daemon down after startup rather than refuse it
+/// here.
 fn interval_secs(seconds: u64) -> Result<Duration, ConfigError> {
-    if seconds == 0 {
+    if !(1..=MAX_INTERVAL_SECS).contains(&seconds) {
         return Err(ConfigError::InvalidValue {
             key: "SIGNALS_MATERIALIZATION_INTERVAL_SECS".to_string(),
-            value: "0".to_string(),
-            expected: "a number of seconds greater than zero",
+            value: seconds.to_string(),
+            expected: "a number of seconds from 1 to 86400 (one day)",
         });
     }
     Ok(Duration::from_secs(seconds))

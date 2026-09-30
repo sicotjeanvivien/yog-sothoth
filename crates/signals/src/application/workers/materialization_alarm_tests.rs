@@ -209,8 +209,8 @@ async fn no_aggregate_reported_fails_the_check() {
 
 /// A stop that arrives while a check is under way ends the loop at once — the
 /// check races the stop, it does not hold it. Here the read hangs: were the
-/// check awaited outside the race, the stop would wait out the minute of
-/// `READ_TIMEOUT`, then a ping, well past Docker's ten seconds.
+/// check awaited outside the race, the stop would wait out `READ_TIMEOUT`,
+/// then a ping, well past Docker's ten seconds.
 #[tokio::test(start_paused = true)]
 async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
     let heartbeat = Arc::new(RecordingHeartbeat::default());

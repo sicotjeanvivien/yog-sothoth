@@ -18,6 +18,23 @@ fn the_interval_is_refused_at_zero_and_kept_otherwise() {
     );
 }
 
+/// A day is kept, a second more is not: past what an `Instant` can hold, the
+/// ticker would panic on its next tick and take the daemon down with it.
+#[test]
+fn the_interval_is_refused_past_one_day() {
+    assert_eq!(
+        interval_secs(MAX_INTERVAL_SECS).unwrap(),
+        Duration::from_secs(86_400)
+    );
+    for seconds in [MAX_INTERVAL_SECS + 1, u64::MAX] {
+        assert_eq!(
+            key_of(interval_secs(seconds)),
+            "SIGNALS_MATERIALIZATION_INTERVAL_SECS",
+            "{seconds}"
+        );
+    }
+}
+
 #[test]
 fn the_limit_refuses_zero_and_what_a_duration_cannot_hold() {
     assert_eq!(max_wait_minutes(240).unwrap(), ChronoDuration::hours(4));
