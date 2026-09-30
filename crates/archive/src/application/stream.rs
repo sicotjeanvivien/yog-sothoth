@@ -6,11 +6,12 @@ use tokio_util::sync::CancellationToken;
 use yog_bootstrap::SecretUrl;
 use yog_persistence::PgTools;
 
-use super::{Interrupted, RunFailure};
+use super::archiver::Interrupted;
+use super::run_outcome::RunFailure;
 
 /// Parts uploaded concurrently before the reader waits. With
-/// [`PART_SIZE`](super::PART_SIZE), the upload holds at most ~24 MiB (two in
-/// flight, one filling).
+/// [`PART_SIZE`](super::archiver::PART_SIZE), the upload holds at most
+/// ~24 MiB (two in flight, one filling).
 const PARTS_IN_FLIGHT: usize = 2;
 
 /// Dump into the open upload while `pg_restore` checks the same bytes, and

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use yog_bootstrap::SecretUrl;
 use yog_persistence::{Database, PgServerInfo, ServerVersions};
 
-use crate::archiver::VersionSource;
+use crate::application::VersionSource;
 
 /// Reads the server's versions over a connection opened for this run and
 /// closed after it.

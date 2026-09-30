@@ -10,10 +10,9 @@
 //! choose the dump and the target; the proven sequence is in
 //! `crates/persistence/README.md`, *Backup and restore*.
 
-mod archiver;
+mod application;
 mod bootstrap;
 mod infra;
-mod metrics;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio_util::sync::CancellationToken;
@@ -61,6 +60,6 @@ fn init_metrics() -> anyhow::Result<()> {
         .with_http_listener(([0, 0, 0, 0], 9000))
         .install()
         .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))?;
-    metrics::register_descriptions();
+    application::metrics::register_descriptions();
     Ok(())
 }

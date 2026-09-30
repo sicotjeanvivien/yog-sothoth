@@ -1,15 +1,13 @@
 use yog_bootstrap::{ConfigError, SecretKey, required, required_secret_key};
 
-/// An S3-compatible bucket and the credentials that may write to it.
+/// The `ARCHIVE_STORE_*` variables, as read. What each one is, and what the
+/// access key must be allowed to do, is said once, on the
+/// [`StoreSettings`](crate::infra::StoreSettings) they become.
 #[derive(Debug)]
 pub(crate) struct StoreConfig {
-    /// The endpoint, e.g. `https://s3.fr-par.scw.cloud`. Plain `http://` is
-    /// accepted for a local MinIO.
     pub(crate) url: String,
     pub(crate) bucket: String,
     pub(crate) region: String,
-    /// Access key id and secret. The key is meant to be **write-only**: a
-    /// compromised server must not be able to delete the backups.
     pub(crate) access_key: SecretKey,
     pub(crate) secret_key: SecretKey,
 }

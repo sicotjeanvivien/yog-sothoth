@@ -20,18 +20,15 @@ use yog_persistence::{PgTools, ServerVersions};
 
 use yog_bootstrap::Heartbeat;
 
-mod run_outcome;
-mod stream;
-
-pub(crate) use run_outcome::{RunFailure, RunOutcome};
-use stream::stream;
+use super::run_outcome::{RunFailure, RunOutcome};
+use super::stream::stream;
 
 /// Where the dumps sit in the bucket, which may one day hold other projects'.
 const KEY_PREFIX: &str = "yog-sothoth/";
 
 /// Size of one multipart part. S3 requires at least 5 MiB for every part
 /// but the last; 8 MiB keeps the memory an upload holds small.
-const PART_SIZE: usize = 8 * 1024 * 1024;
+pub(super) const PART_SIZE: usize = 8 * 1024 * 1024;
 
 /// The server facts a dump depends on. A trait so the tests need no
 /// database; the production implementation connects for each run
@@ -137,7 +134,7 @@ impl Archiver {
 
 /// Why a run stopped before archiving. Internal to the run: a stop is not a
 /// failure, and [`Archiver::archive`] turns each into its [`RunOutcome`].
-enum Interrupted {
+pub(super) enum Interrupted {
     Cancelled,
     Failed(RunFailure),
 }

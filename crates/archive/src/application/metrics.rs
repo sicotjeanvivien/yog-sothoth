@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram};
 
-use crate::archiver::RunOutcome;
+use super::run_outcome::RunOutcome;
 
 const RUNS: &str = "yog_archive_runs_total";
 const LAST_SUCCESS: &str = "yog_archive_last_success_timestamp_seconds";
