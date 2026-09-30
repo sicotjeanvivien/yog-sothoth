@@ -288,6 +288,7 @@ Add the SQL in the corresponding `Pg*Repository` impl (see the [query-shape poli
 - Create or extend a module under `api/src/http/handlers/`.
 - Create request/response DTOs in `api/src/http/dto/` (request validation happens here, before any DB call).
 - Mount the route in `http.rs::build_router`.
+- A **new service** is reached through `AppState`, in two places and two layers: its field in `api/src/http/state.rs`, and its construction in `api/src/bootstrap/app_state.rs::build_app_state`, where the repositories are wired in.
 - Reuse `ApiError` for error mapping; the `From<RepositoryError>` impl handles repository failures uniformly.
 
 ### 4. Verify

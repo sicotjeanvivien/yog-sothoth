@@ -15,8 +15,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::application::EnrichedSignal;
-use crate::http::AppState;
 use crate::http::{
+    AppState,
     cursor::encode_cursor_opt,
     dto::{PageResponse, SignalResponse, request::ListSignalsRequest},
     error::ApiError,

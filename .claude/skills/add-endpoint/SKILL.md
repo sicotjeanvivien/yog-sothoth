@@ -64,6 +64,10 @@ If the query already exists, skip to Step 3.
 - **Handler** — add to `crates/api/src/http/handlers/<aggregate>.rs`. Reuse `ApiError`
   (`crates/api/src/http/error.rs`); its `From<RepositoryError>` impl maps repo failures to
   RFC 9457 Problem Details uniformly — don't hand-roll error responses.
+- **Wire a new service** into `AppState`: its field in `crates/api/src/http/state.rs`,
+  its construction in `build_app_state` (`crates/api/src/bootstrap/app_state.rs`), where the
+  concrete `Pg*` repositories are injected. Two files, two layers — the state belongs to
+  the HTTP layer, its wiring to the bootstrap.
 - **Mount the route** in `build_router` in `crates/api/src/http.rs` (NB: the README says
   `http/mod.rs` — it's actually `http.rs`). Add the `.route("/api/…", get(...))` line next
   to the existing ones.

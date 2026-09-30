@@ -5,8 +5,7 @@
 //! client picks what to display — the API returns the full active set,
 //! most severe first.
 
-use crate::http::AppState;
-use crate::http::{dto::AnnouncementResponse, error::ApiError};
+use crate::http::{AppState, dto::AnnouncementResponse, error::ApiError};
 use axum::{Json, extract::State};
 
 /// `GET /api/announcements/active`

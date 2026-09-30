@@ -15,9 +15,9 @@
 
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-use crate::http::AppState;
-use crate::http::dto::response::{
-    ChecksReport, ComponentStatus, ReadinessResponse, ReadinessStatus,
+use crate::http::{
+    AppState,
+    dto::response::{ChecksReport, ComponentStatus, ReadinessResponse, ReadinessStatus},
 };
 
 /// `GET /healthz` — liveness probe.

@@ -16,10 +16,12 @@ use crate::application::{
 
 /// Application-level dependencies shared across HTTP handlers.
 ///
-/// The services (`Arc<XxxService>`), plus the few runtime handles the
-/// handlers read directly: the signal broadcast, the stream and work slots,
-/// the health probe and the stop token. Handlers never access repositories
-/// directly — all orchestration lives in the application layer.
+/// The services (`Arc<XxxService>`), plus the few runtime handles the router
+/// and the handlers read directly: the signal broadcast, the stream slots, the
+/// work slots (taken by the router's middleware), the health probe and the stop
+/// token. Handlers never access repositories directly — all orchestration lives
+/// in the application layer — with one exception: `readyz` calls the health
+/// probe itself, a concrete persistence type until a trait replaces it.
 ///
 /// `Clone` is cheap: `Arc` clones are reference-count bumps.
 /// axum requires `Clone + Send + Sync + 'static` on its `State`.

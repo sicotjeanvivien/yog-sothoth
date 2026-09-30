@@ -47,8 +47,8 @@ api/src/
 Services compose repository reads with cursor encoding and response DTO
 mapping; handlers are pure async functions taking axum extractors and
 returning `Result<Json<T>, ApiError>`. `AppState` holds the services and the
-few runtime handles the handlers read (signal broadcast, slots, health probe,
-stop token) — `Clone` is cheap. The services take repositories as
+few runtime handles the router and the handlers read (signal broadcast, stream
+and work slots, health probe, stop token) — `Clone` is cheap. The services take repositories as
 `Arc<dyn Trait>`, so a service test swaps a `Pg*` repository for a mock from
 `testing.rs`.
 
