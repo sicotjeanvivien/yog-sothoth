@@ -85,9 +85,7 @@ async fn correct_mint_is_returned_in_aggregate() {
 async fn metadata_repo_error_propagates() {
     let mint = pk(20);
 
-    // MockMetadataRepo n'a pas de `failing()` dans la version existante.
-    // On utilise un mock ad-hoc inline ou on ajoute failing() au mock.
-    // Ici on ajoute failing() — voir testing/mod.rs ci-dessous.
+    // `MockMetadataRepo::failing()` is one of the shared mocks of `crate::testing`.
     let svc = TokenService::new(
         Arc::new(MockMetadataRepo::failing()),
         Arc::new(MockPriceRepo::empty()),

@@ -1,6 +1,7 @@
 //! The state every handler reads through axum's `State` extractor. Built by
-//! the binary (`bootstrap::build_app_state`), owned by the HTTP layer: it is
-//! what the handlers need, so it is defined where they are.
+//! the binary ([`build_app_state`](crate::bootstrap::build_app_state)), owned
+//! by the HTTP layer: it is what the handlers need, so it is defined where they
+//! are.
 
 use std::sync::Arc;
 

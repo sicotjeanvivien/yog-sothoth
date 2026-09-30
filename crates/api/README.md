@@ -15,7 +15,9 @@ roles, the add-an-endpoint recipe), see [`crates/README.md`](../README.md).
 ```
 api/src/
 ├── bootstrap/
-│   ├── app_state.rs       ← build_app_state() — wires the repositories into the services
+│   ├── app_state.rs       ← build_app_state() — opens the pool, wires the repositories
+│   │                        into the services, and builds the signal broadcast with the
+│   │                        poller it returns, the stream slots and the work slots
 │   ├── config.rs          ← Config::load() — env-driven
 │   └── serve.rs           ← serve() — the server and the poller, and their stop
 ├── application/
