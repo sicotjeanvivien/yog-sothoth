@@ -132,12 +132,16 @@ const TRANSACTIONS_EMITTED: &str = "yog_indexer_grpc_transactions_emitted_total"
 /// its speed.
 const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 
-/// Server pings this client could not answer, by reason.
-///
-/// An unanswered ping is what a provider may close a connection for, so a
-/// non-zero value here is a reconnection — and a billed replay — that might
-/// follow. The session keeps reading either way.
+/// Server pings this client could not answer, by reason. A provider may close
+/// a connection that does not answer, so this can precede a reconnection.
 const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
+
+/// Attempts ended because the server said nothing for the stall timeout, by
+/// [`StallSite`].
+///
+/// ⚠️ The only trace of a stall: it raises no error and closes nothing. Each
+/// increment is a reconnection, and a billed replay when there is a mark.
+const STALLS: &str = "yog_indexer_grpc_stalls_total";
 
 /// What an update was, for [`UPDATES_RECEIVED`].
 #[derive(Debug, Clone, Copy)]
@@ -147,13 +151,9 @@ pub(crate) enum UpdateKind {
     /// A server keep-alive. Counted, and answered with a ping-only request —
     /// see `StreamSession::answer_ping`.
     Ping,
-    /// The server's answer to one of those answers.
-    ///
-    /// ⚠️ **Read against `ping`, not on its own.** The client sends a ping only
-    /// in reply to the server's, and the server answers each one with a pong.
-    /// So this rises at the same rate as `ping` while the answers are getting
-    /// through. A `pong` lagging `ping` means answers are going out unread, or
-    /// not going out at all — [`PING_REPLIES_UNSENT`] says which.
+    /// The server's answer to one of ours. ⚠️ Read against `ping`: the two rise
+    /// together while answers get through, and [`PING_REPLIES_UNSENT`] says why
+    /// when they do not.
     Pong,
     /// Anything the subscription did not ask for. Non-zero here means the
     /// request and the reader disagree about what was subscribed to.
@@ -201,16 +201,13 @@ impl DropReason {
     }
 }
 
-/// Why a ping answer did not leave, for [`PING_REPLIES_UNSENT`].
-///
-/// Two labels because the two are fixed in different places: one is a
-/// transport that stopped draining, the other a request stream that is gone.
+/// Why a ping answer did not leave, for [`PING_REPLIES_UNSENT`]: a transport
+/// that stopped draining, or a request stream that is gone.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PingReplyFailure {
     /// The outbound half is full: the transport is not taking what is sent.
     OutboundFull,
-    /// The outbound half is closed: the request stream has ended, so the
-    /// server will hear nothing more from this subscription.
+    /// The outbound half is closed: the request stream has ended.
     OutboundClosed,
 }
 
@@ -219,6 +216,34 @@ impl PingReplyFailure {
         match self {
             Self::OutboundFull => "outbound_full",
             Self::OutboundClosed => "outbound_closed",
+        }
+    }
+}
+
+/// Where a stall happened, for [`STALLS`]: a front end that never answers
+/// `subscribe` shows nothing in [`UPDATES_RECEIVED`]; a stopped data path
+/// shows `ping` rising over a flat `block_meta`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum StallSite {
+    /// `subscribe` was never answered.
+    Subscribe,
+    /// The stream was open and no block-meta came.
+    Stream,
+}
+
+impl StallSite {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Subscribe => "subscribe",
+            Self::Stream => "stream",
+        }
+    }
+
+    /// What the attempt's error says happened.
+    pub(crate) fn describe(self) -> &'static str {
+        match self {
+            Self::Subscribe => "subscribe never answered",
+            Self::Stream => "no block-meta from the stream",
         }
     }
 }
@@ -247,6 +272,12 @@ impl GrpcListenerMetrics {
              to the consumer's speed"
         );
         describe_counter!(
+            STALLS,
+            "Attempts ended because the server said nothing for the stall \
+             timeout, labelled by where: no answer to subscribe, or no \
+             block-meta on an open stream"
+        );
+        describe_counter!(
             PING_REPLIES_UNSENT,
             "Server pings that could not be answered, labelled by why the \
              answer did not leave"
@@ -271,5 +302,9 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_ping_reply_unsent(failure: PingReplyFailure) {
         counter!(PING_REPLIES_UNSENT, "reason" => failure.as_str()).increment(1);
+    }
+
+    pub(crate) fn record_stall(site: StallSite) {
+        counter!(STALLS, "site" => site.as_str()).increment(1);
     }
 }

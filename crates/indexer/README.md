@@ -330,6 +330,14 @@ correction: per-update failures are counted and stepped over in `session`,
 `SessionState::ShutdownRequested` is what keeps a wait on a full consumer
 interruptible.
 
+One ending is not the server's: a stream that stops delivering block-metas and
+stays open, or a `subscribe` that is never answered. Neither the HTTP/2
+keep-alive nor Yellowstone's pings would notice, so after `STALL_TIMEOUT`
+(30 s, the threshold Alchemy gives) of waiting the listener ends the attempt
+itself. The mark is kept even when the attempt delivered nothing: silence is
+not a refusal, and the retry budget is what bounds a server that never speaks
+again.
+
 ## `TransactionProcessor` and its collaborators
 
 `TransactionProcessor::process_transaction(protocol, &OnChainTransaction)`
@@ -488,6 +496,23 @@ emitted. No gauges today — all counters and histograms.
   cost a request that was made and billed, `shutdown_before_fetch` is a
   signature dropped while queueing for a permit and cost nothing. A non-zero
   `downstream_closed` outside a shutdown means the consumer died first.
+- **gRPC listener counters** (Yellowstone source only, and **no** `protocol`
+  label — one stream serves every protocol) —
+  `yog_indexer_grpc_updates_total{kind}` (`transaction`, `block_meta`, `ping`,
+  `pong`, `other`), `yog_indexer_grpc_dropped_transactions_total{reason}`,
+  `yog_indexer_grpc_transactions_emitted_total`,
+  `yog_indexer_grpc_downstream_full_total` (back-pressure, not loss),
+  `yog_indexer_grpc_untimestamped_transactions_total{reason}`,
+  `yog_indexer_grpc_ping_replies_unsent_total{reason}` and
+  `yog_indexer_grpc_stalls_total{site}`. ⚠️ **`stalls_total` is the only
+  trace of a server that went silent without closing**: `site="stream"` for a
+  stream that stopped delivering block-metas (before it, the sign was
+  `kind="block_meta"` going flat while `kind="ping"` kept rising),
+  `site="subscribe"` for a subscription never answered. Each increment is a
+  reconnection, and a billed `from_slot` replay when there is a mark. A steady
+  `site="stream"` rate means a provider that replays and then goes quiet at the
+  live edge: that stall delivered, so it restarts the budget and never stops
+  the indexer.
 - **Worker counter** — `yog_indexer_ingested_dropped_total{reason}`: delivered
   transactions the consumer never processed, `shutdown` for the one in hand and
   `shutdown_queued` for what was still in the channel. It mirrors the fetch

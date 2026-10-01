@@ -52,6 +52,10 @@
 //! have nothing to do with the rule. Named here rather than covered by a
 //! sentence that says "every arm" and means "almost".
 //!
+//! ⚠️ **One ending is the listener's own: the stall** — see
+//! [`Attempt::Stalled`]. One part of it is left unguarded, for the backoff's
+//! reason: that its clock skips the time `handle` spends on a full consumer.
+//!
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
 //! connect timeout, whether a provider takes the session's answer to its pings,
 //! and — the one that matters — whether a provider honours `from_slot` the way
@@ -68,7 +72,10 @@
 use std::{collections::HashSet, error::Error, sync::Arc, time::Duration};
 
 use solana_pubkey::Pubkey;
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    sync::{Mutex, mpsc},
+    time::Instant,
+};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::{
@@ -88,6 +95,7 @@ use crate::{
         endpoint::scheme,
         grpc::{
             interceptor::CredentialInterceptor,
+            metrics::{GrpcListenerMetrics, StallSite},
             session::{SessionState, StreamSession},
             subscription::build_request,
         },
@@ -110,6 +118,19 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// that are precisely the risk.
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
+/// How long the listener waits for an answer to `subscribe`, or for a
+/// block-meta on the stream, before ending the attempt as stalled.
+///
+/// ⚠️ A server can stop delivering and keep the connection open — HTTP/2
+/// keep-alive and Yellowstone pings both carry on, the pings coming from a
+/// task of their own (`rpcpool/yellowstone-grpc` #25, #175). Without this
+/// bound the listener would wait for ever.
+///
+/// The block-meta is the signal because one comes every slot (~400 ms)
+/// whatever the market does. 30 s is Alchemy's alerting threshold; not
+/// measured — the largest block-meta gap on a real stream should replace it.
+pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Ceiling on one decoded message.
 ///
 /// ⚠️ **Not a tuning knob — tonic's default is 4 MiB and it is too small.** A
@@ -119,12 +140,9 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 /// the buffer downstream, not this, is what bounds memory.
 const MAX_DECODING_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
-/// How many outbound requests may queue: the subscription, once per
-/// connection, then one ping-only answer per server ping (see
-/// [`StreamSession`]). Those leave one at a time, seconds apart, so the
-/// headroom is only there for a transport that is slow to drain. A full channel
-/// means it is not draining at all, and the session counts the answer it could
-/// not send rather than waiting.
+/// How many outbound requests may queue: the subscription, then one answer per
+/// server ping. A full channel means the transport is not draining; the
+/// session then drops the answer rather than wait.
 const OUTBOUND_CAPACITY: usize = 8;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped
@@ -145,14 +163,18 @@ pub(crate) struct GrpcListener {
     /// [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
+    /// [`STALL_TIMEOUT`] in production. A parameter rather than the constant
+    /// read in place so that a test can stall a stream in milliseconds.
+    stall_timeout: Duration,
 }
 
 impl GrpcListener {
-    pub(crate) fn new(endpoint: Endpoint, max_attempts: u32) -> Self {
+    pub(crate) fn new(endpoint: Endpoint, max_attempts: u32, stall_timeout: Duration) -> Self {
         Self {
             endpoint,
             watched: Mutex::new(HashSet::new()),
             max_attempts,
+            stall_timeout,
         }
     }
 
@@ -303,8 +325,18 @@ impl GrpcListener {
                     error,
                     delivered: true,
                     ..
+                }
+                | Attempt::Stalled {
+                    error,
+                    delivered: true,
+                    ..
                 } => {
-                    warn!(attempt, error = %error, "gRPC stream broke — resubscribing");
+                    warn!(
+                        attempt,
+                        error = %error,
+                        resume_from = ?resume_from,
+                        "gRPC stream broke — resubscribing"
+                    );
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
@@ -327,6 +359,11 @@ impl GrpcListener {
                 // is exactly what nothing used to say.
                 Attempt::Unreachable { error }
                 | Attempt::Failed {
+                    error,
+                    delivered: false,
+                    ..
+                }
+                | Attempt::Stalled {
                     error,
                     delivered: false,
                     ..
@@ -433,7 +470,23 @@ impl GrpcListener {
             };
         }
 
-        let mut stream = match client.subscribe(ReceiverStream::new(outbound_rx)).await {
+        // Bounded too, or a server that never sends response headers hangs us
+        // here; and interruptible, since 30 s outlasts a stop grace period.
+        let subscribed = tokio::select! {
+            biased;
+
+            _ = shutdown.cancelled() => return Attempt::ShutdownRequested,
+
+            subscribed = tokio::time::timeout(
+                self.stall_timeout,
+                client.subscribe(ReceiverStream::new(outbound_rx)),
+            ) => subscribed,
+        };
+        let Ok(subscribed) = subscribed else {
+            return self.stalled(StallSite::Subscribe, false, None);
+        };
+
+        let mut stream = match subscribed {
             Ok(response) => response.into_inner(),
             // ⚠️ **A `Status` here is not proof that a server spoke.** tonic maps
             // a connection that gave way into a `Status` as well, so this one
@@ -465,42 +518,82 @@ impl GrpcListener {
 
         let mut session = StreamSession::new(downstream.clone(), outbound_tx, shutdown.clone());
 
+        // ⚠️ Time spent *waiting on the server*, not wall-clock time: what
+        // `handle` spends parked on a full consumer is not a silent server.
+        // Reset by a block-meta only.
+        let mut silent = Duration::ZERO;
+
         loop {
+            let waiting = Instant::now();
+
             tokio::select! {
                 biased;
 
                 _ = shutdown.cancelled() => return Attempt::ShutdownRequested,
 
-                message = stream.message() => match message {
-                    Ok(Some(update)) => match session.handle(update).await {
-                        SessionState::Open => {}
-                        SessionState::DownstreamClosed => return Attempt::DownstreamClosed,
-                        // The session was parked on a full consumer when the
-                        // token fired. This arm is what makes that wait
-                        // interruptible: `handle` runs in the *body* of this
-                        // arm, not as a `select!` branch, so nothing here polls
-                        // the token while it is inside.
-                        SessionState::ShutdownRequested => return Attempt::ShutdownRequested,
-                    },
-                    Ok(None) => return Attempt::StreamClosed {
-                        delivered: session.received_data(),
-                        resume_from: session.resume_from(),
-                    },
-                    Err(status) => return Attempt::Failed {
-                        error: url.scrub(&format!("stream: {status}")),
-                        delivered: session.received_data(),
-                        resume_from: session.resume_from(),
-                    },
+                message = stream.message() => {
+                    silent += waiting.elapsed();
+                    match message {
+                        Ok(Some(update)) => {
+                            let block_metas = session.block_metas_received();
+                            match session.handle(update).await {
+                                SessionState::Open => {}
+                                SessionState::DownstreamClosed => return Attempt::DownstreamClosed,
+                                // The session was parked on a full consumer when
+                                // the token fired. This arm is what makes that
+                                // wait interruptible: `handle` runs in the *body*
+                                // of this arm, not as a `select!` branch, so
+                                // nothing here polls the token while it is inside.
+                                SessionState::ShutdownRequested => {
+                                    return Attempt::ShutdownRequested;
+                                }
+                            }
+                            if session.block_metas_received() != block_metas {
+                                silent = Duration::ZERO;
+                            }
+                        }
+                        Ok(None) => return Attempt::StreamClosed {
+                            delivered: session.received_data(),
+                            resume_from: session.resume_from(),
+                        },
+                        Err(status) => return Attempt::Failed {
+                            error: url.scrub(&format!("stream: {status}")),
+                            delivered: session.received_data(),
+                            resume_from: session.resume_from(),
+                        },
+                    }
                 },
+
+                // After `message`, so that a message already waiting — which
+                // may be the block-meta that resets the clock — is read first.
+                _ = tokio::time::sleep(self.stall_timeout.saturating_sub(silent)) => {
+                    return self.stalled(
+                        StallSite::Stream,
+                        session.received_data(),
+                        session.resume_from(),
+                    );
+                }
             }
+        }
+    }
+
+    /// End an attempt as [`Attempt::Stalled`], counted by site. Not logged
+    /// here: `run` logs every ending once, with the mark it will really use.
+    fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Attempt {
+        GrpcListenerMetrics::record_stall(site);
+
+        Attempt::Stalled {
+            error: format!("stalled: {} for {:?}", site.describe(), self.stall_timeout),
+            delivered,
+            resume_from,
         }
     }
 }
 
 /// How one connection ended.
 ///
-/// The two **stream** endings carry the same two facts, and the listener needs
-/// both on both — dropping `delivered` from one of them was a defect of its
+/// The **stream** endings carry the same two facts, and the listener needs
+/// both on each — dropping `delivered` from one of them was a defect of its
 /// own, see the `Failed` arm: `resume_from` is where to pick up (see
 /// `StreamSession::resume_from`), and `delivered` says whether this attempt got
 /// anything off the stream at all, which is what separates the churn of a
@@ -545,6 +638,19 @@ enum Attempt {
         resume_from: Option<u64>,
     },
     Failed {
+        error: String,
+        delivered: bool,
+        resume_from: Option<u64>,
+    },
+    /// The server said nothing for [`STALL_TIMEOUT`], and this listener ended
+    /// the attempt.
+    ///
+    /// ⚠️ `Failed`'s budget rule, not its mark rule: silence is not a refusal,
+    /// so a stall that delivered nothing keeps the mark (the budget bounds the
+    /// retries). A stall that did deliver is churn and restarts the budget — a
+    /// provider that replays and then goes quiet is retried for ever, which
+    /// `stalls_total` rising steadily shows.
+    Stalled {
         error: String,
         delivered: bool,
         resume_from: Option<u64>,
@@ -618,6 +724,11 @@ impl Attempt {
                 delivered: true,
                 resume_from,
                 ..
+            }
+            | Attempt::Stalled {
+                delivered: true,
+                resume_from,
+                ..
             } => (*resume_from).or(held),
 
             Attempt::StreamClosed {
@@ -630,6 +741,12 @@ impl Attempt {
             // Nothing was asked of anyone, so nothing was refused: the mark is
             // exactly as good as it was a moment ago.
             Attempt::Unreachable { .. } => held,
+
+            // Asked, and met with silence — which is not a refusal. See
+            // `Attempt::Stalled`.
+            Attempt::Stalled {
+                delivered: false, ..
+            } => held,
 
             // Neither ending: the loop returns on both, so this answer is never
             // read. Handing back what we hold is the only one that is not a
