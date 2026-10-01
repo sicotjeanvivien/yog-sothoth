@@ -16,7 +16,7 @@ use super::*;
 impl<T> SlotTimestampBuffer<T> {
     /// How many payloads are waiting.
     fn pending_payloads(&self) -> usize {
-        self.pending_count
+        self.waiting.count()
     }
 
     /// How many slot outcomes are remembered — instants and given-up slots
