@@ -17,8 +17,8 @@
 //!
 //! - **skip-and-log inside** — `session` counts every dropped update by reason
 //!   and steps over it; only a broken stream reaches [`GrpcListenerError`];
-//! - **`Ok(())` on a shutdown and on a departed consumer** — `Attempt::
-//!   ShutdownRequested` and `Attempt::DownstreamClosed`, both already exits of
+//! - **`Ok(())` on a shutdown and on a departed consumer** — `Ending::
+//!   ShutdownRequested` and `Ending::DownstreamClosed`, both already exits of
 //!   `GrpcListener::run`;
 //! - **an interruptible wait** — `SessionState::ShutdownRequested` is what makes
 //!   a full consumer stoppable, and it exists because a review found the

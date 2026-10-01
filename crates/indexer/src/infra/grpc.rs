@@ -4,10 +4,12 @@
 //! travels:
 //!
 //! - `listener` — the connection, the subscription, and what to do when the
-//!   stream breaks;
+//!   stream breaks; its sub-modules hold the connection itself, how it ended,
+//!   the retry budget and the stall clock;
 //! - `subscription` — what is asked for, and how an update names its protocol;
-//! - `session` — what one update does: route it, pair it with its slot's time,
-//!   translate it, hand it downstream;
+//! - `session` — what one update does: route it, then pair it with its slot's
+//!   time (`slot_progress`), hand it downstream (`delivery`), or answer a ping
+//!   (`ping_answer`);
 //! - `interceptor` — the credential, on every request, printed by nothing;
 //! - `transaction_adapter` — the protobuf shape into the neutral transaction;
 //! - `slot_timestamp_buffer` — the pairing itself, since `block_time` lives on
@@ -31,9 +33,9 @@
 //! that is **not** a stream's — the attempt that never got an answer — is
 //! guarded in two halves: what it costs the retry budget goes through `run`
 //! like the others, against a port with nothing behind it, while what it does
-//! to the resume mark is driven one level down, at `connect_and_stream`,
+//! to the resume mark is driven one level down, at `Connector::attempt`,
 //! because no server can both deliver a mark and be unreachable for the attempt
-//! after. `listener.rs`'s header carries the measurements. All of it proves
+//! after. All of it proves
 //! this client against our model of the server, and nothing about the protocol
 //! — so TLS, keep-alive, the answer to server pings and the exact semantics of
 //! `from_slot` are still written, reviewed and unproven until the first run
@@ -63,15 +65,16 @@ mod subscription;
 mod transaction_adapter;
 
 // Test-only, and last so that the list above is the path itself. They live in
-// `grpc/tests/` with the six `_tests.rs` files, which is what a directory
+// `grpc/tests/` with the eight `_tests.rs` files, which is what a directory
 // listing needs to say; the module keeps the `test_` prefix, which is what a
 // `use` needs to say. Same split as `api`'s `request.rs` — file `common.rs`,
 // module `test_common`.
 //
 // ⚠️ **The `grpc/` in these paths is not a typo.** `#[path]` resolves against
 // the directory of the *declaring file*, and this file is `infra/grpc.rs`, so
-// the base is `infra/`. The thirteen `#[path]`s inside `grpc/` and `rpc/` are
-// already one level down and need only `tests/`.
+// the base is `infra/`. The `#[path]`s inside `grpc/` and `rpc/` are already one
+// level down and need only `tests/` — and those inside `grpc/listener/`, two
+// levels down, need `../tests/`.
 #[cfg(test)]
 #[path = "grpc/tests/fixtures.rs"]
 mod test_fixtures;

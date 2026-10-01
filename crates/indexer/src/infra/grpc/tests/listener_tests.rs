@@ -16,6 +16,8 @@
 
 use super::*;
 
+use super::ending::Ending;
+
 use yog_bootstrap::Endpoint;
 
 fn listener(url: &str) -> GrpcListener {
@@ -32,7 +34,7 @@ fn an_http_endpoint_is_accepted() {
         "HTTPS://x.io",
     ] {
         assert!(
-            listener(url).channel_endpoint().is_ok(),
+            listener(url).connector.channel_endpoint().is_ok(),
             "{url} is a gRPC endpoint"
         );
     }
@@ -46,6 +48,7 @@ fn an_http_endpoint_is_accepted() {
 #[test]
 fn a_websocket_endpoint_is_refused_before_the_loop() {
     let detail = listener("wss://api.example.com")
+        .connector
         .channel_endpoint()
         .expect_err("a WebSocket URL is not a gRPC endpoint")
         .to_string();
@@ -63,6 +66,7 @@ fn a_websocket_endpoint_is_refused_before_the_loop() {
 #[test]
 fn a_url_without_a_scheme_reaches_the_scheme_check() {
     let detail = listener("grpc.example.com:443")
+        .connector
         .channel_endpoint()
         .expect_err("a schemeless URL is not a gRPC endpoint")
         .to_string();
@@ -102,8 +106,9 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // ── the retry rules, against a scripted server ──────────────────────
 //
 // Everything below drives `GrpcListener::run` itself, against `test_geyser_server`.
-// Until 16 September 2026 nothing did: the six arms of `run`'s `match` are the
-// rule that decides what restarts the retry budget and what charges it — and,
+// Until 16 September 2026 nothing did: `Ending::verdict`, read by
+// `RetryBudget::settle`, is the rule that decides what restarts the retry
+// budget and what charges it — and,
 // until later the same day, where the next attempt resumed from too. Every one
 // of the five defects that rule has had was found by reading it. None could
 // have been found by running it. Where the resume point lives now, and what
@@ -127,7 +132,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // makes that readable; it was missing until a review of this change found the
 // arm had none.
 //
-// ⚠️ **Two rules below are driven at `connect_and_stream` and not at `run`**,
+// ⚠️ **Two rules below are driven at `Connector::attempt` and not at `run`**,
 // and they are the only ones: what an attempt that never reached the service
 // does to the **mark**. Observing a mark being kept needs one to exist first,
 // and only a delivered session makes one — against a server that must, for the
@@ -135,10 +140,10 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // driven through `run` like every other rule here. Each header says which.
 //
 // ⚠️ **Where the resume mutations live moved on 16 September 2026**, with the
-// fix for a delivered session that had no mark of its own. `run`'s arms no
-// longer write `resume_from`: the rule is `Attempt::next_resume_from`, one
-// expression with one branch per ending, and the *per-ending* facts it reads are
-// built in `connect_and_stream`. So a mutation that used to belong to one arm
+// fix for a delivered session that had no mark of its own. The budget does not
+// write `resume_from`: the rule is `Verdict::next_resume_from`, which reads the
+// same verdict as the budget, and the *per-ending* facts behind it are
+// built in `Connector::open` and `Connector::read`. So a mutation that used to belong to one arm
 // now belongs to one of those two places, and each annotation below says which.
 
 use tokio::{net::TcpListener, time::timeout};
@@ -338,8 +343,8 @@ async fn a_stream_that_only_pings_before_closing_spends_the_budget() {
 /// *closes empty*, with a budget of two, is **three** subscriptions. Without
 /// the reset the first one is charged and it is two.
 ///
-/// Mutation this is written against: removing `attempt = 0` from the
-/// `Failed { delivered: true }` arm.
+/// Mutation this is written against: `Ending::verdict` classing
+/// `Failed { delivered: true }` as `Unanswered` instead of `Delivered`.
 #[tokio::test]
 async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -388,7 +393,7 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
 /// other rules — the very pattern the section header above forbids, left
 /// unapplied on one arm by the commit that wrote the rule.
 ///
-/// Mutation this is written against: `connect_and_stream`'s `Err(status)`
+/// Mutation this is written against: `on_message`'s `Err(status)`
 /// ending handing back `resume_from: None` instead of `session.resume_from()`.
 /// That is where this ending's mark is now built — `next_resume_from` no longer
 /// tells the two endings apart, which is the point of it.
@@ -436,8 +441,8 @@ async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
 /// Found by review of this very change, 16 September 2026: the first version of
 /// these tests claimed to cover every arm and left this one reset unobserved.
 ///
-/// Mutation this is written against: removing `attempt = 0` from the
-/// `StreamClosed { delivered: true }` arm.
+/// Mutation this is written against: `Ending::verdict` classing
+/// `StreamClosed { delivered: true }` as `Unanswered` instead of `Delivered`.
 #[tokio::test]
 async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -481,7 +486,7 @@ async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
 /// again — rewound by `REWIND_SLOTS`, because a block-meta does not promise its
 /// slot's transactions have all arrived either.
 ///
-/// Mutation this is written against: `connect_and_stream`'s `Ok(None)` ending
+/// Mutation this is written against: `on_message`'s `Ok(None)` ending
 /// handing back `resume_from: None` instead of `session.resume_from()` — the
 /// half `session_tests` cannot see, since it proves `resume_from` computes 8,
 /// not that anything asks for it.
@@ -527,9 +532,9 @@ async fn a_break_mid_block_resumes_from_the_slot_that_was_cut() {
 /// unroutable transaction then a clean close* has nothing to offer, and the
 /// third must still ask for 8.
 ///
-/// Mutation this is written against: `Attempt::next_resume_from`'s delivered
-/// branch returning the session's mark alone (`*resume_from`) instead of
-/// `(*resume_from).or(held)`. It reddens nothing else — the two resumption
+/// Mutation this is written against: `Verdict::next_resume_from`'s
+/// `Delivered` arm returning the session's mark alone (`*mark`) instead of
+/// `mark.or(held)`. It reddens nothing else — the two resumption
 /// tests above hold `None` at that point, where `or` is invisible.
 ///
 /// ⚠️ **The mark of the first attempt is scaffolding**, produced by the
@@ -562,7 +567,7 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
 
     assert!(outcome.is_err(), "{outcome:?}");
     // ⚠️ The whole vector, not a prefix, and it is safe here where its
-    // neighbours' is not: removing either churn arm's `attempt = 0` still
+    // neighbours' is not: sending either churn arm to `charge` still
     // leaves three subscriptions asking for these same three points, so no
     // budget rule can redden this test.
     assert_eq!(
@@ -579,8 +584,8 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
 /// lost rather than looped on. No error text is read to decide it — only
 /// whether the stream produced anything.
 ///
-/// Mutation this is written against: `Attempt::next_resume_from`'s undelivered
-/// branch returning `held` rather than `None`, which keeps the refused mark and
+/// Mutation this is written against: `Verdict::next_resume_from`'s `Refused`
+/// arm returning `held` rather than `None`, which keeps the refused mark and
 /// asks for it again. It is the mutation
 /// `a_clean_close_that_delivered_nothing_gives_up_the_replay_point` also owns —
 /// one branch now answers for both endings, and a branch cannot be corrected on
@@ -635,8 +640,8 @@ async fn a_refused_resume_point_is_not_asked_for_twice() {
 /// Found by review of this change, 16 September 2026, with its twin above.
 ///
 /// Mutation this is written against: the same one its `Failed`-side twin names
-/// — `Attempt::next_resume_from`'s undelivered branch returning `held` rather
-/// than `None`. The branch is shared; the ending that reaches it is not, and
+/// — `Verdict::next_resume_from`'s `Refused` arm returning `held` rather
+/// than `None`. The arm is shared; the ending that reaches it is not, and
 /// that is what this test adds.
 ///
 /// ⚠️ **The mark is produced by the `Failed` arm, on purpose**, though the rule
@@ -690,14 +695,14 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
 /// was dropped, the attempt after it started from the live edge, and the
 /// transactions of the original break were never asked for again.
 ///
-/// Mutation this owns: `connect_and_stream`'s `channel.connect()` failure
-/// returning `Attempt::Failed { delivered: false }` again, which the `match`
+/// Mutation this owns: `Connector::open`'s `channel.connect()` failure
+/// returning `Ending::Failed { delivered: false }` again, which the `match`
 /// below catches by name.
 ///
-/// ⚠️ It also reddens under `Attempt::next_resume_from`'s `Unreachable` branch
-/// returning `None`, **and so does its twin below** — one branch answers for
-/// every site that never got an answer, exactly as one branch answers for both
-/// undelivered endings. That is the price of the single expression, and it is
+/// ⚠️ It also reddens under `Verdict::next_resume_from`'s `Unanswered` arm
+/// returning `None`, **and so does its twin below** — one arm answers for
+/// every site that never got an answer, exactly as one arm answers for both
+/// refusals. That is the price of the single expression, and it is
 /// paid knowingly: what separates the two tests is the *site* each drives it
 /// from, which is where the defect lived.
 ///
@@ -737,9 +742,11 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     // Built exactly as `run` builds them, and none of the three is what fails:
     // the endpoint is well formed, the credential empty, the subscription
     // non-empty. What is missing is a server.
-    let credential = Credential::new(listener.endpoint.header()).expect("no header is valid");
+    let credential =
+        Credential::new(listener.connector.endpoint().header()).expect("no header is valid");
     let interceptor = CredentialInterceptor::new(&credential).expect("no header to reject");
     let channel = listener
+        .connector
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
     // The attempt is about to ask for slot 8 — the mark a previous break left.
@@ -751,7 +758,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
 
     let outcome = timeout(
         TEST_DEADLINE,
-        listener.connect_and_stream(
+        listener.connector.attempt(
             &channel,
             &interceptor,
             request,
@@ -763,10 +770,10 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     .expect("a refused dial fails at once; it does not hang to the connect timeout");
 
     let error = match &outcome {
-        Attempt::Unreachable { error } => error,
+        Ending::Unreachable { error } => error,
         // Naming the impostor rather than the expectation: reading this failure
         // as an ending of a stream is the defect itself.
-        Attempt::Failed { error, .. } => {
+        Ending::Failed { error, .. } => {
             panic!("the dial was refused, so nothing answered — yet: {error}")
         }
         _ => panic!("a refused dial ends the attempt before any stream exists"),
@@ -777,7 +784,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
     );
 
     assert_eq!(
-        outcome.next_resume_from(Some(8)),
+        outcome.verdict().next_resume_from(Some(8)),
         Some(8),
         "nothing was asked of anyone, so slot 8 was refused by no one: the \
          attempt after this one must ask for it again"
@@ -797,7 +804,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
 /// the two sites the plan had listed and left standing the one it had
 /// classified, wrongly, as the server's answer.
 ///
-/// Mutation this owns: `connect_and_stream`'s `subscribe` arm losing its
+/// Mutation this owns: `Connector::subscribe` losing its
 /// `reached_the_service` guard, so every `Status` counts as an answer. It
 /// reddens nothing else — the twin above never reaches `subscribe`, and
 /// `a_refused_resume_point_is_not_asked_for_twice` drives a `Status` the
@@ -809,9 +816,11 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
     let listener = GrpcListener::new(Endpoint::for_tests(&port.url, None), 1, STALL_TIMEOUT);
     listener.watch(PROTOCOL).await;
 
-    let credential = Credential::new(listener.endpoint.header()).expect("no header is valid");
+    let credential =
+        Credential::new(listener.connector.endpoint().header()).expect("no header is valid");
     let interceptor = CredentialInterceptor::new(&credential).expect("no header to reject");
     let channel = listener
+        .connector
         .channel_endpoint()
         .expect("a plaintext loopback URL is a gRPC endpoint");
     let request = listener
@@ -822,7 +831,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
 
     let outcome = timeout(
         TEST_DEADLINE,
-        listener.connect_and_stream(
+        listener.connector.attempt(
             &channel,
             &interceptor,
             request,
@@ -834,8 +843,8 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
     .expect("a cut connection fails the RPC at once");
 
     let error = match &outcome {
-        Attempt::Unreachable { error } => error,
-        Attempt::Failed { error, .. } => {
+        Ending::Unreachable { error } => error,
+        Ending::Failed { error, .. } => {
             panic!("the connection was cut, so the server never answered — yet: {error}")
         }
         _ => panic!("a cut connection ends the attempt before any stream exists"),
@@ -848,7 +857,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
     );
 
     assert_eq!(
-        outcome.next_resume_from(Some(8)),
+        outcome.verdict().next_resume_from(Some(8)),
         Some(8),
         "a `Status` our own transport produced is nobody's verdict on slot 8: \
          the attempt after this one must ask for it again"
@@ -862,13 +871,14 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
 /// the failure mode the empty-close arm was written against, on the ending
 /// next door.
 ///
-/// This is the half of `Attempt::Unreachable` that **does** go through `run`,
+/// This is the half of `Ending::Unreachable` that **does** go through `run`,
 /// and the header of its sibling says why the other half cannot: a mark has to
 /// exist before it can be kept, and nothing can deliver one through a port that
 /// must stay dead.
 ///
-/// Mutation this is written against: the `run` arm restarting the budget on
-/// `Unreachable` (`attempt = 0`). It cannot produce a wrong value, only a
+/// Mutation this is written against: `Ending::verdict` classing
+/// `Unreachable` as `Delivered { mark: None }`, which restarts the budget and
+/// leaves the mark as it was. It cannot produce a wrong value, only a
 /// listener that never returns — so the deadline is the assertion, as it is for
 /// the two shutdown tests.
 #[tokio::test]
@@ -905,7 +915,7 @@ async fn a_dial_that_never_connects_spends_the_budget() {
 /// for exactly as long as the quiet lasted.
 ///
 /// Mutation this is written against: removing the `shutdown.cancelled()` branch
-/// from `connect_and_stream`'s `select!`. It cannot produce a wrong value, only
+/// from `Connector::read`'s `select!`. It cannot produce a wrong value, only
 /// a listener that never returns — which is why the deadline is the assertion.
 #[tokio::test]
 async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
@@ -938,7 +948,7 @@ async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
 /// stalls without dropping its receiver would otherwise make the process ignore
 /// a stop request for as long as the stall lasts.
 ///
-/// Mutation this is written against: `session.rs`'s back-pressure wait made
+/// Mutation this is written against: `session/delivery.rs`'s back-pressure wait made
 /// unconditional — `self.downstream.send(ingested).await` with no `select!`.
 /// `session_tests` covers the session's own answer; what is proved here is that
 /// the listener turns it into a clean stop rather than another attempt.
@@ -1072,7 +1082,7 @@ async fn run_until_subscribed(
 /// until the next process restart is lost.
 ///
 /// Mutation this is written against: removing the stall arm of
-/// `connect_and_stream`'s `select!` — the second subscription never comes and
+/// `Connector::read`'s `select!` — the second subscription never comes and
 /// `wait_for_subscriptions` gives up at `TEST_DEADLINE`. And `stalled` handing
 /// back `resume_from: None`, which the resume point catches. Not
 /// `#[tokio::test]` because it reads the counter — see `session_tests`'
@@ -1233,9 +1243,9 @@ async fn a_stall_that_delivered_nothing_spends_the_budget() {
 /// data path stays stuck across two attempts must not send the next one to the
 /// live edge.
 ///
-/// Mutation this is written against: `Attempt::next_resume_from` giving a
-/// stall that delivered nothing `None`, as it does a `Failed` — the third
-/// request then asks for no slot at all.
+/// Mutation this is written against: `Ending::verdict` classing a stall that
+/// delivered nothing as `Refused`, as it does a `Failed` — the third request
+/// then asks for no slot at all.
 #[tokio::test]
 async fn a_stall_that_delivered_nothing_keeps_the_mark() {
     let server = run_until_subscribed(

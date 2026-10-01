@@ -407,7 +407,7 @@ fn a_missing_meta_is_an_error_not_an_empty_list() {
     // dropped `meta` wholesale and one that stopped recording inner
     // instructions are two different fixes. The counter cannot tell them apart —
     // `drop_reason` folds both into `reason="missing_field"` on purpose, to
-    // bound cardinality — so `session.rs`'s `warn!(%error, …)` is the only place
+    // bound cardinality — so `session/log.rs`'s `untranslatable` is the only place
     // they are told apart, and this `field` is what it prints.
     assert!(
         matches!(&error, CoreError::MissingField { field, .. }

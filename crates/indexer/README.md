@@ -25,7 +25,12 @@ indexer/src/
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer
-│   └── tests/             ← its eight test files, grouped: what is left beside
+│   ├── listener/          ← one module per responsibility: connector,
+│   │                        ending (+ verdict, resume mark), retry_budget,
+│   │                        stall_clock, log — listener.rs only assembles them
+│   ├── session/           ← slot_progress, delivery, ping_answer, log —
+│   │                        session.rs only routes each update to them
+│   └── tests/             ← its ten test files, grouped: what is left beside
 │                            them is what goes into the binary
 ├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),
@@ -133,9 +138,10 @@ Filling it is this crate's job, one module per source:
   other kind of URL — so each path is a `Transport` constant, side by side with
   the other, and the check is one function.
 
-- `infra/grpc/listener.rs` opens the stream and keeps it open, with
-  `subscription.rs` (what is asked for) and `session.rs` (what an update means)
-  beside it, and `interceptor.rs` putting the credential on every request. The
+- `infra/grpc/listener.rs` opens the stream and keeps it open (its parts in
+  `listener/`), with `subscription.rs` (what is asked for) and `session.rs`
+  (what an update means, its parts in `session/`) beside it, and
+  `interceptor.rs` putting the credential on every request. The
   split is by what can be proven without a server: the request and the meaning
   of an update are pure and tested. The retry rule is neither pure nor
   untested — `tests/geyser_server.rs` is a scripted Yellowstone server, `#[cfg(test)]`
@@ -149,15 +155,16 @@ genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 `tests/geyser_server.rs` serves a test-written script over loopback, and every
 ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
-asks for — the budget being `run`'s `match`, and the resume point the one
-expression beside it, `Attempt::next_resume_from`. One ending is guarded from two
-sides: what an attempt that never reached the service costs the retry budget is
+asks for — the budget being `RetryBudget::settle`, and the resume point
+`Verdict::next_resume_from`, both reading the one `Ending::verdict`. One ending
+is guarded from two sides: what an attempt that never reached the service costs the retry budget is
 driven through `run`, against a port with nothing behind it, while what it does
-to the resume mark is driven one level down at `connect_and_stream` — observing
+to the resume mark is driven one level down at `Connector::attempt` — observing
 a mark being *kept* needs a delivered session to make one first, against a
-server that must be unreachable for the attempt after. The backoff reset is the
-one decision left unguarded on purpose — its only observable is a duration;
-`listener.rs`'s header says why, and carries the measurements behind both.
+server that must be unreachable for the attempt after. The two decisions only a
+duration shows from `run` — the backoff reset after a churn, and the stall clock
+ignoring time spent on a full consumer — are tested on the values of
+`RetryBudget` and `StallClock`.
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, whether a provider honours `from_slot` the way this code
 assumes, and whether it takes the ping-only answer the session sends to each
@@ -326,7 +333,7 @@ connection.
 
 It also meets the port's three obligations by construction rather than by
 correction: per-update failures are counted and stepped over in `session`,
-`Attempt::{ShutdownRequested, DownstreamClosed}` are both exits of `run`, and
+`Ending::{ShutdownRequested, DownstreamClosed}` are both exits of `run`, and
 `SessionState::ShutdownRequested` is what keeps a wait on a full consumer
 interruptible.
 
@@ -488,7 +495,7 @@ emitted. No gauges today — all counters and histograms.
   are ordinary weather on a metered provider. ⚠️ **And the gRPC path does not
   answer on this family at all** — it refuses the same absence, but counts it as
   `yog_indexer_grpc_dropped_transactions_total{reason="missing_field"}`
-  (`grpc/session.rs`, `drop_reason`). An alert written against `adapt` alone
+  (`grpc/session/delivery.rs`, `drop_reason`). An alert written against `adapt` alone
   goes blind the moment `INGEST_SOURCE` changes, which is precisely the failure
   the two adapters were aligned to make visible. The *dropped* family is
   different in kind — work discarded rather than work that went wrong. ⚠️ **Its `reason` label separates

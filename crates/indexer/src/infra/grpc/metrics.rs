@@ -149,7 +149,7 @@ pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
     /// A server keep-alive. Counted, and answered with a ping-only request —
-    /// see `StreamSession::answer_ping`.
+    /// see `PingAnswer::answer`.
     Ping,
     /// The server's answer to one of ours. ⚠️ Read against `ping`: the two rise
     /// together while answers get through, and [`PING_REPLIES_UNSENT`] says why
