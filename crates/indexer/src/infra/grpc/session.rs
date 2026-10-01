@@ -64,12 +64,8 @@ use super::{
 /// its own comment gives.
 const REWIND_SLOTS: u64 = 2;
 
-/// The `id` a server ping is answered with, which the server echoes in its
-/// pong.
-///
-/// Nothing correlates on it: one answer goes out per ping, and the pong is only
-/// counted. `1` is what the reference client example and Alchemy's
-/// documentation send.
+/// The `id` of a ping answer, echoed in the server's pong. Nothing correlates
+/// on it; `1` is what the reference client example and Alchemy send.
 const PING_REPLY_ID: i32 = 1;
 
 /// A transaction waiting for its slot's block time.
@@ -106,14 +102,9 @@ pub(super) enum SessionState {
 pub(super) struct StreamSession {
     buffer: SlotTimestampBuffer<PendingTransaction>,
     downstream: mpsc::Sender<IngestedTransaction>,
-    /// The outbound half of the bidirectional stream: what a server ping is
-    /// answered on — see [`Self::answer_ping`].
-    ///
-    /// ⚠️ **Held for the life of the session, not only for the pings.** Keeping
-    /// this sender alive is also what keeps the request stream from being
-    /// *half-closed*: dropping it ends the outbound direction, which is legal
-    /// HTTP/2 and which a server is free to read as the end of the exchange.
-    /// Cheaper to hold a sender than to find out which servers do.
+    /// The outbound half of the stream, where ping answers go. Held for the
+    /// session's life even when idle: dropping it half-closes the request
+    /// stream, which a server may read as the end of the exchange.
     outbound: mpsc::Sender<SubscribeRequest>,
     /// The highest slot whose block-meta has arrived — the only slots this
     /// session can claim to have finished. Advanced by block-metas alone: a
@@ -166,21 +157,11 @@ impl StreamSession {
         self.received_data
     }
 
-    /// How many block-metas this session took off the stream, a block time or
-    /// not.
+    /// How many block-metas this session took off the stream, with a block
+    /// time or not. The listener's stall clock restarts when it moves.
     ///
-    /// What the listener reads it for: a block-meta is the one message a
-    /// healthy stream sends every slot whatever the market does, so its
-    /// silence is the only reliable sign of a stream that has stalled without
-    /// closing. The listener compares this before and after `handle` and
-    /// restarts its stall clock when it moved.
-    ///
-    /// ⚠️ **Counted for every block-meta, including one without a block time.**
-    /// That slot is given up, but the server did deliver it: the question here
-    /// is whether the stream is alive, not whether the slot was usable. And
-    /// **never for a ping**, for the reason [`Self::received_data`] gives: a
-    /// Yellowstone server pings from a task of its own, so pings keep coming
-    /// from a server whose data path has stopped.
+    /// ⚠️ Never moved by a ping: pings come from a task of their own on the
+    /// server, so they keep coming after its data path has stopped.
     pub(super) fn block_metas_received(&self) -> u64 {
         self.block_metas
     }
@@ -378,45 +359,18 @@ impl StreamSession {
         }
     }
 
-    /// Answer a server ping with a request that carries **only** `ping`.
+    /// Answer a server ping with a request that carries **only** `ping` — a
+    /// provider may close a client that does not answer.
     ///
-    /// Yellowstone servers ping to check that the client is alive, and a
-    /// provider may close a connection that does not answer: Alchemy's
-    /// *Yellowstone gRPC Best Practices* page says "Always respond with pong,
-    /// otherwise the server may close your connection". A closed connection
-    /// costs a reconnection and a `from_slot` replay, both billed.
+    /// ⚠️ Nothing else may ride along. The reference server returns the pong
+    /// before it reads anything else off the request
+    /// (`yellowstone-grpc-geyser/src/grpc.rs`, `get_pong_msg` then
+    /// `continue`), so a bare ping never touches the subscription; a
+    /// `from_slot` or a filter on it would re-issue or replace it.
     ///
-    /// # ⚠️ Why a bare ping cannot touch the subscription
-    ///
-    /// A `SubscribeRequest` is also what *describes* the subscription, so the
-    /// fear was that a ping-only request would read as a new, empty one: an
-    /// unsubscribe-everything. That fear kept this session silent from
-    /// 10 September 2026 until the reference server was read on 1 October
-    /// (`rpcpool/yellowstone-grpc`, `yellowstone-grpc-geyser/src/grpc.rs`, at
-    /// `79abd84`), and the server settles it. It builds a `Filter` from each incoming
-    /// request, and when `filter.get_pong_msg()` returns a pong it sends that
-    /// pong and `continue`s. That is **before**
-    /// `incoming_client_tx.send(Some((request.from_slot, filter)))`, so a
-    /// request carrying a ping never replaces the subscription, and its
-    /// `from_slot` is never read. The reference client example
-    /// (`examples/rust/src/bin/client.rs`) and Alchemy's page both answer with
-    /// exactly this request.
-    ///
-    /// What must still never ride along is the subscription itself. Sending
-    /// `from_slot` back would re-issue the replay on every ping, and clearing
-    /// it on a copy of the request would truncate a replay still in flight.
-    /// That second answer was this module's for a day, before the silence.
-    ///
-    /// # ⚠️ Why `try_send` and not `send().await`
-    ///
-    /// `handle` runs from the *body* of the listener's `select!` arm, so a wait
-    /// here would stop the shutdown token from being polled — the defect that
-    /// [`SessionState::ShutdownRequested`] exists for, on the downstream side.
-    /// And a full outbound half means the transport is not draining: queueing
-    /// more answers buys nothing, and the next ping tries again. Both failures
-    /// are counted and stepped over. The session is still receiving, and if
-    /// the server does close it for want of an answer, the reconnection is
-    /// what handles that.
+    /// `try_send`, never `send().await`: `handle` runs in the body of the
+    /// listener's `select!`, so waiting here would deafen it to shutdown. An
+    /// answer that cannot leave is counted and dropped; the next ping retries.
     fn answer_ping(&self) {
         let answer = SubscribeRequest {
             ping: Some(SubscribeRequestPing { id: PING_REPLY_ID }),

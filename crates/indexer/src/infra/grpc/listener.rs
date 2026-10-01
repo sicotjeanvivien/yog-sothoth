@@ -52,16 +52,9 @@
 //! have nothing to do with the rule. Named here rather than covered by a
 //! sentence that says "every arm" and means "almost".
 //!
-//! ⚠️ **One ending is the listener's own: the stall.** A `subscribe` that is
-//! never answered, or a stream that stops delivering block-metas and stays
-//! open, would otherwise be awaited for ever (see [`STALL_TIMEOUT`]). It ends
-//! as [`Attempt::Stalled`], which takes `Failed`'s budget rule and not its
-//! mark rule — silence is not a refusal — and the tests drive it with a stall
-//! timeout in milliseconds. **And one part of it is left unguarded, for the backoff's
-//! reason:** that the clock counts only the time spent *waiting on the
-//! server*, never the time `handle` spends parked on a full consumer. The only
-//! observable is a stall that does not happen after a long back-pressure
-//! episode, which is a duration again.
+//! ⚠️ **One ending is the listener's own: the stall** — see
+//! [`Attempt::Stalled`]. One part of it is left unguarded, for the backoff's
+//! reason: that its clock skips the time `handle` spends on a full consumer.
 //!
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
 //! connect timeout, whether a provider takes the session's answer to its pings,
@@ -125,31 +118,17 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// that are precisely the risk.
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
-/// How long the listener waits on the stream without a block-meta before
-/// calling it stalled and starting over.
+/// How long the listener waits for an answer to `subscribe`, or for a
+/// block-meta on the stream, before ending the attempt as stalled.
 ///
-/// ⚠️ **A stream can stop delivering and stay open**, and nothing below this
-/// layer notices. The HTTP/2 keep-alive is answered by the server's transport,
-/// not by the loop that sends data, and Yellowstone pings come from a task of
-/// their own in the reference server (`yellowstone-grpc-geyser/src/grpc.rs`,
-/// read at `79abd84`) — so both keep coming from a server whose data path has
-/// stopped. That has been seen in production on Triton's servers
-/// (`rpcpool/yellowstone-grpc` issues #25 and #175). Without this bound the
-/// listener waits on `stream.message()` for ever, and everything until the
-/// next process restart is lost.
+/// ⚠️ A server can stop delivering and keep the connection open — HTTP/2
+/// keep-alive and Yellowstone pings both carry on, the pings coming from a
+/// task of their own (`rpcpool/yellowstone-grpc` #25, #175). Without this
+/// bound the listener would wait for ever.
 ///
-/// The same bound covers the step before: a `subscribe` whose response never
-/// comes, from a front end that took the connection with a wedged backend
-/// behind it.
-///
-/// The block-meta is the signal because the subscription asks for one per
-/// slot, about every 400 ms, whatever the market does — transactions can
-/// legitimately go quiet for minutes. 30 s is the threshold Alchemy's
-/// *Yellowstone gRPC Best Practices* gives for alerting on a stalled stream,
-/// about 75 block-metas missed. Shorter would restart a stream on a run of
-/// skipped slots, and each restart costs a billed replay; longer lets the loss
-/// grow. **Not measured:** the number that should replace it is the largest
-/// gap between two block-metas on a healthy real stream.
+/// The block-meta is the signal because one comes every slot (~400 ms)
+/// whatever the market does. 30 s is Alchemy's alerting threshold; not
+/// measured — the largest block-meta gap on a real stream should replace it.
 pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Ceiling on one decoded message.
@@ -161,12 +140,9 @@ pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 /// the buffer downstream, not this, is what bounds memory.
 const MAX_DECODING_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
-/// How many outbound requests may queue: the subscription, once per
-/// connection, then one ping-only answer per server ping (see
-/// [`StreamSession`]). Those leave one at a time, seconds apart, so the
-/// headroom is only there for a transport that is slow to drain. A full channel
-/// means it is not draining at all, and the session counts the answer it could
-/// not send rather than waiting.
+/// How many outbound requests may queue: the subscription, then one answer per
+/// server ping. A full channel means the transport is not draining; the
+/// session then drops the answer rather than wait.
 const OUTBOUND_CAPACITY: usize = 8;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped
@@ -494,12 +470,8 @@ impl GrpcListener {
             };
         }
 
-        // ⚠️ **Under the stall timeout as well**, or the hang this bound exists
-        // for survives one step earlier: a server that accepts the HTTP/2
-        // stream and never sends the response headers keeps `subscribe`
-        // pending for ever, and the stream clock below never starts. And under
-        // the shutdown token, which a bounded wait still needs: thirty seconds
-        // is longer than a container's stop grace period.
+        // Bounded too, or a server that never sends response headers hangs us
+        // here; and interruptible, since 30 s outlasts a stop grace period.
         let subscribed = tokio::select! {
             biased;
 
@@ -546,13 +518,9 @@ impl GrpcListener {
 
         let mut session = StreamSession::new(downstream.clone(), outbound_tx, shutdown.clone());
 
-        // ⚠️ **Time spent waiting on the server, not time on the clock.** Only
-        // the wait for `stream.message()` is added here, never the time
-        // `handle` spends parked on a full consumer: a slow database is not a
-        // silent server, and a wall-clock deadline would call the stream
-        // stalled on the first ordinary wait after a long back-pressure
-        // episode, buying a billed replay at the worst moment. Reset by a
-        // block-meta and by nothing else — see `STALL_TIMEOUT`.
+        // ⚠️ Time spent *waiting on the server*, not wall-clock time: what
+        // `handle` spends parked on a full consumer is not a silent server.
+        // Reset by a block-meta only.
         let mut silent = Duration::ZERO;
 
         loop {
@@ -609,14 +577,8 @@ impl GrpcListener {
         }
     }
 
-    /// End an attempt on which the server said nothing for the stall
-    /// timeout — no answer to `subscribe`, or no block-meta on the stream.
-    ///
-    /// Counted here, by site: before the counter, a stall was the one ending
-    /// nothing reported. **Not logged here**: `run`'s arm logs every ending
-    /// once, with the error built below and the slot the next attempt will
-    /// really ask for — which is the loop's mark, not this session's. What a
-    /// stall does to the budget and the mark is [`Attempt::Stalled`]'s.
+    /// End an attempt as [`Attempt::Stalled`], counted by site. Not logged
+    /// here: `run` logs every ending once, with the mark it will really use.
     fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Attempt {
         GrpcListenerMetrics::record_stall(site);
 
@@ -680,30 +642,14 @@ enum Attempt {
         delivered: bool,
         resume_from: Option<u64>,
     },
-    /// The server said nothing for the stall timeout — see [`STALL_TIMEOUT`]
-    /// — and **this listener** ended the attempt.
+    /// The server said nothing for [`STALL_TIMEOUT`], and this listener ended
+    /// the attempt.
     ///
-    /// ⚠️ **Not a `Failed`, and the difference is a lost gap.** It takes
-    /// `Failed`'s budget rule: churn if the session delivered, a charged
-    /// attempt if not. But not its mark rule. A `Failed` that delivered
-    /// nothing gives the mark up because the server had our `from_slot` and
-    /// gave nothing back — a verdict. A stall is no verdict: the silence is
-    /// the server's, the decision to stop waiting is ours. Reading it as a
-    /// refusal meant that a provider whose data path stayed stuck across two
-    /// attempts — the first delivered, the second's replay never started —
-    /// sent the third to the live edge, and the gap was lost when the provider
-    /// came back. Found in review before this ending was merged.
-    ///
-    /// ⚠️ **What bounds it, and what does not.** A stall that delivered
-    /// nothing is charged: a server that never speaks again exhausts the
-    /// attempts and stops the indexer, which is seen, rather than skipping a
-    /// gap, which is not — and a replay slower to start than the timeout
-    /// stops it the same way. A stall that **did** deliver is churn and
-    /// restarts the budget, so a provider that replays the rewound slots and
-    /// then goes silent at the live edge is resubscribed every half-minute
-    /// for ever, a short billed replay each time. That is the cost the
-    /// `Failed` churn arm already states for a stream that delivers and then
-    /// errors; `stalls_total` rising steadily is what says it is happening.
+    /// ⚠️ `Failed`'s budget rule, not its mark rule: silence is not a refusal,
+    /// so a stall that delivered nothing keeps the mark (the budget bounds the
+    /// retries). A stall that did deliver is churn and restarts the budget — a
+    /// provider that replays and then goes quiet is retried for ever, which
+    /// `stalls_total` rising steadily shows.
     Stalled {
         error: String,
         delivered: bool,
