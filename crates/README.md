@@ -30,7 +30,7 @@ crates/
 ├── persistence/   ← Postgres adapter: repository impls, migrations, yog-migrate, backup
 ├── bootstrap/     ← shared startup utilities: env helpers, secret types,
 │                   init_rustls/tracing — and the shared stop (shutdown.rs)
-├── indexer/       ← binary: Solana RPC ingestion → DB
+├── indexer/       ← binary: Solana ingestion (JSON-RPC or Yellowstone gRPC) → DB
 ├── api/           ← binary: axum HTTP server + SSE over the indexed data
 ├── context/       ← binary: token/pool enrichment (Helius DAS, Jupiter, cp-amm accounts)
 ├── signals/       ← binary: batch detector engine emitting typed signals
@@ -171,8 +171,8 @@ cargo fmt --all
 cargo test --workspace --all-features
 
 # Native crates only — yog-wasm is excluded (deferred scaffold)
-cargo clippy -p yog-api -p yog-bootstrap -p yog-core -p yog-context -p yog-indexer \
-    -p yog-persistence -p yog-signals \
+cargo clippy -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
+    -p yog-indexer -p yog-persistence -p yog-signals \
     --all-targets --all-features -- -D warnings
 
 # Doc links — the whole workspace; the private-items flag is required, or a
@@ -191,7 +191,7 @@ The Rust version is pinned in `rust-toolchain.toml` at the repo root — don't o
 
 GitHub Actions runs on every push and PR to `main`:
 
-- **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
+- **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `module-visibility` (see *Conventions*), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
 - **`web-quality.yml`** / **`web-docker.yml`** — the frontend (see [`web/README.md`](../web/README.md))
 
 ---
@@ -217,15 +217,15 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 **Account side** — the properties events never carry (mints, base fee, fee shape):
 
-- Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a `DecodedPoolAccount`. Guard on the Anchor discriminator as well as the program id — neither is redundant (see [`core/README.md`](./core/README.md#responsibilities)).
+- Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a `DecodedPoolAccount` from the account bytes alone. It guards on the Anchor discriminator; the program id is guarded by the dispatch in `decode_pool_account` — neither is redundant (see [`core/README.md`](./core/README.md#responsibilities)).
 - Add a branch to `decode_pool_account` (`application/decoder.rs`) routing the new `Protocol`.
 - Add the matching variants to the two-level `PoolAccountProperties` (write side, `domain/pool_account/`) and `PoolProperties` (read side, `domain/pool_properties/`). Both are matched exhaustively downstream, so the compiler points at every site that must follow.
-- Ground the decoder on **real mainnet accounts** before trusting it: a synthetic test builds the buffer with the same constants the decoder reads it with, so both agree on a wrong offset. Fixtures go under `core/tests/fixtures/<protocol>/accounts/`.
+- Ground the decoder on **real mainnet accounts** before trusting it: a synthetic test builds the buffer with the same constants the decoder reads it with, so both agree on a wrong offset. Fixtures go under `core/tests/fixtures/<product>/accounts/` (`damm_v2/`, `dlmm/`).
 
 ### 2. In `persistence`
 
 - Add a migration that creates the per-protocol tables (`<platform>_<product>_<event_kind>_events`). Each table holds only the columns relevant to the protocol. Include `GRANT INSERT, UPDATE ON <new_table> TO yog_indexer;`.
-- Add the **pool-properties satellite** `<platform>_<product>_pool_properties` in the same or a following migration: one row per pool, primary-keyed on `pool_address`, holding what exists for this protocol only — `pools` stays the cross-protocol registry. Copy the shape from migration `039`/`040`: a `protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED` column plus a composite `FOREIGN KEY (pool_address, protocol) REFERENCES pools (pool_address, protocol) ON DELETE CASCADE` **instead of** the single-column FK, so the row cannot claim a protocol the registry disagrees with. Grant it to `yog_context` (its sole writer), not to `yog_indexer`.
+- Add the **pool-properties satellite** `<platform>_<product>_pool_properties` in the same or a following migration: one row per pool, primary-keyed on `pool_address`, holding what exists for this protocol only — `pools` stays the cross-protocol registry. Copy the shape from `001_baseline.sql` §9, the DLMM satellite: a `protocol TEXT NOT NULL GENERATED ALWAYS AS ('<the protocol>') STORED` column plus a composite `FOREIGN KEY (pool_address, protocol) REFERENCES pools (pool_address, protocol) ON DELETE CASCADE` **instead of** the single-column FK, so the row cannot claim a protocol the registry disagrees with. Grant it to `yog_context` (its sole writer), not to `yog_indexer`.
 - Add every new table's line to the privilege matrix in `tests/privileges.rs`. The suite asserts in both directions, so a missing GRANT and an extra one both fail — read the failure as a question before editing either side.
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
@@ -247,7 +247,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`. A service goes under `services/<platform>/<product>/` only when its repository, params and result are irreducibly that product's; cross-protocol services stay at the root and must not name a protocol in their constructor.
 - Add handlers and DTOs as needed. For a cross-protocol read surface, point the handler at the matching VIEW; for protocol-specific detail, point at the table directly.
-- Add the protocol's block to `http/dto/response/pool.rs` — an optional field named after the protocol, alongside its siblings. The `PoolProperties` destructuring there is irrefutable by construction, so this one is compiler-forced rather than optional.
+- Add the protocol's block to `http/dto/response/pool.rs` — an optional field named after the protocol, alongside its siblings. The `PoolProperties` `match` there is exhaustive with no wildcard arm, so this one is compiler-forced rather than optional.
 
 ### 6. Tests
 

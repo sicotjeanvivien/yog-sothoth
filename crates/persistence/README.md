@@ -728,7 +728,7 @@ DATABASE_URL_ADMIN=postgresql://<admin>@<target>/yog_sothoth \
 #     the shell history, the process list and the server log, where an
 #     `ALTER ROLE … PASSWORD '…'` on the command line would leave it.
 psql <target-admin-url>
-  \password yog_migrate      -- … and yog_indexer, yog_api, yog_context, yog_signals
+  \password yog_migrate      -- … and yog_indexer, yog_api, yog_context, yog_signals, yog_archive
 
 # 2. TimescaleDB's restore mode — it stops the background workers
 psql <target-admin-url> -c "SELECT timescaledb_pre_restore();"

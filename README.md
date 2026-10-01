@@ -111,13 +111,13 @@ All nineteen are extracted, persisted to their own per-kind table (`meteora_damm
 | Layer | Technology |
 |---|---|
 | Indexer, enrichment, signals, API | Rust 1.98, Tokio, axum, sqlx |
-| Database | TimescaleDB on PostgreSQL 16 |
+| Database | TimescaleDB on PostgreSQL 18 |
 | Frontend | Next.js 16, TypeScript, Tailwind v4, next-intl |
 | External data | Solana JSON-RPC (any provider), Yellowstone gRPC (Alchemy), Helius DAS, Jupiter Price V3 |
-| Container runtime | Docker Compose (5 backend images + 1 frontend image) |
+| Container runtime | Docker Compose (6 backend images + 1 frontend image; `yog-archive` runs only under the production overlay) |
 | Reverse proxy | Caddy (automatic TLS via Let's Encrypt) |
 | Observability | Prometheus, tracing |
-| CI | GitHub Actions (cargo check, per-crate check, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
+| CI | GitHub Actions (cargo check, rustdoc doc links, per-crate check, module visibility, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
 
 ---
 
@@ -166,7 +166,7 @@ Next comes production, which ingests over gRPC. After that: lifting the allowlis
 
 ## Hosting
 
-Production deployment targets **Scaleway** in the Paris region — a single instance running the five backend containers (`yog-migrate`, `yog-indexer`, `yog-api`, `yog-context`, `yog-signals`) plus the frontend and Caddy as reverse proxy, with a Managed PostgreSQL instance carrying the TimescaleDB extension and Object Storage for daily `pg_dump` backups. The monthly budget is dominated by the gRPC stream and will be stated here once confirmed by provider quotes.
+Production deployment targets **Scaleway** in the Paris region — a single instance, shared with other projects, running the stack of `docker-compose.prod.yml`: TimescaleDB in its own container, the six backend containers (`yog-migrate`, `yog-indexer`, `yog-api`, `yog-context`, `yog-signals`, `yog-archive`), the frontend, and Caddy as reverse proxy. Every container has a memory limit, so that the first one to grow cannot get Postgres killed. Backups leave the machine: `yog-archive` streams a `pg_dump` to Object Storage every six hours. The monthly budget is dominated by the gRPC stream and will be stated here once confirmed by provider quotes.
 
 ---
 

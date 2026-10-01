@@ -63,22 +63,23 @@ cargo clippy -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-conte
 # empty library, which cargo then documents in place of the binary.
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
-# Test — workspace unit tests, DB-free (660 tests, measured 31 Aug 2026)
+# Test — workspace unit tests, DB-free (988 tests, listed 1 Oct 2026)
 cargo test --workspace
 cargo test -p yog-core extraction          # a single crate / filter
 cargo test -p yog-core -- --exact <test>   # one exact test
 
 # ⚠️ Since the adapter moved (31 Aug 2026), `-p yog-core extraction` no longer
-# runs the 28-fixture oracle nor the 19 extractor fixture tests: they live in
+# runs the 28-fixture oracle nor the 20 extractor fixture tests: they live in
 # `yog-indexer`, beside the adapter that builds their input. Extraction work
 # needs BOTH — this can be green while the oracle is red.
 cargo test -p yog-indexer                  # the fixture suites and the oracle
 
 # ⚠️ `--all-features` is NOT DB-free: it turns on `integration-tests`, which
-# un-gates the 161 DB-backed tests and needs everything the section below does.
-# `cargo test --workspace --all-features` therefore reports 821, not 660 — the
+# un-gates the 176 DB-backed tests and needs everything the section below does.
+# `cargo test --workspace --all-features` therefore reports 1164, not 988 — the
 # integration tests are INCLUDED in that total, not additional to it. All three
-# counts were measured 31 Aug 2026, against a live Postgres.
+# counts were listed 1 Oct 2026 with `-- --list`, which compiles every target
+# but runs none, so it needs no Postgres.
 cargo test --workspace --all-features
 
 # Integration tests are DB-backed and gated on the `integration-tests` feature
@@ -88,8 +89,8 @@ cargo test --workspace --all-features
 # `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`.
 # sqlx::test builds a throwaway schema `_sqlx_test` in the maintenance database
 # and `yog_migrate` lacks CREATE on it — that is where the failure lands, before
-# the missing `rolcreatedb` ever comes into play. The symptom is all 161 failing
-# in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
+# the missing `rolcreatedb` ever comes into play. The symptom is every one of them
+# failing in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
 # reads like a regression and is not one.
 #
 # The Postgres must run with `timescaledb.max_background_workers = 0` (see
