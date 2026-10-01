@@ -11,15 +11,22 @@
 
 use super::*;
 
+use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio_util::sync::CancellationToken;
-use yellowstone_grpc_proto::prelude::{SubscribeUpdatePing, SubscribeUpdatePong};
+use yellowstone_grpc_proto::prelude::{
+    SubscribeRequestPing, SubscribeUpdatePing, SubscribeUpdatePong,
+};
 
 // The updates themselves live next door, because `listener_tests` builds the
 // same ones to put on a real stream — see `test_fixtures`.
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature,
+    PROTOCOL, at, block_meta, ping, transaction, transaction_update_with_signature,
     unroutable_transaction, update,
 };
+
+/// How many ping answers the harness's outbound half holds unread — what
+/// `a_full_outbound_half_does_not_park_the_session` fills.
+const HARNESS_OUTBOUND_CAPACITY: usize = 4;
 
 /// A session, its downstream receiver, and its outbound receiver.
 fn session(
@@ -43,11 +50,11 @@ fn session_with(
     mpsc::Receiver<SubscribeRequest>,
 ) {
     let (downstream_tx, downstream_rx) = mpsc::channel(capacity);
-    let (outbound_tx, outbound_rx) = mpsc::channel(4);
-    // The session no longer keeps the request it subscribed with: it never
-    // resent it, and the copy was held "for a future filter update". The
-    // outbound receiver is still handed back, because what the tests assert
-    // about a ping is that **nothing** is written to it.
+    let (outbound_tx, outbound_rx) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
+    // The session does not keep the request it subscribed with, so the only
+    // thing ever written here is the answer to a ping. The receiver is handed
+    // back so that the tests can assert that answer is a bare ping and nothing
+    // more.
     (
         StreamSession::new(downstream_tx, outbound_tx, shutdown),
         downstream_rx,
@@ -175,69 +182,77 @@ async fn a_transaction_that_cannot_be_translated_does_not_stop_the_stream() {
 /// One label for both would send whoever reads the metric to the wrong file,
 /// which is the defect `EvictionReason` was added to the buffer to avoid.
 ///
-/// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
-/// *current thread* for the duration of a closure, so the future is driven
-/// inside it — the recipe the persistor tests use.
+/// Not `#[tokio::test]` — see [`counted`].
 #[test]
 fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
-    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+    let ((), snapshot) = counted(async {
+        let (mut session, _downstream, _outbound) = session(4);
 
-    let recorder = DebuggingRecorder::new();
-    let snapshotter = recorder.snapshotter();
+        // Malformed: a 63-byte signature, which the adapter refuses.
+        session
+            .handle(update(
+                &[PROTOCOL.as_str()],
+                UpdateOneof::Transaction(transaction_update_with_signature(10, vec![7; 63])),
+            ))
+            .await;
+        session.handle(block_meta(10, Some(1_700_000_000))).await;
 
-    metrics::with_local_recorder(&recorder, || {
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .expect("current-thread runtime")
-            .block_on(async {
-                let (mut session, _downstream, _outbound) = session(4);
-
-                // Malformed: a 63-byte signature, which the adapter refuses.
-                session
-                    .handle(update(
-                        &[PROTOCOL.as_str()],
-                        UpdateOneof::Transaction(transaction_update_with_signature(
-                            10,
-                            vec![7; 63],
-                        )),
-                    ))
-                    .await;
-                session.handle(block_meta(10, Some(1_700_000_000))).await;
-
-                // Unroutable: perfectly well-formed, matching no protocol.
-                session.handle(unroutable_transaction(11)).await;
-            });
+        // Unroutable: perfectly well-formed, matching no protocol.
+        session.handle(unroutable_transaction(11)).await;
     });
 
-    let snapshot = snapshotter.snapshot().into_vec();
     assert_eq!(
-        dropped_for(&snapshot, "parse_error"),
+        counter_for(&snapshot, DROPPED, "parse_error"),
         Some(&DebugValue::Counter(1)),
         "the malformed one is an adapter problem"
     );
     assert_eq!(
-        dropped_for(&snapshot, "unroutable"),
+        counter_for(&snapshot, DROPPED, "unroutable"),
         Some(&DebugValue::Counter(1)),
         "the unroutable one is a subscription problem, and must not hide under \
          the adapter's label"
     );
 }
 
-/// The drop counter for one `reason` label, or `None` when it was never
+const DROPPED: &str = "yog_indexer_grpc_dropped_transactions_total";
+const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
+
+/// What the metrics recorder holds after a run.
+type Snapshot = Vec<(
+    metrics_util::CompositeKey,
+    Option<metrics::Unit>,
+    Option<metrics::SharedString>,
+    DebugValue,
+)>;
+
+/// Drive `future` to completion and return its output with what it counted.
+///
+/// `with_local_recorder` installs the recorder on the *current thread* for the
+/// duration of a closure, so the future is driven inside it on a current-thread
+/// runtime — the recipe the persistor tests use. Hence `#[test]` and not
+/// `#[tokio::test]` on every test that reads a counter.
+fn counted<T>(future: impl std::future::Future<Output = T>) -> (T, Snapshot) {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let output = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(future)
+    });
+
+    (output, snapshotter.snapshot().into_vec())
+}
+
+/// The counter `name` for one `reason` label, or `None` when it was never
 /// touched.
-fn dropped_for<'a>(
-    snapshot: &'a [(
-        metrics_util::CompositeKey,
-        Option<metrics::Unit>,
-        Option<metrics::SharedString>,
-        metrics_util::debugging::DebugValue,
-    )],
-    reason: &str,
-) -> Option<&'a metrics_util::debugging::DebugValue> {
+fn counter_for<'a>(snapshot: &'a Snapshot, name: &str, reason: &str) -> Option<&'a DebugValue> {
     snapshot
         .iter()
         .find(|(key, _, _, _)| {
-            key.key().name() == "yog_indexer_grpc_dropped_transactions_total"
+            key.key().name() == name
                 && key
                     .key()
                     .labels()
@@ -320,31 +335,163 @@ async fn a_closed_downstream_ends_the_session() {
 
 // ── keep-alive ──────────────────────────────────────────────────────
 
-/// ⚠️ **A ping is counted and not answered**, and every alternative is unsafe
-/// under one of the two readings of the proto — see the note on
-/// `StreamSession`. This test is what keeps an "obvious improvement" from
-/// quietly re-introducing one: answering with the request re-issues the replay
-/// every ping, answering without it truncates a replay in flight, and answering
-/// with a bare ping may unsubscribe everything.
+/// ⚠️ **A ping is answered with a ping and nothing else** — a request whose only
+/// field is `ping`. The reference server returns the pong *before* it reads
+/// anything else off the request, so this answer never touches the
+/// subscription. Anything more is a defect, and each assertion below names the
+/// one it is about: a `from_slot` would re-issue the replay on every ping, and
+/// a filter would describe a subscription the server is not meant to see again.
 #[tokio::test]
-async fn a_ping_is_counted_and_nothing_is_sent_back() {
+async fn a_ping_is_answered_with_a_bare_ping() {
     let (mut session, _downstream, mut outbound) = session(4);
 
-    assert_eq!(
-        session
-            .handle(update(&[], UpdateOneof::Ping(SubscribeUpdatePing {})))
-            .await,
-        SessionState::Open
-    );
+    assert_eq!(session.handle(ping()).await, SessionState::Open);
 
+    let answer = outbound
+        .try_recv()
+        .expect("a server ping must be answered — a provider may close a silent client");
+    assert!(outbound.try_recv().is_err(), "exactly one answer per ping");
+
+    assert_eq!(
+        answer.from_slot, None,
+        "a `from_slot` on the answer would re-issue the replay on every ping"
+    );
     assert!(
-        outbound.try_recv().is_err(),
-        "nothing goes back on the outbound half — the connection is kept alive \
-         one layer down, by HTTP/2 keep-alive"
+        answer.accounts.is_empty()
+            && answer.slots.is_empty()
+            && answer.transactions.is_empty()
+            && answer.transactions_status.is_empty()
+            && answer.blocks.is_empty()
+            && answer.blocks_meta.is_empty()
+            && answer.entry.is_empty(),
+        "a filter on the answer describes a subscription — the answer must carry none: {answer:?}"
+    );
+    // The net under the two above: commitment, data slices, and whatever field a
+    // later proto adds must all stay at their default as well.
+    assert_eq!(
+        answer,
+        SubscribeRequest {
+            ping: Some(SubscribeRequestPing { id: PING_REPLY_ID }),
+            ..Default::default()
+        }
     );
 }
 
-/// A pong is the answer to one of ours: counted, and nothing more.
+/// A ping during a replay leaves the **session's** side of it exactly as it
+/// was — same resume point, same pending payload, released by its block-meta
+/// as if no ping had come. A replay is when a ping is the most likely to
+/// arrive: a reconnection rewinds, and the server pings long before the
+/// backlog drains.
+///
+/// ⚠️ This guards the `Ping` arm of `handle`, not `answer_ping`, which takes
+/// `&self` and cannot touch either. The damage an *answer* could do to a
+/// replay happens on the server, through a `from_slot` riding along — that is
+/// [`a_ping_is_answered_with_a_bare_ping`]'s to catch.
+#[tokio::test]
+async fn a_ping_during_a_replay_leaves_it_alone() {
+    let (mut session, mut downstream, mut outbound) = session(4);
+
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    assert_eq!(session.resume_from(), Some(10 - REWIND_SLOTS));
+
+    assert_eq!(session.handle(ping()).await, SessionState::Open);
+
+    assert!(outbound.try_recv().is_ok(), "the ping is answered");
+    assert_eq!(
+        session.resume_from(),
+        Some(10 - REWIND_SLOTS),
+        "a ping does not move the resume point"
+    );
+    assert!(
+        downstream.try_recv().is_err(),
+        "a ping releases nothing — the payload is still waiting for its block time"
+    );
+
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+    let ingested = downstream
+        .try_recv()
+        .expect("the payload the ping found pending is still in the buffer");
+    assert_eq!(ingested.transaction.position.slot, 10);
+    assert_eq!(ingested.transaction.position.timestamp, at(1_700_000_000));
+    assert!(downstream.try_recv().is_err(), "and nothing else was held");
+}
+
+/// An answer that cannot leave is counted and stepped over: the session is
+/// still receiving, and if the server does close it for want of an answer, the
+/// reconnection is what handles that. Ending the session here would turn a
+/// failed keep-alive into the very reconnection it exists to avoid.
+#[test]
+fn a_ping_whose_answer_cannot_leave_is_counted_and_keeps_the_session_open() {
+    let (state, snapshot) = counted(async {
+        let (mut session, _downstream, outbound) = session(4);
+        drop(outbound);
+        session.handle(ping()).await
+    });
+
+    assert_eq!(state, SessionState::Open);
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_closed"),
+        Some(&DebugValue::Counter(1)),
+        "a request stream that is gone is counted as such"
+    );
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_full"),
+        None,
+        "and not as a transport that stopped draining — the two are fixed in \
+         different places"
+    );
+}
+
+/// ⚠️ **A full outbound half must not park the session.** `handle` runs from
+/// the body of the listener's `select!` arm, so a wait here would hold off the
+/// shutdown token — and a full channel means the transport is not draining,
+/// so waiting would not even get the answer out. Once the harness's outbound
+/// half is full, the next ping must return at once, and its answer must be
+/// **dropped and counted**, not handed to something that sends it later.
+#[test]
+fn a_full_outbound_half_does_not_park_the_session() {
+    let ((state, queued), snapshot) = counted(async {
+        let (mut session, _downstream, mut outbound) = session(4);
+
+        for _ in 0..HARNESS_OUTBOUND_CAPACITY {
+            session.handle(ping()).await;
+        }
+        let state = tokio::time::timeout(std::time::Duration::from_secs(5), session.handle(ping()))
+            .await
+            .expect("an answer that does not fit must be dropped, not waited on");
+
+        // Free the queue, give anything parked a chance to run, then count.
+        let mut queued = 0;
+        while outbound.try_recv().is_ok() {
+            queued += 1;
+        }
+        tokio::task::yield_now().await;
+        while outbound.try_recv().is_ok() {
+            queued += 1;
+        }
+
+        (state, queued)
+    });
+
+    assert_eq!(state, SessionState::Open);
+    assert_eq!(
+        queued, HARNESS_OUTBOUND_CAPACITY,
+        "the answer that did not fit is dropped — nothing may hold it to send once there is room"
+    );
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_full"),
+        Some(&DebugValue::Counter(1)),
+        "a transport that stopped draining is counted as such"
+    );
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_closed"),
+        None,
+        "and not as a request stream that is gone"
+    );
+}
+
+/// A pong is the server's answer to one of our ping answers: counted, and
+/// nothing more.
 #[tokio::test]
 async fn a_pong_changes_nothing() {
     let (mut session, mut downstream, mut outbound) = session(4);

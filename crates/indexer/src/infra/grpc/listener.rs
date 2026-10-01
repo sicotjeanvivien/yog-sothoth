@@ -53,8 +53,9 @@
 //! sentence that says "every arm" and means "almost".
 //!
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
-//! connect timeout, and — the one that matters — whether a provider honours
-//! `from_slot` the way this code assumes. A scripted server validates **this
+//! connect timeout, whether a provider takes the session's answer to its pings,
+//! and — the one that matters — whether a provider honours `from_slot` the way
+//! this code assumes. A scripted server validates **this
 //! client against our model of the server**, never the protocol; the first run
 //! against a real provider is where that model meets a real one.
 //!
@@ -118,9 +119,12 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 /// the buffer downstream, not this, is what bounds memory.
 const MAX_DECODING_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
 
-/// How many outbound requests may queue. Only one is ever sent — the
-/// subscription, once per connection — since a server ping is counted and not
-/// answered (see [`StreamSession`]). The headroom above one is unused.
+/// How many outbound requests may queue: the subscription, once per
+/// connection, then one ping-only answer per server ping (see
+/// [`StreamSession`]). Those leave one at a time, seconds apart, so the
+/// headroom is only there for a transport that is slow to drain. A full channel
+/// means it is not draining at all, and the session counts the answer it could
+/// not send rather than waiting.
 const OUTBOUND_CAPACITY: usize = 8;
 
 /// Subscribes to a Yellowstone stream and turns it into timestamped
@@ -418,10 +422,10 @@ impl GrpcListener {
         let mut client = GeyserClient::with_interceptor(channel, interceptor.clone())
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
-        // The outbound half stays open for the life of the stream, although nothing
-        // is sent after the subscription. Half-closing it would be legal HTTP/2, and
-        // a server is free to read it as the end of the exchange — see the
-        // `_outbound` field of `StreamSession`.
+        // The outbound half stays open for the life of the stream: the session
+        // answers server pings on it, and half-closing it would be legal HTTP/2
+        // that a server is free to read as the end of the exchange — see the
+        // `outbound` field of `StreamSession`.
         let (outbound_tx, outbound_rx) = mpsc::channel::<SubscribeRequest>(OUTBOUND_CAPACITY);
         if outbound_tx.send(request.clone()).await.is_err() {
             return Attempt::Unreachable {

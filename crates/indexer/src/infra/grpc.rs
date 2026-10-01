@@ -35,8 +35,9 @@
 //! because no server can both deliver a mark and be unreachable for the attempt
 //! after. `listener.rs`'s header carries the measurements. All of it proves
 //! this client against our model of the server, and nothing about the protocol
-//! — so TLS, keep-alive and the exact semantics of `from_slot` are still
-//! written, reviewed and unproven until the first run against a real provider.
+//! — so TLS, keep-alive, the answer to server pings and the exact semantics of
+//! `from_slot` are still written, reviewed and unproven until the first run
+//! against a real provider.
 //! The rest was made testable by being kept out of `listener`: the request in
 //! `subscription`, the meaning of each update in `session`, the pairing in
 //! `slot_timestamp_buffer`, the shape in `transaction_adapter`.
