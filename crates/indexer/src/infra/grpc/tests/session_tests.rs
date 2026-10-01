@@ -11,6 +11,7 @@
 
 use super::*;
 
+use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::{
     SubscribeRequestPing, SubscribeUpdatePing, SubscribeUpdatePong,
@@ -177,69 +178,77 @@ async fn a_transaction_that_cannot_be_translated_does_not_stop_the_stream() {
 /// One label for both would send whoever reads the metric to the wrong file,
 /// which is the defect `EvictionReason` was added to the buffer to avoid.
 ///
-/// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
-/// *current thread* for the duration of a closure, so the future is driven
-/// inside it — the recipe the persistor tests use.
+/// Not `#[tokio::test]` — see [`counted`].
 #[test]
 fn a_malformed_transaction_and_an_unroutable_one_are_counted_apart() {
-    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+    let ((), snapshot) = counted(async {
+        let (mut session, _downstream, _outbound) = session(4);
 
-    let recorder = DebuggingRecorder::new();
-    let snapshotter = recorder.snapshotter();
+        // Malformed: a 63-byte signature, which the adapter refuses.
+        session
+            .handle(update(
+                &[PROTOCOL.as_str()],
+                UpdateOneof::Transaction(transaction_update_with_signature(10, vec![7; 63])),
+            ))
+            .await;
+        session.handle(block_meta(10, Some(1_700_000_000))).await;
 
-    metrics::with_local_recorder(&recorder, || {
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .expect("current-thread runtime")
-            .block_on(async {
-                let (mut session, _downstream, _outbound) = session(4);
-
-                // Malformed: a 63-byte signature, which the adapter refuses.
-                session
-                    .handle(update(
-                        &[PROTOCOL.as_str()],
-                        UpdateOneof::Transaction(transaction_update_with_signature(
-                            10,
-                            vec![7; 63],
-                        )),
-                    ))
-                    .await;
-                session.handle(block_meta(10, Some(1_700_000_000))).await;
-
-                // Unroutable: perfectly well-formed, matching no protocol.
-                session.handle(unroutable_transaction(11)).await;
-            });
+        // Unroutable: perfectly well-formed, matching no protocol.
+        session.handle(unroutable_transaction(11)).await;
     });
 
-    let snapshot = snapshotter.snapshot().into_vec();
     assert_eq!(
-        dropped_for(&snapshot, "parse_error"),
+        counter_for(&snapshot, DROPPED, "parse_error"),
         Some(&DebugValue::Counter(1)),
         "the malformed one is an adapter problem"
     );
     assert_eq!(
-        dropped_for(&snapshot, "unroutable"),
+        counter_for(&snapshot, DROPPED, "unroutable"),
         Some(&DebugValue::Counter(1)),
         "the unroutable one is a subscription problem, and must not hide under \
          the adapter's label"
     );
 }
 
-/// The drop counter for one `reason` label, or `None` when it was never
+const DROPPED: &str = "yog_indexer_grpc_dropped_transactions_total";
+const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
+
+/// What the metrics recorder holds after a run.
+type Snapshot = Vec<(
+    metrics_util::CompositeKey,
+    Option<metrics::Unit>,
+    Option<metrics::SharedString>,
+    DebugValue,
+)>;
+
+/// Drive `future` to completion and return its output with what it counted.
+///
+/// `with_local_recorder` installs the recorder on the *current thread* for the
+/// duration of a closure, so the future is driven inside it on a current-thread
+/// runtime — the recipe the persistor tests use. Hence `#[test]` and not
+/// `#[tokio::test]` on every test that reads a counter.
+fn counted<T>(future: impl std::future::Future<Output = T>) -> (T, Snapshot) {
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let output = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(future)
+    });
+
+    (output, snapshotter.snapshot().into_vec())
+}
+
+/// The counter `name` for one `reason` label, or `None` when it was never
 /// touched.
-fn dropped_for<'a>(
-    snapshot: &'a [(
-        metrics_util::CompositeKey,
-        Option<metrics::Unit>,
-        Option<metrics::SharedString>,
-        metrics_util::debugging::DebugValue,
-    )],
-    reason: &str,
-) -> Option<&'a metrics_util::debugging::DebugValue> {
+fn counter_for<'a>(snapshot: &'a Snapshot, name: &str, reason: &str) -> Option<&'a DebugValue> {
     snapshot
         .iter()
         .find(|(key, _, _, _)| {
-            key.key().name() == "yog_indexer_grpc_dropped_transactions_total"
+            key.key().name() == name
                 && key
                     .key()
                     .labels()
@@ -402,32 +411,73 @@ async fn a_ping_during_a_replay_leaves_it_alone() {
 /// still receiving, and if the server does close it for want of an answer, the
 /// reconnection is what handles that. Ending the session here would turn a
 /// failed keep-alive into the very reconnection it exists to avoid.
-#[tokio::test]
-async fn a_ping_whose_answer_cannot_leave_keeps_the_session_open() {
-    let (mut session, _downstream, outbound) = session(4);
-    drop(outbound);
+#[test]
+fn a_ping_whose_answer_cannot_leave_is_counted_and_keeps_the_session_open() {
+    let (state, snapshot) = counted(async {
+        let (mut session, _downstream, outbound) = session(4);
+        drop(outbound);
+        session.handle(ping()).await
+    });
 
-    assert_eq!(session.handle(ping()).await, SessionState::Open);
+    assert_eq!(state, SessionState::Open);
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_closed"),
+        Some(&DebugValue::Counter(1)),
+        "a request stream that is gone is counted as such"
+    );
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_full"),
+        None,
+        "and not as a transport that stopped draining — the two are fixed in \
+         different places"
+    );
 }
 
 /// ⚠️ **A full outbound half must not park the session.** `handle` runs from
 /// the body of the listener's `select!` arm, so a wait here would hold off the
 /// shutdown token — and a full channel means the transport is not draining,
 /// so waiting would not even get the answer out. The harness queues four; the
-/// fifth ping must return at once.
-#[tokio::test]
-async fn a_full_outbound_half_does_not_park_the_session() {
-    let (mut session, _downstream, _outbound) = session(4);
+/// fifth ping must return at once, and its answer must be **dropped and
+/// counted**, not handed to something that sends it later.
+#[test]
+fn a_full_outbound_half_does_not_park_the_session() {
+    let ((state, queued), snapshot) = counted(async {
+        let (mut session, _downstream, mut outbound) = session(4);
 
-    for _ in 0..4 {
-        session.handle(ping()).await;
-    }
-
-    assert_eq!(
-        tokio::time::timeout(std::time::Duration::from_secs(5), session.handle(ping()))
+        for _ in 0..4 {
+            session.handle(ping()).await;
+        }
+        let state = tokio::time::timeout(std::time::Duration::from_secs(5), session.handle(ping()))
             .await
-            .expect("an answer that does not fit must be dropped, not waited on"),
-        SessionState::Open
+            .expect("an answer that does not fit must be dropped, not waited on");
+
+        // Free the queue, give anything parked a chance to run, then count.
+        let mut queued = 0;
+        while outbound.try_recv().is_ok() {
+            queued += 1;
+        }
+        tokio::task::yield_now().await;
+        while outbound.try_recv().is_ok() {
+            queued += 1;
+        }
+
+        (state, queued)
+    });
+
+    assert_eq!(state, SessionState::Open);
+    assert_eq!(
+        queued, 4,
+        "the fifth answer is dropped — nothing may hold it to send once there is room"
+    );
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_full"),
+        Some(&DebugValue::Counter(1)),
+        "a transport that stopped draining is counted as such"
+    );
+    assert_eq!(
+        counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_closed"),
+        None,
+        "and not as a request stream that is gone"
     );
 }
 

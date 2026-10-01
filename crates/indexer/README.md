@@ -161,9 +161,10 @@ one decision left unguarded on purpose — its only observable is a duration;
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, whether a provider honours `from_slot` the way this code
 assumes, and whether it takes the ping-only answer the session sends to each
-of its pings the way the reference server does (the answer's shape is tested;
-the `pong` count keeping pace with the `ping` count is what says a provider
-accepts it). The first run against a real provider is where they meet one.
+of its pings the way the reference server does. The answer's shape is tested
+on the session alone: the scripted server reads only the subscription, so no
+local test sees an answer cross the wire. The `pong` count keeping pace with the
+`ping` count is what says a provider accepts it. The first run against a real provider is where they meet one.
 
 ⚠️ And **none of it has met a real server.** Every local test drives either pure
 state, a message this repository built itself, or a server this repository
