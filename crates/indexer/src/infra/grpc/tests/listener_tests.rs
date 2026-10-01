@@ -16,6 +16,8 @@
 
 use super::*;
 
+use super::ending::Attempt;
+
 use yog_bootstrap::Endpoint;
 
 fn listener(url: &str) -> GrpcListener {
