@@ -128,8 +128,8 @@ impl<T> SlotTimestampBuffer<T> {
     /// and it can be the one evicted. Either way it is counted and logged; what
     /// the caller must not do is read `None` as "safely waiting".
     pub(crate) fn on_payload(&mut self, slot: u64, payload: T) -> Option<Resolved<T>> {
-        self.waiting.see(slot);
-
+        // A settled slot was seen when it was settled, so only a payload that
+        // waits can move the head — and `push` applies the window when it does.
         match self.known.outcome(slot) {
             Some(SlotOutcome::At(at)) => return Some(Resolved { payload, at }),
             // The slot's one chance to be named came and went empty: waiting
@@ -144,7 +144,6 @@ impl<T> SlotTimestampBuffer<T> {
         }
 
         self.waiting.push(slot, payload);
-        self.waiting.enforce_bounds();
         None
     }
 
@@ -157,14 +156,8 @@ impl<T> SlotTimestampBuffer<T> {
     /// writes a wrong value into the partitioning column. It calls
     /// [`Self::on_slot_unresolvable`] instead.
     pub(crate) fn on_block_time(&mut self, slot: u64, at: DateTime<Utc>) -> Vec<Resolved<T>> {
-        self.waiting.see(slot);
-        let released = self.waiting.take(slot);
+        let released = self.waiting.release(slot);
         self.known.resolve(slot, at);
-        // ⚠️ **The head moved, so the window applies here too**, not only when
-        // a payload arrives: on a stream quiet for the watched protocol,
-        // block-metas alone keep the head running, and a stale slot left
-        // pending would be what a reconnection resumes from.
-        self.waiting.enforce_bounds();
 
         released
             .into_iter()
@@ -181,14 +174,13 @@ impl<T> SlotTimestampBuffer<T> {
     /// `slot_bound`, and makes the window look too small; meanwhile it occupies
     /// a place that slots which *would* resolve need.
     ///
-    /// Called for a block-meta whose `block_time` is `None`. A slot that is not
-    /// pending is only remembered as given up, and counts nothing.
+    /// Called for a block-meta whose `block_time` is `None` — and the entry
+    /// point for a slot known abandoned by a fork, should the listener ever
+    /// learn of one. A slot that is not pending is only remembered as given up,
+    /// and counts nothing.
     pub(crate) fn on_slot_unresolvable(&mut self, slot: u64) {
-        // An empty block-meta is still the stream telling us where it is.
-        self.waiting.see(slot);
-        self.waiting.evict(slot, EvictionReason::Unresolvable);
+        self.waiting.give_up(slot);
         self.known.give_up(slot);
-        self.waiting.enforce_bounds();
     }
 
     /// The oldest slot still waiting for an instant, if any: these payloads die
