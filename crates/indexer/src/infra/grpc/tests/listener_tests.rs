@@ -1108,16 +1108,18 @@ fn a_stalled_stream_is_resubscribed_at_its_mark() {
          rewound — a stall is churn, and keeps the mark"
     );
 
+    // At least one, not exactly one: the second session holds too, and a stop
+    // request that reaches it later than `TEST_STALL` on a loaded runner would
+    // stall it as well. What the rule needs is that a stall is counted at all.
     let stalls = snapshotter
         .snapshot()
         .into_vec()
         .into_iter()
         .find(|(key, _, _, _)| key.key().name() == "yog_indexer_grpc_stalls_total")
         .map(|(_, _, _, value)| value);
-    assert_eq!(
-        stalls,
-        Some(DebugValue::Counter(1)),
-        "a stall is the one ending nothing else reports — it must be counted"
+    assert!(
+        matches!(stalls, Some(DebugValue::Counter(n)) if n >= 1),
+        "a stall is the one ending nothing else reports — it must be counted: {stalls:?}"
     );
 }
 
@@ -1214,4 +1216,64 @@ async fn a_stall_that_delivered_nothing_spends_the_budget() {
         other => panic!("two silent sessions must exhaust a budget of two: {other:?}"),
     }
     assert_eq!(server.requests().len(), 2);
+}
+
+/// ⚠️ **A stall that delivered nothing keeps the mark.** A `Failed` that
+/// delivered nothing gives its mark up because the server had our `from_slot`
+/// and refused it; a stall is no refusal — the decision to stop waiting is
+/// ours. Here the first session closes slot 10 and stalls, the second's replay
+/// never starts, and the third must still ask for slot 10: a provider whose
+/// data path stays stuck across two attempts must not send the next one to the
+/// live edge.
+///
+/// Mutation this is written against: `Attempt::next_resume_from` giving a
+/// stall that delivered nothing `None`, as it does a `Failed` — the third
+/// request then asks for no slot at all.
+#[tokio::test]
+async fn a_stall_that_delivered_nothing_keeps_the_mark() {
+    let server = run_until_subscribed(
+        vec![
+            ScriptedSession::Stream(vec![
+                Action::send(block_meta(10, Some(BLOCK_TIME))),
+                Action::Hold,
+            ]),
+            ScriptedSession::Stream(vec![Action::Hold]),
+            ScriptedSession::Stream(vec![Action::Hold]),
+        ],
+        3,
+    )
+    .await;
+
+    assert_eq!(
+        server.resume_points(),
+        vec![None, Some(8), Some(8)],
+        "the silent second attempt is no verdict on slot 10 — the third asks again"
+    );
+}
+
+/// ⚠️ **A `subscribe` that is never answered is bounded too**, or the hang
+/// survives one step earlier: a front end that took the connection with a
+/// wedged backend behind it sends no response headers, and the stream clock
+/// never starts. It ends as a stall that delivered nothing — the mark is kept,
+/// the budget is charged.
+///
+/// Mutation this is written against: `subscribe` awaited without the timeout —
+/// the third subscription never comes. And the timeout giving the mark up,
+/// which the third resume point catches.
+#[tokio::test]
+async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
+    let server = run_until_subscribed(
+        vec![
+            ScriptedSession::Stream(vec![
+                Action::send(block_meta(10, Some(BLOCK_TIME))),
+                Action::Fail(Status::unavailable("the scripted break")),
+            ]),
+            ScriptedSession::NeverAnswer,
+            ScriptedSession::Stream(vec![Action::Hold]),
+        ],
+        3,
+    )
+    .await;
+
+    assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
 }

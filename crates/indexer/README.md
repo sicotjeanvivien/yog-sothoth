@@ -331,9 +331,12 @@ correction: per-update failures are counted and stepped over in `session`,
 interruptible.
 
 One ending is not the server's: a stream that stops delivering block-metas and
-stays open. Neither the HTTP/2 keep-alive nor Yellowstone's pings would notice,
-so after `STALL_TIMEOUT` (30 s, the threshold Alchemy gives) of waiting with no
-block-meta the listener ends the attempt itself and resumes at its mark.
+stays open, or a `subscribe` that is never answered. Neither the HTTP/2
+keep-alive nor Yellowstone's pings would notice, so after `STALL_TIMEOUT`
+(30 s, the threshold Alchemy gives) of waiting the listener ends the attempt
+itself. The mark is kept even when the attempt delivered nothing: silence is
+not a refusal, and the retry budget is what bounds a server that never speaks
+again.
 
 ## `TransactionProcessor` and its collaborators
 

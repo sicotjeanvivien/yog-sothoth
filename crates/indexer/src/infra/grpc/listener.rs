@@ -52,11 +52,12 @@
 //! have nothing to do with the rule. Named here rather than covered by a
 //! sentence that says "every arm" and means "almost".
 //!
-//! ⚠️ **One ending is the listener's own: the stall.** A stream that stops
-//! delivering block-metas and stays open would otherwise be awaited for ever
-//! (see [`STALL_TIMEOUT`]). It ends as an [`Attempt::Failed`], so it takes the
-//! rules above and adds none, and the tests drive it with a stall timeout in
-//! milliseconds. **And one part of it is left unguarded, for the backoff's
+//! ⚠️ **One ending is the listener's own: the stall.** A `subscribe` that is
+//! never answered, or a stream that stops delivering block-metas and stays
+//! open, would otherwise be awaited for ever (see [`STALL_TIMEOUT`]). It ends
+//! as [`Attempt::Stalled`], which takes `Failed`'s budget rule and not its
+//! mark rule — silence is not a refusal — and the tests drive it with a stall
+//! timeout in milliseconds. **And one part of it is left unguarded, for the backoff's
 //! reason:** that the clock counts only the time spent *waiting on the
 //! server*, never the time `handle` spends parked on a full consumer. The only
 //! observable is a stall that does not happen after a long back-pressure
@@ -77,10 +78,11 @@
 
 use std::{collections::HashSet, error::Error, sync::Arc, time::Duration};
 
-use tokio::time::Instant;
-
 use solana_pubkey::Pubkey;
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    sync::{Mutex, mpsc},
+    time::Instant,
+};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::{
@@ -135,6 +137,10 @@ const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 /// (`rpcpool/yellowstone-grpc` issues #25 and #175). Without this bound the
 /// listener waits on `stream.message()` for ever, and everything until the
 /// next process restart is lost.
+///
+/// The same bound covers the step before: a `subscribe` whose response never
+/// comes, from a front end that took the connection with a wedged backend
+/// behind it.
 ///
 /// The block-meta is the signal because the subscription asks for one per
 /// slot, about every 400 ms, whatever the market does — transactions can
@@ -343,6 +349,11 @@ impl GrpcListener {
                     error,
                     delivered: true,
                     ..
+                }
+                | Attempt::Stalled {
+                    error,
+                    delivered: true,
+                    ..
                 } => {
                     warn!(attempt, error = %error, "gRPC stream broke — resubscribing");
                     attempt = 0;
@@ -367,6 +378,11 @@ impl GrpcListener {
                 // is exactly what nothing used to say.
                 Attempt::Unreachable { error }
                 | Attempt::Failed {
+                    error,
+                    delivered: false,
+                    ..
+                }
+                | Attempt::Stalled {
                     error,
                     delivered: false,
                     ..
@@ -473,7 +489,20 @@ impl GrpcListener {
             };
         }
 
-        let mut stream = match client.subscribe(ReceiverStream::new(outbound_rx)).await {
+        // ⚠️ **Under the stall timeout as well**, or the hang this bound exists
+        // for survives one step earlier: a server that accepts the HTTP/2
+        // stream and never sends the response headers keeps `subscribe`
+        // pending for ever, and the stream clock below never starts.
+        let subscribed = tokio::time::timeout(
+            self.stall_timeout,
+            client.subscribe(ReceiverStream::new(outbound_rx)),
+        )
+        .await;
+        let Ok(subscribed) = subscribed else {
+            return self.stalled("subscribe never answered", false, None);
+        };
+
+        let mut stream = match subscribed {
             Ok(response) => response.into_inner(),
             // ⚠️ **A `Status` here is not proof that a server spoke.** tonic maps
             // a connection that gave way into a `Status` as well, so this one
@@ -558,41 +587,43 @@ impl GrpcListener {
                 // After `message`, so that a message already waiting — which
                 // may be the block-meta that resets the clock — is read first.
                 _ = tokio::time::sleep(self.stall_timeout.saturating_sub(silent)) => {
-                    return self.stalled(&session);
+                    return self.stalled(
+                        "no block-meta from the stream",
+                        session.received_data(),
+                        session.resume_from(),
+                    );
                 }
             }
         }
     }
 
-    /// End an attempt whose stream stopped delivering block-metas.
+    /// End an attempt on which the server said nothing for the stall
+    /// timeout — no answer to `subscribe`, or no block-meta on the stream.
     ///
-    /// ⚠️ **A `Failed`, on purpose, and not an ending of its own.** A stalled
-    /// stream is a broken stream the server failed to close, so it takes
-    /// exactly the rules of one: `run` restarts the budget if the session
-    /// delivered and charges it if not, and [`Attempt::next_resume_from`]
-    /// keeps or gives up the mark on the same `delivered`. A variant of its own
-    /// would have to restate both rules, and a rule restated in a second arm is
-    /// how the eight defects of this file's header came to be.
-    fn stalled(&self, session: &StreamSession) -> Attempt {
+    /// Counted and logged here, once for both sites: before the counter, a
+    /// stall was the one ending nothing reported. What it does to the budget
+    /// and the mark is [`Attempt::Stalled`]'s.
+    fn stalled(&self, what: &str, delivered: bool, resume_from: Option<u64>) -> Attempt {
         GrpcListenerMetrics::record_stall();
         warn!(
             waited_secs = self.stall_timeout.as_secs_f64(),
-            resume_from = ?session.resume_from(),
-            "no block-meta from the stream within the stall timeout — ending the attempt"
+            delivered,
+            resume_from = ?resume_from,
+            "{what} within the stall timeout — ending the attempt"
         );
 
-        Attempt::Failed {
-            error: format!("stream stalled: no block-meta for {:?}", self.stall_timeout),
-            delivered: session.received_data(),
-            resume_from: session.resume_from(),
+        Attempt::Stalled {
+            error: format!("stalled: {what} for {:?}", self.stall_timeout),
+            delivered,
+            resume_from,
         }
     }
 }
 
 /// How one connection ended.
 ///
-/// The two **stream** endings carry the same two facts, and the listener needs
-/// both on both — dropping `delivered` from one of them was a defect of its
+/// The **stream** endings carry the same two facts, and the listener needs
+/// both on each — dropping `delivered` from one of them was a defect of its
 /// own, see the `Failed` arm: `resume_from` is where to pick up (see
 /// `StreamSession::resume_from`), and `delivered` says whether this attempt got
 /// anything off the stream at all, which is what separates the churn of a
@@ -637,6 +668,27 @@ enum Attempt {
         resume_from: Option<u64>,
     },
     Failed {
+        error: String,
+        delivered: bool,
+        resume_from: Option<u64>,
+    },
+    /// The server said nothing for the stall timeout — see [`STALL_TIMEOUT`]
+    /// — and **this listener** ended the attempt.
+    ///
+    /// ⚠️ **Not a `Failed`, and the difference is a lost gap.** It takes
+    /// `Failed`'s budget rule: churn if the session delivered, a charged
+    /// attempt if not. But not its mark rule. A `Failed` that delivered
+    /// nothing gives the mark up because the server had our `from_slot` and
+    /// gave nothing back — a verdict. A stall is no verdict: the silence is
+    /// the server's, the decision to stop waiting is ours. Reading it as a
+    /// refusal meant that a provider whose data path stayed stuck across two
+    /// attempts — the first delivered, the second's replay never started —
+    /// sent the third to the live edge, and the gap was lost when the provider
+    /// came back. Found in review before this ending was merged. The budget
+    /// still bounds it: a server that never speaks again exhausts the attempts
+    /// and stops the indexer, which is seen, rather than skipping a gap, which
+    /// is not.
+    Stalled {
         error: String,
         delivered: bool,
         resume_from: Option<u64>,
@@ -710,6 +762,11 @@ impl Attempt {
                 delivered: true,
                 resume_from,
                 ..
+            }
+            | Attempt::Stalled {
+                delivered: true,
+                resume_from,
+                ..
             } => (*resume_from).or(held),
 
             Attempt::StreamClosed {
@@ -722,6 +779,12 @@ impl Attempt {
             // Nothing was asked of anyone, so nothing was refused: the mark is
             // exactly as good as it was a moment ago.
             Attempt::Unreachable { .. } => held,
+
+            // Asked, and met with silence — which is not a refusal. See
+            // `Attempt::Stalled`.
+            Attempt::Stalled {
+                delivered: false, ..
+            } => held,
 
             // Neither ending: the loop returns on both, so this answer is never
             // read. Handing back what we hold is the only one that is not a

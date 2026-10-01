@@ -105,6 +105,10 @@ pub(super) enum ScriptedSession {
     /// Accept, play these actions, then close cleanly unless an [`Action`]
     /// ended the stream first.
     Stream(Vec<Action>),
+    /// Read the request and never answer it: no response headers, no stream.
+    /// A wedged backend behind a front end that took the connection — the hang
+    /// that comes before any stream exists to stall.
+    NeverAnswer,
 }
 
 impl ScriptedSession {
@@ -158,6 +162,7 @@ impl Geyser for ScriptedGeyser {
 
         let actions = match scripted {
             Some(ScriptedSession::Refuse(status)) => return Err(status),
+            Some(ScriptedSession::NeverAnswer) => std::future::pending().await,
             Some(ScriptedSession::Stream(actions)) => actions,
             // See the module header: silence here would let a listener that
             // reconnects too often pass.
