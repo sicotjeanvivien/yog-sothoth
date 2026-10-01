@@ -8,15 +8,16 @@
 
 use super::*;
 
-/// What the assertions below read, and nothing in production does — which is
-/// why these live here, where a child module still sees the private fields.
+/// What the assertions below read, and nothing in production does. They lean on
+/// two `#[cfg(test)]` accessors of the halves, `WaitingSlots::count` and
+/// `KnownTimes::len`.
 ///
 /// The reader production would have is an occupancy gauge — this buffer can
 /// hold 40–160 MB — and it is what a real-stream measurement will read.
 impl<T> SlotTimestampBuffer<T> {
     /// How many payloads are waiting.
     fn pending_payloads(&self) -> usize {
-        self.pending_count
+        self.waiting.count()
     }
 
     /// How many slot outcomes are remembered — instants and given-up slots

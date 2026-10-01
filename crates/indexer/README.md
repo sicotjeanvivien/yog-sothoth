@@ -30,6 +30,9 @@ indexer/src/
 │   │                        stall_clock, log — listener.rs only assembles them
 │   ├── session/           ← slot_progress, delivery, ping_answer, log —
 │   │                        session.rs only routes each update to them
+│   ├── slot_timestamp_buffer/ ← waiting_slots (what waits, and which go),
+│   │                        known_times (what is settled), log —
+│   │                        slot_timestamp_buffer.rs only orchestrates them
 │   └── tests/             ← its ten test files, grouped: what is left beside
 │                            them is what goes into the binary
 ├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:

@@ -13,7 +13,8 @@
 //! - `interceptor` — the credential, on every request, printed by nothing;
 //! - `transaction_adapter` — the protobuf shape into the neutral transaction;
 //! - `slot_timestamp_buffer` — the pairing itself, since `block_time` lives on
-//!   a separate subscription keyed by slot;
+//!   a separate subscription keyed by slot; its sub-modules hold what waits
+//!   and what is settled;
 //! - `source` — the port's face on all of it, and the only public item.
 //!
 //! What leaves is [`application::source::IngestedTransaction`], which is not this
