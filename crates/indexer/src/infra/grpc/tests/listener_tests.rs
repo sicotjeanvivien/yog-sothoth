@@ -1115,11 +1115,18 @@ fn a_stalled_stream_is_resubscribed_at_its_mark() {
         .snapshot()
         .into_vec()
         .into_iter()
-        .find(|(key, _, _, _)| key.key().name() == "yog_indexer_grpc_stalls_total")
+        .find(|(key, _, _, _)| {
+            key.key().name() == "yog_indexer_grpc_stalls_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "site" && l.value() == "stream")
+        })
         .map(|(_, _, _, value)| value);
     assert!(
         matches!(stalls, Some(DebugValue::Counter(n)) if n >= 1),
-        "a stall is the one ending nothing else reports — it must be counted: {stalls:?}"
+        "a stall is the one ending nothing else reports — it must be counted, \
+         under the stream site: {stalls:?}"
     );
 }
 
@@ -1276,4 +1283,34 @@ async fn a_subscribe_that_is_never_answered_is_bounded_and_keeps_the_mark() {
     .await;
 
     assert_eq!(server.resume_points(), vec![None, Some(8), Some(8)]);
+}
+
+/// ⚠️ **A stop request reaches a `subscribe` that is never answered.** The
+/// stall timeout bounds that wait, but thirty seconds is longer than a
+/// container's stop grace period: without the shutdown branch, `docker compose
+/// stop` would kill the indexer instead of stopping it.
+///
+/// Mutation this is written against: awaiting the bounded `subscribe` without
+/// the `select!` on the token. With a stall timeout of an hour, the run then
+/// outlives `TEST_DEADLINE`.
+#[tokio::test]
+async fn a_shutdown_reaches_a_subscribe_that_is_never_answered() {
+    let server = test_geyser_server::start(vec![ScriptedSession::NeverAnswer]).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+
+    let listener = listener_with_stall(&server, 1, Duration::from_secs(3600)).await;
+    let running = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    wait_for_subscriptions(&server, 1).await;
+    shutdown.cancel();
+
+    let outcome = timeout(TEST_DEADLINE, running)
+        .await
+        .expect("a stop request must not wait out the stall timeout")
+        .expect("no panic");
+    assert!(
+        outcome.is_ok(),
+        "a requested stop is a clean one: {outcome:?}"
+    );
 }

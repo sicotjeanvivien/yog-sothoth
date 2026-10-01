@@ -139,13 +139,15 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 /// follow. The session keeps reading either way.
 const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
 
-/// Attempts ended because the stream stopped delivering block-metas without
-/// closing.
+/// Attempts ended because the server said nothing for the stall timeout, by
+/// [`StallSite`].
 ///
-/// ⚠️ **The one ending nothing else would report.** A stalled stream raises no
-/// error and closes nothing: before this counter existed, the only trace was
-/// `block_meta` going flat in [`UPDATES_RECEIVED`] while `ping` kept rising.
-/// Each increment is a reconnection and a `from_slot` replay, both billed.
+/// ⚠️ **The one ending nothing else would report.** A stall raises no error
+/// and closes nothing: before this counter existed, the only trace of a
+/// stalled stream was `block_meta` going flat in [`UPDATES_RECEIVED`] while
+/// `ping` kept rising, and a `subscribe` never answered left no trace at all.
+/// Each increment is a reconnection, and a `from_slot` replay when there is a
+/// mark — both billed.
 const STALLS: &str = "yog_indexer_grpc_stalls_total";
 
 /// What an update was, for [`UPDATES_RECEIVED`].
@@ -232,6 +234,38 @@ impl PingReplyFailure {
     }
 }
 
+/// Where a stall happened, for [`STALLS`].
+///
+/// Two labels because the two are diagnosed in different places: a wedged
+/// front end never answers `subscribe`, while a server whose data path stopped
+/// answers it and then goes quiet — the first shows nothing in
+/// [`UPDATES_RECEIVED`], the second shows `ping` rising over a flat
+/// `block_meta`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum StallSite {
+    /// `subscribe` was never answered.
+    Subscribe,
+    /// The stream was open and no block-meta came.
+    Stream,
+}
+
+impl StallSite {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Subscribe => "subscribe",
+            Self::Stream => "stream",
+        }
+    }
+
+    /// What the attempt's error says happened.
+    pub(crate) fn describe(self) -> &'static str {
+        match self {
+            Self::Subscribe => "subscribe never answered",
+            Self::Stream => "no block-meta from the stream",
+        }
+    }
+}
+
 pub struct GrpcListenerMetrics;
 
 impl GrpcListenerMetrics {
@@ -257,8 +291,9 @@ impl GrpcListenerMetrics {
         );
         describe_counter!(
             STALLS,
-            "Attempts ended because no block-meta arrived for the stall \
-             timeout while the stream stayed open"
+            "Attempts ended because the server said nothing for the stall \
+             timeout, labelled by where: no answer to subscribe, or no \
+             block-meta on an open stream"
         );
         describe_counter!(
             PING_REPLIES_UNSENT,
@@ -287,7 +322,7 @@ impl GrpcListenerMetrics {
         counter!(PING_REPLIES_UNSENT, "reason" => failure.as_str()).increment(1);
     }
 
-    pub(crate) fn record_stall() {
-        counter!(STALLS).increment(1);
+    pub(crate) fn record_stall(site: StallSite) {
+        counter!(STALLS, "site" => site.as_str()).increment(1);
     }
 }

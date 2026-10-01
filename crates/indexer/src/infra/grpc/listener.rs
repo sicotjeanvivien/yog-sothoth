@@ -102,7 +102,7 @@ use crate::{
         endpoint::scheme,
         grpc::{
             interceptor::CredentialInterceptor,
-            metrics::GrpcListenerMetrics,
+            metrics::{GrpcListenerMetrics, StallSite},
             session::{SessionState, StreamSession},
             subscription::build_request,
         },
@@ -355,7 +355,12 @@ impl GrpcListener {
                     delivered: true,
                     ..
                 } => {
-                    warn!(attempt, error = %error, "gRPC stream broke — resubscribing");
+                    warn!(
+                        attempt,
+                        error = %error,
+                        resume_from = ?resume_from,
+                        "gRPC stream broke — resubscribing"
+                    );
                     attempt = 0;
                     backoff = INITIAL_BACKOFF_SECS;
                     sleep_or_cancel(Duration::from_secs(1), &shutdown).await;
@@ -492,14 +497,21 @@ impl GrpcListener {
         // ⚠️ **Under the stall timeout as well**, or the hang this bound exists
         // for survives one step earlier: a server that accepts the HTTP/2
         // stream and never sends the response headers keeps `subscribe`
-        // pending for ever, and the stream clock below never starts.
-        let subscribed = tokio::time::timeout(
-            self.stall_timeout,
-            client.subscribe(ReceiverStream::new(outbound_rx)),
-        )
-        .await;
+        // pending for ever, and the stream clock below never starts. And under
+        // the shutdown token, which a bounded wait still needs: thirty seconds
+        // is longer than a container's stop grace period.
+        let subscribed = tokio::select! {
+            biased;
+
+            _ = shutdown.cancelled() => return Attempt::ShutdownRequested,
+
+            subscribed = tokio::time::timeout(
+                self.stall_timeout,
+                client.subscribe(ReceiverStream::new(outbound_rx)),
+            ) => subscribed,
+        };
         let Ok(subscribed) = subscribed else {
-            return self.stalled("subscribe never answered", false, None);
+            return self.stalled(StallSite::Subscribe, false, None);
         };
 
         let mut stream = match subscribed {
@@ -588,7 +600,7 @@ impl GrpcListener {
                 // may be the block-meta that resets the clock — is read first.
                 _ = tokio::time::sleep(self.stall_timeout.saturating_sub(silent)) => {
                     return self.stalled(
-                        "no block-meta from the stream",
+                        StallSite::Stream,
                         session.received_data(),
                         session.resume_from(),
                     );
@@ -600,20 +612,16 @@ impl GrpcListener {
     /// End an attempt on which the server said nothing for the stall
     /// timeout — no answer to `subscribe`, or no block-meta on the stream.
     ///
-    /// Counted and logged here, once for both sites: before the counter, a
-    /// stall was the one ending nothing reported. What it does to the budget
-    /// and the mark is [`Attempt::Stalled`]'s.
-    fn stalled(&self, what: &str, delivered: bool, resume_from: Option<u64>) -> Attempt {
-        GrpcListenerMetrics::record_stall();
-        warn!(
-            waited_secs = self.stall_timeout.as_secs_f64(),
-            delivered,
-            resume_from = ?resume_from,
-            "{what} within the stall timeout — ending the attempt"
-        );
+    /// Counted here, by site: before the counter, a stall was the one ending
+    /// nothing reported. **Not logged here**: `run`'s arm logs every ending
+    /// once, with the error built below and the slot the next attempt will
+    /// really ask for — which is the loop's mark, not this session's. What a
+    /// stall does to the budget and the mark is [`Attempt::Stalled`]'s.
+    fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Attempt {
+        GrpcListenerMetrics::record_stall(site);
 
         Attempt::Stalled {
-            error: format!("stalled: {what} for {:?}", self.stall_timeout),
+            error: format!("stalled: {} for {:?}", site.describe(), self.stall_timeout),
             delivered,
             resume_from,
         }
@@ -684,10 +692,18 @@ enum Attempt {
     /// refusal meant that a provider whose data path stayed stuck across two
     /// attempts — the first delivered, the second's replay never started —
     /// sent the third to the live edge, and the gap was lost when the provider
-    /// came back. Found in review before this ending was merged. The budget
-    /// still bounds it: a server that never speaks again exhausts the attempts
-    /// and stops the indexer, which is seen, rather than skipping a gap, which
-    /// is not.
+    /// came back. Found in review before this ending was merged.
+    ///
+    /// ⚠️ **What bounds it, and what does not.** A stall that delivered
+    /// nothing is charged: a server that never speaks again exhausts the
+    /// attempts and stops the indexer, which is seen, rather than skipping a
+    /// gap, which is not — and a replay slower to start than the timeout
+    /// stops it the same way. A stall that **did** deliver is churn and
+    /// restarts the budget, so a provider that replays the rewound slots and
+    /// then goes silent at the live edge is resubscribed every half-minute
+    /// for ever, a short billed replay each time. That is the cost the
+    /// `Failed` churn arm already states for a stream that delivers and then
+    /// errors; `stalls_total` rising steadily is what says it is happening.
     Stalled {
         error: String,
         delivered: bool,
