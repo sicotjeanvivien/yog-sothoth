@@ -54,6 +54,17 @@ const OUTBOUND_CAPACITY: usize = 8;
 
 type Client = GeyserClient<InterceptedService<Channel, CredentialInterceptor>>;
 
+/// A stream the server has accepted, and what must live as long as it.
+struct OpenStream {
+    /// Held, never read: the stream is read through the channel this client
+    /// owns, and nothing here should depend on what tonic does once the last
+    /// client handle is gone.
+    _client: Client,
+    stream: Streaming<SubscribeUpdate>,
+    /// The outbound half, handed to the session for its ping answers.
+    outbound: mpsc::Sender<SubscribeRequest>,
+}
+
 /// Opens a connection per attempt, and follows it to the end of its stream.
 ///
 /// Holds what every connection needs and nothing that lasts beyond one: the
@@ -118,8 +129,8 @@ impl Connector {
             })
     }
 
-    /// One connection: dial, subscribe, then read until the stream ends.
-    pub(super) async fn connect_and_stream(
+    /// One attempt: open a stream, then read it to its end.
+    pub(super) async fn attempt(
         &self,
         channel: &ChannelEndpoint,
         interceptor: &CredentialInterceptor,
@@ -127,39 +138,62 @@ impl Connector {
         downstream: &mpsc::Sender<IngestedTransaction>,
         shutdown: &CancellationToken,
     ) -> Ending {
-        let channel: Channel = match channel.connect().await {
-            Ok(channel) => channel,
-            // Nothing has been asked of anyone yet.
-            Err(e) => {
-                return Ending::Unreachable {
-                    error: self.endpoint.url().scrub(&format!("connect: {e}")),
-                };
-            }
-        };
+        match self.open(channel, interceptor, request, shutdown).await {
+            Ok(open) => self.read(open, downstream, shutdown).await,
+            Err(ending) => ending,
+        }
+    }
 
-        // Held for the life of the stream, as the channel it owns: the stream is
-        // read through it, and nothing here should depend on what tonic does
-        // once the last client handle is gone.
+    /// Dial, send the subscription, and wait for the server to accept it.
+    async fn open(
+        &self,
+        channel: &ChannelEndpoint,
+        interceptor: &CredentialInterceptor,
+        request: SubscribeRequest,
+        shutdown: &CancellationToken,
+    ) -> Result<OpenStream, Ending> {
+        let channel: Channel = channel.connect().await.map_err(|e| {
+            // Nothing has been asked of anyone yet.
+            Ending::Unreachable {
+                error: self.endpoint.url().scrub(&format!("connect: {e}")),
+            }
+        })?;
+
         let mut client = GeyserClient::with_interceptor(channel, interceptor.clone())
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
         // The outbound half stays open for the life of the stream: the session
         // answers server pings on it — see `PingAnswer`.
-        let (outbound_tx, outbound_rx) = mpsc::channel::<SubscribeRequest>(OUTBOUND_CAPACITY);
-        if outbound_tx.send(request.clone()).await.is_err() {
-            return Ending::Unreachable {
+        let (outbound, outbound_rx) = mpsc::channel::<SubscribeRequest>(OUTBOUND_CAPACITY);
+        if outbound.send(request.clone()).await.is_err() {
+            return Err(Ending::Unreachable {
                 error: "outbound stream closed before the subscription was sent".to_string(),
-            };
+            });
         }
 
-        let mut stream = match self.subscribe(&mut client, outbound_rx, shutdown).await {
-            Ok(stream) => stream,
-            Err(ending) => return ending,
-        };
-
+        let stream = self.subscribe(&mut client, outbound_rx, shutdown).await?;
         log::subscribed(request.from_slot);
 
-        let mut session = StreamSession::new(downstream.clone(), outbound_tx, shutdown.clone());
+        Ok(OpenStream {
+            _client: client,
+            stream,
+            outbound,
+        })
+    }
+
+    /// Read an open stream until it ends, stalls, or the listener stops.
+    async fn read(
+        &self,
+        open: OpenStream,
+        downstream: &mpsc::Sender<IngestedTransaction>,
+        shutdown: &CancellationToken,
+    ) -> Ending {
+        let OpenStream {
+            _client,
+            mut stream,
+            outbound,
+        } = open;
+        let mut session = StreamSession::new(downstream.clone(), outbound, shutdown.clone());
         let mut clock = StallClock::new(self.stall_timeout);
 
         loop {

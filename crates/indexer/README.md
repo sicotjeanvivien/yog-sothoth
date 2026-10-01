@@ -159,7 +159,7 @@ asks for — the budget being `RetryBudget::settle`, and the resume point
 `Verdict::next_resume_from`, both reading the one `Ending::verdict`. One ending
 is guarded from two sides: what an attempt that never reached the service costs the retry budget is
 driven through `run`, against a port with nothing behind it, while what it does
-to the resume mark is driven one level down at `connect_and_stream` — observing
+to the resume mark is driven one level down at `Connector::attempt` — observing
 a mark being *kept* needs a delivered session to make one first, against a
 server that must be unreachable for the attempt after. The two decisions only a
 duration shows from `run` — the backoff reset after a churn, and the stall clock

@@ -33,7 +33,7 @@
 //! that is **not** a stream's — the attempt that never got an answer — is
 //! guarded in two halves: what it costs the retry budget goes through `run`
 //! like the others, against a port with nothing behind it, while what it does
-//! to the resume mark is driven one level down, at `connect_and_stream`,
+//! to the resume mark is driven one level down, at `Connector::attempt`,
 //! because no server can both deliver a mark and be unreachable for the attempt
 //! after. All of it proves
 //! this client against our model of the server, and nothing about the protocol

@@ -9,8 +9,7 @@
 //!
 //! This file assembles. Each responsibility has its own module:
 //!
-//! - `connector` — opens one connection per attempt, and follows it to the
-//!   end of its stream;
+//! - `connector` — one attempt: open a stream, then read it to its end;
 //! - `ending` — how it ended, what that is worth (its `Verdict`), and what
 //!   that does to the resume mark;
 //! - `retry_budget` — whether to try again, and when;
@@ -26,7 +25,7 @@
 //! own values, with no clock involved.
 //!
 //! ⚠️ The mark half of [`Ending::Unreachable`](ending::Ending::Unreachable) is driven at
-//! `connect_and_stream`, not `run`: observing a mark *kept* needs a delivered
+//! `Connector::attempt`, not `run`: observing a mark *kept* needs a delivered
 //! session first, against a server that must then be unreachable.
 //!
 //! What no local test reaches: TLS, the keep-alive, the connect timeout,
@@ -140,7 +139,7 @@ impl GrpcListener {
 
             let verdict = self
                 .connector
-                .connect_and_stream(&channel, &interceptor, request, &downstream, &shutdown)
+                .attempt(&channel, &interceptor, request, &downstream, &shutdown)
                 .await
                 .verdict();
 

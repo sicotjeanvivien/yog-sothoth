@@ -132,7 +132,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // makes that readable; it was missing until a review of this change found the
 // arm had none.
 //
-// ⚠️ **Two rules below are driven at `connect_and_stream` and not at `run`**,
+// ⚠️ **Two rules below are driven at `Connector::attempt` and not at `run`**,
 // and they are the only ones: what an attempt that never reached the service
 // does to the **mark**. Observing a mark being kept needs one to exist first,
 // and only a delivered session makes one — against a server that must, for the
@@ -143,7 +143,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // fix for a delivered session that had no mark of its own. The budget does not
 // write `resume_from`: the rule is `Verdict::next_resume_from`, which reads the
 // same verdict as the budget, and the *per-ending* facts behind it are
-// built in `connect_and_stream`. So a mutation that used to belong to one arm
+// built in `Connector::open` and `Connector::read`. So a mutation that used to belong to one arm
 // now belongs to one of those two places, and each annotation below says which.
 
 use tokio::{net::TcpListener, time::timeout};
@@ -695,7 +695,7 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
 /// was dropped, the attempt after it started from the live edge, and the
 /// transactions of the original break were never asked for again.
 ///
-/// Mutation this owns: `connect_and_stream`'s `channel.connect()` failure
+/// Mutation this owns: `Connector::open`'s `channel.connect()` failure
 /// returning `Ending::Failed { delivered: false }` again, which the `match`
 /// below catches by name.
 ///
@@ -758,7 +758,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
 
     let outcome = timeout(
         TEST_DEADLINE,
-        listener.connector.connect_and_stream(
+        listener.connector.attempt(
             &channel,
             &interceptor,
             request,
@@ -831,7 +831,7 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
 
     let outcome = timeout(
         TEST_DEADLINE,
-        listener.connector.connect_and_stream(
+        listener.connector.attempt(
             &channel,
             &interceptor,
             request,
@@ -915,7 +915,7 @@ async fn a_dial_that_never_connects_spends_the_budget() {
 /// for exactly as long as the quiet lasted.
 ///
 /// Mutation this is written against: removing the `shutdown.cancelled()` branch
-/// from `connect_and_stream`'s `select!`. It cannot produce a wrong value, only
+/// from `Connector::read`'s `select!`. It cannot produce a wrong value, only
 /// a listener that never returns — which is why the deadline is the assertion.
 #[tokio::test]
 async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
@@ -1082,7 +1082,7 @@ async fn run_until_subscribed(
 /// until the next process restart is lost.
 ///
 /// Mutation this is written against: removing the stall arm of
-/// `connect_and_stream`'s `select!` — the second subscription never comes and
+/// `Connector::read`'s `select!` — the second subscription never comes and
 /// `wait_for_subscriptions` gives up at `TEST_DEADLINE`. And `stalled` handing
 /// back `resume_from: None`, which the resume point catches. Not
 /// `#[tokio::test]` because it reads the counter — see `session_tests`'
