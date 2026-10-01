@@ -37,15 +37,15 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use yellowstone_grpc_proto::prelude::{
-    SubscribeRequest, SubscribeUpdate, SubscribeUpdateBlockMeta, SubscribeUpdateTransaction,
-    subscribe_update::UpdateOneof,
+    SubscribeRequest, SubscribeRequestPing, SubscribeUpdate, SubscribeUpdateBlockMeta,
+    SubscribeUpdateTransaction, subscribe_update::UpdateOneof,
 };
 use yog_core::{CoreError, domain::Protocol};
 
 use crate::application::source::IngestedTransaction;
 
 use super::{
-    metrics::{DropReason, GrpcListenerMetrics, UpdateKind},
+    metrics::{DropReason, GrpcListenerMetrics, PingReplyFailure, UpdateKind},
     slot_timestamp_buffer::SlotTimestampBuffer,
     subscription::protocol_of,
     transaction_adapter::from_grpc,
@@ -63,6 +63,14 @@ use super::{
 /// nothing will notice. Two is what the reference client uses, for the reason
 /// its own comment gives.
 const REWIND_SLOTS: u64 = 2;
+
+/// The `id` a server ping is answered with, which the server echoes in its
+/// pong.
+///
+/// Nothing correlates on it: one answer goes out per ping, and the pong is only
+/// counted. `1` is what the reference client example and Alchemy's
+/// documentation send.
+const PING_REPLY_ID: i32 = 1;
 
 /// A transaction waiting for its slot's block time.
 ///
@@ -98,20 +106,15 @@ pub(super) enum SessionState {
 pub(super) struct StreamSession {
     buffer: SlotTimestampBuffer<PendingTransaction>,
     downstream: mpsc::Sender<IngestedTransaction>,
-    /// The outbound half of the bidirectional stream.
+    /// The outbound half of the bidirectional stream: what a server ping is
+    /// answered on — see [`Self::answer_ping`].
     ///
-    /// ⚠️ **Held, never read, and the underscore says so on purpose.** Nothing
-    /// is sent after the subscription — see the note on server pings below.
-    /// What keeping this sender alive buys is that the request stream is never
+    /// ⚠️ **Held for the life of the session, not only for the pings.** Keeping
+    /// this sender alive is also what keeps the request stream from being
     /// *half-closed*: dropping it ends the outbound direction, which is legal
     /// HTTP/2 and which a server is free to read as the end of the exchange.
     /// Cheaper to hold a sender than to find out which servers do.
-    ///
-    /// The `_` prefix is this crate's convention for a field whose value is its
-    /// liveness rather than its content — `Daemon::_database` is the other one.
-    /// It arrived when `infra/grpc`'s blanket `allow(dead_code)` came off and
-    /// the build asked, correctly, why a field was never read.
-    _outbound: mpsc::Sender<SubscribeRequest>,
+    outbound: mpsc::Sender<SubscribeRequest>,
     /// The highest slot whose block-meta has arrived — the only slots this
     /// session can claim to have finished. Advanced by block-metas alone: a
     /// transaction update names a slot that is still in flight.
@@ -132,7 +135,7 @@ impl StreamSession {
         Self {
             buffer: SlotTimestampBuffer::new(),
             downstream,
-            _outbound: outbound,
+            outbound,
             highest_meta_slot: None,
             received_data: false,
             shutdown,
@@ -213,39 +216,9 @@ impl StreamSession {
                 self.on_block_meta(meta).await
             }
             Some(UpdateOneof::Ping(_)) => {
-                // A server ping is **counted and not answered**, and that is a decision.
-                //
-                // # ⚠️ Why nothing is sent back
-                //
-                // Because every answer is unsafe under one of the two readings of the
-                // proto, and this file cannot tell which is right without a server.
-                //
-                // A `SubscribeRequest` may carry a `ping`; a `SubscribeRequest` is also
-                // what *describes the subscription*. So a ping-only request is a keep-alive
-                // under the first reading and an unsubscribe-everything under the second.
-                // Resending the whole request avoids that — but then `from_slot` rides
-                // along, and under the second reading every ping re-issues the replay, on a
-                // message that arrives at a fixed interval. Clearing `from_slot` avoids
-                // *that* — and truncates a replay still in flight, since a reconnection
-                // rewinds up to `MAX_PENDING_SLOTS` and a ping arrives long before the
-                // replay drains. That was this module's answer for a day, under a
-                // doc-comment claiming it was "right under both readings"; it was right
-                // under one. Found in review, 10 September 2026.
-                //
-                // Not answering is the only action that is safe under both, and it costs
-                // less than it looks:
-                //
-                // - the connection is kept alive **below** this layer, by HTTP/2 PING
-                //   frames — `listener`'s `http2_keep_alive_interval` with
-                //   `keep_alive_while_idle`, which is what an idle-timing middlebox
-                //   actually watches;
-                // - the reference client does the same: `yellowstone-grpc-client` matches
-                //   `UpdateOneof::Ping(_)` and yields nothing.
-                //
-                // The outbound half of the stream is still held open — see the `_outbound`
-                // field — because half-closing it is a different question from answering a
-                // ping.
+                // Not data: `received_data` stays false — see its doc-comment.
                 GrpcListenerMetrics::record_update(UpdateKind::Ping);
+                self.answer_ping();
                 SessionState::Open
             }
             Some(UpdateOneof::Pong(_)) => {
@@ -378,6 +351,64 @@ impl StreamSession {
                 }
             }
             Err(mpsc::error::TrySendError::Closed(_)) => SessionState::DownstreamClosed,
+        }
+    }
+
+    /// Answer a server ping with a request that carries **only** `ping`.
+    ///
+    /// Yellowstone servers ping to check that the client is alive, and a
+    /// provider may close a connection that does not answer: Alchemy's
+    /// *Yellowstone gRPC Best Practices* page says "Always respond with pong,
+    /// otherwise the server may close your connection". A closed connection
+    /// costs a reconnection and a `from_slot` replay, both billed.
+    ///
+    /// # ⚠️ Why a bare ping cannot touch the subscription
+    ///
+    /// A `SubscribeRequest` is also what *describes* the subscription, so the
+    /// fear was that a ping-only request would read as a new, empty one: an
+    /// unsubscribe-everything. That fear kept this session silent from
+    /// 10 September 2026 until the reference server was read on 1 October
+    /// (`rpcpool/yellowstone-grpc`, `yellowstone-grpc-geyser/src/grpc.rs`, at
+    /// `79abd84`), and the server settles it. It builds a `Filter` from each incoming
+    /// request, and when `filter.get_pong_msg()` returns a pong it sends that
+    /// pong and `continue`s. That is **before**
+    /// `incoming_client_tx.send(Some((request.from_slot, filter)))`, so a
+    /// request carrying a ping never replaces the subscription, and its
+    /// `from_slot` is never read. The reference client example
+    /// (`examples/rust/src/bin/client.rs`) and Alchemy's page both answer with
+    /// exactly this request.
+    ///
+    /// What must still never ride along is the subscription itself. Sending
+    /// `from_slot` back would re-issue the replay on every ping, and clearing
+    /// it on a copy of the request would truncate a replay still in flight.
+    /// That second answer was this module's for a day, before the silence.
+    ///
+    /// # ⚠️ Why `try_send` and not `send().await`
+    ///
+    /// `handle` runs from the *body* of the listener's `select!` arm, so a wait
+    /// here would stop the shutdown token from being polled — the defect that
+    /// [`SessionState::ShutdownRequested`] exists for, on the downstream side.
+    /// And a full outbound half means the transport is not draining: queueing
+    /// more answers buys nothing, and the next ping tries again. Both failures
+    /// are counted and stepped over. The session is still receiving, and if
+    /// the server does close it for want of an answer, the reconnection is
+    /// what handles that.
+    fn answer_ping(&self) {
+        let answer = SubscribeRequest {
+            ping: Some(SubscribeRequestPing { id: PING_REPLY_ID }),
+            ..Default::default()
+        };
+
+        if let Err(error) = self.outbound.try_send(answer) {
+            let failure = match error {
+                mpsc::error::TrySendError::Full(_) => PingReplyFailure::OutboundFull,
+                mpsc::error::TrySendError::Closed(_) => PingReplyFailure::OutboundClosed,
+            };
+            GrpcListenerMetrics::record_ping_reply_unsent(failure);
+            warn!(
+                reason = failure.as_str(),
+                "could not answer a server ping — the server may close the stream"
+            );
         }
     }
 

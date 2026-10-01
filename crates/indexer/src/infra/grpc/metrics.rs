@@ -132,19 +132,28 @@ const TRANSACTIONS_EMITTED: &str = "yog_indexer_grpc_transactions_emitted_total"
 /// its speed.
 const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 
+/// Server pings this client could not answer, by reason.
+///
+/// An unanswered ping is what a provider may close a connection for, so a
+/// non-zero value here is a reconnection — and a billed replay — that might
+/// follow. The session keeps reading either way.
+const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
+
 /// What an update was, for [`UPDATES_RECEIVED`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
-    /// A server keep-alive. Counted, never answered — see how
-    /// [`StreamSession`] handles it, and why no answer is safe under both
-    /// readings of the proto.
-    ///
-    /// [`StreamSession`]: crate::infra::grpc::session::StreamSession
+    /// A server keep-alive. Counted, and answered with a ping-only request —
+    /// see `StreamSession::answer_ping`.
     Ping,
-    /// The server's answer to a client ping. This client sends none, so this
-    /// should stay at zero.
+    /// The server's answer to one of those answers.
+    ///
+    /// ⚠️ **Read against `ping`, not on its own.** The client sends a ping only
+    /// in reply to the server's, and the server answers each one with a pong.
+    /// So this rises at the same rate as `ping` while the answers are getting
+    /// through. A `pong` lagging `ping` means answers are going out unread, or
+    /// not going out at all — [`PING_REPLIES_UNSENT`] says which.
     Pong,
     /// Anything the subscription did not ask for. Non-zero here means the
     /// request and the reader disagree about what was subscribed to.
@@ -192,6 +201,28 @@ impl DropReason {
     }
 }
 
+/// Why a ping answer did not leave, for [`PING_REPLIES_UNSENT`].
+///
+/// Two labels because the two are fixed in different places: one is a
+/// transport that stopped draining, the other a request stream that is gone.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum PingReplyFailure {
+    /// The outbound half is full: the transport is not taking what is sent.
+    OutboundFull,
+    /// The outbound half is closed: the request stream has ended, so the
+    /// server will hear nothing more from this subscription.
+    OutboundClosed,
+}
+
+impl PingReplyFailure {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::OutboundFull => "outbound_full",
+            Self::OutboundClosed => "outbound_closed",
+        }
+    }
+}
+
 pub struct GrpcListenerMetrics;
 
 impl GrpcListenerMetrics {
@@ -215,6 +246,11 @@ impl GrpcListenerMetrics {
             "Times the downstream channel was full and the stream was slowed \
              to the consumer's speed"
         );
+        describe_counter!(
+            PING_REPLIES_UNSENT,
+            "Server pings that could not be answered, labelled by why the \
+             answer did not leave"
+        );
     }
 
     pub(crate) fn record_update(kind: UpdateKind) {
@@ -231,5 +267,9 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_downstream_full() {
         counter!(DOWNSTREAM_FULL).increment(1);
+    }
+
+    pub(crate) fn record_ping_reply_unsent(failure: PingReplyFailure) {
+        counter!(PING_REPLIES_UNSENT, "reason" => failure.as_str()).increment(1);
     }
 }

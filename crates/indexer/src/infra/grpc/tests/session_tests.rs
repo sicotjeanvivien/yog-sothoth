@@ -12,12 +12,14 @@
 use super::*;
 
 use tokio_util::sync::CancellationToken;
-use yellowstone_grpc_proto::prelude::{SubscribeUpdatePing, SubscribeUpdatePong};
+use yellowstone_grpc_proto::prelude::{
+    SubscribeRequestPing, SubscribeUpdatePing, SubscribeUpdatePong,
+};
 
 // The updates themselves live next door, because `listener_tests` builds the
 // same ones to put on a real stream — see `test_fixtures`.
 use crate::infra::grpc::test_fixtures::{
-    PROTOCOL, at, block_meta, transaction, transaction_update_with_signature,
+    PROTOCOL, at, block_meta, ping, transaction, transaction_update_with_signature,
     unroutable_transaction, update,
 };
 
@@ -44,10 +46,10 @@ fn session_with(
 ) {
     let (downstream_tx, downstream_rx) = mpsc::channel(capacity);
     let (outbound_tx, outbound_rx) = mpsc::channel(4);
-    // The session no longer keeps the request it subscribed with: it never
-    // resent it, and the copy was held "for a future filter update". The
-    // outbound receiver is still handed back, because what the tests assert
-    // about a ping is that **nothing** is written to it.
+    // The session does not keep the request it subscribed with, so the only
+    // thing ever written here is the answer to a ping. The receiver is handed
+    // back so that the tests can assert that answer is a bare ping and nothing
+    // more.
     (
         StreamSession::new(downstream_tx, outbound_tx, shutdown),
         downstream_rx,
@@ -320,31 +322,117 @@ async fn a_closed_downstream_ends_the_session() {
 
 // ── keep-alive ──────────────────────────────────────────────────────
 
-/// ⚠️ **A ping is counted and not answered**, and every alternative is unsafe
-/// under one of the two readings of the proto — see the note on
-/// `StreamSession`. This test is what keeps an "obvious improvement" from
-/// quietly re-introducing one: answering with the request re-issues the replay
-/// every ping, answering without it truncates a replay in flight, and answering
-/// with a bare ping may unsubscribe everything.
+/// ⚠️ **A ping is answered with a ping and nothing else** — a request whose only
+/// field is `ping`. The reference server returns the pong *before* it reads
+/// anything else off the request, so this answer never touches the
+/// subscription. Anything more is a defect, and each assertion below names the
+/// one it is about: a `from_slot` would re-issue the replay on every ping, and
+/// a filter would describe a subscription the server is not meant to see again.
 #[tokio::test]
-async fn a_ping_is_counted_and_nothing_is_sent_back() {
+async fn a_ping_is_answered_with_a_bare_ping() {
     let (mut session, _downstream, mut outbound) = session(4);
 
-    assert_eq!(
-        session
-            .handle(update(&[], UpdateOneof::Ping(SubscribeUpdatePing {})))
-            .await,
-        SessionState::Open
-    );
+    assert_eq!(session.handle(ping()).await, SessionState::Open);
 
+    let answer = outbound
+        .try_recv()
+        .expect("a server ping must be answered — a provider may close a silent client");
+    assert!(outbound.try_recv().is_err(), "exactly one answer per ping");
+
+    assert_eq!(
+        answer.from_slot, None,
+        "a `from_slot` on the answer would re-issue the replay on every ping"
+    );
     assert!(
-        outbound.try_recv().is_err(),
-        "nothing goes back on the outbound half — the connection is kept alive \
-         one layer down, by HTTP/2 keep-alive"
+        answer.accounts.is_empty()
+            && answer.slots.is_empty()
+            && answer.transactions.is_empty()
+            && answer.transactions_status.is_empty()
+            && answer.blocks.is_empty()
+            && answer.blocks_meta.is_empty()
+            && answer.entry.is_empty(),
+        "a filter on the answer describes a subscription — the answer must carry none: {answer:?}"
+    );
+    // The net under the two above: commitment, data slices, and whatever field a
+    // later proto adds must all stay at their default as well.
+    assert_eq!(
+        answer,
+        SubscribeRequest {
+            ping: Some(SubscribeRequestPing { id: PING_REPLY_ID }),
+            ..Default::default()
+        }
     );
 }
 
-/// A pong is the answer to one of ours: counted, and nothing more.
+/// A replay is when a ping answer could do the most damage, and when a ping is
+/// the most likely to arrive: a reconnection rewinds, and the server pings long
+/// before the backlog drains. The answer must leave the replay exactly as it
+/// was — same resume point, same pending payload, released by its block-meta
+/// as if no ping had come.
+#[tokio::test]
+async fn a_ping_during_a_replay_leaves_it_alone() {
+    let (mut session, mut downstream, mut outbound) = session(4);
+
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    assert_eq!(session.resume_from(), Some(10 - REWIND_SLOTS));
+
+    assert_eq!(session.handle(ping()).await, SessionState::Open);
+
+    assert!(outbound.try_recv().is_ok(), "the ping is answered");
+    assert_eq!(
+        session.resume_from(),
+        Some(10 - REWIND_SLOTS),
+        "a ping does not move the resume point"
+    );
+    assert!(
+        downstream.try_recv().is_err(),
+        "a ping releases nothing — the payload is still waiting for its block time"
+    );
+
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+    let ingested = downstream
+        .try_recv()
+        .expect("the payload the ping found pending is still in the buffer");
+    assert_eq!(ingested.transaction.position.slot, 10);
+    assert_eq!(ingested.transaction.position.timestamp, at(1_700_000_000));
+    assert!(downstream.try_recv().is_err(), "and nothing else was held");
+}
+
+/// An answer that cannot leave is counted and stepped over: the session is
+/// still receiving, and if the server does close it for want of an answer, the
+/// reconnection is what handles that. Ending the session here would turn a
+/// failed keep-alive into the very reconnection it exists to avoid.
+#[tokio::test]
+async fn a_ping_whose_answer_cannot_leave_keeps_the_session_open() {
+    let (mut session, _downstream, outbound) = session(4);
+    drop(outbound);
+
+    assert_eq!(session.handle(ping()).await, SessionState::Open);
+}
+
+/// ⚠️ **A full outbound half must not park the session.** `handle` runs from
+/// the body of the listener's `select!` arm, so a wait here would hold off the
+/// shutdown token — and a full channel means the transport is not draining,
+/// so waiting would not even get the answer out. The harness queues four; the
+/// fifth ping must return at once.
+#[tokio::test]
+async fn a_full_outbound_half_does_not_park_the_session() {
+    let (mut session, _downstream, _outbound) = session(4);
+
+    for _ in 0..4 {
+        session.handle(ping()).await;
+    }
+
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), session.handle(ping()))
+            .await
+            .expect("an answer that does not fit must be dropped, not waited on"),
+        SessionState::Open
+    );
+}
+
+/// A pong is the server's answer to one of our ping answers: counted, and
+/// nothing more.
 #[tokio::test]
 async fn a_pong_changes_nothing() {
     let (mut session, mut downstream, mut outbound) = session(4);

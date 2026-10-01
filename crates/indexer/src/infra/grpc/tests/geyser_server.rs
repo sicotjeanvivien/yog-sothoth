@@ -216,7 +216,7 @@ impl Geyser for ScriptedGeyser {
     }
 
     async fn ping(&self, _request: Request<PingRequest>) -> Result<Response<PongResponse>, Status> {
-        unimplemented!("the listener never pings: keep-alive is HTTP/2's job")
+        unimplemented!("the listener answers stream pings and never calls the unary one")
     }
 
     async fn get_latest_blockhash(
