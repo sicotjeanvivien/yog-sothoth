@@ -36,30 +36,22 @@ pub(super) fn stopping_consumer_gone() {
     info!("downstream channel closed — gRPC listener stopping");
 }
 
-/// A stream that delivered closed cleanly.
-pub(super) fn resubscribing_after_close(attempt: u32) {
-    warn!(attempt, "gRPC stream closed — resubscribing");
+/// A stream that delivered ended: cleanly when there is no `error`, broken or
+/// stalled otherwise.
+pub(super) fn resubscribing(attempt: u32, error: Option<&str>, resume_from: Option<u64>) {
+    match error {
+        None => warn!(attempt, "gRPC stream closed — resubscribing"),
+        Some(error) => warn!(
+            attempt,
+            error = %error,
+            resume_from = ?resume_from,
+            "gRPC stream broke — resubscribing"
+        ),
+    }
 }
 
-/// A stream that delivered broke or stalled.
-pub(super) fn resubscribing_after_break(attempt: u32, error: &str, resume_from: Option<u64>) {
-    warn!(
-        attempt,
-        error = %error,
-        resume_from = ?resume_from,
-        "gRPC stream broke — resubscribing"
-    );
-}
-
-/// A stream closed cleanly without delivering anything.
-pub(super) fn closed_empty(attempt: u32, max: u32) {
-    warn!(
-        attempt,
-        max, "gRPC stream closed without delivering anything"
-    );
-}
-
-/// An attempt that delivered nothing failed, and is charged to the budget.
+/// An attempt that delivered nothing — refused, unreachable or silent — is
+/// charged to the budget.
 pub(super) fn attempt_failed(attempt: u32, max: u32, error: &str, resume_from: Option<u64>) {
     warn!(
         attempt,

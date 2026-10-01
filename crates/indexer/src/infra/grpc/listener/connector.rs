@@ -1,4 +1,5 @@
-//! One connection, from the dial to the end of its stream.
+//! What opens one connection per attempt, and follows it to the end of its
+//! stream.
 
 use std::{error::Error, time::Duration};
 
@@ -27,7 +28,9 @@ use crate::{
     },
 };
 
-use super::{GrpcListener, ending::Attempt, log, stall_clock::StallClock};
+use yog_bootstrap::Endpoint;
+
+use super::{ending::Ending, log, stall_clock::StallClock};
 
 /// How long to wait for the TCP+TLS handshake before calling an attempt failed.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -51,7 +54,34 @@ const OUTBOUND_CAPACITY: usize = 8;
 
 type Client = GeyserClient<InterceptedService<Channel, CredentialInterceptor>>;
 
-impl GrpcListener {
+/// Opens a connection per attempt, and follows it to the end of its stream.
+///
+/// Holds what every connection needs and nothing that lasts beyond one: the
+/// endpoint (its URL, and every error built from it scrubbed of the key) and
+/// the stall timeout.
+pub(super) struct Connector {
+    /// The whole endpoint and not just its URL: on this path the credential can
+    /// ride in a metadata header — see `interceptor`.
+    endpoint: Endpoint,
+    /// [`STALL_TIMEOUT`] in production. A parameter so that a test can stall a
+    /// stream in milliseconds.
+    ///
+    /// [`STALL_TIMEOUT`]: super::stall_clock::STALL_TIMEOUT
+    stall_timeout: Duration,
+}
+
+impl Connector {
+    pub(super) fn new(endpoint: Endpoint, stall_timeout: Duration) -> Self {
+        Self {
+            endpoint,
+            stall_timeout,
+        }
+    }
+
+    pub(super) fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+
     /// The address to dial, built once.
     ///
     /// TLS is configured unconditionally and applies only to an `https://`
@@ -96,12 +126,12 @@ impl GrpcListener {
         request: SubscribeRequest,
         downstream: &mpsc::Sender<IngestedTransaction>,
         shutdown: &CancellationToken,
-    ) -> Attempt {
+    ) -> Ending {
         let channel: Channel = match channel.connect().await {
             Ok(channel) => channel,
             // Nothing has been asked of anyone yet.
             Err(e) => {
-                return Attempt::Unreachable {
+                return Ending::Unreachable {
                     error: self.endpoint.url().scrub(&format!("connect: {e}")),
                 };
             }
@@ -117,7 +147,7 @@ impl GrpcListener {
         // answers server pings on it — see `PingAnswer`.
         let (outbound_tx, outbound_rx) = mpsc::channel::<SubscribeRequest>(OUTBOUND_CAPACITY);
         if outbound_tx.send(request.clone()).await.is_err() {
-            return Attempt::Unreachable {
+            return Ending::Unreachable {
                 error: "outbound stream closed before the subscription was sent".to_string(),
             };
         }
@@ -138,7 +168,7 @@ impl GrpcListener {
             tokio::select! {
                 biased;
 
-                _ = shutdown.cancelled() => return Attempt::ShutdownRequested,
+                _ = shutdown.cancelled() => return Ending::ShutdownRequested,
 
                 message = stream.message() => {
                     clock.wait_ended(Instant::now());
@@ -170,11 +200,11 @@ impl GrpcListener {
         client: &mut Client,
         outbound_rx: mpsc::Receiver<SubscribeRequest>,
         shutdown: &CancellationToken,
-    ) -> Result<Streaming<SubscribeUpdate>, Attempt> {
+    ) -> Result<Streaming<SubscribeUpdate>, Ending> {
         let subscribed = tokio::select! {
             biased;
 
-            _ = shutdown.cancelled() => return Err(Attempt::ShutdownRequested),
+            _ = shutdown.cancelled() => return Err(Ending::ShutdownRequested),
 
             subscribed = tokio::time::timeout(
                 self.stall_timeout,
@@ -191,12 +221,12 @@ impl GrpcListener {
             // ⚠️ A `Status` here is not proof that a server spoke: tonic also
             // builds one from our own transport giving way, which is what a
             // link cut just after the TCP handshake produces.
-            Err(status) if !reached_the_service(&status) => Err(Attempt::Unreachable {
+            Err(status) if !reached_the_service(&status) => Err(Ending::Unreachable {
                 error: url.scrub(&format!("subscribe: {status}")),
             }),
             // A `Status` carries the server's message, which can quote the
             // request — scrubbed like every other third-party string.
-            Err(status) => Err(Attempt::Failed {
+            Err(status) => Err(Ending::Failed {
                 error: url.scrub(&format!("subscribe: {status}")),
                 delivered: false,
                 resume_from: None,
@@ -210,28 +240,21 @@ impl GrpcListener {
         message: Result<Option<SubscribeUpdate>, Status>,
         session: &mut StreamSession,
         clock: &mut StallClock,
-    ) -> Option<Attempt> {
+    ) -> Option<Ending> {
         match message {
             Ok(Some(update)) => {
                 let block_metas = session.block_metas_received();
-                match session.handle(update).await {
-                    SessionState::Open => {}
-                    SessionState::DownstreamClosed => return Some(Attempt::DownstreamClosed),
-                    // The session was parked on a full consumer when the token
-                    // fired: `handle` runs in the body of the `select!` arm, so
-                    // nothing else polled the token meanwhile.
-                    SessionState::ShutdownRequested => return Some(Attempt::ShutdownRequested),
-                }
+                let ending = ending_of(session.handle(update).await);
                 if session.block_metas_received() != block_metas {
                     clock.heard_block_meta();
                 }
-                None
+                ending
             }
-            Ok(None) => Some(Attempt::StreamClosed {
+            Ok(None) => Some(Ending::StreamClosed {
                 delivered: session.received_data(),
                 resume_from: session.resume_from(),
             }),
-            Err(status) => Some(Attempt::Failed {
+            Err(status) => Some(Ending::Failed {
                 error: self.endpoint.url().scrub(&format!("stream: {status}")),
                 delivered: session.received_data(),
                 resume_from: session.resume_from(),
@@ -239,16 +262,29 @@ impl GrpcListener {
         }
     }
 
-    /// End an attempt as [`Attempt::Stalled`], counted by site. Not logged
+    /// End an attempt as [`Ending::Stalled`], counted by site. Not logged
     /// here: the budget logs every ending once, with the mark it will use.
-    fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Attempt {
+    fn stalled(&self, site: StallSite, delivered: bool, resume_from: Option<u64>) -> Ending {
         GrpcListenerMetrics::record_stall(site);
 
-        Attempt::Stalled {
+        Ending::Stalled {
             error: format!("stalled: {} for {:?}", site.describe(), self.stall_timeout),
             delivered,
             resume_from,
         }
+    }
+}
+
+/// The ending a session's state brings, if any.
+///
+/// `ShutdownRequested` here means the session was parked on a full consumer
+/// when the token fired: `handle` runs in the body of the `select!` arm, so
+/// nothing else polled the token meanwhile.
+fn ending_of(state: SessionState) -> Option<Ending> {
+    match state {
+        SessionState::Open => None,
+        SessionState::DownstreamClosed => Some(Ending::DownstreamClosed),
+        SessionState::ShutdownRequested => Some(Ending::ShutdownRequested),
     }
 }
 

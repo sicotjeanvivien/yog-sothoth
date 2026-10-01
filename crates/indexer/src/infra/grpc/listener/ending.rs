@@ -1,22 +1,18 @@
-//! How one connection ended, and what that does to the resume mark.
+//! How one connection ended, what that ending is worth, and what it does to the
+//! resume mark.
 
 /// How one connection ended.
 ///
-/// The stream endings carry two facts the listener needs on each:
-/// `resume_from`, where to pick up (see `StreamSession::resume_from`), and
-/// `delivered`, whether any data came off the stream — what separates the
-/// churn of a long-lived connection from a server that accepts and closes at
-/// once. [`Attempt::Unreachable`] carries neither: nothing reached the service.
-pub(super) enum Attempt {
+/// The stream endings carry two facts: `resume_from`, where to pick up (see
+/// `StreamSession::resume_from`), and `delivered`, whether any data came off
+/// the stream. [`Ending::Unreachable`] carries neither: nothing reached the
+/// service. What an ending is *worth* is [`Ending::verdict`]'s alone.
+pub(super) enum Ending {
     ShutdownRequested,
     DownstreamClosed,
-    /// The attempt never got an answer from the service.
-    ///
-    /// ⚠️ Not a variety of `Failed`: no `from_slot` of ours was accepted or
-    /// refused, so it is no verdict on the mark. Three sites produce it — the
-    /// dial, `subscribe` failing on **our** transport (a link cut after the TCP
-    /// handshake; see `reached_the_service`), and the outbound half, which
-    /// nothing reaches today.
+    /// The attempt never got an answer from the service: the dial, `subscribe`
+    /// failing on **our** transport (see `reached_the_service`), or the
+    /// outbound half, which nothing reaches today.
     Unreachable {
         error: String,
     },
@@ -32,12 +28,6 @@ pub(super) enum Attempt {
     /// The server said nothing for [`STALL_TIMEOUT`], and this listener ended
     /// the attempt.
     ///
-    /// ⚠️ `Failed`'s budget rule, not its mark rule: silence is not a refusal,
-    /// so a stall that delivered nothing keeps the mark (the budget bounds the
-    /// retries). A stall that did deliver is churn and restarts the budget — a
-    /// provider that replays and then goes quiet is retried for ever, which
-    /// `stalls_total` rising steadily shows.
-    ///
     /// [`STALL_TIMEOUT`]: super::stall_clock::STALL_TIMEOUT
     Stalled {
         error: String,
@@ -46,20 +36,96 @@ pub(super) enum Attempt {
     },
 }
 
-impl Attempt {
+/// What an ending is worth — decided once, read by the two rules that follow
+/// an attempt: the resume mark ([`Verdict::next_resume_from`]) and the retry
+/// budget (`RetryBudget::settle`).
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Verdict {
+    /// A stop was requested.
+    ShutdownRequested,
+    /// The consumer is gone: nothing will take a transaction again.
+    ConsumerGone,
+    /// The stream delivered before it ended. `error` is `None` for a clean
+    /// close, and says what broke or stalled otherwise.
+    Delivered {
+        mark: Option<u64>,
+        error: Option<String>,
+    },
+    /// The server had our `from_slot` and gave nothing back.
+    Refused { error: String },
+    /// Nobody answered the request: the service was unreachable, or silent.
+    Unanswered { error: String },
+}
+
+impl Ending {
+    /// What this ending is worth.
+    ///
+    /// ⚠️ **A stall is no verdict.** A `Failed` that delivered nothing is a
+    /// refusal — the server had our `from_slot` — but a stall that delivered
+    /// nothing is silence, and the decision to stop waiting is ours: it keeps
+    /// the mark.
+    pub(super) fn verdict(self) -> Verdict {
+        match self {
+            Ending::ShutdownRequested => Verdict::ShutdownRequested,
+            Ending::DownstreamClosed => Verdict::ConsumerGone,
+            Ending::Unreachable { error } => Verdict::Unanswered { error },
+
+            Ending::StreamClosed {
+                delivered: true,
+                resume_from,
+            } => Verdict::Delivered {
+                mark: resume_from,
+                error: None,
+            },
+            Ending::StreamClosed {
+                delivered: false, ..
+            } => Verdict::Refused {
+                error: "stream closed without delivering anything".to_string(),
+            },
+
+            Ending::Failed {
+                error,
+                delivered: true,
+                resume_from,
+            } => Verdict::Delivered {
+                mark: resume_from,
+                error: Some(error),
+            },
+            Ending::Failed {
+                error,
+                delivered: false,
+                ..
+            } => Verdict::Refused { error },
+
+            Ending::Stalled {
+                error,
+                delivered: true,
+                resume_from,
+            } => Verdict::Delivered {
+                mark: resume_from,
+                error: Some(error),
+            },
+            Ending::Stalled {
+                error,
+                delivered: false,
+                ..
+            } => Verdict::Unanswered { error },
+        }
+    }
+}
+
+impl Verdict {
     /// Where the next attempt resumes from, given the mark the loop already
-    /// `held` — the whole resume rule, in one expression.
+    /// `held`.
     ///
     /// ⚠️ **An absent mark is not a mark at zero.** A session can deliver and
     /// have nothing to resume from (an unroutable transaction is dropped before
-    /// the buffer), so a delivered attempt's mark *completes* the one held and
-    /// never replaces it with nothing.
+    /// the buffer), so a delivered mark *completes* the one held and never
+    /// replaces it with nothing.
     ///
-    /// ⚠️ **A mark is given up only to the server that refused it.** A
-    /// `from_slot` the server had and gave nothing back for — a slot past its
-    /// retention, say — is not asked for twice: the next attempt starts from
-    /// the live edge. An ending that is no verdict (`Unreachable`, a stall)
-    /// keeps the mark.
+    /// ⚠️ **A mark is given up only to the server that refused it.** A slot
+    /// past its retention, say, is not asked for twice: the next attempt starts
+    /// from the live edge.
     ///
     /// ⚠️ **No floor under the mark.** A replay that breaks before the buffer
     /// drains resumes `REWIND_SLOTS` earlier each round, and the churn resets
@@ -67,38 +133,9 @@ impl Attempt {
     /// `from_slot` backwards without bound.
     pub(super) fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
         match self {
-            Attempt::StreamClosed {
-                delivered: true,
-                resume_from,
-            }
-            | Attempt::Failed {
-                delivered: true,
-                resume_from,
-                ..
-            }
-            | Attempt::Stalled {
-                delivered: true,
-                resume_from,
-                ..
-            } => (*resume_from).or(held),
-
-            Attempt::StreamClosed {
-                delivered: false, ..
-            }
-            | Attempt::Failed {
-                delivered: false, ..
-            } => None,
-
-            // Nothing was asked of anyone, so nothing was refused.
-            Attempt::Unreachable { .. } => held,
-
-            // Asked, and met with silence — which is not a refusal.
-            Attempt::Stalled {
-                delivered: false, ..
-            } => held,
-
-            // The loop returns on both, so this answer is never read.
-            Attempt::ShutdownRequested | Attempt::DownstreamClosed => held,
+            Verdict::Delivered { mark, .. } => mark.or(held),
+            Verdict::Refused { .. } => None,
+            Verdict::Unanswered { .. } | Verdict::ShutdownRequested | Verdict::ConsumerGone => held,
         }
     }
 }

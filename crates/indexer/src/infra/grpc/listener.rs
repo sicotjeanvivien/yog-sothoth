@@ -9,8 +9,10 @@
 //!
 //! This file assembles. Each responsibility has its own module:
 //!
-//! - `connection` — one connection, from the dial to the end of its stream;
-//! - `ending` — how it ended, and what that does to the resume mark;
+//! - `connector` — opens one connection per attempt, and follows it to the
+//!   end of its stream;
+//! - `ending` — how it ended, what that is worth (its `Verdict`), and what
+//!   that does to the resume mark;
 //! - `retry_budget` — whether to try again, and when;
 //! - `stall_clock` — how long the server has been silent;
 //! - `log` — the lines the listener writes.
@@ -23,7 +25,7 @@
 //! asks for — changes. The budget and the stall clock are also tested on their
 //! own values, with no clock involved.
 //!
-//! ⚠️ The mark half of [`Attempt::Unreachable`](ending::Attempt::Unreachable) is driven at
+//! ⚠️ The mark half of [`Ending::Unreachable`](ending::Ending::Unreachable) is driven at
 //! `connect_and_stream`, not `run`: observing a mark *kept* needs a delivered
 //! session first, against a server that must then be unreachable.
 //!
@@ -32,7 +34,7 @@
 //! `from_slot` the way this code assumes. A scripted server validates this
 //! client against **our model** of the server, never the protocol.
 
-mod connection;
+mod connector;
 mod ending;
 mod log;
 mod retry_budget;
@@ -56,6 +58,7 @@ use crate::{
     },
 };
 
+use connector::Connector;
 use retry_budget::{Next, RetryBudget};
 
 pub(crate) use stall_clock::STALL_TIMEOUT;
@@ -67,10 +70,9 @@ pub(crate) use stall_clock::STALL_TIMEOUT;
 /// is an address, a program id or a pool, and which ones go in is decided
 /// upstream by the daemon's registration.
 pub(crate) struct GrpcListener {
-    /// The whole endpoint and not just its URL: on this path the credential can
-    /// ride in a metadata header, which is `Endpoint::header`'s half of the
-    /// question — see `interceptor`.
-    endpoint: Endpoint,
+    /// What opens a connection per attempt — the endpoint and the stall
+    /// timeout.
+    connector: Connector,
     /// Every address to subscribe to, with its protocol — see
     /// [`subscription::build_request`], which groups them into one filter per
     /// protocol.
@@ -78,18 +80,14 @@ pub(crate) struct GrpcListener {
     /// [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
-    /// [`STALL_TIMEOUT`] in production. A parameter rather than the constant
-    /// read in place so that a test can stall a stream in milliseconds.
-    stall_timeout: Duration,
 }
 
 impl GrpcListener {
     pub(crate) fn new(endpoint: Endpoint, max_attempts: u32, stall_timeout: Duration) -> Self {
         Self {
-            endpoint,
+            connector: Connector::new(endpoint, stall_timeout),
             watched: Mutex::new(HashSet::new()),
             max_attempts,
-            stall_timeout,
         }
     }
 
@@ -122,12 +120,12 @@ impl GrpcListener {
         downstream: mpsc::Sender<IngestedTransaction>,
         shutdown: CancellationToken,
     ) -> Result<(), GrpcListenerError> {
-        let credential = Credential::new(self.endpoint.header())?;
+        let credential = Credential::new(self.connector.endpoint().header())?;
         let interceptor = CredentialInterceptor::new(&credential)?;
-        let channel = self.channel_endpoint()?;
+        let channel = self.connector.channel_endpoint()?;
         let request = self.subscribe_request(None).await?;
 
-        log::starting(&self.endpoint, credential.name(), &request);
+        log::starting(self.connector.endpoint(), credential.name(), &request);
 
         let mut budget = RetryBudget::new(self.max_attempts);
         let mut resume_from: Option<u64> = None;
@@ -140,16 +138,17 @@ impl GrpcListener {
 
             let request = self.subscribe_request(resume_from).await?;
 
-            let outcome = self
+            let verdict = self
+                .connector
                 .connect_and_stream(&channel, &interceptor, request, &downstream, &shutdown)
-                .await;
+                .await
+                .verdict();
 
-            // ⚠️ The only place `resume_from` is written: the mark rule is
-            // `Attempt::next_resume_from`'s, the budget `RetryBudget`'s, and
-            // neither hides in the other.
-            resume_from = outcome.next_resume_from(resume_from);
+            // ⚠️ The only place `resume_from` is written. The mark rule and the
+            // budget both read the one verdict, and neither hides in the other.
+            resume_from = verdict.next_resume_from(resume_from);
 
-            match budget.settle(outcome, resume_from) {
+            match budget.settle(verdict, resume_from) {
                 Next::Retry { after } => sleep_or_cancel(after, &shutdown).await,
                 Next::Stop(result) => return result,
             }

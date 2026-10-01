@@ -98,7 +98,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
          on 10 September 2026, and why the count is two rather than four",
     ),
     (
-        "crates/indexer/src/infra/grpc/listener/connection.rs",
+        "crates/indexer/src/infra/grpc/listener/connector.rs",
         1,
         "tonic owns the channel — the URL is the argument of \
          `Endpoint::from_shared`. Every error built from it on that path goes \

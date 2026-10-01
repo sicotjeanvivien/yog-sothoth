@@ -59,28 +59,32 @@ impl Delivery {
         // dispatcher. There a dropped signature can be asked for again; here
         // the transaction came once, over a stream billed by the byte. So the
         // stream is slowed to the consumer's speed, bounded only by shutdown.
-        match self.downstream.try_send(ingested) {
-            Ok(()) => {
-                GrpcListenerMetrics::record_emitted();
-                SessionState::Open
+        let ingested = match self.downstream.try_send(ingested) {
+            Ok(()) => return emitted(),
+            Err(mpsc::error::TrySendError::Closed(_)) => return SessionState::DownstreamClosed,
+            Err(mpsc::error::TrySendError::Full(ingested)) => ingested,
+        };
+
+        GrpcListenerMetrics::record_downstream_full();
+        log::downstream_full();
+        self.wait_for_room(ingested).await
+    }
+
+    /// Wait until the consumer takes `ingested`, or until shutdown.
+    async fn wait_for_room(&self, ingested: IngestedTransaction) -> SessionState {
+        tokio::select! {
+            sent = self.downstream.send(ingested) => {
+                if sent.is_ok() { emitted() } else { SessionState::DownstreamClosed }
             }
-            Err(mpsc::error::TrySendError::Full(ingested)) => {
-                GrpcListenerMetrics::record_downstream_full();
-                log::downstream_full();
-                tokio::select! {
-                    sent = self.downstream.send(ingested) => match sent {
-                        Ok(()) => {
-                            GrpcListenerMetrics::record_emitted();
-                            SessionState::Open
-                        }
-                        Err(_) => SessionState::DownstreamClosed,
-                    },
-                    _ = self.shutdown.cancelled() => SessionState::ShutdownRequested,
-                }
-            }
-            Err(mpsc::error::TrySendError::Closed(_)) => SessionState::DownstreamClosed,
+            _ = self.shutdown.cancelled() => SessionState::ShutdownRequested,
         }
     }
+}
+
+/// A transaction left for the pipeline.
+fn emitted() -> SessionState {
+    GrpcListenerMetrics::record_emitted();
+    SessionState::Open
 }
 
 /// The reason label for a translation failure: a bounded set, so the counter

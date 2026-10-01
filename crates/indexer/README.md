@@ -25,9 +25,9 @@ indexer/src/
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer
-│   ├── listener/          ← one module per responsibility: connection,
-│   │                        ending (+ resume mark), retry_budget, stall_clock,
-│   │                        log — listener.rs only assembles them
+│   ├── listener/          ← one module per responsibility: connector,
+│   │                        ending (+ verdict, resume mark), retry_budget,
+│   │                        stall_clock, log — listener.rs only assembles them
 │   ├── session/           ← slot_progress, delivery, ping_answer, log —
 │   │                        session.rs only routes each update to them
 │   └── tests/             ← its ten test files, grouped: what is left beside
@@ -155,9 +155,9 @@ genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 `tests/geyser_server.rs` serves a test-written script over loopback, and every
 ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
-asks for — the budget being `RetryBudget::settle`, and the resume point the one
-expression beside it, `Attempt::next_resume_from`. One ending is guarded from two
-sides: what an attempt that never reached the service costs the retry budget is
+asks for — the budget being `RetryBudget::settle`, and the resume point
+`Verdict::next_resume_from`, both reading the one `Ending::verdict`. One ending
+is guarded from two sides: what an attempt that never reached the service costs the retry budget is
 driven through `run`, against a port with nothing behind it, while what it does
 to the resume mark is driven one level down at `connect_and_stream` — observing
 a mark being *kept* needs a delivered session to make one first, against a
@@ -333,7 +333,7 @@ connection.
 
 It also meets the port's three obligations by construction rather than by
 correction: per-update failures are counted and stepped over in `session`,
-`Attempt::{ShutdownRequested, DownstreamClosed}` are both exits of `run`, and
+`Ending::{ShutdownRequested, DownstreamClosed}` are both exits of `run`, and
 `SessionState::ShutdownRequested` is what keeps a wait on a full consumer
 interruptible.
 

@@ -8,25 +8,22 @@ use super::*;
 
 const MAX: u32 = 5;
 
-fn failed_empty() -> Attempt {
-    Attempt::Failed {
+fn failed_empty() -> Verdict {
+    Verdict::Refused {
         error: "refused".to_string(),
-        delivered: false,
-        resume_from: None,
     }
 }
 
-fn broke_after_delivering() -> Attempt {
-    Attempt::Failed {
-        error: "reset".to_string(),
-        delivered: true,
-        resume_from: Some(8),
+fn broke_after_delivering() -> Verdict {
+    Verdict::Delivered {
+        mark: Some(8),
+        error: Some("reset".to_string()),
     }
 }
 
 /// One attempt, settled.
-fn attempt(budget: &mut RetryBudget, outcome: Attempt) -> Next {
-    budget.settle(outcome, None)
+fn attempt(budget: &mut RetryBudget, verdict: Verdict) -> Next {
+    budget.settle(verdict, None)
 }
 
 fn waits(next: Next) -> Duration {
