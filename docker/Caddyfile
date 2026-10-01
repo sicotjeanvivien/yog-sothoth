@@ -46,7 +46,30 @@
 # a compressor holds small writes until it has enough to compress — the
 # events would arrive late and in bursts. Without it, Caddy flushes a
 # `text/event-stream` response as it arrives.
+#
+# The pools list is cached 30 s by the browser: it is the dashboard's main
+# read, fetched on every visit, and its rows move with the indexer, not with
+# the second. Only a success is marked: a 500 while yog-api restarts must not
+# be kept 30 s. Here and not in yog-api, so that dev — which calls the API
+# without Caddy — never sees a list frozen for 30 s.
 {$YOG_API_DOMAIN} {
 	import hsts
-	reverse_proxy yog-api:5000
+
+	@pools_list {
+		method GET
+		path /api/pools
+	}
+	handle @pools_list {
+		reverse_proxy yog-api:5000 {
+			@success status 2xx
+			handle_response @success {
+				header Cache-Control "public, max-age=30"
+				copy_response
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy yog-api:5000
+	}
 }
