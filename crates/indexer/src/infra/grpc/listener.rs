@@ -53,8 +53,9 @@
 //! sentence that says "every arm" and means "almost".
 //!
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
-//! connect timeout, and — the one that matters — whether a provider honours
-//! `from_slot` the way this code assumes. A scripted server validates **this
+//! connect timeout, whether a provider takes the session's answer to its pings,
+//! and — the one that matters — whether a provider honours `from_slot` the way
+//! this code assumes. A scripted server validates **this
 //! client against our model of the server**, never the protocol; the first run
 //! against a real provider is where that model meets a real one.
 //!

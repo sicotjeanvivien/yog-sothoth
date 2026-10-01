@@ -161,16 +161,17 @@ one decision left unguarded on purpose — its only observable is a duration;
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, whether a provider honours `from_slot` the way this code
 assumes, and whether it takes the ping-only answer the session sends to each
-of its pings the way the reference server does. The answer's shape is tested
-on the session alone: the scripted server reads only the subscription, so no
-local test sees an answer cross the wire. The `pong` count keeping pace with the
-`ping` count is what says a provider accepts it. The first run against a real provider is where they meet one.
+of its pings the way the reference server does. The first run against a real
+provider is where they meet one. For the ping answer, the `pong` count keeping
+pace with the `ping` count is what will say so: its shape is tested on the
+session alone, since the scripted server reads only the subscription and no
+local test sees an answer cross the wire.
 
 ⚠️ And **none of it has met a real server.** Every local test drives either pure
 state, a message this repository built itself, or a server this repository
-scripted — so TLS, keep-alive and the exact semantics of `from_slot` are written
-and reviewed and unproven until the first run against a real provider, which
-needs an API key.
+scripted — so TLS, keep-alive, the answer to server pings and the exact
+semantics of `from_slot` are written and reviewed and unproven until the first
+run against a real provider, which needs an API key.
 
 **What an adapter owes**, and how it is held to it: the order of the payloads it
 produces becomes the persisted `event_index`, part of the unique key of every

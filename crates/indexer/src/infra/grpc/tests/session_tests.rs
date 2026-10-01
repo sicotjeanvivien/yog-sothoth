@@ -24,6 +24,10 @@ use crate::infra::grpc::test_fixtures::{
     unroutable_transaction, update,
 };
 
+/// How many ping answers the harness's outbound half holds unread — what
+/// `a_full_outbound_half_does_not_park_the_session` fills.
+const HARNESS_OUTBOUND_CAPACITY: usize = 4;
+
 /// A session, its downstream receiver, and its outbound receiver.
 fn session(
     capacity: usize,
@@ -46,7 +50,7 @@ fn session_with(
     mpsc::Receiver<SubscribeRequest>,
 ) {
     let (downstream_tx, downstream_rx) = mpsc::channel(capacity);
-    let (outbound_tx, outbound_rx) = mpsc::channel(4);
+    let (outbound_tx, outbound_rx) = mpsc::channel(HARNESS_OUTBOUND_CAPACITY);
     // The session does not keep the request it subscribed with, so the only
     // thing ever written here is the answer to a ping. The receiver is handed
     // back so that the tests can assert that answer is a bare ping and nothing
@@ -373,11 +377,16 @@ async fn a_ping_is_answered_with_a_bare_ping() {
     );
 }
 
-/// A replay is when a ping answer could do the most damage, and when a ping is
-/// the most likely to arrive: a reconnection rewinds, and the server pings long
-/// before the backlog drains. The answer must leave the replay exactly as it
+/// A ping during a replay leaves the **session's** side of it exactly as it
 /// was — same resume point, same pending payload, released by its block-meta
-/// as if no ping had come.
+/// as if no ping had come. A replay is when a ping is the most likely to
+/// arrive: a reconnection rewinds, and the server pings long before the
+/// backlog drains.
+///
+/// ⚠️ This guards the `Ping` arm of `handle`, not `answer_ping`, which takes
+/// `&self` and cannot touch either. The damage an *answer* could do to a
+/// replay happens on the server, through a `from_slot` riding along — that is
+/// [`a_ping_is_answered_with_a_bare_ping`]'s to catch.
 #[tokio::test]
 async fn a_ping_during_a_replay_leaves_it_alone() {
     let (mut session, mut downstream, mut outbound) = session(4);
@@ -436,15 +445,15 @@ fn a_ping_whose_answer_cannot_leave_is_counted_and_keeps_the_session_open() {
 /// ⚠️ **A full outbound half must not park the session.** `handle` runs from
 /// the body of the listener's `select!` arm, so a wait here would hold off the
 /// shutdown token — and a full channel means the transport is not draining,
-/// so waiting would not even get the answer out. The harness queues four; the
-/// fifth ping must return at once, and its answer must be **dropped and
-/// counted**, not handed to something that sends it later.
+/// so waiting would not even get the answer out. Once the harness's outbound
+/// half is full, the next ping must return at once, and its answer must be
+/// **dropped and counted**, not handed to something that sends it later.
 #[test]
 fn a_full_outbound_half_does_not_park_the_session() {
     let ((state, queued), snapshot) = counted(async {
         let (mut session, _downstream, mut outbound) = session(4);
 
-        for _ in 0..4 {
+        for _ in 0..HARNESS_OUTBOUND_CAPACITY {
             session.handle(ping()).await;
         }
         let state = tokio::time::timeout(std::time::Duration::from_secs(5), session.handle(ping()))
@@ -466,8 +475,8 @@ fn a_full_outbound_half_does_not_park_the_session() {
 
     assert_eq!(state, SessionState::Open);
     assert_eq!(
-        queued, 4,
-        "the fifth answer is dropped — nothing may hold it to send once there is room"
+        queued, HARNESS_OUTBOUND_CAPACITY,
+        "the answer that did not fit is dropped — nothing may hold it to send once there is room"
     );
     assert_eq!(
         counter_for(&snapshot, PING_REPLIES_UNSENT, "outbound_full"),
