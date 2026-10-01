@@ -14,8 +14,8 @@ use crate::{
     bootstrap::{Config, TransactionArrival},
     infra::{
         DispatcherMetrics, FetchMetrics, GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics,
-        GrpcTransactionSource, RpcListener, RpcTransactionSource, SignatureDispatcher,
-        TransactionFetcher,
+        GrpcTransactionSource, RpcListener, RpcTransactionSource, STALL_TIMEOUT,
+        SignatureDispatcher, TransactionFetcher,
     },
 };
 use anyhow::Context;
@@ -114,7 +114,11 @@ fn init_rpc_source(
 /// one kind.
 fn init_grpc_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     Ok(Arc::new(GrpcTransactionSource::new(Arc::new(
-        GrpcListener::new(config.ingest_stream.clone(), config.worker_max_retries),
+        GrpcListener::new(
+            config.ingest_stream.clone(),
+            config.worker_max_retries,
+            STALL_TIMEOUT,
+        ),
     ))))
 }
 

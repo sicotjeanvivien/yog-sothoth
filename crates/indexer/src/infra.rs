@@ -5,7 +5,7 @@ mod rpc;
 
 pub(crate) use endpoint::Credential;
 pub(crate) use grpc::{
-    GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics, GrpcTransactionSource,
+    GrpcBufferMetrics, GrpcListener, GrpcListenerMetrics, GrpcTransactionSource, STALL_TIMEOUT,
 };
 
 pub(crate) use rpc::{

@@ -330,6 +330,11 @@ correction: per-update failures are counted and stepped over in `session`,
 `SessionState::ShutdownRequested` is what keeps a wait on a full consumer
 interruptible.
 
+One ending is not the server's: a stream that stops delivering block-metas and
+stays open. Neither the HTTP/2 keep-alive nor Yellowstone's pings would notice,
+so after `STALL_TIMEOUT` (30 s, the threshold Alchemy gives) of waiting with no
+block-meta the listener ends the attempt itself and resumes at its mark.
+
 ## `TransactionProcessor` and its collaborators
 
 `TransactionProcessor::process_transaction(protocol, &OnChainTransaction)`
@@ -488,6 +493,18 @@ emitted. No gauges today — all counters and histograms.
   cost a request that was made and billed, `shutdown_before_fetch` is a
   signature dropped while queueing for a permit and cost nothing. A non-zero
   `downstream_closed` outside a shutdown means the consumer died first.
+- **gRPC listener counters** (Yellowstone source only, and **no** `protocol`
+  label — one stream serves every protocol) —
+  `yog_indexer_grpc_updates_total{kind}` (`transaction`, `block_meta`, `ping`,
+  `pong`, `other`), `yog_indexer_grpc_dropped_transactions_total{reason}`,
+  `yog_indexer_grpc_transactions_emitted_total`,
+  `yog_indexer_grpc_downstream_full_total` (back-pressure, not loss),
+  `yog_indexer_grpc_untimestamped_transactions_total{reason}`,
+  `yog_indexer_grpc_ping_replies_unsent_total{reason}` and
+  `yog_indexer_grpc_stalls_total`. ⚠️ **`stalls_total` is the only trace of a
+  stream that stopped delivering without closing**: each increment is a
+  reconnection and a billed `from_slot` replay. Before it, the sign was
+  `kind="block_meta"` going flat while `kind="ping"` kept rising.
 - **Worker counter** — `yog_indexer_ingested_dropped_total{reason}`: delivered
   transactions the consumer never processed, `shutdown` for the one in hand and
   `shutdown_queued` for what was still in the channel. It mirrors the fetch

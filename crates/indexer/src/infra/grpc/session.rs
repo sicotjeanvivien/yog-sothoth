@@ -122,6 +122,9 @@ pub(super) struct StreamSession {
     /// Whether any **data** came off the stream — a transaction or a
     /// block-meta. Not "any message": see [`Self::received_data`].
     received_data: bool,
+    /// How many block-metas came off the stream — see
+    /// [`Self::block_metas_received`].
+    block_metas: u64,
     /// The cancellation token, so a wait on a full consumer is interruptible.
     shutdown: CancellationToken,
 }
@@ -138,6 +141,7 @@ impl StreamSession {
             outbound,
             highest_meta_slot: None,
             received_data: false,
+            block_metas: 0,
             shutdown,
         }
     }
@@ -160,6 +164,25 @@ impl StreamSession {
     /// 2026, one day after the rule itself.
     pub(super) fn received_data(&self) -> bool {
         self.received_data
+    }
+
+    /// How many block-metas this session took off the stream, a block time or
+    /// not.
+    ///
+    /// What the listener reads it for: a block-meta is the one message a
+    /// healthy stream sends every slot whatever the market does, so its
+    /// silence is the only reliable sign of a stream that has stalled without
+    /// closing. The listener compares this before and after `handle` and
+    /// restarts its stall clock when it moved.
+    ///
+    /// ⚠️ **Counted for every block-meta, including one without a block time.**
+    /// That slot is given up, but the server did deliver it: the question here
+    /// is whether the stream is alive, not whether the slot was usable. And
+    /// **never for a ping**, for the reason [`Self::received_data`] gives: a
+    /// Yellowstone server pings from a task of its own, so pings keep coming
+    /// from a server whose data path has stopped.
+    pub(super) fn block_metas_received(&self) -> u64 {
+        self.block_metas
     }
 
     /// Where a reconnection should resume from, or `None` when nothing arrived.
@@ -213,6 +236,7 @@ impl StreamSession {
             Some(UpdateOneof::BlockMeta(meta)) => {
                 GrpcListenerMetrics::record_update(UpdateKind::BlockMeta);
                 self.received_data = true;
+                self.block_metas += 1;
                 self.on_block_meta(meta).await
             }
             Some(UpdateOneof::Ping(_)) => {

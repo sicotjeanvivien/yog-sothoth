@@ -52,6 +52,16 @@
 //! have nothing to do with the rule. Named here rather than covered by a
 //! sentence that says "every arm" and means "almost".
 //!
+//! ⚠️ **One ending is the listener's own: the stall.** A stream that stops
+//! delivering block-metas and stays open would otherwise be awaited for ever
+//! (see [`STALL_TIMEOUT`]). It ends as an [`Attempt::Failed`], so it takes the
+//! rules above and adds none, and the tests drive it with a stall timeout in
+//! milliseconds. **And one part of it is left unguarded, for the backoff's
+//! reason:** that the clock counts only the time spent *waiting on the
+//! server*, never the time `handle` spends parked on a full consumer. The only
+//! observable is a stall that does not happen after a long back-pressure
+//! episode, which is a duration again.
+//!
 //! What no test here reaches is the rest of the file: TLS, the keep-alive, the
 //! connect timeout, whether a provider takes the session's answer to its pings,
 //! and — the one that matters — whether a provider honours `from_slot` the way
@@ -66,6 +76,8 @@
 //! tested *here* is that the listener does the right thing with them.
 
 use std::{collections::HashSet, error::Error, sync::Arc, time::Duration};
+
+use tokio::time::Instant;
 
 use solana_pubkey::Pubkey;
 use tokio::sync::{Mutex, mpsc};
@@ -88,6 +100,7 @@ use crate::{
         endpoint::scheme,
         grpc::{
             interceptor::CredentialInterceptor,
+            metrics::GrpcListenerMetrics,
             session::{SessionState, StreamSession},
             subscription::build_request,
         },
@@ -109,6 +122,29 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// `keep_alive_while_idle` is what makes that true during the quiet stretches
 /// that are precisely the risk.
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// How long the listener waits on the stream without a block-meta before
+/// calling it stalled and starting over.
+///
+/// ⚠️ **A stream can stop delivering and stay open**, and nothing below this
+/// layer notices. The HTTP/2 keep-alive is answered by the server's transport,
+/// not by the loop that sends data, and Yellowstone pings come from a task of
+/// their own in the reference server (`yellowstone-grpc-geyser/src/grpc.rs`,
+/// read at `79abd84`) — so both keep coming from a server whose data path has
+/// stopped. That has been seen in production on Triton's servers
+/// (`rpcpool/yellowstone-grpc` issues #25 and #175). Without this bound the
+/// listener waits on `stream.message()` for ever, and everything until the
+/// next process restart is lost.
+///
+/// The block-meta is the signal because the subscription asks for one per
+/// slot, about every 400 ms, whatever the market does — transactions can
+/// legitimately go quiet for minutes. 30 s is the threshold Alchemy's
+/// *Yellowstone gRPC Best Practices* gives for alerting on a stalled stream,
+/// about 75 block-metas missed. Shorter would restart a stream on a run of
+/// skipped slots, and each restart costs a billed replay; longer lets the loss
+/// grow. **Not measured:** the number that should replace it is the largest
+/// gap between two block-metas on a healthy real stream.
+pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Ceiling on one decoded message.
 ///
@@ -145,14 +181,18 @@ pub(crate) struct GrpcListener {
     /// [`subscription::build_request`]: crate::infra::grpc::subscription::build_request
     watched: Mutex<HashSet<(Protocol, Pubkey)>>,
     max_attempts: u32,
+    /// [`STALL_TIMEOUT`] in production. A parameter rather than the constant
+    /// read in place so that a test can stall a stream in milliseconds.
+    stall_timeout: Duration,
 }
 
 impl GrpcListener {
-    pub(crate) fn new(endpoint: Endpoint, max_attempts: u32) -> Self {
+    pub(crate) fn new(endpoint: Endpoint, max_attempts: u32, stall_timeout: Duration) -> Self {
         Self {
             endpoint,
             watched: Mutex::new(HashSet::new()),
             max_attempts,
+            stall_timeout,
         }
     }
 
@@ -465,34 +505,86 @@ impl GrpcListener {
 
         let mut session = StreamSession::new(downstream.clone(), outbound_tx, shutdown.clone());
 
+        // ⚠️ **Time spent waiting on the server, not time on the clock.** Only
+        // the wait for `stream.message()` is added here, never the time
+        // `handle` spends parked on a full consumer: a slow database is not a
+        // silent server, and a wall-clock deadline would call the stream
+        // stalled on the first ordinary wait after a long back-pressure
+        // episode, buying a billed replay at the worst moment. Reset by a
+        // block-meta and by nothing else — see `STALL_TIMEOUT`.
+        let mut silent = Duration::ZERO;
+
         loop {
+            let waiting = Instant::now();
+
             tokio::select! {
                 biased;
 
                 _ = shutdown.cancelled() => return Attempt::ShutdownRequested,
 
-                message = stream.message() => match message {
-                    Ok(Some(update)) => match session.handle(update).await {
-                        SessionState::Open => {}
-                        SessionState::DownstreamClosed => return Attempt::DownstreamClosed,
-                        // The session was parked on a full consumer when the
-                        // token fired. This arm is what makes that wait
-                        // interruptible: `handle` runs in the *body* of this
-                        // arm, not as a `select!` branch, so nothing here polls
-                        // the token while it is inside.
-                        SessionState::ShutdownRequested => return Attempt::ShutdownRequested,
-                    },
-                    Ok(None) => return Attempt::StreamClosed {
-                        delivered: session.received_data(),
-                        resume_from: session.resume_from(),
-                    },
-                    Err(status) => return Attempt::Failed {
-                        error: url.scrub(&format!("stream: {status}")),
-                        delivered: session.received_data(),
-                        resume_from: session.resume_from(),
-                    },
+                message = stream.message() => {
+                    silent += waiting.elapsed();
+                    match message {
+                        Ok(Some(update)) => {
+                            let block_metas = session.block_metas_received();
+                            match session.handle(update).await {
+                                SessionState::Open => {}
+                                SessionState::DownstreamClosed => return Attempt::DownstreamClosed,
+                                // The session was parked on a full consumer when
+                                // the token fired. This arm is what makes that
+                                // wait interruptible: `handle` runs in the *body*
+                                // of this arm, not as a `select!` branch, so
+                                // nothing here polls the token while it is inside.
+                                SessionState::ShutdownRequested => {
+                                    return Attempt::ShutdownRequested;
+                                }
+                            }
+                            if session.block_metas_received() != block_metas {
+                                silent = Duration::ZERO;
+                            }
+                        }
+                        Ok(None) => return Attempt::StreamClosed {
+                            delivered: session.received_data(),
+                            resume_from: session.resume_from(),
+                        },
+                        Err(status) => return Attempt::Failed {
+                            error: url.scrub(&format!("stream: {status}")),
+                            delivered: session.received_data(),
+                            resume_from: session.resume_from(),
+                        },
+                    }
                 },
+
+                // After `message`, so that a message already waiting — which
+                // may be the block-meta that resets the clock — is read first.
+                _ = tokio::time::sleep(self.stall_timeout.saturating_sub(silent)) => {
+                    return self.stalled(&session);
+                }
             }
+        }
+    }
+
+    /// End an attempt whose stream stopped delivering block-metas.
+    ///
+    /// ⚠️ **A `Failed`, on purpose, and not an ending of its own.** A stalled
+    /// stream is a broken stream the server failed to close, so it takes
+    /// exactly the rules of one: `run` restarts the budget if the session
+    /// delivered and charges it if not, and [`Attempt::next_resume_from`]
+    /// keeps or gives up the mark on the same `delivered`. A variant of its own
+    /// would have to restate both rules, and a rule restated in a second arm is
+    /// how the eight defects of this file's header came to be.
+    fn stalled(&self, session: &StreamSession) -> Attempt {
+        GrpcListenerMetrics::record_stall();
+        warn!(
+            waited_secs = self.stall_timeout.as_secs_f64(),
+            resume_from = ?session.resume_from(),
+            "no block-meta from the stream within the stall timeout — ending the attempt"
+        );
+
+        Attempt::Failed {
+            error: format!("stream stalled: no block-meta for {:?}", self.stall_timeout),
+            delivered: session.received_data(),
+            resume_from: session.resume_from(),
         }
     }
 }

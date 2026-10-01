@@ -38,6 +38,7 @@
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use tokio::{net::TcpListener, sync::mpsc, task::JoinHandle};
@@ -52,6 +53,8 @@ use yellowstone_grpc_proto::prelude::{
     SubscribeUpdateGossip,
     geyser_server::{Geyser, GeyserServer},
 };
+
+use crate::infra::grpc::test_fixtures::ping;
 
 /// How many updates may queue on one scripted stream. The scripts are a handful
 /// of messages long; this only has to be bigger than the longest one so that
@@ -76,6 +79,14 @@ pub(super) enum Action {
     /// where the `select!` is parked on `stream.message()` rather than inside
     /// `StreamSession::handle`.
     Hold,
+    /// Wait this long before the next action — what spaces block-metas out, so
+    /// a stream can be slow and still alive.
+    Wait(Duration),
+    /// Ping at this interval until the client goes away, and send nothing
+    /// else: a server whose data path has stopped while its ping task runs on.
+    /// Yellowstone pings from a task of its own, which is how a stalled stream
+    /// keeps pinging (`rpcpool/yellowstone-grpc` issue #25).
+    PingEvery(Duration),
 }
 
 impl Action {
@@ -174,6 +185,15 @@ impl Geyser for ScriptedGeyser {
                     // Holding `tx` is what keeps the stream open; the task ends
                     // when the server is dropped at the end of the test.
                     Action::Hold => std::future::pending::<()>().await,
+                    Action::Wait(duration) => tokio::time::sleep(duration).await,
+                    // Never falls through: a send fails only once the client
+                    // has gone, and the stream ends with it.
+                    Action::PingEvery(interval) => loop {
+                        tokio::time::sleep(interval).await;
+                        if tx.send(Ok(ping())).await.is_err() {
+                            return;
+                        }
+                    },
                 }
             }
             // Falling out of the loop drops `tx`, which the client sees as a

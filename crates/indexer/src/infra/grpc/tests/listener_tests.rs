@@ -19,7 +19,7 @@ use super::*;
 use yog_bootstrap::Endpoint;
 
 fn listener(url: &str) -> GrpcListener {
-    GrpcListener::new(Endpoint::for_tests(url, None), 1)
+    GrpcListener::new(Endpoint::for_tests(url, None), 1, STALL_TIMEOUT)
 }
 
 /// Accepted means built: TLS and keep-alive are configured on the way out, so
@@ -167,10 +167,24 @@ const BLOCK_TIME: i64 = 1_700_000_000;
 /// ⚠️ The `watch` is not decoration: `build_request` refuses an empty
 /// subscription with `NoSubscriptionTargets` **before** the retry loop, so a
 /// test that forgot it would never reach a single one of these rules.
+///
+/// With the production [`STALL_TIMEOUT`], so that no test below stalls a
+/// stream it did not mean to — `Action::Hold` would otherwise turn every
+/// shutdown test into a reconnection race.
 async fn listener_for(server: &ScriptedGeyserHandle, max_attempts: u32) -> Arc<GrpcListener> {
+    listener_with_stall(server, max_attempts, STALL_TIMEOUT).await
+}
+
+/// The same, with a stall timeout a test can wait through.
+async fn listener_with_stall(
+    server: &ScriptedGeyserHandle,
+    max_attempts: u32,
+    stall_timeout: Duration,
+) -> Arc<GrpcListener> {
     let listener = Arc::new(GrpcListener::new(
         Endpoint::for_tests(server.url(), None),
         max_attempts,
+        stall_timeout,
     ));
     listener.watch(Protocol::MeteoraDammV2).await;
     listener
@@ -713,7 +727,11 @@ async fn a_clean_close_that_delivered_nothing_gives_up_the_replay_point() {
 /// `a_dial_that_never_connects_spends_the_budget` drives through `run`.
 #[tokio::test]
 async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
-    let listener = GrpcListener::new(Endpoint::for_tests(&a_closed_port().await, None), 1);
+    let listener = GrpcListener::new(
+        Endpoint::for_tests(&a_closed_port().await, None),
+        1,
+        STALL_TIMEOUT,
+    );
     listener.watch(PROTOCOL).await;
 
     // Built exactly as `run` builds them, and none of the three is what fails:
@@ -788,7 +806,7 @@ async fn a_failure_before_contact_keeps_the_mark_it_never_offered() {
 #[tokio::test]
 async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
     let port = CuttingPort::bind().await;
-    let listener = GrpcListener::new(Endpoint::for_tests(&port.url, None), 1);
+    let listener = GrpcListener::new(Endpoint::for_tests(&port.url, None), 1, STALL_TIMEOUT);
     listener.watch(PROTOCOL).await;
 
     let credential = Credential::new(listener.endpoint.header()).expect("no header is valid");
@@ -856,7 +874,11 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
 #[tokio::test]
 async fn a_dial_that_never_connects_spends_the_budget() {
     let url = a_closed_port().await;
-    let listener = Arc::new(GrpcListener::new(Endpoint::for_tests(&url, None), 3));
+    let listener = Arc::new(GrpcListener::new(
+        Endpoint::for_tests(&url, None),
+        3,
+        STALL_TIMEOUT,
+    ));
     listener.watch(PROTOCOL).await;
     let (downstream, _consumer) = mpsc::channel(4);
 
@@ -1002,4 +1024,194 @@ async fn a_vanished_consumer_stops_the_listener_without_retrying() {
         1,
         "and it is not a reconnection: retrying would not bring the consumer back"
     );
+}
+
+// ── a stream that stalls without closing ────────────────────────────
+
+/// Short enough to wait through in a test, long enough that a script spacing
+/// its block-metas 50 ms apart never comes near it.
+const TEST_STALL: Duration = Duration::from_millis(300);
+
+/// A listener that stays alive across one stall, with room for a second one
+/// should the stop request arrive late: the assertions read what was asked
+/// for, not how the run ended.
+const STALL_TEST_ATTEMPTS: u32 = 10;
+
+/// Run a listener against `script` until the server has been subscribed to
+/// `subscriptions` times, then stop it and hand back the server.
+async fn run_until_subscribed(
+    script: Vec<ScriptedSession>,
+    subscriptions: usize,
+) -> ScriptedGeyserHandle {
+    let server = test_geyser_server::start(script).await;
+    let (downstream, _consumer) = mpsc::channel(4);
+    let shutdown = CancellationToken::new();
+
+    let listener = listener_with_stall(&server, STALL_TEST_ATTEMPTS, TEST_STALL).await;
+    let running = tokio::spawn(listener.run(downstream, shutdown.clone()));
+
+    wait_for_subscriptions(&server, subscriptions).await;
+    shutdown.cancel();
+
+    let outcome = timeout(TEST_DEADLINE, running)
+        .await
+        .expect("a requested stop must end the run")
+        .expect("no panic");
+    assert!(
+        outcome.is_ok(),
+        "a requested stop is a clean one: {outcome:?}"
+    );
+
+    server
+}
+
+/// ⚠️ **A stream that stops delivering and stays open is ended, and resumed at
+/// its mark.** The server keeps the connection and sends nothing more —
+/// Triton's issues #25 and #175 — and nothing below the listener notices:
+/// without a bound, `stream.message()` is awaited for ever and every slot
+/// until the next process restart is lost.
+///
+/// Mutation this is written against: removing the stall arm of
+/// `connect_and_stream`'s `select!` — the second subscription never comes and
+/// `wait_for_subscriptions` gives up at `TEST_DEADLINE`. And `stalled` handing
+/// back `resume_from: None`, which the resume point catches. Not
+/// `#[tokio::test]` because it reads the counter — see `session_tests`'
+/// `counted` for the recipe.
+#[test]
+fn a_stalled_stream_is_resubscribed_at_its_mark() {
+    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
+
+    let recorder = DebuggingRecorder::new();
+    let snapshotter = recorder.snapshotter();
+
+    let server = metrics::with_local_recorder(&recorder, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current-thread runtime")
+            .block_on(run_until_subscribed(
+                vec![
+                    ScriptedSession::Stream(vec![
+                        Action::send(block_meta(10, Some(BLOCK_TIME))),
+                        Action::Hold,
+                    ]),
+                    ScriptedSession::Stream(vec![Action::Hold]),
+                ],
+                2,
+            ))
+    });
+
+    assert_eq!(
+        server.resume_points(),
+        vec![None, Some(8)],
+        "the stalled session closed slot 10, so the next one asks for it again, \
+         rewound — a stall is churn, and keeps the mark"
+    );
+
+    let stalls = snapshotter
+        .snapshot()
+        .into_vec()
+        .into_iter()
+        .find(|(key, _, _, _)| key.key().name() == "yog_indexer_grpc_stalls_total")
+        .map(|(_, _, _, value)| value);
+    assert_eq!(
+        stalls,
+        Some(DebugValue::Counter(1)),
+        "a stall is the one ending nothing else reports — it must be counted"
+    );
+}
+
+/// ⚠️ **Pings do not keep a stalled stream alive.** A Yellowstone server pings
+/// from a task of its own, so a server whose data path has stopped keeps
+/// pinging — issue #25's exact shape. Only a block-meta resets the clock.
+///
+/// Mutation this is written against: resetting the clock on every message
+/// rather than on a block-meta. The pings then hold the stream open for ever,
+/// and the second subscription never comes.
+#[tokio::test]
+async fn pings_do_not_keep_a_stalled_stream_alive() {
+    let server = run_until_subscribed(
+        vec![
+            ScriptedSession::Stream(vec![
+                Action::send(block_meta(10, Some(BLOCK_TIME))),
+                Action::PingEvery(TEST_STALL / 6),
+            ]),
+            ScriptedSession::Stream(vec![Action::Hold]),
+        ],
+        2,
+    )
+    .await;
+
+    assert_eq!(server.resume_points(), vec![None, Some(8)]);
+}
+
+/// A stream that is slow but alive is **not** restarted: block-metas spaced well
+/// inside the timeout, over a span longer than it, keep one subscription until
+/// the script breaks it on purpose.
+///
+/// Mutation this is written against: never resetting the clock, so that it
+/// measures the session's age. The stall then lands mid-script, and the resume
+/// point names a slot well before the last one.
+#[tokio::test]
+async fn a_slow_but_live_stream_is_not_restarted() {
+    let mut actions = Vec::new();
+    for slot in 10..30 {
+        actions.push(Action::send(block_meta(slot, Some(BLOCK_TIME))));
+        actions.push(Action::Wait(TEST_STALL / 6));
+    }
+    actions.push(Action::Fail(Status::unavailable("the scripted break")));
+
+    let server = run_until_subscribed(
+        vec![
+            ScriptedSession::Stream(actions),
+            ScriptedSession::Stream(vec![Action::Hold]),
+        ],
+        2,
+    )
+    .await;
+
+    assert_eq!(
+        server.resume_points(),
+        vec![None, Some(27)],
+        "the first session must have run to its scripted break, slot 29 — an \
+         earlier mark means it was cut as stalled while block-metas were arriving"
+    );
+}
+
+/// A stream that stalls having delivered **nothing** spends the retry budget,
+/// like any ending that delivered nothing: a server that accepts and then says
+/// nothing at all must stop the indexer in the end, not be redialled for ever.
+///
+/// Mutation this is written against: `stalled` reporting `delivered: true`,
+/// which puts it in the churn arm — the budget restarts each time and the
+/// script runs out instead.
+#[tokio::test]
+async fn a_stall_that_delivered_nothing_spends_the_budget() {
+    let server = test_geyser_server::start(vec![
+        ScriptedSession::Stream(vec![Action::Hold]),
+        ScriptedSession::Stream(vec![Action::Hold]),
+    ])
+    .await;
+    let (downstream, _consumer) = mpsc::channel(4);
+
+    let outcome = timeout(
+        TEST_DEADLINE,
+        listener_with_stall(&server, 2, TEST_STALL)
+            .await
+            .run(downstream, CancellationToken::new()),
+    )
+    .await
+    .expect("a budget of two must run out rather than wait for ever");
+
+    match outcome {
+        Err(GrpcListenerError::RetriesExhausted {
+            attempts: 2,
+            last_error,
+        }) => assert!(
+            last_error.contains("stalled"),
+            "the budget must run out on the stall, not on something else: {last_error}"
+        ),
+        other => panic!("two silent sessions must exhaust a budget of two: {other:?}"),
+    }
+    assert_eq!(server.requests().len(), 2);
 }

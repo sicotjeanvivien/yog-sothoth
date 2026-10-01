@@ -139,6 +139,15 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 /// follow. The session keeps reading either way.
 const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
 
+/// Attempts ended because the stream stopped delivering block-metas without
+/// closing.
+///
+/// ⚠️ **The one ending nothing else would report.** A stalled stream raises no
+/// error and closes nothing: before this counter existed, the only trace was
+/// `block_meta` going flat in [`UPDATES_RECEIVED`] while `ping` kept rising.
+/// Each increment is a reconnection and a `from_slot` replay, both billed.
+const STALLS: &str = "yog_indexer_grpc_stalls_total";
+
 /// What an update was, for [`UPDATES_RECEIVED`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum UpdateKind {
@@ -247,6 +256,11 @@ impl GrpcListenerMetrics {
              to the consumer's speed"
         );
         describe_counter!(
+            STALLS,
+            "Attempts ended because no block-meta arrived for the stall \
+             timeout while the stream stayed open"
+        );
+        describe_counter!(
             PING_REPLIES_UNSENT,
             "Server pings that could not be answered, labelled by why the \
              answer did not leave"
@@ -271,5 +285,9 @@ impl GrpcListenerMetrics {
 
     pub(crate) fn record_ping_reply_unsent(failure: PingReplyFailure) {
         counter!(PING_REPLIES_UNSENT, "reason" => failure.as_str()).increment(1);
+    }
+
+    pub(crate) fn record_stall() {
+        counter!(STALLS).increment(1);
     }
 }

@@ -597,6 +597,42 @@ async fn only_data_counts_as_delivered_not_a_keep_alive() {
     assert!(session.received_data(), "a block-meta is data");
 }
 
+/// ⚠️ **Only a block-meta moves the count the stall clock reads** — with or
+/// without a block time, since either way the server delivered. Not a ping:
+/// Yellowstone pings from a task of its own, so pings keep coming from a server
+/// whose data path has stopped, and counting them would keep a stalled stream
+/// alive for ever. Not a transaction either: a quiet market sends none for
+/// minutes, and the clock is about the stream, not the market.
+#[tokio::test]
+async fn only_a_block_meta_moves_the_block_meta_count() {
+    let (mut session, _downstream, _outbound) = session(4);
+
+    session.handle(ping()).await;
+    session
+        .handle(update(
+            &[],
+            UpdateOneof::Pong(SubscribeUpdatePong { id: 1 }),
+        ))
+        .await;
+    session.handle(transaction(10, &[PROTOCOL.as_str()])).await;
+    session.handle(unroutable_transaction(11)).await;
+    assert_eq!(
+        session.block_metas_received(),
+        0,
+        "pings, pongs and transactions say nothing about whether block-metas still flow"
+    );
+
+    session.handle(block_meta(10, Some(1_700_000_000))).await;
+    assert_eq!(session.block_metas_received(), 1);
+
+    session.handle(block_meta(11, None)).await;
+    assert_eq!(
+        session.block_metas_received(),
+        2,
+        "a block-meta without a time gives its slot up, but the stream did deliver it"
+    );
+}
+
 /// ⚠️ **An unroutable transaction is delivery with nothing to resume from**, and
 /// that pair is the premise of the listener's keep-the-mark rule. `handle` sets
 /// `received_data` before `on_transaction` decides anything — which is right,

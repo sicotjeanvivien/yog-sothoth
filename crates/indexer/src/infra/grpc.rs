@@ -79,6 +79,6 @@ mod test_fixtures;
 #[path = "grpc/tests/geyser_server.rs"]
 mod test_geyser_server;
 
-pub(crate) use listener::GrpcListener;
+pub(crate) use listener::{GrpcListener, STALL_TIMEOUT};
 pub(crate) use metrics::{GrpcBufferMetrics, GrpcListenerMetrics};
 pub(crate) use source::GrpcTransactionSource;
