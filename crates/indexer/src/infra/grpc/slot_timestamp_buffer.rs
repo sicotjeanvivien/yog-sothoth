@@ -1,56 +1,23 @@
 //! Pairing a Yellowstone stream's two halves: what happened, and when.
 //!
-//! `SubscribeUpdateTransaction` carries `transaction` and `slot` — and no time.
-//! `block_time` lives on `SubscribeUpdateBlockMeta`, a **separate**
-//! subscription keyed by slot. Yet `TransactionPosition::timestamp` may not be
-//! optional: it is a member of every event table's unique key *and* the
-//! TimescaleDB partitioning column, so a transaction without one is not a
-//! degraded row, it is an unwritable one.
+//! A transaction update carries its slot and no time; `block_time` comes on a
+//! separate block-meta, keyed by slot, either before or after. Yet the time
+//! may not be optional — it is in every event table's unique key and is the
+//! partitioning column. This buffer holds whichever half came first until the
+//! other shows up, and bounds that wait. It is generic over the payload, so
+//! the reasoning about time is testable without a wire.
 //!
-//! Two unsynchronised streams, then. A transaction of slot *N* can arrive
-//! before the block-meta of slot *N*, or after it. This buffer holds whichever
-//! came first until the other shows up, and bounds that wait — a block-meta
-//! that never arrives must not grow memory without end.
+//! ⚠️ **The bound counts slots, not seconds.** A wall clock keeps running while
+//! the stream is down, so a time bound would empty the buffer during an outage
+//! and destroy transactions whose block-meta was coming on reconnect. A slot
+//! bound reads the stream: nothing arrives, nothing is evicted.
 //!
-//! It is deliberately **generic over the payload** and knows nothing about
-//! protobuf: "given a stream of `(slot, T)` and a stream of `(slot, time)`,
-//! yield `(T, time)`". The listener instantiates it; the reasoning about
-//! time is testable without a wire.
+//! ⚠️ **[`MAX_PENDING_SLOTS`] is a ceiling, not an estimate**: set far beyond
+//! any plausible lag so that the eviction counter is a signal, until a real
+//! stream measures the lag.
 //!
-//! # ⚠️ Why the bound counts slots and not seconds
-//!
-//! This was decided with the gRPC listener, and the argument is not comfort —
-//! it is what each choice does **when things break**.
-//!
-//! A time bound reads a wall clock, and a wall clock keeps running while the
-//! stream is down. A thirty-second outage would then empty this buffer and
-//! **destroy transactions whose block-meta was going to arrive on reconnect**:
-//! a network fault turned into data loss. A slot bound reads the stream itself.
-//! Nothing arrives, so nothing is evicted, and an outage stays an outage.
-//!
-//! A consequence rather than the argument: with no clock, this module has none
-//! to inject and no time to simulate in its tests. (The workspace has no clock
-//! abstraction at all — `Utc::now()` is called directly wherever it is needed.)
-//!
-//! # What the default is, and what it is not
-//!
-//! [`MAX_PENDING_SLOTS`] is a **ceiling, not an estimate**. The real lag
-//! between a block-meta and its slot's transactions is a physical quantity of
-//! the provider's stream, and nobody here has measured it — no gRPC endpoint is
-//! reachable before the subscription. So the number is picked to be far beyond
-//! any plausible lag, precisely so that **the eviction counter is a signal and
-//! not background noise**. Reading that counter on a real stream is how the
-//! guess gets replaced by a measurement.
-//!
-//! # How it is split
-//!
-//! This file orchestrates; each half has its own module:
-//!
-//! - `waiting_slots` — the payloads still waiting, and which go when a bound
-//!   is exceeded;
-//! - `known_times` — what is already settled about a slot, for the payload
-//!   that arrives after its block-meta;
-//! - `log` — the lines the buffer writes.
+//! This file orchestrates. `waiting_slots` holds what waits and decides what
+//! goes; `known_times` remembers what is settled; `log` writes the lines.
 
 mod known_times;
 mod log;
