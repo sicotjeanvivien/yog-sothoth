@@ -140,7 +140,8 @@ Filling it is this crate's job, one module per source:
 
 - `infra/grpc/listener.rs` opens the stream and keeps it open (its parts in
   `listener/`), with `subscription.rs` (what is asked for) and `session.rs`
-  (what an update means, its parts in `session/`) beside it, and `interceptor.rs` putting the credential on every request. The
+  (what an update means, its parts in `session/`) beside it, and
+  `interceptor.rs` putting the credential on every request. The
   split is by what can be proven without a server: the request and the meaning
   of an update are pure and tested. The retry rule is neither pure nor
   untested — `tests/geyser_server.rs` is a scripted Yellowstone server, `#[cfg(test)]`
@@ -154,7 +155,7 @@ genuinely unreachable. Since 16 September 2026 the **retry rule** is covered:
 `tests/geyser_server.rs` serves a test-written script over loopback, and every
 ending of a stream has a test that goes red when it changes its answer to which
 ending restarts the retry budget, which charges it, and what the next attempt
-asks for — the budget being `run`'s `match`, and the resume point the one
+asks for — the budget being `RetryBudget::settle`, and the resume point the one
 expression beside it, `Attempt::next_resume_from`. One ending is guarded from two
 sides: what an attempt that never reached the service costs the retry budget is
 driven through `run`, against a port with nothing behind it, while what it does

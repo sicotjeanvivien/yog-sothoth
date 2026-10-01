@@ -1,4 +1,9 @@
 //! Tests for the stall clock: what counts as the server's silence.
+//!
+//! Only what `run` cannot show without timing it: how waits add up. That a
+//! block-meta resets the clock and a ping does not is owned by `listener_tests`
+//! (`pings_do_not_keep_a_stalled_stream_alive`,
+//! `a_slow_but_live_stream_is_not_restarted`).
 
 use super::*;
 
@@ -26,21 +31,6 @@ fn time_outside_a_wait_is_not_silence() {
         Duration::from_secs(20),
         "only the ten seconds spent waiting on the server count"
     );
-}
-
-/// Only a block-meta resets the silence — the clock does not know about pings
-/// at all, which is the listener's side of the same rule.
-#[test]
-fn a_block_meta_resets_the_silence() {
-    let t0 = Instant::now();
-    let mut clock = StallClock::new(TIMEOUT);
-
-    clock.wait_started(t0);
-    clock.wait_ended(t0 + Duration::from_secs(25));
-    assert_eq!(clock.remaining(), Duration::from_secs(5));
-
-    clock.heard_block_meta();
-    assert_eq!(clock.remaining(), TIMEOUT);
 }
 
 /// Waits add up across messages that are not block-metas.

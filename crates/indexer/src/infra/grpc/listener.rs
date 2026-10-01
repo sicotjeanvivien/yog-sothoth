@@ -138,7 +138,6 @@ impl GrpcListener {
                 return Ok(());
             }
 
-            budget.start_attempt();
             let request = self.subscribe_request(resume_from).await?;
 
             let outcome = self

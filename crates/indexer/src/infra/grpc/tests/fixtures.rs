@@ -17,7 +17,7 @@
 //! ⚠️ And one property below is load-bearing in a way that is easy to undo:
 //! [`transaction_update`] produces a transaction the **adapter accepts**. Half
 //! of `listener_tests` depends on it — a transaction that `from_grpc` refuses
-//! is dropped inside `StreamSession::emit`, which returns `Open`, so the
+//! is dropped inside `Delivery::deliver`, which returns `Open`, so the
 //! consumer is never reached and the tests that turn on a full or vanished
 //! consumer would pass while exercising nothing.
 //!

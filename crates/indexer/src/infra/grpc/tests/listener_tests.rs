@@ -104,7 +104,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // ── the retry rules, against a scripted server ──────────────────────
 //
 // Everything below drives `GrpcListener::run` itself, against `test_geyser_server`.
-// Until 16 September 2026 nothing did: the six arms of `run`'s `match` are the
+// Until 16 September 2026 nothing did: the arms of `RetryBudget::settle` are the
 // rule that decides what restarts the retry budget and what charges it — and,
 // until later the same day, where the next attempt resumed from too. Every one
 // of the five defects that rule has had was found by reading it. None could
@@ -137,8 +137,8 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // driven through `run` like every other rule here. Each header says which.
 //
 // ⚠️ **Where the resume mutations live moved on 16 September 2026**, with the
-// fix for a delivered session that had no mark of its own. `run`'s arms no
-// longer write `resume_from`: the rule is `Attempt::next_resume_from`, one
+// fix for a delivered session that had no mark of its own. The budget's arms
+// do not write `resume_from`: the rule is `Attempt::next_resume_from`, one
 // expression with one branch per ending, and the *per-ending* facts it reads are
 // built in `connect_and_stream`. So a mutation that used to belong to one arm
 // now belongs to one of those two places, and each annotation below says which.
@@ -340,8 +340,8 @@ async fn a_stream_that_only_pings_before_closing_spends_the_budget() {
 /// *closes empty*, with a budget of two, is **three** subscriptions. Without
 /// the reset the first one is charged and it is two.
 ///
-/// Mutation this is written against: removing `attempt = 0` from the
-/// `Failed { delivered: true }` arm.
+/// Mutation this is written against: `RetryBudget::settle` sending
+/// `Failed { delivered: true }` to `charge` instead of `churn`.
 #[tokio::test]
 async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -438,8 +438,8 @@ async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
 /// Found by review of this very change, 16 September 2026: the first version of
 /// these tests claimed to cover every arm and left this one reset unobserved.
 ///
-/// Mutation this is written against: removing `attempt = 0` from the
-/// `StreamClosed { delivered: true }` arm.
+/// Mutation this is written against: `RetryBudget::settle` sending
+/// `StreamClosed { delivered: true }` to `charge` instead of `churn`.
 #[tokio::test]
 async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
     let server = test_geyser_server::start(vec![
@@ -564,7 +564,7 @@ async fn an_attempt_with_nothing_to_resume_from_keeps_the_mark_we_hold() {
 
     assert!(outcome.is_err(), "{outcome:?}");
     // ⚠️ The whole vector, not a prefix, and it is safe here where its
-    // neighbours' is not: removing either churn arm's `attempt = 0` still
+    // neighbours' is not: sending either churn arm to `charge` still
     // leaves three subscriptions asking for these same three points, so no
     // budget rule can redden this test.
     assert_eq!(
@@ -869,8 +869,8 @@ async fn a_connection_cut_before_the_server_answered_keeps_the_mark() {
 /// exist before it can be kept, and nothing can deliver one through a port that
 /// must stay dead.
 ///
-/// Mutation this is written against: the `run` arm restarting the budget on
-/// `Unreachable` (`attempt = 0`). It cannot produce a wrong value, only a
+/// Mutation this is written against: `RetryBudget::settle` sending
+/// `Unreachable` to `churn`. It cannot produce a wrong value, only a
 /// listener that never returns — so the deadline is the assertion, as it is for
 /// the two shutdown tests.
 #[tokio::test]

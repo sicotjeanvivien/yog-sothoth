@@ -13,8 +13,8 @@ use super::{ending::Attempt, log};
 /// Retry budget shape, shared with `SubscriptionWorker` — the same provider is
 /// on the other end, and an operator reading two different backoffs would have
 /// to learn two.
-pub(super) const INITIAL_BACKOFF_SECS: u64 = 1;
-pub(super) const MAX_BACKOFF_SECS: u64 = 60;
+const INITIAL_BACKOFF_SECS: u64 = 1;
+const MAX_BACKOFF_SECS: u64 = 60;
 
 /// What the listener does after an attempt.
 #[derive(Debug)]
@@ -42,14 +42,12 @@ impl RetryBudget {
         }
     }
 
-    /// An attempt is about to start.
-    pub(super) fn start_attempt(&mut self) {
-        self.attempt += 1;
-    }
-
-    /// Decide what follows `outcome`. `resume_from` is the mark the next
-    /// attempt will ask for, already decided — it is only logged here.
+    /// Count one attempt and decide what follows its `outcome`. `resume_from`
+    /// is the mark the next attempt will ask for, already decided — it is only
+    /// logged here.
     pub(super) fn settle(&mut self, outcome: Attempt, resume_from: Option<u64>) -> Next {
+        self.attempt += 1;
+
         match outcome {
             Attempt::ShutdownRequested => {
                 log::stopping_on_shutdown();
@@ -125,7 +123,7 @@ impl RetryBudget {
         self.attempt = 0;
         self.backoff = INITIAL_BACKOFF_SECS;
         Next::Retry {
-            after: Duration::from_secs(1),
+            after: Duration::from_secs(INITIAL_BACKOFF_SECS),
         }
     }
 

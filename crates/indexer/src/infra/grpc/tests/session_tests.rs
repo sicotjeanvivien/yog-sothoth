@@ -385,7 +385,7 @@ async fn a_ping_is_answered_with_a_bare_ping() {
 /// arrive: a reconnection rewinds, and the server pings long before the
 /// backlog drains.
 ///
-/// ⚠️ This guards the `Ping` arm of `handle`, not `answer_ping`, which takes
+/// ⚠️ This guards the `Ping` arm of `handle`, not `PingAnswer::answer`, which takes
 /// `&self` and cannot touch either. The damage an *answer* could do to a
 /// replay happens on the server, through a `from_slot` riding along — that is
 /// [`a_ping_is_answered_with_a_bare_ping`]'s to catch.
