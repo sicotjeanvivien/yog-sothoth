@@ -68,7 +68,7 @@ table and what the layout above keeps out of the service layer.
 
 The one place the read path matches on a protocol is
 `http/dto/response/pool.rs` — the wire shape genuinely differs per protocol, and
-its `PoolProperties` destructuring is irrefutable-by-construction, so adding a
+its `PoolProperties` `match` is exhaustive with no wildcard arm, so adding a
 variant breaks the build there instead of silently dropping a field.
 
 ## Endpoints

@@ -124,7 +124,7 @@ every arm mentioning it existed only to say "not this one". Meteora's other
 products are planned, not in the enum; they arrive through the
 add-a-protocol recipe.
 
-The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. `ExtractionDispatcher::extract` is one of the dispatch points a new protocol touches — `decode_pool_account` (`application/decoder.rs`) is this crate's other one (see the [add-a-protocol recipe](../README.md#adding-a-new-protocol)).
+The trait keeps the per-protocol contract explicit and testable; the enum dispatch is cheap — no `dyn` overhead, no allocation per transaction. This crate holds three of the dispatch points a new protocol touches: `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` beside it, and `decode_pool_account` (`application/decoder.rs`) — see the [add-a-protocol recipe](../README.md#adding-a-new-protocol).
 
 ## `OnChainTransaction` — the neutral input, and its adapters
 

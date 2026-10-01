@@ -217,10 +217,10 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 **Account side** — the properties events never carry (mints, base fee, fee shape):
 
-- Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a `DecodedPoolAccount`. Guard on the Anchor discriminator as well as the program id — neither is redundant (see [`core/README.md`](./core/README.md#responsibilities)).
+- Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a `DecodedPoolAccount` from the account bytes alone. It guards on the Anchor discriminator; the program id is guarded by the dispatch in `decode_pool_account` — neither is redundant (see [`core/README.md`](./core/README.md#responsibilities)).
 - Add a branch to `decode_pool_account` (`application/decoder.rs`) routing the new `Protocol`.
 - Add the matching variants to the two-level `PoolAccountProperties` (write side, `domain/pool_account/`) and `PoolProperties` (read side, `domain/pool_properties/`). Both are matched exhaustively downstream, so the compiler points at every site that must follow.
-- Ground the decoder on **real mainnet accounts** before trusting it: a synthetic test builds the buffer with the same constants the decoder reads it with, so both agree on a wrong offset. Fixtures go under `core/tests/fixtures/<protocol>/accounts/`.
+- Ground the decoder on **real mainnet accounts** before trusting it: a synthetic test builds the buffer with the same constants the decoder reads it with, so both agree on a wrong offset. Fixtures go under `core/tests/fixtures/<product>/accounts/` (`damm_v2/`, `dlmm/`).
 
 ### 2. In `persistence`
 
@@ -247,7 +247,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`. A service goes under `services/<platform>/<product>/` only when its repository, params and result are irreducibly that product's; cross-protocol services stay at the root and must not name a protocol in their constructor.
 - Add handlers and DTOs as needed. For a cross-protocol read surface, point the handler at the matching VIEW; for protocol-specific detail, point at the table directly.
-- Add the protocol's block to `http/dto/response/pool.rs` — an optional field named after the protocol, alongside its siblings. The `PoolProperties` destructuring there is irrefutable by construction, so this one is compiler-forced rather than optional.
+- Add the protocol's block to `http/dto/response/pool.rs` — an optional field named after the protocol, alongside its siblings. The `PoolProperties` `match` there is exhaustive with no wildcard arm, so this one is compiler-forced rather than optional.
 
 ### 6. Tests
 
