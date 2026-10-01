@@ -8,8 +8,8 @@ cargo run --bin yog-migrate -p yog-persistence
 ```
 
 The connection string passed to `yog-migrate` must use the `yog_migrate`
-role — the four runtime roles (`yog_indexer`, `yog_api`, `yog_context`,
-`yog_signals`) intentionally cannot CREATE or ALTER tables.
+role — the five runtime roles (`yog_indexer`, `yog_api`, `yog_context`,
+`yog_signals`, `yog_archive`) intentionally cannot CREATE or ALTER tables.
 
 ## The baseline, and where the old numbers went
 
@@ -797,7 +797,7 @@ which is these three, in order:
 
 | step | script | role |
 |---|---|---|
-| `setup-roles` | [`../src/bin/scripts/setup_roles.sql`](../src/bin/scripts/setup_roles.sql) — the five roles and the structural privileges | `DATABASE_URL_ADMIN` |
+| `setup-roles` | [`../src/bin/scripts/setup_roles.sql`](../src/bin/scripts/setup_roles.sql) — the six roles and the structural privileges | `DATABASE_URL_ADMIN` |
 | `migrate` | this directory | `DATABASE_URL_MIGRATE` |
 | `seed-watched-pools` | [`../src/bin/scripts/setup_watched_pools.sql`](../src/bin/scripts/setup_watched_pools.sql) — the startup allowlist | `DATABASE_URL_ADMIN` |
 

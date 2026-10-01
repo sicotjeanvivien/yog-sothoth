@@ -60,7 +60,7 @@ If you find yourself touching a fourth central registry, stop — you've left th
 **Domain side** — template: `crates/core/src/domain/meteora/damm_v2/`
 - Per event kind, create `domain/<platform>/<product>/<event_kind>/` with `model.rs` and
   `repository.rs`. Prefix structs and cursors with the protocol
-  (`MeteoraDlmmSwapEvent`, `MeteoraDlmmSwapCursor`).
+  (`MeteoraDlmmSwapEvent`, `MeteoraDlmmSwapEventCursor`).
 - Add the sub-enum `<Platform><Product>Event` in `domain/<platform>/<product>.rs`, one
   variant per event kind.
 - Add the outer variant in `DomainEvent` (`crates/core/src/domain/domain_event.rs`) and
