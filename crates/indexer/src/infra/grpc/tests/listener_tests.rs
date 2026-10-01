@@ -390,7 +390,7 @@ async fn a_stream_that_delivered_before_breaking_restarts_the_budget() {
 /// other rules — the very pattern the section header above forbids, left
 /// unapplied on one arm by the commit that wrote the rule.
 ///
-/// Mutation this is written against: `connect_and_stream`'s `Err(status)`
+/// Mutation this is written against: `on_message`'s `Err(status)`
 /// ending handing back `resume_from: None` instead of `session.resume_from()`.
 /// That is where this ending's mark is now built — `next_resume_from` no longer
 /// tells the two endings apart, which is the point of it.
@@ -483,7 +483,7 @@ async fn a_stream_that_delivered_before_closing_cleanly_restarts_the_budget() {
 /// again — rewound by `REWIND_SLOTS`, because a block-meta does not promise its
 /// slot's transactions have all arrived either.
 ///
-/// Mutation this is written against: `connect_and_stream`'s `Ok(None)` ending
+/// Mutation this is written against: `on_message`'s `Ok(None)` ending
 /// handing back `resume_from: None` instead of `session.resume_from()` — the
 /// half `session_tests` cannot see, since it proves `resume_from` computes 8,
 /// not that anything asks for it.

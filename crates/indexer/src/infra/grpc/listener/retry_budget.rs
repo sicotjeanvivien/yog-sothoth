@@ -10,9 +10,9 @@ use crate::error::GrpcListenerError;
 
 use super::{ending::Attempt, log};
 
-/// Retry budget shape, shared with `SubscriptionWorker` — the same provider is
-/// on the other end, and an operator reading two different backoffs would have
-/// to learn two.
+/// Retry budget shape, the same as `SubscriptionWorker`'s — the same provider
+/// is on the other end, and an operator reading two different backoffs would
+/// have to learn two. ⚠️ A copy, not a shared definition: change both.
 const INITIAL_BACKOFF_SECS: u64 = 1;
 const MAX_BACKOFF_SECS: u64 = 60;
 

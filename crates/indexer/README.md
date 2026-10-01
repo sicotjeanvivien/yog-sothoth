@@ -161,9 +161,10 @@ sides: what an attempt that never reached the service costs the retry budget is
 driven through `run`, against a port with nothing behind it, while what it does
 to the resume mark is driven one level down at `connect_and_stream` — observing
 a mark being *kept* needs a delivered session to make one first, against a
-server that must be unreachable for the attempt after. The backoff reset is the
-one decision left unguarded on purpose — its only observable is a duration;
-`listener.rs`'s header says why, and carries the measurements behind both.
+server that must be unreachable for the attempt after. The two decisions only a
+duration shows from `run` — the backoff reset after a churn, and the stall clock
+ignoring time spent on a full consumer — are tested on the values of
+`RetryBudget` and `StallClock`.
 What remains untested is what needs a *real* server: TLS, keep-alive, the
 connect timeout, whether a provider honours `from_slot` the way this code
 assumes, and whether it takes the ping-only answer the session sends to each

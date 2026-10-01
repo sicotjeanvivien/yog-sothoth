@@ -107,7 +107,10 @@ impl GrpcListener {
             }
         };
 
-        let client = GeyserClient::with_interceptor(channel, interceptor.clone())
+        // Held for the life of the stream, as the channel it owns: the stream is
+        // read through it, and nothing here should depend on what tonic does
+        // once the last client handle is gone.
+        let mut client = GeyserClient::with_interceptor(channel, interceptor.clone())
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
         // The outbound half stays open for the life of the stream: the session
@@ -119,7 +122,7 @@ impl GrpcListener {
             };
         }
 
-        let mut stream = match self.subscribe(client, outbound_rx, shutdown).await {
+        let mut stream = match self.subscribe(&mut client, outbound_rx, shutdown).await {
             Ok(stream) => stream,
             Err(ending) => return ending,
         };
@@ -164,7 +167,7 @@ impl GrpcListener {
     /// outlasts a container's stop grace period.
     async fn subscribe(
         &self,
-        mut client: Client,
+        client: &mut Client,
         outbound_rx: mpsc::Receiver<SubscribeRequest>,
         shutdown: &CancellationToken,
     ) -> Result<Streaming<SubscribeUpdate>, Attempt> {
