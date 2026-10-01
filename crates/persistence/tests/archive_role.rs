@@ -1,11 +1,14 @@
 //! The `yog_archive` role: it reads everything `pg_dump` needs, and writes
 //! nothing.
 //!
-//! Its rights do not come from a migration, so `privileges.rs` cannot see
-//! them: `setup_roles.sql` makes it a member of the predefined
-//! `pg_read_all_data`. These tests apply that file, then act **under the role
-//! itself** (`SET ROLE`), because a privilege is only proven by the statement
-//! it lets through or stops.
+//! Its reading does not come from a migration, so `privileges.rs` cannot see
+//! it: `setup_roles.sql` makes it a member of the predefined
+//! `pg_read_all_data`. What `privileges.rs` checks is the other half: that no
+//! migration grants it anything on a table, a view or a column of `public`.
+//!
+//! These tests apply that file, then act **under the role itself**
+//! (`SET ROLE`), because a privilege is only proven by the statement it lets
+//! through or stops.
 //!
 //! ⚠️ **Roles belong to the cluster, not to the test's database.** A grant made
 //! by an earlier run survives the removal of the `GRANT` from the file, and a

@@ -20,7 +20,18 @@
 //!
 //! **Explicit grants only** — those a migration emits. Measured: they reproduce
 //! faithfully in a `sqlx::test` database, column-level ones included, and that is
-//! precisely where migration 036's bug lived.
+//! precisely where migration 036's bug lived. Both tests read **every grant the
+//! owner made to anyone else** — the runtime roles, `PUBLIC`, and any role added
+//! later — and compare it to the matrix in both directions: table grants from
+//! `role_table_grants`, column grants from `pg_attribute.attacl`, on the tables
+//! and views of `public`.
+//!
+//! ⚠️ **No list of roles, on purpose.** The first version filtered on a
+//! hand-kept list of runtime roles, and `yog_archive` went unchecked because
+//! nobody added it. A role absent from the matrix — `yog_archive` today — is
+//! declared as granted nothing by name, and anything granted to it fails.
+//!
+//! Not read: sequences, functions, materialized views, other schemas.
 //!
 //! The **default privileges** of `setup_roles.sql` (a blanket `SELECT` to every
 //! role) do *not* reproduce, for two compounding reasons: that file is not a
@@ -47,9 +58,6 @@
 
 use sqlx::PgPool;
 use std::collections::BTreeSet;
-
-/// The four runtime roles. `yog_migrate` is excluded — see the module doc.
-const RUNTIME_ROLES: [&str; 4] = ["yog_api", "yog_context", "yog_indexer", "yog_signals"];
 
 /// What one role may do to one table: `(role, privileges)`.
 type RolePrivileges<'a> = (&'a str, &'a [&'a str]);
@@ -345,8 +353,11 @@ const COLUMN_PRIVILEGES: &[(&str, &str, &str, &[&str])] = &[(
     &["fee_bps", "needs_refresh", "token_a_mint", "token_b_mint"],
 )];
 
-/// One `(table, role, privilege)` triple — the unit both tests compare on.
+/// One `(table, role, privilege)` triple — the unit the table test compares on.
 type Grant = (String, String, String);
+
+/// One `(table, role, privilege, column)` — the unit the column test compares on.
+type ColumnGrant = (String, String, String, String);
 
 fn declared_table_grants() -> BTreeSet<Grant> {
     TABLE_PRIVILEGES
@@ -361,94 +372,135 @@ fn declared_table_grants() -> BTreeSet<Grant> {
         .collect()
 }
 
-/// Render a difference as the SQL that would close it, so the failure is
-/// actionable without a second lookup.
-fn render(grants: &BTreeSet<Grant>, statement: &str, direction: &str) -> String {
-    grants
+fn declared_column_grants() -> BTreeSet<ColumnGrant> {
+    COLUMN_PRIVILEGES
         .iter()
-        .map(|(table, role, privilege)| {
-            format!("    {statement} {privilege} ON {table} {direction} {role};")
+        .flat_map(|(table, role, privilege, columns)| {
+            columns.iter().map(move |column| {
+                (
+                    table.to_string(),
+                    role.to_string(),
+                    privilege.to_string(),
+                    column.to_string(),
+                )
+            })
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect()
 }
 
-/// The whole table-level surface, in both directions.
+/// Fail unless `declared` and `observed` are the same set, printing each
+/// difference as the SQL that would close it — `render(grant, statement,
+/// direction)` writes one statement.
 ///
 /// Exact equality, not "at least": a privilege nobody declared is as much a
 /// finding as one that went missing — it silently widens what a compromised or
 /// buggy process can reach.
+fn assert_same_surface<T: Ord + Clone>(
+    matrix: &str,
+    hint: &str,
+    declared: &BTreeSet<T>,
+    observed: &BTreeSet<T>,
+    render: impl Fn(&T, &str, &str) -> String,
+) {
+    let missing: Vec<String> = declared
+        .difference(observed)
+        .map(|grant| render(grant, "GRANT", "TO"))
+        .collect();
+    let excess: Vec<String> = observed
+        .difference(declared)
+        .map(|grant| render(grant, "REVOKE", "FROM"))
+        .collect();
+
+    assert!(
+        missing.is_empty() && excess.is_empty(),
+        "`{matrix}` and the migrated schema disagree.\n\n\
+         Declared but NOT granted ({} — a migration is missing its GRANT, and the \
+         process that needs it will fail at runtime under its real role):\n{}\n\n\
+         Granted but NOT declared ({} — either a migration granted more than \
+         intended, or the matrix is out of date):\n{}\n\n\
+         {hint}Update `{matrix}` in this file only after deciding which of the two is wrong.",
+        missing.len(),
+        missing.join("\n"),
+        excess.len(),
+        excess.join("\n"),
+    );
+}
+
+/// The whole table-level surface the owner granted, in both directions.
 #[sqlx::test]
 async fn table_privileges_match_the_declared_matrix(pool: PgPool) {
-    let rows: Vec<Grant> = sqlx::query_as(
+    let observed: BTreeSet<Grant> = sqlx::query_as(
         r#"
         SELECT table_name::TEXT, grantee::TEXT, privilege_type::TEXT
         FROM information_schema.role_table_grants
         WHERE table_schema = 'public'
-          AND grantee = ANY($1)
+          AND grantee <> current_user
         "#,
     )
-    .bind(RUNTIME_ROLES.map(str::to_string).to_vec())
     .fetch_all(&pool)
     .await
-    .expect("privilege query failed");
+    .expect("privilege query failed")
+    .into_iter()
+    .collect();
 
-    let observed: BTreeSet<Grant> = rows.into_iter().collect();
-    let declared = declared_table_grants();
-
-    let missing: BTreeSet<Grant> = declared.difference(&observed).cloned().collect();
-    let excess: BTreeSet<Grant> = observed.difference(&declared).cloned().collect();
-
-    assert!(
-        missing.is_empty() && excess.is_empty(),
-        "the privilege matrix and the migrated schema disagree.\n\n\
-         Declared but NOT granted ({} — a migration is missing its GRANT, and \
-         the process that needs it will fail at runtime under its real role):\n{}\n\n\
-         Granted but NOT declared ({} — either a migration granted more than \
-         intended, or the matrix is out of date):\n{}\n\n\
-         Update `TABLE_PRIVILEGES` in this file only after deciding which of the \
-         two is wrong.",
-        missing.len(),
-        render(&missing, "GRANT", "TO"),
-        excess.len(),
-        render(&excess, "REVOKE", "FROM"),
+    assert_same_surface(
+        "TABLE_PRIVILEGES",
+        "",
+        &declared_table_grants(),
+        &observed,
+        |(table, role, privilege), statement, direction| {
+            format!("    {statement} {privilege} ON {table} {direction} {role};")
+        },
     );
 }
 
-/// Column-level grants, which the query above cannot see.
+/// Column-level grants, which the query above cannot see — in both directions.
 ///
 /// A column grant is the finest tool in the model — `yog_context` may write four
 /// columns of `pools` and no others — and also the easiest to lose: it does not
 /// extend to a column added later, which is the trap migration 038 had to work
 /// around explicitly.
+///
+/// ⚠️ **Read from `pg_attribute.attacl`, not `information_schema.column_privileges`.**
+/// That view also repeats every *table-level* grant on each column — 2 874 rows
+/// on the migrated schema, against the four grants made per column — so a
+/// comparison on it would drown in `yog_indexer`'s table rights. `attacl` holds
+/// only what was granted column by column. A grant to `PUBLIC` has no role row,
+/// hence the `LEFT JOIN`; the relation kinds are those the table query covers.
 #[sqlx::test]
 async fn column_privileges_match_the_declared_matrix(pool: PgPool) {
-    for (table, role, privilege, columns) in COLUMN_PRIVILEGES {
-        let observed: Vec<String> = sqlx::query_scalar(
-            r#"
-            SELECT column_name::TEXT
-            FROM information_schema.column_privileges
-            WHERE table_schema = 'public'
-              AND table_name = $1 AND grantee = $2 AND privilege_type = $3
-            ORDER BY column_name
-            "#,
-        )
-        .bind(table)
-        .bind(role)
-        .bind(privilege)
-        .fetch_all(&pool)
-        .await
-        .expect("column privilege query failed");
+    let observed: BTreeSet<ColumnGrant> = sqlx::query_as(
+        r#"
+        SELECT c.relname::TEXT,
+               COALESCE(r.rolname::TEXT, 'PUBLIC'),
+               acl.privilege_type::TEXT,
+               a.attname::TEXT
+        FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        CROSS JOIN LATERAL aclexplode(a.attacl) acl
+        LEFT JOIN pg_roles r ON r.oid = acl.grantee
+        WHERE n.nspname = 'public'
+          AND c.relkind IN ('r', 'v', 'f', 'p')
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+          AND acl.grantee <> c.relowner
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("column privilege query failed")
+    .into_iter()
+    .collect();
 
-        let mut declared: Vec<String> = columns.iter().map(|c| c.to_string()).collect();
-        declared.sort();
-
-        assert_eq!(
-            observed, declared,
-            "{role} may {privilege} the wrong columns of {table}.\n\
-             A column added later is NOT covered by an existing column grant — \
-             if this is a new column, the migration owes it an explicit \
-             `GRANT {privilege} (<column>) ON {table} TO {role};`."
-        );
-    }
+    assert_same_surface(
+        "COLUMN_PRIVILEGES",
+        "A column added later is NOT covered by an existing column grant: the \
+         migration that adds it owes it an explicit one.\n\n",
+        &declared_column_grants(),
+        &observed,
+        |(table, role, privilege, column), statement, direction| {
+            format!("    {statement} {privilege} ({column}) ON {table} {direction} {role};")
+        },
+    );
 }
