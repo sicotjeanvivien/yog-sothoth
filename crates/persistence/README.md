@@ -647,10 +647,13 @@ psql <admin-url> -Atc "SELECT proname FROM pg_proc
 
 `tests/privileges.rs` declares the intended privilege surface by hand and asserts
 it against what the migrations actually produce — in **both** directions, at
-table and at column level, for all five runtime roles, so a forgotten GRANT and
-an unintended one both fail. `yog_archive` is among them with no line at all:
-it is granted nothing by name. **Adding a table means adding its line**; the
-failure prints the exact `GRANT`/`REVOKE` for whatever disagrees.
+table and at column level, so a forgotten GRANT and an unintended one both fail.
+It reads every grant the owner made to anyone else — the runtime roles,
+`PUBLIC`, any role added later — with no list of roles to forget one from:
+`yog_archive` has no line, so anything granted to it fails. It covers the tables
+and views of `public` and their columns, **not** sequences, functions or
+materialized views. **Adding a table means adding its line**; the failure prints
+the exact `GRANT`/`REVOKE` for whatever disagrees.
 
 Read that failure as a question — *is the migration wrong, or the matrix?* —
 before editing either. Pasting the missing line to go green is how migration

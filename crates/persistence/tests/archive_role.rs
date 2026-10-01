@@ -3,8 +3,8 @@
 //!
 //! Its reading does not come from a migration, so `privileges.rs` cannot see
 //! it: `setup_roles.sql` makes it a member of the predefined
-//! `pg_read_all_data`. What `privileges.rs` does check is the other half —
-//! that no migration grants it anything by name. These tests apply that file, then act **under the role
+//! `pg_read_all_data`. What `privileges.rs` checks is the other half: that no
+//! migration grants it anything on a table, a view or a column of `public`. These tests apply that file, then act **under the role
 //! itself** (`SET ROLE`), because a privilege is only proven by the statement
 //! it lets through or stops.
 //!
