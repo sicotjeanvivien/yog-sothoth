@@ -15,7 +15,7 @@
 //! What an operator does about it differs by *which* of the two it was: a
 //! provider that dropped `meta` wholesale and one that stopped recording inner
 //! instructions are two different fixes. And the only place the two are told
-//! apart is a log line — `session.rs`'s `warn!(%error, …)` on the gRPC path,
+//! apart is a log line — `session/log.rs`'s `untranslatable` on the gRPC path,
 //! `fetch_worker.rs`'s `error!` on the other. The counters cannot help:
 //! `drop_reason` folds both into `reason="missing_field"` and `FetchWorker`
 //! folds every adaptation failure into `reason="adapt"`, both on purpose, to

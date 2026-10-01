@@ -138,9 +138,9 @@ Filling it is this crate's job, one module per source:
   other kind of URL — so each path is a `Transport` constant, side by side with
   the other, and the check is one function.
 
-- `infra/grpc/listener.rs` opens the stream and keeps it open, with
-  `subscription.rs` (what is asked for) and `session.rs` (what an update means)
-  beside it, and `interceptor.rs` putting the credential on every request. The
+- `infra/grpc/listener.rs` opens the stream and keeps it open (its parts in
+  `listener/`), with `subscription.rs` (what is asked for) and `session.rs`
+  (what an update means, its parts in `session/`) beside it, and `interceptor.rs` putting the credential on every request. The
   split is by what can be proven without a server: the request and the meaning
   of an update are pure and tested. The retry rule is neither pure nor
   untested — `tests/geyser_server.rs` is a scripted Yellowstone server, `#[cfg(test)]`
@@ -493,7 +493,7 @@ emitted. No gauges today — all counters and histograms.
   are ordinary weather on a metered provider. ⚠️ **And the gRPC path does not
   answer on this family at all** — it refuses the same absence, but counts it as
   `yog_indexer_grpc_dropped_transactions_total{reason="missing_field"}`
-  (`grpc/session.rs`, `drop_reason`). An alert written against `adapt` alone
+  (`grpc/session/delivery.rs`, `drop_reason`). An alert written against `adapt` alone
   goes blind the moment `INGEST_SOURCE` changes, which is precisely the failure
   the two adapters were aligned to make visible. The *dropped* family is
   different in kind — work discarded rather than work that went wrong. ⚠️ **Its `reason` label separates

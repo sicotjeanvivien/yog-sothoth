@@ -940,7 +940,7 @@ async fn a_shutdown_reaches_a_listener_parked_on_a_silent_stream() {
 /// stalls without dropping its receiver would otherwise make the process ignore
 /// a stop request for as long as the stall lasts.
 ///
-/// Mutation this is written against: `session.rs`'s back-pressure wait made
+/// Mutation this is written against: `session/delivery.rs`'s back-pressure wait made
 /// unconditional — `self.downstream.send(ingested).await` with no `select!`.
 /// `session_tests` covers the session's own answer; what is proved here is that
 /// the listener turns it into a clean stop rather than another attempt.
