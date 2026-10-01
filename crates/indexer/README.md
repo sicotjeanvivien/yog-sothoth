@@ -25,7 +25,12 @@ indexer/src/
 ├── infra/grpc/            ← GrpcTransactionSource and the single stage behind
 │                            it: listener, subscription, session, credential
 │                            interceptor, protobuf adapter, slot/time buffer
-│   └── tests/             ← its eight test files, grouped: what is left beside
+│   ├── listener/          ← one module per responsibility: connection,
+│   │                        ending (+ resume mark), retry_budget, stall_clock,
+│   │                        log — listener.rs only assembles them
+│   ├── session/           ← slot_progress, delivery, ping_answer, log —
+│   │                        session.rs only routes each update to them
+│   └── tests/             ← its ten test files, grouped: what is left beside
 │                            them is what goes into the binary
 ├── infra/rpc/             ← RpcTransactionSource and the three stages it owns:
 │                            RpcListener + SubscriptionWorker (WebSocket fleet),

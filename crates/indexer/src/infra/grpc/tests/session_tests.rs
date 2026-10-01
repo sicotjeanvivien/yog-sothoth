@@ -11,6 +11,8 @@
 
 use super::*;
 
+use super::{ping_answer::PING_REPLY_ID, slot_progress::REWIND_SLOTS};
+
 use metrics_util::debugging::{DebugValue, DebuggingRecorder};
 use tokio_util::sync::CancellationToken;
 use yellowstone_grpc_proto::prelude::{

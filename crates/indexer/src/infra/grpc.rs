@@ -4,10 +4,12 @@
 //! travels:
 //!
 //! - `listener` — the connection, the subscription, and what to do when the
-//!   stream breaks;
+//!   stream breaks; its sub-modules hold the connection itself, how it ended,
+//!   the retry budget and the stall clock;
 //! - `subscription` — what is asked for, and how an update names its protocol;
-//! - `session` — what one update does: route it, pair it with its slot's time,
-//!   translate it, hand it downstream;
+//! - `session` — what one update does: route it, then pair it with its slot's
+//!   time (`slot_progress`), hand it downstream (`delivery`), or answer a ping
+//!   (`ping_answer`);
 //! - `interceptor` — the credential, on every request, printed by nothing;
 //! - `transaction_adapter` — the protobuf shape into the neutral transaction;
 //! - `slot_timestamp_buffer` — the pairing itself, since `block_time` lives on
@@ -33,7 +35,7 @@
 //! like the others, against a port with nothing behind it, while what it does
 //! to the resume mark is driven one level down, at `connect_and_stream`,
 //! because no server can both deliver a mark and be unreachable for the attempt
-//! after. `listener.rs`'s header carries the measurements. All of it proves
+//! after. All of it proves
 //! this client against our model of the server, and nothing about the protocol
 //! — so TLS, keep-alive, the answer to server pings and the exact semantics of
 //! `from_slot` are still written, reviewed and unproven until the first run
