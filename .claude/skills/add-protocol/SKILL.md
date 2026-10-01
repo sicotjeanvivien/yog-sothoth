@@ -1,6 +1,6 @@
 ---
 name: add-protocol
-description: Add a new Meteora/AMM protocol (or product) to Yog-Sothoth following the "voie 3" per-protocol pattern. Use when the user wants to support a new on-chain protocol/product end-to-end — new domain events, SQL tables, repositories, indexer sub-persistor, and optional API surface. Walks the exact recipe from crates/README.md and the three dispatch points that must change.
+description: Add a new Meteora/AMM protocol (or product) to Yog-Sothoth following the "voie 3" per-protocol pattern. Use when the user wants to support a new on-chain protocol/product end-to-end — new domain events, SQL tables, repositories, indexer sub-persistor, and optional API surface. Walks the exact recipe from crates/README.md and the seven dispatch points that must change.
 ---
 
 # Add a new protocol (voie 3)
@@ -23,10 +23,12 @@ Confirm with the user (don't assume):
   module + table + repository + `persist_<kind>` method.
 
 Note current state: `Protocol` (`crates/core/src/domain/protocol/model.rs`) already lists
-`MeteoraDlmm`, but `DomainEvent` only has the `MeteoraDammV2` variant
-and `ExtractionDispatcher` only routes DAMM v2 to a real extractor. So "adding a protocol"
-usually means: add the `DomainEvent` outer variant + wire the dispatcher/persistor, and (if
-it's a brand-new protocol not yet in the enum) add the `Protocol` variant + program ID.
+`MeteoraDlmm`, and DLMM's account side is done — its `LbPair` decoder, its satellite
+`meteora_dlmm_pool_properties` and its resolver in `context`. What it lacks is events:
+`DomainEvent` only has the `MeteoraDammV2` variant and `MeteoraDlmm::extract_events` is a
+stub. So finishing DLMM means the extraction, domain-event, event-table and sub-persistor
+steps below; a brand-new protocol also needs the `Protocol` variant + program ID and the
+whole account side.
 
 ## The dispatch points (everything else is isolated per-protocol code)
 
@@ -41,8 +43,16 @@ it's a brand-new protocol not yet in the enum) add the `Protocol` variant + prog
    One new `DomainEvent::<NewProtocol>(e) => …` branch + one field.
 3. `init_event_persistor` — `crates/indexer/src/bootstrap/daemon/init.rs`. One instantiation block
    wiring the new sub-persistor's repos + the shared `Arc<PoolMaintenance>`.
+4. `decode_pool_account` — `crates/core/src/application/decoder.rs`. One branch routing the
+   new `Protocol` to its account decoder.
+5. The `pool_account_resolvers` vec — `crates/context/src/bootstrap/daemon.rs`. One line
+   pushing the new `Pg*` resolver; `PoolAccountWorker` names no protocol.
+6. The `PoolProperties` match — `crates/api/src/http/dto/response/pool.rs`. One optional
+   field named after the protocol; the destructuring is irrefutable, so the compiler asks.
 
-If you find yourself touching a fourth central registry, stop — you've left the pattern.
+(`ExtractionDispatcher` counts as two in the README's table — `extract` and
+`implemented_protocols` — hence *seven*.) If you find yourself touching a central registry
+outside this list, stop — you've left the pattern.
 
 ## Step 1 — `core` (no I/O, wasm-compatible; no Postgres/axum/HTTP here)
 
@@ -68,6 +78,18 @@ If you find yourself touching a fourth central registry, stop — you've left th
 - If the protocol is new to the enum: add the `Protocol` variant + program ID + the
   `all()` / `as_str()` / `program_id()` arms in `domain/protocol/model.rs`.
 
+**Account side** — the properties events never carry (mints, base fee, fee shape);
+template: `crates/core/src/application/decoder/meteora/`
+- Decode the pool account in `application/decoder/<platform>/<product>.rs`, returning a
+  `DecodedPoolAccount`. Guard on the Anchor discriminator **and** the program id — neither
+  is redundant.
+- **Dispatch point 4**: the branch in `decode_pool_account`.
+- Add the matching variants to `PoolAccountProperties` (write side, `domain/pool_account/`)
+  and `PoolProperties` (read side, `domain/pool_properties/`).
+- Ground the decoder on **real mainnet accounts** before trusting it — fixtures under
+  `crates/core/tests/fixtures/<protocol>/accounts/`. A synthetic buffer agrees with the
+  decoder on a wrong offset.
+
 Keep domain types infra-neutral: `Pubkey` for addresses, `rust_decimal::Decimal` for
 prices. Lossless `u128` becomes `BigDecimal` **only** at the persistence boundary — never
 `sqlx::types` in `core`.
@@ -80,12 +102,22 @@ prices. Lossless `u128` becomes `BigDecimal` **only** at the persistence boundar
   NULL columns for incompatible fields, no JSONB blob.
 - In the **same migration**, add `GRANT INSERT, UPDATE ON <new_table> TO yog_indexer;`
   (SELECT is covered by default privileges in `setup_roles.sql`).
+- Add the **pool-properties satellite** `<platform>_<product>_pool_properties`: one row per
+  pool, primary-keyed on `pool_address`. Copy the shape from `001_baseline.sql` §9, the DLMM
+  satellite — the generated `protocol` column plus the composite
+  `FOREIGN KEY (pool_address, protocol) REFERENCES pools (pool_address, protocol)`. Grant it
+  to `yog_context` (its sole writer), not to `yog_indexer`.
+- Add every new table's line to the privilege matrix in
+  `crates/persistence/tests/privileges.rs` — it asserts in both directions.
 - Extend the cross-protocol VIEWs (`swap_events`, `liquidity_events`, …) with a new
   `UNION ALL` branch selecting from the new table with the `protocol` literal injected.
   Protocol-specific columns stay out of the VIEWs.
 - Implement `Pg<Platform><Product><EventKind>EventRepository` under
   `crates/persistence/src/repositories/<platform>/<product>/<event_kind>/`, following the
   `Row + TryFrom<XxxRow> for XxxDomain` convention. Re-export from `lib.rs`.
+- Implement the satellite's `PoolAccountResolver` (write + queue) and
+  `PoolPropertiesLookup` (read) on one `Pg*` struct. ⚠️ Its `list_unresolved` **must**
+  filter on its own protocol, or the queue starves behind other protocols' pools.
 - **Regenerate the SQLx cache** (mandatory — CI's `sqlx-check` fails otherwise):
   ```bash
   cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features
@@ -107,28 +139,39 @@ prices. Lossless `u128` becomes `BigDecimal` **only** at the persistence boundar
 Respect **skip-and-log over abort-and-die**: per-event failures are logged + counted
 (Prometheus) and stepped over; only loop-level failures bubble up.
 
-## Step 4 — `api` (only when read access is needed)
+## Step 4 — `context`
 
+- **Dispatch point 5**: push the new `Pg*` resolver into the `pool_account_resolvers` vec
+  (`crates/context/src/bootstrap/daemon.rs`). That is the whole wiring.
+
+## Step 5 — `api` (only when read access is needed)
+
+- **Dispatch point 6**: the protocol's block in `crates/api/src/http/dto/response/pool.rs`
+  (compiler-forced once the `PoolProperties` variant exists).
 - For new exposed event kinds, add a service under
-  `crates/api/src/application/services/<platform>_<product>_<event_kind>_service.rs`.
+  `crates/api/src/application/services/<platform>/<product>/` (template:
+  `meteora/damm_v2/swap.rs`) — only when its repository, params and result are irreducibly
+  that product's; cross-protocol services stay at the root and name no protocol.
 - Add handlers + DTOs. Cross-protocol read surface → point at the VIEW; protocol-specific
   detail → point at the table directly. Reuse `ApiError` / `From<RepositoryError>`.
   Cursor pagination via `Page<T>`, default limit 50, hard cap 200. Pubkeys as base58,
   timestamps RFC3339.
 
-## Step 5 — Tests
+## Step 6 — Tests
 
 - Add fixture transactions under `crates/core/tests/fixtures/` (one per recognized
   signature for the new protocol) and extraction tests in
   `crates/indexer/src/infra/rpc/tests/fixture_pipeline_tests.rs` — one directory
   over from the adapter that turns a fixture into an `OnChainTransaction`, the
-  fixtures stay in `yog-core`.
+  fixtures stay in `yog-core`. Plus the account fixtures of step 1 and the
+  privilege-matrix lines of step 2.
 
 ## Verify (run from repo root)
 
 ```bash
 cargo fmt --all
-cargo clippy -p yog-api -p yog-core -p yog-context -p yog-indexer -p yog-persistence \
+cargo clippy -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
+    -p yog-indexer -p yog-persistence -p yog-signals \
     --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 # DB-backed repo tests (needs live Postgres):
@@ -140,9 +183,12 @@ Confirm the sub-persistor actually runs end-to-end against a DB before calling i
 
 ## Definition of done
 
-- [ ] All three dispatch points updated (extract / persist / init)
+- [ ] All seven dispatch points updated (extract + implemented_protocols / persist / init /
+      decode_pool_account / pool_account_resolvers / PoolProperties match)
+- [ ] Account decoder grounded on real mainnet accounts; satellite table + resolver
 - [ ] `DomainEvent` outer variant + all five accessors updated
 - [ ] Migration created with `GRANT … TO yog_indexer` + VIEW `UNION ALL` branches
+- [ ] Every new table in the `tests/privileges.rs` matrix
 - [ ] `.sqlx/` regenerated and committed
 - [ ] Repos re-exported from `persistence/lib.rs`
 - [ ] Fixtures added in `yog-core`, extraction tests in `yog-indexer`

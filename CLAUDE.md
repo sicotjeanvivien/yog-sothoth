@@ -89,8 +89,8 @@ cargo test --workspace --all-features
 # `DATABASE_URL` must point at the **admin** role (`yog`), not `yog_migrate`.
 # sqlx::test builds a throwaway schema `_sqlx_test` in the maintenance database
 # and `yog_migrate` lacks CREATE on it — that is where the failure lands, before
-# the missing `rolcreatedb` ever comes into play. The symptom is all 176 failing
-# in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
+# the missing `rolcreatedb` ever comes into play. The symptom is every one of them
+# failing in ~1s on SQLSTATE 42501, "permission denied for database yog_sothoth", which
 # reads like a regression and is not one.
 #
 # The Postgres must run with `timescaledb.max_background_workers = 0` (see

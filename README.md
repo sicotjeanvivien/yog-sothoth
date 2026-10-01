@@ -114,10 +114,10 @@ All nineteen are extracted, persisted to their own per-kind table (`meteora_damm
 | Database | TimescaleDB on PostgreSQL 18 |
 | Frontend | Next.js 16, TypeScript, Tailwind v4, next-intl |
 | External data | Solana JSON-RPC (any provider), Yellowstone gRPC (Alchemy), Helius DAS, Jupiter Price V3 |
-| Container runtime | Docker Compose (6 backend images + 1 frontend image) |
+| Container runtime | Docker Compose (6 backend images + 1 frontend image; `yog-archive` runs only under the production overlay) |
 | Reverse proxy | Caddy (automatic TLS via Let's Encrypt) |
 | Observability | Prometheus, tracing |
-| CI | GitHub Actions (cargo check, per-crate check, module visibility, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
+| CI | GitHub Actions (cargo check, rustdoc doc links, per-crate check, module visibility, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
 
 ---
 
