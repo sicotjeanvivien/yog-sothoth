@@ -116,7 +116,9 @@ main() {
     follow_detached "$script" "$@"
   fi
   [ -n "${YOG_UPDATE_FROM:-}" ] || echo "$$" >"$YOG_UPDATE_RC.pid"
-  trap 'echo $? >"$YOG_UPDATE_RC"' EXIT
+  # Under set -e a failing command in an EXIT trap replaces the exit code:
+  # if the code cannot be written, the follower says so instead.
+  trap 'echo $? >"$YOG_UPDATE_RC" || true' EXIT
 
   local old new
   if [ -z "${YOG_UPDATE_FROM:-}" ]; then
@@ -217,29 +219,27 @@ follow_detached() { # <script> <args...>
   local -r logf="$state/logs/$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
   local -r rcf="$logf.rc"
   : >"$logf"
-  YOG_UPDATE_RC=$rcf setsid "$script" "$@" >"$logf" 2>&1 </dev/null &
-  echo "update running detached as pid $!; log: $logf"
-  echo "  re-attach: tail -f $logf    abort: kill -- -$!  (its whole session)"
-  # A background job of a non-interactive shell ignores SIGINT: tail would
-  # outlive a Ctrl-C and keep printing over the next prompt.
-  tail -n +1 -f "$logf" &
+  # -w: setsid stays alive as long as the update, whether it had to fork or
+  # not, so $! is a pid that lives exactly as long as the run.
+  YOG_UPDATE_RC=$rcf setsid -w "$script" "$@" >"$logf" 2>&1 </dev/null &
+  local -r run_pid=$!
+  echo "update running detached; log: $logf"
+  echo "  re-attach: tail -f $logf    abort: kill -- -\$(cat $rcf.pid)  (its whole session)"
+  # tail stops by itself once the run has exited, after printing the rest of
+  # the log: nothing to kill on the normal path, and no last line lost.
+  # A background job of a non-interactive shell ignores SIGINT, so on any
+  # other way out the EXIT trap stops it — the one place that does.
+  tail -n +1 -f --pid="$run_pid" "$logf" &
   local -r tail_pid=$!
-  trap 'kill "$tail_pid" 2>/dev/null || true' EXIT
+  # Each command tolerates failure: under set -e, one that fails in an EXIT
+  # trap replaces the exit code (a killed tail makes `wait` return 143).
+  trap 'kill "$tail_pid" 2>/dev/null || true; wait "$tail_pid" 2>/dev/null || true' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
-  local pid=""
-  while [ ! -s "$rcf" ]; do
-    sleep 1
-    [ -n "$pid" ] || pid=$(cat "$rcf.pid" 2>/dev/null || true)
-    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null && [ ! -s "$rcf" ]; then
-      kill "$tail_pid" 2>/dev/null || true
-      die "the update (pid $pid) ended without an exit code: read $logf"
-    fi
-  done
-  sleep 1
-  kill "$tail_pid" 2>/dev/null || true
-  wait "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" || true
+  trap - EXIT   # tail is reaped: its pid may already belong to another process
+  [ -s "$rcf" ] || die "the update ended without an exit code: read $logf"
   exit "$(cat "$rcf")"
 }
 
