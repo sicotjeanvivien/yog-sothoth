@@ -13,7 +13,7 @@
 # returns its exit code. An SSH session that drops, or a Ctrl-C, ends the
 # foreground and leaves the update running: stopping it half-way would leave
 # the daemons down. Re-attach with `tail -f` on the log it names; abort with
-# `kill` on the pid it names.
+# `kill -- -<pid>` on the pid it names (the whole session, docker included).
 #
 # The sequence, and why each step sits where it does
 # --------------------------------------------------
@@ -22,8 +22,8 @@
 #    HEAD is an ancestor of origin/main (no local commit on the server).
 # 2. Fast-forward to origin/main, then hand over to the script as it is in
 #    the new commit: a deploy always runs the procedure it ships with.
-# 3. Build the images while the previous version still serves: the outage
-#    lasts only for steps 4-6.
+# 3. Pull the registry images and build ours while the previous version
+#    still serves: the outage lasts only for steps 4-6.
 # 4. Stop every daemon that talks to the database. `up -d` alone is not
 #    enough: it runs yog-migrate before STARTING services, but services
 #    already running keep running through the migration, the old code
@@ -43,8 +43,10 @@
 #    from inside the compose network, and the pools flagged by the migration
 #    drained by yog-context. A pool yog-context cannot resolve (closed on
 #    chain, rejected account) keeps its flag for good: once the count stops
-#    falling, what remains is reported, and only a count that never moves
-#    fails the check.
+#    falling, what remains is reported as a warning. The check fails on a
+#    count that never moves, on a plateau of 100 or more (yog-context takes
+#    the 100 oldest per tick, so they starve the rest), and on a count still
+#    falling at the deadline.
 #
 # If the migration fails, the script stops with the daemons DOWN. The images
 # already hold the new code, which must not run against the old schema. The
@@ -114,7 +116,9 @@ main() {
     git merge-base --is-ancestor HEAD origin/main \
       || die "HEAD is not an ancestor of origin/main: local commits on the server?"
 
-    old=$(cat "$state/deployed" 2>/dev/null || git rev-parse HEAD)
+    # No record means unknown, not "HEAD is deployed": a checkout pulled by
+    # hand, or a first run that failed after its fast-forward, deploys.
+    old=$(cat "$state/deployed" 2>/dev/null || echo unknown)
     new=$(git rev-parse origin/main)
     if [ "$old" = "$new" ] && [ "$mode" = deploy ]; then
       log "nothing to deploy: ${new:0:7} is deployed and is origin/main"
@@ -124,7 +128,7 @@ main() {
     # 2. Fast-forward, then run the procedure as the new commit has it. The
     #    lock (fd 9) and the exit-code file go along through the exec.
     log "deploying ${old:0:7} → ${new:0:7}"
-    git log --oneline "$old..$new" 2>/dev/null || true
+    [ "$old" = unknown ] || git log --oneline "$old..$new" 2>/dev/null || true
     git merge --ff-only --quiet origin/main
     YOG_UPDATE_FROM=$old exec "$script" "$@"
   fi
@@ -132,7 +136,8 @@ main() {
   new=$(git rev-parse HEAD)
 
   # 3. Build while the previous version still serves
-  log "building images"
+  log "pulling registry images, building ours"
+  "${dc[@]}" pull --quiet --ignore-buildable
   "${dc[@]}" build
   local migrations_before migrations_after
   migrations_before=$(psql_admin -c "SELECT count(*) FROM _sqlx_migrations")
@@ -146,10 +151,14 @@ main() {
   flagged_pools >"$state/flagged.before"
   log "migrating"
   if ! "${dc[@]}" run --rm -T yog-migrate; then
-    migrations_after=$(psql_admin -c "SELECT count(*) FROM _sqlx_migrations")
+    migrations_after=$(psql_admin -c "SELECT count(*) FROM _sqlx_migrations" 2>/dev/null) || migrations_after=unknown
     log "❌ the migration failed. The daemons are STOPPED, on purpose: the images" >&2
     log "   now hold the new code, which must not run against the old schema." >&2
-    if [ "$migrations_after" = "$migrations_before" ]; then
+    if [ "$migrations_after" = unknown ]; then
+      log "   The database does not answer either: whether a migration of this" >&2
+      log "   deploy was applied is unknown. Bring Postgres back, then compare" >&2
+      log "   _sqlx_migrations (${migrations_before} rows before) with the migrations directory." >&2
+    elif [ "$migrations_after" = "$migrations_before" ]; then
       log "   No migration of this deploy was applied: the previous version can" >&2
       log "   still be served — git reset --hard ${old:0:7}, then" >&2
       log "   ${dc[*]} build && ${dc[*]} up -d" >&2
@@ -166,8 +175,10 @@ main() {
     >"$state/flagged.by-migration"
 
   # 6. Start, and record what is now deployed
+  # --no-deps with the services named: yog-migrate has just run, and `up`
+  # would otherwise run it a second time inside the outage.
   log "starting"
-  "${dc[@]}" up -d
+  "${dc[@]}" up -d --no-deps "${services[@]}"
   echo "$new" >"$state/deployed"
   local -r outage_secs=$(( $(date +%s) - outage_start ))
 
@@ -188,13 +199,20 @@ die() { log "❌ $*" >&2; exit 1; }
 # exit code. Never returns.
 follow_detached() { # <script> <args...>
   local -r script=$1; shift
-  local -r logf="$state/logs/$(date -u +%Y%m%dT%H%M%SZ).log"
+  local -r logf="$state/logs/$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
   local -r rcf="$logf.rc"
   : >"$logf"
   YOG_UPDATE_RC=$rcf setsid "$script" "$@" >"$logf" 2>&1 </dev/null &
-  echo "update running detached; log: $logf"
+  echo "update running detached as pid $!; log: $logf"
+  echo "  re-attach: tail -f $logf    abort: kill -- -$!  (its whole session)"
+  # A background job of a non-interactive shell ignores SIGINT: tail would
+  # outlive a Ctrl-C and keep printing over the next prompt.
   tail -n +1 -f "$logf" &
   local -r tail_pid=$!
+  trap 'kill "$tail_pid" 2>/dev/null' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   local pid=""
   while [ ! -s "$rcf" ]; do
     sleep 1
@@ -242,9 +260,12 @@ checks() { # <stable_secs>
   # From inside the compose network, through caddy's busybox wget (which
   # fails on any non-2xx). A service just started may not listen yet: keep
   # trying for 60 s before calling it a failure.
-  local api="" web="" deadline=$(( $(date +%s) + 60 ))
+  local api="" web="" body="" deadline=$(( $(date +%s) + 60 ))
   while :; do
-    [ "$api" = ok ] || api=$("${dc[@]}" exec -T caddy wget -q -O - -T 5 http://yog-api:5000/readyz 2>&1 | grep -q '"ready"' && echo ok || true)
+    if [ "$api" != ok ]; then
+      body=$("${dc[@]}" exec -T caddy wget -q -O - -T 5 http://yog-api:5000/readyz 2>&1) || body=""
+      [[ $body == *'"ready"'* ]] && api=ok
+    fi
     [ "$web" = ok ] || web=$("${dc[@]}" exec -T caddy wget -q -O /dev/null -T 5 http://yog-web:3000/ 2>&1 && echo ok || true)
     if { [ "$api" = ok ] && [ "$web" = ok ]; } || [ "$(date +%s)" -ge "$deadline" ]; then break; fi
     sleep 3
@@ -290,13 +311,24 @@ drain() { # <file of pools flagged by the migration> <timeout_secs>
     [ "$remaining" -eq 0 ] && return 0
     if [ "$remaining" = "$last" ]; then flat=$(( flat + 1 )); else flat=0; fi
     last=$remaining
-    if [ "$flat" -ge 4 ] || [ "$(date +%s)" -ge "$deadline" ]; then
-      if [ "$remaining" -lt "$total" ]; then
-        log "⚠️  ${remaining} pool(s) keep their flag: yog-context cannot resolve them (closed on chain or rejected; its WARN lines name them)"
-        return 0
-      fi
-      log "❌ none of the ${total} pools flagged by the migration was resolved: is yog-context working?"
+    if [ "$flat" -lt 4 ] && [ "$(date +%s)" -ge "$deadline" ]; then
+      log "❌ still draining at the deadline (${remaining} left, still falling): raise UPDATE_DRAIN_TIMEOUT_SECS,"
+      log "   or follow it: SELECT count(*) FROM pools WHERE needs_refresh"
       return 1
+    fi
+    if [ "$flat" -ge 4 ]; then
+      if [ "$remaining" -eq "$total" ]; then
+        log "❌ none of the ${total} pools flagged by the migration was resolved: is yog-context working?"
+        return 1
+      fi
+      # yog-context takes the 100 oldest flagged pools per protocol each
+      # tick: 100 that never resolve hold back every pool behind them.
+      if [ "$remaining" -ge 100 ]; then
+        log "❌ stuck at ${remaining}: at 100 or more, unresolvable pools fill yog-context's batch and starve the rest"
+        return 1
+      fi
+      log "⚠️  ${remaining} pool(s) keep their flag: yog-context cannot resolve them (closed on chain or rejected; its WARN lines name them)"
+      return 0
     fi
     sleep 15
   done
