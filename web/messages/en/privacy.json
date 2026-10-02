@@ -2,18 +2,18 @@
   "Privacy": {
     "meta": {
       "title": "Privacy — Yog-Scope",
-      "description": "How Yog-Scope handles your data. Short answer: our servers do not record your IP address, and the only data we keep are the emails you send us."
+      "description": "How Yog-Scope handles your data. Short answer: our servers do not record your IP address, Cloudflare sees it to protect the site, and the only data we keep ourselves are the emails you send us."
     },
     "header": {
       "eyebrow": "Privacy policy",
       "title": "What we do with your data.",
       "lead": "Yog-Scope is a read-only public dashboard. It does not require an account, does not use analytics, and does not track visitors. This page explains in plain terms the very limited data the platform handles.",
-      "lastUpdated": "Last updated: 28 September 2026"
+      "lastUpdated": "Last updated: 2 October 2026"
     },
     "prose": {
       "inShort": {
         "title": "In short",
-        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. We only see personal data about you if you write to us or support the project. One exception worth knowing: token logos are loaded directly from third-party servers, which therefore see your IP address (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
+        "body": "Yog-Scope does not require an account, uses no analytics, shows no advertising, and sets no cookie that requires consent. Our servers do not record your IP address. We only see personal data about you if you write to us or support the project. Two exceptions worth knowing: Cloudflare, which protects the site, sees the IP address of every visit (see \"When you browse the site\"), and token logos are loaded directly from third-party servers, which therefore see your IP address too (see \"Token logos\" below). No data is subject to automated decision-making or profiling."
       },
       "responsible": {
         "title": "Who is responsible",
@@ -21,7 +21,7 @@
       },
       "browsing": {
         "title": "When you browse the site",
-        "body": "To send you a page or answer an API call, our servers, hosted by Scaleway in the European Union, receive your IP address: no connection is possible without it. It is not written to any log. Our technical logs only contain the requested address, the response status and the processing time, and nothing that identifies you. There is no account system, no tracking pixel, and no third-party analytics."
+        "body": "To send you a page or answer an API call, our servers, hosted by Scaleway in the European Union, receive your IP address: no connection is possible without it. They do not write it to any log. Our technical logs only contain the requested address, the response status and the processing time, and nothing that identifies you. Before reaching our servers, every request goes through Cloudflare (Cloudflare, Inc., United States), which protects the site against attacks and bots. Cloudflare is the one that sets up the encrypted connection with your browser, so it sees everything exchanged between your browser and our servers, including your IP address, the headers your browser sends and the full address of the pages and API calls requested. It processes them as a processor, on our behalf and under its data processing agreement. It keeps them for as long as that service requires, and no later than the end of our contract with it. The legal basis is our legitimate interest in protecting the site and keeping it available (GDPR, article 6(1)(f)). This data may be transferred to the United States. That transfer is covered by the EU–US Data Privacy Framework, the subject of a European Commission adequacy decision of 10 July 2023. There is no account system, no tracking pixel, and no third-party analytics."
       },
       "contact": {
         "title": "When you write to us",
@@ -37,7 +37,7 @@
       },
       "cookies": {
         "title": "Cookies",
-        "body": "The site sets no cookie that requires consent. It may set a single technical cookie, NEXT_LOCALE, which remembers the site's language. It is only set if the page you open is in a language different from your browser's, and it is deleted when you close your browser. Being strictly necessary for the site to work, it is exempt from consent. This list will be updated if non-essential cookies are ever introduced."
+        "body": "The site sets no cookie that requires consent. It may set a technical cookie, NEXT_LOCALE, which remembers the site's language. It is only set if the page you open is in a language different from your browser's, and it is deleted when you close your browser. Cloudflare may also set a security cookie, cf_clearance, when it checks that a visit does not come from a bot, for instance during an attack: it records that the check was passed, so that you are not asked again on every page, and expires after 30 minutes. Being strictly necessary for the site to work and stay secure, both cookies are exempt from consent. This list will be updated if non-essential cookies are ever introduced."
       },
       "rights": {
         "title": "Your rights",
