@@ -2,18 +2,18 @@
   "Privacy": {
     "meta": {
       "title": "Confidentialité — Yog-Scope",
-      "description": "Comment Yog-Scope traite vos données. Version courte : nos serveurs n'enregistrent pas votre adresse IP, et les seules données conservées sont les emails que vous nous envoyez."
+      "description": "Comment Yog-Scope traite vos données. Version courte : nos serveurs n'enregistrent pas votre adresse IP, Cloudflare la voit pour protéger le site, et les seules données que nous conservons nous-mêmes sont les emails que vous nous envoyez."
     },
     "header": {
       "eyebrow": "Politique de confidentialité",
       "title": "Ce que nous faisons de vos données.",
       "lead": "Yog-Scope est un dashboard public en lecture seule. Aucun compte n'est requis, aucun outil d'analytique n'est utilisé, aucun visiteur n'est tracké. Cette page explique en termes clairs les très rares données que la plateforme manipule.",
-      "lastUpdated": "Dernière mise à jour : 28 septembre 2026"
+      "lastUpdated": "Dernière mise à jour : 2 octobre 2026"
     },
     "prose": {
       "inShort": {
         "title": "En bref",
-        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Nous ne voyons de données personnelles vous concernant que si vous nous écrivez ou soutenez le projet. Une exception à connaître : les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
+        "body": "Yog-Scope ne demande pas de compte, n'utilise aucun outil d'analytique, n'affiche aucune publicité et ne dépose aucun cookie soumis à consentement. Nos serveurs n'enregistrent pas votre adresse IP. Nous ne voyons de données personnelles vous concernant que si vous nous écrivez ou soutenez le projet. Deux exceptions à connaître : Cloudflare, qui protège le site, voit l'adresse IP de chaque visite (voir « Quand vous consultez le site »), et les logos des tokens sont chargés directement depuis des serveurs tiers, qui voient donc eux aussi votre adresse IP (voir « Logos des tokens » ci-dessous). Aucune donnée ne fait l'objet d'une décision automatisée ni d'un profilage."
       },
       "responsible": {
         "title": "Qui est responsable",
@@ -21,7 +21,7 @@
       },
       "browsing": {
         "title": "Quand vous consultez le site",
-        "body": "Pour vous envoyer une page ou répondre à un appel de l'API, nos serveurs, hébergés par Scaleway dans l'Union européenne, reçoivent votre adresse IP : aucune connexion n'est possible sans elle. Elle n'est écrite dans aucun journal. Nos journaux techniques contiennent seulement l'adresse demandée, le code de réponse et le temps de traitement, et rien qui vous identifie. Il n'y a pas de système de compte, pas de pixel de tracking, pas d'analytique tiers."
+        "body": "Pour vous envoyer une page ou répondre à un appel de l'API, nos serveurs, hébergés par Scaleway dans l'Union européenne, reçoivent votre adresse IP : aucune connexion n'est possible sans elle. Ils ne l'écrivent dans aucun journal. Nos journaux techniques contiennent seulement l'adresse demandée, le code de réponse et le temps de traitement, et rien qui vous identifie. Avant d'atteindre nos serveurs, chaque requête passe par Cloudflare (Cloudflare, Inc., États-Unis), qui protège le site contre les attaques et les robots. C'est Cloudflare qui établit la connexion chiffrée avec votre navigateur : il voit donc tout ce qui transite entre votre navigateur et nos serveurs, dont votre adresse IP, les en-têtes envoyés par votre navigateur et l'adresse complète des pages et des appels demandés. Il les traite en tant que sous-traitant, pour notre compte et selon son accord de traitement des données. Il les conserve tant que c'est nécessaire à ce service, et au plus tard jusqu'à la fin de notre contrat avec lui. La base juridique est notre intérêt légitime à protéger le site et à le garder disponible (article 6.1.f du RGPD). Ces données peuvent être transférées aux États-Unis. Ce transfert est encadré par le Data Privacy Framework UE–États-Unis, qui fait l'objet d'une décision d'adéquation de la Commission européenne du 10 juillet 2023. Il n'y a pas de système de compte, pas de pixel de tracking, pas d'analytique tiers."
       },
       "contact": {
         "title": "Quand vous nous écrivez",
@@ -37,7 +37,7 @@
       },
       "cookies": {
         "title": "Cookies",
-        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer un seul cookie technique, NEXT_LOCALE, qui mémorise la langue du site. Il n'est posé que si la page que vous ouvrez est dans une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. Strictement nécessaire au fonctionnement du site, il est exempté de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
+        "body": "Le site ne dépose aucun cookie soumis à consentement. Il peut déposer un cookie technique, NEXT_LOCALE, qui mémorise la langue du site. Il n'est posé que si la page que vous ouvrez est dans une langue différente de celle de votre navigateur, et il est effacé à la fermeture de celui-ci. Cloudflare peut en outre déposer un cookie de sécurité, cf_clearance, lorsqu'il vérifie qu'une visite ne vient pas d'un robot, par exemple pendant une attaque : il atteste que la vérification a été passée, pour ne pas vous la redemander à chaque page, et expire au bout de 30 minutes. Strictement nécessaires au fonctionnement et à la sécurité du site, ces deux cookies sont exemptés de consentement. Cette liste sera mise à jour si des cookies non essentiels venaient à être introduits."
       },
       "rights": {
         "title": "Vos droits",
