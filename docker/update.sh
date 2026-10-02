@@ -14,6 +14,7 @@
 # foreground and leaves the update running: stopping it half-way would leave
 # the daemons down. Re-attach with `tail -f` on the log it names; abort with
 # `kill -- -<pid>` on the pid it names (the whole session, docker included).
+# The follower needs GNU tail (--pid) and util-linux setsid (-w).
 #
 # The sequence, and why each step sits where it does
 # --------------------------------------------------
@@ -115,7 +116,6 @@ main() {
   if [ -z "${YOG_UPDATE_RC:-}" ]; then
     follow_detached "$script" "$@"
   fi
-  [ -n "${YOG_UPDATE_FROM:-}" ] || echo "$$" >"$YOG_UPDATE_RC.pid"
   # Under set -e a failing command in an EXIT trap replaces the exit code:
   # if the code cannot be written, the follower says so instead.
   trap 'echo $? >"$YOG_UPDATE_RC" || true' EXIT
@@ -218,28 +218,38 @@ follow_detached() { # <script> <args...>
   local -r script=$1; shift
   local -r logf="$state/logs/$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
   local -r rcf="$logf.rc"
-  : >"$logf"
-  # -w: setsid stays alive as long as the update, whether it had to fork or
-  # not, so $! is a pid that lives exactly as long as the run.
-  YOG_UPDATE_RC=$rcf setsid -w "$script" "$@" >"$logf" 2>&1 </dev/null &
-  local -r run_pid=$!
-  echo "update running detached; log: $logf"
-  echo "  re-attach: tail -f $logf    abort: kill -- -\$(cat $rcf.pid)  (its whole session)"
-  # tail stops by itself once the run has exited, after printing the rest of
-  # the log: nothing to kill on the normal path, and no last line lost.
-  # A background job of a non-interactive shell ignores SIGINT, so on any
-  # other way out the EXIT trap stops it — the one place that does.
-  tail -n +1 -f --pid="$run_pid" "$logf" &
-  local -r tail_pid=$!
-  # Each command tolerates failure: under set -e, one that fails in an EXIT
-  # trap replaces the exit code (a killed tail makes `wait` return 143).
-  trap 'kill "$tail_pid" 2>/dev/null || true; wait "$tail_pid" 2>/dev/null || true' EXIT
+  local tail_pid=""
+  # Traps first: a Ctrl-C between the two `&` below and their installation
+  # would leave tail, which ignores SIGINT as a background job of a
+  # non-interactive shell, printing over the next prompt. The EXIT trap is the
+  # one place that stops it; under set -e each of its commands must tolerate
+  # failure, or it replaces the exit code (a killed tail makes `wait` 143).
+  trap '[ -z "$tail_pid" ] || { kill "$tail_pid" 2>/dev/null || true; wait "$tail_pid" 2>/dev/null || true; }' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
+  : >"$logf"
+  # A background job of a non-interactive shell is not a process-group
+  # leader, so setsid execs the script in place: $! is the run itself, the
+  # leader of its new session. (-w only matters if setsid had to fork; it
+  # then waits, so $! still lives exactly as long as the run.)
+  YOG_UPDATE_RC=$rcf setsid -w "$script" "$@" >"$logf" 2>&1 </dev/null &
+  local -r run_pid=$!
+  echo "update running detached as pid $run_pid; log: $logf"
+  echo "  re-attach: tail -f $logf    abort: kill -- -$run_pid  (its whole session)"
+  # tail stops by itself once the run has exited, after printing the rest of
+  # the log: nothing to kill on the normal path, and no last line lost.
+  tail -n +1 -f --pid="$run_pid" "$logf" &
+  tail_pid=$!
   wait "$tail_pid" || true
-  trap - EXIT   # tail is reaped: its pid may already belong to another process
-  [ -s "$rcf" ] || die "the update ended without an exit code: read $logf"
+  tail_pid=""   # reaped: its pid may already belong to another process
+  if [ ! -s "$rcf" ]; then
+    # tail can end before the run: a closed pipe when the session drops, a
+    # kill. Say which case this is rather than declare the run over.
+    kill -0 "$run_pid" 2>/dev/null \
+      && die "the follower lost the log, but the update (pid $run_pid) is still running: tail -f $logf"
+    die "the update (pid $run_pid) ended without an exit code: read $logf"
+  fi
   exit "$(cat "$rcf")"
 }
 
