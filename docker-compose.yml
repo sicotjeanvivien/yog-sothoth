@@ -28,8 +28,10 @@
 # yog-migrate
 # -----------
 # Runs once, applies pending migrations, exits 0. Every runtime
-# service waits for it via `service_completed_successfully`, so we
-# never expose half-migrated schema to the indexer / api / context.
+# service waits for it via `service_completed_successfully` — but only
+# to START: services already running keep running through the
+# migration. On a fresh `up` that is enough; to update a server in
+# service, use docker/update.sh, which stops them first.
 #
 # DATABASE_URL_* host rewriting
 # ------------------------------
