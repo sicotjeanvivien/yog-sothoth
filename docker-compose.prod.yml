@@ -14,6 +14,10 @@
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 #   COMPOSE_PROFILES=full
 #
+# That command starts a server. To UPDATE one already in service, run
+# docker/update.sh instead: a bare `up -d` migrates while the previous
+# daemons are still running, and its header says what that costs.
+#
 # Why an overlay and not a `prod` profile
 # ---------------------------------------
 # A profile only chooses WHICH services start; it cannot change a single
