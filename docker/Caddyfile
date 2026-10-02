@@ -6,6 +6,12 @@
 #
 # The domains come from the environment, set in the server's .env.
 #
+# Both sites sit behind the Cloudflare proxy. The privacy page describes
+# that proxy, and its copy holds only while some Cloudflare zone settings
+# stay as they are: the list is in the header of
+# web/src/app/[locale]/(marketing)/privacy/page.tsx. Read it before
+# changing anything in the Cloudflare dashboard.
+#
 # No visitor IP in the logs. Caddy keeps no access log without a `log`
 # directive, but its default logger still writes every failed request
 # (`http.log.error`, e.g. a 502 while yog-web or yog-api restarts) with
