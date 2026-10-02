@@ -224,7 +224,7 @@ follow_detached() { # <script> <args...>
   # outlive a Ctrl-C and keep printing over the next prompt.
   tail -n +1 -f "$logf" &
   local -r tail_pid=$!
-  trap 'kill "$tail_pid" 2>/dev/null' EXIT
+  trap 'kill "$tail_pid" 2>/dev/null || true' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
@@ -239,6 +239,7 @@ follow_detached() { # <script> <args...>
   done
   sleep 1
   kill "$tail_pid" 2>/dev/null || true
+  wait "$tail_pid" 2>/dev/null || true
   exit "$(cat "$rcf")"
 }
 
