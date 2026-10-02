@@ -92,7 +92,15 @@ main() {
 
   if [ "$mode" = check ]; then
     exec 9>"$state/lock"
-    flock -n 9 || die "an update is running: its checks are the ones to read"
+    if ! flock -n 9; then
+      # The only window a pipeline has on a detached update: the log itself
+      # is not reachable through the deployment key.
+      local latest
+      latest=$(find "$state/logs" -name '*.log' -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
+      log "an update is running; the end of its log (${latest:-none found}):"
+      [ -z "$latest" ] || tail -n 40 "$latest"
+      die "an update is running: check again once it is over"
+    fi
     checks "$stable_secs" || die "checks failed (see above)"
     log "✅ all checks passed"
     return

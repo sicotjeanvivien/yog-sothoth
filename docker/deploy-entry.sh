@@ -21,11 +21,20 @@
 #    trusts whoever answers:
 #      ssh-keyscan -t ed25519 <host> > known_hosts && ssh-keygen -lf known_hosts
 #      (on the server) ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-# 4. Three repository secrets:
-#      gh secret set DEPLOY_SSH_KEY     < ~/.ssh/yog_deploy_ed25519
-#      gh secret set DEPLOY_KNOWN_HOSTS < known_hosts
-#      gh secret set DEPLOY_HOST --body 'jv@<host>'
+# 4. A `production` environment that only `main` may deploy from, holding
+#    the three secrets — so a copy of the workflow edited on another branch
+#    does not get the key:
+#      gh api -X PUT repos/<owner>/<repo>/environments/production \
+#        -F 'deployment_branch_policy[protected_branches]=false' \
+#        -F 'deployment_branch_policy[custom_branch_policies]=true'
+#      gh api -X POST repos/<owner>/<repo>/environments/production/deployment-branch-policies -f name=main
+#      gh secret set DEPLOY_SSH_KEY     --env production < ~/.ssh/yog_deploy_ed25519
+#      gh secret set DEPLOY_KNOWN_HOSTS --env production < known_hosts
+#      gh secret set DEPLOY_HOST        --env production --body 'jv@<host>'
 #    then delete the private key locally: nothing but the pipeline needs it.
+#
+# This list is the only list of accepted arguments: the workflow translates
+# its mode without filtering it. A new mode of update.sh is added here.
 #
 # The forced command points at this file in the checkout: it is updated by the
 # fast-forward like the script it guards. Moving the checkout means editing

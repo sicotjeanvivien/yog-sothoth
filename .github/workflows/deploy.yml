@@ -11,7 +11,12 @@
 #
 # Si la connexion du runner tombe en route, le déploiement continue : le
 # script se détache sur le serveur. Le job sera rouge sans que la prod le
-# soit — relancer en mode `check` pour savoir où elle en est.
+# soit. Relancer en mode `check` : tant que le déploiement tourne, il affiche
+# la fin de son journal ; ensuite, il vérifie la prod.
+#
+# Les secrets sont ceux de l'environnement `production`, qui n'accepte que
+# la branche `main` : une copie de ce fichier modifiée sur une autre branche
+# et lancée depuis elle n'obtient pas la clé.
 
 name: deploy
 
@@ -24,9 +29,10 @@ on:
         options: [deploy, force, check]
         default: deploy
 
-# Deux lancements ne se chevauchent pas, et un déploiement en cours ne
-# s'annule jamais : interrompu entre stop et up, il laisserait la prod
-# arrêtée (le verrou du script refuserait de toute façon le second).
+# Deux lancements ne se chevauchent pas, et celui qui tourne ne s'annule
+# jamais : interrompu entre stop et up, il laisserait la prod arrêtée. ⚠️
+# GitHub ne garde qu'UN lancement en attente par groupe : en lancer un
+# troisième annule celui qui attendait (pas celui qui tourne).
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -37,6 +43,7 @@ permissions: {}
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     # La construction prend ~4 min sur le serveur, le drain jusqu'à 10.
     timeout-minutes: 30
     steps:
@@ -48,12 +55,9 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          case "$MODE" in
-            deploy) args=() ;;
-            force)  args=(--force) ;;
-            check)  args=(--check) ;;
-            *) echo "mode inconnu : $MODE" >&2; exit 2 ;;
-          esac
+          # La seule liste des arguments admis est celle du serveur
+          # (docker/deploy-entry.sh) ; ici, le mode se traduit sans se filtrer.
+          args=(); [ "$MODE" = deploy ] || args=("--$MODE")
           for v in DEPLOY_HOST DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             [ -n "${!v}" ] || { echo "secret manquant : $v" >&2; exit 1; }
           done
@@ -63,9 +67,12 @@ jobs:
           trap 'rm -f "$key" "$hosts"' EXIT
 
           # StrictHostKeyChecking=yes contre l'empreinte épinglée : un serveur
-          # qui ne la présente pas est refusé, jamais appris.
-          ssh -i "$key" \
+          # qui ne la présente pas est refusé, jamais appris. Le `--` avant la
+          # destination n'est pas décoratif : OpenSSH relit les options qui la
+          # suivent, et `hôte --force` s'arrêterait sur « unknown option ».
+          # -T -n : une exécution sans pty ni entrée, pas une session de shell.
+          ssh -i "$key" -T -n \
             -o IdentitiesOnly=yes -o BatchMode=yes \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" \
             -o ServerAliveInterval=30 -o ServerAliveCountMax=4 \
-            "$DEPLOY_HOST" "${args[@]}"
+            -- "$DEPLOY_HOST" "${args[@]}"
