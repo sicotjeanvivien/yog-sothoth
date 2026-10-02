@@ -19,6 +19,9 @@
 # 3. The server's host key, pinned. Read it from outside and compare its
 #    fingerprint with the one the server itself gives — a keyscan alone
 #    trusts whoever answers:
+#    <host> is the server's IP, not a domain name: a name behind the
+#    Cloudflare proxy reaches Cloudflare, not port 22, and the pinned entry
+#    must match DEPLOY_HOST's exact form.
 #      ssh-keyscan -t ed25519 <host> > known_hosts && ssh-keygen -lf known_hosts
 #      (on the server) ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
 # 4. A `production` environment that only `main` may deploy from, holding
@@ -33,8 +36,10 @@
 #      gh secret set DEPLOY_HOST        --env production --body 'jv@<host>'
 #    then delete the private key locally: nothing but the pipeline needs it.
 #
-# This list is the only list of accepted arguments: the workflow translates
-# its mode without filtering it. A new mode of update.sh is added here.
+# The list below is the gate: what the key may ask for. update.sh's own
+# parser defines the modes, and the workflow's `options` is only its menu. A
+# new mode of update.sh is added here too — on purpose: the gate stays an
+# explicit list, never "whatever update.sh accepts".
 #
 # The forced command points at this file in the checkout: it is updated by the
 # fast-forward like the script it guards. Moving the checkout means editing
