@@ -92,8 +92,22 @@ main() {
 
   if [ "$mode" = check ]; then
     exec 9>"$state/lock"
-    flock -n 9 || die "an update is running: its checks are the ones to read"
-    checks "$stable_secs" || exit 1
+    if ! flock -n 9; then
+      # The only window a pipeline has on a detached update: the log itself
+      # is not reachable through the deployment key.
+      # The run holding the lock names its log in $state/current; a log
+      # whose exit code is already written is over, and then the lock is
+      # held by another --check.
+      local current
+      current=$(cat "$state/current" 2>/dev/null || true)
+      if [ -n "$current" ] && [ -f "$current" ] && [ ! -s "$current.rc" ]; then
+        log "an update is running; the end of its log ($current):"
+        tail -n 40 "$current"
+        die "an update is running: check again once it is over"
+      fi
+      die "another --check is running"
+    fi
+    checks "$stable_secs" || die "checks failed (see above)"
     log "✅ all checks passed"
     return
   fi
@@ -109,6 +123,7 @@ main() {
     # 1. Preconditions
     exec 9>"$state/lock"
     flock -n 9 || die "another update is running (lock $state/lock)"
+    echo "${YOG_UPDATE_RC%.rc}" >"$state/current"
     [ "$(git rev-parse --abbrev-ref HEAD)" = main ] || die "the checkout is not on main"
     [ -z "$(git status --porcelain --untracked-files=no)" ] \
       || die "tracked files are modified: $(git status --porcelain --untracked-files=no | tr '\n' ' ')"

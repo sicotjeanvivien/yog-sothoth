@@ -1,0 +1,93 @@
+# deploy — met la prod à jour avec docker/update.sh, déclenché à la main.
+#
+# Le job ne fait qu'un `ssh`. Côté serveur, la clé a pour commande forcée
+# docker/deploy-entry.sh, qui ne laisse passer que trois arguments vers
+# docker/update.sh : rien, --force, --check. La mise en place (clé, ligne
+# authorized_keys, empreinte du serveur, trois secrets) est dans l'en-tête de
+# deploy-entry.sh.
+#
+# Pas de déclenchement sur push : pendant la phase de test, une PR fusionnée
+# ne part en prod que quand on le décide.
+#
+# Si la connexion du runner tombe en route, le déploiement continue : le
+# script se détache sur le serveur. Le job sera rouge sans que la prod le
+# soit. Relancer en mode `check` : tant que le déploiement tourne, il affiche
+# la fin de son journal ; ensuite, il vérifie la prod.
+#
+# Le dépôt est public, donc ses journaux Actions aussi : le job ne recopie
+# que les lignes datées du script (étapes, vérifications, résumé), pas la
+# sortie de docker, de compose ou de psql. Le journal complet reste sur le
+# serveur, sous .git/yog-update/logs/.
+#
+# Les secrets sont ceux de l'environnement `production`, qui n'accepte que
+# la branche `main` : une copie de ce fichier modifiée sur une autre branche
+# et lancée depuis elle n'obtient pas la clé.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "deploy : si origin/main a avancé · force : la séquence entière · check : vérifier seulement"
+        type: choice
+        options: [deploy, force, check]
+        default: deploy
+
+# Deux lancements ne se chevauchent pas, et celui qui tourne ne s'annule
+# jamais : interrompu entre stop et up, il laisserait la prod arrêtée. ⚠️
+# GitHub ne garde qu'UN lancement en attente par groupe : en lancer un
+# troisième annule celui qui attendait (pas celui qui tourne).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# Le job ne lit ni n'écrit rien du dépôt : il ne fait qu'un ssh.
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    # ~4 min de construction, la migration (sans borne), 1 min de
+    # vérifications, jusqu'à 10 de drain. Un job coupé par ce délai ne coupe
+    # pas le déploiement, détaché sur le serveur : relancer en `check`.
+    timeout-minutes: 60
+    steps:
+      - name: docker/update.sh sur la prod
+        env:
+          MODE: ${{ inputs.mode }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          # La seule liste des arguments admis est celle du serveur
+          # (docker/deploy-entry.sh) ; ici, le mode se traduit sans se filtrer.
+          args=(); [ "$MODE" = deploy ] || args=("--$MODE")
+          for v in DEPLOY_HOST DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!v}" ] || { echo "secret manquant : $v" >&2; exit 1; }
+          done
+
+          key="$RUNNER_TEMP/deploy_key"; hosts="$RUNNER_TEMP/known_hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          ( umask 077; printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$hosts" )
+
+          # StrictHostKeyChecking=yes contre l'empreinte épinglée : un serveur
+          # qui ne la présente pas est refusé, jamais appris. Le `--` avant la
+          # destination n'est pas décoratif : OpenSSH relit les options qui la
+          # suivent, et `hôte --force` s'arrêterait sur « unknown option ».
+          # -T -n : une exécution sans pty ni entrée, pas une session de shell.
+          # Seule la sortie standard est filtrée : les erreurs de ssh (empreinte,
+          # clé refusée) et de deploy-entry passent telles quelles. Le code est
+          # celui de ssh, pas celui du filtre.
+          set +e
+          ssh -i "$key" -T -n \
+            -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=4 \
+            -- "$DEPLOY_HOST" "${args[@]}" \
+            | grep --line-buffered -E '^[0-9]{2}:[0-9]{2}:[0-9]{2}Z  |^update running detached'
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit "$rc"
