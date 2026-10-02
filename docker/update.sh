@@ -93,7 +93,7 @@ main() {
   if [ "$mode" = check ]; then
     exec 9>"$state/lock"
     flock -n 9 || die "an update is running: its checks are the ones to read"
-    checks "$stable_secs" || exit 1
+    checks "$stable_secs" || die "checks failed (see above)"
     log "✅ all checks passed"
     return
   fi

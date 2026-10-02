@@ -1,0 +1,71 @@
+# deploy — met la prod à jour avec docker/update.sh, déclenché à la main.
+#
+# Le job ne fait qu'un `ssh`. Côté serveur, la clé a pour commande forcée
+# docker/deploy-entry.sh, qui ne laisse passer que trois arguments vers
+# docker/update.sh : rien, --force, --check. La mise en place (clé, ligne
+# authorized_keys, empreinte du serveur, trois secrets) est dans l'en-tête de
+# deploy-entry.sh.
+#
+# Pas de déclenchement sur push : pendant la phase de test, une PR fusionnée
+# ne part en prod que quand on le décide.
+#
+# Si la connexion du runner tombe en route, le déploiement continue : le
+# script se détache sur le serveur. Le job sera rouge sans que la prod le
+# soit — relancer en mode `check` pour savoir où elle en est.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "deploy : si origin/main a avancé · force : la séquence entière · check : vérifier seulement"
+        type: choice
+        options: [deploy, force, check]
+        default: deploy
+
+# Deux lancements ne se chevauchent pas, et un déploiement en cours ne
+# s'annule jamais : interrompu entre stop et up, il laisserait la prod
+# arrêtée (le verrou du script refuserait de toute façon le second).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+# Le job ne lit ni n'écrit rien du dépôt : il ne fait qu'un ssh.
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # La construction prend ~4 min sur le serveur, le drain jusqu'à 10.
+    timeout-minutes: 30
+    steps:
+      - name: docker/update.sh sur la prod
+        env:
+          MODE: ${{ inputs.mode }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            deploy) args=() ;;
+            force)  args=(--force) ;;
+            check)  args=(--check) ;;
+            *) echo "mode inconnu : $MODE" >&2; exit 2 ;;
+          esac
+          for v in DEPLOY_HOST DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!v}" ] || { echo "secret manquant : $v" >&2; exit 1; }
+          done
+
+          key="$RUNNER_TEMP/deploy_key"; hosts="$RUNNER_TEMP/known_hosts"
+          ( umask 077; printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$hosts" )
+          trap 'rm -f "$key" "$hosts"' EXIT
+
+          # StrictHostKeyChecking=yes contre l'empreinte épinglée : un serveur
+          # qui ne la présente pas est refusé, jamais appris.
+          ssh -i "$key" \
+            -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=4 \
+            "$DEPLOY_HOST" "${args[@]}"
