@@ -55,6 +55,10 @@
 #                      the check yog-signals fails when a continuous aggregate
 #                      stops being materialised (period 10 min, grace 20 min);
 #                      crates/signals/README.md, "The materialisation alarm"
+#   INDEXER_HEARTBEAT_URL
+#                      the check yog-indexer fails when the ingestion stops
+#                      writing events (period 5 min, grace 10 min);
+#                      crates/indexer/README.md, "The ingestion alarm"
 # The CORS origin and the browser's API URL are derived from the two domains
 # rather than set separately: three values that must agree are one value.
 #
@@ -80,9 +84,9 @@
 #   - a volume created WITH it is tuned to 832 MB, which gives
 #     max_connections = 25 (measured on 2.27.1-pg16, and again on 2.30.1-pg18
 #     on 25 September 2026). The four
-#     daemons hold pools of ten connections each — yog-signals one more, the
-#     materialisation alarm's own pool — and yog-archive one while a dump
-#     runs: 42 in all, so under load the pools would be refused "too many
+#     daemons hold pools of ten connections each — yog-signals and yog-indexer
+#     one more each, their alarm's own pool — and yog-archive one while a dump
+#     runs: 43 in all, so under load the pools would be refused "too many
 #     clients".
 # Command-line `-c` settings override postgresql.conf, so these hold whichever
 # way the volume was created. 256MB of shared_buffers inside 832M leaves room
@@ -137,6 +141,11 @@ services:
 
   yog-indexer:
     ports: !reset []
+    # The ingestion alarm's dead man's switch. Required here, as the other two
+    # are: without it an ingestion that stops writing is logged in a container
+    # nobody reads, and the process itself stays up.
+    environment:
+      INDEXER_HEARTBEAT_URL: ${INDEXER_HEARTBEAT_URL:?set it in the server's .env}
     mem_limit: 64m
 
   yog-api:
