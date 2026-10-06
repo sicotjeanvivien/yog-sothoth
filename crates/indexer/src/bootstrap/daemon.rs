@@ -3,6 +3,7 @@ use crate::{
         reporter::NetworkStatusReporter,
         services::{TransactionProcessor, WatchedPoolService},
         source::{IngestedTransaction, TransactionSource},
+        workers::IngestionAlarm,
     },
     bootstrap::{Config, IngestScope},
 };
@@ -23,18 +24,20 @@ use config_log::{
     log_ingestion_mode, log_probe_endpoints, warn_probe_not_independent, warn_saturating_couple,
 };
 use init::{
-    init_db, init_network_status_reporter, init_processor, init_source, init_watched_pool_service,
-    register_metric_descriptions,
+    init_alarm_db, init_db, init_ingestion_alarm, init_network_status_reporter, init_processor,
+    init_source, init_watched_pool_service, register_metric_descriptions,
 };
 use tasks::{
-    index_concurrency, spawn_indexer_task, spawn_network_status_reporter_task, spawn_source_task,
+    index_concurrency, spawn_indexer_task, spawn_ingestion_alarm_task,
+    spawn_network_status_reporter_task, spawn_source_task,
 };
 
-/// The names the three tasks answer to — in the logs, and in the list of what
+/// The names the four tasks answer to — in the logs, and in the list of what
 /// outlived the grace. Named once because each is written at two sites.
 const SOURCE: &str = "transaction source";
 const INDEXER: &str = "indexer worker";
 const REPORTER: &str = "network status reporter";
+const ALARM: &str = "ingestion alarm";
 
 /// Top-level process — owns all runtime dependencies and drives the
 /// indexer lifecycle.
@@ -42,7 +45,8 @@ const REPORTER: &str = "network status reporter";
 /// Responsibilities:
 /// - initialise all dependencies (database, RPC client, services)
 /// - register the observed protocols at startup
-/// - run the transaction source and the indexer worker
+/// - run the transaction source and the indexer worker, and beside them the
+///   network status reporter and the ingestion alarm
 /// - handle graceful shutdown on SIGTERM / Ctrl-C
 ///
 /// It is the **composition root**, and the only place that knows which
@@ -53,6 +57,7 @@ pub(crate) struct Daemon {
     source: Arc<dyn TransactionSource>,
     registration: Registration,
     network_status_reporter: NetworkStatusReporter,
+    ingestion_alarm: IngestionAlarm,
     /// How many transactions may be persisted at once — computed from the pool
     /// that was actually opened, see [`tasks::index_concurrency`].
     index_concurrency: usize,
@@ -86,6 +91,13 @@ impl Daemon {
         let index_concurrency = index_concurrency(database.max_connections())?;
         info!(index_concurrency, "index concurrency derived from the pool");
 
+        // The process's second pool, opened beside the first so that what it
+        // takes from the database's connections reads in one place.
+        let alarm_database = init_alarm_db(&config.database_url)
+            .await
+            .context("ingestion alarm database initialization failed")?;
+        info!("ingestion alarm database initialized");
+
         let source = init_source(&config).context("transaction source initialization failed")?;
         info!("transaction source initialized: {}", config.ingest_stream);
 
@@ -105,6 +117,9 @@ impl Daemon {
         let network_status_reporter = init_network_status_reporter(&database, &config)
             .await
             .context("network_status_reporter initialization failed")?;
+
+        let ingestion_alarm = init_ingestion_alarm(&alarm_database, config.heartbeat_url.clone())
+            .context("ingestion alarm initialization failed")?;
 
         let registration = match config.scope {
             IngestScope::Protocols => Registration::Protocols(implemented_protocols),
@@ -130,6 +145,7 @@ impl Daemon {
             source,
             registration,
             network_status_reporter,
+            ingestion_alarm,
             index_concurrency,
             _database: database,
         })
@@ -137,7 +153,7 @@ impl Daemon {
 
     /// Start the daemon. Consumes `self` — cannot be called twice.
     ///
-    /// Spawns three tasks, and the ingestion half of the graph is **one edge**:
+    /// Spawns four tasks, and the ingestion half of the graph is **one edge**:
     ///
     /// ```text
     /// source → (IngestedTransaction) → indexer worker
@@ -183,6 +199,7 @@ impl Daemon {
         );
         let mut reporter_task =
             spawn_network_status_reporter_task(self.network_status_reporter, shutdown.clone());
+        let mut alarm_task = spawn_ingestion_alarm_task(self.ingestion_alarm, shutdown.clone());
 
         // ⚠️ **The cancellation arm carries no verdict.** It says the stop was
         // asked for, not what happened — and it now wins races it used not to:
@@ -201,19 +218,20 @@ impl Daemon {
             result = &mut source_task => (Some(SOURCE), handle_task_result(result, SOURCE)),
             result = &mut indexer_task => (Some(INDEXER), handle_task_result(result, INDEXER)),
             result = &mut reporter_task => (Some(REPORTER), handle_task_result(result, REPORTER)),
+            result = &mut alarm_task => (Some(ALARM), handle_task_result(result, ALARM)),
             _ = shutdown.cancelled() => {
                 tracing::info!("cancellation received — stopping");
                 (None, Ok(()))
             }
         };
 
-        // Whichever arm fired, the other two have to be told. Idempotent, so
+        // Whichever arm fired, the others have to be told. Idempotent, so
         // the cancellation arm — whose token is already cancelled — needs no
         // branch of its own.
         shutdown.cancel();
 
         // ⚠️ **The indexer is waited on first, and the order is the whole
-        // point.** `Stop` spends one grace across the three, so the first stage
+        // point.** `Stop` spends one grace across them all, so the first stage
         // waited on can eat all of it: the source's own wait is unbounded by
         // design, and an `unsubscribe()` on a stalled link has nothing to cut
         // it short. Ask for the source first and the indexer gets `timeout_at`
@@ -236,6 +254,7 @@ impl Daemon {
         stop.settle(INDEXER, &mut indexer_task).await;
         stop.settle(SOURCE, &mut source_task).await;
         stop.settle(REPORTER, &mut reporter_task).await;
+        stop.settle(ALARM, &mut alarm_task).await;
 
         stop.finish()
     }

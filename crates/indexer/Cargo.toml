@@ -8,7 +8,8 @@ license.workspace = true
 # Workspace crates
 yog-core = { path = "../core" }
 yog-persistence = { path = "../persistence" }
-yog-bootstrap = { path = "../bootstrap" }
+# `heartbeat`: the ingestion alarm reports to a Healthchecks.io check.
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat"] }
 
 # Async runtime
 tokio = { workspace = true }
@@ -81,9 +82,13 @@ tokio = { workspace = true, features = ["test-util"] }
 # must satisfy, which `transaction_adapter`'s tests pin to the mainnet fixture.
 yog-core = { path = "../core", features = ["test-support"] }
 # `SecretKey::for_tests` — the credential the gRPC interceptor tests put on a
-# request and then look for in every printed form. A dev-dependency, so the
-# constructor stays unreachable from production code.
-yog-bootstrap = { path = "../bootstrap", features = ["test-support"] }
+# request and then look for in every printed form — and `RecordingHeartbeat`,
+# which the ingestion alarm's tests read back. A dev-dependency, so neither
+# stays reachable from production code. `heartbeat` is named again although
+# the normal dependency already turns it on: `RecordingHeartbeat` needs both
+# features, and this line says so on its own, as yog-signals' and
+# yog-archive's do.
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"] }
 # ⚠️ **Two features this crate uses and never declared**, found in review of
 # PR #149. `infra::grpc::test_geyser_server` serves a scripted Geyser on
 # `127.0.0.1:0`, which needs `TcpListenerStream` (`tokio-stream/net`) and

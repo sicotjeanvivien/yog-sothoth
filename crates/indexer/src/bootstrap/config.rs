@@ -70,8 +70,8 @@
 //! [`Credential`]: crate::infra::Credential
 
 use yog_bootstrap::{
-    ConfigError, Endpoint, SecretUrl, parse_required_enum, parse_required_u32, required_endpoint,
-    required_endpoint_allowing_header, required_secret_url,
+    ConfigError, Endpoint, SecretUrl, optional_secret_url, parse_required_enum, parse_required_u32,
+    required_endpoint, required_endpoint_allowing_header, required_secret_url,
 };
 
 mod types;
@@ -91,6 +91,10 @@ pub(crate) struct Config {
     pub(crate) network_status: Endpoint,
     pub(crate) worker_max_retries: u32,
     pub(crate) scope: IngestScope,
+    /// The Healthchecks.io check the ingestion alarm reports to. Optional:
+    /// development has no check. Production requires it —
+    /// `docker-compose.prod.yml` refuses to start without it.
+    pub(crate) heartbeat_url: Option<SecretUrl>,
 }
 
 impl Config {
@@ -110,6 +114,7 @@ impl Config {
             network_status: required_endpoint("NETWORK_STATUS")?,
             worker_max_retries: parse_required_u32("RPC_WORKER_MAX_RETRIES")?,
             scope,
+            heartbeat_url: optional_secret_url("INDEXER_HEARTBEAT_URL"),
         })
     }
 

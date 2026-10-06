@@ -9,7 +9,7 @@ use crate::{
         reporter::NetworkStatusReporter,
         services::TransactionProcessor,
         source::{IngestedTransaction, TransactionSource},
-        workers::IndexerWorker,
+        workers::{IndexerWorker, IngestionAlarm},
     },
     error::{IndexerWorkerError, SourceError},
 };
@@ -110,6 +110,18 @@ pub(super) fn spawn_network_status_reporter_task(
     shutdown: CancellationToken,
 ) -> JoinHandle<Result<(), Infallible>> {
     tokio::spawn(async move { reporter.run(shutdown).await })
+}
+
+/// Spawn the ingestion alarm task.
+///
+/// Like the reporter's, it cannot return an error — a failed check is the
+/// check's `/fail`, not the daemon's — so only a panic ends the daemon from
+/// here.
+pub(super) fn spawn_ingestion_alarm_task(
+    alarm: IngestionAlarm,
+    shutdown: CancellationToken,
+) -> JoinHandle<Result<(), Infallible>> {
+    tokio::spawn(async move { alarm.run(shutdown).await })
 }
 
 #[cfg(test)]

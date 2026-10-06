@@ -83,11 +83,12 @@ refused URL is named by and the counter an undelivered signal increments, so
 each daemon keeps its own metric name.
 
 **Why a feature.** It brings `reqwest`, and `yog-api` and `yog-migrate` have no
-check to report to. Only `yog-archive` and `yog-signals` turn it on.
+check to report to. Only `yog-archive`, `yog-signals` and `yog-indexer` turn it
+on.
 `RecordingHeartbeat`, the test double, is behind `test-support` like the
 secrets' `for_tests`. ⚠️ The CI's per-crate check compiles each crate with its
-**default** features, so it compiles this module through `yog-archive` and
-`yog-signals`, not through `yog-bootstrap` alone; `cargo clippy
+**default** features, so it compiles this module through `yog-archive`,
+`yog-signals` and `yog-indexer`, not through `yog-bootstrap` alone; `cargo clippy
 --all-features` is what lints it here. Its tests likewise run only with the
 feature on: `cargo test -p yog-bootstrap --features heartbeat,test-support` —
 a bare `cargo test -p yog-bootstrap` is green without them.

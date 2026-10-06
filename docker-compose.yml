@@ -198,6 +198,9 @@ services:
       # until the variable is set; that is the intent, not a side effect.
       INGEST_SOURCE: ${INGEST_SOURCE:?set it in .env — see .env.example (rpc)}
       INGEST_SCOPE: ${INGEST_SCOPE:?set it in .env — see .env.example (pools)}
+      # The ingestion alarm's check. Optional here — development has none; the
+      # production overlay requires it.
+      INDEXER_HEARTBEAT_URL: ${INDEXER_HEARTBEAT_URL:-}
       RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
       LOG_FORMAT: ${LOG_FORMAT:-text}
     entrypoint:
