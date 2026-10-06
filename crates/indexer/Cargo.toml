@@ -84,8 +84,10 @@ yog-core = { path = "../core", features = ["test-support"] }
 # `SecretKey::for_tests` — the credential the gRPC interceptor tests put on a
 # request and then look for in every printed form — and `RecordingHeartbeat`,
 # which the ingestion alarm's tests read back. A dev-dependency, so neither
-# stays reachable from production code. `heartbeat` is repeated here rather
-# than left to the normal dependency: `RecordingHeartbeat` needs both features.
+# stays reachable from production code. `heartbeat` is named again although
+# the normal dependency already turns it on: `RecordingHeartbeat` needs both
+# features, and this line says so on its own, as yog-signals' and
+# yog-archive's do.
 yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"] }
 # ⚠️ **Two features this crate uses and never declared**, found in review of
 # PR #149. `infra::grpc::test_geyser_server` serves a scripted Geyser on
