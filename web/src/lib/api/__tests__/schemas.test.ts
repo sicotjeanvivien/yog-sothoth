@@ -77,7 +77,7 @@ function validAnnouncement() {
     severity: "info",
     message: "v0.1.0 is live — signal engine and alerts.",
     linkUrl: "/changelog#v0.1.0",
-    startsAt: "2026-07-20T10:00:00.000000Z",
+    startsAt: "2026-10-06T10:00:00.000000Z",
     endsAt: null,
   };
 }

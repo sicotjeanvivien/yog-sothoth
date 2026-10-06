@@ -24,7 +24,7 @@ pub(crate) struct AnnouncementResponse {
     /// Free operator text (English, v1 decision).
     message: String,
 
-    /// Optional target, e.g. `/changelog#v0.1.1`. `null` when absent.
+    /// Optional target, e.g. `/changelog#v0.1.0`. `null` when absent.
     link_url: Option<String>,
 
     /// Start of the display window.
