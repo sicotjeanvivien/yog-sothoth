@@ -23,13 +23,15 @@ signals/src/
 │   │   ├── price_oracle_deviation.rs
 │   │   ├── tvl_drain.rs
 │   │   └── metrics.rs ← considered and skipped counters, SkipReason
-│   ├── materialization/ ← the alarm's rule (see below)
-│   │   ├── verdict.rs ← Verdict: how one check of the backlogs ends
-│   │   └── failure.rs ← Failure: why it failed, and what `/fail` says
-│   ├── workers/   ← the loops that run until the stop
+│   ├── workers/   ← the loops that run until the stop, each with a folder
+│   │   │            for what only it uses
 │   │   ├── signal_engine.rs         ← one poll loop per detector, dedup, persist
+│   │   ├── signal_engine/           ← metrics.rs, the tests
 │   │   ├── materialization_alarm.rs ← read, measure, judge, signal
-│   │   └── *_metrics.rs             ← beside the loop they measure
+│   │   └── materialization_alarm/   ← the alarm's rule (see below):
+│   │       ├── verdict.rs           ← Verdict: how one check of the backlogs ends
+│   │       ├── failure.rs           ← Failure: why it failed, and what `/fail` says
+│   │       └── metrics.rs           ← the pending gauge and the checks counter
 │   └── metrics_probe.rs ← test harness: reads a counter or a gauge
 ├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
 │                    Daemon (daemon/init.rs: the alarm's wiring)

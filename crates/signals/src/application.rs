@@ -1,9 +1,7 @@
-//! What the daemon does once wired: the rules — the detectors', and the
-//! materialisation alarm's — and the loops that apply them on their own
-//! cadence until the stop.
+//! What the daemon does once wired: the detectors' rules, and the loops that
+//! run on their own cadence until the stop — each with what only it uses.
 
 pub(crate) mod detectors;
-pub(crate) mod materialization;
 pub(crate) mod workers;
 
 /// Shared harness for the tests that assert on a metric — a skip *counted*,

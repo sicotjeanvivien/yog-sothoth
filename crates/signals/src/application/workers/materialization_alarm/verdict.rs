@@ -3,7 +3,7 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use yog_core::domain::MaterializationBacklog;
 
-use super::{Failure, LateAggregate};
+use super::failure::{Failure, LateAggregate};
 
 /// How one check ended — and what the heartbeat is told.
 #[derive(Debug, Clone, PartialEq, Eq)]

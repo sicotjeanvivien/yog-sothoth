@@ -21,8 +21,13 @@ use tracing::{info, warn};
 use yog_bootstrap::Heartbeat;
 use yog_core::domain::{MaterializationBacklog, MaterializationBacklogRepository};
 
-use super::materialization_alarm_metrics::AlarmMetrics;
-use crate::application::materialization::{Failure, Verdict, hours_minutes};
+mod failure;
+mod metrics;
+mod verdict;
+
+use failure::{Failure, hours_minutes};
+pub(crate) use metrics::{AlarmMetrics, HEARTBEAT_FAILURES};
+use verdict::Verdict;
 
 /// How long Postgres lets one read of the backlogs run before cancelling it —
 /// the `statement_timeout` of the alarm's own pool, opened by the daemon with
@@ -179,5 +184,5 @@ fn log_change(previous: Option<&Verdict>, verdict: &Verdict) {
 }
 
 #[cfg(test)]
-#[path = "materialization_alarm_tests.rs"]
+#[path = "materialization_alarm/materialization_alarm_tests.rs"]
 mod tests;
