@@ -107,8 +107,12 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ),
     (
         "crates/indexer/src/bootstrap/daemon/init.rs",
-        3,
-        "`init_db` at `Database::connect`, and `RpcClient::new` **twice**, whose \
+        4,
+        "`init_db` at `Database::connect`; `init_ingestion_alarm` at \
+         `Database::connect_with`, the same address exposed a second time on \
+         purpose — the alarm reads under its own `statement_timeout` rather \
+         than through the pool the index tasks are sized against; and \
+         `RpcClient::new` **twice**, whose \
          type belongs to solana-rpc-client. The second one arrived on \
          10 September 2026 and is a widening this list should show rather than \
          hide: the ingestion source and the health reporter each open their own \

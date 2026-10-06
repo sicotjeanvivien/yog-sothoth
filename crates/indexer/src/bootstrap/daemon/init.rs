@@ -9,7 +9,10 @@ use crate::{
             PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
         },
         source::TransactionSource,
-        workers::IndexerWorkerMetrics,
+        workers::{
+            HEARTBEAT_FAILURES, IndexerWorkerMetrics, IngestionAlarm, IngestionAlarmMetrics,
+            STATEMENT_TIMEOUT,
+        },
     },
     bootstrap::{Config, TransactionArrival},
     infra::{
@@ -22,10 +25,13 @@ use anyhow::Context;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use std::sync::Arc;
 use tracing::info;
-use yog_bootstrap::{Endpoint, SecretUrl};
-use yog_core::{application::extraction::ExtractionDispatcher, domain::Protocol};
+use yog_bootstrap::{Endpoint, HealthchecksHeartbeat, Heartbeat, HeartbeatSettings, SecretUrl};
+use yog_core::{
+    application::extraction::ExtractionDispatcher,
+    domain::{EventFreshnessRepository, Protocol},
+};
 use yog_persistence::{
-    Database, PgMeteoraDammV2ClaimPositionFeeEventRepository,
+    Database, PgEventFreshnessRepository, PgMeteoraDammV2ClaimPositionFeeEventRepository,
     PgMeteoraDammV2ClaimProtocolFeeEventRepository, PgMeteoraDammV2ClaimRewardEventRepository,
     PgMeteoraDammV2ClosePositionEventRepository, PgMeteoraDammV2CreatePositionEventRepository,
     PgMeteoraDammV2FundRewardEventRepository, PgMeteoraDammV2InitializePoolEventRepository,
@@ -38,7 +44,7 @@ use yog_persistence::{
     PgMeteoraDammV2UpdateRewardFunderEventRepository,
     PgMeteoraDammV2WithdrawDeadLiquidityRewardEventRepository,
     PgMeteoraDammV2WithdrawIneligibleRewardEventRepository, PgNetworkStatusRepository,
-    PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository,
+    PgPoolCurrentStateRepository, PgPoolRepository, PgWatchedPoolRepository, PoolSettings,
 };
 
 /// Connect to the database.
@@ -226,6 +232,47 @@ pub(super) async fn init_network_status_reporter(
     ))
 }
 
+/// The alarm on the ingestion, reporting to its check if there is one.
+///
+/// It reads through **its own pool**, of one connection, whose
+/// `statement_timeout` lets Postgres cancel a read stuck on a lock. Sharing the
+/// indexing pool, a stuck read would hold a connection the index tasks are
+/// sized against — [`super::tasks::index_concurrency`] counts the pool's other
+/// users, and this one stays out of that count by not being one.
+pub(super) async fn init_ingestion_alarm(config: &Config) -> anyhow::Result<IngestionAlarm> {
+    let database = Database::connect_with(
+        config.database_url.expose(),
+        PoolSettings {
+            max_connections: 1,
+            statement_timeout: Some(STATEMENT_TIMEOUT),
+            ..PoolSettings::DEFAULT
+        },
+    )
+    .await
+    .context("failed to connect the ingestion alarm to the database")?;
+    let repository: Arc<dyn EventFreshnessRepository> =
+        Arc::new(PgEventFreshnessRepository::new(database.pool().clone()));
+
+    let heartbeat = config
+        .heartbeat_url
+        .clone()
+        .map(init_heartbeat)
+        .transpose()?;
+    Ok(IngestionAlarm::new(repository, heartbeat))
+}
+
+/// The Healthchecks.io check, when one is configured. A URL that cannot take
+/// `/fail` stops the daemon here, with the variable named.
+fn init_heartbeat(url: SecretUrl) -> anyhow::Result<Arc<dyn Heartbeat>> {
+    let settings = HeartbeatSettings {
+        variable: "INDEXER_HEARTBEAT_URL",
+        undelivered_counter: HEARTBEAT_FAILURES,
+    };
+    let heartbeat = HealthchecksHeartbeat::new(url, settings)
+        .context("failed to build the heartbeat client")?;
+    Ok(Arc::new(heartbeat))
+}
+
 // Initialise the WatchedPoolService and its repository dependency.
 pub(super) async fn init_watched_pool_service(
     database: &Database,
@@ -258,5 +305,6 @@ pub(super) fn register_metric_descriptions() {
     GrpcBufferMetrics::register_descriptions();
     GrpcListenerMetrics::register_descriptions();
     NetworkStatusReporterMetrics::register_descriptions();
+    IngestionAlarmMetrics::register_descriptions();
     info!("Metrics initialized");
 }

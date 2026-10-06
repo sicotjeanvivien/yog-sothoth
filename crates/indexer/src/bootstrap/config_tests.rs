@@ -302,3 +302,48 @@ fn env_names_round_trip_through_as_str() {
         assert_eq!(IngestScope::from_env_value(scope.as_str()), Some(scope));
     }
 }
+
+/// The ingestion alarm's check is optional — development has none — and read
+/// from its own variable when set. Both halves asserted: a loader that read
+/// another name, or none, would leave the production check silent, and the
+/// overlay's `:?` only proves the variable reached the container.
+#[test]
+fn the_heartbeat_url_is_optional_and_read_when_set() {
+    let _env = ENV.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    // SAFETY: the reasoning of `every_couple_of_the_two_axes_loads`. Every key
+    // read is set here, and the one this test adds is removed on the way out.
+    unsafe {
+        env::set_var("DATABASE_URL_INDEXER", "postgresql://u:p@localhost:5433/db");
+        env::set_var("INGEST_STREAM_URL", "wss://stream.invalid/?k={key}");
+        env::set_var("INGEST_STREAM_KEY", "stream-key");
+        env::set_var("INGEST_TRANSACTION_URL", "https://fetch.invalid/?k={key}");
+        env::set_var("INGEST_TRANSACTION_KEY", "transaction-key");
+        env::set_var("NETWORK_STATUS_URL", "https://reference.invalid/?k={key}");
+        env::set_var("NETWORK_STATUS_KEY", "reference-key");
+        env::set_var("RPC_WORKER_MAX_RETRIES", "10");
+        env::set_var("INGEST_SOURCE", "rpc");
+        env::set_var("INGEST_SCOPE", "pools");
+        env::remove_var("INDEXER_HEARTBEAT_URL");
+    }
+    let config = Config::load().expect("a check is optional");
+    assert!(config.heartbeat_url.is_none());
+
+    // SAFETY: same keys, same reasoning.
+    unsafe {
+        env::set_var(
+            "INDEXER_HEARTBEAT_URL",
+            "https://hc-ping.invalid/check-uuid",
+        );
+    }
+    let config = Config::load().expect("loads with a check");
+    assert_eq!(
+        config.heartbeat_url.as_ref().map(SecretUrl::expose),
+        Some("https://hc-ping.invalid/check-uuid")
+    );
+
+    // SAFETY: same keys, same reasoning.
+    unsafe {
+        env::remove_var("INDEXER_HEARTBEAT_URL");
+    }
+}
