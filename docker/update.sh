@@ -47,8 +47,10 @@
 #    every daemon stopped: the difference is what the migration flagged.
 # 6. `up -d`, and record the commit and the version as deployed
 #    (.git/yog-update/deployed, deployed-version). What is deployed is that
-#    record, not the checkout: a run that fails after the checkout leaves the
-#    record behind it, and the next run of the same version deploys again.
+#    record, not the checkout, and the record is removed at step 4, before
+#    anything stops: a run that fails from there on — a --force included —
+#    leaves no record, and the next run of any version deploys again rather
+#    than answering "nothing to deploy" over stopped daemons.
 # 7. Checks: every service running and stable (no restart for a minute),
 #    yog-api's /readyz (it pings the database) and the dashboard answering
 #    from inside the compose network, and the pools flagged by the migration
@@ -227,7 +229,11 @@ main() {
   local migrations_before migrations_after
   migrations_before=$(psql_admin -c "SELECT count(*) FROM _sqlx_migrations")
 
-  # 4. Stop the daemons that talk to the database
+  # 4. Stop the daemons that talk to the database. The record goes first:
+  #    from here on nothing is known to run, and a run that fails before
+  #    step 6 must not leave one that reads as "deployed". `from` and
+  #    YOG_UPDATE_FROM were read above, so the logs keep their labels.
+  rm -f "$state/deployed" "$state/deployed-version"
   local -r outage_start=$(date +%s)
   log "stopping ${db_daemons[*]}"
   "${dc[@]}" stop "${db_daemons[@]}"
