@@ -37,19 +37,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
-    version: "v0.1.1",
-    date: "2026-07-20",
+    version: "v0.1.0",
+    date: "2026-10-06",
     summary:
-      "Yog-Scope grows from an observer into an alerting system: a signal engine watches every observed pool and surfaces risk across the dashboard.",
+      "The first production release: a real-time observer of Meteora DAMM v2 on Solana, with a signal engine that surfaces risk across every observed pool.",
     sections: [
       {
         kind: "features",
         items: [
+          "Real-time indexing of Meteora DAMM v2 events — swaps, liquidity, positions, fee updates and pool lifecycle — decoded from on-chain Anchor emissions. Pools are discovered from the transaction stream, not configured.",
+          "Pool pages: composition, spot price decoded from the on-chain sqrt-price, realized-fees analytics, 30-day activity charts, and an Alerts tab.",
+          "Overview with global KPIs — total TVL, 24h volume and fees, pools discovered — and a top-pools ranking.",
           "Signal engine with three risk detectors: flow imbalance, price–oracle deviation, and TVL drain (rug-like liquidity exodus).",
-          "Live signal feed on /signals — streamed over SSE, with severity × detector filters and per-detector explanations.",
-          "Alerts tab on every pool page, and a worst-severity signal indicator on the pools list with a hover detail popover.",
-          "Operator announcements: a dismissible banner on the dashboard for maintenance, incidents, releases and beta notes — published without a deploy.",
-          "Dashboard UX pass: collapsible sidebar, metric definitions behind info popovers, slimmer page headers, and a global text-scale bump for readability.",
+          "Live signal feed on /signals — streamed over SSE, with severity × detector filters and per-detector explanations — and a worst-severity indicator on the pools list.",
+          "Token enrichment: metadata, USD prices and pool-account backfill, independent from the ingestion path.",
+          "Operator announcements: a dismissible banner for maintenance, incidents, releases and beta notes.",
+          "English and French interface, with a privacy notice that lists every processing and transfer.",
         ],
       },
       {
@@ -57,25 +60,8 @@ export const RELEASES: readonly Release[] = [
         items: [
           "Jupiter price rate-limits (429) are retried with pacing instead of dropping the price chunk.",
           "Provider HTTP calls carry timeouts — a hung provider can no longer silently freeze token enrichment.",
-          "Single shared Docker builder stage for the five backend images — faster, leaner builds.",
-        ],
-      },
-    ],
-  },
-  {
-    version: "v0.1.0",
-    date: "2026-06-30",
-    summary:
-      "The foundation: a protocol-centric, real-time observer of Meteora DAMM v2 activity on Solana — pools are discovered from the transaction stream, not configured.",
-    sections: [
-      {
-        kind: "features",
-        items: [
-          "Real-time indexing of Meteora DAMM v2 events: swaps, liquidity, positions, fee updates and pool lifecycle, decoded from on-chain Anchor emissions.",
-          "Pool pages: composition, spot price decoded from the on-chain sqrt-price, realized-fees analytics and 30-day activity charts.",
-          "Overview with global KPIs — total TVL, 24h volume and fees, pools discovered — and a top-pools ranking.",
-          "Token enrichment daemon: metadata, USD prices and pool-account backfill, independent from the ingestion path.",
-          "English and French interface.",
+          "The API bounds its connections and its heavy requests, so a single client can no longer take it down.",
+          "Security headers on the dashboard: a content security policy, and HSTS.",
         ],
       },
     ],

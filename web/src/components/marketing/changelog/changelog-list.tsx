@@ -4,7 +4,7 @@
  * One card per release (the marketing-card shell of `TermsProse`),
  * newest first, straight from the `RELEASES` data file. Each block's
  * anchor id is the version string — the target of release
- * announcements' `link_url` (`/changelog#v0.1.1`) — with `scroll-mt`
+ * announcements' `link_url` (`/changelog#v0.1.0`) — with `scroll-mt`
  * so the fragment lands below the fixed navbar.
  *
  * Server Component through and through: static data, no interactivity.
