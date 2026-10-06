@@ -198,7 +198,12 @@ four verdicts — `Verdict (crates)`, `Verdict (web-quality)`,
 `Verdict (web-docker)`, `Verdict (scripts)` — are what the ruleset of `main`
 requires before a merge. Starting everywhere is the point: a required check
 that never starts stays "Expected", and blocks the merge for good. On a push to
-`main`, the `paths:` filter of each workflow still decides.
+`main`, the `paths:` filter of each workflow still decides. The `changes` step
+is one local action, `.github/actions/changes/` — its script says which three
+traps it avoids (renames, quoted non-ASCII paths, a broken pattern). ⚠️
+**Changing a PR's base does not re-run the verdicts**: GitHub reports it as
+`edited`, which the workflows do not listen to, because every title or body edit
+is `edited` too. After retargeting a PR, push a commit or close and reopen it.
 
 - **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `module-visibility` (see *Conventions*), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
 - **`web-quality.yml`** / **`web-docker.yml`** — the frontend (see [`web/README.md`](../web/README.md))

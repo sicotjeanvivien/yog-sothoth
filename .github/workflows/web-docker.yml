@@ -25,6 +25,7 @@ jobs:
   # starts stays "Expected" and blocks the merge for good. The work itself
   # only runs when the PR touches this workflow's paths — the same ones the
   # `push:` filter names. On a push to main that filter has already decided.
+  # The logic, and the traps it avoids: .github/actions/changes/changes.sh.
   changes:
     name: Changes
     runs-on: ubuntu-latest
@@ -38,26 +39,9 @@ jobs:
         with:
           fetch-depth: 0
       - id: diff
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-          PATTERN: '^(web/|\.github/workflows/web-docker\.yml$)'
-        run: |
-          if [ "$EVENT" != pull_request ]; then
-            echo "run=true" >>"$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed=$(git diff --name-only "$BASE...$HEAD")
-          touched=$(grep -E "$PATTERN" <<<"$changed" || true)
-          if [ -n "$touched" ]; then
-            echo "run=true" >>"$GITHUB_OUTPUT"
-            echo "files this workflow checks:"
-            echo "$touched"
-          else
-            echo "run=false" >>"$GITHUB_OUTPUT"
-            echo "no file on this workflow's paths changed: its jobs are skipped"
-          fi
+        uses: ./.github/actions/changes
+        with:
+          pattern: '^(web/|\.github/workflows/web-docker\.yml$)'
 
   build-and-smoke-test:
     name: Build and smoke-test
