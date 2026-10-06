@@ -28,10 +28,13 @@ signals/src/
 │   │   ├── signal_engine.rs         ← one poll loop per detector, dedup, persist
 │   │   ├── signal_engine/           ← metrics.rs, the tests
 │   │   ├── materialization_alarm.rs ← read, measure, judge, signal
-│   │   └── materialization_alarm/   ← the alarm's rule (see below):
-│   │       ├── verdict.rs           ← Verdict: how one check of the backlogs ends
-│   │       ├── failure.rs           ← Failure: why it failed, and what `/fail` says
-│   │       └── metrics.rs           ← the pending gauge and the checks counter
+│   │   └── materialization_alarm/   ← what only the alarm uses:
+│   │       ├── verdict.rs           ← the alarm's rule (see below) — Verdict:
+│   │       │                          how one check of the backlogs ends
+│   │       ├── failure.rs           ← the rule, too — Failure: why it failed,
+│   │       │                          and what `/fail` says
+│   │       ├── metrics.rs           ← the pending gauge and the checks counter
+│   │       └── materialization_alarm_tests.rs
 │   └── metrics_probe.rs ← test harness: reads a counter or a gauge
 ├── bootstrap/     ← Config::load() (config/types/: the alarm's own settings),
 │                    Daemon (daemon/init.rs: the alarm's wiring)
