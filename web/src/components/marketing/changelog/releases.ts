@@ -37,45 +37,24 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
-    version: "v0.1.1",
-    date: "2026-07-20",
-    summary:
-      "Yog-Scope grows from an observer into an alerting system: a signal engine watches every observed pool and surfaces risk across the dashboard.",
-    sections: [
-      {
-        kind: "features",
-        items: [
-          "Signal engine with three risk detectors: flow imbalance, price–oracle deviation, and TVL drain (rug-like liquidity exodus).",
-          "Live signal feed on /signals — streamed over SSE, with severity × detector filters and per-detector explanations.",
-          "Alerts tab on every pool page, and a worst-severity signal indicator on the pools list with a hover detail popover.",
-          "Operator announcements: a dismissible banner on the dashboard for maintenance, incidents, releases and beta notes — published without a deploy.",
-          "Dashboard UX pass: collapsible sidebar, metric definitions behind info popovers, slimmer page headers, and a global text-scale bump for readability.",
-        ],
-      },
-      {
-        kind: "fixes",
-        items: [
-          "Jupiter price rate-limits (429) are retried with pacing instead of dropping the price chunk.",
-          "Provider HTTP calls carry timeouts — a hung provider can no longer silently freeze token enrichment.",
-          "Single shared Docker builder stage for the five backend images — faster, leaner builds.",
-        ],
-      },
-    ],
-  },
-  {
     version: "v0.1.0",
-    date: "2026-06-30",
+    date: "2026-10-06",
     summary:
-      "The foundation: a protocol-centric, real-time observer of Meteora DAMM v2 activity on Solana — pools are discovered from the transaction stream, not configured.",
+      "The first production release: a real-time observer of Meteora DAMM v2 on Solana, with a signal engine that surfaces risk across every observed pool.",
     sections: [
       {
         kind: "features",
         items: [
-          "Real-time indexing of Meteora DAMM v2 events: swaps, liquidity, positions, fee updates and pool lifecycle, decoded from on-chain Anchor emissions.",
-          "Pool pages: composition, spot price decoded from the on-chain sqrt-price, realized-fees analytics and 30-day activity charts.",
-          "Overview with global KPIs — total TVL, 24h volume and fees, pools discovered — and a top-pools ranking.",
-          "Token enrichment daemon: metadata, USD prices and pool-account backfill, independent from the ingestion path.",
-          "English and French interface.",
+          "Real-time indexing of Meteora DAMM v2 events — swaps, liquidity, positions, fee updates and pool lifecycle — decoded from on-chain Anchor emissions, for an operator-selected set of pools; the other pools their transactions touch are discovered along the way.",
+          "Pool pages: composition, spot price decoded from the on-chain sqrt-price, realized-fees analytics with 30-day fee and effective-rate charts, and Swaps, Liquidity and Alerts tabs.",
+          "Pools list with a fee column and a fee-tier filter, and a watchlist of starred pools, kept in the browser.",
+          "Overview with global KPIs — total TVL, 24h volume and fees, pools discovered — a top-pools ranking and the latest signals.",
+          "Signal engine with three risk detectors: flow imbalance, price–oracle deviation, and TVL drain (rug-like liquidity exodus).",
+          "Live signal feed on /signals — streamed over SSE, with severity × detector filters and per-detector explanations — and a worst-severity indicator on the pools list, with a hover detail.",
+          "Token enrichment: metadata, USD prices and pool-account backfill, independent from the ingestion path. Jupiter rate-limits (429) are retried with backoff, and every provider call carries a timeout.",
+          "Operator announcements: a dismissible banner for maintenance, incidents, releases and beta notes, published without a deploy.",
+          "Dashboard: collapsible sidebar with a network-status panel (Solana slot, RPC latency), metric definitions behind info popovers, an English and French interface, and a privacy notice that lists every processing and transfer.",
+          "Hardened serving: the API bounds its memory, connections and heavy requests — past its limits it turns heavy requests and streams away instead of running out of memory — and the dashboard sends HSTS and a content security policy that blocks framing and limits where it connects.",
         ],
       },
     ],

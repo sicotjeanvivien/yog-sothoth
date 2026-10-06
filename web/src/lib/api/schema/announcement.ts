@@ -12,7 +12,7 @@
  *     from the signal severity concept even though the tags coincide
  *     today (editorial display choice vs detector conclusion).
  *   - `linkUrl` is a plain string, not `z.url()`: the main use case is
- *     a relative in-app target like `/changelog#v0.1.1`.
+ *     a relative in-app target like `/changelog#v0.1.0`.
  */
 
 import * as z from "zod";

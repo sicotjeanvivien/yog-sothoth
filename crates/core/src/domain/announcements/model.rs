@@ -102,7 +102,7 @@ pub struct Announcement {
     pub severity: AnnouncementSeverity,
     /// Free operator text (English by decision, v1).
     pub message: String,
-    /// Optional target, e.g. `/changelog#v0.1.1` for a release.
+    /// Optional target, e.g. `/changelog#v0.1.0` for a release.
     pub link_url: Option<String>,
     /// Start of the display window.
     pub starts_at: DateTime<Utc>,

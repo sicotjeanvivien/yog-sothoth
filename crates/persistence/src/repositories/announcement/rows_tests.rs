@@ -17,8 +17,8 @@ fn valid_row() -> AnnouncementRow {
         id: 1,
         kind: "release".to_string(),
         severity: "info".to_string(),
-        message: "v0.1.1 is live".to_string(),
-        link_url: Some("/changelog#v0.1.1".to_string()),
+        message: "v0.1.0 is live".to_string(),
+        link_url: Some("/changelog#v0.1.0".to_string()),
         starts_at: Utc::now(),
         ends_at: None,
     }
@@ -36,8 +36,8 @@ fn try_from_valid_row_maps_all_fields() {
     assert_eq!(announcement.id, 1);
     assert_eq!(announcement.kind, AnnouncementKind::Release);
     assert_eq!(announcement.severity, AnnouncementSeverity::Info);
-    assert_eq!(announcement.message, "v0.1.1 is live");
-    assert_eq!(announcement.link_url.as_deref(), Some("/changelog#v0.1.1"));
+    assert_eq!(announcement.message, "v0.1.0 is live");
+    assert_eq!(announcement.link_url.as_deref(), Some("/changelog#v0.1.0"));
     assert_eq!(announcement.starts_at, starts_at);
     assert_eq!(announcement.ends_at, None);
 }
