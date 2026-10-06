@@ -232,16 +232,18 @@ pub(super) async fn init_network_status_reporter(
     ))
 }
 
-/// The alarm on the ingestion, reporting to its check if there is one.
+/// Open the ingestion alarm's **own pool**: the same database, one connection,
+/// under a `statement_timeout` that lets Postgres cancel a read stuck on a
+/// lock.
 ///
-/// It reads through **its own pool**, of one connection, whose
-/// `statement_timeout` lets Postgres cancel a read stuck on a lock. Sharing the
-/// indexing pool, a stuck read would hold a connection the index tasks are
-/// sized against — [`super::tasks::index_concurrency`] counts the pool's other
-/// users, and this one stays out of that count by not being one.
-pub(super) async fn init_ingestion_alarm(config: &Config) -> anyhow::Result<IngestionAlarm> {
-    let database = Database::connect_with(
-        config.database_url.expose(),
+/// ⚠️ **Not the indexing pool, and on purpose.** That pool has no
+/// `statement_timeout` — giving it one would bound the index writes too — and
+/// [`super::tasks::index_concurrency`] sizes the index tasks against it, minus
+/// its other users. A stuck read there would hold a connection the tasks
+/// wait for; this pool stays out of that count by not being shared.
+pub(super) async fn init_alarm_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
+    let db = Database::connect_with(
+        database_url.expose(),
         PoolSettings {
             max_connections: 1,
             statement_timeout: Some(STATEMENT_TIMEOUT),
@@ -250,14 +252,18 @@ pub(super) async fn init_ingestion_alarm(config: &Config) -> anyhow::Result<Inge
     )
     .await
     .context("failed to connect the ingestion alarm to the database")?;
+    Ok(db)
+}
+
+/// The alarm on the ingestion, over the pool [`init_alarm_db`] opened,
+/// reporting to its check if there is one.
+pub(super) fn init_ingestion_alarm(
+    database: &Database,
+    heartbeat_url: Option<SecretUrl>,
+) -> anyhow::Result<IngestionAlarm> {
     let repository: Arc<dyn EventFreshnessRepository> =
         Arc::new(PgEventFreshnessRepository::new(database.pool().clone()));
-
-    let heartbeat = config
-        .heartbeat_url
-        .clone()
-        .map(init_heartbeat)
-        .transpose()?;
+    let heartbeat = heartbeat_url.map(init_heartbeat).transpose()?;
     Ok(IngestionAlarm::new(repository, heartbeat))
 }
 

@@ -24,8 +24,8 @@ use config_log::{
     log_ingestion_mode, log_probe_endpoints, warn_probe_not_independent, warn_saturating_couple,
 };
 use init::{
-    init_db, init_ingestion_alarm, init_network_status_reporter, init_processor, init_source,
-    init_watched_pool_service, register_metric_descriptions,
+    init_alarm_db, init_db, init_ingestion_alarm, init_network_status_reporter, init_processor,
+    init_source, init_watched_pool_service, register_metric_descriptions,
 };
 use tasks::{
     index_concurrency, spawn_indexer_task, spawn_ingestion_alarm_task,
@@ -91,6 +91,13 @@ impl Daemon {
         let index_concurrency = index_concurrency(database.max_connections())?;
         info!(index_concurrency, "index concurrency derived from the pool");
 
+        // The process's second pool, opened beside the first so that what it
+        // takes from the database's connections reads in one place.
+        let alarm_database = init_alarm_db(&config.database_url)
+            .await
+            .context("ingestion alarm database initialization failed")?;
+        info!("ingestion alarm database initialized");
+
         let source = init_source(&config).context("transaction source initialization failed")?;
         info!("transaction source initialized: {}", config.ingest_stream);
 
@@ -111,8 +118,7 @@ impl Daemon {
             .await
             .context("network_status_reporter initialization failed")?;
 
-        let ingestion_alarm = init_ingestion_alarm(&config)
-            .await
+        let ingestion_alarm = init_ingestion_alarm(&alarm_database, config.heartbeat_url.clone())
             .context("ingestion alarm initialization failed")?;
 
         let registration = match config.scope {

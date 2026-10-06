@@ -108,7 +108,7 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     (
         "crates/indexer/src/bootstrap/daemon/init.rs",
         4,
-        "`init_db` at `Database::connect`; `init_ingestion_alarm` at \
+        "`init_db` at `Database::connect`; `init_alarm_db` at \
          `Database::connect_with`, the same address exposed a second time on \
          purpose — the alarm reads under its own `statement_timeout` rather \
          than through the pool the index tasks are sized against; and \
