@@ -18,7 +18,8 @@ indexer/src/
 │   │                        per-protocol sub-persistors (meteora/damm_v2/),
 │   │                        PoolMaintenance, WatchedPoolService, metrics
 │   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
-│   └── workers/           ← IndexerWorker (bounded-concurrency consumer)
+│   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
+│                            IngestionAlarm (Healthchecks.io dead man's switch)
 ├── infra/endpoint/        ← the endpoint's configuration, refused at start-up
 │                            before anything is dialled: scheme.rs, credential.rs
 ├── infra/refusal.rs       ← the wording both adapters refuse a source's gap with
@@ -466,8 +467,9 @@ acquisition paths, which is what makes comparing them meaningful.
 ## Observability
 
 Prometheus metrics on `:9000/metrics` (host port `9000` in compose). Every
-family carries a `protocol` label; the names below are the ones actually
-emitted. No gauges today — all counters and histograms.
+family carries a `protocol` label unless its entry below says otherwise; the
+names below are the ones actually emitted. No gauges today — all counters and
+histograms.
 
 - **Pipeline counters** — `yog_indexer_raw_log_events_total`,
   `yog_indexer_raw_log_events_rejected_total{filter, reason}`,
@@ -573,11 +575,61 @@ emitted. No gauges today — all counters and histograms.
   and what would close it (raised in review of PR #141). The probe stopped the
   daemon until 11 September 2026, and every restart reset the subscription
   worker's retry budget.
+- **Ingestion alarm counters** (no `protocol` label — the verdict is one for
+  the whole ingestion) — `yog_indexer_ingestion_checks_total{outcome}`
+  (`live`, `delayed`, `stale`, `unreadable`) and
+  `yog_indexer_heartbeat_failures_total{kind}`, the signals that could not be
+  delivered. The alarm itself is the check, below; these say how it went
+  without reading the logs.
 - **Histograms** — `yog_indexer_fetch_duration_seconds` (JSON-RPC source only),
   `yog_indexer_persist_duration_seconds{kind}`,
   `yog_indexer_index_transaction_duration_seconds{outcome}` — extract and
   persist, **not** the fetch, so the two acquisition paths measure the same
   thing
+
+### The ingestion alarm
+
+The ingestion can stop without the process dying — a stream the provider
+refuses, a WebSocket that never reopens, a database that refuses the writes —
+and `restart: unless-stopped` only brings back a process that died. Neither of
+the other two checks sees it: the materialisation alarm of `yog-signals`
+measures the oldest row *waiting* to be materialised, so a stalled ingestion is
+deliberately not its fault, and `yog-archive` only reports its dumps.
+
+`IngestionAlarm` (`application/workers/ingestion_alarm.rs`) closes that gap.
+Every five minutes it reads `EventFreshnessRepository::last_event_at` — the
+newest event in `swap_events` and `liquidity_events` — and judges it with
+`FreshnessStatus::from_last_event`, **the rule behind the dashboard's live
+indicator**, so the alarm and the panel cannot disagree:
+
+| dashboard | last event | check |
+|---|---|---|
+| `live` | 2 min or less | success |
+| `delayed` | up to 15 min | success — a lull, not a fault |
+| `stale` | older, or none ever | `/fail`, with the age of the last event |
+| — | the read failed | `/fail`, with the error |
+
+It reads what was **written**, not what the process believes it did: a persist
+that fails is logged and stepped over, so a count of indexed transactions would
+keep climbing on a database that refuses every row.
+
+- **Its own pool**, one connection with a 60 s `statement_timeout`, as the
+  materialisation alarm has: a read stuck on a lock is cancelled by the server,
+  and never holds a connection the index tasks are sized against
+  (`index_concurrency` counts the shared pool's other users; this one is not
+  one).
+- **The check**: `INDEXER_HEARTBEAT_URL`, period 5 min, grace 10 min. An
+  ingestion that stops writing fails it within 20 min of its last event (15 to
+  `stale`, then up to 5 to the next check); a stopped indexer, by its silence,
+  within 15 min of its last ping. Optional in development, where the verdict is
+  logged and counted only; required by `docker-compose.prod.yml`.
+- **Why fifteen minutes holds for an alarm**, when it was chosen for a display:
+  measured in production on 6 October 2026, under `INGEST_SCOPE=pools`, the
+  longest silence between two indexed events over 4.4 days was 3 min 25 s, and
+  none passed 15 min. Under `protocols` the whole program flows, and the margin
+  only grows.
+- **The logs speak on a change of outcome**, not at every check: through a long
+  outage a warning every five minutes would bury everything else.
 
 ## Configuration
 
@@ -589,9 +641,10 @@ NETWORK_STATUS_URL=https://...         # + NETWORK_STATUS_KEY likewise
 RPC_WORKER_MAX_RETRIES=10
 INGEST_SOURCE=rpc                      # or grpc — see "The two ingestion axes"
 INGEST_SCOPE=pools                     # or protocols
+INDEXER_HEARTBEAT_URL=https://hc-ping.com/...  # optional — see "The ingestion alarm"
 ```
 
-Six of the seven are required on both paths — none has an implicit default, and
+Of the first seven, six are required on both paths — none has an implicit default, and
 a missing one fails at startup with a `ConfigError` naming it. The exception is
 `INGEST_TRANSACTION_*`, **required under `INGEST_SOURCE=rpc` and unread under
 `grpc`**: a delivered stream carries the transaction whole, so there is no
