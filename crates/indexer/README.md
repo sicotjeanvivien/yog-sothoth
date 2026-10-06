@@ -418,11 +418,11 @@ the two dispatch points a new protocol touches in this crate, the other being
   graceful shutdown of all tasks via the shared `CancellationToken`.
 
 **The stop waits, under one grace.** Cancelling the token is where a shutdown
-starts, not where it ends: `Daemon::run` waits for its three tasks,
+starts, not where it ends: `Daemon::run` waits for its four tasks,
 `RpcTransactionSource::run` waits for its three stages, the listener joins its
 fleet, and the indexer worker waits for its detached writes by asking for every
 permit back. The bound is a single `yog_bootstrap::SHUTDOWN_GRACE`, spent
-across the three by the shared `Stop` — a stage that overruns it is named in a
+across them all by the shared `Stop` — a stage that overruns it is named in a
 `warn!` and destroyed with the runtime, which is the only way an orderly stop
 can still cost work. The indexer is waited on **first**, because one deadline
 spent in order can otherwise be eaten whole by a stage above it.
