@@ -1,10 +1,7 @@
 //! The seven ways a **pricing** cycle ends, and everything the outside learns
-//! from each.
-//!
-//! Named after its type rather than after the worker, unlike its neighbours in
-//! this folder: `TickOutcome` is what a reader follows here from `price.rs`,
-//! and the day another worker needs one, its variants will be different enough
-//! to want their own type and their own name.
+//! from each. It belongs to the price worker alone, hence its place in
+//! `price/`: another worker's cycle would end in other ways, and get its own
+//! type in its own folder.
 //!
 //! ⚠️ **The type exists so that leaving without saying so cannot compile.**
 //! Every exit owes the same triple: a reason in the log, a duration stamped
