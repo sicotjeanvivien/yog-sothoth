@@ -31,7 +31,28 @@ describe("RELEASES", () => {
     });
     times.slice(1).forEach((time, i) => {
       // `times[i]` is the previous entry; the slice guarantees it exists.
-      expect(times[i]!).toBeGreaterThan(time);
+      // Not strictly: two versions can ship the same day — an urgent fix
+      // goes out at once — so the order within a day is the version's,
+      // checked below.
+      expect(times[i]!).toBeGreaterThanOrEqual(time);
+    });
+  });
+
+  it("is ordered by version, newest first", () => {
+    const parts = RELEASES.map((r) =>
+      r.version.slice(1).split(".").map(Number),
+    );
+    parts.slice(1).forEach((next, i) => {
+      // `parts[i]` is the previous entry; the slice guarantees it exists.
+      const previous = parts[i]!;
+      const newer =
+        previous[0]! - next[0]! ||
+        previous[1]! - next[1]! ||
+        previous[2]! - next[2]!;
+      expect(
+        newer,
+        `${RELEASES[i]!.version} before ${RELEASES[i + 1]!.version}`,
+      ).toBeGreaterThan(0);
     });
   });
 
