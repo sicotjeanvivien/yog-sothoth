@@ -1,13 +1,14 @@
-# deploy — met la prod à jour avec docker/update.sh, déclenché à la main.
+# deploy — met la prod à une version (un tag vX.Y.Z sur main) avec
+# docker/update.sh, déclenché à la main. Quand sortir une version, et comment
+# la tagger : docker/README.md.
 #
 # Le job ne fait qu'un `ssh`. Côté serveur, la clé a pour commande forcée
-# docker/deploy-entry.sh, qui ne laisse passer que trois arguments vers
-# docker/update.sh : rien, --force, --check. La mise en place (clé, ligne
-# authorized_keys, empreinte du serveur, trois secrets) est dans l'en-tête de
-# deploy-entry.sh.
+# docker/deploy-entry.sh, qui ne laisse passer que trois formes vers
+# docker/update.sh : `vX.Y.Z`, `--force vX.Y.Z`, `--check`. La mise en place
+# (clé, ligne authorized_keys, empreinte du serveur, trois secrets) est dans
+# l'en-tête de deploy-entry.sh.
 #
-# Pas de déclenchement sur push : pendant la phase de test, une PR fusionnée
-# ne part en prod que quand on le décide.
+# Pas de déclenchement sur push : on déploie une version, pas une fusion.
 #
 # Si la connexion du runner tombe en route, le déploiement continue : le
 # script se détache sur le serveur. Le job sera rouge sans que la prod le
@@ -29,10 +30,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "deploy : si origin/main a avancé · force : la séquence entière · check : vérifier seulement"
+        description: "deploy : cette version, si elle n'est pas déjà déployée · force : la séquence entière, même déjà déployée · check : vérifier seulement"
         type: choice
         options: [deploy, force, check]
         default: deploy
+      version:
+        description: "la version, un tag vX.Y.Z sur main (inutile en check)"
+        type: string
+        required: false
 
 # Deux lancements ne se chevauchent pas, et celui qui tourne ne s'annule
 # jamais : interrompu entre stop et up, il laisserait la prod arrêtée. ⚠️
@@ -57,14 +62,25 @@ jobs:
       - name: docker/update.sh sur la prod
         env:
           MODE: ${{ inputs.mode }}
+          VERSION: ${{ inputs.version }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           # La seule liste des arguments admis est celle du serveur
-          # (docker/deploy-entry.sh) ; ici, le mode se traduit sans se filtrer.
-          args=(); [ "$MODE" = deploy ] || args=("--$MODE")
+          # (docker/deploy-entry.sh). Le motif est vérifié ici aussi, pour
+          # qu'une faute de frappe échoue avant d'ouvrir une connexion ; la
+          # version arrive par l'environnement, jamais interpolée dans le script.
+          case "$MODE" in
+            check) args=(--check) ;;
+            deploy | force)
+              [[ $VERSION =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+                || { echo "version invalide : « $VERSION » (attendu : vX.Y.Z)" >&2; exit 1; }
+              if [ "$MODE" = force ]; then args=(--force "$VERSION"); else args=("$VERSION"); fi
+              ;;
+            *) echo "mode inconnu : $MODE" >&2; exit 1 ;;
+          esac
           for v in DEPLOY_HOST DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             [ -n "${!v}" ] || { echo "secret manquant : $v" >&2; exit 1; }
           done

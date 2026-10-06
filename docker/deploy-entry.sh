@@ -3,10 +3,11 @@
 #
 # The key of the deployment pipeline (.github/workflows/deploy.yml) is
 # declared on the server with this script as its forced command: whatever the
-# client asks for arrives here in SSH_ORIGINAL_COMMAND, and only three values
-# go through to docker/update.sh — nothing, `--force`, `--check`. Anything
-# else is refused before anything runs. The `docker` group the account belongs
-# to is root-equivalent: this list, not the account, is what bounds the key.
+# client asks for arrives here in SSH_ORIGINAL_COMMAND, and only three forms
+# go through to docker/update.sh — a version `vX.Y.Z`, `--force vX.Y.Z`, and
+# `--check`. Anything else is refused before anything runs. The `docker` group
+# the account belongs to is root-equivalent: this list, not the account, is
+# what bounds the key.
 #
 # Setting it up (outside the repository, once)
 # --------------------------------------------
@@ -41,18 +42,27 @@
 # new mode of update.sh is added here too — on purpose: the gate stays an
 # explicit list, never "whatever update.sh accepts".
 #
-# The forced command points at this file in the checkout: it is updated by the
-# fast-forward like the script it guards. Moving the checkout means editing
+# The forced command points at this file in the checkout: it moves with each
+# version checked out, like the script it guards. Moving the checkout means editing
 # the authorized_keys line by hand.
 set -euo pipefail
 
-case "${SSH_ORIGINAL_COMMAND:-}" in
-  "") args=() ;;
-  --force | --check) args=("$SSH_ORIGINAL_COMMAND") ;;
-  *)
-    echo "deploy-entry: refused: '${SSH_ORIGINAL_COMMAND}' (accepted: nothing, --force, --check)" >&2
-    exit 2
-    ;;
-esac
+# The whole string is matched, anchored at both ends, and the arguments are
+# rebuilt from the match — never by splitting what the client sent. `$` in a
+# bash regex anchors the end of the string, not of a line, so a newline
+# cannot smuggle a second command past it. Whether the tag exists, and is on
+# main, only update.sh can tell: it refuses those before changing anything.
+cmd=${SSH_ORIGINAL_COMMAND:-}
+version='v[0-9]+\.[0-9]+\.[0-9]+'
+if [[ $cmd == "--check" ]]; then
+  args=(--check)
+elif [[ $cmd =~ ^($version)$ ]]; then
+  args=("${BASH_REMATCH[1]}")
+elif [[ $cmd =~ ^--force\ ($version)$ ]]; then
+  args=(--force "${BASH_REMATCH[1]}")
+else
+  echo "deploy-entry: refused: '${cmd}' (accepted: vX.Y.Z, --force vX.Y.Z, --check)" >&2
+  exit 2
+fi
 
 exec "$(dirname "$(readlink -f "$0")")/update.sh" "${args[@]}"

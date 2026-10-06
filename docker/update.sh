@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# docker/update.sh — update a running production server to origin/main.
+# docker/update.sh — update a running production server to a version.
 #
-#   docker/update.sh           deploy if origin/main is ahead of what was last deployed
-#   docker/update.sh --force   run the whole sequence even if it is not
-#   docker/update.sh --check   run the post-deploy checks only, change nothing
+#   docker/update.sh vX.Y.Z           deploy that version, unless it is the one deployed
+#   docker/update.sh --force vX.Y.Z   run the whole sequence even if it is
+#   docker/update.sh --check          run the post-deploy checks only, change nothing
+#
+# A version is a tag on main; docker/README.md says when to cut one. Nothing
+# else is deployed: not main as it stands, not a branch, not a bare commit.
 #
 # Run it on the server, from anywhere. It is the one definition of the update
 # procedure; a deployment pipeline calls this script and nothing else.
@@ -18,11 +21,18 @@
 #
 # The sequence, and why each step sits where it does
 # --------------------------------------------------
-# 1. Refuse to start unless: no other run holds the lock, the checkout is on
-#    `main`, no tracked file is modified (the .env is ignored by git), and
-#    HEAD is an ancestor of origin/main (no local commit on the server).
-# 2. Fast-forward to origin/main, then hand over to the script as it is in
-#    the new commit: a deploy always runs the procedure it ships with.
+# 1. Refuse to start unless: no other run holds the lock, no tracked file is
+#    modified (the .env is ignored by git), HEAD is an ancestor of
+#    origin/main (no local commit on the server), and the version is a tag
+#    that origin holds on the same commit, on main's first-parent line — what
+#    goes to production is what main went through, not a commit of a merged
+#    branch. Two refusals guard the way back: a version older than versioned
+#    deploys (its scripts would put the old gate back), and a version that
+#    does not ship every migration the database holds (read from
+#    _sqlx_migrations) — the schema cannot go back with the code.
+# 2. Check the version out, detached — the checkout IS the version deployed —
+#    then hand over to the script as it is in that commit: a deploy always
+#    runs the procedure it ships with.
 # 3. Pull the registry images and build ours while the previous version
 #    still serves: the outage lasts only for steps 4-6.
 # 4. Stop every daemon that talks to the database. `up -d` alone is not
@@ -35,10 +45,12 @@
 # 5. Migrate (`compose run yog-migrate`, i.e. `bootstrap`, idempotent). The
 #    pools flagged `needs_refresh` are read just before and just after, with
 #    every daemon stopped: the difference is what the migration flagged.
-# 6. `up -d`, and record the commit as deployed (.git/yog-update/deployed).
-#    What is deployed is that record, not the checkout: a run that fails
-#    after the fast-forward leaves origin/main ahead of it, and the next plain
-#    run deploys again.
+# 6. `up -d`, and record the commit and the version as deployed
+#    (.git/yog-update/deployed, deployed-version). What is deployed is that
+#    record, not the checkout, and the record is removed at step 4, before
+#    anything stops: a run that fails from there on — a --force included —
+#    leaves no record, and the next run of any version deploys again rather
+#    than answering "nothing to deploy" over stopped daemons.
 # 7. Checks: every service running and stable (no restart for a minute),
 #    yog-api's /readyz (it pings the database) and the dashboard answering
 #    from inside the compose network, and the pools flagged by the migration
@@ -56,13 +68,15 @@
 # What this script does not do
 # ----------------------------
 # - Roll a schema back. Migrations are forward-only; going back is a restore
-#   (crates/persistence/README.md, "Backup and restore").
+#   (crates/persistence/README.md, "Backup and restore"). Which is why a
+#   version that does not ship every applied migration is refused: fix
+#   forward, with a new version.
 # - Refresh a continuous aggregate. A full-range refresh typed by hand once
 #   retention has dropped a chunk erases materialised history:
 #   crates/persistence/migrations/README.md says which bounded form to use.
 # - Check the drain from --check: it needs the flags read around a migration.
 #
-# Trap: the fast-forward rewrites this very file while bash is running it,
+# Trap: the checkout rewrites this very file while bash is running it,
 # and bash reads a script as it goes. Everything therefore lives in `main`,
 # parsed whole before it runs, and the last line calls it and exits at once.
 #
@@ -83,13 +97,16 @@ main() {
   local -r stable_secs="${UPDATE_STABLE_SECS:-60}"
   local -r drain_timeout_secs="${UPDATE_DRAIN_TIMEOUT_SECS:-600}"
 
-  local mode=deploy
+  local mode version=""
   case "${1:-}" in
-    "") ;;
-    --force) mode=force ;;
-    --check) mode=check ;;
-    *) echo "usage: $0 [--force | --check]" >&2; exit 2 ;;
+    --check) [ $# -eq 1 ] || usage; mode=check ;;
+    --force) [ $# -eq 2 ] || usage; mode=force; version=$2 ;;
+    v*) [ $# -eq 1 ] || usage; mode=deploy; version=$1 ;;
+    *) usage ;;
   esac
+  # The same pattern as docker/deploy-entry.sh, which the deployment key goes
+  # through first; this one guards a call typed on the server.
+  [ "$mode" = check ] || [[ $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || usage
 
   if [ "$mode" = check ]; then
     exec 9>"$state/lock"
@@ -108,6 +125,7 @@ main() {
       fi
       die "another --check is running"
     fi
+    log "deployed: $(deployed_label)"
     checks "$stable_secs" || die "checks failed (see above)"
     log "✅ all checks passed"
     return
@@ -126,31 +144,83 @@ main() {
     exec 9>"$state/lock"
     flock -n 9 || die "another update is running (lock $state/lock)"
     echo "${YOG_UPDATE_RC%.rc}" >"$state/current"
-    [ "$(git rev-parse --abbrev-ref HEAD)" = main ] || die "the checkout is not on main"
     [ -z "$(git status --porcelain --untracked-files=no)" ] \
       || die "tracked files are modified: $(git status --porcelain --untracked-files=no | tr '\n' ' ')"
-    git fetch --quiet origin main
+    # --tags: a tag moved after the fact is refused by git rather than
+    # followed — a version names one commit, for good. --quiet silences that
+    # refusal too: without the die, the deploy would stop on an empty log.
+    git fetch --quiet --tags origin main \
+      || die "fetching origin failed: unreachable, or a tag moved there (\`git fetch --tags origin\` says which)"
     git merge-base --is-ancestor HEAD origin/main \
       || die "HEAD is not an ancestor of origin/main: local commits on the server?"
 
+    # The tag as origin holds it now, not as the server remembers it: a tag
+    # deleted there is not deployed, and one that names another commit there
+    # is refused rather than followed. The last line is the peeled commit of
+    # an annotated tag, the only line of a lightweight one.
+    local remote
+    remote=$(git ls-remote origin "refs/tags/$version" "refs/tags/$version^{}" | awk 'END { print $1 }') \
+      || die "cannot list the tags of origin"
+    [ -n "$remote" ] || die "no tag $version on origin"
+    new=$(git rev-parse --verify --quiet "refs/tags/$version^{commit}") \
+      || die "tag $version is on origin but was not fetched"
+    [ "$new" = "$remote" ] \
+      || die "tag $version names ${remote:0:7} on origin and ${new:0:7} here: a version names one commit for good"
+    # First-parent, not merely an ancestor: the intermediate commits of a
+    # merged pull request are ancestors of main too, and a version tagged on
+    # one would miss whatever was merged beside it. Not `grep -q`: it stops
+    # reading at the match, rev-list takes a SIGPIPE, and pipefail reads that
+    # as "not on main".
+    # shellcheck disable=SC2143
+    [ -n "$(git rev-list --first-parent origin/main | grep -x "$new")" ] \
+      || die "$version is not on main's first-parent line: a version is a commit main went through, not one of a merged branch"
+    [[ $(git show "$new:docker/update.sh" 2>/dev/null) == *deployed-version* ]] \
+      || die "$version predates versioned deploys: its scripts would put the old gate back — deploy a later version"
+
+    # The migrations the database holds and this version does not ship. The
+    # database, not git: a failed deploy may have applied part of its own,
+    # a checkout may have been moved by hand, a file may have been renamed —
+    # what the older binaries refuse is a schema newer than theirs, and only
+    # _sqlx_migrations says what the schema is.
+    local applied shipped unknown
+    applied=$(psql_admin -c "SELECT version FROM _sqlx_migrations ORDER BY 1") \
+      || die "cannot read the applied migrations: is postgres up?"
+    shipped=$(git ls-tree --name-only "$new" crates/persistence/migrations/ \
+      | sed -n 's#^.*/0*\([0-9][0-9]*\)_[^/]*\.sql$#\1#p')
+    unknown=$(LC_ALL=C comm -23 <(LC_ALL=C sort <<<"$applied") <(LC_ALL=C sort <<<"$shipped") | tr '\n' ' ')
+    [ -z "${unknown// /}" ] \
+      || die "$version does not ship migration(s) ${unknown% } that the database holds: the older binaries refuse a schema newer than theirs — fix forward, with a new version"
+
     # No record means unknown, not "HEAD is deployed": a checkout pulled by
-    # hand, or a first run that failed after its fast-forward, deploys.
+    # hand, or a first run that failed after its checkout, deploys. And the
+    # record alone is not enough either: a run that failed after its checkout
+    # left HEAD elsewhere, with the daemons possibly stopped.
     old=$(cat "$state/deployed" 2>/dev/null || echo unknown)
-    new=$(git rev-parse origin/main)
-    if [ "$old" = "$new" ] && [ "$mode" = deploy ]; then
-      log "nothing to deploy: ${new:0:7} is deployed and is origin/main"
+    if [ "$old" = "$new" ] && [ "$(git rev-parse HEAD)" = "$new" ] && [ "$mode" = deploy ]; then
+      local recorded
+      recorded=$(cat "$state/deployed-version" 2>/dev/null || echo "no version")
+      if [ "$recorded" != "$version" ]; then
+        echo "$version" >"$state/deployed-version"
+        log "nothing to deploy: $version names the commit deployed as $recorded (${new:0:7}); recorded as $version"
+      else
+        log "nothing to deploy: $version (${new:0:7}) is deployed"
+      fi
       return
     fi
+    if [ "$old" != unknown ] && [ "$old" != "$new" ] && git merge-base --is-ancestor "$new" "$old"; then
+      log "going back to $version: the database holds no migration it lacks"
+    fi
 
-    # 2. Fast-forward, then run the procedure as the new commit has it. The
-    #    lock (fd 9) and the exit-code file go along through the exec.
-    log "deploying ${old:0:7} → ${new:0:7}"
+    # 2. Check the version out, then run the procedure as it has it. The lock
+    #    (fd 9) and the exit-code file go along through the exec.
+    log "deploying $(deployed_label) → $version (${new:0:7})"
     [ "$old" = unknown ] || git log --oneline "$old..$new" 2>/dev/null || true
-    git merge --ff-only --quiet origin/main
+    git checkout --quiet --detach "$new"
     YOG_UPDATE_FROM=$old exec "$script" "$@"
   fi
   old=$YOG_UPDATE_FROM
   new=$(git rev-parse HEAD)
+  local -r from=$(deployed_label)
 
   # 3. Build while the previous version still serves
   log "pulling registry images, building ours"
@@ -159,7 +229,11 @@ main() {
   local migrations_before migrations_after
   migrations_before=$(psql_admin -c "SELECT count(*) FROM _sqlx_migrations")
 
-  # 4. Stop the daemons that talk to the database
+  # 4. Stop the daemons that talk to the database. The record goes first:
+  #    from here on nothing is known to run, and a run that fails before
+  #    step 6 must not leave one that reads as "deployed". `from` and
+  #    YOG_UPDATE_FROM were read above, so the logs keep their labels.
+  rm -f "$state/deployed" "$state/deployed-version"
   local -r outage_start=$(date +%s)
   log "stopping ${db_daemons[*]}"
   "${dc[@]}" stop "${db_daemons[@]}"
@@ -177,7 +251,7 @@ main() {
       log "   _sqlx_migrations (${migrations_before} rows before) with the migrations directory." >&2
     elif [ "$migrations_after" = "$migrations_before" ]; then
       log "   No migration of this deploy was applied: the previous version can" >&2
-      log "   still be served — git reset --hard ${old:0:7}, then" >&2
+      log "   still be served — git checkout --detach ${old:0:7}, then" >&2
       log "   ${dc[*]} build && ${dc[*]} up -d" >&2
       log "   and fix forward on main before the next run, which would bring it back." >&2
     else
@@ -197,6 +271,7 @@ main() {
   log "starting"
   "${dc[@]}" up -d --no-deps "${services[@]}"
   echo "$new" >"$state/deployed"
+  echo "$version" >"$state/deployed-version"
   local -r outage_secs=$(( $(date +%s) - outage_start ))
 
   # 7. Checks
@@ -204,13 +279,23 @@ main() {
   checks "$stable_secs" || failed=1
   drain "$state/flagged.by-migration" "$drain_timeout_secs" || failed=1
 
-  log "summary: ${old:0:7} → ${new:0:7}, $(( migrations_after - migrations_before )) migration(s) applied, outage ${outage_secs}s"
+  log "summary: $from → $version (${new:0:7}), $(( migrations_after - migrations_before )) migration(s) applied, outage ${outage_secs}s"
   [ "$failed" -eq 0 ] || die "deployed, but a check failed (see above)"
   log "✅ deployed and checked"
 }
 
 log() { printf '%s  %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
 die() { log "❌ $*" >&2; exit 1; }
+usage() { echo "usage: $0 vX.Y.Z | --force vX.Y.Z | --check" >&2; exit 2; }
+
+# What the record says is deployed: `v0.2.0 (1a2b3c4)`. A record from before
+# versions has no tag beside its commit, and nothing at all is `unknown`.
+deployed_label() {
+  local commit tag
+  commit=$(cat "$state/deployed" 2>/dev/null) || { echo unknown; return; }
+  tag=$(cat "$state/deployed-version" 2>/dev/null) || tag="no version"
+  echo "$tag (${commit:0:7})"
+}
 
 # Start the update in its own session and follow its log until it writes its
 # exit code. Never returns.
