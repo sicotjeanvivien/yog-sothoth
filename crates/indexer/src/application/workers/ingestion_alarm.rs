@@ -43,6 +43,9 @@ const CHECK_INTERVAL: Duration = Duration::from_secs(300);
 /// one connection. A read stuck on a lock is ended **by the server**, so its
 /// connection comes back usable: stopping only the client's wait would leave
 /// the statement running and the connection held, one more at every check.
+/// Measured in production at 0.4–0.6 ms of execution and ~15 ms of planning
+/// (6 October 2026, one index-only scan per table), so a minute is margin, not
+/// a budget.
 pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// How long the alarm waits for a read before failing the check with
