@@ -193,3 +193,5 @@ this software: deploying it as a rival service, free or paid, is not allowed.
 
 Earlier versions of this repository were released under the MIT license, and
 those versions remain available under MIT.
+
+<!-- essai jetable : une PR de doc seule doit avoir quatre verdicts verts sans rien lancer de lourd -->
