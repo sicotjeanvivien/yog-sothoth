@@ -190,10 +190,19 @@ The Rust version is pinned in `rust-toolchain.toml` at the repo root — don't o
 
 ## CI
 
-GitHub Actions runs on every push and PR to `main`:
+Four workflows, and each one starts on **every** pull request. Its first job,
+`changes`, diffs the PR against its base and lets the real jobs run only when
+the PR touches the workflow's paths; its last job, `verdict`, is red if any job
+failed or was cancelled, green otherwise — a skipped job is not a failure. The
+four verdicts — `Verdict (crates)`, `Verdict (web-quality)`,
+`Verdict (web-docker)`, `Verdict (scripts)` — are what the ruleset of `main`
+requires before a merge. Starting everywhere is the point: a required check
+that never starts stays "Expected", and blocks the merge for good. On a push to
+`main`, the `paths:` filter of each workflow still decides.
 
 - **`crates.yml`** — Rust workspace: `check` (then `cargo doc` with `-D warnings`, the only check on intra-doc links), `check-per-crate` (one `cargo check -p <member>` per crate — `check` passes the whole workspace in a single call, where Cargo unifies features and a crate that forgot to declare one is kept green by its siblings), `module-visibility` (see *Conventions*), `fmt`, `clippy -D warnings`, `test`, `test-integration`, `audit`, `sqlx-check` (spins up TimescaleDB, applies migrations, verifies the committed `.sqlx/` cache)
 - **`web-quality.yml`** / **`web-docker.yml`** — the frontend (see [`web/README.md`](../web/README.md))
+- **`scripts.yml`** — what no other workflow reads: `shellcheck` over every tracked `*.sh` (`docker/update.sh`, `docker/deploy-entry.sh`, `web/audit.sh`), and `actionlint` over the workflows, with shellcheck on their `run:` scripts
 
 ---
 

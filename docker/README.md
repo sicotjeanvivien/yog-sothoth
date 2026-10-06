@@ -46,7 +46,9 @@ the latter.
 
 ## Cutting and deploying one
 
-1. Check that the CI of `main` is green on the commit to release.
+1. Check that the CI of `main` is green on the commit to release. Each pull
+   request was already held to its own CI before it could merge; this is the
+   run on `main` itself, after the merge.
 2. Do what the merged pull requests list under **Avant de déployer** (see
    below) — first, because the deploy cannot be trusted to notice. A
    variable the production overlay requires with `${VAR:?…}` stops it at the
