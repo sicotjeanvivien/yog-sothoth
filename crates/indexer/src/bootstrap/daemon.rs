@@ -1,9 +1,8 @@
 use crate::{
     application::{
-        reporter::NetworkStatusReporter,
         services::{TransactionProcessor, WatchedPoolService},
         source::{IngestedTransaction, TransactionSource},
-        workers::IngestionAlarm,
+        workers::{IngestionAlarm, NetworkStatusReporter},
     },
     bootstrap::{Config, IngestScope},
 };

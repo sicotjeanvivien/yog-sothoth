@@ -70,7 +70,11 @@ use yog_bootstrap::SecretUrl;
 
 use yog_core::domain::{NetworkStatus, NetworkStatusRepository};
 
-use crate::application::reporter::{NetworkStatusReporterError, NetworkStatusReporterMetrics};
+mod error;
+mod metrics;
+
+use error::NetworkStatusReporterError;
+pub(crate) use metrics::NetworkStatusReporterMetrics;
 
 /// How often the reporter records a snapshot.
 ///
@@ -190,5 +194,5 @@ impl NetworkStatusReporter {
 }
 
 #[cfg(test)]
-#[path = "network_status_reporter_tests.rs"]
+#[path = "network_status_reporter/network_status_reporter_tests.rs"]
 mod tests;

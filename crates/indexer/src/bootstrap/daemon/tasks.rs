@@ -6,10 +6,9 @@
 
 use crate::{
     application::{
-        reporter::NetworkStatusReporter,
         services::TransactionProcessor,
         source::{IngestedTransaction, TransactionSource},
-        workers::{IndexerWorker, IngestionAlarm},
+        workers::{IndexerWorker, IngestionAlarm, NetworkStatusReporter},
     },
     error::{IndexerWorkerError, SourceError},
 };

@@ -17,9 +17,11 @@ indexer/src/
 │   ├── services/          ← TransactionProcessor, EventPersistor + the
 │   │                        per-protocol sub-persistors (meteora/damm_v2/),
 │   │                        PoolMaintenance, WatchedPoolService, metrics
-│   ├── reporter/          ← NetworkStatusReporter (Solana slot/latency snapshot)
-│   └── workers/           ← IndexerWorker (bounded-concurrency consumer),
-│                            IngestionAlarm (Healthchecks.io dead man's switch)
+│   └── workers/           ← the loops the daemon runs; one <worker>.rs each, its
+│                            own modules (metrics, verdict, tests) in <worker>/:
+│                            IndexerWorker (bounded-concurrency consumer),
+│                            IngestionAlarm (Healthchecks.io dead man's switch),
+│                            NetworkStatusReporter (Solana slot/latency snapshot)
 ├── infra/endpoint/        ← the endpoint's configuration, refused at start-up
 │                            before anything is dialled: scheme.rs, credential.rs
 ├── infra/refusal.rs       ← the wording both adapters refuse a source's gap with

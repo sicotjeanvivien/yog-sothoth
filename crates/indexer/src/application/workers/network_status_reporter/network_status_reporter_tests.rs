@@ -80,7 +80,7 @@ fn reporter(get_slot: &[Value], repository: Arc<ScriptedRepository>) -> NetworkS
 fn with_recorder(body: impl Future<Output = ()>) -> Snapshotter {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
-    metrics::with_local_recorder(&recorder, || {
+    ::metrics::with_local_recorder(&recorder, || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
