@@ -585,8 +585,8 @@ fn snapshot_one_cycle(
     worker: PriceWorker,
 ) -> Vec<(
     metrics_util::CompositeKey,
-    Option<metrics::Unit>,
-    Option<metrics::SharedString>,
+    Option<::metrics::Unit>,
+    Option<::metrics::SharedString>,
     DebugValue,
 )> {
     snapshot_cycles(worker, 1)
@@ -599,14 +599,14 @@ fn snapshot_cycles(
     cycles: usize,
 ) -> Vec<(
     metrics_util::CompositeKey,
-    Option<metrics::Unit>,
-    Option<metrics::SharedString>,
+    Option<::metrics::Unit>,
+    Option<::metrics::SharedString>,
     DebugValue,
 )> {
     let recorder = DebuggingRecorder::new();
     let snapshotter: Snapshotter = recorder.snapshotter();
 
-    metrics::with_local_recorder(&recorder, || {
+    ::metrics::with_local_recorder(&recorder, || {
         tokio::runtime::Builder::new_current_thread()
             .build()
             .expect("current-thread runtime")
@@ -626,8 +626,8 @@ fn snapshot_cycles(
 fn value<'a>(
     snapshot: &'a [(
         metrics_util::CompositeKey,
-        Option<metrics::Unit>,
-        Option<metrics::SharedString>,
+        Option<::metrics::Unit>,
+        Option<::metrics::SharedString>,
         DebugValue,
     )],
     name: &str,
@@ -846,7 +846,7 @@ fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
     // deployment.
     let recorder = DebuggingRecorder::new();
     let snapshotter: Snapshotter = recorder.snapshotter();
-    metrics::with_local_recorder(&recorder, PriceWorkerMetrics::register_descriptions);
+    ::metrics::with_local_recorder(&recorder, PriceWorkerMetrics::register_descriptions);
     let snapshot = snapshotter.snapshot().into_vec();
 
     // All three, not just the two the redundancy rule touches: that ratio is

@@ -34,7 +34,7 @@ use std::time::Instant;
 
 use tracing::{debug, warn};
 
-use super::price_metrics::PriceWorkerMetrics;
+use super::metrics::PriceWorkerMetrics;
 use crate::error::SourceError;
 use yog_core::RepositoryError;
 

@@ -1,12 +1,7 @@
 mod metadata;
-mod metadata_metrics;
 mod pool_account;
 mod price;
-mod price_metrics;
-mod tick_outcome;
 
-pub(crate) use metadata::MetadataWorker;
-pub(crate) use metadata_metrics::MetadataWorkerMetrics;
+pub(crate) use metadata::{MetadataWorker, MetadataWorkerMetrics};
 pub(crate) use pool_account::PoolAccountWorker;
-pub(crate) use price::PriceWorker;
-pub(crate) use price_metrics::PriceWorkerMetrics;
+pub(crate) use price::{PriceWorker, PriceWorkerMetrics};

@@ -15,10 +15,11 @@ roles), see [`crates/README.md`](../README.md).
 context/src/
 ├── application/     ← what the daemon does once wired
 │   ├── source/      ← ports: MetadataSource, PriceSource, PoolAccountSource
-│   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker
-│                      (+ per-worker metrics, and tick_outcome: TickOutcome, the
-│                      seven ways a pricing cycle ends — returning one is what
-│                      makes a silent exit fail to compile)
+│   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
+│                      one <worker>.rs each, its own modules in <worker>/ —
+│                      metrics and tests, and price/tick_outcome.rs: TickOutcome,
+│                      the seven ways a pricing cycle ends — returning one is
+│                      what makes a silent exit fail to compile
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; infra.rs holds
 │                      the shared http_client and its timeouts; source_error.rs
