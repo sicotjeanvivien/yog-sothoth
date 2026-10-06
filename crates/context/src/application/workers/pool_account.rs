@@ -219,5 +219,5 @@ impl PoolAccountWorker {
 }
 
 #[cfg(test)]
-#[path = "pool_account_tests.rs"]
+#[path = "pool_account/pool_account_tests.rs"]
 mod tests;

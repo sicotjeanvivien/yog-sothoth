@@ -23,8 +23,6 @@
 //! 30-second sample — invisible at the dashboard level. The daemon
 //! must not fall over on a Jupiter hiccup.
 
-use super::price_metrics::PriceWorkerMetrics;
-use super::tick_outcome::TickOutcome;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -36,6 +34,12 @@ use yog_core::domain::{KeptPrices, TokenMetadataRepository, TokenPrice, TokenPri
 
 use crate::application::source::{FetchedPrice, PriceSource};
 use crate::error::WorkerError;
+
+mod metrics;
+mod tick_outcome;
+
+pub(crate) use metrics::PriceWorkerMetrics;
+use tick_outcome::TickOutcome;
 
 /// Worker that records a USD price for every known mint on a fixed
 /// interval.
@@ -245,5 +249,5 @@ impl PriceWorker {
 }
 
 #[cfg(test)]
-#[path = "price_tests.rs"]
+#[path = "price/price_tests.rs"]
 mod tests;

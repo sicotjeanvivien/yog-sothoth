@@ -1,9 +1,9 @@
 mod indexer;
-mod indexer_metrics;
 mod ingestion_alarm;
-mod ingestion_alarm_metrics;
+mod network_status_reporter;
 
-pub(crate) use indexer::IndexerWorker;
-pub(crate) use indexer_metrics::IndexerWorkerMetrics;
-pub(crate) use ingestion_alarm::{IngestionAlarm, STATEMENT_TIMEOUT};
-pub(crate) use ingestion_alarm_metrics::{HEARTBEAT_FAILURES, IngestionAlarmMetrics};
+pub(crate) use indexer::{IndexerWorker, IndexerWorkerMetrics};
+pub(crate) use ingestion_alarm::{
+    HEARTBEAT_FAILURES, IngestionAlarm, IngestionAlarmMetrics, STATEMENT_TIMEOUT,
+};
+pub(crate) use network_status_reporter::{NetworkStatusReporter, NetworkStatusReporterMetrics};

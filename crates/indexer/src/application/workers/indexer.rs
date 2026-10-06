@@ -21,12 +21,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::{
-    application::{
-        services::TransactionProcessor, source::IngestedTransaction,
-        workers::indexer_metrics::IndexerWorkerMetrics,
-    },
+    application::{services::TransactionProcessor, source::IngestedTransaction},
     error::IndexerWorkerError,
 };
+
+mod metrics;
+
+pub(crate) use metrics::IndexerWorkerMetrics;
 
 /// Worker that consumes delivered transactions and indexes them with
 /// bounded concurrency.
@@ -204,7 +205,7 @@ fn drain_and_count(rx: &mut mpsc::Receiver<IngestedTransaction>) -> usize {
 }
 
 #[cfg(test)]
-#[path = "indexer_tests.rs"]
+#[path = "indexer/indexer_tests.rs"]
 mod tests;
 
 /// Index a single transaction. Per-transaction errors are logged and counted,

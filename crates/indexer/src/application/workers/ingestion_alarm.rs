@@ -9,7 +9,8 @@
 //! Healthchecks.io check: a stale ingestion as `/fail` with the age of its last
 //! event, and a stopped daemon by the silence the check notices on its own.
 //!
-//! **The verdict is the dashboard's**, [`FreshnessStatus::from_last_event`] —
+//! **The verdict is the dashboard's**,
+//! [`FreshnessStatus::from_last_event`](yog_core::domain::FreshnessStatus::from_last_event) —
 //! the rule behind the live indicator — so the alarm and the panel cannot
 //! disagree. It reads what was *written*, not what this process believes it
 //! did: a persist that fails is logged and stepped over, so a count of indexed
@@ -22,14 +23,18 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, Duration as ChronoDuration, Utc};
+use chrono::{DateTime, Utc};
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use yog_bootstrap::Heartbeat;
-use yog_core::domain::{EventFreshnessRepository, FreshnessStatus};
+use yog_core::domain::EventFreshnessRepository;
 
-use super::ingestion_alarm_metrics::IngestionAlarmMetrics;
+mod metrics;
+mod verdict;
+
+pub(crate) use metrics::{HEARTBEAT_FAILURES, IngestionAlarmMetrics};
+use verdict::Verdict;
 
 /// Time between two checks — and between two pings of the check, whose period
 /// must say the same or it reports the daemon down.
@@ -54,61 +59,6 @@ pub(crate) const STATEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 /// server's cancellation, which frees the connection, comes first; otherwise
 /// Healthchecks.io would report a stopped daemon instead of the reason.
 const READ_TIMEOUT: Duration = Duration::from_secs(STATEMENT_TIMEOUT.as_secs() + 30);
-
-/// How one check ended — and what the heartbeat is told.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Verdict {
-    /// The last event is recent: success.
-    Live,
-    /// Older than usual, not yet stopped — a lull, which a quiet watched pool
-    /// produces several times a day: success.
-    Delayed,
-    /// Nothing indexed for too long, or ever (`None`): failure.
-    Stale {
-        last_event_at: Option<DateTime<Utc>>,
-    },
-    /// The last event could not be read; the text says why: failure.
-    Unreadable(String),
-}
-
-impl Verdict {
-    /// Judge the last event at `now`, by the rule `core` holds.
-    fn judge(last_event_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Self {
-        match FreshnessStatus::from_last_event(last_event_at, now) {
-            FreshnessStatus::Live => Self::Live,
-            FreshnessStatus::Delayed => Self::Delayed,
-            FreshnessStatus::Stale => Self::Stale { last_event_at },
-        }
-    }
-
-    /// The `outcome` label of the checks counter.
-    pub(crate) fn label(&self) -> &'static str {
-        match self {
-            Self::Live => FreshnessStatus::Live.as_str(),
-            Self::Delayed => FreshnessStatus::Delayed.as_str(),
-            Self::Stale { .. } => FreshnessStatus::Stale.as_str(),
-            Self::Unreadable(_) => "unreadable",
-        }
-    }
-
-    /// What `/fail` and the logs say, or `None` when the check succeeds.
-    fn failure_reason(&self, now: DateTime<Utc>) -> Option<String> {
-        match self {
-            Self::Live | Self::Delayed => None,
-            Self::Stale {
-                last_event_at: Some(at),
-            } => Some(format!(
-                "stale: last event {} ago, at {}",
-                hours_minutes(now - *at),
-                at.format("%Y-%m-%d %H:%M UTC")
-            )),
-            Self::Stale {
-                last_event_at: None,
-            } => Some("stale: no event has ever been indexed".to_string()),
-            Self::Unreadable(error) => Some(format!("unreadable: {error}")),
-        }
-    }
-}
 
 pub(crate) struct IngestionAlarm {
     repository: Arc<dyn EventFreshnessRepository>,
@@ -218,12 +168,6 @@ fn log_change(previous: Option<&'static str>, verdict: &Verdict, now: DateTime<U
     }
 }
 
-/// A duration as `4h05m`, the form the reason uses.
-fn hours_minutes(duration: ChronoDuration) -> String {
-    let minutes = duration.num_minutes();
-    format!("{}h{:02}m", minutes / 60, minutes % 60)
-}
-
 #[cfg(test)]
-#[path = "ingestion_alarm_tests.rs"]
+#[path = "ingestion_alarm/ingestion_alarm_tests.rs"]
 mod tests;

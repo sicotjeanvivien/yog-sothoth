@@ -237,7 +237,7 @@ async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
 fn with_recorder(body: impl Future<Output = ()>) -> Snapshotter {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
-    metrics::with_local_recorder(&recorder, || {
+    ::metrics::with_local_recorder(&recorder, || {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()

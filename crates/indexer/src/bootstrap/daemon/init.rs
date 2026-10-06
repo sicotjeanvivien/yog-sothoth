@@ -3,7 +3,6 @@
 
 use crate::{
     application::{
-        reporter::{NetworkStatusReporter, NetworkStatusReporterMetrics},
         services::{
             DammV2Repos, EventPersistor, EventPersistorMetrics, MeteoraDammV2EventPersistor,
             PoolMaintenance, TransactionProcessor, TransactionProcessorMetrics, WatchedPoolService,
@@ -11,7 +10,7 @@ use crate::{
         source::TransactionSource,
         workers::{
             HEARTBEAT_FAILURES, IndexerWorkerMetrics, IngestionAlarm, IngestionAlarmMetrics,
-            STATEMENT_TIMEOUT,
+            NetworkStatusReporter, NetworkStatusReporterMetrics, STATEMENT_TIMEOUT,
         },
     },
     bootstrap::{Config, TransactionArrival},
