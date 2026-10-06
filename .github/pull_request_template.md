@@ -17,5 +17,7 @@ dans le .env du serveur, un check Healthchecks.io, une commande sur le serveur.
 docker/README.md.
 -->
 
-- **Migration** : aucune <!-- ou laquelle : elle rend la version impossible à défaire -->
-- **Gestes** : rien
+<!-- Remplacer chaque À REMPLIR : un champ laissé tel quel se voit à la relecture. -->
+
+- **Migration** : À REMPLIR <!-- « aucune », ou laquelle : elle empêche de revenir à une version d'avant -->
+- **Gestes** : À REMPLIR <!-- « rien », ou la liste -->

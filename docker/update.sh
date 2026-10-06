@@ -24,9 +24,12 @@
 # 1. Refuse to start unless: no other run holds the lock, no tracked file is
 #    modified (the .env is ignored by git), HEAD is an ancestor of
 #    origin/main (no local commit on the server), and the version is a tag
-#    whose commit is on origin/main — what goes to production went through
-#    main. Going back to an older version is refused when a migration lies
-#    between the two: the schema cannot go back with the code.
+#    that origin holds on the same commit, on main's first-parent line — what
+#    goes to production is what main went through, not a commit of a merged
+#    branch. Two refusals guard the way back: a version older than versioned
+#    deploys (its scripts would put the old gate back), and a version that
+#    does not ship every migration the database holds (read from
+#    _sqlx_migrations) — the schema cannot go back with the code.
 # 2. Check the version out, detached — the checkout IS the version deployed —
 #    then hand over to the script as it is in that commit: a deploy always
 #    runs the procedure it ships with.
@@ -64,8 +67,8 @@
 # ----------------------------
 # - Roll a schema back. Migrations are forward-only; going back is a restore
 #   (crates/persistence/README.md, "Backup and restore"). Which is why a
-#   version older than a migration of the checkout is refused: fix forward,
-#   with a new version.
+#   version that does not ship every applied migration is refused: fix
+#   forward, with a new version.
 # - Refresh a continuous aggregate. A full-range refresh typed by hand once
 #   retention has dropped a chunk erases materialised history:
 #   crates/persistence/migrations/README.md says which bounded form to use.
@@ -148,32 +151,62 @@ main() {
       || die "fetching origin failed: unreachable, or a tag moved there (\`git fetch --tags origin\` says which)"
     git merge-base --is-ancestor HEAD origin/main \
       || die "HEAD is not an ancestor of origin/main: local commits on the server?"
+
+    # The tag as origin holds it now, not as the server remembers it: a tag
+    # deleted there is not deployed, and one that names another commit there
+    # is refused rather than followed. The last line is the peeled commit of
+    # an annotated tag, the only line of a lightweight one.
+    local remote
+    remote=$(git ls-remote origin "refs/tags/$version" "refs/tags/$version^{}" | awk 'END { print $1 }') \
+      || die "cannot list the tags of origin"
+    [ -n "$remote" ] || die "no tag $version on origin"
     new=$(git rev-parse --verify --quiet "refs/tags/$version^{commit}") \
-      || die "no tag $version on origin"
-    git merge-base --is-ancestor "$new" origin/main \
-      || die "$version is not on main: only what went through main is deployed"
+      || die "tag $version is on origin but was not fetched"
+    [ "$new" = "$remote" ] \
+      || die "tag $version names ${remote:0:7} on origin and ${new:0:7} here: a version names one commit for good"
+    # First-parent, not merely an ancestor: the intermediate commits of a
+    # merged pull request are ancestors of main too, and a version tagged on
+    # one would miss whatever was merged beside it. Not `grep -q`: it stops
+    # reading at the match, rev-list takes a SIGPIPE, and pipefail reads that
+    # as "not on main".
+    # shellcheck disable=SC2143
+    [ -n "$(git rev-list --first-parent origin/main | grep -x "$new")" ] \
+      || die "$version is not on main's first-parent line: a version is a commit main went through, not one of a merged branch"
+    [[ $(git show "$new:docker/update.sh" 2>/dev/null) == *deployed-version* ]] \
+      || die "$version predates versioned deploys: its scripts would put the old gate back — deploy a later version"
+
+    # The migrations the database holds and this version does not ship. The
+    # database, not git: a failed deploy may have applied part of its own,
+    # a checkout may have been moved by hand, a file may have been renamed —
+    # what the older binaries refuse is a schema newer than theirs, and only
+    # _sqlx_migrations says what the schema is.
+    local applied shipped unknown
+    applied=$(psql_admin -c "SELECT version FROM _sqlx_migrations ORDER BY 1") \
+      || die "cannot read the applied migrations: is postgres up?"
+    shipped=$(git ls-tree --name-only "$new" crates/persistence/migrations/ \
+      | sed -n 's#^.*/0*\([0-9][0-9]*\)_[^/]*\.sql$#\1#p')
+    unknown=$(LC_ALL=C comm -23 <(LC_ALL=C sort <<<"$applied") <(LC_ALL=C sort <<<"$shipped") | tr '\n' ' ')
+    [ -z "${unknown// /}" ] \
+      || die "$version does not ship migration(s) ${unknown% } that the database holds: the older binaries refuse a schema newer than theirs — fix forward, with a new version"
 
     # No record means unknown, not "HEAD is deployed": a checkout pulled by
-    # hand, or a first run that failed after its checkout, deploys.
+    # hand, or a first run that failed after its checkout, deploys. And the
+    # record alone is not enough either: a run that failed after its checkout
+    # left HEAD elsewhere, with the daemons possibly stopped.
     old=$(cat "$state/deployed" 2>/dev/null || echo unknown)
-    if [ "$old" = "$new" ] && [ "$mode" = deploy ]; then
-      log "nothing to deploy: $version (${new:0:7}) is deployed"
+    if [ "$old" = "$new" ] && [ "$(git rev-parse HEAD)" = "$new" ] && [ "$mode" = deploy ]; then
+      local recorded
+      recorded=$(cat "$state/deployed-version" 2>/dev/null || echo "no version")
+      if [ "$recorded" != "$version" ]; then
+        echo "$version" >"$state/deployed-version"
+        log "nothing to deploy: $version names the commit deployed as $recorded (${new:0:7}); recorded as $version"
+      else
+        log "nothing to deploy: $version (${new:0:7}) is deployed"
+      fi
       return
     fi
-
-    # Forward, back, or neither. Back is refused across a migration of the
-    # checkout: it may be applied, and the older binaries refuse a schema
-    # newer than theirs. HEAD rather than the record, because a run that
-    # failed after its checkout may have migrated already.
-    if git merge-base --is-ancestor HEAD "$new"; then
-      :
-    elif git merge-base --is-ancestor "$new" HEAD; then
-      local undone
-      undone=$(git diff --name-only --diff-filter=A "$new" HEAD -- 'crates/persistence/migrations/*.sql')
-      [ -z "$undone" ] || die "going back to $version would undo $(echo "$undone" | wc -l) migration(s): $(echo "$undone" | tr '\n' ' ')— the schema cannot go back with the code: fix forward, with a new version"
-      log "going back to $version: no migration lies in between"
-    else
-      die "$version is neither ahead of nor behind the checkout ($(git rev-parse --short HEAD))"
+    if [ "$old" != unknown ] && [ "$old" != "$new" ] && git merge-base --is-ancestor "$new" "$old"; then
+      log "going back to $version: the database holds no migration it lacks"
     fi
 
     # 2. Check the version out, then run the procedure as it has it. The lock
@@ -249,7 +282,7 @@ log() { printf '%s  %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
 die() { log "❌ $*" >&2; exit 1; }
 usage() { echo "usage: $0 vX.Y.Z | --force vX.Y.Z | --check" >&2; exit 2; }
 
-# What the record says is deployed: `v0.1.0 (06b64e4)`. A record from before
+# What the record says is deployed: `v0.2.0 (1a2b3c4)`. A record from before
 # versions has no tag beside its commit, and nothing at all is `unknown`.
 deployed_label() {
   local commit tag
