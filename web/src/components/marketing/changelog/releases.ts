@@ -37,6 +37,19 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.1",
+    date: "2026-10-06",
+    summary: "A security update of the dashboard's image library.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          "sharp, the image library behind the dashboard, is updated to 0.35.5 for a vulnerability in the librsvg it bundles (CVE-2026-96889). Nothing else changes.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.0",
     date: "2026-10-06",
     summary:
