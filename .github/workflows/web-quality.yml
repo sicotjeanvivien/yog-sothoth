@@ -1,4 +1,6 @@
 # Static quality checks for the /web Next.js package.
+# `changes` decides whether the jobs run on a pull request, and `verdict` is
+# the one check the ruleset of main requires (crates/README.md, "CI").
 # Runs typecheck, lint, unit tests and the dependency audit as parallel
 # jobs so a failure in one does not mask issues in the others.
 #
@@ -19,13 +21,8 @@ on:
       # compose alone must still run the test that watches it.
       - "docker-compose.yml"
       - ".github/workflows/web-quality.yml"
+  # Every pull request, whatever it touches: see the `changes` job.
   pull_request:
-    paths:
-      - "web/**"
-      # Read by src/lib/config/__tests__/compose-env.test.ts: a change to the
-      # compose alone must still run the test that watches it.
-      - "docker-compose.yml"
-      - ".github/workflows/web-quality.yml"
 
 # Cancel any in-flight run for the same ref when a new commit lands.
 # Saves CI minutes during rapid push cycles on PR branches.
@@ -38,8 +35,49 @@ defaults:
     working-directory: web
 
 jobs:
+  # Decides whether the jobs below run. The workflow starts on every pull
+  # request so that its verdict always exists: a required check that never
+  # starts stays "Expected" and blocks the merge for good. The work itself
+  # only runs when the PR touches this workflow's paths — the same ones the
+  # `push:` filter names. On a push to main that filter has already decided.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PATTERN: '^(web/|docker-compose\.yml$|\.github/workflows/web-quality\.yml$)'
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          touched=$(grep -E "$PATTERN" <<<"$changed" || true)
+          if [ -n "$touched" ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            echo "files this workflow checks:"
+            echo "$touched"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+            echo "no file on this workflow's paths changed: its jobs are skipped"
+          fi
+
   typecheck:
     name: TypeScript
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -63,6 +101,8 @@ jobs:
 
   lint:
     name: ESLint
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -86,6 +126,8 @@ jobs:
 
   test:
     name: Vitest
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -118,6 +160,8 @@ jobs:
   # visitor. It reads the lockfile alone, so no `npm ci`.
   audit:
     name: npm audit
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -133,3 +177,26 @@ jobs:
 
       - name: Audit runtime dependencies
         run: bash audit.sh
+
+  # The one check the ruleset of main requires from this workflow: green when
+  # every job above passed or was skipped, red when one failed or was
+  # cancelled. `always()` is what makes it run after a failure — skipped, a
+  # required check reads as passed, which is the one outcome it must not have.
+  verdict:
+    name: Verdict (web-quality)
+    if: always()
+    needs: [changes, typecheck, lint, test, audit]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
+            echo "a job failed or was cancelled" >&2
+            exit 1
+          fi

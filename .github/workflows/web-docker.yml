@@ -1,6 +1,8 @@
 # Build the production Docker image for the /web package and run a
 # smoke test against it. The image is not pushed anywhere; this
 # workflow is a regression guard, not a release pipeline.
+# `changes` decides whether it runs on a pull request, and `verdict` is the
+# one check the ruleset of main requires (crates/README.md, "CI").
 
 name: web-docker
 
@@ -10,18 +12,57 @@ on:
     paths:
       - "web/**"
       - ".github/workflows/web-docker.yml"
+  # Every pull request, whatever it touches: see the `changes` job.
   pull_request:
-    paths:
-      - "web/**"
-      - ".github/workflows/web-docker.yml"
 
 concurrency:
   group: web-docker-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Decides whether the jobs below run. The workflow starts on every pull
+  # request so that its verdict always exists: a required check that never
+  # starts stays "Expected" and blocks the merge for good. The work itself
+  # only runs when the PR touches this workflow's paths — the same ones the
+  # `push:` filter names. On a push to main that filter has already decided.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PATTERN: '^(web/|\.github/workflows/web-docker\.yml$)'
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          touched=$(grep -E "$PATTERN" <<<"$changed" || true)
+          if [ -n "$touched" ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            echo "files this workflow checks:"
+            echo "$touched"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+            echo "no file on this workflow's paths changed: its jobs are skipped"
+          fi
+
   build-and-smoke-test:
     name: Build and smoke-test
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -95,3 +136,26 @@ jobs:
         # an earlier step failed, so subsequent runs on the same
         # runner do not collide on the container name.
         run: docker stop yog-web-smoke || true
+
+  # The one check the ruleset of main requires from this workflow: green when
+  # every job above passed or was skipped, red when one failed or was
+  # cancelled. `always()` is what makes it run after a failure — skipped, a
+  # required check reads as passed, which is the one outcome it must not have.
+  verdict:
+    name: Verdict (web-docker)
+    if: always()
+    needs: [changes, build-and-smoke-test]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
+            echo "a job failed or was cancelled" >&2
+            exit 1
+          fi

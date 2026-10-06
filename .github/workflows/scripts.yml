@@ -1,0 +1,119 @@
+# Lints for what no other workflow reads: the shell scripts (docker/update.sh,
+# docker/deploy-entry.sh, web/audit.sh — every `*.sh` git tracks) and the
+# workflows themselves.
+#
+#   - shellcheck : the runner's shellcheck over `git ls-files '*.sh'`.
+#   - actionlint : the workflows, with shellcheck over their `run:` scripts,
+#                  installed by `go install` at a pinned version — the Go
+#                  checksum database verifies it, and no third-party action or
+#                  install script runs.
+#
+# Same shape as the other three: a `changes` job decides, the jobs run only
+# when this workflow's paths moved, and `verdict` is the check main requires.
+
+name: scripts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.sh"
+      - ".github/workflows/**"
+  # Every pull request, whatever it touches: see the `changes` job.
+  pull_request:
+
+concurrency:
+  group: scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Decides whether the jobs below run. The workflow starts on every pull
+  # request so that its verdict always exists: a required check that never
+  # starts stays "Expected" and blocks the merge for good. The work itself
+  # only runs when the PR touches this workflow's paths — the same ones the
+  # `push:` filter names. On a push to main that filter has already decided.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PATTERN: '(\.sh$|^\.github/workflows/)'
+        run: |
+          if [ "$EVENT" != pull_request ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          touched=$(grep -E "$PATTERN" <<<"$changed" || true)
+          if [ -n "$touched" ]; then
+            echo "run=true" >>"$GITHUB_OUTPUT"
+            echo "files this workflow checks:"
+            echo "$touched"
+          else
+            echo "run=false" >>"$GITHUB_OUTPUT"
+            echo "no file on this workflow's paths changed: its jobs are skipped"
+          fi
+
+  shellcheck:
+    name: shellcheck
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck on every tracked shell script
+        run: |
+          shellcheck --version | sed -n 2p
+          git ls-files -z '*.sh' | xargs -0 shellcheck
+
+  actionlint:
+    name: actionlint
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Install actionlint (pinned)
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: actionlint on the workflows
+        # shellcheck is on the runner's PATH, so actionlint also checks the
+        # `run:` scripts of every workflow.
+        run: |
+          "$(go env GOPATH)/bin/actionlint" -version | head -1
+          "$(go env GOPATH)/bin/actionlint" -color
+
+  # The one check the ruleset of main requires from this workflow: green when
+  # every job above passed or was skipped, red when one failed or was
+  # cancelled. `always()` is what makes it run after a failure — skipped, a
+  # required check reads as passed, which is the one outcome it must not have.
+  verdict:
+    name: Verdict (scripts)
+    if: always()
+    needs: [changes, shellcheck, actionlint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
+            echo "a job failed or was cancelled" >&2
+            exit 1
+          fi
