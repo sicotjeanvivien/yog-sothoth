@@ -1,0 +1,130 @@
+# Lints for what no other workflow reads: the shell scripts (docker/update.sh,
+# docker/deploy-entry.sh, web/audit.sh, .github/actions/changes/changes.sh —
+# every `*.sh` git tracks) and the workflows themselves.
+#
+#   - shellcheck : shellcheck over `git ls-files '*.sh'`.
+#   - actionlint : the workflows, with shellcheck over their `run:` scripts,
+#                  installed by `go install` at a pinned version — the Go
+#                  checksum database verifies it, and no third-party action or
+#                  install script runs.
+#
+# Both jobs install shellcheck 0.11.0 from its release archive, checked
+# against the SHA-256 below, rather than use the runner's: Ubuntu's is 0.9.0,
+# which reports an SC2015 that 0.11 no longer does, so the runner and a
+# developer's machine disagreed on the same file. One pinned version for
+# both, moved on purpose.
+#
+# Same shape as the other three: a `changes` job decides, the jobs run only
+# when this workflow's paths moved, and `verdict` is the check main requires.
+
+name: scripts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.sh"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+  # Every pull request, whatever it touches: see the `changes` job.
+  pull_request:
+
+env:
+  SHELLCHECK_VERSION: "0.11.0"
+  SHELLCHECK_SHA256: "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+
+concurrency:
+  group: scripts-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Decides whether the jobs below run. The workflow starts on every pull
+  # request so that its verdict always exists: a required check that never
+  # starts stays "Expected" and blocks the merge for good. The work itself
+  # only runs when the PR touches this workflow's paths — the same ones the
+  # `push:` filter names. On a push to main that filter has already decided.
+  # The logic, and the traps it avoids: .github/actions/changes/changes.sh.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        uses: ./.github/actions/changes
+        with:
+          pattern: '(\.sh$|^\.github/(workflows|actions)/)'
+
+  shellcheck:
+    name: shellcheck
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck (pinned)
+        run: |
+          archive="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/$archive"
+          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}" >>"$GITHUB_PATH"
+      - name: shellcheck on every tracked shell script
+        run: |
+          shellcheck --version | sed -n 2p
+          git ls-files -z '*.sh' | xargs -0 shellcheck
+
+  actionlint:
+    name: actionlint
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - name: Install shellcheck (pinned)
+        run: |
+          archive="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/$archive"
+          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}" >>"$GITHUB_PATH"
+      - name: Install actionlint (pinned)
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: actionlint on the workflows
+        # The pinned shellcheck is on the PATH, so actionlint also checks the
+        # `run:` scripts of every workflow, with the same version.
+        run: |
+          "$(go env GOPATH)/bin/actionlint" -version | head -1
+          "$(go env GOPATH)/bin/actionlint" -color
+
+  # The one check the ruleset of main requires from this workflow: green when
+  # every job above passed or was skipped, red when one failed or was
+  # cancelled. `always()` is what makes it run after a failure — skipped, a
+  # required check reads as passed, which is the one outcome it must not have.
+  verdict:
+    name: Verdict (scripts)
+    if: always()
+    needs: [changes, shellcheck, actionlint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
+            echo "a job failed or was cancelled" >&2
+            exit 1
+          fi

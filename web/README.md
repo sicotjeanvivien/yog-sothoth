@@ -475,7 +475,10 @@ to `proxy`. next-intl still exposes its helper under
 ## CI
 
 GitHub Actions runs four jobs in parallel on every push and PR that
-touches this package — see `.github/workflows/web-quality.yml`:
+touches this package — see `.github/workflows/web-quality.yml`. The workflow
+itself starts on every PR, so that its `Verdict (web-quality)` check exists for
+the ruleset of `main` to require; the jobs are skipped when nothing here moved
+(`crates/README.md`, *CI*):
 
 - **TypeScript** — `npm run typecheck`
 - **ESLint** — `npm run lint`
@@ -489,7 +492,8 @@ touches this package — see `.github/workflows/web-quality.yml`:
 
 A separate workflow (`.github/workflows/web-docker.yml`) builds the
 production Docker image and runs a smoke test against the locale
-routes. It does not push anywhere — it's a regression guard.
+routes, with its own `Verdict (web-docker)`. It does not push anywhere —
+it's a regression guard.
 
 ## See also
 

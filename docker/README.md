@@ -46,7 +46,12 @@ the latter.
 
 ## Cutting and deploying one
 
-1. Check that the CI of `main` is green on the commit to release.
+1. Check that the CI of `main` is green on the commit to release. Each pull
+   request was held to the CI of the paths it touched before it could merge
+   — the crates, the dashboard and its image, the shell scripts and the
+   workflows. Not the backend images, the Caddyfile or the production
+   overlay: no workflow builds or reads those, so the deploy is their first
+   build.
 2. Do what the merged pull requests list under **Avant de déployer** (see
    below) — first, because the deploy cannot be trusted to notice. A
    variable the production overlay requires with `${VAR:?…}` stops it at the

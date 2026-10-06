@@ -1,0 +1,24 @@
+# The `changes` step every CI workflow runs first: whether its jobs run on
+# this event. One definition for the four workflows — the logic, and the
+# traps it guards against, live in changes.sh beside it.
+name: changes
+description: Whether this workflow's jobs run — true on a pull request that touches its paths, and on any other event.
+inputs:
+  pattern:
+    description: Extended regex over repo-relative paths, the same paths as the workflow's `push:` filter.
+    required: true
+outputs:
+  run:
+    description: '"true" or "false".'
+    value: ${{ steps.diff.outputs.run }}
+runs:
+  using: composite
+  steps:
+    - id: diff
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE: ${{ github.event.pull_request.base.sha }}
+        HEAD: ${{ github.event.pull_request.head.sha }}
+        PATTERN: ${{ inputs.pattern }}
+      run: "$GITHUB_ACTION_PATH/changes.sh"

@@ -22,6 +22,10 @@
 #   - sqlx-check       : the committed `.sqlx/` cache still matches the
 #                        `query!` macros, against a freshly migrated database.
 #
+# Around them: `changes` decides whether they run on a pull request, and
+# `verdict` is the one check the ruleset of main requires (crates/README.md,
+# "CI").
+#
 # Rust version is pinned by /rust-toolchain.toml — `dtolnay/rust-toolchain@stable`
 # reads it automatically, so we never silently inherit a moving target.
 
@@ -37,14 +41,8 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/audit.toml"
       - ".github/workflows/crates.yml"
+  # Every pull request, whatever it touches: see the `changes` job.
   pull_request:
-    paths:
-      - "crates/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".cargo/audit.toml"
-      - ".github/workflows/crates.yml"
 
 # Cancel any in-flight run for the same ref when a new commit lands.
 concurrency:
@@ -58,8 +56,33 @@ env:
   SQLX_OFFLINE: "true"
 
 jobs:
+  # Decides whether the jobs below run. The workflow starts on every pull
+  # request so that its verdict always exists: a required check that never
+  # starts stays "Expected" and blocks the merge for good. The work itself
+  # only runs when the PR touches this workflow's paths — the same ones the
+  # `push:` filter names. On a push to main that filter has already decided.
+  # The logic, and the traps it avoids: .github/actions/changes/changes.sh.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        uses: ./.github/actions/changes
+        with:
+          pattern: '^(crates/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|\.cargo/audit\.toml$|\.github/workflows/crates\.yml$)'
+
   check:
     name: Check
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -137,6 +160,8 @@ jobs:
   # eight entries.
   check-per-crate:
     name: Check (per crate)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -156,7 +181,7 @@ jobs:
           crates=$(cargo metadata --no-deps --format-version 1 \
                    | jq -r '.packages[].name')
           n=$(echo "$crates" | grep -c . || true)
-          echo "$n members: $(echo $crates | tr '\n' ' ')"
+          echo "$n members: $(tr '\n' ' ' <<<"$crates")"
 
           # An empty list would sail through the loop below without
           # compiling anything, and report green. Fail loudly instead.
@@ -186,6 +211,8 @@ jobs:
   # apart before the rule was written (crates/README.md, *Conventions*).
   module-visibility:
     name: Module visibility
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -193,6 +220,8 @@ jobs:
 
   fmt:
     name: Format
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -201,6 +230,8 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -229,6 +260,8 @@ jobs:
 
   test:
     name: Test
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -256,6 +289,8 @@ jobs:
   # ─────────────────────────────────────────────────────────────────
   test-integration:
     name: Test (integration, DB)
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
 
     services:
@@ -329,6 +364,8 @@ jobs:
 
   audit:
     name: Audit
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -350,6 +387,8 @@ jobs:
   # produce against what `.sqlx/` actually contains.
   sqlx-check:
     name: SQLx check
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
  
     # TimescaleDB image because the baseline migration creates the timescaledb
@@ -475,3 +514,26 @@ jobs:
   #     - run: cargo build -p yog-wasm --target wasm32-unknown-unknown --release
 
   
+
+  # The one check the ruleset of main requires from this workflow: green when
+  # every job above passed or was skipped, red when one failed or was
+  # cancelled. `always()` is what makes it run after a failure — skipped, a
+  # required check reads as passed, which is the one outcome it must not have.
+  verdict:
+    name: Verdict (crates)
+    if: always()
+    needs: [changes, check, check-per-crate, module-visibility, fmt, clippy, test, test-integration, audit, sqlx-check]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$RESULTS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<<"$RESULTS" >/dev/null; then
+            echo "a job failed or was cancelled" >&2
+            exit 1
+          fi
