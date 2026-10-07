@@ -18,7 +18,7 @@ context/src/
 │   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
 │                      one <worker>.rs each, its own modules in <worker>/ —
 │                      metrics and tests, and price/tick_outcome.rs: TickOutcome,
-│                      the seven ways a pricing cycle ends — returning one is
+│                      the eight ways a pricing cycle ends — returning one is
 │                      what makes a silent exit fail to compile
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
 │                      SolanaAccountClient (+ provider metrics; infra.rs holds
@@ -48,6 +48,21 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 - **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s),
   lists the known mints and asks Jupiter Price V3 for current USD prices,
   inserting them with a single shared `fetched_at` per tick.
+
+  **It asks only for the mints worth asking.** Over half of the known mints
+  have never had a price (2 970 of 5 522, measured 28 September 2026), and
+  asking for all of them every tick is what rate-limited the rest: 41 % of the
+  calls refused, ticks of ~100 s spent mostly sleeping on 429s. A mint Jupiter
+  answers **without a price** now waits before it is asked again — 1, 2, 4, 8,
+  then 15 minutes at the default cadence — and goes back to every tick at its
+  first price. The rule is `UnpricedMints` in `yog-core`, held in memory like
+  `KeptPrices`; a restart forgets it and the first tick asks everything.
+
+  ⚠️ **Only an answer without a price counts.** A mint whose chunk was given up
+  on 429 was never answered, and holding it back would slow down mints that
+  have a price. The source reports the two cases apart (`PriceAnswer`), and the
+  worker feeds the rule before its filters, so a price the column cannot store
+  still counts as a price.
 
   **It drops prices the price column cannot hold**, before the insert, counting
   them in `yog_context_price_rejected_total` and naming the mints in a `warn!`.
@@ -249,6 +264,17 @@ hours. The API reports the consequence per pool (`swapBucketsPriced24h` /
 A tick that reached Jupiter but priced nothing sets the gauge to 0 and records
 `yog_context_price_tick_total{outcome="no_prices"}` — it must not look like a
 tick that never ran.
+
+**Requested mints** say how much of the universe is still worth asking:
+
+```promql
+yog_context_price_requested_mints / yog_context_price_known_mints
+```
+
+The gap is the mints Jupiter last answered without a price, waiting their turn
+(at most 15 minutes, plus one cycle). It does not touch the coverage above: a
+mint left out had no price to give. A tick where **every** known mint is
+waiting asks nothing and records `outcome="nothing_due"`, never `no_prices`.
 
 A tick that priced everything and wrote nothing because nothing moved records
 `outcome="unchanged"` instead, and **that one is the normal case** — most ticks

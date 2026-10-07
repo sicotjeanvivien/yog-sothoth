@@ -53,7 +53,7 @@ const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 /// # The wait
 ///
 /// After `n` answers in a row without a price, the mint waits
-/// `cadence × 2ⁿ`, up to [`UNPRICED_RETRY_MAX`]: at the default 30 s cadence,
+/// `cadence × 2ⁿ`, up to `UNPRICED_RETRY_MAX`: at the default 30 s cadence,
 /// 1, 2, 4, 8, then 15 minutes for as long as it stays without a price. The
 /// first waits are short on purpose: a token Jupiter has not indexed yet gets
 /// its price within minutes (392 of the 399 mints first priced during the
