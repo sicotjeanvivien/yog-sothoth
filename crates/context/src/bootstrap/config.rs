@@ -14,7 +14,7 @@ use std::num::NonZeroU32;
 use std::time::Duration;
 
 use yog_bootstrap::{
-    ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, optional, required,
+    ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, parse_optional, required,
     required_endpoint, required_secret_key, required_secret_url,
 };
 use yog_core::domain::PRICE_MAX_AGE_LATEST;
@@ -87,7 +87,11 @@ impl Config {
             pool_account: required_endpoint("POOL_ACCOUNT")?,
             jupiter_url: required("JUPITER_URL")?,
             jupiter_api_key: required_secret_key("JUPITER_API_KEY")?,
-            jupiter_rate_limit: jupiter_rate_limit(optional(JUPITER_RATE_LIMIT_KEY).as_deref())?,
+            jupiter_rate_limit: parse_optional(
+                "JUPITER_RATE_LIMIT_PER_MINUTE",
+                DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE,
+                "the requests per minute the Jupiter tier allows, at least 1",
+            )?,
             price_interval: price_interval()?,
             metadata_poll_interval: Duration::from_secs(duration_var(
                 "CONTEXT_METADATA_POLL_SECS",
@@ -154,22 +158,6 @@ fn price_interval_that_keeps_prices_current(seconds: u64) -> Result<Duration, Co
         expected: "a cadence under the 900s price staleness bound of \
                    yog_price_max_age_latest(), or every USD figure reads as absent",
     })
-}
-
-const JUPITER_RATE_LIMIT_KEY: &str = "JUPITER_RATE_LIMIT_PER_MINUTE";
-
-/// `JUPITER_RATE_LIMIT_PER_MINUTE`, from its raw value: absent is the free
-/// tier, zero is refused (it would space the requests infinitely).
-fn jupiter_rate_limit(raw: Option<&str>) -> Result<NonZeroU32, ConfigError> {
-    let Some(raw) = raw else {
-        return Ok(DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE);
-    };
-    raw.parse::<NonZeroU32>()
-        .map_err(|_| ConfigError::InvalidValue {
-            key: JUPITER_RATE_LIMIT_KEY.to_string(),
-            value: raw.to_string(),
-            expected: "the requests per minute the Jupiter tier allows, at least 1",
-        })
 }
 
 #[cfg(test)]

@@ -109,20 +109,3 @@ fn only_a_cadence_that_keeps_prices_current_is_accepted() {
         "an operator reads this in a crash log: {stale}"
     );
 }
-
-/// Unset is the free tier; zero would space the Jupiter requests infinitely
-/// and is refused, the refusal naming the key and the value an operator typed.
-#[test]
-fn only_a_positive_jupiter_rate_limit_is_accepted() {
-    assert_eq!(jupiter_rate_limit(None).expect("the default").get(), 60);
-    assert_eq!(jupiter_rate_limit(Some("600")).expect("a tier").get(), 600);
-
-    for refused in ["0", "-1", "soixante"] {
-        let error = jupiter_rate_limit(Some(refused)).expect_err("not a rate limit");
-        let message = error.to_string();
-        assert!(
-            message.contains("JUPITER_RATE_LIMIT_PER_MINUTE") && message.contains(refused),
-            "{message}"
-        );
-    }
-}

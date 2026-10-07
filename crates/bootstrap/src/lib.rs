@@ -42,9 +42,9 @@ mod exposure_tests;
 
 pub use endpoint::Endpoint;
 pub use env::{
-    EnvEnum, duration_var, optional, optional_secret_url, parse_required_bool, parse_required_enum,
-    parse_required_u32, required, required_endpoint, required_endpoint_allowing_header,
-    required_secret_key, required_secret_url,
+    EnvEnum, duration_var, optional, optional_secret_url, parse_optional, parse_required_bool,
+    parse_required_enum, parse_required_u32, required, required_endpoint,
+    required_endpoint_allowing_header, required_secret_key, required_secret_url,
 };
 pub use error::ConfigError;
 #[cfg(all(feature = "heartbeat", feature = "test-support"))]

@@ -397,6 +397,27 @@ pub fn parse_required_u32(key: &str) -> Result<u32, ConfigError> {
     })
 }
 
+/// Read an optional environment variable and parse it as a `T`, falling back
+/// to `default` when it is absent or blank, by [`optional`]'s rule.
+///
+/// The type carries the rule: a `NonZeroU32` refuses zero without the caller
+/// restating it. `expected` is what the refusal tells the operator. For a
+/// value that is not a secret: the refusal prints it.
+pub fn parse_optional<T: std::str::FromStr>(
+    key: &str,
+    default: T,
+    expected: &'static str,
+) -> Result<T, ConfigError> {
+    let Some(raw) = optional(key) else {
+        return Ok(default);
+    };
+    raw.parse::<T>().map_err(|_| ConfigError::InvalidValue {
+        key: key.to_string(),
+        value: raw,
+        expected,
+    })
+}
+
 /// Read a required environment variable and parse it as a `bool`.
 ///
 /// Accepts the literals `true` and `false` (case-insensitive). Anything
