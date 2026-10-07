@@ -40,13 +40,13 @@ export const RELEASES: readonly Release[] = [
     version: "v0.1.2",
     date: "2026-10-07",
     summary:
-      "Steadier token prices: Jupiter is asked at its own pace, and a restart no longer loses a round of prices.",
+      "More regular price sampling: Jupiter requests are spaced instead of sent in bursts, and a restart keeps the prices a round had already received.",
     sections: [
       {
         kind: "fixes",
         items: [
-          "Requests to Jupiter are spaced under the key's rate limit instead of sent in bursts, so every token that has a price gets it at each round rather than being refused (HTTP 429).",
-          "A token Jupiter answers without a price is asked again less and less often, up to every 15 minutes, instead of at every round; its first price puts it back on every round.",
+          "Requests to Jupiter are spaced under the configured rate limit (60 per minute by default) instead of sent in bursts, which Jupiter refused (HTTP 429) and which left tokens that have a price without one, round after round.",
+          "A token Jupiter answers without a price is asked again less and less often — up to every 15 minutes at the default 30-second cadence — instead of at every round; the next price it gets puts it back on every round.",
           "Stopping the enrichment service in the middle of a pricing round keeps the prices already received, instead of losing the whole round.",
         ],
       },
