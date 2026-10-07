@@ -13,6 +13,9 @@
 //!     end-to-end against a hand-rolled local HTTP server (no mock
 //!     dependency): 429-then-200 recovers the chunk, all-429 gives it
 //!     up as skip-and-log.
+//!   - The answer — every mint of a chunk Jupiter answered is either
+//!     priced or unpriced, the three shapes of absence included, while
+//!     the mints of a chunk given up are in neither list.
 //!
 //! The happy-path HTTP call itself is otherwise not exercised: it is
 //! a thin reqwest pipeline whose non-trivial parts are tested above.
@@ -270,11 +273,12 @@ async fn rate_limited_chunk_recovers_on_retry() {
     let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
 
     let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let fetched = client.fetch_prices(&[mint]).await.expect("Ok expected");
+    let answer = client.fetch_prices(&[mint]).await.expect("Ok expected");
 
-    assert_eq!(fetched.len(), 1, "the retried chunk yields its price");
-    assert_eq!(fetched[0].mint, mint);
-    assert_eq!(fetched[0].price_usd, dec("1.5"));
+    assert_eq!(answer.priced.len(), 1, "the retried chunk yields its price");
+    assert_eq!(answer.priced[0].mint, mint);
+    assert_eq!(answer.priced[0].price_usd, dec("1.5"));
+    assert!(answer.unpriced.is_empty());
 }
 
 #[tokio::test]
@@ -285,10 +289,70 @@ async fn chunk_rate_limited_on_every_attempt_is_skipped() {
     let base_url = serve_scripted_responses(responses);
 
     let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let fetched = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
+    let answer = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
 
-    // Attempts exhausted → skip-and-log, never a hard error.
-    assert!(fetched.is_empty());
+    // Attempts exhausted → skip-and-log, never a hard error. And the mint is
+    // not reported unpriced: Jupiter never answered for it.
+    assert!(answer.priced.is_empty());
+    assert!(
+        answer.unpriced.is_empty(),
+        "a chunk given up says nothing about its mints"
+    );
+}
+
+#[tokio::test]
+async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
+    let (with_price, null_price, no_field, no_entry) = (pk(30), pk(31), pk(32), pk(33));
+    // The three shapes of "no price" Jupiter produces, the last one being an
+    // entry that is simply not there.
+    let body = format!(
+        r#"{{
+          "{with_price}": {{ "usdPrice": 2.0 }},
+          "{null_price}": {{ "usdPrice": null }},
+          "{no_field}": {{ "liquidity": 0.42 }}
+        }}"#
+    );
+    let base_url = serve_scripted_responses(vec![response_200(&body)]);
+
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let answer = client
+        .fetch_prices(&[with_price, null_price, no_field, no_entry])
+        .await
+        .expect("Ok expected");
+
+    assert_eq!(
+        answer.priced.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![with_price]
+    );
+    let mut unpriced = answer.unpriced;
+    unpriced.sort();
+    let mut expected = vec![null_price, no_field, no_entry];
+    expected.sort();
+    assert_eq!(unpriced, expected, "a missing entry is unpriced too");
+}
+
+#[tokio::test]
+async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
+    // 51 mints: a first chunk of 50 that Jupiter answers, pricing one of them,
+    // and a second chunk of one that it rate-limits on every attempt.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let (answered, given_up) = mints.split_at(JUPITER_BATCH_MAX);
+    let body = format!(r#"{{ "{}": {{ "usdPrice": 3.0 }} }}"#, answered[0]);
+    let responses = std::iter::once(response_200(&body))
+        .chain((0..RATE_LIMIT_MAX_ATTEMPTS).map(|_| response_429(0)))
+        .collect();
+    let base_url = serve_scripted_responses(responses);
+
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let answer = client.fetch_prices(&mints).await.expect("Ok expected");
+
+    assert_eq!(answer.priced.len(), 1);
+    assert_eq!(answer.priced[0].mint, answered[0]);
+    assert_eq!(answer.unpriced.len(), JUPITER_BATCH_MAX - 1);
+    assert!(
+        !answer.unpriced.contains(&given_up[0]),
+        "the mint of the chunk given up is not unpriced: nobody answered for it"
+    );
 }
 
 #[test]

@@ -1,17 +1,18 @@
 //! Jupiter price API client — token USD price source.
 //!
 //! Calls Price API V3 (`GET https://api.jup.ag/price/v3?ids=...`)
-//! and returns the subset of mints that yielded a usable price.
-//! Mints that Jupiter cannot price (untraded recently, flagged by
-//! their heuristics) are silently dropped: this is documented V3
-//! behaviour and not an error.
+//! and says, for every mint of a chunk Jupiter answered, whether it
+//! came back with a usable price. A mint Jupiter cannot price
+//! (untraded recently, flagged by their heuristics) is documented V3
+//! behaviour and not an error: it is reported as unpriced, whatever
+//! shape the absence took in the response.
 //!
 //! Chunks beyond the first can hit Jupiter's rate limit (429) because
 //! they are sent back-to-back; those are retried a bounded number of
 //! times, pacing on the `Retry-After` header when present.
 
 use super::metrics::ProviderMetrics;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -23,7 +24,7 @@ use yog_bootstrap::SecretKey;
 use yog_core::domain::PriceProvider;
 
 use crate::{
-    application::source::{FetchedPrice, PriceSource},
+    application::source::{FetchedPrice, PriceAnswer, PriceSource},
     error::SourceError,
 };
 
@@ -96,9 +97,9 @@ impl JupiterPriceClient {
     }
 
     /// Single HTTP call. Caller guarantees `mints.len() <= JUPITER_BATCH_MAX`.
-    async fn fetch_chunk(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
+    async fn fetch_chunk(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         if mints.is_empty() {
-            return Ok(Vec::new());
+            return Ok(PriceAnswer::default());
         }
         debug_assert!(mints.len() <= JUPITER_BATCH_MAX);
         let start = Instant::now();
@@ -116,7 +117,7 @@ impl JupiterPriceClient {
         result
     }
 
-    async fn fetch_chunk_inner(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
+    async fn fetch_chunk_inner(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         let ids: String = mints
             .iter()
             .map(|m| m.to_string())
@@ -142,10 +143,12 @@ impl JupiterPriceClient {
             .json::<HashMap<String, JupiterPriceEntry>>()
             .await?;
 
-        Ok(response
+        let priced = response
             .into_iter()
             .filter_map(into_fetched_price)
-            .collect())
+            .collect();
+
+        Ok(chunk_answer(mints, priced))
     }
 }
 
@@ -154,10 +157,7 @@ impl JupiterPriceClient {
     /// Jupiter provided it, exponential backoff otherwise, then gives
     /// the chunk up (skip-and-log in the caller). Other errors are
     /// not retried — they are not pacing problems.
-    async fn fetch_chunk_with_retry(
-        &self,
-        mints: &[Pubkey],
-    ) -> Result<Vec<FetchedPrice>, SourceError> {
+    async fn fetch_chunk_with_retry(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         let mut attempt = 0;
         loop {
             match self.fetch_chunk(mints).await {
@@ -185,12 +185,15 @@ impl PriceSource for JupiterPriceClient {
     /// Fetches USD prices for an arbitrary number of mints, chunking
     /// internally on Jupiter's 50-id limit. Rate-limited chunks are
     /// retried with backoff; chunk-level failures are logged and
-    /// skipped.
-    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
-        let mut all = Vec::with_capacity(mints.len());
+    /// skipped, and their mints appear in neither list of the answer.
+    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
+        let mut answer = PriceAnswer::default();
         for chunk in mints.chunks(JUPITER_BATCH_MAX) {
             match self.fetch_chunk_with_retry(chunk).await {
-                Ok(fetched) => all.extend(fetched),
+                Ok(chunk) => {
+                    answer.priced.extend(chunk.priced);
+                    answer.unpriced.extend(chunk.unpriced);
+                }
                 Err(e) => {
                     warn!(
                         error = %e,
@@ -200,8 +203,26 @@ impl PriceSource for JupiterPriceClient {
                 }
             }
         }
-        Ok(all)
+        Ok(answer)
     }
+}
+
+/// The answer to one chunk Jupiter did answer: every mint `asked` for that did
+/// not come back with a price is unpriced.
+///
+/// Computed from what was **asked**, not from what came back, because the
+/// absence takes three shapes and only two of them leave an entry to read:
+/// `usdPrice: null`, an entry without `usdPrice`, and no entry for the mint at
+/// all.
+fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> PriceAnswer {
+    let with_price: HashSet<Pubkey> = priced.iter().map(|price| price.mint).collect();
+    let unpriced = asked
+        .iter()
+        .filter(|mint| !with_price.contains(mint))
+        .copied()
+        .collect();
+
+    PriceAnswer { priced, unpriced }
 }
 
 /// Delay before retry attempt `attempt` (0-based): the server's

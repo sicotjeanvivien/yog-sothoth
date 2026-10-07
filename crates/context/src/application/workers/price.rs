@@ -144,13 +144,14 @@ impl PriceWorker {
 
         debug!(count = mints.len(), "price worker: pricing mints");
 
-        let fetched = match self.source.fetch_prices(&mints).await {
-            Ok(fetched) => fetched,
+        let answer = match self.source.fetch_prices(&mints).await {
+            Ok(answer) => answer,
             Err(e) => return TickOutcome::SourceFailed(e),
         };
 
         let now = Utc::now();
-        let priced: Vec<TokenPrice> = fetched
+        let priced: Vec<TokenPrice> = answer
+            .priced
             .into_iter()
             .map(
                 |FetchedPrice {

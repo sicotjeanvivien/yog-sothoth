@@ -22,7 +22,7 @@ use yog_core::{
 };
 
 use super::*;
-use crate::application::source::{FetchedPrice, PriceSource};
+use crate::application::source::{FetchedPrice, PriceAnswer, PriceSource};
 use crate::error::SourceError;
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -114,12 +114,28 @@ impl TokenPriceRepository for FakePriceRepository {
 
 #[derive(Default)]
 struct FakePriceSource {
-    responses: Mutex<Vec<Result<Vec<FetchedPrice>, SourceError>>>,
+    responses: Mutex<Vec<Result<PriceAnswer, SourceError>>>,
     calls: Mutex<Vec<Vec<Pubkey>>>,
 }
 
 impl FakePriceSource {
+    /// Answers carrying prices only: every mint the source returns no price
+    /// for is left out of both lists, as if its request had failed.
     fn with_responses(responses: Vec<Result<Vec<FetchedPrice>, SourceError>>) -> Self {
+        Self::with_answers(
+            responses
+                .into_iter()
+                .map(|response| {
+                    response.map(|priced| PriceAnswer {
+                        priced,
+                        unpriced: vec![],
+                    })
+                })
+                .collect(),
+        )
+    }
+
+    fn with_answers(responses: Vec<Result<PriceAnswer, SourceError>>) -> Self {
         Self {
             responses: Mutex::new(responses),
             ..Self::default()
@@ -133,11 +149,11 @@ impl FakePriceSource {
 
 #[async_trait]
 impl PriceSource for FakePriceSource {
-    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError> {
+    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         self.calls.lock().unwrap().push(mints.to_vec());
         let mut responses = self.responses.lock().unwrap();
         if responses.is_empty() {
-            return Ok(Vec::new());
+            return Ok(PriceAnswer::default());
         }
         responses.remove(0)
     }
