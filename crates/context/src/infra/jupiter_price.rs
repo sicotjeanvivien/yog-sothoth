@@ -2,10 +2,8 @@
 //!
 //! Calls Price API V3 (`GET https://api.jup.ag/price/v3?ids=...`)
 //! and says, for every mint of a chunk Jupiter answered, whether it
-//! came back with a usable price. A mint Jupiter cannot price
-//! (untraded recently, flagged by their heuristics) is documented V3
-//! behaviour and not an error: it is reported as unpriced, whatever
-//! shape the absence took in the response.
+//! came back with a usable price. A mint Jupiter cannot price is not
+//! an error: it is reported as unpriced.
 //!
 //! Chunks beyond the first can hit Jupiter's rate limit (429) because
 //! they are sent back-to-back; those are retried a bounded number of
@@ -217,25 +215,18 @@ impl PriceSource for JupiterPriceClient {
     }
 }
 
-/// The answer to one chunk Jupiter did answer — or `None` when it reads as a
-/// degraded answer rather than a verdict.
+/// The answer to one chunk Jupiter did answer, or `None` when it is degraded.
 ///
-/// Every mint `asked` for that did not come back with a price is unpriced.
-/// Computed from what was **asked**, not from what came back, because the
-/// absence takes three shapes and only two of them leave an entry to read:
-/// `usdPrice: null`, an entry without `usdPrice`, and no entry for the mint at
-/// all.
+/// Every mint `asked` for that did not come back with a price is unpriced —
+/// computed from what was asked, because a missing entry is one of the shapes
+/// "no price" takes.
 ///
-/// ⚠️ **Unless not one of them came back with a price.** Jupiter answers for
-/// the mints it cannot price too — 48 of 48 on 28 September 2026, 26 of them
-/// without `usdPrice` — and chunks mix live and dead mints: over the 24 hours
-/// to that date, the least served of the 111 chunks of the universe still had
-/// 3 of its 50 mints priced. A chunk without a single price — `{}`, an error
-/// body, every entry null — is a degraded answer. Read as a verdict, it would
-/// hold every live mint of the chunk back for up to 15 minutes after Jupiter
-/// recovers, and during an outage of all prices, every mint of the universe.
-/// It says nothing, like a request that failed. The price of the rule: a chunk
-/// made of dead mints only is asked again every tick.
+/// ⚠️ **A chunk without a single price is degraded, not a verdict.** Jupiter
+/// answers for the mints it cannot price too, and a chunk mixes live and dead
+/// mints. Read as "no price", `{}`, an error body or all-null entries would
+/// hold back every live mint of the chunk after Jupiter recovers. Such a chunk
+/// says nothing, like a request that failed; the cost is that a chunk of dead
+/// mints only is asked every tick.
 fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnswer> {
     let with_price: HashSet<Pubkey> = priced.iter().map(|price| price.mint).collect();
     if !asked.iter().any(|mint| with_price.contains(mint)) {

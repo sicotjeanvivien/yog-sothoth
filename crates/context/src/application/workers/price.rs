@@ -56,8 +56,8 @@ pub struct PriceWorker {
     /// The tail of the written series, per mint — what makes a tick able to
     /// tell a price that moved from one that merely came round again.
     kept: KeptPrices,
-    /// The mints the source last answered without a price — what keeps a
-    /// tick from asking again, every 30 s, for prices that do not exist.
+    /// The mints the source last answered without a price, and when each is
+    /// worth asking again.
     unpriced: UnpricedMints,
 }
 
@@ -150,9 +150,7 @@ impl PriceWorker {
             Err(e) => return TickOutcome::ListFailed(e),
         };
 
-        // Only the mints worth asking. Over half of the known mints have never
-        // had a price, and asking for them every tick is what rate-limited the
-        // ones that do; `UnpricedMints` carries the waits and what resets them.
+        // Only the mints worth asking — see `UnpricedMints`.
         let asked_at = Utc::now();
         let mints: Vec<Pubkey> = known
             .iter()

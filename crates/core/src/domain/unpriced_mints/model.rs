@@ -1,23 +1,9 @@
 //! Which mints the price source answered without a price, and when to ask it
 //! again.
 //!
-//! The price worker asks for every known mint, and most of them never come
-//! back with a price: dead projects and memecoins with no route. Measured on
-//! 28 September 2026, 2 970 of the 5 522 known mints had never been priced
-//! once, each asked about 4 500 times. Asked in back-to-back chunks, they cost
-//! the rate limit that live mints need: 41 % of the calls refused (25 September
-//! 2026), and a tick of ~100 s of which ~89 % was spent sleeping on 429s.
-//!
-//! The source's own answer is the signal, and it is enough: deciding whether to
-//! ask again does not need to know *why* a mint has no price (dead, not indexed
-//! yet, liquidity stranded in an abandoned pool). It needs to know that the
-//! source, asked, had none — which this rule re-checks at least every
-//! [`UNPRICED_RETRY_MAX`].
-//!
-//! When to ask is a product judgement about freshness, like [`KeptPrices`],
-//! and lives here for the same reason.
-//!
-//! [`KeptPrices`]: crate::domain::KeptPrices
+//! The source's own answer is the signal: deciding whether to ask again does
+//! not need to know *why* a mint has no price, only that the source, asked, had
+//! none.
 
 use std::collections::HashMap;
 
@@ -25,81 +11,32 @@ use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
 
 /// The longest a mint the source answered without a price waits before it is
-/// asked again.
-///
-/// **Short, because a longer one buys nothing.** Projected on the 28 September
-/// 2026 universe, a cap of 15 minutes leaves ~47 chunks per tick and a cap of
-/// 24 hours ~44: the whole gain comes from no longer asking every tick, not
-/// from how long the wait grows. The cap is what bounds the delay of a mint
-/// that comes back to life — its swaps go unvalued until it is asked again,
-/// and an as-of gap is never backfilled (migration 005). On the 27 September
-/// 2026 event, 204 mints lost their price for three hours then regained it; 15
-/// minutes of delay would have cost at most the 10 swaps measured in the 15
-/// minutes after.
-///
-/// Its value equals [`PRICE_MAX_AGE_LATEST`] and owes it nothing: a mint with
-/// no price has no freshness to keep.
-///
-/// [`PRICE_MAX_AGE_LATEST`]: crate::domain::PRICE_MAX_AGE_LATEST
+/// asked again. It bounds how long a mint that comes back to life goes
+/// unvalued; a longer cap would save almost no request.
 const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 
 /// The mints the source last answered without a price, and when each is due
 /// again.
 ///
-/// Held by the price worker, the only one to see the source's answers. A mint
-/// the source has not answered for — never asked, or asked in a request that
-/// failed — is **not** in here, and is due.
+/// Held by the price worker. A mint not in here — never asked, or asked in a
+/// request that failed — is due.
 ///
-/// # The wait
+/// After `n` answers in a row without a price, a mint waits `cadence × 2ⁿ`, up
+/// to `UNPRICED_RETRY_MAX`: 1, 2, 4, 8, then 15 minutes at a 30 s cadence. The
+/// first answer with a price removes it, whether or not the column can store
+/// that price.
 ///
-/// After `n` answers in a row without a price, the mint waits
-/// `cadence × 2ⁿ`, up to `UNPRICED_RETRY_MAX`: at the default 30 s cadence,
-/// 1, 2, 4, 8, then 15 minutes for as long as it stays without a price. The
-/// first waits are short on purpose: a token Jupiter has not indexed yet gets
-/// its price within minutes (392 of the 399 mints first priced during the
-/// 28 September 2026 window got it within 5 minutes of discovery), and those
-/// first minutes are when it trades.
+/// ⚠️ **Decided one tick early.** The worker looks at a mint once per tick, and
+/// the answer arrives after its tick began: a wait counted from the answer
+/// would land a whole tick late. Subtracting one tick lands it on time, or one
+/// tick early when the request is very short — never late. A tick that
+/// overruns its cadence widens the bound to the cap plus one cycle.
 ///
-/// ⚠️ **Decided one tick early, like the floor of `KeptPrices`.** The worker
-/// looks at a mint once per tick, and the answer that starts a wait arrives a
-/// little after its tick began. A wait counted from the answer would therefore
-/// land on the tick *after* the one it names — 90 s instead of 60 at the
-/// default cadence, and so on at every step. Subtracting one tick puts the next
-/// ask one wait after the tick that asked — never later. It can land one tick
-/// *early*: the tick reads its clock before the request and the answer is
-/// recorded after it, so a request shorter than the jitter of the database
-/// read that precedes it lets the next tick find the mint due a tick sooner.
-/// Asking early costs a request; it never holds a price back.
+/// ⚠️ **Only an answer without a price counts.** A request that failed says
+/// nothing about its mints; counting it would hold back mints that have a
+/// price. The caller passes those in neither list.
 ///
-/// That holds while a tick fits its cadence. A tick that overruns it (~100 s
-/// against 5 000 mints in September 2026) runs back to back with the next, and
-/// the ask lands within one such cycle of the wait: **the guarantee is then the
-/// cap plus one cycle.**
-///
-/// # What resets it
-///
-/// **Any price.** The first answer with a price removes the mint, which goes
-/// back to being asked every tick, and a later answer without one starts the
-/// waits over from the first. A price the column cannot store counts as a
-/// price here: the source had one, and the storability filter is another
-/// question.
-///
-/// **What does not.** A request that failed — a chunk given up on 429 — says
-/// nothing about its mints. Counting it as "no price" would slow down mints
-/// that have one: ~500 per tick were in that case on 28 September 2026. The
-/// caller passes such mints in neither list, and their schedule stays as it
-/// was.
-///
-/// # Size, and the boot
-///
-/// An entry is a `Pubkey` and its schedule, about 50 bytes: the ~3 000
-/// unpriced mints of September 2026 stay well under a megabyte. A mint leaves
-/// at its first price, and the rest is bounded by `token_metadata`, which only
-/// grows as tokens are discovered.
-///
-/// It starts empty on every boot: the first tick asks every known mint, and the
-/// waits build up again over the next half hour — a handful of extra asks per
-/// dead mint, never a live one held back.
+/// Starts empty on every boot, so the first tick asks every known mint.
 #[derive(Debug)]
 pub struct UnpricedMints {
     deferred: HashMap<Pubkey, Deferral>,
@@ -116,10 +53,8 @@ struct Deferral {
 }
 
 impl UnpricedMints {
-    /// Build the rule for a worker ticking every `tick_interval`.
-    ///
-    /// The cadence is the unit of the wait: a wait shorter than one tick would
-    /// change nothing, since the mint is only looked at once per tick.
+    /// Build the rule for a worker ticking every `tick_interval`, the unit of
+    /// the wait.
     pub fn new(tick_interval: core::time::Duration) -> Self {
         let tick = Duration::from_std(tick_interval).unwrap_or(UNPRICED_RETRY_MAX);
 
@@ -130,14 +65,8 @@ impl UnpricedMints {
     }
 
     /// The longest a mint without a price goes unasked at this cadence: the
-    /// cap, or the cadence itself when it is longer, since every tick then
-    /// asks.
-    ///
-    /// Exposed for the reason [`KeptPrices::rewrites_at_most_every`] is: it
-    /// follows from the cadence *and* a constant of this crate, so an operator
-    /// cannot derive it, and the price worker states it once at startup.
-    ///
-    /// [`KeptPrices::rewrites_at_most_every`]: crate::domain::KeptPrices::rewrites_at_most_every
+    /// cap, or the cadence when it is longer. Stated by the price worker at
+    /// startup, since an operator cannot derive it from the configuration.
     pub fn asks_again_at_most_every(&self) -> Duration {
         UNPRICED_RETRY_MAX.max(self.tick)
     }
@@ -153,7 +82,7 @@ impl UnpricedMints {
     ///
     /// `priced` are the mints it returned a price for, `unpriced` the ones it
     /// answered for without a price. A mint asked in a request that failed
-    /// belongs in **neither**: see the type's documentation for why.
+    /// belongs in **neither**.
     pub fn record<'a>(
         &mut self,
         priced: impl IntoIterator<Item = &'a Pubkey>,
@@ -171,10 +100,8 @@ impl UnpricedMints {
                 .map_or(0, |deferral| deferral.misses)
                 .saturating_add(1);
 
-            // One tick early: see the type's documentation. At a cadence over
-            // the cap this lands in the past and the mint is due at the next
-            // tick — the rule, since ticks are already further apart than the
-            // cap allows.
+            // One tick early (see the type). Above the cap, this lands in the
+            // past: every tick asks.
             self.deferred.insert(
                 *mint,
                 Deferral {
@@ -187,9 +114,8 @@ impl UnpricedMints {
 
     /// `cadence × 2^misses`, capped at [`UNPRICED_RETRY_MAX`].
     fn wait_after(&self, misses: u32) -> Duration {
-        // Any cadence of a second or more reaches the cap well before 2²⁰, so
-        // clamping the exponent there changes no wait and keeps the shift and
-        // the multiplication from overflowing.
+        // Any cadence reaches the cap well before 2²⁰: the clamp only keeps
+        // the shift and the multiplication from overflowing.
         let factor = 1_i32 << misses.min(20);
 
         self.tick

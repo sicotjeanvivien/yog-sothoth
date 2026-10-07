@@ -1,31 +1,19 @@
-//! The eight ways a **pricing** cycle ends, and everything the outside learns
-//! from each. It belongs to the price worker alone, hence its place in
-//! `price/`: another worker's cycle would end in other ways, and get its own
-//! type in its own folder.
+//! The ways a **pricing** cycle ends, and everything the outside learns from
+//! each.
 //!
 //! ⚠️ **The type exists so that leaving without saying so cannot compile.**
-//! Every exit owes the same triple: a reason in the log, a duration stamped
-//! under this ending's own outcome label, and — for the three that stop before
-//! anything was priced — a zeroed coverage gauge, so its numerator never
-//! outlives the denominator it was measured against. Written inline at eight
-//! `return`s, that triple is a convention, and this file's own history is the
-//! argument against conventions: `no_prices` was declared in the label set from
-//! the start and emitted at none of them, and `set_priced_mints(0)` was missing
-//! from two of the three early exits.
+//! Every ending owes a reason in the log and a duration under its own outcome
+//! label, and those that stop before anything was priced also zero the
+//! coverage gauge, so its numerator never outlives its denominator. The cycle
+//! *returns* a [`TickOutcome`]: a bare `return;` does not type-check, and a new
+//! ending is a new variant whose arm the compiler asks for.
 //!
-//! Because the cycle *returns* a [`TickOutcome`], a bare `return;` no longer
-//! type-checks. A ninth ending is a new variant, and the compiler asks for
-//! its arm rather than a reviewer noticing its absence.
+//! **One `match`, on purpose**: each arm logs *and* evaluates to its own label,
+//! so the two halves of an ending cannot drift apart.
 //!
-//! **One `match`, on purpose.** An earlier draft had two — one for the log, one
-//! for the label — which put the two halves of an ending in different places
-//! and let them drift: giving `AllUnchanged` the label of `NoStorablePrice`
-//! would have compiled. Here each arm logs *and* evaluates to its own label, so
-//! there is one place per ending and nothing to keep in step.
-//!
-//! What stays in the worker is what is **not** an ending: the counters several
-//! exits share, and the coverage gauge, whose *position* between the two
-//! filters is a decision rather than a consequence.
+//! What stays in the worker is what is not an ending: the counters several
+//! endings share, and the coverage gauge, whose position between the two
+//! filters is a decision.
 
 use std::time::Instant;
 
@@ -83,18 +71,14 @@ impl TickOutcome {
             }
             TickOutcome::NothingDue => {
                 debug!("price worker: every known mint is waiting its turn — nothing asked");
-                // Nothing was priced, and not because nothing is known: every
-                // known mint is one the source has no price for. A coverage of
-                // 0 is the truth, and `no_prices` would be the wrong alarm.
+                // Coverage 0 is the truth; `no_prices` would be the wrong alarm.
                 no_coverage();
                 "nothing_due"
             }
             TickOutcome::SourceFailed(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
-                // Unreachable with the current Jupiter client, which absorbs
-                // per-chunk failures and returns `Ok(partial)` — which is
-                // exactly why the gauge reset would rot silently here in the
-                // next `PriceSource`.
+                // Unreachable with the Jupiter client, which absorbs chunk
+                // failures — the reset is for the next `PriceSource`.
                 no_coverage();
                 "source_hard_error"
             }

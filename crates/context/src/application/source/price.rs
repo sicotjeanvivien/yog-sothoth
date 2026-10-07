@@ -17,10 +17,8 @@ pub(crate) struct FetchedPrice {
 /// What the source said about the mints it was asked for.
 ///
 /// ⚠️ **Three cases, not two.** A mint is in `priced`, in `unpriced`, or in
-/// **neither**: a mint whose request failed — a chunk given up on 429, an HTTP
-/// or decoding error — was never answered, and putting it in `unpriced` would
-/// tell `UnpricedMints` that the source has no price for a mint that may well
-/// have one.
+/// **neither**: one whose request failed was never answered, and calling it
+/// unpriced would hold back a mint that may well have a price.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PriceAnswer {
     /// The mints the source returned a price for.
