@@ -37,6 +37,22 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.2",
+    date: "2026-10-07",
+    summary:
+      "Steadier token prices: Jupiter is asked at its own pace, and a restart no longer loses a round of prices.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          "Requests to Jupiter are spaced under the key's rate limit instead of sent in bursts, so every token that has a price gets it at each round rather than being refused (HTTP 429).",
+          "A token Jupiter answers without a price is asked again less and less often, up to every 15 minutes, instead of at every round; its first price puts it back on every round.",
+          "Stopping the enrichment service in the middle of a pricing round keeps the prices already received, instead of losing the whole round.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.1",
     date: "2026-10-06",
     summary: "A security update of the dashboard's image library.",
