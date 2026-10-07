@@ -16,27 +16,9 @@ use solana_pubkey::Pubkey;
 const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 
 /// The mints the source last answered without a price, and when each is due
-/// again.
-///
-/// Held by the price worker. A mint not in here — never asked, or asked in a
-/// request that failed — is due.
-///
-/// After `n` answers in a row without a price, a mint waits `cadence × 2ⁿ`, up
-/// to `UNPRICED_RETRY_MAX`: 1, 2, 4, 8, then 15 minutes at a 30 s cadence. The
-/// first answer with a price removes it, whether or not the column can store
-/// that price.
-///
-/// ⚠️ **Decided one tick early.** The worker looks at a mint once per tick, and
-/// the answer arrives after its tick began: a wait counted from the answer
-/// would land a whole tick late. Subtracting one tick lands it on time, or one
-/// tick early when the request is very short — never late. A tick that
-/// overruns its cadence widens the bound to the cap plus one cycle.
-///
-/// ⚠️ **Only an answer without a price counts.** A request that failed says
-/// nothing about its mints; counting it would hold back mints that have a
-/// price. The caller passes those in neither list.
-///
-/// Starts empty on every boot, so the first tick asks every known mint.
+/// again; a mint not in here is due. After `n` answers in a row without a
+/// price, a mint waits `cadence × 2ⁿ` up to `UNPRICED_RETRY_MAX` — 1, 2, 4, 8,
+/// then 15 minutes at 30 s — and its first price removes it. Empty at boot.
 #[derive(Debug)]
 pub struct UnpricedMints {
     deferred: HashMap<Pubkey, Deferral>,
@@ -78,11 +60,12 @@ impl UnpricedMints {
             .is_none_or(|deferral| now >= deferral.due_at)
     }
 
-    /// Take in what the source answered at `now`.
+    /// Take in what the source answered at `now`: `priced` mints leave,
+    /// `unpriced` ones wait.
     ///
-    /// `priced` are the mints it returned a price for, `unpriced` the ones it
-    /// answered for without a price. A mint asked in a request that failed
-    /// belongs in **neither**.
+    /// ⚠️ A mint asked in a request that failed goes in **neither**: it was
+    /// never answered, and counting it would hold back a mint that may have a
+    /// price.
     pub fn record<'a>(
         &mut self,
         priced: impl IntoIterator<Item = &'a Pubkey>,
@@ -100,8 +83,9 @@ impl UnpricedMints {
                 .map_or(0, |deferral| deferral.misses)
                 .saturating_add(1);
 
-            // One tick early (see the type). Above the cap, this lands in the
-            // past: every tick asks.
+            // ⚠️ One tick early: the answer arrives after its tick began, so a
+            // wait counted from it would land a tick late. Above the cap, this
+            // lands in the past and every tick asks.
             self.deferred.insert(
                 *mint,
                 Deferral {
