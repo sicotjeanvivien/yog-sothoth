@@ -1,4 +1,5 @@
-//! Price worker. Every `price_interval` (30 s by default) it:
+//! Price worker. Every `price_interval` (30 s by default), or back to back when
+//! a tick outlasts it, it:
 //!   1. lists the known mints and keeps those worth asking (`UnpricedMints`);
 //!   2. asks the source for their USD price;
 //!   3. drops the prices the column cannot hold and those that repeat the last

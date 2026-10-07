@@ -1,8 +1,5 @@
-//! What a requested stop is, for every daemon that has one.
-//!
-//! Three things live here, and they are here rather than in a binary because
-//! each is **one rule applied at several sites**, and a rule written twice is a
-//! rule that holds at one site out of two:
+//! What a requested stop is, for every daemon that has one — each rule here is
+//! applied at several sites, and written once:
 //!
 //! - which signals mean "stop" ([`shutdown_signal`]);
 //! - what a finished task's result says, panic and cancellation told apart
@@ -10,23 +7,10 @@
 //! - what the stop is worth once every stage has answered — or has failed to,
 //!   inside [`SHUTDOWN_GRACE`] ([`Stop`]).
 //!
-//! ⚠️ **These lines come from `yog_bootstrap`, not from the binary**, and that
-//! nearly made a stop unreadable. `EnvFilter` has no implicit global level, so
-//! a `RUST_LOG` made only of per-crate directives — this repository's own —
-//! printed none of `"… stopped"`, `"… panicked"` or the `warn!` naming a stage
-//! destroyed mid-write, and a torn stop read exactly like a clean one. Found on
-//! 14 September 2026 while measuring, by ten cycles that came back silent.
-//!
-//! It is a constraint now, not a warning to remember: `runtime::build_filter`
-//! keeps this target audible unless the operator has said something that covers
-//! it. That function owns the rule; do not restate it.
-//!
-//! ⚠️ **The divergence this module exists to prevent already happened.** The
-//! indexer's daemon and `yog-context`'s each carried their own
-//! `handle_task_result`, and the context one's doc-comment said in so many
-//! words that it covered "the same three cases the indexer's covers". The
-//! duplication was documented, and it diverged anyway the day the indexer
-//! learned to tell a cancellation from a panic and `yog-context` did not.
+//! ⚠️ These lines log under `yog_bootstrap`, not the binary's target: a
+//! `RUST_LOG` of per-crate directives alone would silence them, and a torn stop
+//! would read like a clean one. `runtime::build_filter` keeps the target
+//! audible, and owns that rule.
 
 use std::time::Duration;
 use tokio::{task::JoinError, task::JoinHandle, time::Instant};
@@ -133,11 +117,8 @@ impl Stop {
     /// `collected` names the stage that verdict came from, so the drain can be
     /// written as a plain list of every stage — see [`Stop::settle`].
     ///
-    /// ⚠️ **The deadline is computed here, not handed in.** It used to be the
-    /// caller's job, next to a `finish` that printed [`SHUTDOWN_GRACE`] in its
-    /// warning — one binary, so the two could not disagree. At two they could:
-    /// the grace named in the logs and the grace actually waited would have
-    /// been two statements of one rule. Now there is one.
+    /// ⚠️ The deadline is computed here, not handed in: the grace waited and
+    /// the grace named in the logs are one value.
     pub fn new(first: anyhow::Result<()>, collected: Option<&'static str>) -> Self {
         Self {
             outcome: first,
@@ -151,10 +132,8 @@ impl Stop {
     ///
     /// A task that ends in time has its result logged, and adopted as the
     /// verdict if nothing has failed yet. A task that does not is recorded by
-    /// name: it is still running, and it will be destroyed mid-flight when
-    /// `main` drops the runtime. Keeping the name — rather than only logging it
-    /// — is what makes "the overrun names its task" something a test can
-    /// falsify.
+    /// name: it is still running, and `main` dropping the runtime destroys it
+    /// mid-flight.
     ///
     /// ⚠️ **Stages are served in call order, and that order is a decision.**
     /// One deadline spent in turn means the first stage waited on can eat all
@@ -163,14 +142,10 @@ impl Stop {
     /// — but no wait for one that has not come. Call first the stage whose
     /// work is *lost* rather than merely abandoned.
     ///
-    /// ⚠️ **The stage the `select!` already collected is skipped here, and that
-    /// is why it is skipped nowhere else.** Its handle has been polled to
-    /// completion and `tokio` panics on a `JoinHandle` polled again, so every
-    /// drain has to step over it. Written at the call sites, that guard was six
-    /// `if`s across two daemons — one rule stated six times, which is one rule
-    /// per site waiting to be forgotten by the seventh. Callers now list every
-    /// stage, in the order they want them served, and say nothing about which
-    /// one is spent.
+    /// ⚠️ The stage the `select!` already collected is skipped here, and
+    /// nowhere else: its handle is polled to completion, and `tokio` panics on
+    /// a `JoinHandle` polled again. Callers list every stage, in the order they
+    /// want them served.
     pub async fn settle<E>(&mut self, name: &'static str, handle: &mut JoinHandle<Result<(), E>>)
     where
         E: std::error::Error + Send + Sync + 'static,
@@ -204,18 +179,14 @@ impl Stop {
 
 /// Resolve when the process is asked to stop.
 ///
-/// ⚠️ **Both signals, and the second one is the one production sends.**
-/// Ctrl-C (SIGINT) is what a developer types; `docker compose stop`, a
-/// Kubernetes eviction and `systemctl stop` all send **SIGTERM**. That was
-/// `yog-context` and `yog-signals` until 14 September 2026, which is why this
-/// lives here instead of in one binary's `main`.
+/// ⚠️ **Both signals: the second is the one production sends.** Ctrl-C
+/// (SIGINT) is what a developer types; `docker compose stop`, a Kubernetes
+/// eviction and `systemctl stop` send **SIGTERM**.
 ///
-/// ⚠️ **And in a container it is worse than dying.** Every compose service
-/// `exec`s its binary, so the daemon is **PID 1** — and the kernel does not
-/// deliver a signal's default action to PID 1. A process with no SIGTERM
-/// handler therefore *ignores* it: nothing stops, nothing is logged, and Docker
-/// waits its ten seconds before SIGKILL. The stop did not tear, it never
-/// started.
+/// ⚠️ **In a container, an unheard SIGTERM is ignored.** Every compose service
+/// `exec`s its binary, so the daemon is PID 1, and the kernel does not apply a
+/// signal's default action to PID 1: without a handler nothing stops, nothing
+/// is logged, and Docker sends SIGKILL ten seconds later.
 pub async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()

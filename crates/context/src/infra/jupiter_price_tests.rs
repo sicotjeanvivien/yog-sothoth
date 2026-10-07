@@ -528,8 +528,7 @@ async fn a_stop_between_two_chunks_returns_what_was_answered() {
     let (base_url, arrivals) = serve_timed_responses(script);
     let client = client_at(base_url, 1);
 
-    // Whether it lands during the first request or in the pause after it,
-    // the pause that follows hears it.
+    // The first chunk is answered at once, so the stop lands in the pause.
     let shutdown = CancellationToken::new();
     let stop = shutdown.clone();
     tokio::spawn(async move {

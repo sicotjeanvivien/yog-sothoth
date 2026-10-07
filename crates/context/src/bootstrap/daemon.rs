@@ -1,9 +1,5 @@
-//! Shared daemon dependencies, assembled once at startup.
-//!
-//! Holds the repositories and the two HTTP source clients. The two
-//! reqwest clients are deliberately distinct (and separate from the
-//! indexer's RPC client): a burst of enrichment traffic must never
-//! slow the indexer's hot ingestion path.
+//! Shared daemon dependencies, assembled once at startup: the repositories
+//! and the three source clients, each with its own HTTP client.
 
 use std::sync::Arc;
 
@@ -46,9 +42,9 @@ pub(crate) struct Daemon {
     pool_repository: Arc<dyn PoolRepository>,
     /// cp-amm pool account source.
     pool_account_source: Arc<dyn PoolAccountSource>,
-    /// Context METADATA poll secs
+    /// The metadata and pool-account workers' cadence.
     poll_interval: std::time::Duration,
-    /// context PRICE interval secs
+    /// The price worker's cadence.
     price_interval: std::time::Duration,
 }
 
@@ -72,23 +68,20 @@ impl Daemon {
         let token_price_repository: Arc<dyn TokenPriceRepository> =
             Arc::new(PgTokenPriceRepository::new(db_pool.clone()));
 
-        // One resolver per protocol. Each owns its own enrichment queue and its
-        // own tables; the worker iterates and names none of them. Adding DLMM
-        // means pushing its resolver here — nothing else moves.
+        // One resolver per protocol, each with its own queue and tables; the
+        // worker names none of them. A new protocol pushes its resolver here.
         let pool_account_resolvers: Vec<Arc<dyn PoolAccountResolver>> = vec![
             Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
                 db_pool.clone(),
             )),
             Arc::new(PgMeteoraDlmmPoolPropertiesRepository::new(db_pool.clone())),
         ];
-        // Written by the same worker, from the same account read — but through
-        // the repository that owns `pools`, so no satellite is a co-writer of
-        // the cross-protocol registry.
+        // Same worker, same account read, but through the repository that owns
+        // `pools`: no satellite writes the cross-protocol registry.
         let pool_repository: Arc<dyn PoolRepository> = Arc::new(PgPoolRepository::new(db_pool));
 
-        // Two independent HTTP clients — one per external source. Each takes
-        // the wrapped secret, not the exposed string: the type travels to the
-        // request builder, so `.expose()` never happens this far from the wire.
+        // Each client takes the wrapped secret: `.expose()` happens at the
+        // request builder, never here.
         let metadata_source = Arc::new(HeliusDasClient::new(config.token_metadata.url()));
         let price_source = Arc::new(JupiterPriceClient::new(
             config.jupiter_url.clone(),
@@ -96,10 +89,9 @@ impl Daemon {
             config.jupiter_rate_limit,
         ));
         log::jupiter_spacing(config.jupiter_rate_limit, price_source.request_spacing());
-        // `getMultipleAccounts`, standard Solana JSON-RPC — its own endpoint,
-        // which may or may not be the provider serving DAS above. Logged
-        // side by side because that is what makes the split visible at
-        // startup rather than in a config file nobody rereads.
+        // `getMultipleAccounts`, its own endpoint, which may or may not be the
+        // provider serving DAS: the two are logged side by side, so that the
+        // split shows at startup.
         let pool_account_source: Arc<dyn PoolAccountSource> =
             Arc::new(SolanaAccountClient::new(config.pool_account.url()));
         log::endpoints_initialized(&config.token_metadata, &config.pool_account);
@@ -125,14 +117,9 @@ impl Daemon {
     /// then **wait for the others** before returning.
     ///
     /// ⚠️ **The waiting is the point.** `main` drops the runtime the moment
-    /// this returns, and a dropped runtime destroys whatever is still in
-    /// flight — a price tick among them, whose rows are stamped at one instant
-    /// the next cycle does not redo.
-    ///
-    /// The grace keeps the wait from becoming a hang: a worker that will not
-    /// end is named in the logs and left to the runtime. A price tick outlasts
-    /// the grace on its own, so it hears the stop at any point of a Jupiter
-    /// request, drops the one in flight and writes what it has.
+    /// this returns, destroying whatever is still in flight — a price tick
+    /// among them. The grace bounds the wait: a worker that will not end is
+    /// named in the logs and left behind.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),
@@ -157,14 +144,10 @@ impl Daemon {
             shutdown.clone(),
         );
 
-        // ⚠️ **The cancellation arm carries no verdict.** It says the stop was
-        // asked for, not what happened, and a worker that failed can still be
-        // in the middle of stopping when it fires — so its error arrives
-        // afterwards, through the drain. `Stop` is what collects it.
-        //
-        // Which worker answered comes back with its outcome, because `Stop`
-        // needs it: that handle has been polled to completion, and the drain
-        // below has to step over it. The rule lives in `settle`, not here.
+        // ⚠️ The cancellation arm carries no verdict: a worker that failed can
+        // still be stopping when it fires, and its error arrives through the
+        // drain. The worker that ended comes back with its outcome, so that
+        // `Stop` steps over its handle, already polled to completion.
         let (ended, first) = tokio::select! {
             result = &mut metadata_task => (Some(METADATA), handle_task_result(result, METADATA)),
             result = &mut price_task => (Some(PRICE), handle_task_result(result, PRICE)),
@@ -177,19 +160,13 @@ impl Daemon {
             }
         };
 
-        // Whichever arm fired, the other two have to be told. Idempotent, so
-        // the cancellation arm — whose token is already cancelled — needs no
-        // branch of its own.
+        // Whichever arm fired, the others are told. Idempotent.
         shutdown.cancel();
 
-        // ⚠️ **The price worker is waited on first, and the order is a
-        // decision.** `Stop` spends one grace across the three, so the first
-        // one waited on can eat all of it — and the price worker is the only
-        // one whose interrupted work is *lost* rather than merely *abandoned*.
-        // Its tick ends in a single `INSERT` of prices stamped at one instant;
-        // destroy it and that instant is gone. The other two re-list what they
-        // did not finish on their next tick (`list_missing_mints`,
-        // `list_unresolved`), so interrupting them costs time, not rows.
+        // ⚠️ The price worker is waited on first: `Stop` spends one grace
+        // across the three, and only its interrupted work is lost — prices
+        // stamped at an instant no later tick redoes. The other two re-list
+        // what they did not finish (`list_missing_mints`, `list_unresolved`).
         let mut stop = Stop::new(first, ended);
         stop.settle(PRICE, &mut price_task).await;
         stop.settle(METADATA, &mut metadata_task).await;
@@ -199,17 +176,13 @@ impl Daemon {
     }
 }
 
-/// The names the three workers answer to — in the logs, and in the list of
-/// what outlived the grace. Named once because each is written at two sites.
+/// The names the three workers answer to, in the logs and in the list of what
+/// outlived the grace.
 const METADATA: &str = "metadata worker";
 const PRICE: &str = "price worker";
 const POOL_ACCOUNT: &str = "pool-account worker";
 
-/// Connect to the database.
-///
-/// The database URL is held in `Config::database_url` (a redacted secret),
-/// so we never log it directly — [`anyhow::Context`] is sufficient to surface
-/// the failure at startup without leaking credentials.
+/// Connect to the database. The error names the failure, never the URL.
 async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     let db = Database::connect(database_url.expose())
         .await

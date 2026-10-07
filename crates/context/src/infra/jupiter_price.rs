@@ -32,8 +32,8 @@ const RATE_LIMIT_MAX_ATTEMPTS: u32 = 3;
 /// Backoff before retry `n` (0-based) without `Retry-After`: 1 s, then 2 s.
 const RATE_LIMIT_BASE_BACKOFF: Duration = Duration::from_secs(1);
 
-/// Cap on any retry sleep, a server's `Retry-After` included, so one bad
-/// header cannot stall the worker and its shutdown.
+/// Cap on a retry's backoff, a server's `Retry-After` included, so that one bad
+/// header cannot stall the tick.
 const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(10);
 
 /// What [`spacing_under`] divides by the rate limit: a minute and a tenth,
