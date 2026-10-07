@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
+use tokio_util::sync::CancellationToken;
 use yog_core::domain::PriceProvider;
 
 use crate::error::SourceError;
@@ -16,7 +17,7 @@ pub(crate) struct FetchedPrice {
 /// What the source said about the mints it was asked for.
 ///
 /// ⚠️ A mint whose request failed is in **neither** list: it was never
-/// answered.
+/// answered. Nor is a mint whose chunk the stop dropped or left unasked.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PriceAnswer {
     /// The mints the source returned a price for.
@@ -29,5 +30,13 @@ pub(crate) struct PriceAnswer {
 pub trait PriceSource: Send + Sync {
     /// Fetch USD prices for a batch of mints. A failed request leaves its mints
     /// out of the [`PriceAnswer`] rather than failing the call.
-    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError>;
+    ///
+    /// ⚠️ `shutdown` cuts the batch short: the source drops a request in
+    /// flight, asks nothing more, and returns what was answered so far, which
+    /// the caller still writes.
+    async fn fetch_prices(
+        &self,
+        mints: &[Pubkey],
+        shutdown: &CancellationToken,
+    ) -> Result<PriceAnswer, SourceError>;
 }

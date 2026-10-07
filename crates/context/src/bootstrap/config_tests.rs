@@ -2,21 +2,13 @@ use std::env;
 
 use super::*;
 
-/// The wall the variable split pulls down: the DAS and the account reads used
-/// to share `SOLANA_RPC_HTTP`, so a migration that moved one and not the other
-/// could not be *expressed* — one variable, two addresses. Here they are given
-/// two different hosts, and each field carries its own.
-///
-/// The refusals of the pair itself — a `{key}` with no key, a key with no
-/// `{key}` — are covered where the pair lives, in `yog-bootstrap`; restating
-/// them here would be a second definition of one rule.
+/// The DAS and the account reads come from two variables, given two hosts
+/// here. The refusals of each pair are tested in `yog-bootstrap`, where the
+/// pair lives.
 #[test]
 fn the_two_solana_endpoints_are_read_from_two_variables() {
-    // SAFETY — the same honest version as `yog-indexer`'s config test: these
-    // keys are process-global and cargo runs this binary's tests in parallel.
-    // One test rather than several, so the halves cannot race each other; the
-    // remaining window is that another test in this binary reads the
-    // environment, and none does.
+    // SAFETY: process-global keys, and the tests run in parallel; this is the
+    // binary's only test that touches the environment.
     unsafe {
         env::set_var("DATABASE_URL_CONTEXT", "postgresql://u:p@localhost:5433/db");
         env::set_var("TOKEN_METADATA_URL", "https://das.example.invalid/?k={key}");
@@ -39,8 +31,7 @@ fn the_two_solana_endpoints_are_read_from_two_variables() {
     );
 }
 
-/// `Config` derives `Debug`, and `{:?}` on it is one keystroke away in any
-/// error path. Neither endpoint's credential may survive that.
+/// `{:?}` on `Config` prints no credential, and still names the hosts.
 #[test]
 fn debugging_the_config_prints_no_credential() {
     let config = Config {
@@ -52,6 +43,7 @@ fn debugging_the_config_prints_no_credential() {
         pool_account: Endpoint::for_tests("https://accounts.example.invalid/v2/pasted", None),
         jupiter_url: "https://api.jup.ag".to_string(),
         jupiter_api_key: SecretKey::for_tests("jup-key"),
+        jupiter_rate_limit: NonZeroU32::new(60).expect("non-zero"),
         price_interval: Duration::from_secs(30),
         metadata_poll_interval: Duration::from_secs(10),
     };
@@ -63,30 +55,15 @@ fn debugging_the_config_prints_no_credential() {
             "`{secret}` survived: {rendered}"
         );
     }
-    // And the diagnostic survives: a config that says nothing costs more than
-    // it saves — a redaction that removed the host once left a crash log with
-    // nothing to go on.
     assert!(rendered.contains("das.example.invalid"), "{rendered}");
     assert!(rendered.contains("accounts.example.invalid"), "{rendered}");
 }
 
-/// The two cadences the daemon cannot honour. Tested here and not through
-/// `Config::load` on purpose: the environment is process-global, and the file
-/// keeps a single test that touches it.
+/// The two cadences the daemon cannot honour: zero, and anything at or past the
+/// staleness bound.
 ///
-/// Neither refusal belongs to the redundancy filter — `KeptPrices` decides its
-/// floor one tick early so that the cadence alone bounds freshness. What the
-/// filter changed is that the coupling is now *named*, and these are the two
-/// values that were silently accepted before: zero, which panics the ticker
-/// inside the spawned worker long after startup reported success, and anything
-/// at or past the staleness bound, which leaves every price stale before the
-/// next tick fires.
-///
-/// 480 s is in the list because it was the wrong answer to this question: an
-/// earlier guard capped the cadence at 300 s, on the theory that the floor plus
-/// one tick had to fit under the bound. It must be **accepted** — the floor
-/// absorbs the cadence now, and a rule that still refused it would be the old
-/// one wearing a new name.
+/// ⚠️ 480 s must be accepted: the floor of `KeptPrices` absorbs the cadence,
+/// and a guard capping it at 300 s would refuse a cadence that works.
 #[test]
 fn only_a_cadence_that_keeps_prices_current_is_accepted() {
     for accepted in [1_u64, 30, 300, 480, 899] {

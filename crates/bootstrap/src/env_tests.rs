@@ -30,10 +30,8 @@ fn required_fails_when_empty() {
     assert!(matches!(err, ConfigError::MissingVariable(_)));
 }
 
-/// The `.env` of this repository is CRLF, and the documented native
-/// workflow sources it into the shell. Trimming lives in `required`, so
-/// every helper built on it — `parse_required_u32` and the connection
-/// strings included — inherits the fix instead of restating it.
+/// The `.env` is CRLF; the trim lives in `required`, so every helper built on
+/// it inherits it.
 #[test]
 fn required_trims_surrounding_whitespace() {
     // SAFETY: unique keys, isolated from other tests
@@ -84,9 +82,8 @@ fn parse_required_bool_rejects_garbage() {
 
 // ── parse_required_enum ──────────────────────────────────────────────
 //
-// A stand-in for a real config enum: what is under test is the helper's
-// contract — lowercasing, and the shape of the refusal — not any
-// particular set of names.
+// A stand-in enum: what is under test is the helper's contract, not a set of
+// names.
 
 #[derive(Debug, PartialEq, Eq)]
 enum Colour {
@@ -118,10 +115,9 @@ fn parse_required_enum_accepts_a_known_name() {
     );
 }
 
-/// The one that pins case-insensitivity to the *helper*. Implementors
-/// match on lowercase literals only, so if `parse_required_enum` ever
-/// stops lowercasing, every enum in the workspace silently starts
-/// rejecting values an operator would reasonably type.
+/// ⚠️ Case-insensitivity belongs to the helper: implementors match lowercase
+/// literals, so if it stopped lowercasing, every enum would refuse what an
+/// operator types.
 #[test]
 fn parse_required_enum_ignores_case() {
     // SAFETY: unique keys, isolated from other tests
@@ -139,9 +135,8 @@ fn parse_required_enum_ignores_case() {
     );
 }
 
-/// Same reason as the case test, and less obvious: this repository's
-/// `.env` has CRLF line endings. A `\r` reaching `from_env_value` would
-/// be refused with a message showing a value that looks correct.
+/// Same, for whitespace: a `\r` from the CRLF `.env` would be refused with a
+/// value that looks right.
 #[test]
 fn parse_required_enum_ignores_surrounding_whitespace() {
     // SAFETY: unique key, isolated from other tests
@@ -161,9 +156,8 @@ fn parse_required_enum_rejects_an_unknown_name_and_lists_the_accepted_ones() {
         env::set_var("YOG_TEST_ENUM_UNKNOWN", "green");
     }
     let err = parse_required_enum::<Colour>("YOG_TEST_ENUM_UNKNOWN").unwrap_err();
-    // Asserting the exact fields, not just the variant: an error that
-    // does not echo the value it refused and the names it wanted is of
-    // no use to whoever reads the crash log.
+    // The exact fields: a crash log needs the value refused and the names
+    // accepted.
     match err {
         ConfigError::InvalidValue {
             key,
@@ -197,6 +191,41 @@ fn optional_trims_and_reads_a_blank_value_as_absent() {
     );
     assert_eq!(optional("YOG_TEST_OPTIONAL_BLANK"), None);
     assert_eq!(optional("YOG_TEST_OPTIONAL_ABSENT"), None);
+}
+
+#[test]
+fn parse_optional_falls_back_to_the_default_when_absent_or_blank() {
+    // SAFETY: unique keys, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_PARSE_OPTIONAL_PRESENT", " 600\r");
+        env::set_var("YOG_TEST_PARSE_OPTIONAL_BLANK", "  \r");
+    }
+    let read = |key| parse_optional::<u32>(key, 60, "a count");
+    assert_eq!(read("YOG_TEST_PARSE_OPTIONAL_PRESENT").unwrap(), 600);
+    assert_eq!(read("YOG_TEST_PARSE_OPTIONAL_BLANK").unwrap(), 60);
+    assert_eq!(read("YOG_TEST_PARSE_OPTIONAL_ABSENT").unwrap(), 60);
+}
+
+/// The type carries the rule: `NonZeroU32` refuses zero, and the refusal names
+/// the key, the value and what was expected.
+#[test]
+fn parse_optional_refuses_what_the_type_refuses() {
+    // SAFETY: unique key, isolated from other tests
+    unsafe {
+        env::set_var("YOG_TEST_PARSE_OPTIONAL_ZERO", "0");
+    }
+    let default = std::num::NonZeroU32::new(60).unwrap();
+    let error = parse_optional("YOG_TEST_PARSE_OPTIONAL_ZERO", default, "at least 1")
+        .expect_err("zero is not a NonZeroU32");
+
+    assert!(
+        matches!(
+            &error,
+            ConfigError::InvalidValue { key, value, expected }
+                if key == "YOG_TEST_PARSE_OPTIONAL_ZERO" && value == "0" && *expected == "at least 1"
+        ),
+        "{error:?}"
+    );
 }
 
 /// Absent and blank both read as "not configured" — a `FOO=` left in a `.env`

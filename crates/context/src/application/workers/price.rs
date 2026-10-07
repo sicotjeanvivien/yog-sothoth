@@ -1,4 +1,5 @@
-//! Price worker. Every `price_interval` (30 s by default) it:
+//! Price worker. Every `price_interval` (30 s by default), or back to back when
+//! a tick outlasts it, it:
 //!   1. lists the known mints and keeps those worth asking (`UnpricedMints`);
 //!   2. asks the source for their USD price;
 //!   3. drops the prices the column cannot hold and those that repeat the last
@@ -79,21 +80,26 @@ impl PriceWorker {
                     return Ok(());
                 }
                 _ = ticker.tick() => {
-                    self.run_one_cycle().await;
+                    self.run_one_cycle(&shutdown).await;
                 }
             }
         }
     }
 
-    /// One pricing cycle: time it, and let the ending say what it was.
-    async fn run_one_cycle(&mut self) {
+    /// One pricing cycle: time it, and let the ending say what it was — and
+    /// whether the stop came before it ended.
+    async fn run_one_cycle(&mut self, shutdown: &CancellationToken) {
         let start = Instant::now();
 
-        self.price_once().await.record(start);
+        let outcome = self.price_once(shutdown).await;
+        outcome.record(start, shutdown.is_cancelled());
     }
 
     /// The cycle itself: it decides how it ended, and [`TickOutcome`] says so.
-    async fn price_once(&mut self) -> TickOutcome {
+    ///
+    /// ⚠️ A stop cuts the fetch short, not the cycle: what came back goes
+    /// through the same filters and the same single insert.
+    async fn price_once(&mut self, shutdown: &CancellationToken) -> TickOutcome {
         let known = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
             Err(e) => return TickOutcome::ListFailed(e),
@@ -118,7 +124,7 @@ impl PriceWorker {
 
         log::pricing(mints.len(), known.len());
 
-        let answer = match self.source.fetch_prices(&mints).await {
+        let answer = match self.source.fetch_prices(&mints, shutdown).await {
             Ok(answer) => answer,
             Err(e) => return TickOutcome::SourceFailed(e),
         };

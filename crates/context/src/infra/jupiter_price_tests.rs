@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use yog_bootstrap::SecretKey;
 
 use rust_decimal::Decimal;
@@ -191,13 +192,29 @@ fn backoff_caps_a_hostile_retry_after() {
 // ── 429 handling: retry loop against a local HTTP server ────────────
 
 /// Serve `responses` on a fresh localhost listener, one connection each, and
-/// return the base URL. A request beyond the script fails loudly.
+/// return the base URL. A request beyond the script is refused: the listener
+/// closes with it.
 fn serve_scripted_responses(responses: Vec<String>) -> String {
+    let untimed = responses
+        .into_iter()
+        .map(|response| (Duration::ZERO, response))
+        .collect();
+    serve_timed_responses(untimed).0
+}
+
+/// When each request of a timed server arrived, in order.
+type Arrivals = Arc<Mutex<Vec<Instant>>>;
+
+/// Same, each response written after its delay, and the arrival of each
+/// request recorded once its head is read.
+fn serve_timed_responses(responses: Vec<(Duration, String)>) -> (String, Arrivals) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind localhost");
     let base_url = format!("http://{}", listener.local_addr().expect("local addr"));
+    let arrivals = Arrivals::default();
+    let recorded = Arc::clone(&arrivals);
 
     std::thread::spawn(move || {
-        for response in responses {
+        for (delay, response) in responses {
             let (mut stream, _) = listener.accept().expect("accept");
             // Drain the request head before answering.
             use std::io::{Read, Write};
@@ -210,13 +227,36 @@ fn serve_scripted_responses(responses: Vec<String>) -> String {
                     break;
                 }
             }
+            recorded.lock().unwrap().push(Instant::now());
+            std::thread::sleep(delay);
             stream
                 .write_all(response.as_bytes())
                 .expect("write response");
         }
     });
 
-    base_url
+    (base_url, arrivals)
+}
+
+/// The time between two consecutive arrivals.
+fn gaps(arrivals: &Arrivals) -> Vec<Duration> {
+    let arrivals = arrivals.lock().unwrap();
+    arrivals.windows(2).map(|pair| pair[1] - pair[0]).collect()
+}
+
+/// A client at `per_minute`, which sets the spacing between two chunks.
+fn client_at(base_url: String, per_minute: u32) -> JupiterPriceClient {
+    JupiterPriceClient::new(
+        base_url,
+        SecretKey::for_tests("test-key"),
+        NonZeroU32::new(per_minute).expect("non-zero"),
+    )
+}
+
+/// A client spaced by about a millisecond, for the tests that are not about
+/// the spacing.
+fn unpaced_client(base_url: String) -> JupiterPriceClient {
+    client_at(base_url, 60_000)
 }
 
 fn response_429(retry_after_secs: u64) -> String {
@@ -228,6 +268,11 @@ fn response_429(retry_after_secs: u64) -> String {
 fn response_500() -> String {
     "HTTP/1.1 500 Internal Server Error\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
         .to_string()
+}
+
+/// A body pricing `mint` alone.
+fn price_body(mint: Pubkey) -> String {
+    format!(r#"{{ "{mint}": {{ "usdPrice": 1.0 }} }}"#)
 }
 
 fn response_200(body: &str) -> String {
@@ -244,8 +289,11 @@ async fn rate_limited_chunk_recovers_on_retry() {
     // 429 (Retry-After: 0 keeps it instant), then 200.
     let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let answer = client.fetch_prices(&[mint]).await.expect("Ok expected");
+    let client = unpaced_client(base_url);
+    let answer = client
+        .fetch_prices(&[mint], &CancellationToken::new())
+        .await
+        .expect("Ok expected");
 
     assert_eq!(answer.priced.len(), 1, "the retried chunk yields its price");
     assert_eq!(answer.priced[0].mint, mint);
@@ -260,8 +308,11 @@ async fn chunk_rate_limited_on_every_attempt_is_skipped() {
         .collect();
     let base_url = serve_scripted_responses(responses);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let answer = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
+    let client = unpaced_client(base_url);
+    let answer = client
+        .fetch_prices(&[pk(21)], &CancellationToken::new())
+        .await
+        .expect("Ok expected");
 
     // Attempts exhausted: skipped, not an error, and not unpriced either.
     assert!(answer.priced.is_empty());
@@ -284,9 +335,12 @@ async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
     );
     let base_url = serve_scripted_responses(vec![response_200(&body)]);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     let answer = client
-        .fetch_prices(&[with_price, null_price, no_field, no_entry])
+        .fetch_prices(
+            &[with_price, null_price, no_field, no_entry],
+            &CancellationToken::new(),
+        )
         .await
         .expect("Ok expected");
 
@@ -316,14 +370,17 @@ async fn an_answer_without_a_single_price_says_nothing() {
         response_200(&stray),
     ]);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     for shape in [
         "empty map",
         "every entry without a price",
         "error body",
         "a price for a mint not asked",
     ] {
-        let answer = client.fetch_prices(&[a, b]).await.expect("Ok expected");
+        let answer = client
+            .fetch_prices(&[a, b], &CancellationToken::new())
+            .await
+            .expect("Ok expected");
 
         assert!(answer.priced.is_empty(), "{shape}");
         assert!(
@@ -344,8 +401,11 @@ async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
         .collect();
     let base_url = serve_scripted_responses(responses);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let answer = client.fetch_prices(&mints).await.expect("Ok expected");
+    let client = unpaced_client(base_url);
+    let answer = client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
 
     assert_eq!(answer.priced.len(), 1);
     assert_eq!(answer.priced[0].mint, answered[0]);
@@ -353,6 +413,198 @@ async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
     assert!(
         !answer.unpriced.contains(&given_up[0]),
         "the mint of the chunk given up is not unpriced: nobody answered for it"
+    );
+}
+
+// ── Spacing ─────────────────────────────────────────────────────────
+
+#[test]
+fn the_free_tier_is_one_request_every_1_1_s() {
+    let free_tier = NonZeroU32::new(60).expect("non-zero");
+    assert_eq!(spacing_under(free_tier), Duration::from_millis(1100));
+}
+
+/// Mutation this is written against: the `sleep_until` removed, and the three
+/// chunks leave at once.
+#[tokio::test]
+async fn chunks_are_spaced_by_the_rate_limit() {
+    // Three chunks: 50, 50 and 1 mints, each answered with one price.
+    let mints: Vec<Pubkey> = (1..=101).map(pk).collect();
+    let responses = mints
+        .chunks(JUPITER_BATCH_MAX)
+        .map(|chunk| response_200(&price_body(chunk[0])))
+        .collect();
+    let client = client_at(serve_scripted_responses(responses), 600);
+    let spacing = client.request_spacing();
+    assert_eq!(spacing, Duration::from_millis(110), "premise");
+
+    let start = Instant::now();
+    let answer = client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+    let elapsed = start.elapsed();
+
+    assert_eq!(answer.priced.len(), 3, "every chunk was asked");
+    assert!(
+        elapsed >= spacing * 2,
+        "three chunks take two spacings at least, took {elapsed:?}"
+    );
+}
+
+/// Mutation this is written against: `next_start` taken once the answer is
+/// in, which adds the server's 400 ms to the gap.
+#[tokio::test]
+async fn the_spacing_runs_from_one_start_to_the_next() {
+    // Two chunks, 1 s apart at 66 per minute, each answered in 400 ms.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let latency = Duration::from_millis(400);
+    let responses = mints
+        .chunks(JUPITER_BATCH_MAX)
+        .map(|chunk| (latency, response_200(&price_body(chunk[0]))))
+        .collect();
+    let (base_url, arrivals) = serve_timed_responses(responses);
+    let client = client_at(base_url, 66);
+    assert_eq!(client.request_spacing(), Duration::from_secs(1), "premise");
+
+    client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    let gaps = gaps(&arrivals);
+    assert_eq!(gaps.len(), 1, "both chunks were asked");
+    assert!(
+        gaps[0] < Duration::from_millis(1300),
+        "1 s from start to start, not 1.4 s from the answer: {gaps:?}"
+    );
+}
+
+/// Mutation this is written against: the retry waiting its backoff alone,
+/// which `Retry-After: 0` makes nothing.
+#[tokio::test]
+async fn a_retry_takes_its_slot_like_any_request() {
+    // A first chunk refused then retried, and a second chunk: three requests,
+    // 300 ms apart at 220 per minute.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let responses = vec![
+        (Duration::ZERO, response_429(0)),
+        (Duration::ZERO, response_200(&price_body(mints[0]))),
+        (
+            Duration::ZERO,
+            response_200(&price_body(mints[JUPITER_BATCH_MAX])),
+        ),
+    ];
+    let (base_url, arrivals) = serve_timed_responses(responses);
+    let client = client_at(base_url, 220);
+    let spacing = client.request_spacing();
+    assert_eq!(spacing, Duration::from_millis(300), "premise");
+
+    let answer = client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    assert_eq!(
+        answer.priced.len(),
+        2,
+        "the retry and the second chunk answered"
+    );
+    let gaps = gaps(&arrivals);
+    assert_eq!(gaps.len(), 2, "three requests");
+    assert!(
+        gaps.iter().all(|gap| *gap >= spacing * 4 / 5),
+        "every request waits its slot, the retry included: {gaps:?}"
+    );
+}
+
+/// Mutation this is written against: the `cancelled()` arm removed, and the
+/// client waits out its minute before the second chunk.
+#[tokio::test]
+async fn a_stop_between_two_chunks_returns_what_was_answered() {
+    // Two chunks, a minute apart; only the first is scripted.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let script = vec![(Duration::ZERO, response_200(&price_body(mints[0])))];
+    let (base_url, arrivals) = serve_timed_responses(script);
+    let client = client_at(base_url, 1);
+
+    // The first chunk is answered at once, so the stop lands in the pause.
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        stop.cancel();
+    });
+
+    let answer = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.fetch_prices(&mints, &shutdown),
+    )
+    .await
+    .expect("the stop ends the fetch, not the minute's wait")
+    .expect("Ok expected");
+
+    assert_eq!(
+        answer.priced.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![mints[0]],
+        "the first chunk's answer is kept"
+    );
+    assert_eq!(answer.unpriced.len(), JUPITER_BATCH_MAX - 1);
+    assert!(
+        !answer.unpriced.contains(&mints[JUPITER_BATCH_MAX]),
+        "the chunk never sent says nothing about its mint"
+    );
+    assert_eq!(
+        arrivals.lock().unwrap().len(),
+        1,
+        "the second chunk is never sent, not sent and refused"
+    );
+}
+
+/// Mutation this is written against: the stop raced against the pause alone,
+/// and the client waits for the request in flight — 15 s of `http_client`.
+#[tokio::test]
+async fn a_stop_during_a_request_drops_it_and_keeps_what_came_before() {
+    // Two chunks back to back; Jupiter answers the second after 30 s.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let script = vec![
+        (Duration::ZERO, response_200(&price_body(mints[0]))),
+        (
+            Duration::from_secs(30),
+            response_200(&price_body(mints[JUPITER_BATCH_MAX])),
+        ),
+    ];
+    let (base_url, arrivals) = serve_timed_responses(script);
+    let client = unpaced_client(base_url);
+
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        stop.cancel();
+    });
+
+    let answer = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.fetch_prices(&mints, &shutdown),
+    )
+    .await
+    .expect("the stop drops the request in flight")
+    .expect("Ok expected");
+
+    assert_eq!(
+        arrivals.lock().unwrap().len(),
+        2,
+        "premise: the second was sent"
+    );
+    assert_eq!(
+        answer.priced.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![mints[0]],
+        "the first chunk's answer is kept"
+    );
+    assert!(
+        !answer.unpriced.contains(&mints[JUPITER_BATCH_MAX]),
+        "the chunk dropped says nothing about its mint"
     );
 }
 

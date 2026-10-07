@@ -163,13 +163,33 @@ impl FakePriceSource {
 
 #[async_trait]
 impl PriceSource for FakePriceSource {
-    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
+    async fn fetch_prices(
+        &self,
+        mints: &[Pubkey],
+        _shutdown: &CancellationToken,
+    ) -> Result<PriceAnswer, SourceError> {
         self.calls.lock().unwrap().push(mints.to_vec());
         let mut responses = self.responses.lock().unwrap();
         if responses.is_empty() {
             return Ok(PriceAnswer::default());
         }
         responses.remove(0)
+    }
+}
+
+/// A source the stop reaches mid-fetch: it cancels the token, as the signal
+/// would, and returns the one price it had received.
+struct StoppedDuringFetch(FetchedPrice);
+
+#[async_trait]
+impl PriceSource for StoppedDuringFetch {
+    async fn fetch_prices(
+        &self,
+        _mints: &[Pubkey],
+        shutdown: &CancellationToken,
+    ) -> Result<PriceAnswer, SourceError> {
+        shutdown.cancel();
+        answer(vec![self.0.clone()], vec![])
     }
 }
 
@@ -188,7 +208,7 @@ async fn no_known_mints_skips_source_and_insert() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     assert!(source.calls().is_empty());
     assert!(price_repo.inserts().is_empty());
@@ -217,7 +237,7 @@ async fn inserts_prices_for_all_priced_mints_with_uniform_timestamp() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     let calls = source.calls();
     assert_eq!(calls.len(), 1);
@@ -276,7 +296,7 @@ async fn inserts_only_what_source_priced() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     assert_eq!(source.calls()[0].len(), 3);
 
@@ -314,7 +334,7 @@ async fn unstorable_price_is_dropped_before_the_batch() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     // The healthy mints are still written.
     let inserts = price_repo.inserts();
@@ -346,7 +366,7 @@ async fn a_tick_of_only_unstorable_prices_inserts_nothing() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     assert!(
         price_repo.inserts().is_empty(),
@@ -381,7 +401,7 @@ async fn an_overflowing_price_is_dropped_before_the_batch() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     let inserts = price_repo.inserts();
     assert_eq!(inserts.len(), 1, "the batch must still be sent");
@@ -411,7 +431,7 @@ async fn midpoint_price_is_kept() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     let inserts = price_repo.inserts();
     assert_eq!(inserts.len(), 1);
@@ -434,7 +454,7 @@ async fn list_known_mints_error_skips_cycle_silently() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await; // must not panic
+    worker.run_one_cycle(&CancellationToken::new()).await; // must not panic
 
     assert!(source.calls().is_empty());
     assert!(price_repo.inserts().is_empty());
@@ -454,7 +474,7 @@ async fn no_insert_when_no_chunk_yields_a_price() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     assert_eq!(source.calls().len(), 1, "source was called");
     assert!(
@@ -481,7 +501,7 @@ async fn insert_batch_error_does_not_panic() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await; // must not panic — that's the assertion
+    worker.run_one_cycle(&CancellationToken::new()).await; // must not panic — that's the assertion
 
     // The insert was attempted before failing.
     assert_eq!(price_repo.inserts().len(), 1);
@@ -506,8 +526,8 @@ async fn a_price_that_repeats_is_written_once() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     assert_eq!(
         source.calls().len(),
@@ -537,8 +557,8 @@ async fn a_price_that_moved_is_written_on_the_next_tick() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     let inserts = price_repo.inserts();
     assert_eq!(inserts.len(), 2);
@@ -566,8 +586,8 @@ async fn a_failed_insert_leaves_nothing_remembered() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await; // insert fails
-    worker.run_one_cycle().await; // same price — must be retried, not skipped
+    worker.run_one_cycle(&CancellationToken::new()).await; // insert fails
+    worker.run_one_cycle(&CancellationToken::new()).await; // same price — must be retried, not skipped
 
     assert_eq!(
         price_repo.inserts().len(),
@@ -598,8 +618,8 @@ async fn a_mint_answered_without_a_price_is_not_asked_on_the_next_tick() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     let calls = source.calls();
     assert_eq!(
@@ -633,8 +653,8 @@ async fn a_mint_whose_request_failed_is_asked_on_the_next_tick() {
         std::time::Duration::from_secs(30),
     );
 
-    worker.run_one_cycle().await;
-    worker.run_one_cycle().await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
+    worker.run_one_cycle(&CancellationToken::new()).await;
 
     assert_eq!(
         source.calls()[1],
@@ -666,8 +686,8 @@ async fn an_unstorable_price_resets_the_wait_like_any_price() {
         worker.unpriced.record([], &[mint], long_ago);
     }
 
-    worker.run_one_cycle().await; // a price, too small for the column
-    worker.run_one_cycle().await; // then no price at all
+    worker.run_one_cycle(&CancellationToken::new()).await; // a price, too small for the column
+    worker.run_one_cycle(&CancellationToken::new()).await; // then no price at all
 
     assert!(
         price_repo.inserts().is_empty(),
@@ -681,6 +701,37 @@ async fn an_unstorable_price_resets_the_wait_like_any_price() {
             .unpriced
             .is_due(&mint, Utc::now() + chrono::Duration::seconds(61)),
         "an unstorable price must reset the wait like any other"
+    );
+}
+
+/// Mutation this is written against: the cycle returning before the insert
+/// once the token is cancelled.
+#[tokio::test]
+async fn a_stop_during_a_tick_writes_what_was_received() {
+    let (answered, never_asked) = (pk(1), pk(2));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
+        answered,
+        never_asked,
+    ]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(StoppedDuringFetch(priced(answered, "1.5")));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source,
+        std::time::Duration::from_secs(30),
+    );
+
+    let shutdown = CancellationToken::new();
+    worker.run_one_cycle(&shutdown).await;
+
+    assert!(shutdown.is_cancelled(), "premise: the stop came mid-fetch");
+    let inserts = price_repo.inserts();
+    assert_eq!(inserts.len(), 1, "what was received is written");
+    assert_eq!(
+        inserts[0].iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![answered]
     );
 }
 
@@ -723,7 +774,7 @@ fn snapshot_cycles(
             .expect("current-thread runtime")
             .block_on(async {
                 for _ in 0..cycles {
-                    worker.run_one_cycle().await;
+                    worker.run_one_cycle(&CancellationToken::new()).await;
                 }
             });
     });

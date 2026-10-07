@@ -6,7 +6,7 @@
 
 use std::time::Instant;
 
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use super::metrics::PriceWorkerMetrics;
 use crate::error::SourceError;
@@ -34,10 +34,13 @@ pub(super) enum TickOutcome {
 
 impl TickOutcome {
     /// Say why the tick ended, and record its duration under its own label.
+    /// If the stop came before the end, say also what became of what the tick
+    /// had received.
     ///
     /// ⚠️ `no_prices` (the source valued nothing: an alarm) and `unchanged`
     /// (nothing moved: the normal case) must never share a label.
-    pub(super) fn record(self, start: Instant) {
+    pub(super) fn record(self, start: Instant, stopped: bool) {
+        let mut written = 0;
         let outcome = match self {
             TickOutcome::ListFailed(e) => {
                 warn!(error = %e, "price worker: list_known_mints failed");
@@ -76,11 +79,21 @@ impl TickOutcome {
                 "insert_failed"
             }
             TickOutcome::Inserted { count } => {
+                written = count;
                 PriceWorkerMetrics::record_inserted(count);
                 debug!(count, "price worker: prices inserted");
                 "ok"
             }
         };
+
+        if stopped {
+            info!(
+                outcome,
+                written,
+                "price worker: the stop came during this tick — outcome and written say \
+                 what became of what it had received"
+            );
+        }
 
         PriceWorkerMetrics::record_tick(outcome, start.elapsed().as_secs_f64());
     }

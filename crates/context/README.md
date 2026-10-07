@@ -47,9 +47,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   queries `TokenMetadataRepository::list_missing_mints` for mints present in
   `pools` but absent from `token_metadata`, and fetches symbol / name /
   decimals / logo via Helius DAS.
-- **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s),
-  lists the known mints and asks Jupiter Price V3 for current USD prices,
-  inserting them with a single shared `fetched_at` per tick.
+- **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
+  back to back when a tick outlasts it, lists the known mints and asks Jupiter
+  Price V3 for current USD prices, inserting them with a single shared
+  `fetched_at` per tick.
 
   **It asks only for the mints worth asking.** A mint Jupiter answers
   **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
@@ -176,11 +177,19 @@ then `continue`). An `Err` returned from a source trait is reserved for
 structural misconfiguration, not partial fetch failures — those are handled
 internally as skip-and-log per chunk.
 
-One refinement on the Jupiter side: chunks are sent back-to-back, so a tick
-with many mints can trip Jupiter's rate limit and 429 the later chunks. The
-client retries a rate-limited chunk a bounded number of times (pacing on the
-`Retry-After` header when present, capped exponential backoff otherwise)
-before falling back to skip-and-log.
+One refinement on the Jupiter side: chunks are **spaced**, one every
+`request_spacing` — 1.1 s for `JUPITER_RATE_LIMIT_PER_MINUTE=60`, ten requests
+where the limit allows eleven, counted from the start of one request to the
+start of the next. A
+chunk sent back to back with the others is what drew the 429s: Jupiter counts
+over a sliding minute and lets a burst through before it refuses the rest. A
+chunk refused anyway is retried a bounded number of times (`Retry-After` when
+present, capped exponential backoff otherwise, and never before its slot: a
+retry is a request too) before falling back to skip-and-log.
+
+⚠️ The spacing is what bounds a tick: about `request_spacing` times the chunks
+asked. Past the cadence, ticks run back to back — at 60 per minute, 27 chunks
+(about 1 350 mints) fit a 30 s cadence.
 
 ### One invariant, and it is not optional
 
@@ -221,13 +230,13 @@ interrupted work is *lost* rather than merely *abandoned*: its tick ends in a
 single `INSERT` of prices stamped at one instant, and that instant does not come
 back. The other two re-list their remainder next tick.
 
-⚠️ **A price tick routinely outlives the grace, and the stop says so rather
-than hiding it.** Measured 14 September 2026: a tick takes 10.7–19.9 s against
-a rate-limiting Jupiter, so a stop taken inside one ends with
-`shutdown grace expired … tasks=["price worker"]` and the tick is still
-destroyed. That is not a missing timeout — every request is bounded by
-`infra::http_client` — it is ~19 chunks sent back to back plus backoff,
-with nothing between two chunks looking at the token.
+⚠️ **A price tick outlasts the grace on its own, so it hears the stop at any
+point.** The Jupiter client races the token against each chunk — its slot,
+its request and its retries — so it drops the request in flight, sends nothing
+more, and returns what was answered before; the worker writes that through its
+usual filters and single `INSERT`. At most one chunk, 50 mints, is lost. Two
+log lines say so: the client's (`finished`, `abandoned`) and the worker's
+(`outcome`, `written`), which tells a tick written from one abandoned.
 
 ⚠️ Until 14 September 2026 the daemon selected on `ctrl_c()` and returned on it:
 20 stops measured, **none** saw the three workers hand back, and the process was
@@ -324,6 +333,7 @@ TOKEN_METADATA_KEY=...
 POOL_ACCOUNT_URL=https://api.mainnet-beta.solana.com
 JUPITER_URL=https://api.jup.ag
 JUPITER_API_KEY=...
+JUPITER_RATE_LIMIT_PER_MINUTE=60   # optional, the key's tier as Jupiter documents it
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```
@@ -333,8 +343,10 @@ daemon refuses to start otherwise.** Zero panics the ticker inside the spawned
 worker, long after startup reported success; 900 s or more leaves the newest
 price older than `yog_price_max_age_latest()` before the next tick even fires,
 whether or not anything is being suppressed. Neither refusal comes from the
-redundancy filter: `KeptPrices` sets its floor one tick early so that the
-cadence, and nothing else, bounds freshness.
+redundancy filter: `KeptPrices` sets its floor one tick early so that it adds
+nothing to what the cycle already costs. The cadence bounds when a tick starts,
+not the age of the newest price: a tick's own length — about `request_spacing`
+per chunk — adds to it.
 
 **Two Solana endpoints, and this crate is why they are two.** The DAS
 (`getAssetBatch`) is Helius' own API; `getMultipleAccounts` is standard Solana

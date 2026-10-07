@@ -1,26 +1,15 @@
-//! Bootstrap utilities shared across yog-sothoth's native binaries
-//! (indexer, context, signals, api) and the `yog-migrate` binary.
+//! Bootstrap utilities shared by yog-sothoth's binaries, `yog-migrate`
+//! included — what every binary needs at startup, and only that:
 //!
-//! This crate hosts what every binary needs at startup, and only that:
-//!
-//! - reading and validating environment variables (`env`)
+//! - reading and validating environment variables (`env`);
 //! - wrapping secrets so they cannot be printed (`secret`), and holding an
-//!   external endpoint's address apart from its credential (`endpoint`)
-//! - the canonical `ConfigError` type returned by every binary's
-//!   `Config::load` (`error`)
-//! - one-shot runtime initialization for crates that don't pick a
-//!   default (rustls), and the shared tracing subscriber (`runtime`)
-//! - the other end of that lifecycle: which signals mean "stop", what a
-//!   finished task's result says, and how long a daemon waits for its stages
-//!   before the runtime destroys them (`shutdown`)
-//! - and what a running daemon tells a dead man's switch (`heartbeat`, behind
-//!   the feature of the same name)
+//!   endpoint's address apart from its credential (`endpoint`);
+//! - the `ConfigError` every `Config::load` returns (`error`);
+//! - rustls and the shared tracing subscriber (`runtime`);
+//! - the stop: its signals, what a task's end says, and the grace (`shutdown`);
+//! - what a daemon tells a dead man's switch (`heartbeat`, behind its feature).
 //!
-//! Each binary keeps its own `Config` struct describing the variables
-//! it cares about — only the building blocks live here. The `Config`
-//! type is intentionally not generalized: the indexer's variables and
-//! the api's variables don't overlap enough to share a struct, and a
-//! "common" config that contains everyone's variables is a smell.
+//! Each binary keeps its own `Config`: only the building blocks live here.
 
 mod endpoint;
 mod env;
@@ -31,20 +20,17 @@ mod runtime;
 mod secret;
 mod shutdown;
 
-/// The guard that keeps `.expose()` on the lines that consume a secret.
-///
-/// It lives here rather than in each crate because the rule belongs to the
-/// type, and the type lives here — one definition instead of seven restatements
-/// of the same convention.
+/// The guard that keeps `.expose()` on the lines that consume a secret. Here,
+/// because the rule belongs to the type.
 #[cfg(test)]
 #[path = "exposure_tests.rs"]
 mod exposure_tests;
 
 pub use endpoint::Endpoint;
 pub use env::{
-    EnvEnum, duration_var, optional, optional_secret_url, parse_required_bool, parse_required_enum,
-    parse_required_u32, required, required_endpoint, required_endpoint_allowing_header,
-    required_secret_key, required_secret_url,
+    EnvEnum, duration_var, optional, optional_secret_url, parse_optional, parse_required_bool,
+    parse_required_enum, parse_required_u32, required, required_endpoint,
+    required_endpoint_allowing_header, required_secret_key, required_secret_url,
 };
 pub use error::ConfigError;
 #[cfg(all(feature = "heartbeat", feature = "test-support"))]
