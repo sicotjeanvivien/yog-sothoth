@@ -60,10 +60,17 @@ const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 /// 28 September 2026 window got it within 5 minutes of discovery), and those
 /// first minutes are when it trades.
 ///
-/// ⚠️ **The guarantee is the cap plus one cycle, not the cap.** The worker
-/// checks a mint at each tick, so a mint due at `t` is asked at the first tick
-/// that starts after `t`. A cycle is the cadence, or the tick's own duration
-/// when it overruns — ~100 s against 5 000 mints in September 2026.
+/// ⚠️ **Decided one tick early, like the floor of `KeptPrices`.** The worker
+/// looks at a mint once per tick, and the answer that starts a wait arrives a
+/// little after its tick began. A wait counted from the answer would therefore
+/// land on the tick *after* the one it names — 90 s instead of 60 at the
+/// default cadence, and so on at every step. Subtracting one tick puts the next
+/// ask exactly one wait after the tick that asked.
+///
+/// That holds while a tick fits its cadence. A tick that overruns it (~100 s
+/// against 5 000 mints in September 2026) runs back to back with the next, and
+/// the ask lands within one such cycle of the wait: **the guarantee is then the
+/// cap plus one cycle.**
 ///
 /// # What resets it
 ///
@@ -147,11 +154,15 @@ impl UnpricedMints {
                 .map_or(0, |deferral| deferral.misses)
                 .saturating_add(1);
 
+            // One tick early: see the type's documentation. At a cadence over
+            // the cap this lands in the past and the mint is due at the next
+            // tick — the rule, since ticks are already further apart than the
+            // cap allows.
             self.deferred.insert(
                 *mint,
                 Deferral {
                     misses,
-                    due_at: now + self.wait_after(misses),
+                    due_at: now + self.wait_after(misses) - self.tick,
                 },
             );
         }

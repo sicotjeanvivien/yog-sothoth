@@ -52,6 +52,8 @@ fn priced(mint: Pubkey, price: &str) -> FetchedPrice {
 #[derive(Default)]
 struct FakeMetadataRepository {
     known: Mutex<Vec<Pubkey>>,
+    /// Lists served one per call before falling back to `known`.
+    known_per_call: Mutex<Vec<Vec<Pubkey>>>,
     list_known_error: Mutex<Option<RepositoryError>>,
 }
 
@@ -59,6 +61,16 @@ impl FakeMetadataRepository {
     fn with_known(mints: Vec<Pubkey>) -> Self {
         Self {
             known: Mutex::new(mints),
+            ..Self::default()
+        }
+    }
+
+    /// One list per tick, the last one repeated after that.
+    fn with_known_per_call(mut lists: Vec<Vec<Pubkey>>) -> Self {
+        let last = lists.pop().unwrap_or_default();
+        Self {
+            known: Mutex::new(last),
+            known_per_call: Mutex::new(lists),
             ..Self::default()
         }
     }
@@ -73,6 +85,10 @@ impl TokenMetadataRepository for FakeMetadataRepository {
     async fn list_known_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
         if let Some(err) = self.list_known_error.lock().unwrap().take() {
             return Err(err);
+        }
+        let mut per_call = self.known_per_call.lock().unwrap();
+        if !per_call.is_empty() {
+            return Ok(per_call.remove(0));
         }
         Ok(self.known.lock().unwrap().clone())
     }
@@ -1000,15 +1016,24 @@ fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
 
 #[test]
 fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
-    // One known mint, which the source answers without a price. The second
-    // tick has nothing due: it must not call the source, must not be taken for
-    // a tick that priced nothing (`no_prices` is an alarm), and must not leave
-    // the first tick's gauges standing.
-    let dead = pk(1);
-    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![dead]));
+    // The first tick prices `live` and gets no price for `dead`. The second
+    // finds only `dead`, which is waiting its turn: it must not call the
+    // source, must not be taken for a tick that priced nothing (`no_prices` is
+    // an alarm), and must not leave the first tick's coverage standing.
+    //
+    // The known list shrinks between the two ticks, which `token_metadata`
+    // never does: in production the tick before a `nothing_due` has already
+    // priced nothing, so this reset is defensive — the same reason
+    // `source_hard_error` resets the gauge — and this is the only way to make
+    // it observable.
+    let (live, dead) = (pk(1), pk(2));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known_per_call(vec![
+        vec![live, dead],
+        vec![dead],
+    ]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_answers(vec![answer(
-        vec![],
+        vec![priced(live, "1.0")],
         vec![dead],
     )]));
 
@@ -1033,6 +1058,7 @@ fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
             .then_some(v)
         })
     };
+    assert_eq!(ticks("ok"), Some(&DebugValue::Counter(1)));
     assert_eq!(
         ticks("nothing_due"),
         Some(&DebugValue::Counter(1)),
@@ -1040,8 +1066,8 @@ fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
     );
     assert_eq!(
         ticks("no_prices"),
-        Some(&DebugValue::Counter(1)),
-        "only the first tick, which asked and got no price, is a `no_prices`"
+        None,
+        "asking nothing is not pricing nothing"
     );
     assert_eq!(
         value(&snapshot, "yog_context_price_known_mints"),
@@ -1054,6 +1080,7 @@ fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
     );
     assert_eq!(
         value(&snapshot, "yog_context_price_priced_mints"),
-        Some(&DebugValue::Gauge(0.0.into()))
+        Some(&DebugValue::Gauge(0.0.into())),
+        "the first tick's coverage must not outlive it"
     );
 }

@@ -332,6 +332,25 @@ async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
 }
 
 #[tokio::test]
+async fn an_answer_without_a_single_entry_says_nothing() {
+    // A 200 with `{}` for a whole chunk: Jupiter answers for the mints it
+    // cannot price too, so this is a degraded answer, not a verdict on them.
+    let base_url = serve_scripted_responses(vec![response_200("{}")]);
+
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let answer = client
+        .fetch_prices(&[pk(40), pk(41)])
+        .await
+        .expect("Ok expected");
+
+    assert!(answer.priced.is_empty());
+    assert!(
+        answer.unpriced.is_empty(),
+        "an empty answer must not hold its mints back"
+    );
+}
+
+#[tokio::test]
 async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
     // 51 mints: a first chunk of 50 that Jupiter answers, pricing one of them,
     // and a second chunk of one that it rate-limits on every attempt.

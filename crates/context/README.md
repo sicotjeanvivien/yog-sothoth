@@ -60,9 +60,11 @@ decoded at this boundary and never reaches `core`, which stays free of it.
 
   ⚠️ **Only an answer without a price counts.** A mint whose chunk was given up
   on 429 was never answered, and holding it back would slow down mints that
-  have a price. The source reports the two cases apart (`PriceAnswer`), and the
-  worker feeds the rule before its filters, so a price the column cannot store
-  still counts as a price.
+  have a price. The source reports the two cases apart (`PriceAnswer`), and
+  takes a chunk answered with no entry at all for an unanswered one: Jupiter
+  returns an entry even for the mints it cannot price, so an empty map is a
+  degraded answer, not a verdict. The worker feeds the rule before its filters,
+  so a price the column cannot store still counts as a price.
 
   **It drops prices the price column cannot hold**, before the insert, counting
   them in `yog_context_price_rejected_total` and naming the mints in a `warn!`.

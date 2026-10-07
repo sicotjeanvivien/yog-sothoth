@@ -143,6 +143,16 @@ impl JupiterPriceClient {
             .json::<HashMap<String, JupiterPriceEntry>>()
             .await?;
 
+        // ⚠️ **An answer with no entry at all is not a verdict.** Jupiter
+        // returns an entry for the mints it cannot price too — 48 of 48 on
+        // 28 September 2026, 26 of them without `usdPrice` — so an empty map
+        // for a whole chunk is a degraded answer. Read as "no price", it would
+        // hold every live mint of the chunk back for up to 15 minutes after
+        // Jupiter recovers. It says nothing, like a request that failed.
+        if response.is_empty() {
+            return Ok(PriceAnswer::default());
+        }
+
         let priced = response
             .into_iter()
             .filter_map(into_fetched_price)
