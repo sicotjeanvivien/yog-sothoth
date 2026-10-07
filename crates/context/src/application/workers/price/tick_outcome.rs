@@ -1,31 +1,8 @@
-//! The seven ways a **pricing** cycle ends, and everything the outside learns
-//! from each. It belongs to the price worker alone, hence its place in
-//! `price/`: another worker's cycle would end in other ways, and get its own
-//! type in its own folder.
+//! The ways a pricing cycle ends, each with its log line, its outcome label and,
+//! for the endings that stop before pricing, a zeroed coverage gauge.
 //!
-//! ⚠️ **The type exists so that leaving without saying so cannot compile.**
-//! Every exit owes the same triple: a reason in the log, a duration stamped
-//! under this ending's own outcome label, and — for the two that stop before
-//! anything was priced — a zeroed coverage gauge, so its numerator never
-//! outlives the denominator it was measured against. Written inline at seven
-//! `return`s, that triple is a convention, and this file's own history is the
-//! argument against conventions: `no_prices` was declared in the label set from
-//! the start and emitted at none of them, and `set_priced_mints(0)` was missing
-//! from two of the three early exits.
-//!
-//! Because the cycle *returns* a [`TickOutcome`], a bare `return;` no longer
-//! type-checks. An eighth ending is a new variant, and the compiler asks for
-//! its arm rather than a reviewer noticing its absence.
-//!
-//! **One `match`, on purpose.** An earlier draft had two — one for the log, one
-//! for the label — which put the two halves of an ending in different places
-//! and let them drift: giving `AllUnchanged` the label of `NoStorablePrice`
-//! would have compiled. Here each arm logs *and* evaluates to its own label, so
-//! there is one place per ending and nothing to keep in step.
-//!
-//! What stays in the worker is what is **not** an ending: the counters several
-//! exits share, and the coverage gauge, whose *position* between the two
-//! filters is a decision rather than a consequence.
+//! ⚠️ The cycle *returns* a [`TickOutcome`], so leaving without saying so does
+//! not compile; and one `match` keeps each ending's log and label together.
 
 use std::time::Instant;
 
@@ -36,13 +13,13 @@ use crate::error::SourceError;
 use yog_core::RepositoryError;
 
 /// How one pricing cycle ended.
-///
-/// Every variant is terminal: the cycle yields one and does nothing more.
 pub(super) enum TickOutcome {
     /// The known-mint list could not be read, so the tick never started.
     ListFailed(RepositoryError),
     /// Nothing to price yet — an empty `token_metadata`, i.e. a cold start.
     NoKnownMints,
+    /// Every known mint is waiting its turn (`UnpricedMints`).
+    NothingDue,
     /// The source returned a hard error rather than a partial answer.
     SourceFailed(SourceError),
     /// Prices came back, but none the price column can hold.
@@ -56,17 +33,10 @@ pub(super) enum TickOutcome {
 }
 
 impl TickOutcome {
-    /// Say why the tick ended, and record it under its own outcome label.
+    /// Say why the tick ended, and record its duration under its own label.
     ///
-    /// Takes the `Instant` rather than a duration so that every ending — down
-    /// to the one that returns after a single failed query — is timed the same
-    /// way, by the same line.
-    ///
-    /// ⚠️ `no_prices` and `unchanged` are **not** the same event and must never
-    /// share a label. The first says the source valued nothing, an anomaly
-    /// worth alerting on; the second says everything it valued was already on
-    /// record, which after the redundancy filter is what most ticks do.
-    /// Sharing a label would leave that alert lit for ever.
+    /// ⚠️ `no_prices` (the source valued nothing: an alarm) and `unchanged`
+    /// (nothing moved: the normal case) must never share a label.
     pub(super) fn record(self, start: Instant) {
         let outcome = match self {
             TickOutcome::ListFailed(e) => {
@@ -78,12 +48,15 @@ impl TickOutcome {
                 no_coverage();
                 "no_work"
             }
+            TickOutcome::NothingDue => {
+                debug!("price worker: every known mint is waiting its turn — nothing asked");
+                // Coverage 0 is the truth; `no_prices` would be the wrong alarm.
+                no_coverage();
+                "nothing_due"
+            }
             TickOutcome::SourceFailed(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
-                // Unreachable with the current Jupiter client, which absorbs
-                // per-chunk failures and returns `Ok(partial)` — which is
-                // exactly why the gauge reset would rot silently here in the
-                // next `PriceSource`.
+                // Unreachable with the Jupiter client; kept for the next source.
                 no_coverage();
                 "source_hard_error"
             }
@@ -113,9 +86,8 @@ impl TickOutcome {
     }
 }
 
-/// Both gauges move together or the ratio the README tells you to alert on
-/// (`priced / known`) divides a stale numerator by 0 and reads +Inf on a cold
-/// start.
+/// The coverage numerator falls with its denominator, or `priced / known` reads
+/// a stale ratio.
 fn no_coverage() {
     PriceWorkerMetrics::set_priced_mints(0);
 }

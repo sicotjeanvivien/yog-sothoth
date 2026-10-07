@@ -5,6 +5,7 @@ use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gau
 const TICK_TOTAL: &str = "yog_context_price_tick_total";
 const TICK_DURATION: &str = "yog_context_price_tick_duration_seconds";
 const KNOWN_MINTS: &str = "yog_context_price_known_mints";
+const REQUESTED_MINTS: &str = "yog_context_price_requested_mints";
 const PRICED_MINTS: &str = "yog_context_price_priced_mints";
 const INSERTED_TOTAL: &str = "yog_context_price_inserted_total";
 const REJECTED_TOTAL: &str = "yog_context_price_rejected_total";
@@ -16,7 +17,9 @@ impl PriceWorkerMetrics {
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TICK_TOTAL,
-            "Price worker ticks completed (label: outcome=ok|no_work|list_failed|source_hard_error|no_prices|unchanged|insert_failed). \
+            "Price worker ticks completed (label: outcome=ok|no_work|nothing_due|list_failed|source_hard_error|no_prices|unchanged|insert_failed). \
+             `nothing_due` is a tick that asked nothing because every known mint is one the source last answered without \
+             a price and is waiting its turn. \
              `no_prices` covers both a source that priced nothing and a tick whose every price was rejected as unstorable — \
              yog_context_price_rejected_total tells the two apart. `unchanged` is the opposite and is the NORMAL case: \
              every price came back identical to the last one kept, so the tick wrote nothing on purpose"
@@ -27,11 +30,19 @@ impl PriceWorkerMetrics {
         );
         describe_gauge!(
             KNOWN_MINTS,
-            "Number of known mints submitted to the price source at the last tick"
+            "Number of known mints (token_metadata) at the last tick"
+        );
+        describe_gauge!(
+            REQUESTED_MINTS,
+            "Number of known mints actually asked of the price source at the last tick. \
+             The rest are mints the source last answered without a price, waiting their \
+             turn (at most unpriced_asked_again_at_most_every_secs, stated at startup, \
+             plus one cycle) — see UnpricedMints. \
+             requested/known is the share of the universe still worth asking"
         );
         describe_gauge!(
             PRICED_MINTS,
-            "Number of those mints that yielded a price we KEPT at the last tick. \
+            "Number of known mints that yielded a price we KEPT at the last tick. \
              priced/known is the price coverage — the input every USD valuation \
              downstream depends on, and the thing that silently degrades. \
              Counted after the unstorable-price filter: a price the source \
@@ -63,24 +74,11 @@ impl PriceWorkerMetrics {
              stopped rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
-        // Materialise both at zero. `describe_counter!` only registers the help
-        // text: the Prometheus exporter emits nothing for a counter that has
-        // never been incremented, so a metric expected to sit at 0 for ever
-        // would be *absent* for ever — unalertable, and indistinguishable from
-        // a build where the rejection path was dropped. Publishing the zero is
-        // what makes "flat at 0" an observation instead of a hope.
-        //
-        // `UNCHANGED_TOTAL` needs it for the opposite reason: it is incremented
-        // deep in the tick, after three early returns, so a context whose
-        // `token_metadata` is still empty leaves `/metrics` with no redundancy
-        // series at all and the README's PromQL returning no data — during
-        // exactly the window an operator is watching a fresh deployment.
+        // ⚠️ Published at zero: the exporter emits nothing for a counter never
+        // incremented, so "flat at 0" would read as absent, and the README's
+        // ratios would return no data on a fresh deployment.
         counter!(REJECTED_TOTAL).absolute(0);
         counter!(UNCHANGED_TOTAL).absolute(0);
-        // And `INSERTED_TOTAL`, because the redundancy expression divides by
-        // their SUM: in PromQL a vector-to-vector `+` matches nothing when one
-        // side is absent, so publishing only the numerator would still leave
-        // the query returning no data on the very deployment it was written for.
         counter!(INSERTED_TOTAL).absolute(0);
     }
 
@@ -93,9 +91,14 @@ impl PriceWorkerMetrics {
         gauge!(KNOWN_MINTS).set(count as f64);
     }
 
-    /// Set alongside [`Self::set_known_mints`] on every tick that reached the
-    /// source, including the zero case — a gauge left at its previous value
-    /// would report yesterday's coverage as today's.
+    /// Set with [`Self::set_known_mints`], on every tick that read the known
+    /// mints, zero included.
+    pub(crate) fn set_requested_mints(count: usize) {
+        gauge!(REQUESTED_MINTS).set(count as f64);
+    }
+
+    /// Set on every tick, zero included: a stale value would report yesterday's
+    /// coverage as today's.
     pub(crate) fn set_priced_mints(count: usize) {
         gauge!(PRICED_MINTS).set(count as f64);
     }
@@ -104,21 +107,14 @@ impl PriceWorkerMetrics {
         counter!(INSERTED_TOTAL).increment(count as u64);
     }
 
-    /// Count prices refused by [`TokenPrice::is_storable`][is_storable] before
-    /// the batch insert — at either end of the column. Skip-and-log, and the
-    /// skip is countable.
+    /// Count prices refused by [`TokenPrice::is_storable`][is_storable].
     ///
     /// [is_storable]: yog_core::domain::TokenPrice::is_storable
     pub(crate) fn record_rejected(count: usize) {
         counter!(REJECTED_TOTAL).increment(count as u64);
     }
 
-    /// Count prices the redundancy rule suppressed. Called on every tick that
-    /// reached the rule, zero included, so a tick that suppressed nothing is
-    /// still a tick that was measured. The series itself is published by
-    /// `register_descriptions`, which cannot be reached by an early return.
-    ///
-    /// [`KeptPrices`][kept] carries the rule.
+    /// Count prices the redundancy rule ([`KeptPrices`][kept]) suppressed.
     ///
     /// [kept]: yog_core::domain::KeptPrices
     pub(crate) fn record_unchanged(count: usize) {

@@ -1,21 +1,6 @@
-//! Unit tests for the Jupiter price client.
-//!
-//! Two surfaces are covered:
-//!   - `into_fetched_price` — projection from `(mint_str, JupiterPriceEntry)`
-//!     to the worker view (`FetchedPrice`), with its two drop conditions
-//!     (no usable price, unparseable mint).
-//!   - `JupiterPriceEntry` deserialization — locks down the three real-world
-//!     "no price" cases (value present, `null`, field absent), plus
-//!     forward compatibility with the extra fields V3 returns
-//!     (`createdAt`, `liquidity`, `blockId`, `decimals`, …).
-//!   - 429 handling — `parse_retry_after` (header extraction) and
-//!     `rate_limit_backoff` (delay policy), plus the retry loop
-//!     end-to-end against a hand-rolled local HTTP server (no mock
-//!     dependency): 429-then-200 recovers the chunk, all-429 gives it
-//!     up as skip-and-log.
-//!
-//! The happy-path HTTP call itself is otherwise not exercised: it is
-//! a thin reqwest pipeline whose non-trivial parts are tested above.
+//! Unit tests for the Jupiter price client: the projection of an entry, its
+//! deserialisation, the 429 retries, and the answer — against a hand-rolled
+//! local HTTP server.
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -45,7 +30,7 @@ fn happy_path_yields_mint_and_price() {
 
     let result = into_fetched_price((mint.to_string(), entry)).expect("expected Some");
 
-    // Distinct values per field — catches accidental field swap.
+    // Distinct values per field: catches a field swap.
     assert_eq!(result.mint, mint);
     assert_eq!(result.price_usd, dec("1.5"));
 }
@@ -98,9 +83,7 @@ fn entry_deserializes_null_price() {
 
 #[test]
 fn entry_deserializes_missing_price_field() {
-    // The field is entirely ABSENT — only works because of
-    // `#[serde(default)]` on the field. If someone removes that
-    // attribute, this test breaks immediately.
+    // The field is absent: works only through `#[serde(default)]`.
     let body = r#"{}"#;
     let entry: JupiterPriceEntry = serde_json::from_str(body).expect("valid JSON");
     assert_eq!(entry.usd_price, None);
@@ -108,9 +91,7 @@ fn entry_deserializes_missing_price_field() {
 
 #[test]
 fn entry_ignores_unknown_fields() {
-    // Real V3 entries carry many extra fields we don't read.
-    // serde must keep ignoring them silently — guard against
-    // someone adding `#[serde(deny_unknown_fields)]` later.
+    // Extra V3 fields are ignored: guards against `deny_unknown_fields`.
     let body = r#"{
       "usdPrice": 1.0,
       "blockId": 42,
@@ -145,8 +126,6 @@ fn full_response_filters_to_priced_mints_only() {
         serde_json::from_str(&body).expect("valid JSON");
     assert_eq!(response.len(), 3, "all three entries deserialize");
 
-    // Apply the projection pipeline the same way `fetch_prices_batch`
-    // does, to assert end-to-end behaviour.
     let projected: Vec<FetchedPrice> = response
         .into_iter()
         .filter_map(into_fetched_price)
@@ -185,8 +164,7 @@ fn retry_after_absent_yields_none() {
 
 #[test]
 fn retry_after_http_date_form_yields_none() {
-    // The HTTP-date form is valid per RFC 9110 but not handled — it
-    // must fall back to our own backoff, not panic or mis-parse.
+    // The HTTP-date form is not handled: our own backoff applies.
     let headers = headers_with_retry_after("Wed, 21 Oct 2026 07:28:00 GMT");
     assert_eq!(parse_retry_after(&headers), None);
 }
@@ -205,18 +183,15 @@ fn backoff_grows_exponentially_without_retry_after() {
 
 #[test]
 fn backoff_caps_a_hostile_retry_after() {
-    // A server-provided Retry-After of ten minutes must not stall the
-    // worker: the cap wins.
+    // A ten-minute Retry-After is capped.
     let delay = rate_limit_backoff(0, Some(std::time::Duration::from_secs(600)));
     assert_eq!(delay, RATE_LIMIT_MAX_BACKOFF);
 }
 
 // ── 429 handling: retry loop against a local HTTP server ────────────
 
-/// Serve `responses` on a fresh localhost listener, one connection per
-/// response (each response closes its connection), and return the base
-/// URL. Requests beyond the scripted responses are not served — a
-/// client retrying more than expected fails loudly on connect/read.
+/// Serve `responses` on a fresh localhost listener, one connection each, and
+/// return the base URL. A request beyond the script fails loudly.
 fn serve_scripted_responses(responses: Vec<String>) -> String {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind localhost");
     let base_url = format!("http://{}", listener.local_addr().expect("local addr"));
@@ -266,15 +241,16 @@ fn response_200(body: &str) -> String {
 async fn rate_limited_chunk_recovers_on_retry() {
     let mint = pk(20);
     let body = format!(r#"{{ "{mint}": {{ "usdPrice": 1.5 }} }}"#);
-    // First call 429 (Retry-After: 0 keeps the test instant), second OK.
+    // 429 (Retry-After: 0 keeps it instant), then 200.
     let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
 
     let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let fetched = client.fetch_prices(&[mint]).await.expect("Ok expected");
+    let answer = client.fetch_prices(&[mint]).await.expect("Ok expected");
 
-    assert_eq!(fetched.len(), 1, "the retried chunk yields its price");
-    assert_eq!(fetched[0].mint, mint);
-    assert_eq!(fetched[0].price_usd, dec("1.5"));
+    assert_eq!(answer.priced.len(), 1, "the retried chunk yields its price");
+    assert_eq!(answer.priced[0].mint, mint);
+    assert_eq!(answer.priced[0].price_usd, dec("1.5"));
+    assert!(answer.unpriced.is_empty());
 }
 
 #[tokio::test]
@@ -285,10 +261,99 @@ async fn chunk_rate_limited_on_every_attempt_is_skipped() {
     let base_url = serve_scripted_responses(responses);
 
     let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let fetched = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
+    let answer = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
 
-    // Attempts exhausted → skip-and-log, never a hard error.
-    assert!(fetched.is_empty());
+    // Attempts exhausted: skipped, not an error, and not unpriced either.
+    assert!(answer.priced.is_empty());
+    assert!(
+        answer.unpriced.is_empty(),
+        "a chunk given up says nothing about its mints"
+    );
+}
+
+#[tokio::test]
+async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
+    let (with_price, null_price, no_field, no_entry) = (pk(30), pk(31), pk(32), pk(33));
+    // The three shapes of "no price": null, field absent, entry absent.
+    let body = format!(
+        r#"{{
+          "{with_price}": {{ "usdPrice": 2.0 }},
+          "{null_price}": {{ "usdPrice": null }},
+          "{no_field}": {{ "liquidity": 0.42 }}
+        }}"#
+    );
+    let base_url = serve_scripted_responses(vec![response_200(&body)]);
+
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let answer = client
+        .fetch_prices(&[with_price, null_price, no_field, no_entry])
+        .await
+        .expect("Ok expected");
+
+    assert_eq!(
+        answer.priced.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![with_price]
+    );
+    let mut unpriced = answer.unpriced;
+    unpriced.sort();
+    let mut expected = vec![null_price, no_field, no_entry];
+    expected.sort();
+    assert_eq!(unpriced, expected, "a missing entry is unpriced too");
+}
+
+#[tokio::test]
+async fn an_answer_without_a_single_price_says_nothing() {
+    // Four degraded 200s, none a verdict on the mints asked: an empty map,
+    // all-null entries, an error body (it deserialises, keyed `error`), and a
+    // price for a mint not asked.
+    let (a, b) = (pk(40), pk(41));
+    let all_null = format!(r#"{{ "{a}": {{ "usdPrice": null }}, "{b}": {{}} }}"#);
+    let stray = format!(r#"{{ "{}": {{ "usdPrice": 1.0 }} }}"#, pk(42));
+    let base_url = serve_scripted_responses(vec![
+        response_200("{}"),
+        response_200(&all_null),
+        response_200(r#"{ "error": { "message": "upstream unavailable" } }"#),
+        response_200(&stray),
+    ]);
+
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    for shape in [
+        "empty map",
+        "every entry without a price",
+        "error body",
+        "a price for a mint not asked",
+    ] {
+        let answer = client.fetch_prices(&[a, b]).await.expect("Ok expected");
+
+        assert!(answer.priced.is_empty(), "{shape}");
+        assert!(
+            answer.unpriced.is_empty(),
+            "{shape}: a degraded answer must not hold its mints back"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
+    // A chunk of 50 answered with one price, then a chunk of one given up.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let (answered, given_up) = mints.split_at(JUPITER_BATCH_MAX);
+    let body = format!(r#"{{ "{}": {{ "usdPrice": 3.0 }} }}"#, answered[0]);
+    let responses = std::iter::once(response_200(&body))
+        .chain((0..RATE_LIMIT_MAX_ATTEMPTS).map(|_| response_429(0)))
+        .collect();
+    let base_url = serve_scripted_responses(responses);
+
+    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let answer = client.fetch_prices(&mints).await.expect("Ok expected");
+
+    assert_eq!(answer.priced.len(), 1);
+    assert_eq!(answer.priced[0].mint, answered[0]);
+    assert_eq!(answer.unpriced.len(), JUPITER_BATCH_MAX - 1);
+    assert!(
+        !answer.unpriced.contains(&given_up[0]),
+        "the mint of the chunk given up is not unpriced: nobody answered for it"
+    );
 }
 
 #[test]
@@ -307,14 +372,9 @@ fn full_response_handles_empty_object() {
 
 // ── Redaction: the two error kinds a live server can produce ────────
 
-/// Lives here, and not beside the conversion it tests, because the local
-/// HTTP server above is the only one in the crate — duplicating it to keep
-/// the test "in the right file" would repeat exactly the kind of thing this
-/// whole change is about. The connect-failure half of the proof is in
-/// `infra/source_error_tests.rs`, which needs no server.
-///
-/// Covers what that one cannot: a non-2xx status and an undecodable body,
-/// both requested through a URL carrying a secret.
+/// A non-2xx status and an undecodable body, through a URL carrying a secret.
+/// Here because the only local server is here; the connect failure is in
+/// `infra/source_error_tests.rs`.
 #[tokio::test]
 async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret() {
     const SECRET: &str = "SECRET-DE-TEST-a1b2c3d4";
@@ -322,11 +382,8 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
     let base = serve_scripted_responses(vec![response_500(), response_200("pas du json")]);
     let url = format!("{base}/?api-key={SECRET}");
 
-    // `http_client()` and not `Client::new()`, for the reason spelled out in
-    // `infra/source_error_tests.rs`: the scripted server is a single thread that
-    // `expect`s its way through accept/read/write, and a client with no
-    // timeout turns any mishap there into a test that hangs for ever instead
-    // of one that fails in 15 s with a diagnosis.
+    // ⚠️ `http_client()`, not `Client::new()`: without its timeout, a mishap
+    // in the scripted server hangs the test instead of failing it.
 
     // 1. Non-2xx → transport error, secret gone.
     let raw_status = crate::infra::http_client()
@@ -336,17 +393,14 @@ async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret
         .expect("the scripted server answers")
         .error_for_status()
         .expect_err("500 must be an error");
-    // Premise, asserted for the same reason as in
-    // `infra/source_error_tests.rs`: if reqwest stopped attaching the URL to
-    // this kind, the check below would pass while proving nothing about the
-    // conversion.
+    // Premise: if reqwest stopped attaching the URL, the check below would
+    // prove nothing.
     assert!(raw_status.to_string().contains(SECRET), "{raw_status}");
     let status_err = SourceError::from(raw_status);
     assert!(matches!(status_err, SourceError::Http(_)), "{status_err}");
     assert!(!status_err.to_string().contains(SECRET), "{status_err}");
 
-    // 2. 2xx with a body that is not JSON → decode error, secret gone, and
-    //    the variant still distinguishes it from a transport failure.
+    // 2. 2xx with a body that is not JSON → decode error, secret gone.
     let raw_decode = crate::infra::http_client()
         .get(&url)
         .send()

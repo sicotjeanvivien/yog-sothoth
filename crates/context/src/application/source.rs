@@ -4,4 +4,4 @@ mod price;
 
 pub(crate) use metadata::{FetchedMetadata, MetadataSource};
 pub(crate) use pool_account::{PoolAccountSource, RawAccount};
-pub(crate) use price::{FetchedPrice, PriceSource};
+pub(crate) use price::{FetchedPrice, PriceAnswer, PriceSource};

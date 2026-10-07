@@ -5,8 +5,7 @@ use yog_core::domain::PriceProvider;
 
 use crate::error::SourceError;
 
-/// A successfully fetched price, ready to be turned into the domain
-/// `TokenPrice` by the worker.
+/// A fetched price, which the worker turns into a `TokenPrice`.
 #[derive(Debug, Clone)]
 pub(crate) struct FetchedPrice {
     pub(crate) mint: Pubkey,
@@ -14,14 +13,21 @@ pub(crate) struct FetchedPrice {
     pub(crate) price_usd: Decimal,
 }
 
+/// What the source said about the mints it was asked for.
+///
+/// ⚠️ A mint whose request failed is in **neither** list: it was never
+/// answered.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct PriceAnswer {
+    /// The mints the source returned a price for.
+    pub(crate) priced: Vec<FetchedPrice>,
+    /// The mints the source answered for without a price.
+    pub(crate) unpriced: Vec<Pubkey>,
+}
+
 #[async_trait]
 pub trait PriceSource: Send + Sync {
-    /// Fetch USD prices for a batch of mints.
-    ///
-    /// Implementations must respect their own batch limit (the worker
-    /// chunks the queue before calling). The returned `Vec` contains
-    /// only the mints the source could actually price — mints the
-    /// source cannot price (untraded, flagged, etc.) are silently
-    /// dropped.
-    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<Vec<FetchedPrice>, SourceError>;
+    /// Fetch USD prices for a batch of mints. A failed request leaves its mints
+    /// out of the [`PriceAnswer`] rather than failing the call.
+    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError>;
 }

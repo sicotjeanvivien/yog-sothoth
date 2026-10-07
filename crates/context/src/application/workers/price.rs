@@ -1,48 +1,35 @@
-//! Price worker — periodically prices every known mint.
+//! Price worker. Every `price_interval` (30 s by default) it:
+//!   1. lists the known mints and keeps those worth asking (`UnpricedMints`);
+//!   2. asks the source for their USD price;
+//!   3. drops the prices the column cannot hold and those that repeat the last
+//!      row kept (`KeptPrices`), and inserts the rest in one statement.
 //!
-//! Every `price_interval` (30s by default):
-//!   1. read the set of mints we have metadata for
-//!      (`list_known_mints`);
-//!   2. ask Jupiter for their USD price in chunks of at most
-//!      `JUPITER_BATCH_MAX`;
-//!   3. assemble `TokenPrice` rows, drop the ones the price column
-//!      cannot hold and the ones that repeat the last row kept for
-//!      their mint, and `insert_batch` the rest in a single
-//!      round-trip.
-//!
-//! Most ticks write nothing: four prices in five come back identical
-//! to the last one stored, and `KeptPrices` is what says so. The
-//! series then grows at the rate of the prices rather than at the
-//! rate of this loop.
-//!
-//! # Resilience
-//!
-//! Same policy as the metadata worker: HTTP/decoding errors against
-//! Jupiter, and persistence errors on the batch insert, are absorbed
-//! in the loop and logged. A failed tick simply means one missing
-//! 30-second sample — invisible at the dashboard level. The daemon
-//! must not fall over on a Jupiter hiccup.
+//! Errors are absorbed and logged: a failed tick is one missing sample, never a
+//! stopped worker.
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
+use solana_pubkey::Pubkey;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
 
-use yog_core::domain::{KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository};
+use yog_core::domain::{
+    KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository, UnpricedMints,
+};
 
 use crate::application::source::{FetchedPrice, PriceSource};
 use crate::error::WorkerError;
 
+mod log;
 mod metrics;
 mod tick_outcome;
 
 pub(crate) use metrics::PriceWorkerMetrics;
 use tick_outcome::TickOutcome;
 
-/// Worker that records a USD price for every known mint on a fixed
-/// interval.
+/// Worker that records a USD price for the known mints worth asking, on a
+/// fixed interval.
 pub struct PriceWorker {
     metadata_repository: Arc<dyn TokenMetadataRepository>,
     price_repository: Arc<dyn TokenPriceRepository>,
@@ -51,6 +38,9 @@ pub struct PriceWorker {
     /// The tail of the written series, per mint — what makes a tick able to
     /// tell a price that moved from one that merely came round again.
     kept: KeptPrices,
+    /// The mints the source last answered without a price, and when each is
+    /// worth asking again.
+    unpriced: UnpricedMints,
 }
 
 impl PriceWorker {
@@ -65,49 +55,27 @@ impl PriceWorker {
             price_repository,
             source,
             interval,
-            // The cadence is part of the rule: the floor is decided one tick
-            // early so a forced row lands at or before it, whatever the
-            // interval. See `KeptPrices::new`.
             kept: KeptPrices::new(interval),
+            unpriced: UnpricedMints::new(interval),
         }
     }
 
-    /// Run the interval loop until the shutdown token is triggered.
-    ///
-    /// The first tick fires immediately (tokio's `interval` yields
-    /// at once), so a fresh price sample lands as soon as the daemon
-    /// starts rather than after the first interval.
+    /// Run the interval loop until the shutdown token is triggered. The first
+    /// tick fires at once.
     pub async fn run(mut self, shutdown: CancellationToken) -> Result<(), WorkerError> {
-        // What the cadence *entails*, which is the part an operator cannot read
-        // off the variable they set: the floor follows from
-        // `CONTEXT_PRICE_INTERVAL_SECS` and a constant of `yog-core` together,
-        // and nothing else in either crate names it. Stated here rather than in
-        // a `config_log` module of its own, which one line does not yet earn.
-        info!(
-            cadence_secs = self.interval.as_secs(),
-            rewrite_at_most_every_secs = self.kept.rewrites_at_most_every().num_seconds(),
-            "PriceWorker started — a motionless price is rewritten at the floor"
-        );
+        log::started(self.interval, &self.kept, &self.unpriced);
 
         let mut ticker = tokio::time::interval(self.interval);
 
         loop {
             tokio::select! {
-                // ⚠️ **`biased`: the stop must win a tie, and here it is the
-                // tie that is measured.** The ticker keeps tokio's default
-                // `MissedTickBehavior::Burst`, so a cycle that outruns the
-                // cadence leaves `tick()` **already ready** when the loop comes
-                // back round — and this worker's cycle took 10.7–19.9 s against
-                // a rate-limiting Jupiter on 14 September 2026, for a 30 s
-                // cadence. An unbiased `select!` would then pick pseudo-randomly
-                // between a new tick and a stop already asked for: about one
-                // stop in two starting a fresh 900-mint fetch, burning the
-                // shutdown grace and dying mid-`INSERT`. Same reason the
-                // indexer's own loops are biased.
+                // ⚠️ `biased`: the stop must win a tie. A cycle that outruns the
+                // cadence leaves `tick()` already ready, and an unbiased
+                // `select!` would start a new cycle about one stop in two.
                 biased;
 
                 _ = shutdown.cancelled() => {
-                    info!("shutdown requested — price worker stopping");
+                    log::stopping();
                     return Ok(());
                 }
                 _ = ticker.tick() => {
@@ -124,33 +92,47 @@ impl PriceWorker {
         self.price_once().await.record(start);
     }
 
-    /// The cycle itself. **It decides, it does not narrate.**
-    ///
-    /// Absorbs every recoverable error so a hiccup never stops the worker, and
-    /// yields how it ended; [`TickOutcome`] owns the log line, the outcome
-    /// label and the gauges that go with each ending. Returning the outcome
-    /// rather than recording it in place is what makes a bare `return;` — an
-    /// exit that tells the outside nothing — fail to compile.
+    /// The cycle itself: it decides how it ended, and [`TickOutcome`] says so.
     async fn price_once(&mut self) -> TickOutcome {
-        let mints = match self.metadata_repository.list_known_mints().await {
+        let known = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
             Err(e) => return TickOutcome::ListFailed(e),
         };
-        PriceWorkerMetrics::set_known_mints(mints.len());
 
-        if mints.is_empty() {
+        // Only the mints worth asking — see `UnpricedMints`.
+        let asked_at = Utc::now();
+        let mints: Vec<Pubkey> = known
+            .iter()
+            .filter(|mint| self.unpriced.is_due(mint, asked_at))
+            .copied()
+            .collect();
+        PriceWorkerMetrics::set_known_mints(known.len());
+        PriceWorkerMetrics::set_requested_mints(mints.len());
+
+        if known.is_empty() {
             return TickOutcome::NoKnownMints;
         }
+        if mints.is_empty() {
+            return TickOutcome::NothingDue;
+        }
 
-        debug!(count = mints.len(), "price worker: pricing mints");
+        log::pricing(mints.len(), known.len());
 
-        let fetched = match self.source.fetch_prices(&mints).await {
-            Ok(fetched) => fetched,
+        let answer = match self.source.fetch_prices(&mints).await {
+            Ok(answer) => answer,
             Err(e) => return TickOutcome::SourceFailed(e),
         };
 
         let now = Utc::now();
-        let priced: Vec<TokenPrice> = fetched
+
+        // Before the filters: a price the column cannot hold is still a price.
+        self.unpriced.record(
+            answer.priced.iter().map(|price| &price.mint),
+            &answer.unpriced,
+            now,
+        );
+        let priced: Vec<TokenPrice> = answer
+            .priced
             .into_iter()
             .map(
                 |FetchedPrice {
@@ -167,67 +149,32 @@ impl PriceWorker {
             )
             .collect();
 
-        // A price the `NUMERIC(38, 18)` column cannot hold is dropped HERE
-        // rather than left for the database to refuse.
-        //
-        // Not a nicety: `insert_batch` sends the whole tick as ONE statement,
-        // and `ON CONFLICT DO NOTHING` covers neither the `CHECK` of migration
-        // 009 (`23514`, a price that rounds to zero) nor the column type's own
-        // overflow (`22003`, a price at or above 10^20). Either one aborts the
-        // insert for *every other mint*, every tick, for as long as that mint
-        // stays in the known set — and migration 005 established that the
-        // resulting as-of gap never heals. The constraint is the guarantee;
-        // this filter is what keeps it from ever firing. See
-        // `TokenPrice::is_storable` for why the test is neither `> 0` nor
-        // one-sided.
+        // ⚠️ Dropped here, not left to the database: the tick is ONE statement,
+        // and a price the column refuses (`23514`, `22003`) would abort it for
+        // every other mint, every tick. See `TokenPrice::is_storable`.
         let (mut to_insert, rejected): (Vec<TokenPrice>, Vec<TokenPrice>) =
             priced.into_iter().partition(TokenPrice::is_storable);
 
         if !rejected.is_empty() {
             PriceWorkerMetrics::record_rejected(rejected.len());
-            warn!(
-                count = rejected.len(),
-                mints = ?rejected.iter().map(|p| p.mint.to_string()).collect::<Vec<_>>(),
-                "price worker: dropped prices the price column cannot hold"
-            );
+            log::unstorable(&rejected);
         }
 
-        // Coverage of this tick: how many of the mints we asked for yielded a
-        // price we actually kept. **Its position between the two filters is the
-        // decision, which is why it is here and not in `TickOutcome`.**
-        //
-        // After the storability filter, because the gauge answers "what can be
-        // valued downstream" and a price rejected there is as absent as one the
-        // source never returned. Before the redundancy filter, for the same
-        // question read the other way: a price suppressed as unchanged is still
-        // valued downstream, by the row that already says it. Moving this line
-        // down would read as a coverage collapse to under a fifth — and
-        // `priced / known` is the ratio the README tells you to alert on.
+        // ⚠️ Coverage sits between the two filters: an unstorable price values
+        // nothing downstream, an unchanged one still does, through the row
+        // already kept. Below the next filter, it would read as a collapse.
         PriceWorkerMetrics::set_priced_mints(to_insert.len());
 
         if to_insert.is_empty() {
             return TickOutcome::NoStorablePrice;
         }
 
-        // Second filter, and the one that decides the SIZE of the series: a
-        // price that repeats the last row kept for its mint earns no row of its
-        // own. `KeptPrices` carries the rule — including the floor that writes
-        // a motionless price anyway before it ages out of migration 005's
-        // windows, and the rounding to the column's scale without which the
-        // comparison would never find two prices equal.
-        //
-        // `retain` rather than a second `partition`: unlike `rejected` above,
-        // which is logged mint by mint, nothing here reads the suppressed rows
-        // — only how many there were. Partitioning would move four fifths of
-        // the tick into a Vec built to be dropped.
+        // A price that repeats the last row kept earns no row (`KeptPrices`).
         let before = to_insert.len();
         to_insert.retain(|price| self.kept.worth_keeping(price));
         let suppressed = before - to_insert.len();
 
-        // Recorded on every tick that reaches the rule, zero included, so that
-        // "nothing was suppressed" is a measurement. Its ratio to
-        // `inserted_total` is the redundancy the database query used to be
-        // needed for.
+        // Zero included, so that "nothing suppressed" is a measurement.
         PriceWorkerMetrics::record_unchanged(suppressed);
 
         if to_insert.is_empty() {
@@ -239,9 +186,7 @@ impl PriceWorker {
             return TickOutcome::InsertFailed(e);
         }
 
-        // Only now, and never before the insert: a batch that failed left no
-        // row, and remembering it would hold the real price back until the
-        // floor fires — a gap in a series nothing backfills.
+        // ⚠️ After the insert only: see `KeptPrices::record`.
         self.kept.record(&to_insert);
 
         TickOutcome::Inserted { count }
