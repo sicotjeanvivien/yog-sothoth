@@ -176,11 +176,18 @@ then `continue`). An `Err` returned from a source trait is reserved for
 structural misconfiguration, not partial fetch failures — those are handled
 internally as skip-and-log per chunk.
 
-One refinement on the Jupiter side: chunks are sent back-to-back, so a tick
-with many mints can trip Jupiter's rate limit and 429 the later chunks. The
-client retries a rate-limited chunk a bounded number of times (pacing on the
-`Retry-After` header when present, capped exponential backoff otherwise)
-before falling back to skip-and-log.
+One refinement on the Jupiter side: chunks are **spaced**, one every
+`request_spacing` — 1.1 s for `JUPITER_RATE_LIMIT_PER_MINUTE=60`, 10 % under
+the limit, counted from the start of one request to the start of the next. A
+chunk sent back to back with the others is what drew the 429s: Jupiter counts
+over a sliding minute and lets a burst through before it refuses the rest. A
+chunk refused anyway is retried a bounded number of times (`Retry-After` when
+present, capped exponential backoff otherwise) before falling back to
+skip-and-log.
+
+⚠️ The spacing is what bounds a tick: about `request_spacing` times the chunks
+asked. Past the cadence, ticks run back to back — at 60 per minute, 27 chunks
+(about 1 350 mints) fit a 30 s cadence.
 
 ### One invariant, and it is not optional
 
@@ -324,6 +331,7 @@ TOKEN_METADATA_KEY=...
 POOL_ACCOUNT_URL=https://api.mainnet-beta.solana.com
 JUPITER_URL=https://api.jup.ag
 JUPITER_API_KEY=...
+JUPITER_RATE_LIMIT_PER_MINUTE=60   # optional, the key's tier as Jupiter documents it
 CONTEXT_METADATA_POLL_SECS=10
 CONTEXT_PRICE_INTERVAL_SECS=30
 ```

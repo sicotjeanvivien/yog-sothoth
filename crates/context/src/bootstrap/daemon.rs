@@ -92,7 +92,13 @@ impl Daemon {
         let price_source = Arc::new(JupiterPriceClient::new(
             config.jupiter_url.clone(),
             config.jupiter_api_key.clone(),
+            config.jupiter_rate_limit,
         ));
+        info!(
+            rate_limit_per_minute = config.jupiter_rate_limit.get(),
+            request_every_ms = price_source.request_spacing().as_millis() as u64,
+            "Jupiter requests spaced under the key's rate limit"
+        );
         // `getMultipleAccounts`, standard Solana JSON-RPC — its own endpoint,
         // which may or may not be the provider serving DAS above. Logged
         // side by side because that is what makes the split visible at

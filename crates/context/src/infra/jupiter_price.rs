@@ -1,9 +1,11 @@
 //! Jupiter Price API V3 client (`GET …/price/v3?ids=…`): says, for every mint
-//! of a chunk Jupiter answered, whether it came back with a price. Chunks
-//! refused on 429 are retried a bounded number of times.
+//! of a chunk Jupiter answered, whether it came back with a price. Chunks are
+//! spaced under the key's rate limit; one refused on 429 anyway is retried a
+//! bounded number of times.
 
 use super::metrics::ProviderMetrics;
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -33,6 +35,10 @@ const RATE_LIMIT_BASE_BACKOFF: Duration = Duration::from_secs(1);
 /// header cannot stall the worker and its shutdown.
 const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(10);
 
+/// What [`spacing_under`] divides by the rate limit: a minute and a tenth,
+/// so the client sends ten requests where the limit allows eleven.
+const SPACING_PER_REQUEST_ALLOWED: Duration = Duration::from_secs(66);
+
 // ── Wire types ────────────────────────────────────────────────────────
 
 /// One price entry from Jupiter's V3 response, reduced to `usdPrice`.
@@ -58,16 +64,25 @@ pub struct JupiterPriceClient {
     base_url: String,
     /// Stays a [`SecretKey`] until the header is built.
     api_key: SecretKey,
+    /// The least time between the starts of two chunks.
+    request_spacing: Duration,
 }
 
 impl JupiterPriceClient {
-    /// Build the client against the given base URL and API key.
-    pub fn new(base_url: String, api_key: SecretKey) -> Self {
+    /// Build the client against the given base URL and API key, spaced under
+    /// `rate_limit`, the requests per minute the key's tier allows.
+    pub fn new(base_url: String, api_key: SecretKey, rate_limit: NonZeroU32) -> Self {
         Self {
             http: super::http_client(),
             base_url,
             api_key,
+            request_spacing: spacing_under(rate_limit),
         }
+    }
+
+    /// The least time between the starts of two chunks.
+    pub fn request_spacing(&self) -> Duration {
+        self.request_spacing
     }
 
     /// Single HTTP call. Caller guarantees `mints.len() <= JUPITER_BATCH_MAX`.
@@ -155,11 +170,17 @@ impl JupiterPriceClient {
 
 #[async_trait]
 impl PriceSource for JupiterPriceClient {
-    /// Fetches the prices chunk by chunk. A chunk that fails is logged and
-    /// skipped: its mints are in neither list of the answer.
+    /// Fetches the prices chunk by chunk, one every `request_spacing`. A chunk
+    /// that fails is logged and skipped: its mints are in neither list of the
+    /// answer.
     async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         let mut answer = PriceAnswer::default();
+        let mut next_start = tokio::time::Instant::now();
         for chunk in mints.chunks(JUPITER_BATCH_MAX) {
+            tokio::time::sleep_until(next_start).await;
+            // ⚠️ From start to start: a pause after the answer would add the
+            // request's own latency to every chunk.
+            next_start = tokio::time::Instant::now() + self.request_spacing;
             match self.fetch_chunk_with_retry(chunk).await {
                 Ok(answered) => {
                     answer.priced.extend(answered.priced);
@@ -194,6 +215,14 @@ fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnsw
         .collect();
 
     Some(PriceAnswer { priced, unpriced })
+}
+
+/// The least time between the starts of two chunks, under `rate_limit`.
+///
+/// ⚠️ Under, not at: Jupiter counts over a sliding minute, on arrival, and
+/// two requests can arrive closer than they left.
+fn spacing_under(rate_limit: NonZeroU32) -> Duration {
+    SPACING_PER_REQUEST_ALLOWED / rate_limit.get()
 }
 
 /// Delay before retry `attempt`: `Retry-After` if any, exponential backoff

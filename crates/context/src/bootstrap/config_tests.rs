@@ -52,6 +52,7 @@ fn debugging_the_config_prints_no_credential() {
         pool_account: Endpoint::for_tests("https://accounts.example.invalid/v2/pasted", None),
         jupiter_url: "https://api.jup.ag".to_string(),
         jupiter_api_key: SecretKey::for_tests("jup-key"),
+        jupiter_rate_limit: NonZeroU32::new(60).expect("non-zero"),
         price_interval: Duration::from_secs(30),
         metadata_poll_interval: Duration::from_secs(10),
     };
@@ -107,4 +108,21 @@ fn only_a_cadence_that_keeps_prices_current_is_accepted() {
         stale.to_string().contains(&bound.to_string()),
         "an operator reads this in a crash log: {stale}"
     );
+}
+
+/// Unset is the free tier; zero would space the Jupiter requests infinitely
+/// and is refused, the refusal naming the key and the value an operator typed.
+#[test]
+fn only_a_positive_jupiter_rate_limit_is_accepted() {
+    assert_eq!(jupiter_rate_limit(None).expect("the default").get(), 60);
+    assert_eq!(jupiter_rate_limit(Some("600")).expect("a tier").get(), 600);
+
+    for refused in ["0", "-1", "soixante"] {
+        let error = jupiter_rate_limit(Some(refused)).expect_err("not a rate limit");
+        let message = error.to_string();
+        assert!(
+            message.contains("JUPITER_RATE_LIMIT_PER_MINUTE") && message.contains(refused),
+            "{message}"
+        );
+    }
 }

@@ -219,6 +219,21 @@ fn serve_scripted_responses(responses: Vec<String>) -> String {
     base_url
 }
 
+/// A client at `per_minute`, which sets the spacing between two chunks.
+fn client_at(base_url: String, per_minute: u32) -> JupiterPriceClient {
+    JupiterPriceClient::new(
+        base_url,
+        SecretKey::for_tests("test-key"),
+        NonZeroU32::new(per_minute).expect("non-zero"),
+    )
+}
+
+/// A client spaced by about a millisecond, for the tests that are not about
+/// the spacing.
+fn unpaced_client(base_url: String) -> JupiterPriceClient {
+    client_at(base_url, 60_000)
+}
+
 fn response_429(retry_after_secs: u64) -> String {
     format!(
         "HTTP/1.1 429 Too Many Requests\r\nretry-after: {retry_after_secs}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
@@ -244,7 +259,7 @@ async fn rate_limited_chunk_recovers_on_retry() {
     // 429 (Retry-After: 0 keeps it instant), then 200.
     let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     let answer = client.fetch_prices(&[mint]).await.expect("Ok expected");
 
     assert_eq!(answer.priced.len(), 1, "the retried chunk yields its price");
@@ -260,7 +275,7 @@ async fn chunk_rate_limited_on_every_attempt_is_skipped() {
         .collect();
     let base_url = serve_scripted_responses(responses);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     let answer = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
 
     // Attempts exhausted: skipped, not an error, and not unpriced either.
@@ -284,7 +299,7 @@ async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
     );
     let base_url = serve_scripted_responses(vec![response_200(&body)]);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     let answer = client
         .fetch_prices(&[with_price, null_price, no_field, no_entry])
         .await
@@ -316,7 +331,7 @@ async fn an_answer_without_a_single_price_says_nothing() {
         response_200(&stray),
     ]);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     for shape in [
         "empty map",
         "every entry without a price",
@@ -344,7 +359,7 @@ async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
         .collect();
     let base_url = serve_scripted_responses(responses);
 
-    let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
+    let client = unpaced_client(base_url);
     let answer = client.fetch_prices(&mints).await.expect("Ok expected");
 
     assert_eq!(answer.priced.len(), 1);
@@ -353,6 +368,42 @@ async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
     assert!(
         !answer.unpriced.contains(&given_up[0]),
         "the mint of the chunk given up is not unpriced: nobody answered for it"
+    );
+}
+
+// ── Spacing ─────────────────────────────────────────────────────────
+
+#[test]
+fn the_free_tier_is_one_request_every_1_1_s() {
+    let free_tier = NonZeroU32::new(60).expect("non-zero");
+    assert_eq!(
+        spacing_under(free_tier),
+        std::time::Duration::from_millis(1100)
+    );
+}
+
+/// Mutation this is written against: the `sleep_until` removed, and the three
+/// chunks leave at once.
+#[tokio::test]
+async fn chunks_are_spaced_by_the_rate_limit() {
+    // Three chunks: 50, 50 and 1 mints, each answered with one price.
+    let mints: Vec<Pubkey> = (1..=101).map(pk).collect();
+    let responses = mints
+        .chunks(JUPITER_BATCH_MAX)
+        .map(|chunk| response_200(&format!(r#"{{ "{}": {{ "usdPrice": 1.0 }} }}"#, chunk[0])))
+        .collect();
+    let client = client_at(serve_scripted_responses(responses), 600);
+    let spacing = client.request_spacing();
+    assert_eq!(spacing, std::time::Duration::from_millis(110), "premise");
+
+    let start = Instant::now();
+    let answer = client.fetch_prices(&mints).await.expect("Ok expected");
+    let elapsed = start.elapsed();
+
+    assert_eq!(answer.priced.len(), 3, "every chunk was asked");
+    assert!(
+        elapsed >= spacing * 2,
+        "three chunks take two spacings at least, took {elapsed:?}"
     );
 }
 

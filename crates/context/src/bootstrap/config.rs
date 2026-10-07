@@ -10,11 +10,12 @@
 //! authenticates by header, so its key never enters its URL and the two stay
 //! `String` + `SecretKey`.
 
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use yog_bootstrap::{
-    ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, required, required_endpoint,
-    required_secret_key, required_secret_url,
+    ConfigError, Endpoint, SecretKey, SecretUrl, duration_var, optional, required,
+    required_endpoint, required_secret_key, required_secret_url,
 };
 use yog_core::domain::PRICE_MAX_AGE_LATEST;
 
@@ -23,6 +24,9 @@ use yog_core::domain::PRICE_MAX_AGE_LATEST;
 /// Overridable via `CONTEXT_PRICE_INTERVAL_SECS`. 30s is a sensible
 /// default — frequent enough for a dashboard, light on Jupiter.
 const DEFAULT_PRICE_INTERVAL_SECS: u64 = 30;
+
+/// Default for `JUPITER_RATE_LIMIT_PER_MINUTE`: Jupiter's free tier.
+const DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE: u32 = 60;
 
 /// Default interval between `pools` polls for new mints, in seconds.
 ///
@@ -64,6 +68,10 @@ pub(crate) struct Config {
     /// a `?`.
     pub(crate) jupiter_api_key: SecretKey,
 
+    /// The requests per minute the Jupiter key's tier allows, as Jupiter
+    /// documents it. The client stays under it (`request_spacing`).
+    pub(crate) jupiter_rate_limit: NonZeroU32,
+
     /// How often the price worker fetches from Jupiter.
     pub(crate) price_interval: Duration,
 
@@ -79,6 +87,7 @@ impl Config {
             pool_account: required_endpoint("POOL_ACCOUNT")?,
             jupiter_url: required("JUPITER_URL")?,
             jupiter_api_key: required_secret_key("JUPITER_API_KEY")?,
+            jupiter_rate_limit: jupiter_rate_limit(optional(JUPITER_RATE_LIMIT_KEY).as_deref())?,
             price_interval: price_interval()?,
             metadata_poll_interval: Duration::from_secs(duration_var(
                 "CONTEXT_METADATA_POLL_SECS",
@@ -104,13 +113,10 @@ impl Config {
 ///     writing on every tick at that cadence was already past the bound.
 ///
 /// ⚠️ **It bounds the cadence, not the age of the newest price.** A cycle takes
-/// time of its own — 85 s against 5 028 mints on 22 September 2026 — and that
-/// time adds to the cadence before the next row lands, so 899 s is accepted
-/// while the real worst age is nearer 984 s. Leaving headroom would mean
-/// picking a cycle budget out of the air; what actually bounds the cycle is
-/// Jupiter pacing, which is its own piece of work. This guard refuses the
-/// cadences that cannot keep prices current **on their own**, which is the
-/// whole of what it claims.
+/// time of its own — one Jupiter request per `request_spacing`, so about that
+/// spacing times the chunks asked — and that time adds to the cadence before
+/// the next row lands. This guard refuses the cadences that cannot keep prices
+/// current **on their own**, which is the whole of what it claims.
 ///
 /// Refused at startup rather than logged, because the symptom arrives hours
 /// later, on the subset of pools nobody is watching, with nothing in the logs
@@ -148,6 +154,22 @@ fn price_interval_that_keeps_prices_current(seconds: u64) -> Result<Duration, Co
         expected: "a cadence under the 900s price staleness bound of \
                    yog_price_max_age_latest(), or every USD figure reads as absent",
     })
+}
+
+const JUPITER_RATE_LIMIT_KEY: &str = "JUPITER_RATE_LIMIT_PER_MINUTE";
+
+/// `JUPITER_RATE_LIMIT_PER_MINUTE`, from its raw value: absent is the free
+/// tier, zero is refused (it would space the requests infinitely).
+fn jupiter_rate_limit(raw: Option<&str>) -> Result<NonZeroU32, ConfigError> {
+    let Some(raw) = raw else {
+        return Ok(NonZeroU32::new(DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE).expect("non-zero"));
+    };
+    raw.parse::<NonZeroU32>()
+        .map_err(|_| ConfigError::InvalidValue {
+            key: JUPITER_RATE_LIMIT_KEY.to_string(),
+            value: raw.to_string(),
+            expected: "the requests per minute the Jupiter tier allows, at least 1",
+        })
 }
 
 #[cfg(test)]
