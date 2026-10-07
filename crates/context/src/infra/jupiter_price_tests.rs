@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 use yog_bootstrap::SecretKey;
 
 use rust_decimal::Decimal;
@@ -193,11 +194,26 @@ fn backoff_caps_a_hostile_retry_after() {
 /// Serve `responses` on a fresh localhost listener, one connection each, and
 /// return the base URL. A request beyond the script fails loudly.
 fn serve_scripted_responses(responses: Vec<String>) -> String {
+    let untimed = responses
+        .into_iter()
+        .map(|response| (Duration::ZERO, response))
+        .collect();
+    serve_timed_responses(untimed).0
+}
+
+/// When each request of a timed server arrived, in order.
+type Arrivals = Arc<Mutex<Vec<Instant>>>;
+
+/// Same, each response written after its delay, and the arrival of each
+/// request recorded once its head is read.
+fn serve_timed_responses(responses: Vec<(Duration, String)>) -> (String, Arrivals) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind localhost");
     let base_url = format!("http://{}", listener.local_addr().expect("local addr"));
+    let arrivals = Arrivals::default();
+    let recorded = Arc::clone(&arrivals);
 
     std::thread::spawn(move || {
-        for response in responses {
+        for (delay, response) in responses {
             let (mut stream, _) = listener.accept().expect("accept");
             // Drain the request head before answering.
             use std::io::{Read, Write};
@@ -210,13 +226,21 @@ fn serve_scripted_responses(responses: Vec<String>) -> String {
                     break;
                 }
             }
+            recorded.lock().unwrap().push(Instant::now());
+            std::thread::sleep(delay);
             stream
                 .write_all(response.as_bytes())
                 .expect("write response");
         }
     });
 
-    base_url
+    (base_url, arrivals)
+}
+
+/// The time between two consecutive arrivals.
+fn gaps(arrivals: &Arrivals) -> Vec<Duration> {
+    let arrivals = arrivals.lock().unwrap();
+    arrivals.windows(2).map(|pair| pair[1] - pair[0]).collect()
 }
 
 /// A client at `per_minute`, which sets the spacing between two chunks.
@@ -243,6 +267,11 @@ fn response_429(retry_after_secs: u64) -> String {
 fn response_500() -> String {
     "HTTP/1.1 500 Internal Server Error\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
         .to_string()
+}
+
+/// A body pricing `mint` alone.
+fn price_body(mint: Pubkey) -> String {
+    format!(r#"{{ "{mint}": {{ "usdPrice": 1.0 }} }}"#)
 }
 
 fn response_200(body: &str) -> String {
@@ -405,7 +434,7 @@ async fn chunks_are_spaced_by_the_rate_limit() {
     let mints: Vec<Pubkey> = (1..=101).map(pk).collect();
     let responses = mints
         .chunks(JUPITER_BATCH_MAX)
-        .map(|chunk| response_200(&format!(r#"{{ "{}": {{ "usdPrice": 1.0 }} }}"#, chunk[0])))
+        .map(|chunk| response_200(&price_body(chunk[0])))
         .collect();
     let client = client_at(serve_scripted_responses(responses), 600);
     let spacing = client.request_spacing();
@@ -422,6 +451,72 @@ async fn chunks_are_spaced_by_the_rate_limit() {
     assert!(
         elapsed >= spacing * 2,
         "three chunks take two spacings at least, took {elapsed:?}"
+    );
+}
+
+/// Mutation this is written against: `next_start` taken once the answer is
+/// in, which adds the server's 400 ms to the gap.
+#[tokio::test]
+async fn the_spacing_runs_from_one_start_to_the_next() {
+    // Two chunks, 1 s apart at 66 per minute, each answered in 400 ms.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let latency = Duration::from_millis(400);
+    let responses = mints
+        .chunks(JUPITER_BATCH_MAX)
+        .map(|chunk| (latency, response_200(&price_body(chunk[0]))))
+        .collect();
+    let (base_url, arrivals) = serve_timed_responses(responses);
+    let client = client_at(base_url, 66);
+    assert_eq!(client.request_spacing(), Duration::from_secs(1), "premise");
+
+    client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    let gaps = gaps(&arrivals);
+    assert_eq!(gaps.len(), 1, "both chunks were asked");
+    assert!(
+        gaps[0] < Duration::from_millis(1300),
+        "1 s from start to start, not 1.4 s from the answer: {gaps:?}"
+    );
+}
+
+/// Mutation this is written against: the retry waiting its backoff alone,
+/// which `Retry-After: 0` makes nothing.
+#[tokio::test]
+async fn a_retry_takes_its_slot_like_any_request() {
+    // A first chunk refused then retried, and a second chunk: three requests,
+    // 300 ms apart at 220 per minute.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let responses = vec![
+        (Duration::ZERO, response_429(0)),
+        (Duration::ZERO, response_200(&price_body(mints[0]))),
+        (
+            Duration::ZERO,
+            response_200(&price_body(mints[JUPITER_BATCH_MAX])),
+        ),
+    ];
+    let (base_url, arrivals) = serve_timed_responses(responses);
+    let client = client_at(base_url, 220);
+    let spacing = client.request_spacing();
+    assert_eq!(spacing, Duration::from_millis(300), "premise");
+
+    let answer = client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
+
+    assert_eq!(
+        answer.priced.len(),
+        2,
+        "the retry and the second chunk answered"
+    );
+    let gaps = gaps(&arrivals);
+    assert_eq!(gaps.len(), 2, "three requests");
+    assert!(
+        gaps.iter().all(|gap| *gap >= spacing * 4 / 5),
+        "every request waits its slot, the retry included: {gaps:?}"
     );
 }
 

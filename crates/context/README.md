@@ -183,8 +183,8 @@ start of the next. A
 chunk sent back to back with the others is what drew the 429s: Jupiter counts
 over a sliding minute and lets a burst through before it refuses the rest. A
 chunk refused anyway is retried a bounded number of times (`Retry-After` when
-present, capped exponential backoff otherwise) before falling back to
-skip-and-log.
+present, capped exponential backoff otherwise, and never before its slot: a
+retry is a request too) before falling back to skip-and-log.
 
 ⚠️ The spacing is what bounds a tick: about `request_spacing` times the chunks
 asked. Past the cadence, ticks run back to back — at 60 per minute, 27 chunks

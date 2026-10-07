@@ -152,16 +152,27 @@ impl JupiterPriceClient {
 impl JupiterPriceClient {
     /// One chunk with bounded 429 retries, then given up. Other errors are not
     /// retried: they are not pacing problems.
-    async fn fetch_chunk_with_retry(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
+    ///
+    /// ⚠️ Every attempt, a retry included, moves `next_start` on: Jupiter
+    /// counts a retry like any other request.
+    async fn fetch_chunk_with_retry(
+        &self,
+        mints: &[Pubkey],
+        next_start: &mut tokio::time::Instant,
+    ) -> Result<PriceAnswer, SourceError> {
         let mut attempt = 0;
         loop {
+            // ⚠️ From start to start: a pause after the answer would add the
+            // request's own latency to every chunk.
+            *next_start = tokio::time::Instant::now() + self.request_spacing;
             match self.fetch_chunk(mints).await {
                 Err(SourceError::RateLimited { retry_after })
                     if attempt + 1 < RATE_LIMIT_MAX_ATTEMPTS =>
                 {
-                    let delay = rate_limit_backoff(attempt, retry_after);
-                    log::rate_limited(attempt, delay, mints.len());
-                    tokio::time::sleep(delay).await;
+                    let wait = rate_limit_backoff(attempt, retry_after)
+                        .max(next_start.saturating_duration_since(tokio::time::Instant::now()));
+                    log::rate_limited(attempt, wait, mints.len());
+                    tokio::time::sleep(wait).await;
                     attempt += 1;
                 }
                 result => return result,
@@ -194,10 +205,7 @@ impl PriceSource for JupiterPriceClient {
                 }
                 () = tokio::time::sleep_until(next_start) => {}
             }
-            // ⚠️ From start to start: a pause after the answer would add the
-            // request's own latency to every chunk.
-            next_start = tokio::time::Instant::now() + self.request_spacing;
-            match self.fetch_chunk_with_retry(chunk).await {
+            match self.fetch_chunk_with_retry(chunk, &mut next_start).await {
                 Ok(answered) => {
                     answer.priced.extend(answered.priced);
                     answer.unpriced.extend(answered.unpriced);
