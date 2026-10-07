@@ -26,7 +26,7 @@ use yog_core::domain::PRICE_MAX_AGE_LATEST;
 const DEFAULT_PRICE_INTERVAL_SECS: u64 = 30;
 
 /// Default for `JUPITER_RATE_LIMIT_PER_MINUTE`: Jupiter's free tier.
-const DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE: u32 = 60;
+const DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE: NonZeroU32 = NonZeroU32::new(60).unwrap();
 
 /// Default interval between `pools` polls for new mints, in seconds.
 ///
@@ -162,7 +162,7 @@ const JUPITER_RATE_LIMIT_KEY: &str = "JUPITER_RATE_LIMIT_PER_MINUTE";
 /// tier, zero is refused (it would space the requests infinitely).
 fn jupiter_rate_limit(raw: Option<&str>) -> Result<NonZeroU32, ConfigError> {
     let Some(raw) = raw else {
-        return Ok(NonZeroU32::new(DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE).expect("non-zero"));
+        return Ok(DEFAULT_JUPITER_RATE_LIMIT_PER_MINUTE);
     };
     raw.parse::<NonZeroU32>()
         .map_err(|_| ConfigError::InvalidValue {

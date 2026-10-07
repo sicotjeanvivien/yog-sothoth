@@ -96,7 +96,7 @@ impl Daemon {
         ));
         info!(
             rate_limit_per_minute = config.jupiter_rate_limit.get(),
-            request_every_ms = price_source.request_spacing().as_millis() as u64,
+            request_every = ?price_source.request_spacing(),
             "Jupiter requests spaced under the key's rate limit"
         );
         // `getMultipleAccounts`, standard Solana JSON-RPC — its own endpoint,

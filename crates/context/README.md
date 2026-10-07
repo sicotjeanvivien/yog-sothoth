@@ -177,8 +177,9 @@ structural misconfiguration, not partial fetch failures — those are handled
 internally as skip-and-log per chunk.
 
 One refinement on the Jupiter side: chunks are **spaced**, one every
-`request_spacing` — 1.1 s for `JUPITER_RATE_LIMIT_PER_MINUTE=60`, 10 % under
-the limit, counted from the start of one request to the start of the next. A
+`request_spacing` — 1.1 s for `JUPITER_RATE_LIMIT_PER_MINUTE=60`, ten requests
+where the limit allows eleven, counted from the start of one request to the
+start of the next. A
 chunk sent back to back with the others is what drew the 429s: Jupiter counts
 over a sliding minute and lets a burst through before it refuses the rest. A
 chunk refused anyway is retried a bounded number of times (`Retry-After` when
