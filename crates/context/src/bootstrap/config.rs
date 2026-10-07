@@ -101,8 +101,8 @@ impl Config {
 /// cannot honour.
 ///
 /// Neither is new with the redundancy filter — `KeptPrices` decides its floor
-/// one tick early precisely so that the cadence, and nothing else, bounds
-/// freshness. Both were simply never checked:
+/// one tick early so that the filter adds nothing to what the cycle already
+/// costs. Both were simply never checked:
 ///
 ///   * **zero** panics `tokio::time::interval` inside the spawned worker,
 ///     *after* startup succeeded — a typo that takes the daemon down where no

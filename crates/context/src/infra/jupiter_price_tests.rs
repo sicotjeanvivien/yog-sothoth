@@ -192,7 +192,8 @@ fn backoff_caps_a_hostile_retry_after() {
 // ── 429 handling: retry loop against a local HTTP server ────────────
 
 /// Serve `responses` on a fresh localhost listener, one connection each, and
-/// return the base URL. A request beyond the script fails loudly.
+/// return the base URL. A request beyond the script is refused: the listener
+/// closes with it.
 fn serve_scripted_responses(responses: Vec<String>) -> String {
     let untimed = responses
         .into_iter()
@@ -420,10 +421,7 @@ async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
 #[test]
 fn the_free_tier_is_one_request_every_1_1_s() {
     let free_tier = NonZeroU32::new(60).expect("non-zero");
-    assert_eq!(
-        spacing_under(free_tier),
-        std::time::Duration::from_millis(1100)
-    );
+    assert_eq!(spacing_under(free_tier), Duration::from_millis(1100));
 }
 
 /// Mutation this is written against: the `sleep_until` removed, and the three
@@ -438,7 +436,7 @@ async fn chunks_are_spaced_by_the_rate_limit() {
         .collect();
     let client = client_at(serve_scripted_responses(responses), 600);
     let spacing = client.request_spacing();
-    assert_eq!(spacing, std::time::Duration::from_millis(110), "premise");
+    assert_eq!(spacing, Duration::from_millis(110), "premise");
 
     let start = Instant::now();
     let answer = client
@@ -526,20 +524,21 @@ async fn a_retry_takes_its_slot_like_any_request() {
 async fn a_stop_between_two_chunks_returns_what_was_answered() {
     // Two chunks, a minute apart; only the first is scripted.
     let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
-    let body = format!(r#"{{ "{}": {{ "usdPrice": 2.0 }} }}"#, mints[0]);
-    let client = client_at(serve_scripted_responses(vec![response_200(&body)]), 1);
+    let script = vec![(Duration::ZERO, response_200(&price_body(mints[0])))];
+    let (base_url, arrivals) = serve_timed_responses(script);
+    let client = client_at(base_url, 1);
 
     // Whether it lands during the first request or in the pause after it,
     // the pause that follows hears it.
     let shutdown = CancellationToken::new();
     let stop = shutdown.clone();
     tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
         stop.cancel();
     });
 
     let answer = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
+        Duration::from_secs(5),
         client.fetch_prices(&mints, &shutdown),
     )
     .await
@@ -555,6 +554,11 @@ async fn a_stop_between_two_chunks_returns_what_was_answered() {
     assert!(
         !answer.unpriced.contains(&mints[JUPITER_BATCH_MAX]),
         "the chunk never sent says nothing about its mint"
+    );
+    assert_eq!(
+        arrivals.lock().unwrap().len(),
+        1,
+        "the second chunk is never sent, not sent and refused"
     );
 }
 

@@ -47,9 +47,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   queries `TokenMetadataRepository::list_missing_mints` for mints present in
   `pools` but absent from `token_metadata`, and fetches symbol / name /
   decimals / logo via Helius DAS.
-- **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s),
-  lists the known mints and asks Jupiter Price V3 for current USD prices,
-  inserting them with a single shared `fetched_at` per tick.
+- **`PriceWorker`** — every `CONTEXT_PRICE_INTERVAL_SECS` (default 30 s), or
+  back to back when a tick outlasts it, lists the known mints and asks Jupiter
+  Price V3 for current USD prices, inserting them with a single shared
+  `fetched_at` per tick.
 
   **It asks only for the mints worth asking.** A mint Jupiter answers
   **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
@@ -343,8 +344,10 @@ daemon refuses to start otherwise.** Zero panics the ticker inside the spawned
 worker, long after startup reported success; 900 s or more leaves the newest
 price older than `yog_price_max_age_latest()` before the next tick even fires,
 whether or not anything is being suppressed. Neither refusal comes from the
-redundancy filter: `KeptPrices` sets its floor one tick early so that the
-cadence, and nothing else, bounds freshness.
+redundancy filter: `KeptPrices` sets its floor one tick early so that it adds
+nothing to what the cycle already costs. The cadence bounds when a tick starts,
+not the age of the newest price: a tick's own length — about `request_spacing`
+per chunk — adds to it.
 
 **Two Solana endpoints, and this crate is why they are two.** The DAS
 (`getAssetBatch`) is Helius' own API; `getMultipleAccounts` is standard Solana
