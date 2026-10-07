@@ -1,13 +1,6 @@
-//! Jupiter price API client — token USD price source.
-//!
-//! Calls Price API V3 (`GET https://api.jup.ag/price/v3?ids=...`)
-//! and says, for every mint of a chunk Jupiter answered, whether it
-//! came back with a usable price. A mint Jupiter cannot price is not
-//! an error: it is reported as unpriced.
-//!
-//! Chunks beyond the first can hit Jupiter's rate limit (429) because
-//! they are sent back-to-back; those are retried a bounded number of
-//! times, pacing on the `Retry-After` header when present.
+//! Jupiter Price API V3 client (`GET …/price/v3?ids=…`): says, for every mint
+//! of a chunk Jupiter answered, whether it came back with a price. Chunks
+//! refused on 429 are retried a bounded number of times.
 
 use super::metrics::ProviderMetrics;
 use std::collections::{HashMap, HashSet};
@@ -27,39 +20,26 @@ use crate::{
 
 mod log;
 
-/// Maximum number of `ids` accepted by Price API V3 in a single
-/// call. Documented limit: 50.
+/// Maximum number of `ids` per call (documented limit).
 const JUPITER_BATCH_MAX: usize = 50;
 
-/// Attempts per chunk when Jupiter answers 429 (1 initial call +
-/// retries). Chunks are sent back-to-back, so the first chunks of a
-/// tick can exhaust the per-second budget and 429 the rest; a short
-/// paced retry recovers them instead of losing a price sample.
+/// Attempts per chunk when Jupiter answers 429, the first call included.
 const RATE_LIMIT_MAX_ATTEMPTS: u32 = 3;
 
-/// Backoff before retry attempt `n` (0-based) when the 429 carried
-/// no `Retry-After` header: 1s, then 2s.
+/// Backoff before retry `n` (0-based) without `Retry-After`: 1 s, then 2 s.
 const RATE_LIMIT_BASE_BACKOFF: Duration = Duration::from_secs(1);
 
-/// Upper bound on any single retry sleep, including a server-provided
-/// `Retry-After`. Keeps one bad header from stalling the worker (and
-/// its graceful shutdown) for minutes.
+/// Cap on any retry sleep, a server's `Retry-After` included, so one bad
+/// header cannot stall the worker and its shutdown.
 const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(10);
 
 // ── Wire types ────────────────────────────────────────────────────────
 
-/// One price entry from Jupiter's V3 response.
+/// One price entry from Jupiter's V3 response, reduced to `usdPrice`.
 ///
-/// The API returns several fields per entry (createdAt, liquidity,
-/// blockId, decimals, priceChange24h, launchpad, etc.); we only
-/// deserialise `usdPrice` and let serde ignore the rest.
-///
-/// `usd_price` is wrapped in `Option` AND marked `#[serde(default)]`
-/// because Jupiter has three real-world cases for unpriced mints:
-///   - `usdPrice: <number>` — Some(value),
-///   - `usdPrice: null`     — None,
-///   - the field is entirely ABSENT from the entry — also None
-///     (without `default`, serde would error on the missing field).
+/// ⚠️ `Option` **and** `#[serde(default)]`: Jupiter sends `null` or omits the
+/// field for a mint it cannot price, and without `default` the omission would
+/// fail to deserialise.
 #[derive(Debug, Deserialize)]
 struct JupiterPriceEntry {
     #[serde(rename = "usdPrice", default)]
@@ -68,20 +48,15 @@ struct JupiterPriceEntry {
 
 // ── Client ────────────────────────────────────────────────────────────
 
-/// Client for the Jupiter Price API V3.
-///
-/// Owns its own [`reqwest::Client`], separate from the Helius client
-/// and from the indexer's RPC client. Holds the API key set in the
-/// `x-api-key` header on every request.
+/// Client for the Jupiter Price API V3, authenticated by the `x-api-key`
+/// header.
 #[derive(Clone)]
 pub struct JupiterPriceClient {
     http: reqwest::Client,
-    /// Jupiter API base URL (e.g. `https://api.jup.ag`); `/price/v3`
-    /// is appended per request. Carries no secret — Jupiter authenticates by
-    /// header — so it is a plain `String` on purpose.
+    /// Base URL (e.g. `https://api.jup.ag`). No secret in it — the key goes in
+    /// a header — hence a plain `String`.
     base_url: String,
-    /// API key — sent on every request via `x-api-key`. Stays a [`SecretKey`]
-    /// until the header is built, one line below.
+    /// Stays a [`SecretKey`] until the header is built.
     api_key: SecretKey,
 }
 
@@ -158,10 +133,8 @@ impl JupiterPriceClient {
 }
 
 impl JupiterPriceClient {
-    /// One chunk with bounded 429 retries: sleeps `Retry-After` when
-    /// Jupiter provided it, exponential backoff otherwise, then gives
-    /// the chunk up (skip-and-log in the caller). Other errors are
-    /// not retried — they are not pacing problems.
+    /// One chunk with bounded 429 retries, then given up. Other errors are not
+    /// retried: they are not pacing problems.
     async fn fetch_chunk_with_retry(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         let mut attempt = 0;
         loop {
@@ -182,10 +155,8 @@ impl JupiterPriceClient {
 
 #[async_trait]
 impl PriceSource for JupiterPriceClient {
-    /// Fetches USD prices for an arbitrary number of mints, chunking
-    /// internally on Jupiter's 50-id limit. Rate-limited chunks are
-    /// retried with backoff; chunk-level failures are logged and
-    /// skipped, and their mints appear in neither list of the answer.
+    /// Fetches the prices chunk by chunk. A chunk that fails is logged and
+    /// skipped: its mints are in neither list of the answer.
     async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
         let mut answer = PriceAnswer::default();
         for chunk in mints.chunks(JUPITER_BATCH_MAX) {
@@ -203,18 +174,13 @@ impl PriceSource for JupiterPriceClient {
     }
 }
 
-/// The answer to one chunk Jupiter did answer, or `None` when it is degraded.
+/// The answer to one chunk: every mint asked that did not come back with a
+/// price is unpriced (a missing entry included).
 ///
-/// Every mint `asked` for that did not come back with a price is unpriced —
-/// computed from what was asked, because a missing entry is one of the shapes
-/// "no price" takes.
-///
-/// ⚠️ **A chunk without a single price is degraded, not a verdict.** Jupiter
-/// answers for the mints it cannot price too, and a chunk mixes live and dead
-/// mints. Read as "no price", `{}`, an error body or all-null entries would
-/// hold back every live mint of the chunk after Jupiter recovers. Such a chunk
-/// says nothing, like a request that failed; the cost is that a chunk of dead
-/// mints only is asked every tick.
+/// ⚠️ `None` when not one came back with a price: Jupiter answers for the mints
+/// it cannot price too, and a chunk mixes live and dead mints, so `{}`, an
+/// error body or all-null entries are a degraded answer. Read as a verdict,
+/// they would hold back every live mint of the chunk.
 fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnswer> {
     let with_price: HashSet<Pubkey> = priced.iter().map(|price| price.mint).collect();
     if !asked.iter().any(|mint| with_price.contains(mint)) {
@@ -230,19 +196,15 @@ fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnsw
     Some(PriceAnswer { priced, unpriced })
 }
 
-/// Delay before retry attempt `attempt` (0-based): the server's
-/// `Retry-After` when present, exponential backoff on
-/// `RATE_LIMIT_BASE_BACKOFF` otherwise — both capped at
-/// `RATE_LIMIT_MAX_BACKOFF`.
+/// Delay before retry `attempt`: `Retry-After` if any, exponential backoff
+/// otherwise, capped at `RATE_LIMIT_MAX_BACKOFF`.
 fn rate_limit_backoff(attempt: u32, retry_after: Option<Duration>) -> Duration {
     retry_after
         .unwrap_or_else(|| RATE_LIMIT_BASE_BACKOFF * 2u32.saturating_pow(attempt))
         .min(RATE_LIMIT_MAX_BACKOFF)
 }
 
-/// Extract the `Retry-After` header as a duration. Only the
-/// delta-seconds form is handled; the HTTP-date form (which Jupiter
-/// does not use) yields `None` and falls back to our own backoff.
+/// `Retry-After` in its delta-seconds form; the HTTP-date form yields `None`.
 fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
     headers
         .get(reqwest::header::RETRY_AFTER)?
@@ -254,11 +216,8 @@ fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
         .map(Duration::from_secs)
 }
 
-/// Project one HashMap entry from Jupiter's response into the
-/// worker's view, or drop it. Drops when:
-///   - the entry has no usable `usdPrice` (null or absent);
-///   - the mint string cannot be parsed back into a Pubkey
-///     (unlikely — Jupiter would have to return a malformed id).
+/// One response entry as a price, or `None` without a usable `usdPrice` or a
+/// parseable mint.
 fn into_fetched_price((mint_str, entry): (String, JupiterPriceEntry)) -> Option<FetchedPrice> {
     let price_usd = entry.usd_price?;
     let mint = Pubkey::try_from(mint_str.as_str()).ok()?;

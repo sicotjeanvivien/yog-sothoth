@@ -1,18 +1,13 @@
 //! Which mints the price source answered without a price, and when to ask it
-//! again.
-//!
-//! The source's own answer is the signal: deciding whether to ask again does
-//! not need to know *why* a mint has no price, only that the source, asked, had
-//! none.
+//! again — the source's answer is the signal, whatever the reason behind it.
 
 use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 use solana_pubkey::Pubkey;
 
-/// The longest a mint the source answered without a price waits before it is
-/// asked again. It bounds how long a mint that comes back to life goes
-/// unvalued; a longer cap would save almost no request.
+/// The longest wait: it bounds how long a mint that comes back to life goes
+/// unvalued, and a longer one would save almost no request.
 const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 
 /// The mints the source last answered without a price, and when each is due
@@ -35,8 +30,7 @@ struct Deferral {
 }
 
 impl UnpricedMints {
-    /// Build the rule for a worker ticking every `tick_interval`, the unit of
-    /// the wait.
+    /// The rule for a worker ticking every `tick_interval`, the unit of the wait.
     pub fn new(tick_interval: core::time::Duration) -> Self {
         let tick = Duration::from_std(tick_interval).unwrap_or(UNPRICED_RETRY_MAX);
 
@@ -46,9 +40,8 @@ impl UnpricedMints {
         }
     }
 
-    /// The longest a mint without a price goes unasked at this cadence: the
-    /// cap, or the cadence when it is longer. Stated by the price worker at
-    /// startup, since an operator cannot derive it from the configuration.
+    /// The longest a mint without a price goes unasked at this cadence, stated
+    /// by the price worker at startup.
     pub fn asks_again_at_most_every(&self) -> Duration {
         UNPRICED_RETRY_MAX.max(self.tick)
     }
@@ -63,9 +56,8 @@ impl UnpricedMints {
     /// Take in what the source answered at `now`: `priced` mints leave,
     /// `unpriced` ones wait.
     ///
-    /// ⚠️ A mint asked in a request that failed goes in **neither**: it was
-    /// never answered, and counting it would hold back a mint that may have a
-    /// price.
+    /// ⚠️ A mint whose request failed goes in **neither**: counting it would
+    /// hold back a mint that may have a price.
     pub fn record<'a>(
         &mut self,
         priced: impl IntoIterator<Item = &'a Pubkey>,
@@ -98,8 +90,7 @@ impl UnpricedMints {
 
     /// `cadence × 2^misses`, capped at [`UNPRICED_RETRY_MAX`].
     fn wait_after(&self, misses: u32) -> Duration {
-        // Any cadence reaches the cap well before 2²⁰: the clamp only keeps
-        // the shift and the multiplication from overflowing.
+        // The clamp only prevents an overflow: any cadence caps before 2²⁰.
         let factor = 1_i32 << misses.min(20);
 
         self.tick

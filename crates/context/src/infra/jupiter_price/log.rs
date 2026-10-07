@@ -1,5 +1,4 @@
-//! The lines the Jupiter price client writes, one function each — same shape
-//! as the indexer's stream `log` modules.
+//! The Jupiter price client's log lines, one function each.
 
 use std::time::Duration;
 

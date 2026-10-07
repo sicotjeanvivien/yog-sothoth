@@ -1,10 +1,5 @@
-//! Unit tests for `PriceWorker::run_one_cycle`.
-//!
-//! Same approach as the metadata worker tests: the infinite `run`
-//! loop is left alone, `run_one_cycle` carries all the interesting
-//! behaviour. Three fakes drive the worker — the metadata repository
-//! (read-only: `list_known_mints`), the price repository (write:
-//! `insert_batch`), and the price source.
+//! Unit tests for `PriceWorker::run_one_cycle`, driven by three fakes: the
+//! metadata repository, the price repository and the price source.
 
 use std::sync::Mutex;
 
@@ -121,8 +116,7 @@ impl FakePriceRepository {
 #[async_trait]
 impl TokenPriceRepository for FakePriceRepository {
     async fn insert_batch(&self, prices: &[TokenPrice]) -> RepositoryResult<()> {
-        // Always record — even on forced failure — so we can assert
-        // the worker did try to insert.
+        // Recorded even on a forced failure: the test asserts the attempt.
         self.inserts.lock().unwrap().push(prices.to_vec());
 
         if let Some(err) = self.insert_error.lock().unwrap().take() {
@@ -139,8 +133,8 @@ struct FakePriceSource {
 }
 
 impl FakePriceSource {
-    /// Answers carrying prices only: every mint the source returns no price
-    /// for is left out of both lists, as if its request had failed.
+    /// Prices only: a mint without a price is in neither list, as if its
+    /// request had failed.
     fn with_responses(responses: Vec<Result<Vec<FetchedPrice>, SourceError>>) -> Self {
         Self::with_answers(
             responses
@@ -234,8 +228,7 @@ async fn inserts_prices_for_all_priced_mints_with_uniform_timestamp() {
     let batch = &inserts[0];
     assert_eq!(batch.len(), 3);
 
-    // Distinct values per field — catches a field swap in the
-    // worker's construction of `TokenPrice`.
+    // Distinct values per field: catches a field swap in `TokenPrice`.
     assert_eq!(batch[0].mint, mint_a);
     assert_eq!(batch[0].price_usd, dec("1.0"));
     assert_eq!(batch[1].mint, mint_b);
@@ -262,9 +255,7 @@ async fn inserts_prices_for_all_priced_mints_with_uniform_timestamp() {
 
 #[tokio::test]
 async fn inserts_only_what_source_priced() {
-    // Source returns fewer prices than requested (Jupiter cannot
-    // price untraded mints). The worker must still call the source
-    // with the full list, then only insert what came back.
+    // The source prices fewer mints than asked: only those are inserted.
     let mint_a = pk(1);
     let mint_b = pk(2);
     let mint_c = pk(3);
@@ -299,14 +290,9 @@ async fn inserts_only_what_source_priced() {
 
 #[tokio::test]
 async fn unstorable_price_is_dropped_before_the_batch() {
-    // 4e-19 is POSITIVE, and stores as exactly 0 in `NUMERIC(38, 18)`. It must
-    // never reach `insert_batch`: migration 009's CHECK would refuse it, and
-    // because the batch is one statement with `ON CONFLICT DO NOTHING` — which
-    // does not cover check violations — that refusal would take the two healthy
-    // mints down with it, every tick.
-    //
-    // A `price_usd > 0` filter passes this value through, so this test is what
-    // stands between the rule and the naive version of it.
+    // 4e-19 is positive but stores as 0: the CHECK of migration 009 would abort
+    // the whole batch. Mutation this is written against: a `price_usd > 0`
+    // filter.
     let mint_a = pk(1);
     let mint_dust = pk(2);
     let mint_c = pk(3);
@@ -330,8 +316,7 @@ async fn unstorable_price_is_dropped_before_the_batch() {
 
     worker.run_one_cycle().await;
 
-    // The healthy mints are still written — the dust price is skipped, not
-    // fatal.
+    // The healthy mints are still written.
     let inserts = price_repo.inserts();
     assert_eq!(inserts.len(), 1, "the batch must still be sent");
     let batch = &inserts[0];
@@ -344,9 +329,7 @@ async fn unstorable_price_is_dropped_before_the_batch() {
 
 #[tokio::test]
 async fn a_tick_of_only_unstorable_prices_inserts_nothing() {
-    // The empty check now sits after the filter, so this must NOT reach the
-    // repository at all — an insert of an empty batch would be a wasted
-    // round-trip, and `inserts()` staying empty is what proves the ordering.
+    // The empty check sits after the filter: no insert at all.
     let mint_dust = pk(1);
 
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint_dust]));
@@ -373,11 +356,8 @@ async fn a_tick_of_only_unstorable_prices_inserts_nothing() {
 
 #[tokio::test]
 async fn an_overflowing_price_is_dropped_before_the_batch() {
-    // The other end of the column. 1e20 has 20 integer digits and overflows
-    // `NUMERIC(38, 18)` with `22003` — refused by the TYPE, so migration 009's
-    // CHECK never even runs. `usd_price` comes off the Jupiter response
-    // unvalidated, so nothing upstream bounds it either, and the abort would
-    // take the two healthy mints with it exactly like a zero would.
+    // The other end: 1e20 overflows `NUMERIC(38, 18)` (`22003`) and would abort
+    // the batch just the same.
     let mint_a = pk(1);
     let mint_absurd = pk(2);
     let mint_c = pk(3);
@@ -414,8 +394,7 @@ async fn an_overflowing_price_is_dropped_before_the_batch() {
 
 #[tokio::test]
 async fn midpoint_price_is_kept() {
-    // 5e-19 rounds AWAY from zero and stores as 1e-18 — the filter must not be
-    // over-eager and throw away a price the column can actually hold.
+    // 5e-19 rounds away from zero and stores as 1e-18: it must be kept.
     let mint = pk(1);
 
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
@@ -463,9 +442,7 @@ async fn list_known_mints_error_skips_cycle_silently() {
 
 #[tokio::test]
 async fn no_insert_when_no_chunk_yields_a_price() {
-    // All known mints, source returns empty responses for all chunks.
-    // The worker's `to_insert.is_empty()` guard must prevent the
-    // insert from ever being called.
+    // The source prices nothing: no insert is attempted.
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![])]));
@@ -506,15 +483,14 @@ async fn insert_batch_error_does_not_panic() {
 
     worker.run_one_cycle().await; // must not panic — that's the assertion
 
-    // Sanity: the insert WAS attempted before failing.
+    // The insert was attempted before failing.
     assert_eq!(price_repo.inserts().len(), 1);
 }
 
 #[tokio::test]
 async fn a_price_that_repeats_is_written_once() {
-    // The whole change in one test: two ticks, one unchanged price, one row.
-    // The two ticks are milliseconds apart, so the 10-minute floor cannot be
-    // what suppresses the second — only the value comparison can.
+    // Two ticks milliseconds apart, one unchanged price, one row: only the
+    // value comparison can suppress the second, not the floor.
     let mint = pk(1);
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -545,8 +521,7 @@ async fn a_price_that_repeats_is_written_once() {
 
 #[tokio::test]
 async fn a_price_that_moved_is_written_on_the_next_tick() {
-    // The counterpart, and what keeps the test above from passing against a
-    // worker that simply stopped writing after its first tick.
+    // The counterpart: a worker that stopped writing would pass the test above.
     let mint = pk(1);
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -572,10 +547,8 @@ async fn a_price_that_moved_is_written_on_the_next_tick() {
 
 #[tokio::test]
 async fn a_failed_insert_leaves_nothing_remembered() {
-    // The ordering guard. `KeptPrices::record` runs only after a successful
-    // insert; recording before it would make the worker believe a row exists
-    // that the database refused, and the real price would then wait for the
-    // 10-minute floor — a gap nothing backfills.
+    // `KeptPrices::record` after a successful insert only: a refused batch
+    // must be retried at the next tick, not wait for the floor.
     let mint = pk(1);
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -605,10 +578,8 @@ async fn a_failed_insert_leaves_nothing_remembered() {
 
 // ── Mints the source answered without a price ─────────────────────────
 //
-// The waits themselves are `UnpricedMints`'s, tested in yog-core against a
-// clock. What is tested here is what the worker feeds it: the two ticks below
-// are milliseconds apart, so any mint the rule has deferred is still waiting
-// on the second.
+// The waits are tested in yog-core; here, what the worker feeds the rule. Two
+// ticks milliseconds apart: a deferred mint is still waiting on the second.
 
 #[tokio::test]
 async fn a_mint_answered_without_a_price_is_not_asked_on_the_next_tick() {
@@ -645,9 +616,8 @@ async fn a_mint_answered_without_a_price_is_not_asked_on_the_next_tick() {
 
 #[tokio::test]
 async fn a_mint_whose_request_failed_is_asked_on_the_next_tick() {
-    // The source priced `live` and said nothing about `silent` — the case of a
-    // chunk given up on 429. Nothing was learnt about `silent`, so it must not
-    // be held back: it may well have a price.
+    // Nothing was said about `silent` (a chunk given up on 429): it must not
+    // be held back.
     let (live, silent) = (pk(1), pk(2));
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![live, silent]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -675,8 +645,7 @@ async fn a_mint_whose_request_failed_is_asked_on_the_next_tick() {
 
 #[tokio::test]
 async fn an_unstorable_price_resets_the_wait_like_any_price() {
-    // The rule is fed before the storability filter: the source had a price,
-    // and holding the mint back would only delay the day it becomes storable.
+    // The rule is fed before the storability filter.
     let mint = pk(1);
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -705,8 +674,8 @@ async fn an_unstorable_price_resets_the_wait_like_any_price() {
         "nothing storable was priced"
     );
     assert_eq!(source.calls().len(), 2, "the mint was due on both ticks");
-    // Reset by the unstorable price, the miss of the second tick is a first
-    // miss again: one minute, not the eight of a fourth.
+    // Reset by the unstorable price, this is a first miss: one minute, not
+    // the eight of a fourth.
     assert!(
         worker
             .unpriced
@@ -717,14 +686,9 @@ async fn an_unstorable_price_resets_the_wait_like_any_price() {
 
 // ── Coverage metrics ──────────────────────────────────────────────────
 //
-// The gauges are the whole point of the price-coverage observability: a
-// price coverage that degrades must be visible, and a tick that priced nothing
-// must not look like a tick that never happened.
-//
 // Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
-// *current thread* for the duration of a closure, so the future has to be
-// driven inside it — hence the current-thread runtime. Same recipe as
-// yog-indexer's persistor metrics test.
+// current thread only, so the future runs on a current-thread runtime inside
+// it.
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 
@@ -740,8 +704,7 @@ fn snapshot_one_cycle(
     snapshot_cycles(worker, 1)
 }
 
-/// Same, over `cycles` consecutive ticks of the SAME worker — the only way to
-/// observe anything that depends on what the previous tick kept.
+/// Same, over `cycles` consecutive ticks of the same worker.
 fn snapshot_cycles(
     mut worker: PriceWorker,
     cycles: usize,
@@ -765,9 +728,8 @@ fn snapshot_cycles(
             });
     });
 
-    // ONE snapshot, queried repeatedly: `Snapshotter::snapshot` is destructive
-    // for counters (`swap(0)`), so a second call returns zeros and would
-    // "prove" a metric that never fired.
+    // ⚠️ One snapshot only: `snapshot()` resets counters, so a second call
+    // would read zeros.
     snapshotter.snapshot().into_vec()
 }
 
@@ -808,9 +770,7 @@ fn tick_outcome<'a>(
 
 #[test]
 fn partial_price_coverage_is_reported_by_the_two_gauges() {
-    // Three known mints, only two of which the source can price. The pair of
-    // gauges is the only thing that says the coverage is 2/3 — the insert
-    // count alone cannot, since it has no denominator.
+    // Two of three mints priced: only the pair of gauges says 2/3.
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![
         pk(1),
         pk(2),
@@ -844,10 +804,8 @@ fn partial_price_coverage_is_reported_by_the_two_gauges() {
 
 #[test]
 fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
-    // The source answers, but prices nothing. Two things must happen, and
-    // neither did before: the gauge drops to 0 rather than holding the previous
-    // tick's value, and the `no_prices` outcome — declared in the label set
-    // from the start — is actually emitted.
+    // The source prices nothing: the gauge drops to 0 and `no_prices` is
+    // emitted.
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Ok(vec![])]));
@@ -875,10 +833,7 @@ fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
 
 #[test]
 fn a_tick_with_no_known_mints_zeroes_both_gauges() {
-    // Found in review. `set_known_mints` runs before the empty-mints early
-    // return but `set_priced_mints` did not, so on a cold start the denominator
-    // dropped to 0 while the numerator held its previous value — and the
-    // README's own alert expression `priced / known` reads +Inf.
+    // Cold start: both gauges at 0, or `priced / known` reads +Inf.
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![]));
@@ -904,9 +859,7 @@ fn a_tick_with_no_known_mints_zeroes_both_gauges() {
 
 #[test]
 fn a_hard_source_error_also_zeroes_the_priced_gauge() {
-    // The third early return. `set_known_mints` has already run by then, so
-    // leaving the numerator untouched reports yesterday's coverage against
-    // today's denominator — for as long as the source keeps failing.
+    // A hard source error zeroes the numerator too.
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![pk(1), pk(2)]));
     let price_repo = Arc::new(FakePriceRepository::default());
     let source = Arc::new(FakePriceSource::with_responses(vec![Err(
@@ -934,16 +887,8 @@ fn a_hard_source_error_also_zeroes_the_priced_gauge() {
 
 #[test]
 fn a_tick_that_changed_nothing_is_not_a_tick_that_priced_nothing() {
-    // Two outcomes that look alike from the outside and mean opposite things.
-    // `no_prices` is an anomaly worth alerting on — the source valued nothing.
-    // `unchanged` is the normal case once redundant rows are suppressed, and
-    // after this change it is most ticks: labelling it `no_prices` would leave
-    // that alert lit for ever.
-    //
-    // The gauge is the second half of the test. `priced_mints` answers "what
-    // can be valued downstream", and a price suppressed as redundant still can
-    // be — by the row that already carries it. Counting it after the
-    // redundancy filter would read as a coverage collapse.
+    // `unchanged` (the normal case) must not be labelled `no_prices` (an
+    // alarm), and a suppressed price still counts in the coverage.
     let mint = pk(1);
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
     let price_repo = Arc::new(FakePriceRepository::default());
@@ -999,22 +944,14 @@ fn a_tick_that_changed_nothing_is_not_a_tick_that_priced_nothing() {
 
 #[test]
 fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
-    // `describe_counter!` registers help text only: the Prometheus exporter
-    // emits nothing for a counter never incremented. Both of these are
-    // incremented deep inside a tick, after three early returns, so on a fresh
-    // process — `token_metadata` still empty, every tick returning at
-    // `no_work` — neither series would exist and the README's redundancy PromQL
-    // would return no data, during exactly the window someone is watching a
-    // deployment.
+    // The exporter emits nothing for a counter never incremented: on a fresh
+    // process the README's ratios would return no data.
     let recorder = DebuggingRecorder::new();
     let snapshotter: Snapshotter = recorder.snapshotter();
     ::metrics::with_local_recorder(&recorder, PriceWorkerMetrics::register_descriptions);
     let snapshot = snapshotter.snapshot().into_vec();
 
-    // All three, not just the two the redundancy rule touches: that ratio is
-    // `unchanged / (unchanged + inserted)`, and PromQL's vector-to-vector `+`
-    // matches nothing when one side is missing — publishing the numerator
-    // alone would leave the query just as empty.
+    // All three: PromQL's `+` matches nothing when one side is missing.
     for name in [
         "yog_context_price_rejected_total",
         "yog_context_price_unchanged_total",
@@ -1030,16 +967,10 @@ fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
 
 #[test]
 fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
-    // The first tick prices `live` and gets no price for `dead`. The second
-    // finds only `dead`, which is waiting its turn: it must not call the
-    // source, must not be taken for a tick that priced nothing (`no_prices` is
-    // an alarm), and must not leave the first tick's coverage standing.
-    //
-    // The known list shrinks between the two ticks, which `token_metadata`
-    // never does: in production the tick before a `nothing_due` has already
-    // priced nothing, so this reset is defensive — the same reason
-    // `source_hard_error` resets the gauge — and this is the only way to make
-    // it observable.
+    // The second tick finds only `dead`, waiting its turn: no call, no
+    // `no_prices`, and the first tick's coverage does not stand. The known list
+    // shrinks between the ticks — `token_metadata` never does — because that is
+    // the only way to observe this defensive reset.
     let (live, dead) = (pk(1), pk(2));
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known_per_call(vec![
         vec![live, dead],

@@ -51,23 +51,17 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   lists the known mints and asks Jupiter Price V3 for current USD prices,
   inserting them with a single shared `fetched_at` per tick.
 
-  **It asks only for the mints worth asking.** Over half of the known mints
-  have never had a price (2 970 of 5 522, measured 28 September 2026), and
-  asking for all of them every tick is what rate-limited the rest: 41 % of the
-  calls refused, ticks of ~100 s spent mostly sleeping on 429s. A mint Jupiter
-  answers **without a price** now waits before it is asked again — 1, 2, 4, 8,
-  then 15 minutes at the default cadence — and goes back to every tick at its
-  first price. The rule is `UnpricedMints` in `yog-core`, held in memory like
-  `KeptPrices`; a restart forgets it and the first tick asks everything.
+  **It asks only for the mints worth asking.** A mint Jupiter answers
+  **without a price** waits before it is asked again — 1, 2, 4, 8, then 15
+  minutes at the default cadence — and goes back to every tick at its first
+  price. The rule is `UnpricedMints` in `yog-core`, in memory and empty at
+  boot. Where half the universe never has a price, it halves the requests.
 
-  ⚠️ **Only an answer without a price counts.** A mint whose chunk was given up
-  on 429 was never answered, and holding it back would slow down mints that
-  have a price. The source reports the two cases apart (`PriceAnswer`), and
-  takes a chunk in which not one mint asked came back with a price for an
-  unanswered one: Jupiter returns an entry even for the mints it cannot price,
-  and chunks mix live and dead mints, so such an answer — `{}`, an error body,
-  every entry null — is degraded, not a verdict. It is logged. The worker feeds the rule before its filters,
-  so a price the column cannot store still counts as a price.
+  ⚠️ **Only an answer without a price counts.** A chunk given up on 429 was
+  never answered, and neither was a chunk without a single price (`{}`, an
+  error body, all-null entries — logged as degraded): their mints keep their
+  schedule. The rule is fed before the worker's filters, so a price the column
+  cannot store still counts.
 
   **It drops prices the price column cannot hold**, before the insert, counting
   them in `yog_context_price_rejected_total` and naming the mints in a `warn!`.
@@ -276,12 +270,11 @@ tick that never ran.
 yog_context_price_requested_mints / yog_context_price_known_mints
 ```
 
-The gap is the mints Jupiter last answered without a price, waiting their turn:
-at most 15 minutes at the default cadence, plus one cycle — the startup line
-states the bound in force (`unpriced_asked_again_at_most_every_secs`). It
-touches the coverage above in one case only: a mint that regains its price
-while it waits counts as unpriced until its turn comes, up to that bound. A tick where **every** known mint is
-waiting asks nothing and records `outcome="nothing_due"`, never `no_prices`.
+The gap is the mints waiting their turn, for at most the
+`unpriced_asked_again_at_most_every_secs` of the startup line plus one cycle. A
+mint that regains its price while it waits counts as unpriced until its turn. A
+tick where **every** known mint waits asks nothing and records
+`outcome="nothing_due"`, never `no_prices`.
 
 A tick that priced everything and wrote nothing because nothing moved records
 `outcome="unchanged"` instead, and **that one is the normal case** — most ticks

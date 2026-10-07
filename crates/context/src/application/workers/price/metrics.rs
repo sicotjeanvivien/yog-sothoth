@@ -74,24 +74,11 @@ impl PriceWorkerMetrics {
              stopped rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
-        // Materialise both at zero. `describe_counter!` only registers the help
-        // text: the Prometheus exporter emits nothing for a counter that has
-        // never been incremented, so a metric expected to sit at 0 for ever
-        // would be *absent* for ever — unalertable, and indistinguishable from
-        // a build where the rejection path was dropped. Publishing the zero is
-        // what makes "flat at 0" an observation instead of a hope.
-        //
-        // `UNCHANGED_TOTAL` needs it for the opposite reason: it is incremented
-        // deep in the tick, after three early returns, so a context whose
-        // `token_metadata` is still empty leaves `/metrics` with no redundancy
-        // series at all and the README's PromQL returning no data — during
-        // exactly the window an operator is watching a fresh deployment.
+        // ⚠️ Published at zero: the exporter emits nothing for a counter never
+        // incremented, so "flat at 0" would read as absent, and the README's
+        // ratios would return no data on a fresh deployment.
         counter!(REJECTED_TOTAL).absolute(0);
         counter!(UNCHANGED_TOTAL).absolute(0);
-        // And `INSERTED_TOTAL`, because the redundancy expression divides by
-        // their SUM: in PromQL a vector-to-vector `+` matches nothing when one
-        // side is absent, so publishing only the numerator would still leave
-        // the query returning no data on the very deployment it was written for.
         counter!(INSERTED_TOTAL).absolute(0);
     }
 
@@ -110,10 +97,8 @@ impl PriceWorkerMetrics {
         gauge!(REQUESTED_MINTS).set(count as f64);
     }
 
-    /// Set on every tick that read the known mints: by the tick itself once
-    /// the source answered, and at zero by the endings that stop before it — a
-    /// gauge left at its previous value would report yesterday's coverage as
-    /// today's.
+    /// Set on every tick, zero included: a stale value would report yesterday's
+    /// coverage as today's.
     pub(crate) fn set_priced_mints(count: usize) {
         gauge!(PRICED_MINTS).set(count as f64);
     }
@@ -122,21 +107,14 @@ impl PriceWorkerMetrics {
         counter!(INSERTED_TOTAL).increment(count as u64);
     }
 
-    /// Count prices refused by [`TokenPrice::is_storable`][is_storable] before
-    /// the batch insert — at either end of the column. Skip-and-log, and the
-    /// skip is countable.
+    /// Count prices refused by [`TokenPrice::is_storable`][is_storable].
     ///
     /// [is_storable]: yog_core::domain::TokenPrice::is_storable
     pub(crate) fn record_rejected(count: usize) {
         counter!(REJECTED_TOTAL).increment(count as u64);
     }
 
-    /// Count prices the redundancy rule suppressed. Called on every tick that
-    /// reached the rule, zero included, so a tick that suppressed nothing is
-    /// still a tick that was measured. The series itself is published by
-    /// `register_descriptions`, which cannot be reached by an early return.
-    ///
-    /// [`KeptPrices`][kept] carries the rule.
+    /// Count prices the redundancy rule ([`KeptPrices`][kept]) suppressed.
     ///
     /// [kept]: yog_core::domain::KeptPrices
     pub(crate) fn record_unchanged(count: usize) {

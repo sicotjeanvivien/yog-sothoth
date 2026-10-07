@@ -1,12 +1,6 @@
 //! What the price series has already recorded, and what a new observation has
-//! to say to earn a row of its own.
-//!
-//! The price worker asks for every price on a fixed cadence, so without this
-//! rule the series grows at the rate of the worker rather than at the rate of
-//! the prices. Deciding that an observation says nothing new is a product
-//! judgement about freshness, like [`FreshnessStatus`], hence its place here.
-//!
-//! [`FreshnessStatus`]: crate::domain::FreshnessStatus
+//! to say to earn a row: without this rule the series grows at the rate of the
+//! worker, not of the prices.
 
 use std::collections::HashMap;
 
@@ -16,37 +10,19 @@ use solana_pubkey::Pubkey;
 
 use crate::domain::{PRICE_STORAGE_SCALE, PriceProvider, TokenPrice};
 
-/// How old the most recent observation may be and still count as a current
-/// price — the 15 minutes of `yog_price_max_age_latest()`.
+/// How old the latest observation may be and still count as current.
 ///
-/// ⚠️ **A mirror of migration 005, not a preference.** The SQL function is the
-/// source of truth; this constant is restated because `PRICE_SERIES_MAX_GAP`
-/// is only correct relative to it. A migration that redefines the function
-/// must revisit it — nothing enforces that.
+/// ⚠️ A mirror of `yog_price_max_age_latest()` (migration 005): a migration
+/// that redefines it must revisit this constant — nothing enforces that.
 pub const PRICE_MAX_AGE_LATEST: Duration = Duration::minutes(15);
 
-/// The widest gap allowed between two kept observations of the same mint.
-///
-/// Below [`PRICE_MAX_AGE_LATEST`], so that a price that never moves is still
-/// rewritten before it ages out of the staleness windows of migration 005 and
-/// every USD figure derived from it turns NULL. Suppressing a repeated row
-/// must never suppress the price itself.
-///
-/// ⚠️ **A forced row lands at the first tick on or after the floor, not at the
-/// floor.** Taken literally, the spacing would be `ceil(gap / cadence) ×
-/// cadence`, which is not monotonic in the cadence. [`KeptPrices::new`]
-/// subtracts one tick instead, so the row lands at or before this constant.
+/// The widest gap between two kept observations of a mint: below
+/// [`PRICE_MAX_AGE_LATEST`], so that a price that never moves is rewritten
+/// before it stops valuing anything.
 const PRICE_SERIES_MAX_GAP: Duration = Duration::minutes(10);
 
-/// The last observation kept for each mint — the tail of the written series.
-///
-/// Held by the price worker, the only writer of `token_prices`: it is the whole
-/// truth about the table's latest row, not a cache of it. It needs no eviction,
-/// being bounded by `token_metadata`, which only grows as tokens are
-/// discovered.
-///
-/// Starts empty on every boot, which costs one full batch at the first tick —
-/// a row too many, never one too few.
+/// The last observation kept for each mint. Held by the price worker, the only
+/// writer of `token_prices`; empty at boot, which costs one full batch.
 #[derive(Debug)]
 pub struct KeptPrices {
     last: HashMap<Pubkey, KeptPrice>,
@@ -66,18 +42,11 @@ struct KeptPrice {
 impl KeptPrices {
     /// Build the rule for a worker ticking every `tick_interval`.
     ///
-    /// The floor is decided one tick early — `PRICE_SERIES_MAX_GAP -
-    /// tick_interval` — so the forced row lands at or before
-    /// `PRICE_SERIES_MAX_GAP` whatever the cadence.
-    ///
-    /// ⚠️ **Above half the floor (300 s), the rule suppresses nothing**: two kept
-    /// rows are at most 10 minutes apart, so every tick writes. Correct, but
-    /// silent — [`Self::rewrites_at_most_every`] is what says so at startup.
-    ///
-    /// ⚠️ It reads the *configured* cadence, not the observed one. A tick that
-    /// overruns its period widens the spacing by the overrun; the five minutes
-    /// between the floor and [`PRICE_MAX_AGE_LATEST`] absorb a cycle of up to
-    /// 450 s.
+    /// ⚠️ The floor is decided one tick early, or the forced row would land at
+    /// the first tick *past* it. Above a 300 s cadence nothing is suppressed,
+    /// silently — [`Self::rewrites_at_most_every`] says so at startup. A tick
+    /// that overruns its cadence widens the spacing; the margin up to
+    /// [`PRICE_MAX_AGE_LATEST`] absorbs a cycle of up to 450 s.
     pub fn new(tick_interval: core::time::Duration) -> Self {
         let tick = Duration::from_std(tick_interval).unwrap_or(PRICE_SERIES_MAX_GAP);
 
@@ -88,32 +57,22 @@ impl KeptPrices {
         }
     }
 
-    /// The longest a motionless price can go unwritten at this cadence: the
-    /// first tick past the threshold, so up to one tick more than it. Stated by
-    /// the price worker at startup, since an operator cannot derive it from the
-    /// configuration.
+    /// The longest a motionless price goes unwritten at this cadence, stated by
+    /// the price worker at startup.
     pub fn rewrites_at_most_every(&self) -> Duration {
-        // A zero cadence is refused at startup; this only keeps the division
-        // from panicking.
+        // A zero cadence is refused at startup; this only avoids a panic.
         let tick = self.tick.num_seconds().max(1);
 
         Duration::seconds((self.max_gap.num_seconds() / tick + 1) * tick)
     }
 
-    /// Whether this observation earns a row: true when the mint has never been
-    /// priced, when the price moved, when the provenance changed, or when the
-    /// last kept row has reached the floor.
+    /// Whether this observation earns a row: a new mint, a moved price, another
+    /// provenance, or a last row at the floor.
     ///
-    /// ⚠️ **The comparison rounds first.** `token_prices.price_usd` is
-    /// `NUMERIC(38, 18)` and Postgres rounds on write, while Jupiter sends more
-    /// decimals than that: comparing the raw values would almost never find two
-    /// prices equal. Both sides are rounded at [`PRICE_STORAGE_SCALE`] the way
-    /// Postgres does, as [`TokenPrice::is_storable`] does.
-    ///
-    /// The provenance takes part, because a price from another source is
-    /// another observation. `confidence` does not: an `f32` that wobbles would
-    /// make every tick look new. A source that reports one must first decide
-    /// what a material change of confidence is.
+    /// ⚠️ Both sides are rounded at [`PRICE_STORAGE_SCALE`] first: Postgres
+    /// rounds on write and Jupiter sends more decimals, so raw values would
+    /// almost never compare equal. `confidence` is left out: an `f32` that
+    /// wobbles would make every tick look new.
     pub fn worth_keeping(&self, candidate: &TokenPrice) -> bool {
         let Some(last) = self.last.get(&candidate.mint) else {
             return true;
@@ -126,9 +85,8 @@ impl KeptPrices {
 
     /// Remember observations that have been written.
     ///
-    /// ⚠️ **After a successful insert, never before**: a batch that failed left
-    /// no row, and remembering it would hold the real price back until the next
-    /// floor — a gap nothing backfills.
+    /// ⚠️ After a successful insert only: remembering a failed batch would hold
+    /// the real price back until the next floor.
     pub fn record(&mut self, kept: &[TokenPrice]) {
         for price in kept {
             self.last.insert(

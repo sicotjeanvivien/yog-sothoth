@@ -1,14 +1,11 @@
-//! The lines the price worker writes, one function each — same shape as the
-//! indexer's stream `log` modules. The lines of a tick's ending live in
-//! `tick_outcome`, beside their labels.
+//! The price worker's log lines, one function each. A tick's ending logs in
+//! `tick_outcome`, beside its label.
 
 use tracing::{debug, info, warn};
 use yog_core::domain::{KeptPrices, TokenPrice, UnpricedMints};
 
-/// The worker starts, stating what its cadence entails: the floor and the
-/// longest wait of a mint without a price each follow from the cadence and a
-/// constant of `yog-core`, and an operator cannot read them off the
-/// configuration.
+/// The worker starts, stating the two bounds its cadence entails, which an
+/// operator cannot read off the configuration.
 pub(super) fn started(cadence: std::time::Duration, kept: &KeptPrices, unpriced: &UnpricedMints) {
     info!(
         cadence_secs = cadence.as_secs(),

@@ -1,24 +1,15 @@
-//! When [`UnpricedMints`] asks again, and the four ways the rule can be got
-//! wrong.
-//!
-//! - **forget the reset** and a mint that regained its price stays on the
-//!   waits of its dead period: up to 15 minutes before its next price, and the
-//!   longest wait again at its first miss — `a_price_puts_the_mint_back_on_every_tick`;
-//! - **let an answer move a mint it did not mention** and a chunk given up on
-//!   429 slows down mints that have a price — `a_mint_the_source_said_nothing_about_keeps_its_schedule`;
-//! - **drop the cap** and a mint that comes back to life is asked hours later
-//!   — `the_wait_doubles_then_stops_at_the_cap`;
-//! - **count the wait from the answer** rather than one tick early, and every
-//!   ask lands a tick late — 90 s instead of 60 — which the same test catches,
-//!   because it walks the ticks the way the worker does.
+//! When [`UnpricedMints`] asks again. Mutations these are written against:
+//! no reset (`a_price_puts_the_mint_back_on_every_tick`), an answer that moves
+//! a mint it did not mention (`a_mint_the_source_said_nothing_about_keeps_its_schedule`),
+//! no cap, and a wait counted from the answer rather than one tick early
+//! (`the_wait_doubles_then_stops_at_the_cap`).
 
 use super::*;
 
 /// The rule at the default cadence.
 const TICK: core::time::Duration = core::time::Duration::from_secs(30);
 
-/// How long after its tick began an answer arrives. Anything above zero puts
-/// the answer after the tick boundary, which is the whole point.
+/// How long after its tick began an answer arrives: past the tick boundary.
 const ANSWER_DELAY: Duration = Duration::milliseconds(100);
 
 fn t0() -> DateTime<Utc> {
@@ -29,10 +20,8 @@ fn mint(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
-/// Seconds from the tick that asked `mint`, at `asked`, to the first later tick
-/// that asks it again — the ticks falling every `cadence`, as the worker's do
-/// when a tick fits its cadence. Every claim below is about this number, what
-/// the worker observes, and never about the state that produces it.
+/// Seconds from the tick that asked `mint`, at `asked`, to the next tick that
+/// asks it — ticks every `cadence`, as the worker sees them.
 fn next_ask(rule: &UnpricedMints, mint: &Pubkey, asked: DateTime<Utc>, cadence: Duration) -> i64 {
     let mut tick = asked + cadence;
     while !rule.is_due(mint, tick) {
@@ -42,9 +31,8 @@ fn next_ask(rule: &UnpricedMints, mint: &Pubkey, asked: DateTime<Utc>, cadence: 
     (tick - asked).num_seconds()
 }
 
-/// The spacing between the asks of a mint the source answers `misses` times
-/// in a row without a price, each answer arriving `ANSWER_DELAY` after the tick
-/// that asked.
+/// The spacing between the asks of a mint answered `misses` times in a row
+/// without a price.
 fn spacings(cadence_secs: u64, misses: usize) -> Vec<i64> {
     let cadence = core::time::Duration::from_secs(cadence_secs);
     let step = Duration::from_std(cadence).expect("small cadence");
@@ -71,15 +59,13 @@ fn a_mint_never_answered_is_due() {
 
 #[test]
 fn the_wait_doubles_then_stops_at_the_cap() {
-    // 1, 2, 4, 8 minutes, then the 15-minute cap for as long as it lasts —
-    // exactly, and not a tick later each time.
+    // Exactly 1, 2, 4, 8, then 15 minutes — not a tick later each time.
     assert_eq!(spacings(30, 7), vec![60, 120, 240, 480, 900, 900, 900]);
 }
 
 #[test]
 fn the_wait_is_counted_in_ticks() {
-    // At a five-minute cadence the first wait is already two ticks, and the
-    // cap is reached at the second answer.
+    // At five minutes, the cap is reached at the second answer.
     assert_eq!(spacings(300, 3), vec![600, 900, 900]);
 }
 
@@ -127,8 +113,7 @@ fn a_mint_the_source_said_nothing_about_keeps_its_schedule() {
     let silent = mint(1);
     rule.record([], &[silent], t0() + ANSWER_DELAY);
 
-    // The next tick answers about other mints — the case of a chunk given up on
-    // 429, whose mints the caller passes in neither list.
+    // The next answer is about other mints, as for a chunk given up on 429.
     rule.record([&mint(2)], &[mint(3)], t0() + step + ANSWER_DELAY);
 
     assert_eq!(
@@ -149,8 +134,7 @@ fn a_mint_without_a_price_for_ever_never_waits_past_the_cap() {
     let mut rule = UnpricedMints::new(TICK);
     let dead = mint(1);
 
-    // Far more misses than any cadence needs to reach the cap: the exponent
-    // must neither overflow nor carry the wait past it.
+    // Far past the cap: the exponent must not overflow.
     for _ in 0..100 {
         rule.record([], &[dead], t0() + ANSWER_DELAY);
     }
