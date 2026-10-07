@@ -1,8 +1,7 @@
 //! Jupiter Price API V3 client (`GET …/price/v3?ids=…`): says, for every mint
 //! of a chunk Jupiter answered, whether it came back with a price. Chunks are
-//! spaced under the key's rate limit, and the pause between two is where the
-//! stop is heard; one refused on 429 anyway is retried a bounded number of
-//! times.
+//! spaced under the key's rate limit, and the stop is heard at any point of
+//! one; a chunk refused on 429 anyway is retried a bounded number of times.
 
 use super::metrics::ProviderMetrics;
 use std::collections::{HashMap, HashSet};
@@ -194,18 +193,22 @@ impl PriceSource for JupiterPriceClient {
         let mut answer = PriceAnswer::default();
         let mut next_start = tokio::time::Instant::now();
         for (index, chunk) in mints.chunks(JUPITER_BATCH_MAX).enumerate() {
-            // ⚠️ The only place the stop is heard: a request in flight ends,
-            // and its answer is kept.
-            tokio::select! {
+            // ⚠️ The stop races the whole chunk — its slot, its request, its
+            // retries: a request in flight is dropped, so a slow Jupiter or a
+            // long `Retry-After` cannot hold the stop past its grace.
+            let result = tokio::select! {
                 biased;
 
                 () = shutdown.cancelled() => {
                     log::stopped(index * JUPITER_BATCH_MAX, mints.len());
                     break;
                 }
-                () = tokio::time::sleep_until(next_start) => {}
-            }
-            match self.fetch_chunk_with_retry(chunk, &mut next_start).await {
+                result = async {
+                    tokio::time::sleep_until(next_start).await;
+                    self.fetch_chunk_with_retry(chunk, &mut next_start).await
+                } => result,
+            };
+            match result {
                 Ok(answered) => {
                     answer.priced.extend(answered.priced);
                     answer.unpriced.extend(answered.unpriced);

@@ -34,11 +34,12 @@ pub(super) fn degraded_answer(chunk_size: usize) {
     );
 }
 
-/// The stop came between two chunks: the mints past `asked` are not asked.
-pub(super) fn stopped(asked: usize, total: usize) {
+/// The stop came: the mints past `finished` are abandoned, those of a chunk
+/// in flight included.
+pub(super) fn stopped(finished: usize, total: usize) {
     info!(
-        asked,
-        not_asked = total - asked,
-        "jupiter_price: stop asked — no further chunk is sent",
+        finished,
+        abandoned = total - finished,
+        "jupiter_price: stop asked — the chunk in flight is dropped, no further chunk is sent",
     );
 }

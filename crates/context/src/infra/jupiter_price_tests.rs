@@ -562,6 +562,53 @@ async fn a_stop_between_two_chunks_returns_what_was_answered() {
     );
 }
 
+/// Mutation this is written against: the stop raced against the pause alone,
+/// and the client waits for the request in flight — 15 s of `http_client`.
+#[tokio::test]
+async fn a_stop_during_a_request_drops_it_and_keeps_what_came_before() {
+    // Two chunks back to back; Jupiter answers the second after 30 s.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let script = vec![
+        (Duration::ZERO, response_200(&price_body(mints[0]))),
+        (
+            Duration::from_secs(30),
+            response_200(&price_body(mints[JUPITER_BATCH_MAX])),
+        ),
+    ];
+    let (base_url, arrivals) = serve_timed_responses(script);
+    let client = unpaced_client(base_url);
+
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        stop.cancel();
+    });
+
+    let answer = tokio::time::timeout(
+        Duration::from_secs(5),
+        client.fetch_prices(&mints, &shutdown),
+    )
+    .await
+    .expect("the stop drops the request in flight")
+    .expect("Ok expected");
+
+    assert_eq!(
+        arrivals.lock().unwrap().len(),
+        2,
+        "premise: the second was sent"
+    );
+    assert_eq!(
+        answer.priced.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![mints[0]],
+        "the first chunk's answer is kept"
+    );
+    assert!(
+        !answer.unpriced.contains(&mints[JUPITER_BATCH_MAX]),
+        "the chunk dropped says nothing about its mint"
+    );
+}
+
 #[test]
 fn full_response_handles_empty_object() {
     let body = r#"{}"#;

@@ -17,7 +17,7 @@ pub(crate) struct FetchedPrice {
 /// What the source said about the mints it was asked for.
 ///
 /// ⚠️ A mint whose request failed is in **neither** list: it was never
-/// answered. Nor is a mint the stop left unasked.
+/// answered. Nor is a mint whose chunk the stop dropped or left unasked.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PriceAnswer {
     /// The mints the source returned a price for.
@@ -31,8 +31,9 @@ pub trait PriceSource: Send + Sync {
     /// Fetch USD prices for a batch of mints. A failed request leaves its mints
     /// out of the [`PriceAnswer`] rather than failing the call.
     ///
-    /// ⚠️ `shutdown` cuts the batch short: the source asks nothing more and
-    /// returns what was answered so far, which the caller still writes.
+    /// ⚠️ `shutdown` cuts the batch short: the source drops a request in
+    /// flight, asks nothing more, and returns what was answered so far, which
+    /// the caller still writes.
     async fn fetch_prices(
         &self,
         mints: &[Pubkey],

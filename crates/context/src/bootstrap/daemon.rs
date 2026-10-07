@@ -138,11 +138,8 @@ impl Daemon {
     ///
     /// The grace keeps the wait from becoming a hang: a worker that will not
     /// end is named in the logs and left to the runtime. A price tick outlasts
-    /// the grace on its own, so it hears the stop between two Jupiter requests
-    /// and writes what it has; what can still hold it is one request in flight
-    /// (bounded by [`infra::http_client`]) and a 429's retries.
-    ///
-    /// [`infra::http_client`]: crate::infra::http_client
+    /// the grace on its own, so it hears the stop at any point of a Jupiter
+    /// request, drops the one in flight and writes what it has.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {
         let mut metadata_task = spawn_metadata_worker(
             Arc::clone(&self.token_metadata_repository),

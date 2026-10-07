@@ -101,9 +101,9 @@ where
 /// ⚠️ **One value for every daemon.** Work longer than Docker's ten seconds
 /// admits — `yog-context`'s price tick, whose Jupiter requests leave 1.1 s
 /// apart — cannot be covered by any grace: it has to hear the stop and end
-/// early, as that tick does between two requests. Tuning the number per
-/// binary would buy nothing and hand the next daemon a knob to set wrong; what
-/// an overrun gets instead is a name in the logs, which is what [`Stop`]
+/// early, as that tick does, dropping the request in flight. Tuning the number
+/// per binary would buy nothing and hand the next daemon a knob to set wrong;
+/// what an overrun gets instead is a name in the logs, which is what [`Stop`]
 /// delivers.
 pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
