@@ -260,7 +260,10 @@ async fn rate_limited_chunk_recovers_on_retry() {
     let base_url = serve_scripted_responses(vec![response_429(0), response_200(&body)]);
 
     let client = unpaced_client(base_url);
-    let answer = client.fetch_prices(&[mint]).await.expect("Ok expected");
+    let answer = client
+        .fetch_prices(&[mint], &CancellationToken::new())
+        .await
+        .expect("Ok expected");
 
     assert_eq!(answer.priced.len(), 1, "the retried chunk yields its price");
     assert_eq!(answer.priced[0].mint, mint);
@@ -276,7 +279,10 @@ async fn chunk_rate_limited_on_every_attempt_is_skipped() {
     let base_url = serve_scripted_responses(responses);
 
     let client = unpaced_client(base_url);
-    let answer = client.fetch_prices(&[pk(21)]).await.expect("Ok expected");
+    let answer = client
+        .fetch_prices(&[pk(21)], &CancellationToken::new())
+        .await
+        .expect("Ok expected");
 
     // Attempts exhausted: skipped, not an error, and not unpriced either.
     assert!(answer.priced.is_empty());
@@ -301,7 +307,10 @@ async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
 
     let client = unpaced_client(base_url);
     let answer = client
-        .fetch_prices(&[with_price, null_price, no_field, no_entry])
+        .fetch_prices(
+            &[with_price, null_price, no_field, no_entry],
+            &CancellationToken::new(),
+        )
         .await
         .expect("Ok expected");
 
@@ -338,7 +347,10 @@ async fn an_answer_without_a_single_price_says_nothing() {
         "error body",
         "a price for a mint not asked",
     ] {
-        let answer = client.fetch_prices(&[a, b]).await.expect("Ok expected");
+        let answer = client
+            .fetch_prices(&[a, b], &CancellationToken::new())
+            .await
+            .expect("Ok expected");
 
         assert!(answer.priced.is_empty(), "{shape}");
         assert!(
@@ -360,7 +372,10 @@ async fn a_chunk_given_up_reports_nothing_beside_one_that_was_answered() {
     let base_url = serve_scripted_responses(responses);
 
     let client = unpaced_client(base_url);
-    let answer = client.fetch_prices(&mints).await.expect("Ok expected");
+    let answer = client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
 
     assert_eq!(answer.priced.len(), 1);
     assert_eq!(answer.priced[0].mint, answered[0]);
@@ -397,13 +412,54 @@ async fn chunks_are_spaced_by_the_rate_limit() {
     assert_eq!(spacing, std::time::Duration::from_millis(110), "premise");
 
     let start = Instant::now();
-    let answer = client.fetch_prices(&mints).await.expect("Ok expected");
+    let answer = client
+        .fetch_prices(&mints, &CancellationToken::new())
+        .await
+        .expect("Ok expected");
     let elapsed = start.elapsed();
 
     assert_eq!(answer.priced.len(), 3, "every chunk was asked");
     assert!(
         elapsed >= spacing * 2,
         "three chunks take two spacings at least, took {elapsed:?}"
+    );
+}
+
+/// Mutation this is written against: the `cancelled()` arm removed, and the
+/// client waits out its minute before the second chunk.
+#[tokio::test]
+async fn a_stop_between_two_chunks_returns_what_was_answered() {
+    // Two chunks, a minute apart; only the first is scripted.
+    let mints: Vec<Pubkey> = (1..=51).map(pk).collect();
+    let body = format!(r#"{{ "{}": {{ "usdPrice": 2.0 }} }}"#, mints[0]);
+    let client = client_at(serve_scripted_responses(vec![response_200(&body)]), 1);
+
+    // Whether it lands during the first request or in the pause after it,
+    // the pause that follows hears it.
+    let shutdown = CancellationToken::new();
+    let stop = shutdown.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        stop.cancel();
+    });
+
+    let answer = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        client.fetch_prices(&mints, &shutdown),
+    )
+    .await
+    .expect("the stop ends the fetch, not the minute's wait")
+    .expect("Ok expected");
+
+    assert_eq!(
+        answer.priced.iter().map(|p| p.mint).collect::<Vec<_>>(),
+        vec![mints[0]],
+        "the first chunk's answer is kept"
+    );
+    assert_eq!(answer.unpriced.len(), JUPITER_BATCH_MAX - 1);
+    assert!(
+        !answer.unpriced.contains(&mints[JUPITER_BATCH_MAX]),
+        "the chunk never sent says nothing about its mint"
     );
 }
 

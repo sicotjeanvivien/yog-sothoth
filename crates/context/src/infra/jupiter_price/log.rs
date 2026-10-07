@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::error::SourceError;
 
@@ -31,5 +31,14 @@ pub(super) fn degraded_answer(chunk_size: usize) {
         chunk_size,
         "jupiter_price: chunk answered without a single price — \
          read as a degraded answer, its mints keep their schedule",
+    );
+}
+
+/// The stop came between two chunks: the mints past `asked` are not asked.
+pub(super) fn stopped(asked: usize, total: usize) {
+    info!(
+        asked,
+        not_asked = total - asked,
+        "jupiter_price: stop asked — no further chunk is sent",
     );
 }

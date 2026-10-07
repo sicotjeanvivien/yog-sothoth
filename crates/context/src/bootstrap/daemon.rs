@@ -133,26 +133,14 @@ impl Daemon {
     ///
     /// ⚠️ **The waiting is the point.** `main` drops the runtime the moment
     /// this returns, and a dropped runtime destroys whatever is still in
-    /// flight. Until 14 September 2026 the `ctrl_c` arm of the `select!` below
-    /// returned `Ok(())` on its own and the process was gone 5–7 ms later:
-    /// measured over 20 stops on `main`, **none** saw the three workers hand
-    /// back, and the ten that fell inside a price tick destroyed it ten times
-    /// out of ten — 645–747 `token_prices` rows, timestamped, that the next
-    /// cycle does not redo.
+    /// flight — a price tick among them, whose rows are stamped at one instant
+    /// the next cycle does not redo.
     ///
-    /// The grace is what keeps the wait from becoming a hang: a worker that
-    /// will not end is named in the logs and left to the runtime. The same
-    /// measurement says that will happen — a price tick takes 10.7–19.9 s
-    /// against a rate-limiting Jupiter, far past
-    /// [`yog_bootstrap::SHUTDOWN_GRACE`], and 10 stops out of 10 taken inside
-    /// one lost it.
-    ///
-    /// ⚠️ **That is not a missing timeout.** Every provider request is already
-    /// bounded (15 s total, 5 s connect — [`infra::http_client`]). The tick
-    /// is long because it is ~19 chunks sent back to back plus the capped
-    /// backoff the rate-limited ones earn, and **nothing between two chunks
-    /// looks at the token**. Shortening it is a question for the worker and
-    /// its client, not for the grace.
+    /// The grace keeps the wait from becoming a hang: a worker that will not
+    /// end is named in the logs and left to the runtime. A price tick outlasts
+    /// the grace on its own, so it hears the stop between two Jupiter requests
+    /// and writes what it has; what can still hold it is one request in flight
+    /// (bounded by [`infra::http_client`]) and a 429's retries.
     ///
     /// [`infra::http_client`]: crate::infra::http_client
     pub(crate) async fn run(self, shutdown: CancellationToken) -> anyhow::Result<()> {

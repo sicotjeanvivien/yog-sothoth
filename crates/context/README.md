@@ -228,13 +228,14 @@ interrupted work is *lost* rather than merely *abandoned*: its tick ends in a
 single `INSERT` of prices stamped at one instant, and that instant does not come
 back. The other two re-list their remainder next tick.
 
-⚠️ **A price tick routinely outlives the grace, and the stop says so rather
-than hiding it.** Measured 14 September 2026: a tick takes 10.7–19.9 s against
-a rate-limiting Jupiter, so a stop taken inside one ends with
-`shutdown grace expired … tasks=["price worker"]` and the tick is still
-destroyed. That is not a missing timeout — every request is bounded by
-`infra::http_client` — it is ~19 chunks sent back to back plus backoff,
-with nothing between two chunks looking at the token.
+⚠️ **A price tick outlasts the grace on its own, so it hears the stop
+between two chunks.** The Jupiter client reads the token in the pause that
+spaces its requests, sends nothing more, and returns what was answered; the
+worker writes that through its usual filters and single `INSERT`. Two log
+lines say so: the client's (`asked`, `not_asked`) and the worker's (`outcome`,
+`written`), which tells a tick written from one abandoned. What can still hold
+the stop is one request in flight, bounded by `infra::http_client`, and the
+retries of a 429.
 
 ⚠️ Until 14 September 2026 the daemon selected on `ctrl_c()` and returned on it:
 20 stops measured, **none** saw the three workers hand back, and the process was

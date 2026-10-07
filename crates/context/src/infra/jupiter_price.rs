@@ -1,7 +1,8 @@
 //! Jupiter Price API V3 client (`GET …/price/v3?ids=…`): says, for every mint
 //! of a chunk Jupiter answered, whether it came back with a price. Chunks are
-//! spaced under the key's rate limit; one refused on 429 anyway is retried a
-//! bounded number of times.
+//! spaced under the key's rate limit, and the pause between two is where the
+//! stop is heard; one refused on 429 anyway is retried a bounded number of
+//! times.
 
 use super::metrics::ProviderMetrics;
 use std::collections::{HashMap, HashSet};
@@ -12,6 +13,7 @@ use async_trait::async_trait;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
+use tokio_util::sync::CancellationToken;
 use yog_bootstrap::SecretKey;
 use yog_core::domain::PriceProvider;
 
@@ -173,11 +175,25 @@ impl PriceSource for JupiterPriceClient {
     /// Fetches the prices chunk by chunk, one every `request_spacing`. A chunk
     /// that fails is logged and skipped: its mints are in neither list of the
     /// answer.
-    async fn fetch_prices(&self, mints: &[Pubkey]) -> Result<PriceAnswer, SourceError> {
+    async fn fetch_prices(
+        &self,
+        mints: &[Pubkey],
+        shutdown: &CancellationToken,
+    ) -> Result<PriceAnswer, SourceError> {
         let mut answer = PriceAnswer::default();
         let mut next_start = tokio::time::Instant::now();
-        for chunk in mints.chunks(JUPITER_BATCH_MAX) {
-            tokio::time::sleep_until(next_start).await;
+        for (index, chunk) in mints.chunks(JUPITER_BATCH_MAX).enumerate() {
+            // ⚠️ The only place the stop is heard: a request in flight ends,
+            // and its answer is kept.
+            tokio::select! {
+                biased;
+
+                () = shutdown.cancelled() => {
+                    log::stopped(index * JUPITER_BATCH_MAX, mints.len());
+                    break;
+                }
+                () = tokio::time::sleep_until(next_start) => {}
+            }
             // ⚠️ From start to start: a pause after the answer would add the
             // request's own latency to every chunk.
             next_start = tokio::time::Instant::now() + self.request_spacing;
