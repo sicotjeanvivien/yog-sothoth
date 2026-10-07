@@ -10,7 +10,6 @@ use std::sync::Arc;
 use anyhow::Context;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
 use yog_bootstrap::{SecretUrl, Stop, handle_task_result};
 use yog_core::domain::{
     PoolAccountResolver, PoolRepository, TokenMetadataRepository, TokenPriceRepository,
@@ -27,6 +26,8 @@ use crate::application::workers::{
 use crate::bootstrap::Config;
 use crate::error::WorkerError;
 use crate::infra::{HeliusDasClient, JupiterPriceClient, ProviderMetrics, SolanaAccountClient};
+
+mod log;
 
 /// Dependencies shared by the daemon's workers.
 #[derive(Clone)]
@@ -58,7 +59,7 @@ impl Daemon {
         let database = init_db(&config.database_url)
             .await
             .context("database initialization failed")?;
-        info!("database initialized");
+        log::database_initialized();
 
         let poll_interval = config.metadata_poll_interval;
         let price_interval = config.price_interval;
@@ -94,22 +95,14 @@ impl Daemon {
             config.jupiter_api_key.clone(),
             config.jupiter_rate_limit,
         ));
-        info!(
-            rate_limit_per_minute = config.jupiter_rate_limit.get(),
-            request_every = ?price_source.request_spacing(),
-            "Jupiter requests spaced under the key's rate limit"
-        );
+        log::jupiter_spacing(config.jupiter_rate_limit, price_source.request_spacing());
         // `getMultipleAccounts`, standard Solana JSON-RPC — its own endpoint,
         // which may or may not be the provider serving DAS above. Logged
         // side by side because that is what makes the split visible at
         // startup rather than in a config file nobody rereads.
         let pool_account_source: Arc<dyn PoolAccountSource> =
             Arc::new(SolanaAccountClient::new(config.pool_account.url()));
-        info!(
-            token_metadata = %config.token_metadata,
-            pool_account = %config.pool_account,
-            "external endpoints initialized"
-        );
+        log::endpoints_initialized(&config.token_metadata, &config.pool_account);
 
         MetadataWorkerMetrics::register_descriptions();
         PriceWorkerMetrics::register_descriptions();
@@ -179,7 +172,7 @@ impl Daemon {
                 (Some(POOL_ACCOUNT), handle_task_result(result, POOL_ACCOUNT))
             }
             _ = shutdown.cancelled() => {
-                info!("cancellation received — stopping");
+                log::cancellation_received();
                 (None, Ok(()))
             }
         };
@@ -221,7 +214,7 @@ async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     let db = Database::connect(database_url.expose())
         .await
         .context("failed to connect to database")?;
-    tracing::info!("connected to database");
+    log::connected_to_database();
     Ok(db)
 }
 
