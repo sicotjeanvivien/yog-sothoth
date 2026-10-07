@@ -29,6 +29,8 @@ core/src/
 │   ├── token_price/       (TokenPrice + repo, PriceProvider)
 │   ├── kept_prices/       (KeptPrices — what the price series already records,
 │   │                       and what a new observation must say to earn a row)
+│   ├── unpriced_mints/    (UnpricedMints — which mints the price source
+│   │                       answered without a price, and when to ask again)
 │   ├── network_status/    (singleton snapshot)
 │   ├── materialization_backlog/ (MaterializationBacklog — how long each
 │   │                       continuous aggregate's oldest raw row has waited,

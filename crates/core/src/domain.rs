@@ -21,6 +21,7 @@ mod swap_flow;
 mod token_metadata;
 mod token_price;
 mod trade_direction;
+mod unpriced_mints;
 mod watched_pool;
 
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
@@ -90,4 +91,5 @@ pub use token_price::{
     TokenPriceRepository,
 };
 pub use trade_direction::TradeDirection;
+pub use unpriced_mints::UnpricedMints;
 pub use watched_pool::{WatchedPool, WatchedPoolRepository};
