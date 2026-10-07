@@ -143,22 +143,22 @@ impl JupiterPriceClient {
             .json::<HashMap<String, JupiterPriceEntry>>()
             .await?;
 
-        // ⚠️ **An answer with no entry at all is not a verdict.** Jupiter
-        // returns an entry for the mints it cannot price too — 48 of 48 on
-        // 28 September 2026, 26 of them without `usdPrice` — so an empty map
-        // for a whole chunk is a degraded answer. Read as "no price", it would
-        // hold every live mint of the chunk back for up to 15 minutes after
-        // Jupiter recovers. It says nothing, like a request that failed.
-        if response.is_empty() {
-            return Ok(PriceAnswer::default());
-        }
-
         let priced = response
             .into_iter()
             .filter_map(into_fetched_price)
             .collect();
 
-        Ok(chunk_answer(mints, priced))
+        match chunk_answer(mints, priced) {
+            Some(answer) => Ok(answer),
+            None => {
+                warn!(
+                    chunk_size = mints.len(),
+                    "jupiter_price: chunk answered without a single price — \
+                     read as a degraded answer, its mints keep their schedule",
+                );
+                Ok(PriceAnswer::default())
+            }
+        }
     }
 }
 
@@ -200,9 +200,9 @@ impl PriceSource for JupiterPriceClient {
         let mut answer = PriceAnswer::default();
         for chunk in mints.chunks(JUPITER_BATCH_MAX) {
             match self.fetch_chunk_with_retry(chunk).await {
-                Ok(chunk) => {
-                    answer.priced.extend(chunk.priced);
-                    answer.unpriced.extend(chunk.unpriced);
+                Ok(answered) => {
+                    answer.priced.extend(answered.priced);
+                    answer.unpriced.extend(answered.unpriced);
                 }
                 Err(e) => {
                     warn!(
@@ -217,22 +217,38 @@ impl PriceSource for JupiterPriceClient {
     }
 }
 
-/// The answer to one chunk Jupiter did answer: every mint `asked` for that did
-/// not come back with a price is unpriced.
+/// The answer to one chunk Jupiter did answer — or `None` when it reads as a
+/// degraded answer rather than a verdict.
 ///
+/// Every mint `asked` for that did not come back with a price is unpriced.
 /// Computed from what was **asked**, not from what came back, because the
 /// absence takes three shapes and only two of them leave an entry to read:
 /// `usdPrice: null`, an entry without `usdPrice`, and no entry for the mint at
 /// all.
-fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> PriceAnswer {
+///
+/// ⚠️ **Unless not one of them came back with a price.** Jupiter answers for
+/// the mints it cannot price too — 48 of 48 on 28 September 2026, 26 of them
+/// without `usdPrice` — and chunks mix live and dead mints: over the 24 hours
+/// to that date, the least served of the 111 chunks of the universe still had
+/// 3 of its 50 mints priced. A chunk without a single price — `{}`, an error
+/// body, every entry null — is a degraded answer. Read as a verdict, it would
+/// hold every live mint of the chunk back for up to 15 minutes after Jupiter
+/// recovers, and during an outage of all prices, every mint of the universe.
+/// It says nothing, like a request that failed. The price of the rule: a chunk
+/// made of dead mints only is asked again every tick.
+fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnswer> {
     let with_price: HashSet<Pubkey> = priced.iter().map(|price| price.mint).collect();
+    if !asked.iter().any(|mint| with_price.contains(mint)) {
+        return None;
+    }
+
     let unpriced = asked
         .iter()
         .filter(|mint| !with_price.contains(mint))
         .copied()
         .collect();
 
-    PriceAnswer { priced, unpriced }
+    Some(PriceAnswer { priced, unpriced })
 }
 
 /// Delay before retry attempt `attempt` (0-based): the server's

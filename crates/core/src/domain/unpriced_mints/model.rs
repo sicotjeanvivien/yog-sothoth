@@ -65,7 +65,11 @@ const UNPRICED_RETRY_MAX: Duration = Duration::minutes(15);
 /// little after its tick began. A wait counted from the answer would therefore
 /// land on the tick *after* the one it names — 90 s instead of 60 at the
 /// default cadence, and so on at every step. Subtracting one tick puts the next
-/// ask exactly one wait after the tick that asked.
+/// ask one wait after the tick that asked — never later. It can land one tick
+/// *early*: the tick reads its clock before the request and the answer is
+/// recorded after it, so a request shorter than the jitter of the database
+/// read that precedes it lets the next tick find the mint due a tick sooner.
+/// Asking early costs a request; it never holds a price back.
 ///
 /// That holds while a tick fits its cadence. A tick that overruns it (~100 s
 /// against 5 000 mints in September 2026) runs back to back with the next, and
@@ -123,6 +127,19 @@ impl UnpricedMints {
             deferred: HashMap::new(),
             tick,
         }
+    }
+
+    /// The longest a mint without a price goes unasked at this cadence: the
+    /// cap, or the cadence itself when it is longer, since every tick then
+    /// asks.
+    ///
+    /// Exposed for the reason [`KeptPrices::rewrites_at_most_every`] is: it
+    /// follows from the cadence *and* a constant of this crate, so an operator
+    /// cannot derive it, and the price worker states it once at startup.
+    ///
+    /// [`KeptPrices::rewrites_at_most_every`]: crate::domain::KeptPrices::rewrites_at_most_every
+    pub fn asks_again_at_most_every(&self) -> Duration {
+        UNPRICED_RETRY_MAX.max(self.tick)
     }
 
     /// Whether `mint` is worth asking the source about at `now`.

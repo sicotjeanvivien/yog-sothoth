@@ -61,9 +61,10 @@ decoded at this boundary and never reaches `core`, which stays free of it.
   ⚠️ **Only an answer without a price counts.** A mint whose chunk was given up
   on 429 was never answered, and holding it back would slow down mints that
   have a price. The source reports the two cases apart (`PriceAnswer`), and
-  takes a chunk answered with no entry at all for an unanswered one: Jupiter
-  returns an entry even for the mints it cannot price, so an empty map is a
-  degraded answer, not a verdict. The worker feeds the rule before its filters,
+  takes a chunk in which not one mint asked came back with a price for an
+  unanswered one: Jupiter returns an entry even for the mints it cannot price,
+  and chunks mix live and dead mints, so such an answer — `{}`, an error body,
+  every entry null — is degraded, not a verdict. It is logged. The worker feeds the rule before its filters,
   so a price the column cannot store still counts as a price.
 
   **It drops prices the price column cannot hold**, before the insert, counting
@@ -273,9 +274,11 @@ tick that never ran.
 yog_context_price_requested_mints / yog_context_price_known_mints
 ```
 
-The gap is the mints Jupiter last answered without a price, waiting their turn
-(at most 15 minutes, plus one cycle). It does not touch the coverage above: a
-mint left out had no price to give. A tick where **every** known mint is
+The gap is the mints Jupiter last answered without a price, waiting their turn:
+at most 15 minutes at the default cadence, plus one cycle — the startup line
+states the bound in force (`unpriced_asked_again_at_most_every_secs`). It
+touches the coverage above in one case only: a mint that regains its price
+while it waits counts as unpriced until its turn comes, up to that bound. A tick where **every** known mint is
 waiting asks nothing and records `outcome="nothing_due"`, never `no_prices`.
 
 A tick that priced everything and wrote nothing because nothing moved records

@@ -36,7 +36,8 @@ impl PriceWorkerMetrics {
             REQUESTED_MINTS,
             "Number of known mints actually asked of the price source at the last tick. \
              The rest are mints the source last answered without a price, waiting their \
-             turn (at most 15 minutes, plus one cycle) — see UnpricedMints. \
+             turn (at most unpriced_asked_again_at_most_every_secs, stated at startup, \
+             plus one cycle) — see UnpricedMints. \
              requested/known is the share of the universe still worth asking"
         );
         describe_gauge!(
@@ -109,9 +110,10 @@ impl PriceWorkerMetrics {
         gauge!(REQUESTED_MINTS).set(count as f64);
     }
 
-    /// Set alongside [`Self::set_known_mints`] on every tick that reached the
-    /// source, including the zero case — a gauge left at its previous value
-    /// would report yesterday's coverage as today's.
+    /// Set on every tick that read the known mints: by the tick itself once
+    /// the source answered, and at zero by the endings that stop before it — a
+    /// gauge left at its previous value would report yesterday's coverage as
+    /// today's.
     pub(crate) fn set_priced_mints(count: usize) {
         gauge!(PRICED_MINTS).set(count as f64);
     }

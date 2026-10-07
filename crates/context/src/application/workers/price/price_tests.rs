@@ -786,6 +786,26 @@ fn value<'a>(
         .map(|(_, _, _, v)| v)
 }
 
+/// The count of ticks recorded under `outcome`, if any was.
+fn tick_outcome<'a>(
+    snapshot: &'a [(
+        metrics_util::CompositeKey,
+        Option<::metrics::Unit>,
+        Option<::metrics::SharedString>,
+        DebugValue,
+    )],
+    outcome: &str,
+) -> Option<&'a DebugValue> {
+    snapshot.iter().find_map(|(key, _, _, v)| {
+        (key.key().name() == "yog_context_price_tick_total"
+            && key
+                .key()
+                .labels()
+                .any(|l| l.key() == "outcome" && l.value() == outcome))
+        .then_some(v)
+    })
+}
+
 #[test]
 fn partial_price_coverage_is_reported_by_the_two_gauges() {
     // Three known mints, only two of which the source can price. The pair of
@@ -846,13 +866,7 @@ fn a_tick_that_priced_nothing_reports_zero_and_its_outcome() {
          today's — total loss of coverage must read as 0, not as silence"
     );
     assert!(
-        snapshot.iter().any(|(key, _, _, _)| {
-            key.key().name() == "yog_context_price_tick_total"
-                && key
-                    .key()
-                    .labels()
-                    .any(|l| l.key() == "outcome" && l.value() == "no_prices")
-        }),
+        tick_outcome(&snapshot, "no_prices").is_some(),
         "the `no_prices` outcome must be emitted: a tick that priced nothing \
          used to return without recording anything, so it was indistinguishable \
          from a tick that never ran"
@@ -1048,16 +1062,7 @@ fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
     );
 
     assert_eq!(source.calls().len(), 1, "the second tick asks nothing");
-    let ticks = |label: &str| {
-        snapshot.iter().find_map(|(key, _, _, v)| {
-            (key.key().name() == "yog_context_price_tick_total"
-                && key
-                    .key()
-                    .labels()
-                    .any(|l| l.key() == "outcome" && l.value() == label))
-            .then_some(v)
-        })
-    };
+    let ticks = |outcome: &str| tick_outcome(&snapshot, outcome);
     assert_eq!(ticks("ok"), Some(&DebugValue::Counter(1)));
     assert_eq!(
         ticks("nothing_due"),

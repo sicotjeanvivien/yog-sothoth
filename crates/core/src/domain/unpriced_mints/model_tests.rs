@@ -157,3 +157,16 @@ fn a_mint_without_a_price_for_ever_never_waits_past_the_cap() {
 
     assert_eq!(next_ask(&rule, &dead, t0(), step), 900);
 }
+
+#[test]
+fn the_bound_stated_at_startup_is_the_cap_or_the_cadence() {
+    assert_eq!(
+        UnpricedMints::new(TICK).asks_again_at_most_every(),
+        Duration::minutes(15)
+    );
+    assert_eq!(
+        UnpricedMints::new(core::time::Duration::from_secs(1_200)).asks_again_at_most_every(),
+        Duration::minutes(20),
+        "above the cap, every tick asks"
+    );
+}

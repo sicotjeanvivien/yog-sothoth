@@ -332,22 +332,37 @@ async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
 }
 
 #[tokio::test]
-async fn an_answer_without_a_single_entry_says_nothing() {
-    // A 200 with `{}` for a whole chunk: Jupiter answers for the mints it
-    // cannot price too, so this is a degraded answer, not a verdict on them.
-    let base_url = serve_scripted_responses(vec![response_200("{}")]);
+async fn an_answer_without_a_single_price_says_nothing() {
+    // Four degraded 200s for the same two mints: an empty map, an entry for
+    // each but no price anywhere, an error body — which deserialises, as one
+    // entry keyed `error` — and a price for a mint that was not asked. Jupiter answers for the mints it cannot price
+    // too, and a chunk normally mixes live and dead mints: none of these is a
+    // verdict on the mints asked.
+    let (a, b) = (pk(40), pk(41));
+    let all_null = format!(r#"{{ "{a}": {{ "usdPrice": null }}, "{b}": {{}} }}"#);
+    let stray = format!(r#"{{ "{}": {{ "usdPrice": 1.0 }} }}"#, pk(42));
+    let base_url = serve_scripted_responses(vec![
+        response_200("{}"),
+        response_200(&all_null),
+        response_200(r#"{ "error": { "message": "upstream unavailable" } }"#),
+        response_200(&stray),
+    ]);
 
     let client = JupiterPriceClient::new(base_url, SecretKey::for_tests("test-key"));
-    let answer = client
-        .fetch_prices(&[pk(40), pk(41)])
-        .await
-        .expect("Ok expected");
+    for shape in [
+        "empty map",
+        "every entry without a price",
+        "error body",
+        "a price for a mint not asked",
+    ] {
+        let answer = client.fetch_prices(&[a, b]).await.expect("Ok expected");
 
-    assert!(answer.priced.is_empty());
-    assert!(
-        answer.unpriced.is_empty(),
-        "an empty answer must not hold its mints back"
-    );
+        assert!(answer.priced.is_empty(), "{shape}");
+        assert!(
+            answer.unpriced.is_empty(),
+            "{shape}: a degraded answer must not hold its mints back"
+        );
+    }
 }
 
 #[tokio::test]

@@ -1,4 +1,4 @@
-//! Price worker — periodically prices every known mint.
+//! Price worker — periodically prices the known mints worth asking.
 //!
 //! Every `price_interval` (30s by default):
 //!   1. read the set of mints we have metadata for
@@ -46,8 +46,8 @@ mod tick_outcome;
 pub(crate) use metrics::PriceWorkerMetrics;
 use tick_outcome::TickOutcome;
 
-/// Worker that records a USD price for every known mint on a fixed
-/// interval.
+/// Worker that records a USD price for the known mints worth asking, on a
+/// fixed interval.
 pub struct PriceWorker {
     metadata_repository: Arc<dyn TokenMetadataRepository>,
     price_repository: Arc<dyn TokenPriceRepository>,
@@ -88,14 +88,18 @@ impl PriceWorker {
     /// starts rather than after the first interval.
     pub async fn run(mut self, shutdown: CancellationToken) -> Result<(), WorkerError> {
         // What the cadence *entails*, which is the part an operator cannot read
-        // off the variable they set: the floor follows from
-        // `CONTEXT_PRICE_INTERVAL_SECS` and a constant of `yog-core` together,
-        // and nothing else in either crate names it. Stated here rather than in
-        // a `config_log` module of its own, which one line does not yet earn.
+        // off the variable they set: the floor and the longest wait of a mint
+        // without a price each follow from `CONTEXT_PRICE_INTERVAL_SECS` and a
+        // constant of `yog-core` together, and nothing else in either crate
+        // names them. Stated here rather than in a `config_log` module of its
+        // own, which one line does not yet earn.
         info!(
             cadence_secs = self.interval.as_secs(),
             rewrite_at_most_every_secs = self.kept.rewrites_at_most_every().num_seconds(),
-            "PriceWorker started — a motionless price is rewritten at the floor"
+            unpriced_asked_again_at_most_every_secs =
+                self.unpriced.asks_again_at_most_every().num_seconds(),
+            "PriceWorker started — a motionless price is rewritten at the floor, \
+             a mint without a price is asked again at the cap"
         );
 
         let mut ticker = tokio::time::interval(self.interval);
