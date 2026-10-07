@@ -46,7 +46,7 @@ export const RELEASES: readonly Release[] = [
         kind: "fixes",
         items: [
           "Requests to Jupiter are spaced under the configured rate limit (60 per minute by default) instead of sent in bursts, which Jupiter refused (HTTP 429) and which left tokens that have a price without one, round after round.",
-          "A token Jupiter answers without a price is asked again less and less often — up to every 15 minutes at the default 30-second cadence — instead of at every round; the next price it gets puts it back on every round.",
+          "A token Jupiter answers without a price is asked again less and less often — up to every 15 minutes at the default 30-second cadence — instead of at every round; the next price it gets puts it back on every round. A request in which none of its 50 tokens gets a price is read as a failed answer, and changes no token's turn.",
           "Stopping the enrichment service in the middle of a pricing round keeps the prices already received, instead of losing the whole round.",
         ],
       },
