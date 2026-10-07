@@ -180,11 +180,35 @@ impl JupiterPriceClient {
     }
 }
 
+impl JupiterPriceClient {
+    /// One chunk in its slot, raced against the stop: `None` if the stop came
+    /// first.
+    ///
+    /// ⚠️ The race covers the whole chunk — its slot, its request, its retries:
+    /// a request in flight is dropped, so a slow Jupiter or a long
+    /// `Retry-After` cannot hold the stop past its grace.
+    async fn fetch_chunk_unless_stopped(
+        &self,
+        chunk: &[Pubkey],
+        next_start: &mut tokio::time::Instant,
+        shutdown: &CancellationToken,
+    ) -> Option<Result<PriceAnswer, SourceError>> {
+        tokio::select! {
+            biased;
+
+            () = shutdown.cancelled() => None,
+            result = async {
+                tokio::time::sleep_until(*next_start).await;
+                self.fetch_chunk_with_retry(chunk, next_start).await
+            } => Some(result),
+        }
+    }
+}
+
 #[async_trait]
 impl PriceSource for JupiterPriceClient {
-    /// Fetches the prices chunk by chunk, one every `request_spacing`. A chunk
-    /// that fails is logged and skipped: its mints are in neither list of the
-    /// answer.
+    /// Fetches the prices chunk by chunk, one every `request_spacing`, until
+    /// the stop.
     async fn fetch_prices(
         &self,
         mints: &[Pubkey],
@@ -193,32 +217,32 @@ impl PriceSource for JupiterPriceClient {
         let mut answer = PriceAnswer::default();
         let mut next_start = tokio::time::Instant::now();
         for (index, chunk) in mints.chunks(JUPITER_BATCH_MAX).enumerate() {
-            // ⚠️ The stop races the whole chunk — its slot, its request, its
-            // retries: a request in flight is dropped, so a slow Jupiter or a
-            // long `Retry-After` cannot hold the stop past its grace.
-            let result = tokio::select! {
-                biased;
-
-                () = shutdown.cancelled() => {
-                    log::stopped(index * JUPITER_BATCH_MAX, mints.len());
-                    break;
-                }
-                result = async {
-                    tokio::time::sleep_until(next_start).await;
-                    self.fetch_chunk_with_retry(chunk, &mut next_start).await
-                } => result,
+            let Some(result) = self
+                .fetch_chunk_unless_stopped(chunk, &mut next_start, shutdown)
+                .await
+            else {
+                log::stopped(index * JUPITER_BATCH_MAX, mints.len());
+                break;
             };
-            match result {
-                Ok(answered) => {
-                    answer.priced.extend(answered.priced);
-                    answer.unpriced.extend(answered.unpriced);
-                }
-                Err(e) => {
-                    log::chunk_failed(&e, chunk.len());
-                }
-            }
+            add_chunk(&mut answer, result, chunk.len());
         }
         Ok(answer)
+    }
+}
+
+/// Add one chunk's answer to the tick's. A chunk that failed is logged and adds
+/// nothing: its mints are in neither list.
+fn add_chunk(
+    answer: &mut PriceAnswer,
+    result: Result<PriceAnswer, SourceError>,
+    chunk_size: usize,
+) {
+    match result {
+        Ok(answered) => {
+            answer.priced.extend(answered.priced);
+            answer.unpriced.extend(answered.unpriced);
+        }
+        Err(e) => log::chunk_failed(&e, chunk_size),
     }
 }
 
