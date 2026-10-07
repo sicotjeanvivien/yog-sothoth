@@ -31,7 +31,6 @@ use std::time::Instant;
 use chrono::Utc;
 use solana_pubkey::Pubkey;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
 
 use yog_core::domain::{
     KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository, UnpricedMints,
@@ -40,6 +39,7 @@ use yog_core::domain::{
 use crate::application::source::{FetchedPrice, PriceSource};
 use crate::error::WorkerError;
 
+mod log;
 mod metrics;
 mod tick_outcome;
 
@@ -87,20 +87,7 @@ impl PriceWorker {
     /// at once), so a fresh price sample lands as soon as the daemon
     /// starts rather than after the first interval.
     pub async fn run(mut self, shutdown: CancellationToken) -> Result<(), WorkerError> {
-        // What the cadence *entails*, which is the part an operator cannot read
-        // off the variable they set: the floor and the longest wait of a mint
-        // without a price each follow from `CONTEXT_PRICE_INTERVAL_SECS` and a
-        // constant of `yog-core` together, and nothing else in either crate
-        // names them. Stated here rather than in a `config_log` module of its
-        // own, which one line does not yet earn.
-        info!(
-            cadence_secs = self.interval.as_secs(),
-            rewrite_at_most_every_secs = self.kept.rewrites_at_most_every().num_seconds(),
-            unpriced_asked_again_at_most_every_secs =
-                self.unpriced.asks_again_at_most_every().num_seconds(),
-            "PriceWorker started — a motionless price is rewritten at the floor, \
-             a mint without a price is asked again at the cap"
-        );
+        log::started(self.interval, &self.kept, &self.unpriced);
 
         let mut ticker = tokio::time::interval(self.interval);
 
@@ -120,7 +107,7 @@ impl PriceWorker {
                 biased;
 
                 _ = shutdown.cancelled() => {
-                    info!("shutdown requested — price worker stopping");
+                    log::stopping();
                     return Ok(());
                 }
                 _ = ticker.tick() => {
@@ -167,11 +154,7 @@ impl PriceWorker {
             return TickOutcome::NothingDue;
         }
 
-        debug!(
-            count = mints.len(),
-            known = known.len(),
-            "price worker: pricing mints"
-        );
+        log::pricing(mints.len(), known.len());
 
         let answer = match self.source.fetch_prices(&mints).await {
             Ok(answer) => answer,
@@ -223,11 +206,7 @@ impl PriceWorker {
 
         if !rejected.is_empty() {
             PriceWorkerMetrics::record_rejected(rejected.len());
-            warn!(
-                count = rejected.len(),
-                mints = ?rejected.iter().map(|p| p.mint.to_string()).collect::<Vec<_>>(),
-                "price worker: dropped prices the price column cannot hold"
-            );
+            log::unstorable(&rejected);
         }
 
         // Coverage of this tick: how many of the mints we asked for yielded a

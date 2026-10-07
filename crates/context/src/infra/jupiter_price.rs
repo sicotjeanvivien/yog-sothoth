@@ -17,7 +17,6 @@ use async_trait::async_trait;
 use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
-use tracing::warn;
 use yog_bootstrap::SecretKey;
 use yog_core::domain::PriceProvider;
 
@@ -25,6 +24,8 @@ use crate::{
     application::source::{FetchedPrice, PriceAnswer, PriceSource},
     error::SourceError,
 };
+
+mod log;
 
 /// Maximum number of `ids` accepted by Price API V3 in a single
 /// call. Documented limit: 50.
@@ -149,11 +150,7 @@ impl JupiterPriceClient {
         match chunk_answer(mints, priced) {
             Some(answer) => Ok(answer),
             None => {
-                warn!(
-                    chunk_size = mints.len(),
-                    "jupiter_price: chunk answered without a single price — \
-                     read as a degraded answer, its mints keep their schedule",
-                );
+                log::degraded_answer(mints.len());
                 Ok(PriceAnswer::default())
             }
         }
@@ -173,12 +170,7 @@ impl JupiterPriceClient {
                     if attempt + 1 < RATE_LIMIT_MAX_ATTEMPTS =>
                 {
                     let delay = rate_limit_backoff(attempt, retry_after);
-                    warn!(
-                        attempt,
-                        delay_ms = delay.as_millis() as u64,
-                        chunk_size = mints.len(),
-                        "jupiter_price: rate-limited, backing off before retry",
-                    );
+                    log::rate_limited(attempt, delay, mints.len());
                     tokio::time::sleep(delay).await;
                     attempt += 1;
                 }
@@ -203,11 +195,7 @@ impl PriceSource for JupiterPriceClient {
                     answer.unpriced.extend(answered.unpriced);
                 }
                 Err(e) => {
-                    warn!(
-                        error = %e,
-                        chunk_size = chunk.len(),
-                        "jupiter_price: chunk failed, continuing",
-                    );
+                    log::chunk_failed(&e, chunk.len());
                 }
             }
         }

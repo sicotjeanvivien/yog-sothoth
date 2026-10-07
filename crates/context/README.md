@@ -17,11 +17,13 @@ context/src/
 │   ├── source/      ← ports: MetadataSource, PriceSource, PoolAccountSource
 │   └── workers/     ← use cases: MetadataWorker, PriceWorker, PoolAccountWorker,
 │                      one <worker>.rs each, its own modules in <worker>/ —
-│                      metrics and tests, and price/tick_outcome.rs: TickOutcome,
-│                      the eight ways a pricing cycle ends — returning one is
-│                      what makes a silent exit fail to compile
+│                      metrics, log lines (log.rs, one function per line) and
+│                      tests, and price/tick_outcome.rs: TickOutcome, the ways
+│                      a pricing cycle ends — returning one is what makes a
+│                      silent exit fail to compile
 ├── infra/           ← adapters: HeliusDasClient, JupiterPriceClient,
-│                      SolanaAccountClient (+ provider metrics; infra.rs holds
+│                      SolanaAccountClient (+ provider metrics; jupiter_price/
+│                      log.rs holds the client's log lines; infra.rs holds
 │                      the shared http_client and its timeouts; source_error.rs
 │                      turns a reqwest failure into a SourceError, URL stripped)
 ├── bootstrap/       ← Config::load(), Daemon::new — composition root, and the
