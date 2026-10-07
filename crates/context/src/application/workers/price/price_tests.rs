@@ -35,6 +35,10 @@ fn dec(s: &str) -> Decimal {
     Decimal::from_str(s).expect("valid decimal literal")
 }
 
+fn answer(priced: Vec<FetchedPrice>, unpriced: Vec<Pubkey>) -> Result<PriceAnswer, SourceError> {
+    Ok(PriceAnswer { priced, unpriced })
+}
+
 fn priced(mint: Pubkey, price: &str) -> FetchedPrice {
     FetchedPrice {
         mint,
@@ -583,6 +587,118 @@ async fn a_failed_insert_leaves_nothing_remembered() {
     );
 }
 
+// ── Mints the source answered without a price ─────────────────────────
+//
+// The waits themselves are `UnpricedMints`'s, tested in yog-core against a
+// clock. What is tested here is what the worker feeds it: the two ticks below
+// are milliseconds apart, so any mint the rule has deferred is still waiting
+// on the second.
+
+#[tokio::test]
+async fn a_mint_answered_without_a_price_is_not_asked_on_the_next_tick() {
+    let (live, dead) = (pk(1), pk(2));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![live, dead]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_answers(vec![
+        answer(vec![priced(live, "1.0")], vec![dead]),
+        answer(vec![priced(live, "1.0")], vec![]),
+    ]));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo,
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+
+    let calls = source.calls();
+    assert_eq!(
+        calls[0],
+        vec![live, dead],
+        "the first tick asks for everything"
+    );
+    assert_eq!(
+        calls[1],
+        vec![live],
+        "the mint the source had no price for waits its turn"
+    );
+}
+
+#[tokio::test]
+async fn a_mint_whose_request_failed_is_asked_on_the_next_tick() {
+    // The source priced `live` and said nothing about `silent` — the case of a
+    // chunk given up on 429. Nothing was learnt about `silent`, so it must not
+    // be held back: it may well have a price.
+    let (live, silent) = (pk(1), pk(2));
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![live, silent]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_answers(vec![
+        answer(vec![priced(live, "1.0")], vec![]),
+        answer(vec![priced(live, "1.0")], vec![]),
+    ]));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo,
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+
+    worker.run_one_cycle().await;
+    worker.run_one_cycle().await;
+
+    assert_eq!(
+        source.calls()[1],
+        vec![live, silent],
+        "a mint the source said nothing about keeps being asked"
+    );
+}
+
+#[tokio::test]
+async fn an_unstorable_price_resets_the_wait_like_any_price() {
+    // The rule is fed before the storability filter: the source had a price,
+    // and holding the mint back would only delay the day it becomes storable.
+    let mint = pk(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![mint]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_answers(vec![
+        answer(vec![priced(mint, "0.0000000000000000001")], vec![]),
+        answer(vec![], vec![mint]),
+    ]));
+
+    let mut worker = PriceWorker::new(
+        metadata_repo,
+        price_repo.clone(),
+        source.clone(),
+        std::time::Duration::from_secs(30),
+    );
+    // A mint three misses deep, whose wait has already run out.
+    let long_ago = Utc::now() - chrono::Duration::hours(1);
+    for _ in 0..3 {
+        worker.unpriced.record([], &[mint], long_ago);
+    }
+
+    worker.run_one_cycle().await; // a price, too small for the column
+    worker.run_one_cycle().await; // then no price at all
+
+    assert!(
+        price_repo.inserts().is_empty(),
+        "nothing storable was priced"
+    );
+    assert_eq!(source.calls().len(), 2, "the mint was due on both ticks");
+    // Reset by the unstorable price, the miss of the second tick is a first
+    // miss again: one minute, not the eight of a fourth.
+    assert!(
+        worker
+            .unpriced
+            .is_due(&mint, Utc::now() + chrono::Duration::seconds(61)),
+        "an unstorable price must reset the wait like any other"
+    );
+}
+
 // ── Coverage metrics ──────────────────────────────────────────────────
 //
 // The gauges are the whole point of the price-coverage observability: a
@@ -680,7 +796,7 @@ fn partial_price_coverage_is_reported_by_the_two_gauges() {
     assert_eq!(
         value(&snapshot, "yog_context_price_known_mints"),
         Some(&DebugValue::Gauge(3.0.into())),
-        "the denominator: every mint we asked about"
+        "the denominator: every known mint"
     );
     assert_eq!(
         value(&snapshot, "yog_context_price_priced_mints"),
@@ -880,4 +996,64 @@ fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
             "`{name}` must be published at 0 before any tick runs"
         );
     }
+}
+
+#[test]
+fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
+    // One known mint, which the source answers without a price. The second
+    // tick has nothing due: it must not call the source, must not be taken for
+    // a tick that priced nothing (`no_prices` is an alarm), and must not leave
+    // the first tick's gauges standing.
+    let dead = pk(1);
+    let metadata_repo = Arc::new(FakeMetadataRepository::with_known(vec![dead]));
+    let price_repo = Arc::new(FakePriceRepository::default());
+    let source = Arc::new(FakePriceSource::with_answers(vec![answer(
+        vec![],
+        vec![dead],
+    )]));
+
+    let snapshot = snapshot_cycles(
+        PriceWorker::new(
+            metadata_repo,
+            price_repo,
+            source.clone(),
+            std::time::Duration::from_secs(30),
+        ),
+        2,
+    );
+
+    assert_eq!(source.calls().len(), 1, "the second tick asks nothing");
+    let ticks = |label: &str| {
+        snapshot.iter().find_map(|(key, _, _, v)| {
+            (key.key().name() == "yog_context_price_tick_total"
+                && key
+                    .key()
+                    .labels()
+                    .any(|l| l.key() == "outcome" && l.value() == label))
+            .then_some(v)
+        })
+    };
+    assert_eq!(
+        ticks("nothing_due"),
+        Some(&DebugValue::Counter(1)),
+        "the tick says why it asked nothing"
+    );
+    assert_eq!(
+        ticks("no_prices"),
+        Some(&DebugValue::Counter(1)),
+        "only the first tick, which asked and got no price, is a `no_prices`"
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_known_mints"),
+        Some(&DebugValue::Gauge(1.0.into()))
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_requested_mints"),
+        Some(&DebugValue::Gauge(0.0.into())),
+        "known but not requested: the share still worth asking is readable"
+    );
+    assert_eq!(
+        value(&snapshot, "yog_context_price_priced_mints"),
+        Some(&DebugValue::Gauge(0.0.into()))
+    );
 }

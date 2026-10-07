@@ -5,6 +5,7 @@ use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gau
 const TICK_TOTAL: &str = "yog_context_price_tick_total";
 const TICK_DURATION: &str = "yog_context_price_tick_duration_seconds";
 const KNOWN_MINTS: &str = "yog_context_price_known_mints";
+const REQUESTED_MINTS: &str = "yog_context_price_requested_mints";
 const PRICED_MINTS: &str = "yog_context_price_priced_mints";
 const INSERTED_TOTAL: &str = "yog_context_price_inserted_total";
 const REJECTED_TOTAL: &str = "yog_context_price_rejected_total";
@@ -16,7 +17,9 @@ impl PriceWorkerMetrics {
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TICK_TOTAL,
-            "Price worker ticks completed (label: outcome=ok|no_work|list_failed|source_hard_error|no_prices|unchanged|insert_failed). \
+            "Price worker ticks completed (label: outcome=ok|no_work|nothing_due|list_failed|source_hard_error|no_prices|unchanged|insert_failed). \
+             `nothing_due` is a tick that asked nothing because every known mint is one the source last answered without \
+             a price and is waiting its turn. \
              `no_prices` covers both a source that priced nothing and a tick whose every price was rejected as unstorable — \
              yog_context_price_rejected_total tells the two apart. `unchanged` is the opposite and is the NORMAL case: \
              every price came back identical to the last one kept, so the tick wrote nothing on purpose"
@@ -27,11 +30,18 @@ impl PriceWorkerMetrics {
         );
         describe_gauge!(
             KNOWN_MINTS,
-            "Number of known mints submitted to the price source at the last tick"
+            "Number of known mints (token_metadata) at the last tick"
+        );
+        describe_gauge!(
+            REQUESTED_MINTS,
+            "Number of known mints actually asked of the price source at the last tick. \
+             The rest are mints the source last answered without a price, waiting their \
+             turn (at most 15 minutes, plus one cycle) — see UnpricedMints. \
+             requested/known is the share of the universe still worth asking"
         );
         describe_gauge!(
             PRICED_MINTS,
-            "Number of those mints that yielded a price we KEPT at the last tick. \
+            "Number of known mints that yielded a price we KEPT at the last tick. \
              priced/known is the price coverage — the input every USD valuation \
              downstream depends on, and the thing that silently degrades. \
              Counted after the unstorable-price filter: a price the source \
@@ -91,6 +101,12 @@ impl PriceWorkerMetrics {
 
     pub(crate) fn set_known_mints(count: usize) {
         gauge!(KNOWN_MINTS).set(count as f64);
+    }
+
+    /// Set with [`Self::set_known_mints`], on every tick that read the known
+    /// mints, zero included.
+    pub(crate) fn set_requested_mints(count: usize) {
+        gauge!(REQUESTED_MINTS).set(count as f64);
     }
 
     /// Set alongside [`Self::set_known_mints`] on every tick that reached the

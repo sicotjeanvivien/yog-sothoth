@@ -2,9 +2,11 @@
 //!
 //! Every `price_interval` (30s by default):
 //!   1. read the set of mints we have metadata for
-//!      (`list_known_mints`);
+//!      (`list_known_mints`), and keep the ones worth asking: a mint
+//!      the source answered without a price waits its turn, as
+//!      `UnpricedMints` decides;
 //!   2. ask Jupiter for their USD price in chunks of at most
-//!      `JUPITER_BATCH_MAX`;
+//!      `JUPITER_BATCH_MAX`, and tell `UnpricedMints` what it said;
 //!   3. assemble `TokenPrice` rows, drop the ones the price column
 //!      cannot hold and the ones that repeat the last row kept for
 //!      their mint, and `insert_batch` the rest in a single
@@ -27,10 +29,13 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
+use solana_pubkey::Pubkey;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use yog_core::domain::{KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository};
+use yog_core::domain::{
+    KeptPrices, TokenMetadataRepository, TokenPrice, TokenPriceRepository, UnpricedMints,
+};
 
 use crate::application::source::{FetchedPrice, PriceSource};
 use crate::error::WorkerError;
@@ -51,6 +56,9 @@ pub struct PriceWorker {
     /// The tail of the written series, per mint — what makes a tick able to
     /// tell a price that moved from one that merely came round again.
     kept: KeptPrices,
+    /// The mints the source last answered without a price — what keeps a
+    /// tick from asking again, every 30 s, for prices that do not exist.
+    unpriced: UnpricedMints,
 }
 
 impl PriceWorker {
@@ -69,6 +77,7 @@ impl PriceWorker {
             // early so a forced row lands at or before it, whatever the
             // interval. See `KeptPrices::new`.
             kept: KeptPrices::new(interval),
+            unpriced: UnpricedMints::new(interval),
         }
     }
 
@@ -132,17 +141,35 @@ impl PriceWorker {
     /// rather than recording it in place is what makes a bare `return;` — an
     /// exit that tells the outside nothing — fail to compile.
     async fn price_once(&mut self) -> TickOutcome {
-        let mints = match self.metadata_repository.list_known_mints().await {
+        let known = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
             Err(e) => return TickOutcome::ListFailed(e),
         };
-        PriceWorkerMetrics::set_known_mints(mints.len());
 
-        if mints.is_empty() {
+        // Only the mints worth asking. Over half of the known mints have never
+        // had a price, and asking for them every tick is what rate-limited the
+        // ones that do; `UnpricedMints` carries the waits and what resets them.
+        let asked_at = Utc::now();
+        let mints: Vec<Pubkey> = known
+            .iter()
+            .filter(|mint| self.unpriced.is_due(mint, asked_at))
+            .copied()
+            .collect();
+        PriceWorkerMetrics::set_known_mints(known.len());
+        PriceWorkerMetrics::set_requested_mints(mints.len());
+
+        if known.is_empty() {
             return TickOutcome::NoKnownMints;
         }
+        if mints.is_empty() {
+            return TickOutcome::NothingDue;
+        }
 
-        debug!(count = mints.len(), "price worker: pricing mints");
+        debug!(
+            count = mints.len(),
+            known = known.len(),
+            "price worker: pricing mints"
+        );
 
         let answer = match self.source.fetch_prices(&mints).await {
             Ok(answer) => answer,
@@ -150,6 +177,14 @@ impl PriceWorker {
         };
 
         let now = Utc::now();
+
+        // Before either filter below: the rule is about what the source said,
+        // and a price the column cannot hold is still a price the source had.
+        self.unpriced.record(
+            answer.priced.iter().map(|price| &price.mint),
+            &answer.unpriced,
+            now,
+        );
         let priced: Vec<TokenPrice> = answer
             .priced
             .into_iter()

@@ -1,20 +1,20 @@
-//! The seven ways a **pricing** cycle ends, and everything the outside learns
+//! The eight ways a **pricing** cycle ends, and everything the outside learns
 //! from each. It belongs to the price worker alone, hence its place in
 //! `price/`: another worker's cycle would end in other ways, and get its own
 //! type in its own folder.
 //!
 //! ⚠️ **The type exists so that leaving without saying so cannot compile.**
 //! Every exit owes the same triple: a reason in the log, a duration stamped
-//! under this ending's own outcome label, and — for the two that stop before
+//! under this ending's own outcome label, and — for the three that stop before
 //! anything was priced — a zeroed coverage gauge, so its numerator never
-//! outlives the denominator it was measured against. Written inline at seven
+//! outlives the denominator it was measured against. Written inline at eight
 //! `return`s, that triple is a convention, and this file's own history is the
 //! argument against conventions: `no_prices` was declared in the label set from
 //! the start and emitted at none of them, and `set_priced_mints(0)` was missing
 //! from two of the three early exits.
 //!
 //! Because the cycle *returns* a [`TickOutcome`], a bare `return;` no longer
-//! type-checks. An eighth ending is a new variant, and the compiler asks for
+//! type-checks. A ninth ending is a new variant, and the compiler asks for
 //! its arm rather than a reviewer noticing its absence.
 //!
 //! **One `match`, on purpose.** An earlier draft had two — one for the log, one
@@ -43,6 +43,9 @@ pub(super) enum TickOutcome {
     ListFailed(RepositoryError),
     /// Nothing to price yet — an empty `token_metadata`, i.e. a cold start.
     NoKnownMints,
+    /// Every known mint is waiting its turn: the source answered each of them
+    /// without a price, and none is due again yet.
+    NothingDue,
     /// The source returned a hard error rather than a partial answer.
     SourceFailed(SourceError),
     /// Prices came back, but none the price column can hold.
@@ -77,6 +80,14 @@ impl TickOutcome {
                 debug!("price worker: no known mints yet — sleeping");
                 no_coverage();
                 "no_work"
+            }
+            TickOutcome::NothingDue => {
+                debug!("price worker: every known mint is waiting its turn — nothing asked");
+                // Nothing was priced, and not because nothing is known: every
+                // known mint is one the source has no price for. A coverage of
+                // 0 is the truth, and `no_prices` would be the wrong alarm.
+                no_coverage();
+                "nothing_due"
             }
             TickOutcome::SourceFailed(e) => {
                 warn!(error = %e, "price worker: source returned a hard error");
