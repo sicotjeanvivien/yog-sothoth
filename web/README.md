@@ -163,6 +163,40 @@ through to the Alerts tab. Hover-only is acceptable there because on
 touch the tap lands on the Alerts tab — the full version of what the
 popover previews.
 
+## Dashboard frame
+
+The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
+from `lg`, a drawer below it, collapsible on `lg+` from the toggle at its foot,
+with a cookie), the mobile header and the announcement banner.
+
+**Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
+*Protocol* group (Meteora DAMM v2, Meteora DLMM, Raydium, Orca), then Token.
+An entry is `open` (it has a page and an `href`) or `closed` (shown with a lock,
+no `href`). `SidebarNavList` renders a closed entry as a plain
+`<span>`, never a link; its test fails as soon as one becomes a link. To open
+an entry once its page exists, move its key from `ClosedNavKey` to
+`OpenNavKey` (`sidebar-keys.ts`) and give it an `href`. The compiler then asks
+for its icon, which is all the collapsed rail shows. `/pools`, `/signals`,
+`/watchlist` and the pool detail are no longer in the menu.
+
+**Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
+by the dashboard layout alone (`next/font/google`), so the marketing never
+downloads them. They are applied through `font-dash-sans` / `font-dash-mono`.
+Cinzel, loaded for the whole site, serves the frame only for the wordmark;
+page contents not yet redone (the Overview's titles among them) still use it.
+
+**Colours** — the dashboard has one colour per role, declared once as
+`--color-dash-*` in `globals.css`: `bg`, `surface`, `rule`, `ink`, `ink-2`,
+`ink-3`, `accent`, `up`, `down`, `warn`. Every text colour reaches at least
+4.5:1 on `dash-bg` and `dash-surface`. Violet (`accent`) marks the brand: the
+active entry and the live state. Green and red carry a meaning, never the
+brand. The frame (`shell/`, `sidebar/`, `announcements/`) uses these tokens
+only, with no hex values and no Tailwind palette. The background is a flat
+`dash-bg`, which also sits behind the pages that left the menu, with no glow
+and no text shadow. The older palette (`cosmos-*`, `sothoth-*`, `slate-*`)
+remains in use for the marketing site and for page contents not yet moved to
+the roles, the Overview included.
+
 ## Pools list, watchlist, pool detail
 
 The `/pools` page is a Server Component that reads its whole state from the
@@ -225,8 +259,8 @@ itself. A failing announcements call degrades to "no banner" — it never
 takes the dashboard down.
 
 The banner's severity styling is its own mapping (an announcement
-severity is an editorial choice, not a detector conclusion); it shares
-only the design-system color tokens with the signal cards.
+severity is an editorial choice, not a detector conclusion), onto the
+dashboard's role colours: neutral for info, `dash-warn`, `dash-down`.
 
 ## Scripts
 
@@ -330,7 +364,7 @@ web/
 │   │   ├── layout.tsx               # root layout (passthrough)
 │   │   └── [locale]/
 │   │       ├── layout.tsx           # html/body, intl provider
-│   │       ├── (dashboard)/         # app shell: sidebar + network status
+│   │       ├── (dashboard)/         # app shell: menu, network status, fonts
 │   │       │   ├── overview/        # global KPIs, top pools (volume | TVL),
 │   │       │   │                    # latest signals (live over SSE)
 │   │       │   ├── pools/           # pools listing (search, fee filter,

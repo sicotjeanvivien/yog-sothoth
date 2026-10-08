@@ -636,6 +636,17 @@ export const SearchIcon: React.FC<IconProps> = ({
   </svg>
 );
 
+export const LockIcon: React.FC<IconProps> = ({
+  size = 12,
+  strokeWidth = 1.8,
+  className,
+}) => (
+  <svg {...base(size, strokeWidth)} className={className}>
+    <rect x="5" y="11" width="14" height="10" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
+
 export const ChevronUpSortableIcon: React.FC<IconProps> = ({
   size = 14,
   strokeWidth = 1.8,

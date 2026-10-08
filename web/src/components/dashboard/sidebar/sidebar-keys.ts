@@ -1,16 +1,20 @@
 /**
  * Sidebar navigation keys.
  *
- * Source of truth for the set of identifiers a navigation entry can
- * carry. Defined as a literal union so TypeScript rejects any typo at
- * compile time (`"oerview"` will not type-check).
+ * Literal unions, so TypeScript rejects a typo at compile time. Leaf
+ * module — it imports nothing.
  *
- * This is a leaf module — it imports nothing. Both `sidebar-nav.ts`
- * (to type its config entries) and `sidebar.tsx` (to type what it
- * manipulates) depend on it, and it depends on nothing in return.
- *
- * Add a key here when a new dashboard section ships, in lockstep with
- * its entry in `sidebar-nav.ts`.
+ * An entry is open (it has a page) or closed (visible, leads nowhere).
+ * Opening one moves its key from `ClosedNavKey` to `OpenNavKey`; the
+ * sidebar's icon map then refuses to compile until the entry has an
+ * icon for the collapsed rail.
  */
 
-export type SidebarNavKey = "overview" | "pools" | "signals" | "watchlist";
+export type OpenNavKey = "overview";
+
+export type ClosedNavKey =
+  | "meteoraDammV2"
+  | "meteoraDlmm"
+  | "raydium"
+  | "orca"
+  | "token";

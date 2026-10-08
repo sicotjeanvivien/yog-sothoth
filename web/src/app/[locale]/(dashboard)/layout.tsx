@@ -14,14 +14,14 @@ export const dynamic = "force-dynamic";
  * (`/[locale]/overview`, `/[locale]/pools`, …) while sharing this
  * chrome.
  *
- * This file is intentionally thin: it is a Server Component and does
- * nothing but read the sidebar-collapse cookie (so the first paint
- * already has the user's preferred width — no flash) and mount the
- * (client) shell. All interactivity and layout mechanics live in
- * `DashboardShell`.
+ * This Server Component only prepares what the first paint needs: the
+ * sidebar-collapse cookie (no width flash), the announcement to show,
+ * and the dashboard's fonts. All interactivity and layout mechanics
+ * live in `DashboardShell`.
  */
 
 import { cookies } from "next/headers";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import { AnnouncementBanner } from "@/components/dashboard/announcements/announcement-banner";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
@@ -33,6 +33,19 @@ import {
   parseDismissedIds,
   pickAnnouncement,
 } from "@/lib/announcements/announcement-state";
+
+// Declared here, not in the locale layout: the marketing must not
+// download them. The `--font-dash-*` theme tokens read these variables.
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+});
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
 
 /**
  * Best-effort read of the active announcements: a broken announcement
@@ -65,7 +78,10 @@ export default async function DashboardLayout({
   );
 
   return (
-    <DashboardShell initialCollapsed={initialCollapsed}>
+    <DashboardShell
+      initialCollapsed={initialCollapsed}
+      fontVariables={`${geist.variable} ${geistMono.variable}`}
+    >
       {announcement && (
         <AnnouncementBanner
           announcement={announcement}

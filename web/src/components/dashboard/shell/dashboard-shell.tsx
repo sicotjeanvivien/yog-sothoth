@@ -49,6 +49,7 @@ const LG_BREAKPOINT_PX = 1024;
 export function DashboardShell({
   children,
   initialCollapsed = false,
+  fontVariables,
 }: {
   children: React.ReactNode;
   /**
@@ -56,6 +57,8 @@ export function DashboardShell({
    * the first paint already has the user's preferred rail width.
    */
   initialCollapsed?: boolean;
+  /** next/font classes declaring `--font-geist` and `--font-geist-mono`. */
+  fontVariables: string;
 }) {
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
@@ -110,7 +113,9 @@ export function DashboardShell({
   }, [close]);
 
   return (
-    <div className="flex min-h-screen items-start">
+    // Solid background over the cosmic one of `body` — behind the pages
+    // that left the menu too.
+    <div className={`${fontVariables} flex min-h-screen items-start bg-dash-bg`}>
       {/*
        * Mobile header — only shown below lg. Carries the hamburger.
        * On lg+ it collapses to nothing (`lg:hidden`).
@@ -154,12 +159,12 @@ function MobileHeader({
   menuLabel: string;
 }) {
   return (
-    <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-sothoth-700/25 bg-cosmos-900/95 px-4 backdrop-blur-sm lg:hidden">
+    <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-dash-rule bg-dash-bg px-4 font-dash-sans lg:hidden">
       <button
         type="button"
         onClick={onOpen}
         aria-label={menuLabel}
-        className="flex h-9 w-9 items-center justify-center rounded-[3px] text-slate-300 transition-colors hover:bg-sothoth-500/10 hover:text-slate-100"
+        className="flex h-9 w-9 items-center justify-center text-dash-ink-2 transition-colors hover:bg-dash-surface hover:text-dash-ink"
       >
         <HamburgerIcon />
       </button>
@@ -178,7 +183,7 @@ function Overlay({ onClick, label }: { onClick: () => void; label: string }) {
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="fixed inset-0 z-30 bg-cosmos-950/70 backdrop-blur-[2px] lg:hidden"
+      className="fixed inset-0 z-30 bg-dash-bg/70 lg:hidden"
     />
   );
 }
