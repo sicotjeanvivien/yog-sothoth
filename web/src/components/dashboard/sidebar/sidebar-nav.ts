@@ -2,43 +2,82 @@
  * Sidebar navigation configuration.
  *
  * Pure data — no React, no JSX. Describes *which* entries the sidebar
- * renders, in *what order*, pointing at *which routes*. The component
- * (`sidebar.tsx`) consumes this list and is responsible only for
- * turning it into markup.
- *
- * Separating the data from the presentation keeps the component a
- * dumb renderer and makes the nav structure trivial to inspect or
- * test in isolation.
+ * renders, in *what order*, pointing at *which routes*. The renderer
+ * (`sidebar-nav-list.tsx`) only turns it into markup.
  */
 
-import type { SidebarNavKey } from "./sidebar-keys";
+import type { ClosedNavKey, OpenNavKey } from "./sidebar-keys";
 
 /**
- * A single navigation entry.
+ * An entry with a page.
  *
- * - `key`      stable identity, also used to resolve the active item.
- * - `href`     route path *without* the locale segment. next-intl's
- *              `Link` prepends the active locale at render time, so
- *              `/overview` becomes `/fr/overview` transparently.
- * - `labelKey` i18n key, relative to the `Sidebar.nav` namespace.
- *              The component resolves it via `useTranslations`.
- *              The config itself stays language-agnostic.
+ * - `href`     route path *without* the locale segment; next-intl's
+ *              `Link` prepends the active locale at render time.
+ * - `labelKey` i18n key, relative to `Dashboard.Sidebar.nav`.
  */
-export type SidebarNavItem = {
-  key: SidebarNavKey;
+export type OpenNavEntry = {
+  kind: "open";
+  key: OpenNavKey;
   href: string;
   labelKey: string;
 };
 
 /**
- * The navigation entries, in display order.
+ * An entry without a page: shown with a lock and a status, never a
+ * link. It has no `href` on purpose — there is nothing to point at.
  *
- * `readonly` + `as const` so neither the array nor its entries can be
- * mutated at runtime — the config is a constant, not a mutable store.
+ * - `statusKey` i18n key, relative to `Dashboard.Sidebar.status`.
  */
+export type ClosedNavEntry = {
+  kind: "closed";
+  key: ClosedNavKey;
+  labelKey: string;
+  statusKey: "comingSoon" | "notObserved";
+};
+
+export type SidebarNavEntry = OpenNavEntry | ClosedNavEntry;
+
+/** A caption over indented entries — not itself navigable. */
+export type SidebarNavGroup = {
+  kind: "group";
+  labelKey: string;
+  entries: readonly SidebarNavEntry[];
+};
+
+export type SidebarNavItem = SidebarNavEntry | SidebarNavGroup;
+
+/** The navigation, in display order. */
 export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
-  { key: "overview", href: "/overview", labelKey: "overview" },
-  { key: "pools", href: "/pools", labelKey: "pools" },
-  { key: "watchlist", href: "/watchlist", labelKey: "watchlist" },
-  { key: "signals", href: "/signals", labelKey: "signals" },
+  { kind: "open", key: "overview", href: "/overview", labelKey: "overview" },
+  {
+    kind: "group",
+    labelKey: "protocol",
+    entries: [
+      {
+        kind: "closed",
+        key: "meteoraDammV2",
+        labelKey: "meteoraDammV2",
+        statusKey: "comingSoon",
+      },
+      {
+        kind: "closed",
+        key: "meteoraDlmm",
+        labelKey: "meteoraDlmm",
+        statusKey: "notObserved",
+      },
+      {
+        kind: "closed",
+        key: "raydium",
+        labelKey: "raydium",
+        statusKey: "comingSoon",
+      },
+      {
+        kind: "closed",
+        key: "orca",
+        labelKey: "orca",
+        statusKey: "comingSoon",
+      },
+    ],
+  },
+  { kind: "closed", key: "token", labelKey: "token", statusKey: "comingSoon" },
 ] as const;

@@ -1,12 +1,18 @@
 {
   "Dashboard": {
     "Sidebar": {
-      "caption": "Dashboard",
       "nav": {
-        "overview": "Vue d'ensemble",
-        "pools": "Pools",
-        "watchlist": "Watchlist",
-        "signals": "Signaux"
+        "overview": "Overview",
+        "protocol": "Protocol",
+        "meteoraDammV2": "Meteora DAMM v2",
+        "meteoraDlmm": "Meteora DLMM",
+        "raydium": "Raydium",
+        "orca": "Orca",
+        "token": "Token"
+      },
+      "status": {
+        "comingSoon": "à venir",
+        "notObserved": "non observé"
       },
       "network": {
         "title": "Solana",

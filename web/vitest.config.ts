@@ -3,9 +3,10 @@ import { resolve } from "node:path";
 
 // Vitest configuration for the /web package.
 //
-// The `@/*` alias mirrors the one declared in tsconfig.json so that
-// test files can use the same import paths as the application code
-// (e.g. `import { ... } from "@/config/features"`).
+// The aliases mirror the `paths` of tsconfig.json so that test files
+// can use the same import paths as the application code (e.g.
+// `import { ... } from "@/config/features"`). The two narrower ones
+// come first: `@/i18n` and `@/messages` live outside `src/`.
 export default defineConfig({
   test: {
     // Plain Node environment is enough for unit tests on pure logic.
@@ -21,8 +22,13 @@ export default defineConfig({
     reporters: ["default"],
   },
   resolve: {
-    alias: {
-      "@": resolve(__dirname, "src"),
-    },
+    alias: [
+      { find: /^@\/i18n\//, replacement: `${resolve(__dirname, "i18n")}/` },
+      {
+        find: /^@\/messages\//,
+        replacement: `${resolve(__dirname, "messages")}/`,
+      },
+      { find: "@", replacement: resolve(__dirname, "src") },
+    ],
   },
 });
