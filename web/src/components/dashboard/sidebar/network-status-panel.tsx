@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Network status panel — the "Solana Live" block at the foot of the
- * sidebar.
+ * Network status panel — the Solana block at the foot of the sidebar:
+ * state, slot, latency.
  *
  * Autonomous: it owns its own data lifecycle. It fetches yog-api
  * directly through the public gateway on mount and then polls every
@@ -14,10 +14,9 @@
  *   - loading : first fetch not yet returned — slot/latency show
  *               "—", the dot is neutral;
  *   - ready   : data in hand — slot, latency, and a freshness dot
- *               coloured green / orange / red for live / delayed /
- *               stale;
+ *               (see `presentation`);
  *   - error   : the fetch failed — an explicit "offline" state
- *               (red dot + label), never a silent "—". An health
+ *               (negative dot + label), never a silent "—". An health
  *               panel that can't signal its own connection loss
  *               would defeat its purpose.
  *
@@ -32,7 +31,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { SolanaGlyph } from "@/components/shared/icon";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchNetworkStatusBrowser } from "@/lib/api/browser/network-status";
 import type {
@@ -104,22 +102,27 @@ export function NetworkStatusPanel({
     return () => clearInterval(timer);
   }, [load]);
 
+  const { dotClass, labelClass, labelKey } = presentation(state);
+  const label = t(labelKey);
+
   return (
     <>
       <div
-        className={`mt-5 rounded-[4px] border border-sothoth-500/15 bg-cosmos-800/65 p-[14px] ${collapsed ? "lg:hidden" : ""}`}
+        className={`border border-dash-rule bg-dash-surface px-[14px] py-3 ${collapsed ? "lg:hidden" : ""}`}
       >
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-[7px]">
-            <SolanaGlyph size={20} />
-            <span className="text-[12px] font-semibold tracking-[0.04em] text-slate-300">
-              {t("title")}
-            </span>
-          </div>
-          <StatusBadge state={state} />
+        <header className="mb-2 flex items-center justify-between">
+          <span className="font-dash-mono text-[11px] font-medium tracking-[0.12em] text-dash-ink-3 uppercase">
+            {t("title")}
+          </span>
+          <span
+            className={`inline-flex items-center gap-2 text-[12px] ${labelClass}`}
+          >
+            <StatusDot className={dotClass} />
+            {label}
+          </span>
         </header>
 
-        <dl className="mt-3 flex flex-col gap-[7px]">
+        <dl className="flex flex-col gap-1.5 text-[12px]">
           <StatRow label={t("slot")} value={slotValue(state)} />
           <StatRow label={t("latency")} value={latencyValue(state)} />
         </dl>
@@ -127,42 +130,61 @@ export function NetworkStatusPanel({
 
       {collapsed && (
         <div
-          title={`${t("title")} — ${statusLabel(state, t)}`}
-          className="mt-5 hidden justify-center rounded-[4px] border border-sothoth-500/15 bg-cosmos-800/65 py-3 lg:flex"
+          title={`${t("title")} — ${label}`}
+          className="hidden justify-center border border-dash-rule bg-dash-surface py-3 lg:flex"
         >
-          <StatusDot
-            colorClass={statusDotClass(state)}
-            pulse={state.phase === "ready" && state.data.freshness === "live"}
-          />
-          <span className="sr-only">{statusLabel(state, t)}</span>
+          <StatusDot className={dotClass} />
+          <span className="sr-only">{label}</span>
         </div>
       )}
     </>
   );
 }
 
-// ── Collapsed-dot state mapping ───────────────────────────────────────
+// ── State presentation ────────────────────────────────────────────────
+//
+// Violet means live (the accent marks the live state); the warning and
+// negative roles take over when the data lags or the API is gone. The
+// label always doubles the dot's colour.
 
-type TranslateNetwork = ReturnType<typeof useTranslations>;
+type Presentation = { dotClass: string; labelClass: string; labelKey: string };
 
-function statusDotClass(state: PanelState): string {
-  if (state.phase === "loading") return "bg-slate-500";
-  if (state.phase === "error") return "bg-signal-bad";
-  return {
-    live: "bg-signal-good",
-    delayed: "bg-signal-warn",
-    stale: "bg-signal-bad",
-  }[state.data.freshness];
-}
-
-function statusLabel(state: PanelState, t: TranslateNetwork): string {
-  if (state.phase === "loading") return t("connecting");
-  if (state.phase === "error") return t("offline");
-  return t(state.data.freshness);
+function presentation(state: PanelState): Presentation {
+  if (state.phase === "loading") {
+    return {
+      dotClass: "bg-dash-ink-3",
+      labelClass: "text-dash-ink-2",
+      labelKey: "connecting",
+    };
+  }
+  if (state.phase === "error") {
+    return {
+      dotClass: "bg-dash-down",
+      labelClass: "text-dash-down",
+      labelKey: "offline",
+    };
+  }
+  const byFreshness: Record<Freshness, Presentation> = {
+    live: {
+      dotClass: "bg-dash-accent",
+      labelClass: "text-dash-ink-2",
+      labelKey: "live",
+    },
+    delayed: {
+      dotClass: "bg-dash-warn",
+      labelClass: "text-dash-warn",
+      labelKey: "delayed",
+    },
+    stale: {
+      dotClass: "bg-dash-down",
+      labelClass: "text-dash-down",
+      labelKey: "stale",
+    },
+  };
+  return byFreshness[state.data.freshness];
 }
 
 // ── Value formatting ──────────────────────────────────────────────────
-// (unchanged below — copy from the previous version)
 
 function slotValue(state: PanelState): string {
   return state.phase === "ready" ? state.data.slot : "—";
@@ -172,102 +194,15 @@ function latencyValue(state: PanelState): string {
   return state.phase === "ready" ? `${state.data.rpcLatencyMs} ms` : "—";
 }
 
-function StatusBadge({ state }: { state: PanelState }) {
-  const t = useTranslations("Dashboard.Sidebar.network");
-
-  if (state.phase === "loading") {
-    return (
-      <Badge dotClass="bg-slate-500" labelClass="text-slate-500">
-        {t("connecting")}
-      </Badge>
-    );
-  }
-
-  if (state.phase === "error") {
-    return (
-      <Badge dotClass="bg-signal-bad" labelClass="text-signal-bad">
-        {t("offline")}
-      </Badge>
-    );
-  }
-
-  return <FreshnessBadge freshness={state.data.freshness} />;
-}
-
-function FreshnessBadge({ freshness }: { freshness: Freshness }) {
-  const t = useTranslations("Dashboard.Sidebar.network");
-
-  const presentation: Record<
-    Freshness,
-    { dotClass: string; labelClass: string; labelKey: string; pulse: boolean }
-  > = {
-    live: {
-      dotClass: "bg-signal-good",
-      labelClass: "text-signal-good",
-      labelKey: "live",
-      pulse: true,
-    },
-    delayed: {
-      dotClass: "bg-signal-warn",
-      labelClass: "text-signal-warn",
-      labelKey: "delayed",
-      pulse: false,
-    },
-    stale: {
-      dotClass: "bg-signal-bad",
-      labelClass: "text-signal-bad",
-      labelKey: "stale",
-      pulse: false,
-    },
-  };
-
-  const { dotClass, labelClass, labelKey, pulse } = presentation[freshness];
-
-  return (
-    <Badge dotClass={dotClass} labelClass={labelClass} pulse={pulse}>
-      {t(labelKey)}
-    </Badge>
-  );
-}
-
-function Badge({
-  children,
-  dotClass,
-  labelClass,
-  pulse = false,
-}: {
-  children: React.ReactNode;
-  dotClass: string;
-  labelClass: string;
-  pulse?: boolean;
-}) {
-  return (
-    <span
-      className={`flex items-center gap-[5px] text-[10px] font-semibold tracking-[0.18em] uppercase ${labelClass}`}
-    >
-      <StatusDot colorClass={dotClass} pulse={pulse} />
-      {children}
-    </span>
-  );
-}
-
-function StatusDot({ colorClass, pulse }: { colorClass: string; pulse: boolean }) {
-  if (!pulse) {
-    return <span className={`h-1.5 w-1.5 rounded-full ${colorClass}`} />;
-  }
-  return (
-    <span className="relative h-1.5 w-1.5">
-      <span className={`absolute inset-0 animate-ping rounded-full ${colorClass}`} />
-      <span className={`absolute inset-0 rounded-full ${colorClass}`} />
-    </span>
-  );
+function StatusDot({ className }: { className: string }) {
+  return <span aria-hidden="true" className={`h-2 w-2 shrink-0 ${className}`} />;
 }
 
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between">
-      <dt className="text-[11px] text-slate-500">{label}</dt>
-      <dd className="font-mono text-[12px] text-slate-300">{value}</dd>
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-dash-ink-3">{label}</dt>
+      <dd className="font-dash-mono text-dash-ink tabular-nums">{value}</dd>
     </div>
   );
 }

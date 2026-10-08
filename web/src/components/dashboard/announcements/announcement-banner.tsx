@@ -10,11 +10,10 @@
  * `sidebar-state` cookie pattern. This client island only owns the
  * dismiss interaction: append the id to the cookie, hide locally.
  *
- * Severity styling is the banner's own mapping. It deliberately does
- * NOT import the signals' `signal-display` vocabulary: an announcement
- * severity is an editorial display choice, not a detector conclusion —
- * only the underlying color *tokens* (sky/amber/rose) are shared, as
- * design-system consistency.
+ * Severity styling is the banner's own mapping onto the dashboard's
+ * role colours. It deliberately does NOT import the signals'
+ * `signal-display` vocabulary: an announcement severity is an
+ * editorial display choice, not a detector conclusion.
  */
 
 import { useState } from "react";
@@ -38,18 +37,18 @@ import {
   type IconProps,
 } from "@/components/shared/icon";
 
-// Same rung logic as everywhere severity is displayed: shape + tint,
-// never hue alone; info stays close to neutral.
-const BANNER_STYLE: Record<AnnouncementSeverity, string> = {
-  info: "border-sothoth-500/15 border-l-sky-400/60 bg-cosmos-700/40",
-  warning: "border-amber-400/30 border-l-amber-400 bg-amber-400/[0.06]",
-  critical: "border-rose-400/40 border-l-rose-400 bg-rose-500/[0.10]",
+// Shape + colour, never colour alone: each severity has its own icon.
+// Info stays neutral.
+const BANNER_RULE: Record<AnnouncementSeverity, string> = {
+  info: "border-l-dash-ink-3",
+  warning: "border-l-dash-warn",
+  critical: "border-l-dash-down",
 };
 
 const BANNER_ICON_COLOR: Record<AnnouncementSeverity, string> = {
-  info: "text-sky-300",
-  warning: "text-amber-300",
-  critical: "text-rose-300",
+  info: "text-dash-ink-3",
+  warning: "text-dash-warn",
+  critical: "text-dash-down",
 };
 
 const BANNER_ICON: Record<AnnouncementSeverity, React.FC<IconProps>> = {
@@ -83,30 +82,29 @@ export function AnnouncementBanner({
   // would land outside the viewport for anyone scrolled down — an
   // announcement nobody sees fails its purpose. Sticks below the
   // fixed mobile header (`top-14`) until lg, where the header is
-  // gone; the near-opaque blurred backing (the mobile header's
-  // recipe) keeps scrolled content from bleeding through the tinted
-  // card. z-20 stays under the header/drawer/overlay (z-30/40).
+  // gone; its opaque surface keeps scrolled content from showing
+  // through. z-20 stays under the header/drawer/overlay (z-30/40).
   return (
-    <div className="sticky top-14 z-20 bg-cosmos-950/85 px-6 py-3 backdrop-blur-sm lg:top-0 lg:px-10">
+    <div className="sticky top-14 z-20 border-b border-dash-rule bg-dash-surface font-dash-sans lg:top-0">
       <div
         role="status"
-        className={`flex items-start gap-3 rounded-lg border border-l-2 px-4 py-3 ${BANNER_STYLE[announcement.severity]}`}
+        className={`flex items-start gap-3 border-l-2 px-6 py-3 lg:px-10 ${BANNER_RULE[announcement.severity]}`}
       >
         <Icon
           size={18}
           className={`mt-0.5 shrink-0 ${BANNER_ICON_COLOR[announcement.severity]}`}
         />
         <div className="min-w-0 flex-1">
-          <span className="mr-2 font-mono text-[12px] tracking-wide text-slate-400 uppercase">
+          <span className="mr-2 font-dash-mono text-[11px] tracking-[0.12em] text-dash-ink-3 uppercase">
             {t(`kinds.${announcement.kind}`)}
           </span>
-          <span className="text-[14px] text-slate-200">
+          <span className="text-[14px] text-dash-ink">
             {announcement.message}
           </span>
           {announcement.linkUrl && (
             <Link
               href={announcement.linkUrl}
-              className="ml-2 text-[13px] text-sky-300 underline underline-offset-2 hover:text-sky-200"
+              className="ml-2 text-[13px] text-dash-accent underline underline-offset-2 hover:text-dash-ink"
             >
               {t("readMore")}
             </Link>
@@ -116,7 +114,7 @@ export function AnnouncementBanner({
           type="button"
           onClick={dismiss}
           aria-label={t("dismiss")}
-          className="shrink-0 rounded p-1 text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
+          className="shrink-0 p-1 text-dash-ink-3 transition-colors hover:text-dash-ink"
         >
           <CloseIcon size={16} />
         </button>
