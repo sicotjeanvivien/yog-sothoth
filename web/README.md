@@ -183,7 +183,8 @@ their URL only.
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
 by the dashboard layout alone (`next/font/google`), so the marketing never
 downloads them. They are applied through `font-dash-sans` / `font-dash-mono`.
-Cinzel, loaded for the whole site, serves the dashboard only for the wordmark.
+Cinzel, loaded for the whole site, serves the frame only for the wordmark;
+page contents not yet redone (the Overview's titles among them) still use it.
 
 **Colours** — the dashboard has one colour per role, declared once as
 `--color-dash-*` in `globals.css`: `bg`, `surface`, `rule`, `ink`, `ink-2`,
@@ -194,7 +195,8 @@ brand. The frame (`shell/`, `sidebar/`, `announcements/`) uses these tokens
 only, with no hex values and no Tailwind palette. The background is a flat
 `dash-bg`, which also sits behind the pages that left the menu, with no glow
 and no text shadow. The older palette (`cosmos-*`, `sothoth-*`, `slate-*`)
-remains in use for the marketing site and for those pages.
+remains in use for the marketing site and for page contents not yet moved to
+the roles, the Overview included.
 
 ## Pools list, watchlist, pool detail
 
@@ -258,8 +260,8 @@ itself. A failing announcements call degrades to "no banner" — it never
 takes the dashboard down.
 
 The banner's severity styling is its own mapping (an announcement
-severity is an editorial choice, not a detector conclusion); it shares
-only the design-system color tokens with the signal cards.
+severity is an editorial choice, not a detector conclusion), onto the
+dashboard's role colours: neutral for info, `dash-warn`, `dash-down`.
 
 ## Scripts
 

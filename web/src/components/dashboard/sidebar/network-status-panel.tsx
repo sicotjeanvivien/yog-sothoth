@@ -164,25 +164,26 @@ function presentation(state: PanelState): Presentation {
       labelKey: "offline",
     };
   }
-  const byFreshness: Record<Freshness, Presentation> = {
-    live: {
-      dotClass: "bg-dash-accent",
-      labelClass: "text-dash-ink-2",
-      labelKey: "live",
-    },
-    delayed: {
-      dotClass: "bg-dash-warn",
-      labelClass: "text-dash-warn",
-      labelKey: "delayed",
-    },
-    stale: {
-      dotClass: "bg-dash-down",
-      labelClass: "text-dash-down",
-      labelKey: "stale",
-    },
-  };
-  return byFreshness[state.data.freshness];
+  return BY_FRESHNESS[state.data.freshness];
 }
+
+const BY_FRESHNESS: Record<Freshness, Presentation> = {
+  live: {
+    dotClass: "bg-dash-accent",
+    labelClass: "text-dash-ink-2",
+    labelKey: "live",
+  },
+  delayed: {
+    dotClass: "bg-dash-warn",
+    labelClass: "text-dash-warn",
+    labelKey: "delayed",
+  },
+  stale: {
+    dotClass: "bg-dash-down",
+    labelClass: "text-dash-down",
+    labelKey: "stale",
+  },
+};
 
 // ── Value formatting ──────────────────────────────────────────────────
 

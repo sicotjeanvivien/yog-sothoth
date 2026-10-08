@@ -73,4 +73,4 @@ export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
     ],
   },
   { kind: "closed", key: "token", labelKey: "token" },
-] as const;
+];

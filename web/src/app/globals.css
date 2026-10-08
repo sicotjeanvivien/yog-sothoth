@@ -25,11 +25,11 @@
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 
-  /* Dashboard — one colour per role, the only colours its frame may use.
-     The palette above stays with the marketing and with the pages that
-     left the menu. Every text colour here is at least 4.5:1 on dash-bg
-     and dash-surface. dash-down is the TEXT red: a chart bar needs its
-     own, darker tint. */
+  /* Dashboard — one colour per role, the only colours its frame (shell,
+     sidebar, banner) may use. The palette above stays with the marketing
+     and with page contents not yet moved to these roles. Every text
+     colour here is at least 4.5:1 on dash-bg and dash-surface. dash-down
+     is the TEXT red: a chart bar needs its own, darker tint. */
   --color-dash-bg: #000310;
   --color-dash-surface: #0a0815;
   --color-dash-rule: #241d44;
@@ -42,13 +42,15 @@
   --color-dash-warn: #fbbf24;
 }
 
-/* `inline`, or the fonts never apply: --font-geist(-mono) are set by
+/* `inline`, or Geist never applies: --font-geist(-mono) are set by
    next/font on the dashboard's wrapper, not on :root, so a plain @theme
-   variable would resolve them at :root, find nothing, and inherit an
-   invalid value. Inlined, they resolve on the element that uses them. */
+   variable would resolve them at :root, where they are unset. Inlined,
+   they resolve on the element that uses them. */
 @theme inline {
-  --font-dash-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-dash-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-dash-sans: var(--font-geist, ui-sans-serif), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-dash-mono: var(--font-geist-mono, ui-monospace), ui-monospace,
+    monospace;
 }
 
 /*

@@ -10,6 +10,7 @@
         "orca": "Orca",
         "token": "Token"
       },
+      "unavailable": "indisponible",
       "network": {
         "title": "Solana",
         "live": "En direct",

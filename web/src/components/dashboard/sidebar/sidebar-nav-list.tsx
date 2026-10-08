@@ -4,16 +4,17 @@
  * The sidebar's menu: renders `SIDEBAR_NAV`.
  *
  * An open entry is a `Link`. A closed entry is a plain `<span>` with
- * its lock — no `href`, no `tabindex`, no handler — so it
- * reacts neither to a click nor to the keyboard. The test in
+ * its lock — no `href`, no `tabindex`, no handler — so it reacts
+ * neither to a click nor to the keyboard. The test in
  * `__tests__/sidebar-nav-list.test.tsx` holds that line.
  *
  * On the collapsed lg+ rail only the open entries remain, as their
- * icon: a lock without its label says nothing. The mobile drawer
- * ignores `collapsed`, so every collapsed style is `lg:`-scoped.
+ * icon — wherever they sit, in a group or not: a lock without its
+ * label says nothing. The mobile drawer ignores `collapsed`, so every
+ * collapsed style is `lg:`-scoped.
  */
 
-import type { FC } from "react";
+import { useId, type FC } from "react";
 import { useTranslations } from "next-intl";
 
 import { Link, usePathname } from "@/i18n/navigation";
@@ -26,7 +27,6 @@ import {
 import type { OpenNavKey } from "./sidebar-keys";
 import {
   SIDEBAR_NAV,
-  type ClosedNavEntry,
   type OpenNavEntry,
   type SidebarNavEntry,
 } from "./sidebar-nav";
@@ -37,7 +37,11 @@ const NAV_ICONS: Record<OpenNavKey, FC<IconProps>> = {
   overview: OverviewIcon,
 };
 
-const ROW = "flex min-h-9 items-center justify-between gap-2 px-[10px]";
+function rowClass(nested: boolean): string {
+  return `flex min-h-9 items-center justify-between gap-2 pr-[10px] ${
+    nested ? "pl-[22px] text-[13px]" : "pl-[10px] text-[14px]"
+  }`;
+}
 
 type SidebarNavListProps = {
   collapsed: boolean;
@@ -48,71 +52,76 @@ type SidebarNavListProps = {
 export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
   const pathname = usePathname();
   const t = useTranslations("Dashboard.Sidebar.nav");
+  const groupIdPrefix = useId();
+
+  const hiddenWhenCollapsed = collapsed ? "lg:hidden" : undefined;
 
   const renderEntry = (entry: SidebarNavEntry, nested: boolean) =>
     entry.kind === "open" ? (
-      <OpenEntry
-        entry={entry}
-        // Exact match: `usePathname` already strips the locale.
-        active={pathname === entry.href}
-        nested={nested}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
-      />
+      <li key={entry.key}>
+        <OpenEntry
+          entry={entry}
+          label={t(entry.labelKey)}
+          // Exact match: `usePathname` already strips the locale.
+          active={pathname === entry.href}
+          nested={nested}
+          collapsed={collapsed}
+          onNavigate={onNavigate}
+        />
+      </li>
     ) : (
-      <ClosedEntry entry={entry} nested={nested} />
+      <li key={entry.key} className={hiddenWhenCollapsed}>
+        <ClosedEntry label={t(entry.labelKey)} nested={nested} />
+      </li>
     );
 
   return (
     <ul className="flex flex-col gap-[2px]">
-      {SIDEBAR_NAV.map((item) =>
-        item.kind === "group" ? (
-          <li
-            key={item.labelKey}
-            className={collapsed ? "lg:hidden" : undefined}
-          >
-            <span className={`${ROW} text-[14px] text-dash-ink-2`}>
+      {SIDEBAR_NAV.map((item) => {
+        if (item.kind !== "group") return renderEntry(item, false);
+        const captionId = `${groupIdPrefix}-${item.labelKey}`;
+        return (
+          <li key={item.labelKey}>
+            <span
+              id={captionId}
+              className={`${rowClass(false)} text-dash-ink-2 ${hiddenWhenCollapsed ?? ""}`}
+            >
               <span>{t(item.labelKey)}</span>
-              <span className="font-dash-mono text-[11px] text-dash-ink-3 tabular-nums">
+              <span
+                aria-hidden="true"
+                className="font-dash-mono text-[11px] text-dash-ink-3 tabular-nums"
+              >
                 {item.entries.length}
               </span>
             </span>
-            <ul className="flex flex-col gap-[2px]">
-              {item.entries.map((entry) => (
-                <li key={entry.key}>{renderEntry(entry, true)}</li>
-              ))}
+            <ul
+              aria-labelledby={captionId}
+              className="flex flex-col gap-[2px]"
+            >
+              {item.entries.map((entry) => renderEntry(entry, true))}
             </ul>
           </li>
-        ) : (
-          <li
-            key={item.key}
-            className={
-              collapsed && item.kind === "closed" ? "lg:hidden" : undefined
-            }
-          >
-            {renderEntry(item, false)}
-          </li>
-        ),
-      )}
+        );
+      })}
     </ul>
   );
 }
 
 function OpenEntry({
   entry,
+  label,
   active,
   nested,
   collapsed,
   onNavigate,
 }: {
   entry: OpenNavEntry;
+  label: string;
   active: boolean;
   nested: boolean;
   collapsed: boolean;
   onNavigate: () => void;
 }) {
-  const t = useTranslations("Dashboard.Sidebar.nav");
-  const label = t(entry.labelKey);
   const Icon = NAV_ICONS[entry.key];
 
   const state = active
@@ -127,9 +136,9 @@ function OpenEntry({
       // Native tooltip on the collapsed rail: the OS-managed one never
       // overlaps the page.
       title={collapsed ? label : undefined}
-      className={`${ROW} ${nested ? "pl-[22px] text-[13px]" : "text-[14px]"} transition-colors ${state} ${collapsed ? "lg:justify-center" : ""}`}
+      className={`${rowClass(nested)} transition-colors ${state} ${collapsed ? "lg:justify-center" : ""}`}
     >
-      <span className={collapsed ? "lg:hidden" : undefined}>{label}</span>
+      <span className={collapsed ? "lg:sr-only" : undefined}>{label}</span>
       {collapsed && (
         <Icon size={18} className="hidden shrink-0 lg:block" />
       )}
@@ -137,22 +146,19 @@ function OpenEntry({
   );
 }
 
-function ClosedEntry({
-  entry,
-  nested,
-}: {
-  entry: ClosedNavEntry;
-  nested: boolean;
-}) {
-  const t = useTranslations("Dashboard.Sidebar.nav");
+function ClosedEntry({ label, nested }: { label: string; nested: boolean }) {
+  const t = useTranslations("Dashboard.Sidebar");
 
+  // `aria-disabled` is not announced on a plain span: the sr-only text
+  // says what the lock shows.
   return (
     <span
       aria-disabled="true"
-      className={`${ROW} ${nested ? "pl-[22px] text-[13px]" : "text-[14px]"} cursor-default text-dash-ink-3`}
+      className={`${rowClass(nested)} cursor-default text-dash-ink-3`}
     >
-      <span>{t(entry.labelKey)}</span>
+      <span>{label}</span>
       <LockIcon size={11} />
+      <span className="sr-only">{t("unavailable")}</span>
     </span>
   );
 }

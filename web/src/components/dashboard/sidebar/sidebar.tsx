@@ -60,7 +60,7 @@ export function Sidebar({
       className={`${positioning} ${drawerState} ${width} flex shrink-0 flex-col gap-7 border-r border-dash-rule bg-dash-bg px-5 py-6 font-dash-sans text-dash-ink`}
     >
       <Brand collapsed={collapsed} />
-      <nav className="flex-1">
+      <nav className="min-h-0 flex-1 overflow-y-auto">
         <SidebarNavList collapsed={collapsed} onNavigate={onNavigate} />
       </nav>
       <div className="flex flex-col gap-3">
@@ -80,14 +80,14 @@ function Brand({ collapsed }: { collapsed: boolean }) {
       <Link href="/" className="flex items-center gap-3">
         <Image
           src="/logo.png"
-          alt={t("name")}
+          alt=""
           width={40}
           height={43}
           priority
           className="h-auto w-10 shrink-0"
         />
         <span
-          className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "lg:hidden" : ""}`}
+          className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "lg:sr-only" : ""}`}
         >
           {t("name")}
         </span>
