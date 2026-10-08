@@ -49,6 +49,7 @@ const LG_BREAKPOINT_PX = 1024;
 export function DashboardShell({
   children,
   initialCollapsed = false,
+  fontVariables,
 }: {
   children: React.ReactNode;
   /**
@@ -56,6 +57,8 @@ export function DashboardShell({
    * the first paint already has the user's preferred rail width.
    */
   initialCollapsed?: boolean;
+  /** next/font classes declaring `--font-geist` and `--font-geist-mono`. */
+  fontVariables: string;
 }) {
   const t = useTranslations("Dashboard.shell");
   const [isOpen, setIsOpen] = useState(false);
@@ -110,7 +113,9 @@ export function DashboardShell({
   }, [close]);
 
   return (
-    <div className="flex min-h-screen items-start">
+    // Solid background over the cosmic one of `body` — behind the pages
+    // that left the menu too.
+    <div className={`${fontVariables} flex min-h-screen items-start bg-dash-bg`}>
       {/*
        * Mobile header — only shown below lg. Carries the hamburger.
        * On lg+ it collapses to nothing (`lg:hidden`).

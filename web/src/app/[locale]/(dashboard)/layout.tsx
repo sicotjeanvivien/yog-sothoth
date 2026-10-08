@@ -22,6 +22,7 @@ export const dynamic = "force-dynamic";
  */
 
 import { cookies } from "next/headers";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import { AnnouncementBanner } from "@/components/dashboard/announcements/announcement-banner";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
@@ -33,6 +34,19 @@ import {
   parseDismissedIds,
   pickAnnouncement,
 } from "@/lib/announcements/announcement-state";
+
+// Declared here, not in the locale layout: the marketing must not
+// download them. The `--font-dash-*` theme tokens read these variables.
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+});
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
 
 /**
  * Best-effort read of the active announcements: a broken announcement
@@ -65,7 +79,10 @@ export default async function DashboardLayout({
   );
 
   return (
-    <DashboardShell initialCollapsed={initialCollapsed}>
+    <DashboardShell
+      initialCollapsed={initialCollapsed}
+      fontVariables={`${geist.variable} ${geistMono.variable}`}
+    >
       {announcement && (
         <AnnouncementBanner
           announcement={announcement}
