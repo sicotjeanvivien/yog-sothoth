@@ -4,7 +4,7 @@
  * The sidebar's menu: renders `SIDEBAR_NAV`.
  *
  * An open entry is a `Link`. A closed entry is a plain `<span>` with
- * its lock and status — no `href`, no `tabindex`, no handler — so it
+ * its lock — no `href`, no `tabindex`, no handler — so it
  * reacts neither to a click nor to the keyboard. The test in
  * `__tests__/sidebar-nav-list.test.tsx` holds that line.
  *
@@ -144,18 +144,15 @@ function ClosedEntry({
   entry: ClosedNavEntry;
   nested: boolean;
 }) {
-  const t = useTranslations("Dashboard.Sidebar");
+  const t = useTranslations("Dashboard.Sidebar.nav");
 
   return (
     <span
       aria-disabled="true"
       className={`${ROW} ${nested ? "pl-[22px] text-[13px]" : "text-[14px]"} cursor-default text-dash-ink-3`}
     >
-      <span>{t(`nav.${entry.labelKey}`)}</span>
-      <span className="inline-flex items-center gap-[5px] font-dash-mono text-[11px] whitespace-nowrap">
-        <LockIcon size={11} />
-        {t(`status.${entry.statusKey}`)}
-      </span>
+      <span>{t(entry.labelKey)}</span>
+      <LockIcon size={11} />
     </span>
   );
 }

@@ -10,10 +10,6 @@
         "orca": "Orca",
         "token": "Token"
       },
-      "status": {
-        "comingSoon": "coming soon",
-        "notObserved": "not observed"
-      },
       "network": {
         "title": "Solana",
         "live": "Live",

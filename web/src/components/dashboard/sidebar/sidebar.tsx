@@ -59,36 +59,24 @@ export function Sidebar({
     <aside
       className={`${positioning} ${drawerState} ${width} flex shrink-0 flex-col gap-7 border-r border-dash-rule bg-dash-bg px-5 py-6 font-dash-sans text-dash-ink`}
     >
-      <BrandRow collapsed={collapsed} onToggle={onToggleCollapsed} />
+      <Brand collapsed={collapsed} />
       <nav className="flex-1">
         <SidebarNavList collapsed={collapsed} onNavigate={onNavigate} />
       </nav>
-      <NetworkStatusPanel collapsed={collapsed} />
+      <div className="flex flex-col gap-3">
+        <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapsed} />
+        <NetworkStatusPanel collapsed={collapsed} />
+      </div>
     </aside>
   );
 }
 
-/**
- * Logo and wordmark, linking to the site's home; on lg+ the collapse
- * toggle sits at the end of the row, under the logo once collapsed.
- */
-function BrandRow({
-  collapsed,
-  onToggle,
-}: {
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
+/** Logo and wordmark, linking to the site's home. */
+function Brand({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations("Brand");
-  const tShell = useTranslations("Dashboard.shell");
-  const toggleLabel = collapsed
-    ? tShell("expandSidebar")
-    : tShell("collapseSidebar");
 
   return (
-    <div
-      className={`flex items-center justify-between gap-2 ${collapsed ? "lg:flex-col lg:gap-4" : ""}`}
-    >
+    <div className={`flex ${collapsed ? "lg:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
         <Image
           src="/logo.png"
@@ -99,25 +87,43 @@ function BrandRow({
           className="h-auto w-10 shrink-0"
         />
         <span
-          className={`font-display text-[16px] font-semibold tracking-[0.16em] uppercase ${collapsed ? "lg:hidden" : ""}`}
+          className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "lg:hidden" : ""}`}
         >
           {t("name")}
         </span>
       </Link>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={toggleLabel}
-        aria-expanded={!collapsed}
-        title={collapsed ? toggleLabel : undefined}
-        className="hidden p-1 text-dash-ink-3 transition-colors hover:text-dash-ink lg:flex"
-      >
-        {collapsed ? (
-          <ChevronDoubleRightIcon size={16} />
-        ) : (
-          <ChevronDoubleLeftIcon size={16} />
-        )}
-      </button>
     </div>
+  );
+}
+
+/**
+ * lg+ only — an off-canvas drawer has nothing to collapse. At the foot
+ * of the rail, right-aligned, centered once collapsed.
+ */
+function CollapseToggle({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const t = useTranslations("Dashboard.shell");
+  const label = collapsed ? t("expandSidebar") : t("collapseSidebar");
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-expanded={!collapsed}
+      title={collapsed ? label : undefined}
+      className={`hidden p-1 text-dash-ink-3 transition-colors hover:text-dash-ink lg:flex ${collapsed ? "lg:self-center" : "lg:self-end"}`}
+    >
+      {collapsed ? (
+        <ChevronDoubleRightIcon size={16} />
+      ) : (
+        <ChevronDoubleLeftIcon size={16} />
+      )}
+    </button>
   );
 }

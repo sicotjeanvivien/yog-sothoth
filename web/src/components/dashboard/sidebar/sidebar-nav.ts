@@ -23,16 +23,13 @@ export type OpenNavEntry = {
 };
 
 /**
- * An entry without a page: shown with a lock and a status, never a
- * link. It has no `href` on purpose — there is nothing to point at.
- *
- * - `statusKey` i18n key, relative to `Dashboard.Sidebar.status`.
+ * An entry without a page: shown with a lock, never a link. It has no
+ * `href` on purpose — there is nothing to point at.
  */
 export type ClosedNavEntry = {
   kind: "closed";
   key: ClosedNavKey;
   labelKey: string;
-  statusKey: "comingSoon" | "notObserved";
 };
 
 export type SidebarNavEntry = OpenNavEntry | ClosedNavEntry;
@@ -57,27 +54,23 @@ export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
         kind: "closed",
         key: "meteoraDammV2",
         labelKey: "meteoraDammV2",
-        statusKey: "comingSoon",
       },
       {
         kind: "closed",
         key: "meteoraDlmm",
         labelKey: "meteoraDlmm",
-        statusKey: "notObserved",
       },
       {
         kind: "closed",
         key: "raydium",
         labelKey: "raydium",
-        statusKey: "comingSoon",
       },
       {
         kind: "closed",
         key: "orca",
         labelKey: "orca",
-        statusKey: "comingSoon",
       },
     ],
   },
-  { kind: "closed", key: "token", labelKey: "token", statusKey: "comingSoon" },
+  { kind: "closed", key: "token", labelKey: "token" },
 ] as const;

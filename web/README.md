@@ -166,13 +166,13 @@ popover previews.
 ## Dashboard frame
 
 The `(dashboard)` layout mounts `DashboardShell`: the sidebar (a sticky rail
-from `lg`, a drawer below it, collapsible on `lg+` with a cookie), the mobile
-header and the announcement banner.
+from `lg`, a drawer below it, collapsible on `lg+` from the toggle at its foot,
+with a cookie), the mobile header and the announcement banner.
 
 **Menu** — `sidebar/sidebar-nav.ts` is pure data: Overview, then the
 *Protocol* group (Meteora DAMM v2, Meteora DLMM, Raydium, Orca), then Token.
-An entry is `open` (it has a page and an `href`) or `closed` (shown with a lock
-and a status, no `href`). `SidebarNavList` renders a closed entry as a plain
+An entry is `open` (it has a page and an `href`) or `closed` (shown with a lock,
+no `href`). `SidebarNavList` renders a closed entry as a plain
 `<span>`, never a link; its test fails as soon as one becomes a link. To open
 an entry once its page exists, move its key from `ClosedNavKey` to
 `OpenNavKey` (`sidebar-keys.ts`) and give it an `href`. The compiler then asks
