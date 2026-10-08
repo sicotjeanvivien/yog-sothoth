@@ -177,8 +177,7 @@ no `href`). `SidebarNavList` renders a closed entry as a plain
 an entry once its page exists, move its key from `ClosedNavKey` to
 `OpenNavKey` (`sidebar-keys.ts`) and give it an `href`. The compiler then asks
 for its icon, which is all the collapsed rail shows. `/pools`, `/signals`,
-`/watchlist` and the pool detail are no longer in the menu and are reached by
-their URL only.
+`/watchlist` and the pool detail are no longer in the menu.
 
 **Fonts** — Geist (text) and Geist Mono (figures, addresses, times) are loaded
 by the dashboard layout alone (`next/font/google`), so the marketing never

@@ -51,7 +51,7 @@ export function Sidebar({
   onToggleCollapsed,
 }: SidebarProps) {
   const positioning =
-    "fixed top-0 left-0 z-40 h-screen transition-[transform,width] duration-200 ease-out lg:sticky lg:z-auto lg:translate-x-0";
+    "fixed top-0 left-0 z-40 h-dvh transition-[transform,width] duration-200 ease-out lg:sticky lg:z-auto lg:translate-x-0";
   const drawerState = isOpen ? "translate-x-0" : "-translate-x-full";
   const width = collapsed ? "w-[232px] lg:w-[76px] lg:px-3" : "w-[232px]";
 

@@ -3,15 +3,18 @@
 /**
  * The sidebar's menu: renders `SIDEBAR_NAV`.
  *
- * An open entry is a `Link`. A closed entry is a plain `<span>` with
- * its lock — no `href`, no `tabindex`, no handler — so it reacts
- * neither to a click nor to the keyboard. The test in
- * `__tests__/sidebar-nav-list.test.tsx` holds that line.
+ * An open entry is a `Link`. A closed entry is a disabled link — a
+ * `<span role="link" aria-disabled>`, the pagination's convention — with
+ * its lock: no `href`, no `tabindex`, no handler, so it reacts neither
+ * to a click nor to the keyboard. `__tests__/sidebar-nav-list.test.tsx`
+ * holds that line.
  *
  * On the collapsed lg+ rail only the open entries remain, as their
- * icon — wherever they sit, in a group or not: a lock without its
- * label says nothing. The mobile drawer ignores `collapsed`, so every
- * collapsed style is `lg:`-scoped.
+ * centred icon — wherever they sit, in a group or not; a group shows
+ * only if it holds one. A lock without its label says nothing. The
+ * mobile drawer ignores `collapsed`, so every collapsed style is
+ * `lg:`-scoped; `__tests__/sidebar-nav-list-collapsed.test.tsx` holds
+ * those rules.
  */
 
 import { useId, type FC } from "react";
@@ -80,8 +83,12 @@ export function SidebarNavList({ collapsed, onNavigate }: SidebarNavListProps) {
       {SIDEBAR_NAV.map((item) => {
         if (item.kind !== "group") return renderEntry(item, false);
         const captionId = `${groupIdPrefix}-${item.labelKey}`;
+        const holdsOpen = item.entries.some((entry) => entry.kind === "open");
         return (
-          <li key={item.labelKey}>
+          <li
+            key={item.labelKey}
+            className={holdsOpen ? undefined : hiddenWhenCollapsed}
+          >
             <span
               id={captionId}
               className={`${rowClass(false)} text-dash-ink-2 ${hiddenWhenCollapsed ?? ""}`}
@@ -136,7 +143,8 @@ function OpenEntry({
       // Native tooltip on the collapsed rail: the OS-managed one never
       // overlaps the page.
       title={collapsed ? label : undefined}
-      className={`${rowClass(nested)} transition-colors ${state} ${collapsed ? "lg:justify-center" : ""}`}
+      // Inset outline: the scrolling nav would clip one drawn outside.
+      className={`${rowClass(nested)} transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-dash-accent ${state} ${collapsed ? "lg:justify-center lg:px-0" : ""}`}
     >
       <span className={collapsed ? "lg:sr-only" : undefined}>{label}</span>
       {collapsed && (
@@ -147,18 +155,14 @@ function OpenEntry({
 }
 
 function ClosedEntry({ label, nested }: { label: string; nested: boolean }) {
-  const t = useTranslations("Dashboard.Sidebar");
-
-  // `aria-disabled` is not announced on a plain span: the sr-only text
-  // says what the lock shows.
   return (
     <span
+      role="link"
       aria-disabled="true"
       className={`${rowClass(nested)} cursor-default text-dash-ink-3`}
     >
       <span>{label}</span>
       <LockIcon size={11} />
-      <span className="sr-only">{t("unavailable")}</span>
     </span>
   );
 }

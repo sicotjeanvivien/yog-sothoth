@@ -14,11 +14,10 @@ export const dynamic = "force-dynamic";
  * (`/[locale]/overview`, `/[locale]/pools`, …) while sharing this
  * chrome.
  *
- * This file is intentionally thin: it is a Server Component and does
- * nothing but read the sidebar-collapse cookie (so the first paint
- * already has the user's preferred width — no flash) and mount the
- * (client) shell. All interactivity and layout mechanics live in
- * `DashboardShell`.
+ * This Server Component only prepares what the first paint needs: the
+ * sidebar-collapse cookie (no width flash), the announcement to show,
+ * and the dashboard's fonts. All interactivity and layout mechanics
+ * live in `DashboardShell`.
  */
 
 import { cookies } from "next/headers";
