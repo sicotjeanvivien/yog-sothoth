@@ -1,5 +1,5 @@
 //! Integration tests for migration 014 — the raw swaps are chunked by the day,
-//! compressed the day after their chunk closes, and kept 7 days.
+//! compressed a day after their chunk closes, and kept 7 days.
 //!
 //! Gated behind `integration-tests`. Both tests read the TimescaleDB catalog
 //! (`timescaledb_information.dimensions` and `.jobs`), which is where a later

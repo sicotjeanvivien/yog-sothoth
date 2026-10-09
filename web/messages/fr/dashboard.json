@@ -239,7 +239,7 @@
         "action": "Action",
         "copySignature": "Copier la signature",
         "viewOnSolscan": "Voir sur Solscan",
-        "empty": "Aucun swap observé pour le moment sur cette pool. Ils apparaîtront ici dès que des événements on-chain seront détectés."
+        "empty": "Aucun swap sur cette pool ces 7 derniers jours. Les nouveaux apparaîtront ici dès qu'ils seront détectés."
       },
       "liquidity": {
         "title": "Événements de liquidité récents",

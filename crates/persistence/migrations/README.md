@@ -718,9 +718,10 @@ calling `now()` produce two different timestamps, so a
 `(signature, event_index, timestamp)` index sees no conflict at all — a probe
 written that way "proves" a hole that does not exist.
 
-**Why we leave it alone.** The compression policy is 7 days and the indexer is
-live: events carry a current timestamp and always land in the open, uncompressed
-chunk. The expensive path is never taken. Putting `signature` into
+**Why we leave it alone.** The compression policy is 7 days — 1 day on the
+swaps since `014_swap_raw_sized_to_its_readers.sql` — and the indexer is live:
+events carry a current timestamp, a gRPC replay reaches back minutes, and both
+land in an uncompressed chunk. The expensive path is never taken. Putting `signature` into
 `compress_segmentby` would silence the warning at the cost of destroying the
 compression ratio — it is maximum-cardinality, so each segment would hold a
 single row.

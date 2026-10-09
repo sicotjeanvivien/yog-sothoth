@@ -1,6 +1,6 @@
 -- ============================================================================
 -- 014_swap_raw_sized_to_its_readers.sql — the raw swaps are kept one week, and
--- compressed the day after their chunk closes
+-- compressed a day after their chunk closes
 -- ============================================================================
 -- The swap hypertable moves from 7-day chunks, compressed 7 days after they
 -- close and dropped at 30 days, to:
@@ -17,14 +17,17 @@
 -- ## Why these numbers
 --
 -- The aggregates read the raw rows for a few hours only. The 7 days are not
--- what a reader needs: they are the time to react when the refresh stops (job
--- scheduler down, workers exhausted, Postgres down) — an hour never
--- materialized before its raw rows are dropped is lost for good. The
+-- what a reader needs: they buy the time to react when the refresh stops (job
+-- scheduler down, workers exhausted, Postgres down). That time is **6 days**,
+-- the refresh window — an hour pending longer is out of the policy's reach,
+-- and lost for good once its raw rows are dropped a day later. The
 -- materialization alarm of yog-signals is what tells you.
 --
 -- Compression waits one day after the chunk ends: that covers late arrivals
 -- (a gRPC replay reaches back at most ~40 min), and keeps today and yesterday
--- uncompressed, which is what the first page of a pool's swap history reads.
+-- uncompressed, which is what the first page of an active pool's swap history
+-- reads. A quiet pool's first page reaches into compressed chunks, decompressing
+-- only that pool's segment in each.
 --
 -- `start_offset` 6 days against `drop_after` 7 keeps the rule of
 -- `008_cagg_refresh_below_retention.sql` — `start_offset < drop_after` — with
