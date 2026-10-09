@@ -37,6 +37,28 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.3",
+    date: "2026-10-09",
+    summary:
+      "The dashboard is now organised by protocol, and raw swaps are kept for a week so the database stays within its disk.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          "The dashboard menu is organised by protocol: Overview, then Meteora DAMM v2, Meteora DLMM, Raydium and Orca, then Token. Only Overview is open for now; the other entries carry a lock until their page exists. The pool list, signals and watchlist pages are no longer in the menu.",
+          "A new look for the dashboard frame: one colour per role, and the Geist typeface.",
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          "Raw swap events are kept for 7 days instead of 30, and compressed one day after their day ends instead of seven: since every DAMM v2 pool is observed, they were outgrowing the disk. The hourly swap history that charts and analytics read is unaffected and still kept in full; a pool's list of individual swaps now goes back 7 days.",
+          "Next.js is updated to 16.3.8, following five advisories published on 7 October. None of them applied to this site's configuration.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.2",
     date: "2026-10-07",
     summary:
