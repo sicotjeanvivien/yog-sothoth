@@ -82,8 +82,8 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
     assert!(
         policies[0].0,
         "the compression delay must be the house 7 days — the one every other \
-         hypertable `001` compresses uses, `signals` excepted at 30 days — and \
-         the catalog declares {}",
+         hypertable `001` compresses uses, `signals` excepted at 30 days and \
+         the swaps at 1 day since 014 — and the catalog declares {}",
         policies[0].1
     );
 

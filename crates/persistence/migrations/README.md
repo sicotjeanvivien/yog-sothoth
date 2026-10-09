@@ -171,6 +171,18 @@ never evaluated — and this is not it.
 
 > **`start_offset` must be STRICTLY smaller than `drop_after`.**
 
+The values, per raw hypertable:
+
+| raw hypertable | chunk | compressed after | `drop_after` | its aggregate's `start_offset` | set by |
+|---|---|---|---|---|---|
+| `meteora_damm_v2_swap_events` | 1 day | 1 day | **7 days** | **6 days** | `014` |
+| `meteora_damm_v2_liquidity_events`, `…_claim_position_fee_events`, `…_claim_reward_events` | 7 days | 7 days | 30 days | 29 days | `001`, `008` |
+
+⚠️ `001_baseline.sql:827-837` still declares the swaps at 7 / 7 / 30 days, and
+`008` their refresh at 29 — forward-only, so neither can be corrected. For the
+swaps, `014_swap_raw_sized_to_its_readers.sql` is the file that holds;
+`tests/swap_retention.rs` reads its row of this table out of the catalog.
+
 A refresh must never look at a range whose raw rows may already be gone.
 `drop_chunks` logs an invalidation over what it removes; a refresh is
 invalidation-driven, so a window containing that invalidation recomputes the
@@ -178,14 +190,16 @@ range from rows that no longer exist and writes back the nothing it finds —
 **deleting** the materialized buckets. The retention never touches the
 aggregate; the refresh does.
 
-⚠️ **The 7-day chunk geometry does not protect you.** A chunk is dropped only
-once entirely older than `drop_after`, which *looks* like it keeps the dropped
-range clear of a window that only overshoots by a day. It does not, because
-retention runs **daily**: a chunk is dropped at the first run after its end
-crosses the line, so its newest rows are then between 30 and 31 days old —
-inside a 31-day window. Measured 10 August 2026 on the real geometry:
-**2160 materialized buckets → 2136, exactly 24 — one day of history per chunk
-dropped**, permanently, about one day in seven beyond the 30-day line.
+⚠️ **Chunk geometry does not protect you.** A chunk is dropped only once
+entirely older than `drop_after`, which *looks* like it keeps the dropped range
+clear of a window that only overshoots by a day. It does not, because retention
+runs **daily**: a chunk is dropped at the first run after its end crosses the
+line, so its newest rows are then between `drop_after` and `drop_after` + 1 day
+old — inside a window that reaches one day further. Measured 10 August 2026 on
+7-day chunks and a 30-day retention: **2160 materialized buckets → 2136,
+exactly 24 — one day of history per chunk dropped**, permanently, about one day
+in seven beyond the 30-day line. On the swaps' 1-day chunks, that would be every
+day.
 
 Both directions are asserted by `tests/cagg_retention.rs`: the rule itself, read
 out of the TimescaleDB catalog for all four pairs, and the behaviour it exists
@@ -252,10 +266,12 @@ This is not a hypothetical footgun: the paragraph on 007 above says the next
 cagg rebuild *"will need a backfill"*, and a full-range refresh is the obvious
 way to do one. It is the wrong way. A backfill must be run in **bounded slices
 that stay inside the retention** — `CALL refresh_continuous_aggregate(cagg,
-now() - INTERVAL '29 days', now() - INTERVAL '1 hour')` — and history older than
-the raw retention cannot be rebuilt at all, because the rows it was computed
-from are gone. That is the real cost of a late rebuild, and it is why columns
-belong in the rebuild you are already doing.
+now() - <start_offset>, now() - INTERVAL '1 hour')`, with the aggregate's own
+`start_offset` from the table above. ☠️ **That is 6 days on the swaps, not 29**:
+29 would reach three weeks past their raw rows and delete those buckets. History
+older than the raw retention cannot be rebuilt at all, because the rows it was
+computed from are gone. That is the real cost of a late rebuild, and it is why
+columns belong in the rebuild you are already doing.
 
 `tests/cagg_retention.rs` pins this behaviour too, so the warning stays
 falsifiable: if TimescaleDB ever stops recomputing over dropped ranges, that
