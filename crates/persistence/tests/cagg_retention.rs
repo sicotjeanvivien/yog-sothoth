@@ -150,11 +150,12 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
 /// A first version of this test seeded 40 days, called `drop_chunks(older_than
 /// => '30 days')` and refreshed over `[now-31d, now-1h]` — and it stayed green
 /// with `start_offset` back at 31 days, which is exactly the regression it was
-/// written to catch. The reason is chunk geometry: raw chunks span 7 days and
-/// are dropped only once **entirely** older than `drop_after`, so a single
-/// manual drop clears data 30 to 37 days old depending on alignment. Measured
-/// on that fixture, the youngest dropped row was 32 days old — a 31-day window
-/// never reached it, and nothing was destroyed.
+/// written to catch. The reason is chunk geometry: the swap chunks then spanned
+/// 7 days, and a chunk is dropped only once **entirely** older than
+/// `drop_after`, so a single manual drop cleared data 30 to 37 days old
+/// depending on alignment. Measured on that fixture, the youngest dropped row
+/// was 32 days old — a 31-day window never reached it, and nothing was
+/// destroyed.
 ///
 /// In production the alignment is not a lottery, because retention runs
 /// **daily**: a chunk is dropped at the first run after its end crosses
@@ -164,9 +165,10 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
 ///
 /// This helper reproduces that instant instead of waiting for it: it takes a
 /// real chunk boundary `B`, treats `B + drop_after` as "now", and returns the
-/// window the policy would then compute. Measured on a probe with the real
-/// 7-day geometry: overshooting the cut by a day erased **24 buckets — exactly
-/// one day**; stopping a day short of it erased none ("already up-to-date").
+/// window the policy would then compute. Measured on a probe with the 7-day
+/// chunks the swaps then had: overshooting the cut by a day erased **24
+/// buckets — exactly one day**; stopping a day short of it erased none
+/// ("already up-to-date").
 struct RetentionMoment {
     /// The cut: chunks ending at or before this are dropped.
     boundary: DateTime<Utc>,
@@ -256,8 +258,8 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
     .await
     .unwrap();
 
-    // 90 days, one swap an hour — enough to span several 7-day chunks on both
-    // sides of the retention cut.
+    // 90 days, one swap an hour — enough to span several chunks on both sides
+    // of the retention cut.
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -337,8 +339,8 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
         after_refresh, before,
         "the refresh reached past the retention cut, recomputed a range whose \
          raw rows were gone, and wrote back the nothing it found. With \
-         start_offset one day beyond drop_after this loses exactly 24 buckets — \
-         one day of history per chunk dropped, for ever."
+         start_offset one day beyond drop_after this loses up to 24 buckets — \
+         up to one day of history per chunk dropped, for ever."
     );
     assert_eq!(
         oldest_after, oldest_before,

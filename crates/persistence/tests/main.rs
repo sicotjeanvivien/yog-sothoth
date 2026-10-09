@@ -54,6 +54,7 @@ mod signal_list;
 mod split_position;
 mod statement_timeout;
 mod swap_flow;
+mod swap_retention;
 mod token_metadata;
 mod update_pool_fees;
 mod update_reward_duration;
