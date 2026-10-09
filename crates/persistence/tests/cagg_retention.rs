@@ -165,9 +165,10 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
 ///
 /// This helper reproduces that instant instead of waiting for it: it takes a
 /// real chunk boundary `B`, treats `B + drop_after` as "now", and returns the
-/// window the policy would then compute. Measured on a probe with the real
-/// 7-day geometry: overshooting the cut by a day erased **24 buckets — exactly
-/// one day**; stopping a day short of it erased none ("already up-to-date").
+/// window the policy would then compute. Measured on a probe with the 7-day
+/// chunks the swaps then had: overshooting the cut by a day erased **24
+/// buckets — exactly one day**; stopping a day short of it erased none
+/// ("already up-to-date").
 struct RetentionMoment {
     /// The cut: chunks ending at or before this are dropped.
     boundary: DateTime<Utc>,

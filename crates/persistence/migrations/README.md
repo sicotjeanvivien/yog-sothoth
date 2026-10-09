@@ -743,7 +743,8 @@ migration in the project tracker).
 test puts one there.** The local Postgres runs with
 `timescaledb.max_background_workers = 0` (`docker-compose.yml`, for the reason
 in `CLAUDE.md`), so the compression policies never fire: **0 compressed chunk
-out of 45** on a typical dev database. Production compresses at 7 days.
+out of 45** on a typical dev database. Production compresses a swap chunk a
+day after it closes, the other event tables at 7 days.
 
 What the scheduler will not do, a test can: `compress_chunk` is an ordinary
 function call, it needs no background worker, and `tests/price_compression.rs`

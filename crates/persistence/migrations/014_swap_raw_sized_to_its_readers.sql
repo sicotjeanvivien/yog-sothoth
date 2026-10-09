@@ -37,6 +37,11 @@
 --   * `001_baseline.sql` (the swap section of §12, and §13's comment on the
 --     swap aggregate) and `008` still describe the swaps at 7 / 30 / 29 days.
 --     For the swaps, this file is the one that holds.
+--   * On a database older than 7 days, the first retention run after this
+--     migration drops every swap chunk past that line at once, and the refresh
+--     no longer reaches past 6 days: an hour not materialized by then is lost.
+--     Before applying, `yog_cagg_materialization_backlog()` must show the
+--     swap aggregate's `oldest_pending_at` younger than 6 days, or NULL.
 --   * A bounded backfill of `meteora_damm_v2_swap_events_hourly` must stay
 --     within **6 days**, not 29: over 7 days its raw rows are gone, and a
 --     refresh over that range deletes the buckets (`migrations/README.md`).

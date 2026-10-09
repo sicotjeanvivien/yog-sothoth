@@ -512,9 +512,10 @@ implied-price rule above.
 ### A refresh policy must stay inside its retention policy
 
 The four hourly continuous aggregates each sit on a raw hypertable with a
-retention: 7 days for the swaps (migration `014`, which also cuts them into
-1-day chunks compressed the next day), 30 days for the three others. The
-relation between the two policies is a **rule, not a preference**:
+retention: 7 days for the swaps (`014_swap_raw_sized_to_its_readers.sql`,
+which also cuts them into 1-day chunks, each compressed a day after it closes),
+30 days for the three others. The relation between the two policies is a
+**rule, not a preference**:
 
 ```
 start_offset  <  drop_after
@@ -525,8 +526,8 @@ invalidation-driven — so a refresh window that reaches past the retention
 recomputes a range whose raw rows are gone and writes back nothing, **deleting**
 the materialized buckets. The retention never touches the aggregate; the refresh
 does. Migration `008` moved the four policies to `29 days` for that reason, and
-`014` the swaps' to `6 days`; the values per table, the measurement, and why
-chunk geometry does not save you, are in
+the swaps' moved again to `6 days` with their retention; the values per table,
+the measurement, and why chunk geometry does not save you, are in
 [`migrations/README.md`](./migrations/README.md).
 
 ☠️ **The rule does not close the hole, it only closes the policy.** A refresh
