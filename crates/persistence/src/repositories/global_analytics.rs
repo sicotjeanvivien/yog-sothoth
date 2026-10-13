@@ -1,7 +1,8 @@
 //! PostgreSQL implementation of [`GlobalAnalyticsRepository`]: the last 24 h
 //! of yog-analytic's protocol aggregate, and the last TVL it measured for each
-//! protocol. A measurement older than the previous hour reads as NULL, so a
-//! stopped writer shows instead of publishing yesterday's TVL as current.
+//! protocol. Each reads as NULL when the writer's last hour written, or last
+//! TVL measured, is older than the previous hour: a stopped or catching-up
+//! writer shows instead of publishing a partial sum as current.
 
 mod rows;
 
@@ -30,14 +31,17 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
         let row = sqlx::query_as!(
             GlobalAnalyticsRow,
             r#"
-            WITH tvl AS (
+            WITH bound AS (
+                SELECT date_trunc('hour', NOW(), 'UTC') - INTERVAL '1 hour' AS oldest
+            ),
+            tvl AS (
                 SELECT
                     SUM(tvl_usd)                           AS total_tvl_usd,
                     COALESCE(SUM(pools_priced), 0)::BIGINT AS pools_priced
                 FROM (
                     SELECT DISTINCT ON (protocol) tvl_usd, pools_priced
-                    FROM analytic_protocol_tvl
-                    WHERE bucket >= date_trunc('hour', NOW(), 'UTC') - INTERVAL '1 hour'
+                    FROM analytic_protocol_tvl, bound
+                    WHERE bucket >= bound.oldest
                     ORDER BY protocol, bucket DESC
                 ) latest
             ),
@@ -51,6 +55,8 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
                         AS swap_buckets_priced_24h
                 FROM analytic_protocol_hourly
                 WHERE bucket > NOW() - INTERVAL '24 hours'
+                  AND (SELECT MAX(bucket) FROM analytic_hours)
+                      >= (SELECT oldest FROM bound)
             )
             SELECT
                 tvl.total_tvl_usd  AS "total_tvl_usd?",

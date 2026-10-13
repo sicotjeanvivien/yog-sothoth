@@ -526,9 +526,10 @@ query. `tests/analytic_writer.rs` runs it under
 `meteora_damm_v2_pool_hourly_activity` on the same closed hours.
 
 `/api/stats` reads the last 24 h of the protocol aggregate and the last TVL of
-each protocol (`repositories/global_analytics.rs`). A TVL measured before the
-previous hour reads as NULL: a stopped writer shows, as `pool_current_tvl` does
-for a stale price.
+each protocol (`repositories/global_analytics.rs`). Each reads as NULL when the
+last hour written, or the last TVL measured, is older than the previous hour: a
+stopped or catching-up writer shows, as `pool_current_tvl` does for a stale
+price.
 
 The DAMM v2 facts read `meteora_damm_v2_swap_events_hourly_priced` with the
 formulas of `swap_parts` (010). That view reads the swap aggregate in real

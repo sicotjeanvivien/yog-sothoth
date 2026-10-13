@@ -81,7 +81,10 @@ type TablePrivileges<'a> = (&'a str, &'a [RolePrivileges<'a>]);
 const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     (
         "analytic_hours",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[
+            ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
+            ("yog_api", &["SELECT"]),
+        ],
     ),
     (
         "analytic_pool_hourly",

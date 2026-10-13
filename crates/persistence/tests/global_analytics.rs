@@ -118,10 +118,19 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
 /// The facts and the aggregate of every hour a fixture trades in, open as the
 /// writer leaves the current one.
 async fn write_facts(pool: &PgPool) {
-    let now = Utc::now();
+    write_facts_through(pool, 0).await;
+}
+
+/// As [`write_facts`], by a writer whose last hour written is `hours_ago` back
+/// on the database's clock.
+async fn write_facts_through(pool: &PgPool, hours_ago: i64) {
+    let now: DateTime<Utc> = sqlx::query_scalar("SELECT now()")
+        .fetch_one(pool)
+        .await
+        .unwrap();
     let cycle = CycleWrite {
         from: hour_of(now - Duration::hours(32)),
-        through: hour_of(now),
+        through: hour_of(now - Duration::hours(hours_ago)),
         freeze_through: None,
         tvl_hour: None,
         at: now,
@@ -273,6 +282,38 @@ async fn the_usd_sums_equal_the_activity_view(pool: PgPool) {
     let analytics = read(&pool).await;
 
     assert_eq!((analytics.volume_24h_usd, analytics.fees_24h_usd), view);
+}
+
+/// Against the writer's age dropped (the hours of a writer stopped two hours
+/// back read) or narrowed to the current hour (the previous hour's not read).
+#[sqlx::test]
+async fn a_writer_behind_the_previous_hour_reads_as_no_volume(pool: PgPool) {
+    let priced = setup_pool(&pool, 1, Some("180.0")).await;
+    insert_bucket(&pool, &priced, "p3", 3).await;
+
+    write_facts_through(&pool, 2).await;
+    let facts: i64 = sqlx::query_scalar("SELECT count(*) FROM analytic_protocol_hourly")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(facts, 1, "the hour traded is in the aggregate");
+    let stopped = read(&pool).await;
+    assert_eq!((stopped.volume_24h_usd, stopped.fees_24h_usd), (None, None));
+    assert_eq!(
+        (stopped.swap_buckets_24h, stopped.swap_buckets_priced_24h),
+        (0, 0)
+    );
+
+    write_facts_through(&pool, 1).await;
+    let previous_hour = read(&pool).await;
+    assert!(previous_hour.volume_24h_usd.is_some());
+    assert_eq!(
+        (
+            previous_hour.swap_buckets_24h,
+            previous_hour.swap_buckets_priced_24h
+        ),
+        (1, 1)
+    );
 }
 
 /// Against every measurement summed (160 over 6 pools) or a single protocol
