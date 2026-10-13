@@ -1,8 +1,8 @@
 //! PostgreSQL implementation of [`GlobalAnalyticsRepository`]: the last 24 h
 //! of yog-analytic's protocol aggregate, and the last TVL it measured for each
-//! protocol. Each reads as NULL when the writer's last hour written, or last
-//! TVL measured, is older than the previous hour: a stopped or catching-up
-//! writer shows instead of publishing a partial sum as current.
+//! protocol. The volume reads as NULL unless the hours written span the window
+//! through the previous hour, the TVL unless measured since then: a stopped,
+//! catching-up or new writer shows instead of publishing a partial sum.
 
 mod rows;
 
@@ -32,7 +32,12 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
             GlobalAnalyticsRow,
             r#"
             WITH bound AS (
-                SELECT date_trunc('hour', NOW(), 'UTC') - INTERVAL '1 hour' AS oldest
+                SELECT date_trunc('hour', NOW(), 'UTC') - INTERVAL '23 hours' AS first_hour,
+                       date_trunc('hour', NOW(), 'UTC') - INTERVAL '1 hour'   AS oldest
+            ),
+            written AS (
+                SELECT MIN(bucket) AS first_hour, MAX(bucket) AS last_hour
+                FROM analytic_hours
             ),
             tvl AS (
                 SELECT
@@ -53,10 +58,10 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
                         AS swap_buckets_24h,
                     COALESCE(SUM(active_pools_valued), 0)::BIGINT
                         AS swap_buckets_priced_24h
-                FROM analytic_protocol_hourly
-                WHERE bucket > NOW() - INTERVAL '24 hours'
-                  AND (SELECT MAX(bucket) FROM analytic_hours)
-                      >= (SELECT oldest FROM bound)
+                FROM analytic_protocol_hourly, bound, written
+                WHERE bucket >= bound.first_hour
+                  AND written.first_hour <= bound.first_hour
+                  AND written.last_hour >= bound.oldest
             )
             SELECT
                 tvl.total_tvl_usd  AS "total_tvl_usd?",

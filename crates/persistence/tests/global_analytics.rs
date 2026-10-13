@@ -51,7 +51,7 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
     }
 
     // Only ever token B: token A stays the unlisted side, so a priced pool is
-    // valued through the implied rate — the shape this migration introduced.
+    // valued through the implied rate.
     //
     // Sampled hourly rather than once at `long_ago`: since migration 005 the
     // as-of lookup reaches back at most `yog_price_max_age_asof()` from the
@@ -118,19 +118,19 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
 /// The facts and the aggregate of every hour a fixture trades in, open as the
 /// writer leaves the current one.
 async fn write_facts(pool: &PgPool) {
-    write_facts_through(pool, 0).await;
+    write_facts_spanning(pool, 32, 0).await;
 }
 
-/// As [`write_facts`], by a writer whose last hour written is `hours_ago` back
-/// on the database's clock.
-async fn write_facts_through(pool: &PgPool, hours_ago: i64) {
+/// As [`write_facts`], by a writer whose first and last hours written are
+/// `first` and `last` hours back on the database's clock.
+async fn write_facts_spanning(pool: &PgPool, first: i64, last: i64) {
     let now: DateTime<Utc> = sqlx::query_scalar("SELECT now()")
         .fetch_one(pool)
         .await
         .unwrap();
     let cycle = CycleWrite {
-        from: hour_of(now - Duration::hours(32)),
-        through: hour_of(now - Duration::hours(hours_ago)),
+        from: hour_of(now - Duration::hours(first)),
+        through: hour_of(now - Duration::hours(last)),
         freeze_through: None,
         tvl_hour: None,
         at: now,
@@ -291,7 +291,7 @@ async fn a_writer_behind_the_previous_hour_reads_as_no_volume(pool: PgPool) {
     let priced = setup_pool(&pool, 1, Some("180.0")).await;
     insert_bucket(&pool, &priced, "p3", 3).await;
 
-    write_facts_through(&pool, 2).await;
+    write_facts_spanning(&pool, 32, 2).await;
     let facts: i64 = sqlx::query_scalar("SELECT count(*) FROM analytic_protocol_hourly")
         .fetch_one(&pool)
         .await
@@ -304,13 +304,45 @@ async fn a_writer_behind_the_previous_hour_reads_as_no_volume(pool: PgPool) {
         (0, 0)
     );
 
-    write_facts_through(&pool, 1).await;
+    write_facts_spanning(&pool, 32, 1).await;
     let previous_hour = read(&pool).await;
     assert!(previous_hour.volume_24h_usd.is_some());
     assert_eq!(
         (
             previous_hour.swap_buckets_24h,
             previous_hour.swap_buckets_priced_24h
+        ),
+        (1, 1)
+    );
+}
+
+/// Against the writer's first hour not checked (the 10 hours of a new writer
+/// read) or required an hour early (the window's first hour not enough).
+#[sqlx::test]
+async fn a_writer_younger_than_the_window_reads_as_no_volume(pool: PgPool) {
+    let priced = setup_pool(&pool, 1, Some("180.0")).await;
+    insert_bucket(&pool, &priced, "p3", 3).await;
+
+    write_facts_spanning(&pool, 10, 0).await;
+    let facts: i64 = sqlx::query_scalar("SELECT count(*) FROM analytic_protocol_hourly")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(facts, 1, "the hour traded is in the aggregate");
+    let young = read(&pool).await;
+    assert_eq!((young.volume_24h_usd, young.fees_24h_usd), (None, None));
+    assert_eq!(
+        (young.swap_buckets_24h, young.swap_buckets_priced_24h),
+        (0, 0)
+    );
+
+    write_facts_spanning(&pool, 23, 0).await;
+    let whole_window = read(&pool).await;
+    assert!(whole_window.volume_24h_usd.is_some());
+    assert_eq!(
+        (
+            whole_window.swap_buckets_24h,
+            whole_window.swap_buckets_priced_24h
         ),
         (1, 1)
     );
