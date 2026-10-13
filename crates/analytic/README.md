@@ -13,7 +13,8 @@ The writer prices each of them once, and the readers read sums.
 
 It writes under the `yog_analytic` role, which may write the four `analytic_*`
 tables and nothing else ([`crates/README.md`](../README.md#database-roles)).
-No reader is wired to these tables yet.
+`/api/stats` reads the protocol aggregate and the last TVL measured
+(`repositories/global_analytics.rs` in `yog-persistence`).
 
 ## Layout
 

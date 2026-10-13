@@ -1,18 +1,23 @@
-//! Integration test for the protocol-wide coverage counters behind
-//! `GET /api/stats` (`PgGlobalAnalyticsRepository::global_analytics`).
-//!
-//! Gated behind `integration-tests`. Exists because the equivalent counters in
-//! `pool_analytics` are covered and these were not: `rows_tests.rs` asserts the
-//! row → domain mapping, which cannot catch the two `COUNT(*) FILTER` clauses
-//! drifting from their per-pool twins. `/api/stats` is the most-read endpoint
-//! of the dashboard; the number it prints deserves a test that can go red.
+//! `PgGlobalAnalyticsRepository`, the read behind `GET /api/stats`: its
+//! counters over the protocol aggregate, written here by `PgAnalyticRepository`
+//! from swaps, and its TVL over the measurements as the writer leaves them.
 
 use super::helpers::{pk, price_mint};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, DurationRound, Utc};
+use rust_decimal::Decimal;
 use sqlx::PgPool;
 
-use yog_core::domain::{GlobalAnalyticsRepository, PoolAnalyticsRepository};
-use yog_persistence::{PgGlobalAnalyticsRepository, PgPoolAnalyticsRepository};
+use yog_core::domain::{
+    AnalyticRepository, CycleWrite, GlobalAnalytics, GlobalAnalyticsRepository,
+    PoolAnalyticsRepository,
+};
+use yog_persistence::{
+    PgAnalyticRepository, PgGlobalAnalyticsRepository, PgPoolAnalyticsRepository,
+};
+
+fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {
+    at.duration_trunc(Duration::hours(1)).unwrap()
+}
 
 /// One pool, its two mints registered with decimals, optionally priced.
 async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
@@ -109,21 +114,58 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
     }
 }
 
+/// The facts and the aggregate of every hour a fixture trades in, open as the
+/// writer leaves the current one.
+async fn write_facts(pool: &PgPool) {
+    let now = Utc::now();
+    let cycle = CycleWrite {
+        from: hour_of(now - Duration::hours(32)),
+        through: hour_of(now),
+        freeze_through: None,
+        tvl_hour: None,
+        at: now,
+    };
+    PgAnalyticRepository::new(pool.clone())
+        .write_cycle(&cycle)
+        .await
+        .unwrap();
+}
+
+/// A TVL measurement of the hour `hours_ago` back.
+async fn measure_tvl(pool: &PgPool, protocol: &str, hours_ago: i64, tvl_usd: i64, priced: i64) {
+    sqlx::query(
+        "INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
+         VALUES ($1, $2, $3, $4, $2)",
+    )
+    .bind(protocol)
+    .bind(hour_of(Utc::now() - Duration::hours(hours_ago)))
+    .bind(tvl_usd)
+    .bind(priced)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn read(pool: &PgPool) -> GlobalAnalytics {
+    PgGlobalAnalyticsRepository::new(pool.clone())
+        .global_analytics()
+        .await
+        .unwrap()
+}
+
+/// Against the valued count read off the wrong column: the unpriced pool's
+/// hour counted as valued, 3 of 3.
 #[sqlx::test]
 async fn global_coverage_sums_every_pool_priced_or_not(pool: PgPool) {
-    // Pool 1 is priceable and trades two hours; pool 2 has no price at all and
-    // trades one. The global counters must report 2 valued buckets out of 3 —
-    // the whole point being that the 112 (or whatever) USD figure next to them
-    // covers two thirds of the activity, and says so.
     let priced = setup_pool(&pool, 1, Some("180.0")).await;
     let unpriced = setup_pool(&pool, 2, None).await;
 
     insert_bucket(&pool, &priced, "p1", 1).await;
     insert_bucket(&pool, &priced, "p2", 3).await;
     insert_bucket(&pool, &unpriced, "u1", 2).await;
+    write_facts(&pool).await;
 
-    let repo = PgGlobalAnalyticsRepository::new(pool.clone());
-    let analytics = repo.global_analytics().await.unwrap();
+    let analytics = read(&pool).await;
 
     assert_eq!(
         analytics.swap_buckets_24h, 3,
@@ -140,53 +182,51 @@ async fn global_coverage_sums_every_pool_priced_or_not(pool: PgPool) {
     );
 }
 
+/// Against a window wider than 24 h: the 30 h-old hour, written, counted.
 #[sqlx::test]
 async fn global_coverage_ignores_activity_outside_the_window(pool: PgPool) {
-    // The counters must obey the same 24h window as the sums they qualify;
-    // a denominator on a wider window would understate coverage forever.
     let priced = setup_pool(&pool, 1, Some("180.0")).await;
     insert_bucket(&pool, &priced, "recent", 2).await;
     insert_bucket(&pool, &priced, "old", 30).await;
+    write_facts(&pool).await;
 
-    let repo = PgGlobalAnalyticsRepository::new(pool.clone());
-    let analytics = repo.global_analytics().await.unwrap();
+    let hours: i64 = sqlx::query_scalar("SELECT count(*) FROM analytic_protocol_hourly")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(hours, 2, "both hours are in the aggregate");
+
+    let analytics = read(&pool).await;
 
     assert_eq!(analytics.swap_buckets_24h, 1, "the 30h-old bucket is out");
     assert_eq!(analytics.swap_buckets_priced_24h, 1);
 }
 
+/// Against a `COALESCE` dropped: an empty window sums to NULL, which the row
+/// refuses for a count.
 #[sqlx::test]
 async fn global_coverage_is_zero_zero_on_an_empty_universe(pool: PgPool) {
-    // No pools, no swaps: COUNT never returns NULL, so the counters must be 0
-    // and the USD sums None — "nothing happened", not "unknown coverage".
-    let repo = PgGlobalAnalyticsRepository::new(pool.clone());
-    let analytics = repo.global_analytics().await.unwrap();
+    let analytics = read(&pool).await;
 
     assert_eq!(analytics.swap_buckets_24h, 0);
     assert_eq!(analytics.swap_buckets_priced_24h, 0);
     assert_eq!(analytics.volume_24h_usd, None);
+    assert_eq!((analytics.total_tvl_usd, analytics.pools_priced), (None, 0));
 }
 
+/// Against the aggregate and the activity view, read per pool, counting
+/// different buckets of the same hours.
 #[sqlx::test]
 async fn the_global_counters_agree_with_the_per_pool_ones(pool: PgPool) {
-    // The reason this file's header gives for existing — the two `COUNT(*)
-    // FILTER` clauses drifting apart — was not actually asserted anywhere.
-    // Here it is: same fixture, both read paths, one comparison.
-    //
-    // The relation is equality, not merely "close": every bucket the global
-    // sees belongs to some pool, and both queries share the same window and
-    // the same predicates.
     let priced = setup_pool(&pool, 1, Some("180.0")).await;
     let unpriced = setup_pool(&pool, 2, None).await;
 
     insert_bucket(&pool, &priced, "p1", 1).await;
     insert_bucket(&pool, &priced, "p2", 3).await;
     insert_bucket(&pool, &unpriced, "u1", 2).await;
+    write_facts(&pool).await;
 
-    let global = PgGlobalAnalyticsRepository::new(pool.clone())
-        .global_analytics()
-        .await
-        .unwrap();
+    let global = read(&pool).await;
 
     let per_pool = PgPoolAnalyticsRepository::new(pool.clone())
         .batch_compute(&[pk(1), pk(2)])
@@ -207,5 +247,37 @@ async fn the_global_counters_agree_with_the_per_pool_ones(pool: PgPool) {
     assert_eq!(
         (global.swap_buckets_24h, global.swap_buckets_priced_24h),
         (3, 2)
+    );
+}
+
+/// Against every measurement summed (160 over 6 pools) or a single protocol
+/// read (100 over 3).
+#[sqlx::test]
+async fn the_tvl_is_the_last_measurement_of_each_protocol_summed(pool: PgPool) {
+    measure_tvl(&pool, "meteora_damm_v2", 1, 10, 1).await;
+    measure_tvl(&pool, "meteora_damm_v2", 0, 100, 3).await;
+    measure_tvl(&pool, "meteora_dlmm", 0, 50, 2).await;
+
+    let analytics = read(&pool).await;
+
+    assert_eq!(
+        (analytics.total_tvl_usd, analytics.pools_priced),
+        (Some(Decimal::from(150)), 5)
+    );
+}
+
+/// Against the age limit dropped (the measurement two hours back read) or
+/// narrowed to the current hour (the previous hour's not read).
+#[sqlx::test]
+async fn a_tvl_measured_before_the_previous_hour_reads_as_null(pool: PgPool) {
+    measure_tvl(&pool, "meteora_damm_v2", 2, 100, 3).await;
+    let stale = read(&pool).await;
+    assert_eq!((stale.total_tvl_usd, stale.pools_priced), (None, 0));
+
+    measure_tvl(&pool, "meteora_damm_v2", 1, 80, 2).await;
+    let previous_hour = read(&pool).await;
+    assert_eq!(
+        (previous_hour.total_tvl_usd, previous_hour.pools_priced),
+        (Some(Decimal::from(80)), 2)
     );
 }

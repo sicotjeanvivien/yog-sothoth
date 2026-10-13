@@ -4,9 +4,7 @@ use crate::{RepositoryResult, domain::GlobalAnalytics};
 
 /// Read-only access to protocol-wide aggregate analytics.
 ///
-/// Implementations live in `yog-persistence`. The repository never writes; it
-/// rolls up the per-pool valuation tables into a single [`GlobalAnalytics`]
-/// snapshot at query time.
+/// Implementations live in `yog-persistence`. The repository never writes.
 #[async_trait]
 pub trait GlobalAnalyticsRepository: Send + Sync {
     /// Compute the protocol-wide aggregate analytics: summed TVL (with its
