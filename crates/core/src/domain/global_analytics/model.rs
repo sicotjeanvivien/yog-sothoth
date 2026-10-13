@@ -7,11 +7,6 @@
 //! universe, the analytics counterpart of [`crate::domain::NetworkStatus`].
 //! The two share only the trade-time USD valuation *logic*, not identity or
 //! lifecycle — hence a separate module.
-//!
-//! Nothing here is persisted: like `PoolAnalytics`, the values are computed on
-//! demand by combining RPC-sourced tables with the context price tables. When
-//! materialisation becomes necessary it will move to a dedicated analytics
-//! store, never written by the indexer or by yog-context.
 
 use rust_decimal::Decimal;
 
@@ -23,8 +18,7 @@ use rust_decimal::Decimal;
 /// price.
 ///
 ///   - `total_tvl_usd` is the summed current TVL across all pools that have a
-///     current state and a known price for both tokens. `None` only when not a
-///     single pool is priceable.
+///     current state and a known price for both tokens.
 ///   - `pools_priced` is how many pools contributed to `total_tvl_usd` — the
 ///     coverage numerator. The denominator (total observed) lives on the pool
 ///     inventory counts; the presentation layer derives the "N / M priced"

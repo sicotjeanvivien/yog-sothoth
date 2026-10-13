@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH bound AS (\n                SELECT date_trunc('hour', NOW(), 'UTC') - INTERVAL '23 hours' AS first_hour,\n                       date_trunc('hour', NOW(), 'UTC') - INTERVAL '1 hour'   AS oldest\n            ),\n            written AS (\n                SELECT MIN(bucket) AS first_hour, MAX(bucket) AS last_hour\n                FROM analytic_hours\n            ),\n            tvl AS (\n                SELECT\n                    SUM(tvl_usd)                           AS total_tvl_usd,\n                    COALESCE(SUM(pools_priced), 0)::BIGINT AS pools_priced\n                FROM (\n                    SELECT DISTINCT ON (protocol) tvl_usd, pools_priced\n                    FROM analytic_protocol_tvl, bound\n                    WHERE bucket >= bound.oldest\n                    ORDER BY protocol, bucket DESC\n                ) latest\n            ),\n            vol AS (\n                SELECT\n                    SUM(volume_usd) AS volume_24h_usd,\n                    SUM(fees_usd)   AS fees_24h_usd,\n                    COALESCE(SUM(active_pools), 0)::BIGINT\n                        AS swap_buckets_24h,\n                    COALESCE(SUM(active_pools_valued), 0)::BIGINT\n                        AS swap_buckets_priced_24h\n                FROM analytic_protocol_hourly, bound, written\n                WHERE bucket >= bound.first_hour\n                  AND written.first_hour <= bound.first_hour\n                  AND written.last_hour >= bound.oldest\n            )\n            SELECT\n                tvl.total_tvl_usd  AS \"total_tvl_usd?\",\n                tvl.pools_priced   AS \"pools_priced!\",\n                vol.volume_24h_usd AS \"volume_24h_usd?\",\n                vol.fees_24h_usd   AS \"fees_24h_usd?\",\n                vol.swap_buckets_24h        AS \"swap_buckets_24h!\",\n                vol.swap_buckets_priced_24h AS \"swap_buckets_priced_24h!\"\n            FROM tvl, vol\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_tvl_usd?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "pools_priced!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "volume_24h_usd?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "fees_24h_usd?",
+        "type_info": "Numeric",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "swap_buckets_24h!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "swap_buckets_priced_24h!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0e425c36d76960f8a7dda75159f94630c379367b525c9fb21790b37741b0449f"
+}

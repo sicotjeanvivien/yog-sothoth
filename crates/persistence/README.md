@@ -525,6 +525,12 @@ query. `tests/analytic_writer.rs` runs it under
 `yog_analytic` and holds the facts and the aggregate equal to
 `meteora_damm_v2_pool_hourly_activity` on the same closed hours.
 
+`/api/stats` reads the last 24 h of the protocol aggregate and the last TVL of
+each protocol (`repositories/global_analytics.rs`). The volume reads as NULL
+unless the hours written span the window through the previous hour, the TVL
+unless measured since then: a stopped, catching-up or new writer shows, as
+`pool_current_tvl` does for a stale price.
+
 The DAMM v2 facts read `meteora_damm_v2_swap_events_hourly_priced` with the
 formulas of `swap_parts` (010). That view reads the swap aggregate in real
 time: an hour frozen ten minutes after its close is not materialised yet, so it

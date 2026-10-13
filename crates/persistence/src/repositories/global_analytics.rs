@@ -1,19 +1,8 @@
-//! PostgreSQL implementation of [`GlobalAnalyticsRepository`].
-//!
-//! One query, two independent roll-ups cross-joined into a single row, each
-//! reading a versioned VIEW so the heavy valuation SQL lives in migrations,
-//! not here:
-//!   - `tvl`: summed current TVL over every priceable pool (and the count of
-//!     pools that contributed — the coverage numerator), from the
-//!     `pool_current_tvl` view (baseline §15). `tvl_usd` is NULL for an
-//!     unpriceable pool, so the SUM skips it and the `FILTER` counts only the
-//!     priced ones — partial coverage surfaces what is priceable.
-//!   - `vol`: summed 24h volume and realized fees from the per-(pool, hour)
-//!     USD valuation view (baseline §15), windowed to the last 24h — plus the
-//!     coverage of those sums, since `SUM` skips the buckets it cannot value
-//!     and a partial total is otherwise indistinguishable from a complete one.
-//!     The denominator counts buckets *with swaps*; the view unions all four
-//!     caggs, and a liquidity-only bucket is not a volume coverage failure.
+//! PostgreSQL implementation of [`GlobalAnalyticsRepository`]: the last 24 h
+//! of yog-analytic's protocol aggregate, and the last TVL it measured for each
+//! protocol. The volume reads as NULL unless the hours written span the window
+//! through the previous hour, the TVL unless measured since then: a stopped,
+//! catching-up or new writer shows instead of publishing a partial sum.
 
 mod rows;
 
@@ -42,23 +31,37 @@ impl GlobalAnalyticsRepository for PgGlobalAnalyticsRepository {
         let row = sqlx::query_as!(
             GlobalAnalyticsRow,
             r#"
-            WITH tvl AS (
+            WITH bound AS (
+                SELECT date_trunc('hour', NOW(), 'UTC') - INTERVAL '23 hours' AS first_hour,
+                       date_trunc('hour', NOW(), 'UTC') - INTERVAL '1 hour'   AS oldest
+            ),
+            written AS (
+                SELECT MIN(bucket) AS first_hour, MAX(bucket) AS last_hour
+                FROM analytic_hours
+            ),
+            tvl AS (
                 SELECT
-                    SUM(tvl_usd)                                AS total_tvl_usd,
-                    COUNT(*) FILTER (WHERE tvl_usd IS NOT NULL) AS pools_priced
-                FROM pool_current_tvl
+                    SUM(tvl_usd)                           AS total_tvl_usd,
+                    COALESCE(SUM(pools_priced), 0)::BIGINT AS pools_priced
+                FROM (
+                    SELECT DISTINCT ON (protocol) tvl_usd, pools_priced
+                    FROM analytic_protocol_tvl, bound
+                    WHERE bucket >= bound.oldest
+                    ORDER BY protocol, bucket DESC
+                ) latest
             ),
             vol AS (
                 SELECT
                     SUM(volume_usd) AS volume_24h_usd,
                     SUM(fees_usd)   AS fees_24h_usd,
-                    COUNT(*) FILTER (WHERE swap_count IS NOT NULL)
+                    COALESCE(SUM(active_pools), 0)::BIGINT
                         AS swap_buckets_24h,
-                    COUNT(*) FILTER (WHERE swap_count IS NOT NULL
-                                       AND volume_usd IS NOT NULL)
+                    COALESCE(SUM(active_pools_valued), 0)::BIGINT
                         AS swap_buckets_priced_24h
-                FROM meteora_damm_v2_pool_hourly_activity
-                WHERE bucket > NOW() - INTERVAL '24 hours'
+                FROM analytic_protocol_hourly, bound, written
+                WHERE bucket >= bound.first_hour
+                  AND written.first_hour <= bound.first_hour
+                  AND written.last_hour >= bound.oldest
             )
             SELECT
                 tvl.total_tvl_usd  AS "total_tvl_usd?",

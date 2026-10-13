@@ -47,9 +47,7 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
                 FROM UNNEST($1::TEXT[]) AS pool_address
             ),
             -- Per-pool current TVL is encapsulated in the `pool_current_tvl`
-            -- view (baseline §15) — same reserve × most-recent-price valuation
-            -- as before, no longer duplicated here (the `global_analytics`
-            -- roll-up reads the same view).
+            -- view (baseline §15).
             tvl_per_pool AS (
                 SELECT pool_address, tvl_usd
                 FROM pool_current_tvl
