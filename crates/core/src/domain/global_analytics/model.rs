@@ -17,9 +17,8 @@ use rust_decimal::Decimal;
 /// surface that, rather than collapsing to `None` because some pools lack a
 /// price.
 ///
-///   - `total_tvl_usd` is the TVL yog-analytic last measured, summed over the
-///     pools priced then. `None` when none was, or when that measurement is
-///     older than the previous hour.
+///   - `total_tvl_usd` is the summed current TVL across all pools that have a
+///     current state and a known price for both tokens.
 ///   - `pools_priced` is how many pools contributed to `total_tvl_usd` — the
 ///     coverage numerator. The denominator (total observed) lives on the pool
 ///     inventory counts; the presentation layer derives the "N / M priced"

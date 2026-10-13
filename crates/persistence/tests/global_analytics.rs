@@ -98,7 +98,7 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
                 amount_a, amount_b, reserve_a_after, reserve_b_after, next_sqrt_price,
                 claiming_fee, protocol_fee, compounding_fee, referral_fee, fee_token_is_a,
                 timestamp, slot, event_index)
-             VALUES ($1,$2,$3,$4,$5,0,0,0,$6,0,0,0,$7,$8,0,0)",
+             VALUES ($1,$2,$3,$4,$5,0,0,0,$6,$7,0,0,$8,$9,0,0)",
         )
         .bind(pool_addr)
         .bind(&sig)
@@ -106,6 +106,7 @@ async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64
         .bind(a)
         .bind(b)
         .bind(fee)
+        .bind(fee / 4)
         .bind(fee_is_a)
         .bind(at)
         .execute(pool)
@@ -131,14 +132,15 @@ async fn write_facts(pool: &PgPool) {
         .unwrap();
 }
 
-/// A TVL measurement of the hour `hours_ago` back.
-async fn measure_tvl(pool: &PgPool, protocol: &str, hours_ago: i64, tvl_usd: i64, priced: i64) {
+/// A TVL measurement of the hour `hours_ago` back, by the database's clock,
+/// which is the one the read compares it to.
+async fn measure_tvl(pool: &PgPool, protocol: &str, hours_ago: i32, tvl_usd: i64, priced: i64) {
     sqlx::query(
         "INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)
-         VALUES ($1, $2, $3, $4, $2)",
+         VALUES ($1, date_trunc('hour', now(), 'UTC') - make_interval(hours => $2), $3, $4, now())",
     )
     .bind(protocol)
-    .bind(hour_of(Utc::now() - Duration::hours(hours_ago)))
+    .bind(hours_ago)
     .bind(tvl_usd)
     .bind(priced)
     .execute(pool)
@@ -248,6 +250,29 @@ async fn the_global_counters_agree_with_the_per_pool_ones(pool: PgPool) {
         (global.swap_buckets_24h, global.swap_buckets_priced_24h),
         (3, 2)
     );
+}
+
+/// Against a sum read off the wrong column: the LP or protocol share for the
+/// fees, any other for the volume.
+#[sqlx::test]
+async fn the_usd_sums_equal_the_activity_view(pool: PgPool) {
+    let priced = setup_pool(&pool, 1, Some("180.0")).await;
+    insert_bucket(&pool, &priced, "p1", 1).await;
+    insert_bucket(&pool, &priced, "p2", 3).await;
+    write_facts(&pool).await;
+
+    let view: (Option<Decimal>, Option<Decimal>) = sqlx::query_as(
+        "SELECT SUM(volume_usd), SUM(fees_usd) FROM meteora_damm_v2_pool_hourly_activity
+          WHERE bucket > now() - INTERVAL '24 hours'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(view.0.is_some() && view.1.is_some(), "{view:?}");
+
+    let analytics = read(&pool).await;
+
+    assert_eq!((analytics.volume_24h_usd, analytics.fees_24h_usd), view);
 }
 
 /// Against every measurement summed (160 over 6 pools) or a single protocol

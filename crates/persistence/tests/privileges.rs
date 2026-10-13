@@ -89,11 +89,17 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "analytic_protocol_hourly",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[
+            ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
+            ("yog_api", &["SELECT"]),
+        ],
     ),
     (
         "analytic_protocol_tvl",
-        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+        &[
+            ("yog_analytic", &["INSERT", "SELECT", "UPDATE"]),
+            ("yog_api", &["SELECT"]),
+        ],
     ),
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
