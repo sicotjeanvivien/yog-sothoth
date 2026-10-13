@@ -11,7 +11,7 @@ use crate::bootstrap::Config;
 
 mod init;
 
-use init::{init_database, init_heartbeat};
+use init::{init_db, init_heartbeat};
 
 pub(crate) struct Daemon {
     worker: AnalyticWorker,
@@ -20,7 +20,7 @@ pub(crate) struct Daemon {
 impl Daemon {
     pub(crate) async fn new(config: Config) -> anyhow::Result<Self> {
         let heartbeat = config.heartbeat_url.map(init_heartbeat).transpose()?;
-        let database = init_database(&config.database_url).await?;
+        let database = init_db(&config.database_url).await?;
         let repository: Arc<dyn AnalyticRepository> =
             Arc::new(PgAnalyticRepository::new(database.pool_owned()));
 

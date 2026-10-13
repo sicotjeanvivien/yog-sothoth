@@ -29,7 +29,7 @@ analytic/src/
     ├── config.rs        ← DATABASE_URL_ANALYTIC, ANALYTIC_CYCLE_SECS, ANALYTIC_HEARTBEAT_URL
     ├── daemon.rs        ← assembles the worker and runs it
     └── daemon/
-        └── init.rs      ← init_database (one connection), init_heartbeat
+        └── init.rs      ← init_db (one connection), init_heartbeat
 ```
 
 One loop, so no `workers/` folder ([`crates/README.md`](../README.md#conventions)).

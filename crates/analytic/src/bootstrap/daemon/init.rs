@@ -15,7 +15,7 @@ use crate::application::metrics;
 const STATEMENT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// One connection: a cycle runs its reads and its transaction in turn.
-pub(super) async fn init_database(database_url: &SecretUrl) -> anyhow::Result<Database> {
+pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database> {
     Database::connect_with(
         database_url.expose(),
         PoolSettings {
