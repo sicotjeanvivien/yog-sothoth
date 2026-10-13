@@ -28,7 +28,7 @@ use std::{fs, path::Path};
 /// reading the line.
 const ALLOWED: &[(&str, usize, &str)] = &[
     (
-        "crates/analytic/src/bootstrap/daemon.rs",
+        "crates/analytic/src/bootstrap/daemon/init.rs",
         1,
         "sqlx owns the pool — the URL is the argument of `Database::connect_with`",
     ),
