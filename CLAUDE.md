@@ -18,6 +18,23 @@ This file is a map, not the territory. The in-repo READMEs are the authoritative
 
 **Never reference a project-tracking ticket in this repository** — no `.project/…` path, no ticket number, no "this ticket", in code, comments, READMEs, CI files or commit-visible docs. The tracker is a separate private repository: a reader of this code cannot follow the pointer, and every rename there breaks it. Write the reason itself instead (the defect, the measurement still to come, the migration that fixed it). Committed migrations are the one exception, and only because they can never be edited.
 
+## Comments — absolute rule
+
+A comment says what the code cannot: a trap (why not the obvious way) or an
+invariant the types don't show. Nothing else. In a test, it names the mutation
+the test is written against.
+
+- **Length:** an item's doc-comment ≤ 3 lines; a trap (⚠️) ≤ 2 lines, next to
+  the line it guards; a file or migration header ≤ 5 lines. No exception.
+- **Never in a comment:** history ("the first version…", "found in review"),
+  dates, measurements, provenance, paraphrase of the code, a fact already
+  stated elsewhere. They go in the commit, the PR or the ticket.
+- **In review:** a comment is reported only if it is false or breaks this
+  rule, and the fix is to delete or shorten it — never to add text. Answering
+  a review never adds a comment.
+- Applies to Rust, SQL, TypeScript and shell, to what a change adds or
+  modifies. Untouched comments are left as they are.
+
 ## Commands
 
 All Rust commands run from the repo root. Toolchain is pinned in `rust-toolchain.toml` (don't override it).
