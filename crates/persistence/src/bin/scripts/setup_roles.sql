@@ -31,9 +31,10 @@
 --
 --   yog_migrate  : DDL — owns the schema, applies migrations.
 --                  Used by the yog-migrate binary; never by runtime services.
---   Every runtime role below reads every table: the default privileges at
---   the end of this file grant SELECT to all of them. What differs is what
---   each one writes, and the per-table grants in the migrations are the list.
+--   Every runtime role below reads every table of `public`, through the
+--   default privileges of this file; yog_archive reads every schema. What
+--   differs is what each one writes, and the per-table grants in the
+--   migrations are the list.
 --
 --   yog_indexer  : writes the event tables, pools, pool_current_state and
 --                  network_status.
@@ -148,6 +149,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_analytic;
 
+-- `public` is enough for yog_archive too: the internal tables of a hypertable
+-- or a continuous aggregate inherit its grants.
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON TABLES TO yog_archive;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON SEQUENCES TO yog_archive;
+
 -- Sequences (behind BIGSERIAL columns) are used by yog_indexer at insert
 -- time. Default USAGE + SELECT keeps future tables consistent.
 ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
@@ -198,37 +207,58 @@ END $$;
 
 
 -- ---------------------------------------------------------------------------
--- yog_archive — every schema `pg_dump` reads — DATABASE scope
+-- yog_archive — what `pg_dump` reads and already exists — DATABASE scope
 --
--- What exists now, schema by schema, so that a schema added since the last run
--- is taken too; what yog_migrate creates later, by default privileges — its
--- hypertables' chunks inherit their grants. Every deploy runs this file again.
--- ⚠️ A schema this file has not seen fails the next dump: re-run it after
--- adding one, as after an extension update.
+-- Granted only where missing, so a rerun writes no catalog row, and `public`
+-- first, so a hypertable's chunks inherit its grant instead of taking their own.
+-- What yog_migrate creates later is covered by the default privileges above.
+-- ⚠️ An object yog_migrate did not create — a table of an extension update —
+-- fails the next dump until this file runs again.
 -- ---------------------------------------------------------------------------
 DO $$
+DECLARE
+    membership RECORD;
 BEGIN
-    IF pg_has_role('yog_archive', 'pg_read_all_data', 'MEMBER') THEN
-        REVOKE pg_read_all_data FROM yog_archive;
+    FOR membership IN
+        SELECT m.member::REGROLE AS member, m.grantor::REGROLE AS grantor
+          FROM pg_auth_members m
+         WHERE m.roleid = 'pg_read_all_data'::REGROLE
+           AND m.member::REGROLE::TEXT LIKE 'yog\_%'
+    LOOP
+        EXECUTE format('REVOKE pg_read_all_data FROM %s GRANTED BY %s',
+                       membership.member, membership.grantor);
+    END LOOP;
+    IF EXISTS (SELECT 1 FROM pg_roles
+                WHERE rolname LIKE 'yog\_%'
+                  AND pg_has_role(oid, 'pg_read_all_data', 'MEMBER')) THEN
+        RAISE EXCEPTION 'a yog_* role still reads pg_authid through pg_read_all_data';
     END IF;
 END $$;
 
 DO $$
 DECLARE
     schema_name TEXT;
+    relation    RECORD;
 BEGIN
     FOR schema_name IN
         SELECT nspname FROM pg_namespace
          WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema'
+           AND NOT has_schema_privilege('yog_archive', oid, 'USAGE')
     LOOP
         EXECUTE format('GRANT USAGE ON SCHEMA %I TO yog_archive', schema_name);
-        EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO yog_archive', schema_name);
-        EXECUTE format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA %I TO yog_archive', schema_name);
+    END LOOP;
+
+    FOR relation IN
+        SELECT c.oid, c.relkind
+          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
+           AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+         ORDER BY n.nspname <> 'public'
+    LOOP
+        IF NOT has_table_privilege('yog_archive', relation.oid, 'SELECT') THEN
+            EXECUTE format('GRANT SELECT ON %s %s TO yog_archive',
+                           CASE relation.relkind WHEN 'S' THEN 'SEQUENCE' ELSE 'TABLE' END,
+                           relation.oid::REGCLASS);
+        END IF;
     END LOOP;
 END $$;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
-    GRANT SELECT ON TABLES TO yog_archive;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
-    GRANT SELECT ON SEQUENCES TO yog_archive;

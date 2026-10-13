@@ -626,14 +626,17 @@ migrations. The role → rights → process mapping is documented in
 
 **`yog_archive` reads schema by schema.** `pg_dump` reads every schema,
 TimescaleDB's chunks and catalog included. At every run the file grants `USAGE`
-and `SELECT` on each schema it finds, and sets default privileges on what
-`yog_migrate` later creates in `public`; TimescaleDB passes a hypertable's
-grants on to its chunks, compressed ones included. No role is a member of
-`pg_read_all_data`, which also reads `pg_authid`, every role's password hash.
-⚠️ A schema created between two runs fails the next dump — the archiver's
-heartbeat says so — until the file runs again; every deploy runs it.
-`tests/archive_role.rs` holds the role to it, chunks born after the file
-included.
+and `SELECT` where they are missing — a rerun writes no catalog row, so it
+cannot collide with a compression job — and sets default privileges on what
+`yog_migrate` creates in `public`; TimescaleDB passes a hypertable's or an
+aggregate's grants on to its internal tables and chunks, compressed ones
+included. No role is a member of `pg_read_all_data`, which also reads
+`pg_authid`, every role's password hash: the file revokes the membership, from
+whichever grantor, and fails if one remains. ⚠️ An object `yog_migrate` did not
+create — a schema added by hand, a table of an extension update — fails the next
+dump, which the archiver's heartbeat reports, until the file runs again.
+`tests/archive_role.rs` applies the file as production meets it, then creates a
+compressed hypertable, an aggregate and late chunks, and reads them all.
 
 **Two scopes, one file, and it is idempotent.** Roles are cluster-wide;
 everything else is per-database. That asymmetry used to make the script

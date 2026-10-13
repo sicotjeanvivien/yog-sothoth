@@ -47,6 +47,17 @@ pub const SETUP_ROLES_SQL: &str = include_str!("../src/bin/scripts/setup_roles.s
 /// process-wide lock can.
 pub static CLUSTER_ROLES: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+/// The refusal `pg_read_all_data` would lift: every role's password hash.
+pub async fn assert_reads_no_password_hash(conn: &mut sqlx::PgConnection) {
+    let err = sqlx::query("SELECT rolpassword FROM pg_authid")
+        .execute(conn)
+        .await
+        .expect_err("a runtime role reads no password hash");
+    assert_eq!(sqlstate(&err), INSUFFICIENT_PRIVILEGE);
+    let message = err.as_database_error().unwrap().message().to_owned();
+    assert!(message.contains("table pg_authid"), "{message}");
+}
+
 /// Apply [`SETUP_ROLES_SQL`] to the test's database, under [`CLUSTER_ROLES`].
 pub async fn apply_setup_roles(pool: &PgPool) {
     let _cluster = CLUSTER_ROLES.lock().await;

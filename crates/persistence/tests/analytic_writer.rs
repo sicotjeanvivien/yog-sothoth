@@ -7,7 +7,10 @@ use sqlx::types::BigDecimal;
 use yog_core::domain::{AnalyticProgress, AnalyticRepository, CycleWrite};
 use yog_persistence::PgAnalyticRepository;
 
-use super::helpers::{INSUFFICIENT_PRIVILEGE, apply_setup_roles, pk, price_mint, sqlstate};
+use super::helpers::{
+    INSUFFICIENT_PRIVILEGE, apply_setup_roles, assert_reads_no_password_hash, pk, price_mint,
+    sqlstate,
+};
 
 /// A pool on the test's database whose connections act as `yog_analytic`.
 async fn as_analytic(pool: &PgPool) -> PgPool {
@@ -376,14 +379,7 @@ async fn the_tvl_is_the_sum_of_pool_current_tvl(pool: PgPool) {
 async fn yog_analytic_cannot_read_the_password_hashes(pool: PgPool) {
     let analytic = as_analytic(&pool).await;
 
-    let err = sqlx::query("SELECT rolpassword FROM pg_authid")
-        .execute(&analytic)
-        .await
-        .expect_err("yog_analytic reads what it values, not the catalog of roles");
-
-    assert_eq!(sqlstate(&err), INSUFFICIENT_PRIVILEGE);
-    let message = err.as_database_error().unwrap().message().to_owned();
-    assert!(message.contains("table pg_authid"), "{message}");
+    assert_reads_no_password_hash(&mut analytic.acquire().await.unwrap()).await;
 }
 
 #[sqlx::test]
