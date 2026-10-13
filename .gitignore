@@ -13,6 +13,7 @@ web/.env.*.local
 
 # Docker
 .env
+.env.prod
 
 # OS
 .DS_Store
