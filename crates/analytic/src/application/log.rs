@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tracing::{error, info};
 use yog_core::RepositoryError;
-use yog_core::domain::{CycleOutcome, CycleWrite};
+use yog_core::domain::CycleOutcome;
 
 pub(super) fn started(interval: Duration, heartbeat: bool) {
     info!(interval = ?interval, heartbeat, "analytic writer started");
@@ -13,7 +13,8 @@ pub(super) fn started(interval: Duration, heartbeat: bool) {
     }
 }
 
-pub(super) fn written(cycle: &CycleWrite, outcome: &CycleOutcome, elapsed: Duration) {
+pub(super) fn written(outcome: &CycleOutcome, elapsed: Duration) {
+    let cycle = &outcome.written;
     info!(
         from = %cycle.from,
         through = %cycle.through,

@@ -268,6 +268,46 @@ async fn a_swap_written_after_the_freeze_changes_nothing_of_its_hour(pool: PgPoo
     );
 }
 
+/// Against the table lock of `write_cycle` removed: the cycle would read no
+/// frozen hour, wait on the other writer's fact, then overwrite it.
+#[sqlx::test]
+async fn a_cycle_waits_for_a_concurrent_freeze_and_keeps_out_of_it(pool: PgPool) {
+    let now = now();
+    let address = setup_pool(&pool, 1, Some("180.0")).await;
+    let frozen = hours_before(now, 3);
+    trade(&pool, &address, "before", frozen).await;
+    let repository = PgAnalyticRepository::new(as_analytic(&pool).await);
+
+    let mut other_writer = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO analytic_hours (bucket, frozen_at) VALUES ($1, now())")
+        .bind(frozen)
+        .execute(&mut *other_writer)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO analytic_pool_hourly (pool_address, bucket, protocol, swap_count, valued)
+         VALUES ($1, $2, 'meteora_damm_v2', 999, false)",
+    )
+    .bind(&address)
+    .bind(frozen)
+    .execute(&mut *other_writer)
+    .await
+    .unwrap();
+
+    let cycle = cycle_from(now, frozen);
+    let writing = tokio::spawn(async move { repository.write_cycle(&cycle).await });
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert!(
+        !writing.is_finished(),
+        "the cycle ran beside the other writer"
+    );
+    other_writer.commit().await.unwrap();
+    let outcome = writing.await.unwrap().unwrap();
+
+    assert!(outcome.written.from > frozen, "{outcome:?}");
+    assert_eq!(fact_pool_hours(&pool, frozen).await[0].2, 999);
+}
+
 #[sqlx::test]
 async fn the_tvl_is_the_sum_of_pool_current_tvl(pool: PgPool) {
     let priced = setup_pool(&pool, 1, Some("180.0")).await;

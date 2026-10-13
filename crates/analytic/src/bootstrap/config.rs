@@ -8,8 +8,9 @@ use yog_bootstrap::{
 
 const DEFAULT_CYCLE_SECS: u64 = 300;
 
-/// One day: far beyond a useful cadence, far below what an `Instant` holds.
-const MAX_CYCLE_SECS: u64 = 86_400;
+/// An hour: a cycle advances `MAX_HOURS_PER_CYCLE` hours at most, so a much
+/// longer one would fall behind for good.
+const MAX_CYCLE_SECS: u64 = 3_600;
 
 #[derive(Debug)]
 pub(crate) struct Config {
@@ -30,14 +31,13 @@ impl Config {
     }
 }
 
-/// ⚠️ At zero `tokio::time::interval` panics, and past an `Instant`'s range
-/// the ticker does: both would stop the daemon after startup instead of here.
+/// ⚠️ At zero `tokio::time::interval` panics: refused here, not after startup.
 fn cycle(seconds: u64) -> Result<Duration, ConfigError> {
     if !(1..=MAX_CYCLE_SECS).contains(&seconds) {
         return Err(ConfigError::InvalidValue {
             key: "ANALYTIC_CYCLE_SECS".to_string(),
             value: seconds.to_string(),
-            expected: "a number of seconds from 1 to 86400 (one day)",
+            expected: "a number of seconds from 1 to 3600 (one hour)",
         });
     }
     Ok(Duration::from_secs(seconds))

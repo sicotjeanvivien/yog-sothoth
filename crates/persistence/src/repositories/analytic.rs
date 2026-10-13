@@ -48,6 +48,7 @@ impl AnalyticRepository for PgAnalyticRepository {
 
     async fn write_cycle(&self, cycle: &CycleWrite) -> RepositoryResult<CycleOutcome> {
         let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
+        lock_out_other_writers(&mut tx).await?;
         let cycle = cycle.without_frozen(last_frozen(&mut tx).await?);
 
         let pool_hours =
@@ -64,10 +65,21 @@ impl AnalyticRepository for PgAnalyticRepository {
 
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(CycleOutcome {
+            written: cycle,
             pool_hours,
             hours_frozen,
         })
     }
+}
+
+/// ⚠️ Before `last_frozen` is read: a concurrent cycle's freeze is then either
+/// committed and seen, or not begun. Readers are not blocked.
+async fn lock_out_other_writers(tx: &mut Transaction<'static, Postgres>) -> RepositoryResult<()> {
+    sqlx::query!("LOCK TABLE analytic_hours IN EXCLUSIVE MODE")
+        .execute(&mut **tx)
+        .await
+        .map_err(map_sqlx_error)?;
+    Ok(())
 }
 
 /// Read inside the cycle's transaction: a freeze committed since the cycle

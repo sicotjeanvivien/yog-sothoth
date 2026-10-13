@@ -9,9 +9,7 @@ A frozen hour is never written again.
 
 It exists because valuing at read time does not scale: a reader of the
 valuation VIEWs re-prices every (pool, hour) of its window on every request.
-The writer prices each of them once, and the readers read sums. The model, and
-the decisions behind it, are a design note of the project tracker; this README
-says what the code does.
+The writer prices each of them once, and the readers read sums.
 
 It writes under the `yog_analytic` role, which may write the four `analytic_*`
 tables and nothing else, and reads through `pg_read_all_data`
@@ -54,9 +52,10 @@ in `persistence` (`repositories/analytic.rs`).
 - **TVL**: measured into the hour of the cycle, as long as that hour is not
   frozen.
 
-`PgAnalyticRepository::write_cycle` writes it in **one transaction**, after
-`CycleWrite::without_frozen` has taken out whatever was frozen since the cycle
-was planned (see
+`PgAnalyticRepository::write_cycle` writes it in **one transaction**. It first
+locks `analytic_hours` against any other writer — readers go on — then lets
+`CycleWrite::without_frozen` take out whatever was frozen since the cycle was
+planned (see
 [`persistence/README.md`](../persistence/README.md#the-analytic-tables-migration-015)).
 A stop drops the cycle in flight, and rolls its transaction back with it; the
 next start writes it again.
@@ -74,7 +73,7 @@ What the freeze costs, by design:
 | Variable | Default | |
 |---|---|---|
 | `DATABASE_URL_ANALYTIC` | — | the `yog_analytic` role |
-| `ANALYTIC_CYCLE_SECS` | `300` | time between two cycles, 1 to 86 400; the first runs at startup |
+| `ANALYTIC_CYCLE_SECS` | `300` | time between two cycles, 1 to 3 600; the first runs at startup |
 | `ANALYTIC_HEARTBEAT_URL` | — | a Healthchecks.io ping URL; optional, required by `docker-compose.prod.yml` |
 
 Each statement has two minutes before Postgres cancels it: a cycle stuck on a

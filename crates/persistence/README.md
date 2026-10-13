@@ -518,9 +518,10 @@ implied-price rule above.
 (pool, hour), each protocol's from its own module; the protocol aggregate summed
 from those facts; the hours recorded, and frozen once closed; the protocol TVL,
 by the rule of `pool_current_tvl`. A frozen hour is never written again, whatever
-range the cycle was handed: the transaction reads the last frozen hour first,
-and `CycleWrite::without_frozen` (`core`) takes it out — the guard is written
-once, not in each protocol's query. `tests/analytic_writer.rs` runs it under
+range the cycle was handed: the transaction locks `analytic_hours` against any
+other writer, reads the last frozen hour, and `CycleWrite::without_frozen`
+(`core`) takes it out — the guard is written once, not in each protocol's
+query. `tests/analytic_writer.rs` runs it under
 `yog_analytic` and holds the facts and the aggregate equal to
 `meteora_damm_v2_pool_hourly_activity` on the same closed hours.
 

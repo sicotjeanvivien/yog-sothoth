@@ -20,11 +20,11 @@ const PROGRESS: AnalyticProgress = AnalyticProgress {
     last_frozen: None,
 };
 
-/// Answers `progress` and `write_cycle` as scripted, and keeps the cycles it
-/// was asked to write.
+/// Answers `progress` as scripted, writes every cycle unless `refusal` is set,
+/// and keeps the cycles it was asked to write.
 struct ScriptedRepository {
     progress: RepositoryResult<AnalyticProgress>,
-    written: RepositoryResult<CycleOutcome>,
+    refusal: Option<RepositoryError>,
     cycles: Mutex<Vec<CycleWrite>>,
 }
 
@@ -36,13 +36,20 @@ impl AnalyticRepository for ScriptedRepository {
 
     async fn write_cycle(&self, cycle: &CycleWrite) -> RepositoryResult<CycleOutcome> {
         self.cycles.lock().unwrap().push(*cycle);
-        self.written.clone()
+        match &self.refusal {
+            Some(error) => Err(error.clone()),
+            None => Ok(CycleOutcome {
+                written: *cycle,
+                pool_hours: 0,
+                hours_frozen: 0,
+            }),
+        }
     }
 }
 
 fn worker(
     progress: RepositoryResult<AnalyticProgress>,
-    written: RepositoryResult<CycleOutcome>,
+    refusal: Option<RepositoryError>,
 ) -> (
     AnalyticWorker,
     Arc<ScriptedRepository>,
@@ -50,7 +57,7 @@ fn worker(
 ) {
     let repository = Arc::new(ScriptedRepository {
         progress,
-        written,
+        refusal,
         cycles: Mutex::new(Vec::new()),
     });
     let heartbeat = Arc::new(RecordingHeartbeat::default());
@@ -74,7 +81,7 @@ async fn a_cycle_writes_what_the_plan_says_and_signals_success() {
         first_hour: Some(at(9, 0)),
         last_frozen: Some(at(10, 0)),
     };
-    let (worker, repository, heartbeat) = worker(Ok(progress), Ok(CycleOutcome::default()));
+    let (worker, repository, heartbeat) = worker(Ok(progress), None);
 
     worker.cycle(at(12, 30)).await.unwrap();
 
@@ -88,7 +95,7 @@ async fn a_cycle_writes_what_the_plan_says_and_signals_success() {
 #[tokio::test]
 async fn a_failed_write_signals_its_error() {
     let refused = RepositoryError::Backend("permission denied for table signals".into());
-    let (worker, _, heartbeat) = worker(Ok(PROGRESS), Err(refused));
+    let (worker, _, heartbeat) = worker(Ok(PROGRESS), Some(refused));
 
     assert!(worker.cycle(at(12, 30)).await.is_err());
 
@@ -106,7 +113,7 @@ async fn a_failed_write_signals_its_error() {
 #[tokio::test]
 async fn an_unreadable_progress_writes_nothing_and_signals_failure() {
     let unreachable = RepositoryError::Timeout("pool timed out".into());
-    let (worker, repository, heartbeat) = worker(Err(unreachable), Ok(CycleOutcome::default()));
+    let (worker, repository, heartbeat) = worker(Err(unreachable), None);
 
     assert!(worker.cycle(at(12, 30)).await.is_err());
 

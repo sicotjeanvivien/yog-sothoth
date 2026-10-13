@@ -56,10 +56,10 @@ impl AnalyticWorker {
         let written = self.write(now).await;
         let elapsed = started.elapsed();
         match &written {
-            Ok((cycle, outcome)) => {
+            Ok(outcome) => {
                 metrics::record_cycle("written", elapsed);
                 metrics::record_frozen(outcome.hours_frozen);
-                log::written(cycle, outcome, elapsed);
+                log::written(outcome, elapsed);
                 if let Some(heartbeat) = &self.heartbeat {
                     heartbeat.success().await;
                 }
@@ -72,14 +72,14 @@ impl AnalyticWorker {
                 }
             }
         }
-        written.map(|(_, outcome)| outcome)
+        written
     }
 
-    async fn write(&self, now: DateTime<Utc>) -> RepositoryResult<(CycleWrite, CycleOutcome)> {
+    async fn write(&self, now: DateTime<Utc>) -> RepositoryResult<CycleOutcome> {
         let progress = self.repository.progress().await?;
-        let cycle = CycleWrite::plan(now, progress);
-        let outcome = self.repository.write_cycle(&cycle).await?;
-        Ok((cycle, outcome))
+        self.repository
+            .write_cycle(&CycleWrite::plan(now, progress))
+            .await
     }
 }
 

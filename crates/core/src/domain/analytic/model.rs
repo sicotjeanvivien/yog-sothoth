@@ -71,8 +71,10 @@ impl CycleWrite {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CycleOutcome {
+    /// The cycle as written, once the hours frozen since it was planned are out.
+    pub written: CycleWrite,
     /// The (pool, hour) facts upserted.
     pub pool_hours: u64,
     pub hours_frozen: u64,
