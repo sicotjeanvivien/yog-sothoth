@@ -7,6 +7,8 @@ independent at the Node.js level. It talks to `yog-api` over HTTP only —
 it never connects to TimescaleDB, and there is **no BFF layer**: the
 browser calls the Rust API directly.
 
+Comments follow the absolute rule of `CLAUDE.md` (*Comments — absolute rule*).
+
 ## Stack
 
 - **Next.js 16** — App Router, Server Components, standalone output, Turbopack by default
