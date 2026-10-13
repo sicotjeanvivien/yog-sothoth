@@ -13,8 +13,7 @@ The writer prices each of them once, and the readers read sums.
 
 It writes under the `yog_analytic` role, which may write the four `analytic_*`
 tables and nothing else ([`crates/README.md`](../README.md#database-roles)).
-It is not a member of `pg_read_all_data`, which would let it read every
-role's password hash. No reader is wired to these tables yet.
+No reader is wired to these tables yet.
 
 ## Layout
 

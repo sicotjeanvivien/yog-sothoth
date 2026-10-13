@@ -1,77 +1,94 @@
-//! The `yog_archive` role: it reads everything `pg_dump` needs, and writes
-//! nothing.
-//!
-//! Its reading does not come from a migration, so `privileges.rs` cannot see
-//! it: `setup_roles.sql` makes it a member of the predefined
-//! `pg_read_all_data`. What `privileges.rs` checks is the other half: that no
-//! migration grants it anything on a table, a view or a column of `public`.
-//!
-//! These tests apply that file, then act **under the role itself**
-//! (`SET ROLE`), because a privilege is only proven by the statement it lets
-//! through or stops.
-//!
-//! ⚠️ **Roles belong to the cluster, not to the test's database.** A grant made
-//! by an earlier run survives the removal of the `GRANT` from the file, and a
-//! test that only ran the file would stay green on a script that no longer
-//! grants anything. So the membership is revoked first: what the assertions
-//! see is what the file grants *now*. Measured by mutation — with the `GRANT`
-//! line removed, the read test fails on `42501`.
+//! The `yog_archive` role: it reads every schema `pg_dump` reads, chunks born
+//! after `setup_roles.sql` included, and writes nothing — nor reads `pg_authid`.
+//! Those grants come from that file, not from a migration, so `privileges.rs`
+//! cannot see them: these tests apply it, then act under the role.
 
-use super::helpers::{CLUSTER_ROLES, INSUFFICIENT_PRIVILEGE, SETUP_ROLES_SQL, sqlstate};
-use sqlx::PgPool;
+use super::helpers::{INSUFFICIENT_PRIVILEGE, apply_setup_roles, sqlstate};
+use sqlx::{AssertSqlSafe, PgPool};
 use yog_persistence::PgServerInfo;
 
-/// Apply `setup_roles.sql` from a state where `yog_archive` holds nothing.
-///
-/// The revoke and the file run under one hold of [`CLUSTER_ROLES`]: another
-/// test applying the file in between would grant the membership back, and the
-/// assertions would see its grant instead of this one.
-async fn setup_roles_from_scratch(pool: &PgPool) {
-    let _cluster = CLUSTER_ROLES.lock().await;
-    sqlx::raw_sql(
-        "DO $$ BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'yog_archive') THEN
-                REVOKE pg_read_all_data FROM yog_archive;
-            END IF;
-        END $$;",
+/// A price at `fetched_at`, in whatever chunk of `token_prices` holds it.
+async fn price_at(pool: &PgPool, fetched_at: &str) {
+    sqlx::query(
+        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
+         VALUES ('archive_probe', 1, 'jupiter', $1::TIMESTAMPTZ)",
     )
+    .bind(fetched_at)
     .execute(pool)
     .await
-    .expect("revoke the membership an earlier run left");
-
-    sqlx::raw_sql(SETUP_ROLES_SQL)
-        .execute(pool)
-        .await
-        .expect("apply setup_roles.sql");
+    .unwrap();
 }
 
-/// One test, not two: the role is cluster-wide, and `sqlx::test` runs tests in
-/// parallel, each in its own database. A second test revoking the membership
-/// while this one reads fails it at random — observed on the first run — and
-/// an advisory lock cannot serialise them, since those are per-database.
+/// The chunk born for a price far in the future, and the compressed chunk of
+/// an old one — both after the file ran, as production makes them between two
+/// deploys.
+async fn chunks_born_after_the_file(pool: &PgPool) -> [String; 2] {
+    price_at(pool, "2030-01-01").await;
+    price_at(pool, "2020-01-01").await;
+    let new_chunk: String = sqlx::query_scalar(
+        "SELECT c::TEXT FROM show_chunks('token_prices', newer_than => TIMESTAMPTZ '2029-12-01') c",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let old_chunk: String = sqlx::query_scalar(
+        "SELECT compress_chunk(c)::TEXT
+           FROM show_chunks('token_prices', older_than => TIMESTAMPTZ '2020-02-01') c",
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let compressed: String = sqlx::query_scalar(
+        "SELECT compress_relid::TEXT FROM _timescaledb_catalog.compression_settings
+          WHERE relid = $1::REGCLASS",
+    )
+    .bind(&old_chunk)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    [new_chunk, compressed]
+}
+
+/// Against the per-schema grants of the file removed or narrowed to `public`,
+/// and against `pg_read_all_data` given back, which reads `pg_authid`.
 #[sqlx::test]
-async fn yog_archive_reads_everything_and_writes_nothing(pool: PgPool) {
-    setup_roles_from_scratch(&pool).await;
+async fn yog_archive_reads_every_schema_and_writes_nothing(pool: PgPool) {
+    sqlx::raw_sql("CREATE SCHEMA archive_probe; CREATE TABLE archive_probe.kept (id int);")
+        .execute(&pool)
+        .await
+        .unwrap();
+    apply_setup_roles(&pool).await;
+    let born_after = chunks_born_after_the_file(&pool).await;
     let mut conn = pool.acquire().await.unwrap();
     sqlx::query("SET ROLE yog_archive")
         .execute(&mut *conn)
         .await
         .unwrap();
 
-    // `pools` grants nothing to yog_archive by name: only the membership can
-    // let this through. Likewise TimescaleDB's catalog, which `pg_dump` reads
-    // to dump a hypertable and its chunks.
-    let pools: i64 = sqlx::query_scalar("SELECT count(*) FROM pools")
-        .fetch_one(&mut *conn)
-        .await
-        .expect("yog_archive must read a public table");
-    assert_eq!(pools, 0);
+    let mut reads = vec![
+        "SELECT count(*) FROM pools".to_string(),
+        "SELECT count(*) FROM archive_probe.kept".to_string(),
+        "SELECT count(*) FROM _timescaledb_catalog.hypertable".to_string(),
+    ];
+    reads.extend(
+        born_after
+            .iter()
+            .map(|chunk| format!("SELECT count(*) FROM {chunk}")),
+    );
+    for read in reads {
+        sqlx::query(AssertSqlSafe(read.clone()))
+            .execute(&mut *conn)
+            .await
+            .unwrap_or_else(|e| panic!("yog_archive must run `{read}`: {e}"));
+    }
 
-    let catalog: i64 = sqlx::query_scalar("SELECT count(*) FROM _timescaledb_catalog.hypertable")
-        .fetch_one(&mut *conn)
+    let err = sqlx::query("SELECT rolpassword FROM pg_authid")
+        .execute(&mut *conn)
         .await
-        .expect("yog_archive must read TimescaleDB's catalog");
-    assert!(catalog > 0, "the migrations create hypertables");
+        .expect_err("yog_archive reads no password hash");
+    assert_eq!(sqlstate(&err), INSUFFICIENT_PRIVILEGE);
+    let message = err.as_database_error().unwrap().message().to_owned();
+    assert!(message.contains("table pg_authid"), "{message}");
 
     // The privilege check runs before any constraint, so an otherwise invalid
     // row still fails on the privilege and nothing else.

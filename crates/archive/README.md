@@ -144,6 +144,9 @@ run otherwise, and says so.
   alarm on its own.
 - **Role**: `yog_archive` is created by `yog-migrate setup-roles` with a
   `CHANGE_ME_…` password — set the real one with `\password yog_archive`.
+  The same file grants it every schema, at each run — not
+  `pg_read_all_data`, which also reads the password hashes of `pg_authid`
+  ([`persistence/README.md`](../persistence/README.md#setup_rolessql)).
 - **Service**: `yog-archive` in `docker-compose.prod.yml`, profile `full`,
   so it starts with the rest of the production stack. The overlay refuses to
   run while one of its seven variables (`DATABASE_URL_ARCHIVE`, the five

@@ -175,7 +175,7 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | `yog_context` | writes `token_metadata`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
 | `yog_signals` | INSERT (append-only) on `signals`; EXECUTE on `yog_cagg_materialization_backlog()` | signals |
 | `yog_analytic` | writes the `analytic_*` tables | analytic |
-| `yog_archive` | RO on everything (member of `pg_read_all_data`), writes nothing | archive |
+| `yog_archive` | RO on every schema, granted schema by schema by `setup_roles.sql`; writes nothing | archive |
 
 Every runtime role **reads everything** (default `SELECT` in `setup_roles.sql`); the column above is what it may write. `setup_roles.sql` also revokes from `PUBLIC` TimescaleDB's job API and `TEMP` — re-run it after any `ALTER EXTENSION timescaledb UPDATE`, which can restore them.
 

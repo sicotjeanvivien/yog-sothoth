@@ -96,7 +96,7 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_context` | `INSERT, UPDATE` on `token_metadata` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_backlog()`, which no other role holds | signals |
 | `yog_analytic` | `INSERT, UPDATE` on the `analytic_*` tables | analytic |
-| `yog_archive` | `SELECT` on everything through `pg_read_all_data`, writes nothing | archive |
+| `yog_archive` | `SELECT` on every schema, granted schema by schema by `setup_roles.sql` at each run; writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 
 The role split is the safety net, not a bug: calling a write method from the api process fails with `permission denied` from Postgres itself, by design. Nor can a runtime role write through what `PUBLIC` holds by default: `setup_roles.sql` takes back TimescaleDB's job API (`add_job` and its siblings) and `TEMP` on the database, and `tests/runtime_role_writes.rs` proves each refusal under the role itself. Provisioning mechanics (`setup_roles.sql`, default privileges) are documented in [`persistence/README.md`](./persistence/README.md#setup_rolessql).

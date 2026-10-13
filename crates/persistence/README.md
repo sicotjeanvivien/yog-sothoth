@@ -532,8 +532,7 @@ is read from the raw rows, whole. ⚠️ An hour caught up after an outage may b
 materialised already, and is then read as materialised: a swap written into it
 since the last refresh is not in its facts.
 
-`yog_analytic` reads through explicit grants (015), not `pg_read_all_data`.
-⚠️ The swap aggregate is granted as well as the priced view over it: TimescaleDB
+`yog_analytic` reads through explicit grants (015). ⚠️ The swap aggregate is granted as well as the priced view over it: TimescaleDB
 checks a continuous aggregate as the reader, not as the owner of the view on
 top.
 
@@ -624,6 +623,17 @@ yog_migrate` so tables created by future migrations inherit the right `SELECT`
 grants automatically. It contains no table-specific GRANTs — those live in the
 migrations. The role → rights → process mapping is documented in
 [`crates/README.md`](../README.md#database-roles).
+
+**`yog_archive` reads schema by schema.** `pg_dump` reads every schema,
+TimescaleDB's chunks and catalog included. At every run the file grants `USAGE`
+and `SELECT` on each schema it finds, and sets default privileges on what
+`yog_migrate` later creates in `public`; TimescaleDB passes a hypertable's
+grants on to its chunks, compressed ones included. No role is a member of
+`pg_read_all_data`, which also reads `pg_authid`, every role's password hash.
+⚠️ A schema created between two runs fails the next dump — the archiver's
+heartbeat says so — until the file runs again; every deploy runs it.
+`tests/archive_role.rs` holds the role to it, chunks born after the file
+included.
 
 **Two scopes, one file, and it is idempotent.** Roles are cluster-wide;
 everything else is per-database. That asymmetry used to make the script

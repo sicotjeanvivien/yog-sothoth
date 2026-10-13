@@ -32,9 +32,8 @@
 --   yog_migrate  : DDL — owns the schema, applies migrations.
 --                  Used by the yog-migrate binary; never by runtime services.
 --   Every runtime role below reads every table: the default privileges at
---   the end of this file grant SELECT to all of them but yog_archive, which
---   reads through `pg_read_all_data`. What differs is what each one writes, and
---   the per-table grants in the migrations are the list.
+--   the end of this file grant SELECT to all of them. What differs is what
+--   each one writes, and the per-table grants in the migrations are the list.
 --
 --   yog_indexer  : writes the event tables, pools, pool_current_state and
 --                  network_status.
@@ -43,13 +42,12 @@
 --                  satellites and the pool-property columns of pools.
 --   yog_signals  : appends to signals.
 --   yog_archive  : RO on everything, writes nothing. Used by yog-archive to
---                  run `pg_dump`, which must read every table — TimescaleDB's
---                  chunks and catalog included — so it is a member of the
---                  predefined `pg_read_all_data` rather than of per-table
---                  grants that every new table would have to remember.
---   yog_analytic : writes the analytic tables. Not in `pg_read_all_data`:
---                  that membership reads `pg_authid`, every role's password
---                  hash.
+--                  run `pg_dump`, which must read every schema — TimescaleDB's
+--                  chunks and catalog included. See the last section.
+--   yog_analytic : writes the analytic tables.
+--
+-- No role is a member of `pg_read_all_data`: it also reads `pg_authid`, every
+-- role's password hash.
 --
 -- Least privilege at runtime: none of yog_indexer / yog_api / yog_context /
 -- yog_signals / yog_archive / yog_analytic can CREATE or ALTER tables. The day one of them is compromised,
@@ -100,12 +98,6 @@ BEGIN
     END LOOP;
 END $$;
 
-
--- yog_archive reads everything and writes nothing, in every database of the
--- cluster: `pg_read_all_data` (Postgres >= 14) is SELECT on all tables, views
--- and sequences, and USAGE on all schemas, present and future. Membership is
--- cluster-scoped like the role itself; granting it again is a no-op.
-GRANT pg_read_all_data TO yog_archive;
 
 
 -- ---------------------------------------------------------------------------
@@ -203,3 +195,40 @@ DO $$
 BEGIN
     EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
 END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- yog_archive — every schema `pg_dump` reads — DATABASE scope
+--
+-- What exists now, schema by schema, so that a schema added since the last run
+-- is taken too; what yog_migrate creates later, by default privileges — its
+-- hypertables' chunks inherit their grants. Every deploy runs this file again.
+-- ⚠️ A schema this file has not seen fails the next dump: re-run it after
+-- adding one, as after an extension update.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF pg_has_role('yog_archive', 'pg_read_all_data', 'MEMBER') THEN
+        REVOKE pg_read_all_data FROM yog_archive;
+    END IF;
+END $$;
+
+DO $$
+DECLARE
+    schema_name TEXT;
+BEGIN
+    FOR schema_name IN
+        SELECT nspname FROM pg_namespace
+         WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema'
+    LOOP
+        EXECUTE format('GRANT USAGE ON SCHEMA %I TO yog_archive', schema_name);
+        EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO yog_archive', schema_name);
+        EXECUTE format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA %I TO yog_archive', schema_name);
+    END LOOP;
+END $$;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON TABLES TO yog_archive;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON SEQUENCES TO yog_archive;
