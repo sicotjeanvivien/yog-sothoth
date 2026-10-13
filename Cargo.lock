@@ -6199,6 +6199,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "yog-analytic"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dotenvy",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "yog-bootstrap",
+ "yog-core",
+ "yog-persistence",
+]
+
+[[package]]
 name = "yog-api"
 version = "0.1.0"
 dependencies = [

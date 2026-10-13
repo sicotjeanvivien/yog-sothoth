@@ -90,7 +90,7 @@ main() {
   cd "$(dirname "$script")/.."
 
   dc=(docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full)
-  db_daemons=(yog-indexer yog-context yog-signals yog-api yog-archive)
+  db_daemons=(yog-indexer yog-context yog-signals yog-api yog-archive yog-analytic)
   services=(postgres "${db_daemons[@]}" yog-web caddy)
   state=$(git rev-parse --absolute-git-dir)/yog-update
   mkdir -p "$state/logs"

@@ -343,6 +343,35 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  # ── Analytic writer ────────────────────────────────────────────
+  yog-analytic:
+    profiles: ["backend", "full"]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: yog-analytic
+    environment:
+      DATABASE_URL_ANALYTIC: ${DATABASE_URL_ANALYTIC}
+      ANALYTIC_CYCLE_SECS: ${ANALYTIC_CYCLE_SECS:-300}
+      # Empty in development; docker-compose.prod.yml makes it required.
+      ANALYTIC_HEARTBEAT_URL: ${ANALYTIC_HEARTBEAT_URL:-}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export DATABASE_URL_ANALYTIC="$$(echo "$$DATABASE_URL_ANALYTIC" | sed 's|@localhost:5433/|@postgres:5432/|')"
+        exec /usr/local/bin/yog-analytic
+    ports:
+      - "127.0.0.1:9003:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      yog-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # ── Web (frontend) ─────────────────────────────────────────────
   yog-web:
     profiles: ["full"]

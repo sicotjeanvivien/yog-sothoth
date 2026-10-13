@@ -17,6 +17,7 @@
 
 mod helpers;
 
+mod analytic_writer;
 mod archive_role;
 mod cagg_materialization;
 mod cagg_retention;

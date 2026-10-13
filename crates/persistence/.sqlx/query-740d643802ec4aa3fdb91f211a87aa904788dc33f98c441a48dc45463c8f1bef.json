@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT MAX(bucket) AS \"last_frozen?: DateTime<Utc>\"\n          FROM analytic_hours\n         WHERE frozen_at IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_frozen?: DateTime<Utc>",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "740d643802ec4aa3fdb91f211a87aa904788dc33f98c441a48dc45463c8f1bef"
+}

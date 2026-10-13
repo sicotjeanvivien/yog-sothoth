@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO analytic_protocol_tvl (protocol, bucket, tvl_usd, pools_priced, measured_at)\n        SELECT p.protocol, $1, SUM(t.tvl_usd),\n               COUNT(*) FILTER (WHERE t.tvl_usd IS NOT NULL), $2\n          FROM pool_current_tvl t\n          JOIN pools p ON p.pool_address = t.pool_address\n         GROUP BY p.protocol\n        ON CONFLICT (protocol, bucket) DO UPDATE SET\n            tvl_usd      = EXCLUDED.tvl_usd,\n            pools_priced = EXCLUDED.pools_priced,\n            measured_at  = EXCLUDED.measured_at\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57f6ffdd2d53e203eaec21f680079db1c841df6f9305f38a0e9dda406e09da0c"
+}

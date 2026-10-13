@@ -59,6 +59,9 @@
 #                      the check yog-indexer fails when the ingestion stops
 #                      writing events (period 5 min, grace 10 min);
 #                      crates/indexer/README.md, "The ingestion alarm"
+#   ANALYTIC_HEARTBEAT_URL
+#                      the check yog-analytic pings after each cycle and fails
+#                      when one fails (period 5 min); crates/analytic/README.md
 # The CORS origin and the browser's API URL are derived from the two domains
 # rather than set separately: three values that must agree are one value.
 #
@@ -69,9 +72,9 @@
 # OOM killer. The binaries' limits are about 4x to 8x their measured peaks
 # (September 2026: web 62 MiB under HTTP load, indexer 7.7, context 9.9,
 # api 6.3, signals 4.7, archive 31 with its pg_dump) — except the API's, which
-# is sized against its capacity bounds rather than a peak (see below). The
-# limits add up to 1504 MiB, inside the 2.5 GB the machine reserves for this
-# stack.
+# is sized against its capacity bounds rather than a peak (see below), and
+# yog-analytic's, not yet measured in production. The limits add up to
+# 1536 MiB, inside the 2.5 GB the machine reserves for this stack.
 #
 # Postgres's memory and connection settings are written here, not left to
 # `timescaledb-tune`. The image runs it once, when the volume is created, and
@@ -85,9 +88,9 @@
 #     max_connections = 25 (measured on 2.27.1-pg16, and again on 2.30.1-pg18
 #     on 25 September 2026). The four
 #     daemons hold pools of ten connections each — yog-signals and yog-indexer
-#     one more each, their alarm's own pool — and yog-archive one while a dump
-#     runs: 43 in all, so under load the pools would be refused "too many
-#     clients".
+#     one more each, their alarm's own pool — yog-analytic one, and
+#     yog-archive one while a dump runs: 44 in all, so under load the pools
+#     would be refused "too many clients".
 # Command-line `-c` settings override postgresql.conf, so these hold whichever
 # way the volume was created. 256MB of shared_buffers inside 832M leaves room
 # for 50 connections at 4MB of work_mem each and for the compression jobs'
@@ -171,6 +174,12 @@ services:
     # container nobody reads, and the whole point is that someone is told.
     environment:
       SIGNALS_MATERIALIZATION_HEARTBEAT_URL: ${SIGNALS_MATERIALIZATION_HEARTBEAT_URL:?set it in the server's .env}
+    mem_limit: 32m
+
+  yog-analytic:
+    ports: !reset []
+    environment:
+      ANALYTIC_HEARTBEAT_URL: ${ANALYTIC_HEARTBEAT_URL:?set it in the server's .env}
     mem_limit: 32m
 
   yog-web:

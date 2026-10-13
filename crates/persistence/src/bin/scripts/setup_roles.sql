@@ -32,8 +32,9 @@
 --   yog_migrate  : DDL — owns the schema, applies migrations.
 --                  Used by the yog-migrate binary; never by runtime services.
 --   Every runtime role below reads every table: the default privileges at
---   the end of this file grant SELECT to all four. What differs is what each
---   one writes, and the per-table grants in the migrations are the list.
+--   the end of this file grant SELECT to the first four, `pg_read_all_data`
+--   to the last two. What differs is what each one writes, and the per-table
+--   grants in the migrations are the list.
 --
 --   yog_indexer  : writes the event tables, pools, pool_current_state and
 --                  network_status.
@@ -46,9 +47,12 @@
 --                  chunks and catalog included — so it is a member of the
 --                  predefined `pg_read_all_data` rather than of per-table
 --                  grants that every new table would have to remember.
+--   yog_analytic : writes the analytic tables, and reads through
+--                  `pg_read_all_data`: a default privilege added for it now
+--                  would not reach the views it reads, all older than it.
 --
 -- Least privilege at runtime: none of yog_indexer / yog_api / yog_context /
--- yog_signals / yog_archive can CREATE or ALTER tables. The day one of them is compromised,
+-- yog_signals / yog_archive / yog_analytic can CREATE or ALTER tables. The day one of them is compromised,
 -- the schema itself stays out of reach.
 --
 -- Sequence on a fresh database:
@@ -76,12 +80,13 @@ DECLARE
         'yog_api',     'CHANGE_ME_api_password',
         'yog_context', 'CHANGE_ME_context_password',
         'yog_signals', 'CHANGE_ME_signals_password',
-        'yog_archive', 'CHANGE_ME_archive_password'
+        'yog_archive', 'CHANGE_ME_archive_password',
+        'yog_analytic', 'CHANGE_ME_analytic_password'
     );
 BEGIN
     FOREACH role_name IN ARRAY ARRAY[
         'yog_migrate', 'yog_indexer', 'yog_api', 'yog_context', 'yog_signals',
-        'yog_archive'
+        'yog_archive', 'yog_analytic'
     ] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
             RAISE NOTICE 'role % already exists — left untouched (password included)', role_name;
@@ -101,6 +106,7 @@ END $$;
 -- and sequences, and USAGE on all schemas, present and future. Membership is
 -- cluster-scoped like the role itself; granting it again is a no-op.
 GRANT pg_read_all_data TO yog_archive;
+GRANT pg_read_all_data TO yog_analytic;
 
 
 -- ---------------------------------------------------------------------------

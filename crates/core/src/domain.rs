@@ -1,3 +1,4 @@
+mod analytic;
 mod announcements;
 mod domain_event;
 mod event_position;
@@ -24,6 +25,10 @@ mod trade_direction;
 mod unpriced_mints;
 mod watched_pool;
 
+pub use analytic::{
+    AnalyticProgress, AnalyticRepository, CycleOutcome, CycleWrite, FREEZE_MARGIN,
+    MAX_HOURS_PER_CYCLE,
+};
 pub use announcements::{Announcement, AnnouncementKind, AnnouncementLookup, AnnouncementSeverity};
 pub use domain_event::DomainEvent;
 pub use event_position::{EventPosition, TransactionPosition};

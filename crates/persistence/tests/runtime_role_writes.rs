@@ -20,12 +20,13 @@ use sqlx::{AssertSqlSafe, PgPool};
 // name cannot be a bind parameter.
 
 /// Every role a runtime process connects under.
-const RUNTIME_ROLES: [&str; 5] = [
+const RUNTIME_ROLES: [&str; 6] = [
     "yog_indexer",
     "yog_api",
     "yog_context",
     "yog_signals",
     "yog_archive",
+    "yog_analytic",
 ];
 
 async fn connect_as(pool: &PgPool, role: &str) -> PoolConnection<Postgres> {

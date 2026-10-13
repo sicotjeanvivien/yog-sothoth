@@ -20,6 +20,8 @@ core/src/
 │   ├── pool_current_state/(CQRS projection of the latest per-pool state)
 │   ├── pool_analytics/    (hourly aggregates read models)
 │   ├── global_analytics/  (GlobalAnalytics — the /api/stats read model)
+│   ├── analytic/          (CycleWrite — what one cycle of yog-analytic writes,
+│   │                       and which hours it freezes; AnalyticRepository)
 │   ├── signals/           (Signal, Severity, SignalDetector, EvalContext,
 │   │                       SignalRepository + SignalFeed, DetectorError)
 │   ├── swap_flow/         (PoolSwapFlow — directional volume read model)

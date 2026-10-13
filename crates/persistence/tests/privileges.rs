@@ -79,6 +79,22 @@ type TablePrivileges<'a> = (&'a str, &'a [RolePrivileges<'a>]);
 /// event table that later needs a corrective UPDATE must not require a migration
 /// to get a right it was always meant to have.
 const TABLE_PRIVILEGES: &[TablePrivileges] = &[
+    (
+        "analytic_hours",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_pool_hourly",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_protocol_hourly",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_protocol_tvl",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
     ("claim_protocol_fee_events", &[("yog_api", &["SELECT"])]),
