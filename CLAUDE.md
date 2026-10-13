@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Protocol-centric observer of Meteora's on-chain activity on Solana. It subscribes to Meteora program IDs over WebSocket, decodes Anchor `event_cpi` emissions, reconstructs AMM state, and persists it to TimescaleDB. A signal engine runs detectors over that data; an HTTP API and a Next.js dashboard read it. Pools are *discovered* from the transaction stream, not configured upfront — the `pools` table records what was *seen*, not a watchlist.
 
-Five backend processes share one Postgres database and never call each other — all coordination is through the schema: `indexer` (ingest), `context` (token/price/pool-account enrichment), `signals` (batch detectors → `signals` table), `api` (axum HTTP + SSE), `archive` (a `pg_dump` every 6 h to an S3 bucket, read-only). The `web` dashboard (Next.js) never touches the DB and has **no BFF**: Server Components and the browser both call the API directly over HTTP (CORS-locked).
+Six backend processes share one Postgres database and never call each other — all coordination is through the schema: `indexer` (ingest), `context` (token/price/pool-account enrichment), `signals` (batch detectors → `signals` table), `analytic` (values the swaps once per pool and hour into the analytic tables, freezes each closed hour), `api` (axum HTTP + SSE), `archive` (a `pg_dump` every 6 h to an S3 bucket, read-only). The `web` dashboard (Next.js) never touches the DB and has **no BFF**: Server Components and the browser both call the API directly over HTTP (CORS-locked).
 
 ## Where the real documentation lives
 
@@ -65,18 +65,18 @@ for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 # an `--all-features` or dev-dependency path needs is still checked in one
 # grouped invocation, and still maskable.
 
-# Lint — the eight native crates (yog-wasm is excluded; it's a deferred
+# Lint — the nine native crates (yog-wasm is excluded; it's a deferred
 # scaffold). Every one must be named: clippy only DRIVES the packages given
 # with `-p`, so a crate reached as a path dependency is compiled but never
 # linted — that is how yog-bootstrap went unlinted until 1 Sept 2026.
-cargo clippy -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
+cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
     -p yog-indexer -p yog-persistence -p yog-signals --all-targets --all-features -- -D warnings
 
 # Doc links — rustdoc is the only thing that checks them (the CI `check` job
 # runs this). `--document-private-items` is required: without it a library's
 # private-item docs are skipped, links included. To force a re-check of an
 # already-documented crate, touch files that EXIST (`lib.rs` for the libraries,
-# `main.rs` for the five binaries): touching a missing `src/lib.rs` creates an
+# `main.rs` for the six binaries): touching a missing `src/lib.rs` creates an
 # empty library, which cargo then documents in place of the binary.
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
@@ -117,7 +117,7 @@ cargo test --workspace --all-features
 cargo test -p yog-persistence --features integration-tests
 
 # Run a binary natively (see "Local dev" for the DB it expects)
-cargo run -p yog-indexer        # or yog-api, yog-context, yog-signals, yog-archive
+cargo run -p yog-indexer        # or yog-api, yog-context, yog-signals, yog-analytic, yog-archive
 cargo run -p yog-persistence --bin yog-migrate   # apply migrations (as yog_migrate)
 ```
 
@@ -161,7 +161,7 @@ Everything is typed per `(platform, protocol, event_kind)`, all the way down: do
 
 - Each table holds only columns relevant to its protocol — no NULL columns for incompatible fields, no JSONB blob.
 - Cross-protocol reads ("all swaps for a pool") go through SQL **VIEW**s (`swap_events`, `liquidity_events`, …) defined at the bottom of the baseline migration, each a `UNION ALL` with a synthesised `protocol` column. Protocol-specific columns are *not* in the VIEWs — read the underlying table when you need them.
-- Adding a protocol touches a short, fixed list of **dispatch points** — one branch or one line each: `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` (⚠️ a stub answers `false`, or the ingestion subscribes to its program id and pays a firehose for zero rows) and `decode_pool_account` (`core`), `EventPersistor::persist` and the persistor wiring in `init_event_persistor` (`indexer/src/bootstrap/daemon/init.rs`), the `pool_account_resolvers` vec (`context/src/bootstrap/daemon.rs`), and the `PoolProperties` match in `api/src/http/dto/response/pool.rs`. Everything else is isolated per-protocol code; the full recipe is in `crates/README.md`. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table — but per-protocol *pool properties* live in a satellite table keyed on `pool_address`, never in `pools`.
+- Adding a protocol touches a short, fixed list of **dispatch points** — one branch or one line each: `ExtractionDispatcher::extract`, `ExtractionDispatcher::implemented_protocols` (⚠️ a stub answers `false`, or the ingestion subscribes to its program id and pays a firehose for zero rows) and `decode_pool_account` (`core`), the facts upsert in `PgAnalyticRepository::write_cycle` (`persistence`), `EventPersistor::persist` and the persistor wiring in `init_event_persistor` (`indexer/src/bootstrap/daemon/init.rs`), the `pool_account_resolvers` vec (`context/src/bootstrap/daemon.rs`), and the `PoolProperties` match in `api/src/http/dto/response/pool.rs`. Everything else is isolated per-protocol code; the full recipe is in `crates/README.md`. Cross-protocol concepts (`Pool`, `PoolCurrentState`, `TokenMetadata`, `TokenPrice`, `Signal`) stay generic, single-table — but per-protocol *pool properties* live in a satellite table keyed on `pool_address`, never in `pools`.
 
 ## Database privilege model
 
@@ -174,7 +174,8 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | `yog_api` | writes nothing | api |
 | `yog_context` | writes `token_metadata`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
 | `yog_signals` | INSERT (append-only) on `signals`; EXECUTE on `yog_cagg_materialization_backlog()` | signals |
-| `yog_archive` | RO on everything (member of `pg_read_all_data`), writes nothing | archive |
+| `yog_analytic` | writes the `analytic_*` tables | analytic |
+| `yog_archive` | RO on every schema, granted schema by schema by `setup_roles.sql`; writes nothing | archive |
 
 Every runtime role **reads everything** (default `SELECT` in `setup_roles.sql`); the column above is what it may write. `setup_roles.sql` also revokes from `PUBLIC` TimescaleDB's job API and `TEMP` — re-run it after any `ALTER EXTENSION timescaledb UPDATE`, which can restore them.
 
@@ -200,4 +201,4 @@ cargo run -p yog-indexer
 
 ## Observability
 
-The three daemons expose Prometheus metrics on `:9000/metrics` (host-mapped: indexer 9000, context 9001, signals 9002). The API uses RFC 9457 Problem Details (`application/problem+json`) for errors and correlates 500s via the `x-request-id` header. Collection endpoints use opaque base64 cursor pagination (`Page<T>`, default limit 50, hard cap 200).
+The four daemons expose Prometheus metrics on `:9000/metrics` (host-mapped: indexer 9000, context 9001, signals 9002, analytic 9003). The API uses RFC 9457 Problem Details (`application/problem+json`) for errors and correlates 500s via the `x-request-id` header. Collection endpoints use opaque base64 cursor pagination (`Page<T>`, default limit 50, hard cap 200).

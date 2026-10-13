@@ -31,9 +31,10 @@
 --
 --   yog_migrate  : DDL — owns the schema, applies migrations.
 --                  Used by the yog-migrate binary; never by runtime services.
---   Every runtime role below reads every table: the default privileges at
---   the end of this file grant SELECT to all four. What differs is what each
---   one writes, and the per-table grants in the migrations are the list.
+--   Every runtime role below reads every table of `public`, through the
+--   default privileges of this file; yog_archive reads every schema. What
+--   differs is what each one writes, and the per-table grants in the
+--   migrations are the list.
 --
 --   yog_indexer  : writes the event tables, pools, pool_current_state and
 --                  network_status.
@@ -42,13 +43,15 @@
 --                  satellites and the pool-property columns of pools.
 --   yog_signals  : appends to signals.
 --   yog_archive  : RO on everything, writes nothing. Used by yog-archive to
---                  run `pg_dump`, which must read every table — TimescaleDB's
---                  chunks and catalog included — so it is a member of the
---                  predefined `pg_read_all_data` rather than of per-table
---                  grants that every new table would have to remember.
+--                  run `pg_dump`, which must read every schema — TimescaleDB's
+--                  chunks and catalog included. See the last section.
+--   yog_analytic : writes the analytic tables.
+--
+-- No role is a member of `pg_read_all_data`: it also reads `pg_authid`, every
+-- role's password hash.
 --
 -- Least privilege at runtime: none of yog_indexer / yog_api / yog_context /
--- yog_signals / yog_archive can CREATE or ALTER tables. The day one of them is compromised,
+-- yog_signals / yog_archive / yog_analytic can CREATE or ALTER tables. The day one of them is compromised,
 -- the schema itself stays out of reach.
 --
 -- Sequence on a fresh database:
@@ -76,12 +79,13 @@ DECLARE
         'yog_api',     'CHANGE_ME_api_password',
         'yog_context', 'CHANGE_ME_context_password',
         'yog_signals', 'CHANGE_ME_signals_password',
-        'yog_archive', 'CHANGE_ME_archive_password'
+        'yog_archive', 'CHANGE_ME_archive_password',
+        'yog_analytic', 'CHANGE_ME_analytic_password'
     );
 BEGIN
     FOREACH role_name IN ARRAY ARRAY[
         'yog_migrate', 'yog_indexer', 'yog_api', 'yog_context', 'yog_signals',
-        'yog_archive'
+        'yog_archive', 'yog_analytic'
     ] LOOP
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
             RAISE NOTICE 'role % already exists — left untouched (password included)', role_name;
@@ -96,17 +100,11 @@ BEGIN
 END $$;
 
 
--- yog_archive reads everything and writes nothing, in every database of the
--- cluster: `pg_read_all_data` (Postgres >= 14) is SELECT on all tables, views
--- and sequences, and USAGE on all schemas, present and future. Membership is
--- cluster-scoped like the role itself; granting it again is a no-op.
-GRANT pg_read_all_data TO yog_archive;
-
 
 -- ---------------------------------------------------------------------------
 -- Schema access — DATABASE scope. Re-run for every database of the cluster.
 -- ---------------------------------------------------------------------------
-GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context, yog_signals;
+GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context, yog_signals, yog_analytic;
 
 -- yog_migrate owns the schema. This is the cleanest way to give it GRANT
 -- authority over the tables it creates (the baseline migration emits its own
@@ -147,6 +145,17 @@ ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
 -- existing read-sources is granted per-table when a detector needs it.
 ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_signals;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON TABLES TO yog_analytic;
+
+-- `public` is enough for yog_archive too: the internal tables of a hypertable
+-- or a continuous aggregate inherit its grants.
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON TABLES TO yog_archive;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON SEQUENCES TO yog_archive;
 
 -- Sequences (behind BIGSERIAL columns) are used by yog_indexer at insert
 -- time. Default USAGE + SELECT keeps future tables consistent.
@@ -194,4 +203,62 @@ REVOKE EXECUTE ON ROUTINE add_job, alter_job, delete_job, run_job FROM PUBLIC;
 DO $$
 BEGIN
     EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- yog_archive — what `pg_dump` reads and already exists — DATABASE scope
+--
+-- Granted only where missing, so a rerun writes no catalog row, and `public`
+-- first, so a hypertable's chunks inherit its grant instead of taking their own.
+-- What yog_migrate creates later is covered by the default privileges above.
+-- ⚠️ An object yog_migrate did not create — a table of an extension update —
+-- fails the next dump until this file runs again.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE
+    membership RECORD;
+BEGIN
+    FOR membership IN
+        SELECT m.member::REGROLE AS member, m.grantor::REGROLE AS grantor
+          FROM pg_auth_members m
+         WHERE m.roleid = 'pg_read_all_data'::REGROLE
+           AND m.member::REGROLE::TEXT LIKE 'yog\_%'
+    LOOP
+        EXECUTE format('REVOKE pg_read_all_data FROM %s GRANTED BY %s',
+                       membership.member, membership.grantor);
+    END LOOP;
+    IF EXISTS (SELECT 1 FROM pg_roles
+                WHERE rolname LIKE 'yog\_%'
+                  AND pg_has_role(oid, 'pg_read_all_data', 'MEMBER')) THEN
+        RAISE EXCEPTION 'a yog_* role still reads pg_authid through pg_read_all_data';
+    END IF;
+END $$;
+
+DO $$
+DECLARE
+    schema_name TEXT;
+    relation    RECORD;
+BEGIN
+    FOR schema_name IN
+        SELECT nspname FROM pg_namespace
+         WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema'
+           AND NOT has_schema_privilege('yog_archive', oid, 'USAGE')
+    LOOP
+        EXECUTE format('GRANT USAGE ON SCHEMA %I TO yog_archive', schema_name);
+    END LOOP;
+
+    FOR relation IN
+        SELECT c.oid, c.relkind
+          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
+           AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+         ORDER BY n.nspname <> 'public'
+    LOOP
+        IF NOT has_table_privilege('yog_archive', relation.oid, 'SELECT') THEN
+            EXECUTE format('GRANT SELECT ON %s %s TO yog_archive',
+                           CASE relation.relkind WHEN 'S' THEN 'SEQUENCE' ELSE 'TABLE' END,
+                           relation.oid::REGCLASS);
+        END IF;
+    END LOOP;
 END $$;

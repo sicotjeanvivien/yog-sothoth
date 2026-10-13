@@ -25,6 +25,7 @@ web/.next/
 
 # Local env files — secrets must never end up in an image layer
 .env
+.env.prod
 .env.local
 .env.*.local
 

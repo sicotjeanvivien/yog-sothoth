@@ -2,7 +2,7 @@
 
 This directory hosts the Rust workspace — the engine of yog-sothoth.
 
-The workspace follows a **Domain-Driven Design** layout: domain types and contracts live in `core`, infrastructure and I/O live in dedicated adapter crates (`persistence` for Postgres, `bootstrap` for startup utilities). The five native binaries (`indexer`, `api`, `context`, `signals`, `archive`) are thin assembly layers that wire the pieces together; a one-shot binary (`yog-migrate`) lives next to the migrations it applies.
+The workspace follows a **Domain-Driven Design** layout: domain types and contracts live in `core`, infrastructure and I/O live in dedicated adapter crates (`persistence` for Postgres, `bootstrap` for startup utilities). The six native binaries (`indexer`, `api`, `context`, `signals`, `analytic`, `archive`) are thin assembly layers that wire the pieces together; a one-shot binary (`yog-migrate`) lives next to the migrations it applies.
 
 **How the documentation is organised**: this README covers what is *inter-crate and common* — the dependency graph, the conventions, the database roles, the local workflows, and the cross-crate recipes (adding a protocol, adding an endpoint). Each substantial crate has its own README for its internals; each fact lives in exactly one place, so this file links rather than repeats. For the project-wide pitch and status, see the [root README](../README.md).
 
@@ -36,6 +36,7 @@ crates/
 ├── api/           ← binary: axum HTTP server + SSE over the indexed data
 ├── context/       ← binary: token/pool enrichment (Helius DAS, Jupiter, cp-amm accounts)
 ├── signals/       ← binary: batch detector engine emitting typed signals
+├── analytic/      ← binary: the swaps valued once per pool and hour, frozen once closed
 ├── archive/       ← binary: pg_dump every 6 h, streamed to an S3 bucket
 └── wasm/          ← WASM build target (scaffold — deferred)
 ```
@@ -47,21 +48,21 @@ The dependency graph is strict and one-directional:
                        │   core   │  no I/O, wasm-compatible
                        └────▲─────┘
                             │
-              ┌─────────────┼─────────────┬──────────────────────┐
-              │             │             │                      │
-        ┌─────┴─────┐ ┌─────┴─────┐  ┌────┴────┐                 │
-        │persistence│ │ bootstrap │  │  wasm   │                 │
-        └─────▲─────┘ └─────▲─────┘  └─────────┘                 │
-              │             │                                    │
-              └──────┬──────┘                                    │
-                     │                                           │
-      ┌──────────┬───┴──────┬───────────┬───────────┐            │
-      │          │          │           │           │            │
- ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐ ┌────┴────┐       │
- │ indexer │ │  api  │ │ context │ │ signals │ │ archive │       │
- └─────────┘ └───────┘ └─────────┘ └─────────┘ └─────────┘       │
-                                                                 │
-                                          (no binary depends on wasm)
+              ┌─────────────┼─────────────┬───────────────────────────────────┐
+              │             │             │                                   │
+        ┌─────┴─────┐ ┌─────┴─────┐  ┌────┴────┐                              │
+        │persistence│ │ bootstrap │  │  wasm   │                              │
+        └─────▲─────┘ └─────▲─────┘  └─────────┘                              │
+              │             │                                                 │
+              └──────┬──────┘                                                 │
+                     │                                                        │
+      ┌──────────┬───┴──────┬───────────┬───────────┬────────────┐            │
+      │          │          │           │           │            │            │
+ ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐ ┌────┴─────┐ ┌────┴────┐       │
+ │ indexer │ │  api  │ │ context │ │ signals │ │ analytic │ │ archive │       │
+ └─────────┘ └───────┘ └─────────┘ └─────────┘ └──────────┘ └─────────┘       │
+                                                                              │
+                                                    (no binary depends on wasm)
 ```
 
 `core` knows nothing about Postgres, axum, or HTTP clients. It declares traits; the adapters and binaries implement and consume them. Each binary depends only on `core` (types + traits), `persistence` (concrete repos), and `bootstrap` (startup helpers).
@@ -72,12 +73,13 @@ The dependency graph is strict and one-directional:
 
 - **[`core` (`yog-core`)](./core/README.md)** — pure logic and domain types. Domain entities and every repository trait, the two-level `DomainEvent`, the Anchor `event_cpi` extraction pipeline, the `SignalDetector` contract, AMM math, pagination primitives. No I/O.
 - **[`persistence` (`yog-persistence`)](./persistence/README.md)** — the Postgres adapter. `Pg*` repository implementations, the forward-only migration suite, the `yog-migrate` binary, the SQLx offline cache, the query-shape policy (inline `query!` / VIEW / `QueryBuilder`), and the `watched_pools` operational reference.
-- **[`bootstrap` (`yog-bootstrap`)](./bootstrap/README.md)** — shared startup utilities: env parsing primitives, the two secret types (`SecretUrl`, `SecretKey`) and the `Endpoint` that holds an address apart from its credential, `ConfigError`, `init_rustls()`, `init_tracing()`, the shared stop (`shutdown_signal()`, `TaskEnd`, `Stop`), and — behind the `heartbeat` feature, for `archive`, `signals` and `indexer` — the Healthchecks.io dead man's switch. The decision rule for adding anything: *does this run identically in every binary's `main()`?* If it varies even slightly, it stays in the binary.
+- **[`bootstrap` (`yog-bootstrap`)](./bootstrap/README.md)** — shared startup utilities: env parsing primitives, the two secret types (`SecretUrl`, `SecretKey`) and the `Endpoint` that holds an address apart from its credential, `ConfigError`, `init_rustls()`, `init_tracing()`, the shared stop (`shutdown_signal()`, `TaskEnd`, `Stop`), and — behind the `heartbeat` feature, for `archive`, `signals`, `indexer` and `analytic` — the Healthchecks.io dead man's switch. The decision rule for adding anything: *does this run identically in every binary's `main()`?* If it varies even slightly, it stays in the binary.
 - **[`indexer` (`yog-indexer`)](./indexer/README.md)** — the ingest daemon. A `TransactionSource` port with two implementations — JSON-RPC (listener → dispatcher → fetch) and Yellowstone gRPC — chosen by `INGEST_SOURCE`, feeding a bounded worker, `TransactionProcessor`, per-protocol sub-persistors, Prometheus metrics. Beside them, the ingestion alarm: a Healthchecks.io check fails when the ingestion stops writing events.
 - **[`api` (`yog-api`)](./api/README.md)** — the read-only HTTP server. Sixteen endpoints, cursor pagination, RFC 9457 errors, and the shared SSE poller behind the live signal stream.
 - **[`context` (`yog-context`)](./context/README.md)** — the enrichment daemon. Three workers: token metadata (Helius DAS), USD prices (Jupiter Price V3), and pool-account property backfill. The last one names no protocol — it iterates one `PoolAccountResolver` per protocol (cp-amm and DLMM today), each owning its queue and its satellite table.
 - **[`archive` (`yog-archive`)](./archive/README.md)** — the backup daemon. Every six hours, `pg_dump` under the read-only `yog_archive` role, streamed to an S3-compatible bucket, checked by a `pg_restore` that reads every block, and signalled to a dead man's switch. It never restores: the proven procedure is in [`persistence/README.md`](./persistence/README.md#backup-and-restore).
 - **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain. Beside them, the materialisation alarm: a Healthchecks.io check fails when a continuous aggregate stops being materialised.
+- **[`analytic` (`yog-analytic`)](./analytic/README.md)** — the analytic writer. Every five minutes, one transaction: the DAMM v2 swaps of the open hours valued into a fact table per pool and hour, the protocol aggregate summed from those facts, the protocol TVL measured; each hour frozen ten minutes after its close and never written again. The readers come in their own changes.
 - **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed once user accounts exist.
 
 ---
@@ -93,7 +95,8 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_api` | writes nothing | api |
 | `yog_context` | `INSERT, UPDATE` on `token_metadata` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_backlog()`, which no other role holds | signals |
-| `yog_archive` | `SELECT` on everything through `pg_read_all_data`, writes nothing | archive |
+| `yog_analytic` | `INSERT, UPDATE` on the `analytic_*` tables | analytic |
+| `yog_archive` | `SELECT` on every schema, granted schema by schema by `setup_roles.sql` at each run; writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 
 The role split is the safety net, not a bug: calling a write method from the api process fails with `permission denied` from Postgres itself, by design. Nor can a runtime role write through what `PUBLIC` holds by default: `setup_roles.sql` takes back TimescaleDB's job API (`add_job` and its siblings) and `TEMP` on the database, and `tests/runtime_role_writes.rs` proves each refusal under the role itself. Provisioning mechanics (`setup_roles.sql`, default privileges) are documented in [`persistence/README.md`](./persistence/README.md#setup_rolessql).
@@ -112,7 +115,7 @@ Two workflows are supported.
 # Postgres only — when running native cargo run alongside
 docker compose up -d
 
-# Full backend stack (postgres + migrate + indexer + api + context + signals)
+# Full backend stack (postgres + migrate + indexer + api + context + signals + analytic)
 docker compose --profile backend up -d --build
 
 # Everything including the Next.js dashboard (still the dev shape)
@@ -154,7 +157,7 @@ psql "postgresql://yog:yog@localhost:5433/yog_sothoth" -c \
     "SELECT pool_address, note FROM watched_pools WHERE active;"
 
 # 4. Run the binary you're working on
-cargo run -p yog-indexer    # or yog-api, yog-context, yog-signals
+cargo run -p yog-indexer    # or yog-api, yog-context, yog-signals, yog-analytic
 
 # Hit the api
 curl http://127.0.0.1:5000/healthz
@@ -173,7 +176,7 @@ cargo fmt --all
 cargo test --workspace --all-features
 
 # Native crates only — yog-wasm is excluded (deferred scaffold)
-cargo clippy -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
+cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
     -p yog-indexer -p yog-persistence -p yog-signals \
     --all-targets --all-features -- -D warnings
 
@@ -246,6 +249,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 - Extend the cross-protocol VIEWs with a new `UNION ALL` branch per VIEW (in a new migration redefining them), the `protocol` literal injected.
 - Implement the new `Pg<Platform><Product><EventKind>EventRepository` traits in `persistence/src/repositories/<platform>/<product>/`. Follow the `Row + TryFrom<XxxRow> for XxxDomain` convention.
 - Implement the satellite's `PoolAccountResolver` (write + queue) and `PoolPropertiesLookup` (read) on the same `Pg*` struct. ⚠️ Its `list_unresolved` **must** filter on its own protocol: "has no satellite row yet" is one of the candidate conditions, and that is permanently true of every pool of every *other* protocol — get it wrong and the queue starves behind pools this resolver can never store.
+- Give the analytic writer the protocol's swaps: a module beside `repositories/analytic/meteora_damm_v2.rs` that upserts their facts, called from `PgAnalyticRepository::write_cycle`. It needs no freeze guard of its own: `CycleWrite::without_frozen` has already taken the frozen hours out of its range.
 - Regenerate `.sqlx/` (`cd crates/persistence && cargo sqlx prepare -- --all-targets --all-features`).
 - Re-export the new repositories from `lib.rs`.
 

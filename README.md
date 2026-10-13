@@ -38,21 +38,21 @@ It is a **stream observer** — pools are discovered dynamically as transactions
 
 ## How it works (high-level)
 
-Five backend processes share a single Postgres database — no direct calls between them, all coordination happens through the schema. The four below carry the data; the fifth, `archive`, backs it up. The web dashboard never touches the database; it reads through the API:
+Six backend processes share a single Postgres database — no direct calls between them, all coordination happens through the schema. The five below carry the data; the sixth, `archive`, backs it up. The web dashboard never touches the database; it reads through the API:
 
 ```
-                ┌──────────────────────────────────────────────────────┐
-                │                 TimescaleDB (Postgres)               │
-                │  events · pools · token_metadata · prices · signals  │
-                └─────┬───────────┬────────────┬────────────────┬──────┘
-                      │ writes    │ writes     │ writes         │ reads
-                ┌─────┴────┐ ┌────┴─────┐ ┌────┴──────┐ ┌───────┴──────┐
-                │ indexer  │ │ context  │ │  signals  │ │     api      │
-                │  (Rust)  │ │  (Rust)  │ │  (Rust)   │ │ (Rust, axum) │
-                └─────┬────┘ └────┬─────┘ └───────────┘ └───────┬──────┘
-                      │ WS / gRPC │ HTTP                        │ HTTP + SSE
-                      ▼           ▼                             ▼
-                 Solana RPC   Helius DAS               web (Next.js) · browser
+                ┌───────────────────────────────────────────────────────────────────┐
+                │                      TimescaleDB (Postgres)                       │
+                │   events · pools · token_metadata · prices · signals · analytic   │
+                └─────┬────────────┬────────────┬─────────────┬──────────────┬──────┘
+                      │ writes     │ writes     │ writes      │ writes       │ reads
+                ┌─────┴────┐ ┌─────┴────┐ ┌─────┴─────┐ ┌─────┴────┐ ┌───────┴──────┐
+                │ indexer  │ │ context  │ │  signals  │ │ analytic │ │     api      │
+                │  (Rust)  │ │  (Rust)  │ │  (Rust)   │ │  (Rust)  │ │ (Rust, axum) │
+                └─────┬────┘ └─────┬────┘ └───────────┘ └──────────┘ └───────┬──────┘
+                      │ WS / gRPC  │ HTTP                                    │ HTTP + SSE
+                      ▼            ▼                                         ▼
+                 Solana RPC   Helius DAS                          web (Next.js) · browser
                  Yellowstone  Jupiter Price V3
                  gRPC
 ```
@@ -60,11 +60,12 @@ Five backend processes share a single Postgres database — no direct calls betw
 - **`indexer`** subscribes to Meteora programs (or, for now, to the watched pools), decodes Anchor events, persists the reconstructed state. A `TransactionSource` port — JSON-RPC or Yellowstone gRPC, chosen by `INGEST_SOURCE` — feeding a bounded-concurrency worker, with Prometheus metrics.
 - **`context`** enriches the raw mint addresses recorded by the indexer with token metadata (Helius DAS) and USD prices (Jupiter Price V3), and resolves pool properties (mints, fee config) from on-chain accounts. Independent worker loops with configurable intervals.
 - **`signals`** is a batch detector engine: each detector polls the accumulated data at its own cadence, stateless between ticks — the database carries the state — and emits typed signals with a severity into the `signals` table. A per-`(detector, pool)` cooldown prevents re-alerting, except on severity escalation.
+- **`analytic`** values the swaps once per pool and per hour into fact tables, sums them per protocol and measures each protocol's TVL, every five minutes; an hour is frozen ten minutes after its close. Readers then read sums instead of re-pricing every hour of their window on each request.
 - **`api`** exposes the indexed, enriched, and detected data over HTTP. Cursor-based pagination, RFC 9457 errors, security headers as router-level middleware. It is also the single egress for signals: a paginated collection endpoint plus an SSE stream fed by an internal poller that broadcasts new signals to connected clients.
 - **`archive`** runs `pg_dump` every six hours under a read-only role, streams the dump to an S3-compatible bucket, checks that `pg_restore` can read every block of it, and signals a dead man's switch. It never restores; the proven restore procedure is in [`crates/persistence/README.md`](./crates/persistence/README.md#backup-and-restore).
 - **`web`** is a Next.js dashboard. Server Components render the initial data from the API; the browser then talks to the API directly (CORS-locked) — there is no BFF layer.
 
-Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the five backend processes connects under its own least-privilege Postgres role, and `yog-migrate` is the only holder of DDL rights.
+Migrations are applied by a separate one-shot binary (`yog-migrate`) that runs once per deployment under its own DDL role. Runtime services never have schema-modification privileges — each of the six backend processes connects under its own least-privilege Postgres role, and `yog-migrate` is the only holder of DDL rights.
 
 For the full ingestion pipeline, the Anchor decoding mechanism, the database role split, and the workspace layout, see **[`crates/README.md`](./crates/README.md)**. For the dashboard architecture, see **[`web/README.md`](./web/README.md)**.
 
@@ -114,7 +115,7 @@ All nineteen are extracted, persisted to their own per-kind table (`meteora_damm
 | Database | TimescaleDB on PostgreSQL 18 |
 | Frontend | Next.js 16, TypeScript, Tailwind v4, next-intl |
 | External data | Solana JSON-RPC (any provider), Yellowstone gRPC (Alchemy), Helius DAS, Jupiter Price V3 |
-| Container runtime | Docker Compose (6 backend images + 1 frontend image; `yog-archive` runs only under the production overlay) |
+| Container runtime | Docker Compose (7 backend images + 1 frontend image; `yog-archive` runs only under the production overlay) |
 | Reverse proxy | Caddy (automatic TLS via Let's Encrypt) |
 | Observability | Prometheus, tracing |
 | CI | GitHub Actions (cargo check, rustdoc doc links, per-crate check, module visibility, fmt, clippy, unit and DB-backed integration tests, audit, sqlx offline check) |
@@ -146,7 +147,7 @@ docker compose --profile backend up -d --build
 docker compose --profile full up -d --build
 ```
 
-The API is reachable on `http://localhost:5000` and the web dashboard on `http://localhost:3000`. Each daemon exposes Prometheus metrics on the host: indexer on `127.0.0.1:9000/metrics`, context on `:9001`, signals on `:9002`.
+The API is reachable on `http://localhost:5000` and the web dashboard on `http://localhost:3000`. Each daemon exposes Prometheus metrics on the host: indexer on `127.0.0.1:9000/metrics`, context on `:9001`, signals on `:9002`, analytic on `:9003`.
 
 For the native development workflow (running services via `cargo run` against a dockerised Postgres), the migration toolchain, and the SQL conventions, see **[`crates/README.md`](./crates/README.md)**. For the frontend setup, see **[`web/README.md`](./web/README.md)**.
 
@@ -166,7 +167,7 @@ Next comes production, which ingests over gRPC. After that: lifting the allowlis
 
 ## Hosting
 
-Production deployment targets **Scaleway** in the Paris region — a single instance, shared with other projects, running the stack of `docker-compose.prod.yml`: TimescaleDB in its own container, the six backend containers (`yog-migrate`, `yog-indexer`, `yog-api`, `yog-context`, `yog-signals`, `yog-archive`), the frontend, and Caddy as reverse proxy. Every container has a memory limit, so that the first one to grow cannot get Postgres killed. Backups leave the machine: `yog-archive` streams a `pg_dump` to Object Storage every six hours. The monthly budget is dominated by the gRPC stream and will be stated here once confirmed by provider quotes.
+Production deployment targets **Scaleway** in the Paris region — a single instance, shared with other projects, running the stack of `docker-compose.prod.yml`: TimescaleDB in its own container, the seven backend containers (`yog-migrate`, `yog-indexer`, `yog-api`, `yog-context`, `yog-signals`, `yog-analytic`, `yog-archive`), the frontend, and Caddy as reverse proxy. Every container has a memory limit, so that the first one to grow cannot get Postgres killed. Backups leave the machine: `yog-archive` streams a `pg_dump` to Object Storage every six hours. The monthly budget is dominated by the gRPC stream and will be stated here once confirmed by provider quotes.
 
 ---
 

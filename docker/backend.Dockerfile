@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1.7
 #
-# Single Dockerfile for all six Rust backend images.
+# Single Dockerfile for all seven Rust backend images.
 #
-# The six binaries share one workspace, so they share one `builder`
+# The seven binaries share one workspace, so they share one `builder`
 # stage that compiles everything exactly once. Each service then has
 # a tiny final stage (selected via `target:` in docker-compose.yml)
 # that copies just its binary into the slim runtime base.
 #
-# Why one file instead of six: `docker compose build` hands all the
+# Why one file instead of seven: `docker compose build` hands all the
 # targets to BuildKit in a single bake session, which deduplicates
 # identical stages — the dependency cook and the workspace build run
-# once, not six times in parallel. On memory-constrained hosts
+# once, not seven times in parallel. On memory-constrained hosts
 # (7 GB WSL2) six concurrent rustc trees OOM-kill the compiler; this
 # layout makes a plain `docker compose --profile backend up --build`
 # safe, and ~5x faster on cold cache.
@@ -19,7 +19,7 @@
 #   chef         — base image with cargo-chef installed.
 #   planner      — produces a recipe.json describing the dep graph.
 #   builder      — cooks the deps (cached on Cargo.lock), then builds
-#                  all six binaries against the real source tree.
+#                  all seven binaries against the real source tree.
 #   runtime      — slim Debian base shared by every final stage but
 #                  yog-archive, which needs the Postgres client tools.
 #   yog-*        — one per service: COPY its binary, set ENTRYPOINT.
@@ -74,7 +74,8 @@ RUN cargo build --release \
         --bin yog-api \
         --bin yog-context \
         --bin yog-signals \
-        --bin yog-archive
+        --bin yog-archive \
+        --bin yog-analytic
 
 # ── runtime base ───────────────────────────────────────────────────
 # libssl3 covers any non-rustls TLS code paths transitively pulled
@@ -133,6 +134,12 @@ FROM runtime AS yog-signals
 COPY --from=builder /app/target/release/yog-signals /usr/local/bin/yog-signals
 EXPOSE 9000
 ENTRYPOINT ["/usr/local/bin/yog-signals"]
+
+# yog-analytic — the analytic writer.
+FROM runtime AS yog-analytic
+COPY --from=builder /app/target/release/yog-analytic /usr/local/bin/yog-analytic
+EXPOSE 9000
+ENTRYPOINT ["/usr/local/bin/yog-analytic"]
 
 # yog-archive — the backup daemon. Not on the slim `runtime` base: it runs
 # `pg_dump` and `pg_restore`, which must be the SERVER's Postgres major (a 14

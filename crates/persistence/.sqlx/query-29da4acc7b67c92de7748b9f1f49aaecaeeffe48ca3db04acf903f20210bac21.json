@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE analytic_hours\n           SET frozen_at = $3\n         WHERE bucket BETWEEN $1 AND $2\n           AND frozen_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "29da4acc7b67c92de7748b9f1f49aaecaeeffe48ca3db04acf903f20210bac21"
+}

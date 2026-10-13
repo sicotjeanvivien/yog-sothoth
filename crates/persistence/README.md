@@ -27,6 +27,8 @@ persistence/
 │   ├── health.rs            ← PgHealthChecker
 │   ├── server_info.rs       ← PgServerInfo: the server's versions
 │   ├── repositories/        ← one impl per domain repository trait
+│   │   ├── analytic/        (the analytic writer's cycle, and one module per
+│   │   │                     protocol for its facts — DAMM v2 today)
 │   │   ├── helper/          (pubkey/u64/u128 conversions, pagination helpers,
 │   │   │                     sqlx error mapping)
 │   │   ├── meteora/damm_v2/ (per-event-kind event repositories — 19 today —
@@ -481,7 +483,7 @@ Reads `DATABASE_URL_MIGRATE`, connects under the `yog_migrate` role, applies
 pending migrations via `Database::run_migrations()`, exits 0. In Docker it
 runs once at compose-up; runtime services depend on it via
 `service_completed_successfully` so they never start against a half-migrated
-schema. It is the **only** path through which DDL flows — the five runtime
+schema. It is the **only** path through which DDL flows — the six runtime
 roles cannot CREATE or ALTER anything.
 
 Note: the migration suite is embedded at compile time (`sqlx::migrate!`) — a
@@ -508,6 +510,31 @@ invalidation flag (`038`), DLMM (`039`), and the pool↔protocol invariant
 (`040`). Post-baseline: `002` rebuilds the swap cagg with the two whole-bucket
 traded totals and adds `meteora_damm_v2_swap_events_hourly_priced` — the
 implied-price rule above.
+
+### The analytic tables (migration 015)
+
+`yog-analytic` is their only writer, one transaction per cycle
+(`repositories/analytic.rs`): the facts of the open hours, one row per
+(pool, hour), each protocol's from its own module; the protocol aggregate summed
+from those facts; the hours recorded, and frozen once closed; the protocol TVL,
+by the rule of `pool_current_tvl`. A frozen hour is never written again, whatever
+range the cycle was handed: the transaction locks `analytic_hours` against any
+other writer, reads the last frozen hour, and `CycleWrite::without_frozen`
+(`core`) takes it out — the guard is written once, not in each protocol's
+query. `tests/analytic_writer.rs` runs it under
+`yog_analytic` and holds the facts and the aggregate equal to
+`meteora_damm_v2_pool_hourly_activity` on the same closed hours.
+
+The DAMM v2 facts read `meteora_damm_v2_swap_events_hourly_priced` with the
+formulas of `swap_parts` (010). That view reads the swap aggregate in real
+time: an hour frozen ten minutes after its close is not materialised yet, so it
+is read from the raw rows, whole. ⚠️ An hour caught up after an outage may be
+materialised already, and is then read as materialised: a swap written into it
+since the last refresh is not in its facts.
+
+`yog_analytic` reads through explicit grants (015). ⚠️ The swap aggregate is granted as well as the priced view over it: TimescaleDB
+checks a continuous aggregate as the reader, not as the owner of the view on
+top.
 
 ### A refresh policy must stay inside its retention policy
 
@@ -590,12 +617,26 @@ callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*
 ## `setup_roles.sql`
 
 Provisioning script applied as the admin role, by
-`yog-migrate -- setup-roles`. Creates the six roles, transfers `public`
+`yog-migrate -- setup-roles`. Creates the seven roles, transfers `public`
 schema ownership to `yog_migrate`, and sets `ALTER DEFAULT PRIVILEGES FOR ROLE
 yog_migrate` so tables created by future migrations inherit the right `SELECT`
 grants automatically. It contains no table-specific GRANTs — those live in the
 migrations. The role → rights → process mapping is documented in
 [`crates/README.md`](../README.md#database-roles).
+
+**`yog_archive` reads schema by schema.** `pg_dump` reads every schema,
+TimescaleDB's chunks and catalog included. At every run the file grants `USAGE`
+and `SELECT` where they are missing — a rerun writes no catalog row, so it
+cannot collide with a compression job — and sets default privileges on what
+`yog_migrate` creates in `public`; TimescaleDB passes a hypertable's or an
+aggregate's grants on to its internal tables and chunks, compressed ones
+included. No role is a member of `pg_read_all_data`, which also reads
+`pg_authid`, every role's password hash: the file revokes the membership, from
+whichever grantor, and fails if one remains. ⚠️ An object `yog_migrate` did not
+create — a schema added by hand, a table of an extension update — fails the next
+dump, which the archiver's heartbeat reports, until the file runs again.
+`tests/archive_role.rs` applies the file as production meets it, then creates a
+compressed hypertable, an aggregate and late chunks, and reads them all.
 
 **Two scopes, one file, and it is idempotent.** Roles are cluster-wide;
 everything else is per-database. That asymmetry used to make the script
@@ -736,7 +777,7 @@ DATABASE_URL_ADMIN=postgresql://<admin>@<target>/yog_sothoth \
 #     the shell history, the process list and the server log, where an
 #     `ALTER ROLE … PASSWORD '…'` on the command line would leave it.
 psql <target-admin-url>
-  \password yog_migrate      -- … and yog_indexer, yog_api, yog_context, yog_signals, yog_archive
+  \password yog_migrate      -- … and yog_indexer, yog_api, yog_context, yog_signals, yog_archive, yog_analytic
 
 # 2. TimescaleDB's restore mode — it stops the background workers
 psql <target-admin-url> -c "SELECT timescaledb_pre_restore();"

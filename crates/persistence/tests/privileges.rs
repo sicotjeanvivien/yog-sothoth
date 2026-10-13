@@ -79,6 +79,22 @@ type TablePrivileges<'a> = (&'a str, &'a [RolePrivileges<'a>]);
 /// event table that later needs a corrective UPDATE must not require a migration
 /// to get a right it was always meant to have.
 const TABLE_PRIVILEGES: &[TablePrivileges] = &[
+    (
+        "analytic_hours",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_pool_hourly",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_protocol_hourly",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
+    (
+        "analytic_protocol_tvl",
+        &[("yog_analytic", &["INSERT", "SELECT", "UPDATE"])],
+    ),
     ("announcements", &[("yog_api", &["SELECT"])]),
     ("claim_position_fee_events", &[("yog_api", &["SELECT"])]),
     ("claim_protocol_fee_events", &[("yog_api", &["SELECT"])]),
@@ -225,7 +241,11 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "meteora_damm_v2_swap_events_hourly",
-        &[("yog_api", &["SELECT"])],
+        &[("yog_analytic", &["SELECT"]), ("yog_api", &["SELECT"])],
+    ),
+    (
+        "meteora_damm_v2_swap_events_hourly_priced",
+        &[("yog_analytic", &["SELECT"])],
     ),
     (
         "meteora_damm_v2_update_pool_fees_events",
@@ -288,12 +308,17 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "pool_current_tvl",
-        &[("yog_api", &["SELECT"]), ("yog_signals", &["SELECT"])],
+        &[
+            ("yog_analytic", &["SELECT"]),
+            ("yog_api", &["SELECT"]),
+            ("yog_signals", &["SELECT"]),
+        ],
     ),
     ("pool_price_snapshot", &[("yog_signals", &["SELECT"])]),
     (
         "pools",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_context", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),

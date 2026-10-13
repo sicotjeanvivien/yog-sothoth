@@ -37,6 +37,26 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.4",
+    date: "2026-10-13",
+    summary:
+      "Groundwork for the Overview figures: swaps are now valued once per hour and kept, and the backup service's database access is narrowed.",
+    sections: [
+      {
+        kind: "features",
+        items: [
+          "A new background service values each pool's swaps in dollars once per hour, keeps the result, and freezes each hour ten minutes after it closes. Nothing reads these figures yet: the Overview's 24h volume, fees and TVL, which are still recomputed from every swap at each request and currently fail to load, will move to them once they cover a full day.",
+        ],
+      },
+      {
+        kind: "fixes",
+        items: [
+          "The backup service now reads the application's data schema by schema, instead of through PostgreSQL's built-in read-all role, which reached beyond what a backup needs.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.3",
     date: "2026-10-09",
     summary:

@@ -1,0 +1,33 @@
+[package]
+name = "yog-analytic"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+# The application layer reads through core traits only; bootstrap/ wires the
+# concrete Pg repository from yog-persistence.
+yog-core = { path = "../core" }
+yog-persistence = { path = "../persistence" }
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat"] }
+
+# Async runtime
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+# Errors / logging / config
+anyhow = { workspace = true }
+tracing = { workspace = true }
+dotenvy = { workspace = true }
+
+# Metrics
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+
+# Misc
+chrono = { workspace = true }
+
+[dev-dependencies]
+yog-bootstrap = { path = "../bootstrap", features = ["heartbeat", "test-support"] }
+# The scripted repository of the worker's tests implements a core trait.
+async-trait = { workspace = true }
