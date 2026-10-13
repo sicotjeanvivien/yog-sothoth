@@ -27,7 +27,9 @@ analytic/src/
 │   └── log.rs           ← the lines the worker writes, one function each
 └── bootstrap/
     ├── config.rs        ← DATABASE_URL_ANALYTIC, ANALYTIC_CYCLE_SECS, ANALYTIC_HEARTBEAT_URL
-    └── daemon.rs        ← the pool (one connection), the heartbeat, the worker
+    ├── daemon.rs        ← assembles the worker and runs it
+    └── daemon/
+        └── init.rs      ← init_database (one connection), init_heartbeat
 ```
 
 One loop, so no `workers/` folder ([`crates/README.md`](../README.md#conventions)).
