@@ -95,7 +95,7 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_api` | writes nothing | api |
 | `yog_context` | `INSERT, UPDATE` on `token_metadata` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_backlog()`, which no other role holds | signals |
-| `yog_analytic` | `INSERT, UPDATE` on the `analytic_*` tables; `SELECT` on everything through `pg_read_all_data` | analytic |
+| `yog_analytic` | `INSERT, UPDATE` on the `analytic_*` tables | analytic |
 | `yog_archive` | `SELECT` on everything through `pg_read_all_data`, writes nothing | archive |
 | admin (e.g. `yog` superuser) | Full — provisioning, `cargo sqlx prepare`, ad-hoc operations | tooling only, never a running service |
 

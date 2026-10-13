@@ -29,10 +29,12 @@ SELECT create_hypertable('analytic_pool_hourly', 'bucket',
                          create_default_indexes => FALSE);
 CREATE INDEX analytic_pool_hourly_bucket ON analytic_pool_hourly (bucket DESC);
 
+-- Not segmented by pool: most pools trade a few hours a week, too few rows
+-- per segment to compress.
 ALTER TABLE analytic_pool_hourly SET (
     timescaledb.compress,
-    timescaledb.compress_orderby   = 'bucket DESC',
-    timescaledb.compress_segmentby = 'pool_address'
+    timescaledb.compress_orderby   = 'pool_address, bucket DESC',
+    timescaledb.compress_segmentby = 'protocol'
 );
 
 SELECT add_compression_policy('analytic_pool_hourly', INTERVAL '7 days');
@@ -62,4 +64,10 @@ CREATE TABLE analytic_protocol_tvl (
 
 GRANT SELECT, INSERT, UPDATE
     ON analytic_hours, analytic_pool_hourly, analytic_protocol_hourly, analytic_protocol_tvl
+    TO yog_analytic;
+-- ⚠️ The aggregate under the priced view too: TimescaleDB checks it as the
+-- reader, not as the view's owner.
+GRANT SELECT
+    ON meteora_damm_v2_swap_events_hourly, meteora_damm_v2_swap_events_hourly_priced,
+       pool_current_tvl, pools
     TO yog_analytic;

@@ -241,7 +241,11 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "meteora_damm_v2_swap_events_hourly",
-        &[("yog_api", &["SELECT"])],
+        &[("yog_analytic", &["SELECT"]), ("yog_api", &["SELECT"])],
+    ),
+    (
+        "meteora_damm_v2_swap_events_hourly_priced",
+        &[("yog_analytic", &["SELECT"])],
     ),
     (
         "meteora_damm_v2_update_pool_fees_events",
@@ -304,12 +308,17 @@ const TABLE_PRIVILEGES: &[TablePrivileges] = &[
     ),
     (
         "pool_current_tvl",
-        &[("yog_api", &["SELECT"]), ("yog_signals", &["SELECT"])],
+        &[
+            ("yog_analytic", &["SELECT"]),
+            ("yog_api", &["SELECT"]),
+            ("yog_signals", &["SELECT"]),
+        ],
     ),
     ("pool_price_snapshot", &[("yog_signals", &["SELECT"])]),
     (
         "pools",
         &[
+            ("yog_analytic", &["SELECT"]),
             ("yog_api", &["SELECT"]),
             ("yog_context", &["SELECT"]),
             ("yog_indexer", &["INSERT", "SELECT", "UPDATE"]),

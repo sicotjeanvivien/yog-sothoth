@@ -526,9 +526,16 @@ query. `tests/analytic_writer.rs` runs it under
 `meteora_damm_v2_pool_hourly_activity` on the same closed hours.
 
 The DAMM v2 facts read `meteora_damm_v2_swap_events_hourly_priced` with the
-formulas of `swap_parts` (010). That view reads the swap aggregate in
-real time, so an hour frozen ten minutes after its close is read whole, whether
-or not its bucket has been materialised yet.
+formulas of `swap_parts` (010). That view reads the swap aggregate in real
+time: an hour frozen ten minutes after its close is not materialised yet, so it
+is read from the raw rows, whole. ⚠️ An hour caught up after an outage may be
+materialised already, and is then read as materialised: a swap written into it
+since the last refresh is not in its facts.
+
+`yog_analytic` reads through explicit grants (015), not `pg_read_all_data`.
+⚠️ The swap aggregate is granted as well as the priced view over it: TimescaleDB
+checks a continuous aggregate as the reader, not as the owner of the view on
+top.
 
 ### A refresh policy must stay inside its retention policy
 

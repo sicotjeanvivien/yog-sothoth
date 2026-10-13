@@ -268,6 +268,25 @@ async fn a_swap_written_after_the_freeze_changes_nothing_of_its_hour(pool: PgPoo
     );
 }
 
+/// Returns once a statement of the test's database waits on a lock — the cycle
+/// behind the other writer, wherever it blocks.
+async fn wait_for_a_blocked_statement(pool: &PgPool) {
+    for _ in 0..500 {
+        let blocked: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+              WHERE NOT l.granted AND a.datname = current_database()",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if blocked > 0 {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("the cycle never waited on the other writer");
+}
+
 /// Against the table lock of `write_cycle` removed: the cycle would read no
 /// frozen hour, wait on the other writer's fact, then overwrite it.
 #[sqlx::test]
@@ -296,11 +315,7 @@ async fn a_cycle_waits_for_a_concurrent_freeze_and_keeps_out_of_it(pool: PgPool)
 
     let cycle = cycle_from(now, frozen);
     let writing = tokio::spawn(async move { repository.write_cycle(&cycle).await });
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    assert!(
-        !writing.is_finished(),
-        "the cycle ran beside the other writer"
-    );
+    wait_for_a_blocked_statement(&pool).await;
     other_writer.commit().await.unwrap();
     let outcome = writing.await.unwrap().unwrap();
 
@@ -353,6 +368,22 @@ async fn the_tvl_is_the_sum_of_pool_current_tvl(pool: PgPool) {
         measured,
         (cycle.tvl_hour.unwrap(), expected.0, expected.1, cycle.at)
     );
+}
+
+/// Against `yog_analytic` made a member of `pg_read_all_data`, which reads
+/// every role's password hash.
+#[sqlx::test]
+async fn yog_analytic_cannot_read_the_password_hashes(pool: PgPool) {
+    let analytic = as_analytic(&pool).await;
+
+    let err = sqlx::query("SELECT rolpassword FROM pg_authid")
+        .execute(&analytic)
+        .await
+        .expect_err("yog_analytic reads what it values, not the catalog of roles");
+
+    assert_eq!(sqlstate(&err), INSUFFICIENT_PRIVILEGE);
+    let message = err.as_database_error().unwrap().message().to_owned();
+    assert!(message.contains("table pg_authid"), "{message}");
 }
 
 #[sqlx::test]

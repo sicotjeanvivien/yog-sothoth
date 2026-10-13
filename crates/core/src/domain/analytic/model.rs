@@ -46,15 +46,15 @@ impl CycleWrite {
         Self {
             from,
             through,
-            freeze_through: Some(closed.min(through)),
+            freeze_through: Some(closed),
             tvl_hour: Some(current),
             at: now,
         }
         .without_frozen(progress.last_frozen)
     }
 
-    /// This cycle without the hours up to `last_frozen`: the one place a
-    /// frozen hour is kept from being written again.
+    /// This cycle without the hours up to `last_frozen`, and without a freeze
+    /// past the hours it rewrites: the one place both rules are applied.
     pub fn without_frozen(self, last_frozen: Option<DateTime<Utc>>) -> Self {
         let from = match last_frozen {
             Some(frozen) => self.from.max(frozen + TimeDelta::hours(1)),
@@ -62,7 +62,10 @@ impl CycleWrite {
         };
         Self {
             from,
-            freeze_through: self.freeze_through.filter(|hour| *hour >= from),
+            freeze_through: self
+                .freeze_through
+                .map(|hour| hour.min(self.through))
+                .filter(|hour| *hour >= from),
             tvl_hour: self
                 .tvl_hour
                 .filter(|hour| last_frozen.is_none_or(|frozen| *hour > frozen)),

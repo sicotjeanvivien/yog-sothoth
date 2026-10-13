@@ -32,9 +32,9 @@
 --   yog_migrate  : DDL — owns the schema, applies migrations.
 --                  Used by the yog-migrate binary; never by runtime services.
 --   Every runtime role below reads every table: the default privileges at
---   the end of this file grant SELECT to the first four, `pg_read_all_data`
---   to the last two. What differs is what each one writes, and the per-table
---   grants in the migrations are the list.
+--   the end of this file grant SELECT to all of them but yog_archive, which
+--   reads through `pg_read_all_data`. What differs is what each one writes, and
+--   the per-table grants in the migrations are the list.
 --
 --   yog_indexer  : writes the event tables, pools, pool_current_state and
 --                  network_status.
@@ -47,9 +47,9 @@
 --                  chunks and catalog included — so it is a member of the
 --                  predefined `pg_read_all_data` rather than of per-table
 --                  grants that every new table would have to remember.
---   yog_analytic : writes the analytic tables, and reads through
---                  `pg_read_all_data`: a default privilege added for it now
---                  would not reach the views it reads, all older than it.
+--   yog_analytic : writes the analytic tables. Not in `pg_read_all_data`:
+--                  that membership reads `pg_authid`, every role's password
+--                  hash.
 --
 -- Least privilege at runtime: none of yog_indexer / yog_api / yog_context /
 -- yog_signals / yog_archive / yog_analytic can CREATE or ALTER tables. The day one of them is compromised,
@@ -106,13 +106,12 @@ END $$;
 -- and sequences, and USAGE on all schemas, present and future. Membership is
 -- cluster-scoped like the role itself; granting it again is a no-op.
 GRANT pg_read_all_data TO yog_archive;
-GRANT pg_read_all_data TO yog_analytic;
 
 
 -- ---------------------------------------------------------------------------
 -- Schema access — DATABASE scope. Re-run for every database of the cluster.
 -- ---------------------------------------------------------------------------
-GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context, yog_signals;
+GRANT USAGE ON SCHEMA public TO yog_indexer, yog_api, yog_context, yog_signals, yog_analytic;
 
 -- yog_migrate owns the schema. This is the cleanest way to give it GRANT
 -- authority over the tables it creates (the baseline migration emits its own
@@ -153,6 +152,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
 -- existing read-sources is granted per-table when a detector needs it.
 ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
     GRANT SELECT ON TABLES TO yog_signals;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE yog_migrate IN SCHEMA public
+    GRANT SELECT ON TABLES TO yog_analytic;
 
 -- Sequences (behind BIGSERIAL columns) are used by yog_indexer at insert
 -- time. Default USAGE + SELECT keeps future tables consistent.

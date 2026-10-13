@@ -104,3 +104,21 @@ fn a_cycle_loses_the_hours_frozen_since_it_was_planned() {
     assert_eq!(left.freeze_through, None);
     assert_eq!(left.tvl_hour, None);
 }
+
+/// Against the clamp to `through` kept in `plan` only: a cycle built by hand
+/// would freeze hours an earlier cycle wrote.
+#[test]
+fn a_hand_built_cycle_freezes_nothing_past_what_it_rewrites() {
+    let hand_built = CycleWrite {
+        from: at(9, 0),
+        through: at(9, 0),
+        freeze_through: Some(at(12, 0)),
+        tvl_hour: None,
+        at: at(13, 30),
+    };
+
+    assert_eq!(
+        hand_built.without_frozen(None).freeze_through,
+        Some(at(9, 0))
+    );
+}

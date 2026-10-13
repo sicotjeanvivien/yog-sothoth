@@ -12,9 +12,9 @@
 #                        unless a `// Visible:` comment says why
 #                        (crates/check-module-visibility.py).
 #   - fmt              : `cargo fmt --check`.
-#   - clippy           : `cargo clippy` over the eight native crates (the
+#   - clippy           : `cargo clippy` over the nine native crates (the
 #                        WASM crate is a scaffold, disabled for now).
-#   - test             : `cargo test` over those same eight crates.
+#   - test             : `cargo test` over those same nine crates.
 #   - test-integration : the DB-backed tests, behind the `integration-tests`
 #                        feature, against a real TimescaleDB.
 #   - audit            : `cargo audit` on Cargo.lock — vulnerability scan of

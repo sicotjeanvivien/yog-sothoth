@@ -65,7 +65,7 @@ for p in $crates; do cargo check -p "$p" || solo="$solo $p"; done
 # an `--all-features` or dev-dependency path needs is still checked in one
 # grouped invocation, and still maskable.
 
-# Lint — the eight native crates (yog-wasm is excluded; it's a deferred
+# Lint — the nine native crates (yog-wasm is excluded; it's a deferred
 # scaffold). Every one must be named: clippy only DRIVES the packages given
 # with `-p`, so a crate reached as a path dependency is compiled but never
 # linted — that is how yog-bootstrap went unlinted until 1 Sept 2026.
@@ -174,7 +174,7 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | `yog_api` | writes nothing | api |
 | `yog_context` | writes `token_metadata`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
 | `yog_signals` | INSERT (append-only) on `signals`; EXECUTE on `yog_cagg_materialization_backlog()` | signals |
-| `yog_analytic` | writes the `analytic_*` tables; reads through `pg_read_all_data` | analytic |
+| `yog_analytic` | writes the `analytic_*` tables | analytic |
 | `yog_archive` | RO on everything (member of `pg_read_all_data`), writes nothing | archive |
 
 Every runtime role **reads everything** (default `SELECT` in `setup_roles.sql`); the column above is what it may write. `setup_roles.sql` also revokes from `PUBLIC` TimescaleDB's job API and `TEMP` — re-run it after any `ALTER EXTENSION timescaledb UPDATE`, which can restore them.

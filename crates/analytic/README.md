@@ -12,9 +12,9 @@ valuation VIEWs re-prices every (pool, hour) of its window on every request.
 The writer prices each of them once, and the readers read sums.
 
 It writes under the `yog_analytic` role, which may write the four `analytic_*`
-tables and nothing else, and reads through `pg_read_all_data`
-([`crates/README.md`](../README.md#database-roles)). No reader is wired to
-these tables yet.
+tables and nothing else ([`crates/README.md`](../README.md#database-roles)).
+It is not a member of `pg_read_all_data`, which would let it read every
+role's password hash. No reader is wired to these tables yet.
 
 ## Layout
 
@@ -74,7 +74,7 @@ What the freeze costs, by design:
 |---|---|---|
 | `DATABASE_URL_ANALYTIC` | — | the `yog_analytic` role |
 | `ANALYTIC_CYCLE_SECS` | `300` | time between two cycles, 1 to 3 600; the first runs at startup |
-| `ANALYTIC_HEARTBEAT_URL` | — | a Healthchecks.io ping URL; optional, required by `docker-compose.prod.yml` |
+| `ANALYTIC_HEARTBEAT_URL` | — | a Healthchecks.io ping URL; optional, required by `docker-compose.prod.yml`. It is pinged once per cycle: the check's period follows `ANALYTIC_CYCLE_SECS` |
 
 Each statement has two minutes before Postgres cancels it: a cycle stuck on a
 lock fails with its reason rather than holding the next ones.
