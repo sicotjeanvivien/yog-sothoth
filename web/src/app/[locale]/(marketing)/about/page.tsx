@@ -7,8 +7,7 @@
  *
  * Layout
  *
- *   1. Hero — split: copy left, logo with glow right (stacks on
- *      mobile). Reuses `/logo.png`; no new asset is needed.
+ *   1. Hero.
  *   2. Principles — four cards in a responsive grid, mirroring the
  *      pillar-card vocabulary from `HomePillars` for visual
  *      consistency.
