@@ -324,12 +324,14 @@ bound reaches it — see the implied price below.
 `token_last_price` holds one row per token: the most recent price written for
 it. `insert_batch` writes it in the statement that inserts into `token_prices`,
 so its only writer is `yog_context`, and an older price never replaces a newer
-one. `pool_current_tvl` joins it under the latest bound, instead of searching
-the hypertable twice per pool: its cost follows the tokens, not the pools.
+one. `pool_current_tvl` joins it under the latest bound, and
+`pool_price_snapshot` (018) without one, instead of searching the hypertable
+twice per pool: their cost follows the tokens, not the pools.
 
 ⚠️ It is not the last price of *every* token. 017 filled it from the 15-minute
 window only, so a token not priced since may be missing while `token_prices`
-still holds an older row — the same answer under the latest bound, a wrong one
+still holds an older row. That is the same answer under the latest bound, and
+for `pool_price_snapshot`, whose reader drops an old price in Rust; a wrong one
 for an unbounded read such as `find_latest_by_mint`.
 
 ⚠️ A write to `token_prices` outside `insert_batch` — a raw fixture, a repair

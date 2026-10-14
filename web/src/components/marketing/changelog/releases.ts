@@ -47,6 +47,7 @@ export const RELEASES: readonly Release[] = [
         items: [
           "The Overview's 24h volume, fees and total TVL now read the hourly values introduced in v0.1.4, instead of revaluing a full day of swaps at each request, which had made them fail to load. A figure the hourly service has not caught up with shows as — rather than as a partial sum.",
           "Valuing the TVL of every pool now looks up each token's latest price once, instead of once per pool. It was the slowest step of the hourly service.",
+          "The price-deviation signal now reads each token's latest price once per run, instead of once per pool. It was the slowest step of the signal service.",
         ],
       },
     ],

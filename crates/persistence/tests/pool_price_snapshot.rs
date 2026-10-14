@@ -104,6 +104,36 @@ async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
     assert_eq!(snap.price_b_fetched_at, now - Duration::minutes(2));
 }
 
+/// Against the view bounding the price's age: it is exempt, the detector gates.
+#[sqlx::test]
+async fn a_stale_price_is_still_published(pool: PgPool) {
+    let pool_addr = pk(1).to_string();
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    let now = Utc::now().trunc_subsecs(6);
+    let fetched_at = now - Duration::hours(2);
+
+    insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
+    insert_metadata(&pool, &mint_a, 6, now).await;
+    insert_metadata(&pool, &mint_b, 9, now).await;
+    price_at(&pool, &mint_a, "1.5", fetched_at).await;
+    price_at(&pool, &mint_b, "80.0", fetched_at).await;
+    insert_current_state(&pool, &pool_addr, Some("18446744073709551616"), Some(now)).await;
+
+    let snapshots = PgPoolPriceSnapshotRepository::new(pool.clone())
+        .latest()
+        .await
+        .unwrap();
+
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(
+        (
+            snapshots[0].price_a_fetched_at,
+            snapshots[0].price_b_fetched_at
+        ),
+        (fetched_at, fetched_at)
+    );
+}
+
 #[sqlx::test]
 async fn incomparable_pools_are_absent(pool: PgPool) {
     let now = Utc::now();
