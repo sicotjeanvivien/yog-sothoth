@@ -184,10 +184,10 @@ filters thin pools. Warning at `|imbalance| ≥ threshold`, Critical at
 **`price_oracle_deviation`** — compares the on-chain spot price (decoded from
 `sqrt_price` Q64.64 via `core::amm`) with the oracle price
 (`price_a_usd / price_b_usd` from Jupiter), on the relative gap
-`(spot − oracle) / oracle`, reading the `pool_price_snapshot` VIEW (migration
-024). **Freshness guards on both sides**: a stale oracle price or a pool whose
-last swap is too old makes the comparison meaningless — no signal is emitted
-rather than a false one. The Warning/Critical scale is validated fail-loud at
+`(spot − oracle) / oracle`, reading the `pool_price_snapshot` VIEW, which joins
+`token_last_price` (migration 018). **Freshness guards on both sides**: a stale
+oracle price or a pool whose last swap is too old makes the comparison
+meaningless — no signal is emitted rather than a false one. The Warning/Critical scale is validated fail-loud at
 config load (`threshold < critical`, otherwise Warning would be unreachable).
 
 **`tvl_drain`** — a pool being emptied of its liquidity (LP exodus, rug-like

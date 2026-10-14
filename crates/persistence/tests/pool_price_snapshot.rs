@@ -1,10 +1,5 @@
-//! Integration test for the pool price snapshot view (baseline §15) and
-//! the `PgPoolPriceSnapshotRepository` read path.
-//!
-//! Gated behind `integration-tests`. Validates the vertical slice: a pool
-//! with resolved mints, a swap-bearing current state and a price for both
-//! tokens comes back as one complete snapshot; a pool missing any input
-//! (no swap yet, or an unpriced token) is absent rather than half-populated.
+//! The pool price snapshot view, through `PgPoolPriceSnapshotRepository`: a
+//! pool with every input comes back whole, one missing an input not at all.
 
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, SubsecRound, Utc};
@@ -60,32 +55,36 @@ async fn insert_current_state(
     .unwrap();
 }
 
-#[sqlx::test]
-async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
+/// Pool `pk(1)` on mints `pk(2)` (6 decimals) and `pk(3)` (9), last swapped at
+/// `swap_at` with sqrt_price = 2^64 (raw price 1.0 before decimal rescaling).
+async fn seed_swapped_pool(pool: &PgPool, swap_at: DateTime<Utc>) -> (String, String) {
     let pool_addr = pk(1).to_string();
-    let mint_a = pk(2).to_string();
-    let mint_b = pk(3).to_string();
-    // TIMESTAMPTZ is microsecond-precision; truncate so the round-trip
-    // compares exactly.
-    let now = Utc::now().trunc_subsecs(6);
-    let swap_at = now - Duration::minutes(5);
-
-    insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
-    insert_metadata(&pool, &mint_a, 6, now).await;
-    insert_metadata(&pool, &mint_b, 9, now).await;
-    // Two observations per mint — the view must pick the most recent one.
-    price_at(&pool, &mint_a, "1.5", now - Duration::hours(2)).await;
-    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(3)).await;
-    price_at(&pool, &mint_b, "80.0", now - Duration::hours(2)).await;
-    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(2)).await;
-    // sqrt_price = 2^64 (raw price 1.0 before decimal rescaling).
+    let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
+    insert_pool(pool, &pool_addr, &mint_a, &mint_b).await;
+    insert_metadata(pool, &mint_a, 6, swap_at).await;
+    insert_metadata(pool, &mint_b, 9, swap_at).await;
     insert_current_state(
-        &pool,
+        pool,
         &pool_addr,
         Some("18446744073709551616"),
         Some(swap_at),
     )
     .await;
+    (mint_a, mint_b)
+}
+
+#[sqlx::test]
+async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
+    // TIMESTAMPTZ is microsecond-precision; truncate so the round-trip
+    // compares exactly.
+    let now = Utc::now().trunc_subsecs(6);
+    let swap_at = now - Duration::minutes(5);
+
+    let (mint_a, mint_b) = seed_swapped_pool(&pool, swap_at).await;
+    price_at(&pool, &mint_a, "1.5", now - Duration::hours(2)).await;
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(3)).await;
+    price_at(&pool, &mint_b, "80.0", now - Duration::hours(2)).await;
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(2)).await;
 
     let repo = PgPoolPriceSnapshotRepository::new(pool.clone());
     let snapshots = repo.latest().await.unwrap();
@@ -102,6 +101,31 @@ async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
     assert_eq!(snap.price_b_usd, Decimal::from(100));
     assert_eq!(snap.price_a_fetched_at, now - Duration::minutes(3));
     assert_eq!(snap.price_b_fetched_at, now - Duration::minutes(2));
+}
+
+/// Against the view bounding the price's age: it is exempt, the detector gates.
+#[sqlx::test]
+async fn a_stale_price_is_still_published(pool: PgPool) {
+    let now = Utc::now().trunc_subsecs(6);
+    let fetched_at = now - Duration::hours(2);
+
+    let (mint_a, mint_b) = seed_swapped_pool(&pool, now).await;
+    price_at(&pool, &mint_a, "1.5", fetched_at).await;
+    price_at(&pool, &mint_b, "80.0", fetched_at).await;
+
+    let snapshots = PgPoolPriceSnapshotRepository::new(pool.clone())
+        .latest()
+        .await
+        .unwrap();
+
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(
+        (
+            snapshots[0].price_a_fetched_at,
+            snapshots[0].price_b_fetched_at
+        ),
+        (fetched_at, fetched_at)
+    );
 }
 
 #[sqlx::test]

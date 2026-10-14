@@ -190,8 +190,7 @@ struct Readings {
     /// `find_latest_by_mint`, the read path the API uses — and the one that
     /// carries **no** time bound at all, so it is the one that really can land
     /// on a compressed chunk in production, for a mint last priced over seven
-    /// days ago. (`pool_price_snapshot` has the same unbounded shape; 005 left
-    /// it outside the staleness policy on purpose.)
+    /// days ago.
     latest_price: Option<String>,
     latest_fetched_at: Option<DateTime<Utc>>,
     latest_confidence: Option<String>,

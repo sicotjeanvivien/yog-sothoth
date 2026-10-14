@@ -1,6 +1,5 @@
-//! `token_last_price` (017): written by the statement that inserts into
-//! `token_prices`, read by `pool_current_tvl`, filled by the migration from the
-//! last 15 minutes of prices.
+//! `token_last_price`: written by the statement that inserts into
+//! `token_prices`, filled by migrations 017 and 018.
 
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
@@ -103,15 +102,22 @@ async fn the_price_worker_writes_the_last_price_as_yog_context(pool: PgPool) {
     assert_eq!(last_prices(&pool).await, latest_of_the_series(&pool).await);
 }
 
-/// Against 017 without its fill, filling past the 15-minute window, or
-/// stamping the rows with another time than their price's.
+/// Against 017 without its fill or past its 15-minute window, 018 without its
+/// fill, keeping a row the series disagrees with, or either stamping a row with
+/// another time than its price's.
 #[sqlx::test(migrations = false)]
-async fn the_migration_fills_the_last_price_from_the_window(pool: PgPool) {
+async fn the_migrations_fill_the_last_price_of_every_token(pool: PgPool) {
     let migrator = sqlx::migrate!("./migrations");
     migrator.run_to(16, &pool).await.unwrap();
 
     // Raw SQL: the writer of this schema does not know the table yet.
-    for (mint, usd, minutes_ago) in [(pk(2), 1, 10), (pk(2), 2, 5), (pk(3), 3, 20), (pk(4), 4, 1)] {
+    for (mint, usd, minutes_ago) in [
+        (pk(2), 1, 10),
+        (pk(2), 2, 5),
+        (pk(3), 9, 30),
+        (pk(3), 3, 20),
+        (pk(4), 4, 1),
+    ] {
         sqlx::query(
             "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
              VALUES ($1, $2, 'jupiter', now() - $3 * INTERVAL '1 minute')",
@@ -124,10 +130,28 @@ async fn the_migration_fills_the_last_price_from_the_window(pool: PgPool) {
         .unwrap();
     }
 
-    migrator.run(&pool).await.unwrap();
+    migrator.run_to(17, &pool).await.unwrap();
+    let mut window = latest_of_the_series(&pool).await;
+    window.retain(|(mint, ..)| *mint != pk(3).to_string());
+    assert_eq!(window.len(), 2);
+    assert_eq!(last_prices(&pool).await, window);
 
-    let mut expected = latest_of_the_series(&pool).await;
-    expected.retain(|(mint, ..)| *mint != pk(3).to_string());
-    assert_eq!(expected.len(), 2);
-    assert_eq!(last_prices(&pool).await, expected);
+    // One row older than the series, one newer: 018 sets both to the series.
+    for (mint, minutes_ago) in [(pk(2), 8), (pk(4), -1)] {
+        sqlx::query(
+            "UPDATE token_last_price
+                SET price_usd = 7, fetched_at = now() - $2 * INTERVAL '1 minute'
+              WHERE mint = $1",
+        )
+        .bind(mint.to_string())
+        .bind(f64::from(minutes_ago))
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    migrator.run_to(18, &pool).await.unwrap();
+    let every_token = latest_of_the_series(&pool).await;
+    assert_eq!(every_token.len(), 3);
+    assert_eq!(last_prices(&pool).await, every_token);
 }

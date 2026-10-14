@@ -344,7 +344,7 @@ async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
     let exempt_present = views.iter().any(|(name, _)| name == EXEMPT);
     assert!(
         exempt_present,
-        "{EXEMPT} no longer reads token_prices — the exemption above is now \
+        "{EXEMPT} no longer reads a price — the exemption above is now \
          meaningless and must be removed"
     );
 
