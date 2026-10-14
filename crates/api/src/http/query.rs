@@ -27,9 +27,12 @@ pub(crate) const MAX_TOP_LIMIT: i64 = crate::application::TOP_POOLS_MAX;
 pub(crate) struct PageQuery {
     pub(crate) cursor: Option<String>,
     #[serde(default)]
+    #[param(inline)]
     pub(crate) dir: PageDirectionParam,
+    #[param(inline)]
     pub(crate) position: Option<PagePositionParam>,
     #[serde(default)]
+    #[param(inline)]
     pub(crate) sort: PoolSortParam,
     pub(crate) q: Option<String>,
     /// Exact base-fee tier filter (basis points), as a decimal string on the
@@ -131,8 +134,11 @@ impl From<PoolSortParam> for PoolSort {
 pub(crate) struct SignalsQuery {
     pub(crate) cursor: Option<String>,
     #[serde(default)]
+    #[param(inline)]
     pub(crate) dir: PageDirectionParam,
+    #[param(inline)]
     pub(crate) position: Option<PagePositionParam>,
+    #[param(inline)]
     pub(crate) severity: Option<SeverityParam>,
     pub(crate) pool: Option<String>,
     #[serde(default = "default_limit")]
@@ -165,6 +171,7 @@ impl From<SeverityParam> for Severity {
 #[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct TopPoolsQuery {
     #[serde(default)]
+    #[param(inline)]
     pub(crate) metric: PoolRankMetricParam,
     #[serde(default = "default_top_limit")]
     #[param(value_type = Count)]

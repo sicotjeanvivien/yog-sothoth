@@ -1826,7 +1826,11 @@
             "name": "dir",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PageDirectionParam"
+              "enum": [
+                "next",
+                "prev"
+              ],
+              "type": "string"
             }
           },
           {
@@ -1836,7 +1840,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/PagePositionParam"
+                  "enum": [
+                    "first",
+                    "last"
+                  ],
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -1849,7 +1857,13 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PoolSortParam"
+              "enum": [
+                "first_seen_desc",
+                "first_seen_asc",
+                "last_seen_desc",
+                "last_seen_asc"
+              ],
+              "type": "string"
             }
           },
           {
@@ -1946,7 +1960,12 @@
             "name": "metric",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PoolRankMetricParam"
+              "description": "Wire form of the ranking metric. An unknown value fails serde\ndeserialization → axum returns 400 before the handler runs.",
+              "enum": [
+                "volume_24h",
+                "tvl"
+              ],
+              "type": "string"
             }
           },
           {
@@ -2123,7 +2142,11 @@
             "name": "dir",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PageDirectionParam"
+              "enum": [
+                "next",
+                "prev"
+              ],
+              "type": "string"
             }
           },
           {
@@ -2133,7 +2156,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/PagePositionParam"
+                  "enum": [
+                    "first",
+                    "last"
+                  ],
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -2146,7 +2173,13 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PoolSortParam"
+              "enum": [
+                "first_seen_desc",
+                "first_seen_asc",
+                "last_seen_desc",
+                "last_seen_asc"
+              ],
+              "type": "string"
             }
           },
           {
@@ -2232,7 +2265,11 @@
             "name": "dir",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PageDirectionParam"
+              "enum": [
+                "next",
+                "prev"
+              ],
+              "type": "string"
             }
           },
           {
@@ -2242,7 +2279,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/PagePositionParam"
+                  "enum": [
+                    "first",
+                    "last"
+                  ],
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -2255,7 +2296,13 @@
             "name": "sort",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PoolSortParam"
+              "enum": [
+                "first_seen_desc",
+                "first_seen_asc",
+                "last_seen_desc",
+                "last_seen_asc"
+              ],
+              "type": "string"
             }
           },
           {
@@ -2341,7 +2388,11 @@
             "name": "dir",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/PageDirectionParam"
+              "enum": [
+                "next",
+                "prev"
+              ],
+              "type": "string"
             }
           },
           {
@@ -2351,7 +2402,11 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/PagePositionParam"
+                  "enum": [
+                    "first",
+                    "last"
+                  ],
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -2366,7 +2421,13 @@
             "schema": {
               "oneOf": [
                 {
-                  "$ref": "#/components/schemas/SeverityParam"
+                  "description": "Wire form of the severity filter. An unknown value fails serde\ndeserialization → axum returns 400 before the handler runs.",
+                  "enum": [
+                    "info",
+                    "warning",
+                    "critical"
+                  ],
+                  "type": "string"
                 },
                 {
                   "type": "null"

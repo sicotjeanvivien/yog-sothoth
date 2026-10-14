@@ -41,6 +41,7 @@ fn finish(doc: &mut Value) {
     answer_problems(doc);
     require_nullable(doc);
     refuse_int64(doc, "#");
+    refuse_dangling_refs(doc);
 }
 
 /// Every operation answers its failures as RFC 9457 Problem Details.
@@ -126,6 +127,37 @@ fn refuse_int64(node: &Value, at: &str) {
                 refuse_int64(value, &format!("{at}/{i}"));
             }
         }
+        _ => {}
+    }
+}
+
+/// Panics on a `$ref` to a schema the document does not declare: the generator
+/// skips it, and the zod of that field silently disappears.
+fn refuse_dangling_refs(doc: &Value) {
+    let declared = doc["components"]["schemas"]
+        .as_object()
+        .expect("the document declares schemas");
+    let mut refs = Vec::new();
+    collect_refs(doc, &mut refs);
+    let mut dangling: Vec<&str> = refs
+        .iter()
+        .filter_map(|r| r.strip_prefix("#/components/schemas/"))
+        .filter(|name| !declared.contains_key(*name))
+        .collect();
+    dangling.sort_unstable();
+    dangling.dedup();
+    assert!(dangling.is_empty(), "undeclared schemas: {dangling:?}");
+}
+
+fn collect_refs<'a>(node: &'a Value, refs: &mut Vec<&'a str>) {
+    match node {
+        Value::Object(map) => {
+            if let Some(target) = map.get("$ref").and_then(Value::as_str) {
+                refs.push(target);
+            }
+            map.values().for_each(|v| collect_refs(v, refs));
+        }
+        Value::Array(items) => items.iter().for_each(|v| collect_refs(v, refs)),
         _ => {}
     }
 }

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use super::{document, refuse_int64, require_nullable};
+use super::{document, refuse_dangling_refs, refuse_int64, require_nullable};
 
 const COMMITTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
 
@@ -100,6 +100,19 @@ fn an_int64_is_refused() {
         "properties": { "swapBuckets24h": { "type": "integer", "format": "int64" } }
     });
     refuse_int64(&schema, "#");
+}
+
+#[test]
+#[should_panic(expected = "undeclared schemas: [\"PoolSortParam\"]")]
+fn a_ref_to_an_undeclared_schema_is_refused() {
+    let doc = json!({
+        "components": { "schemas": { "Count": {} } },
+        "paths": { "/api/pools": { "get": { "parameters": [
+            { "name": "limit", "schema": { "$ref": "#/components/schemas/Count" } },
+            { "name": "sort", "schema": { "$ref": "#/components/schemas/PoolSortParam" } }
+        ] } } }
+    });
+    refuse_dangling_refs(&doc);
 }
 
 #[test]
