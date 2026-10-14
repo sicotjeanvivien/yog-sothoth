@@ -328,11 +328,8 @@ one. `pool_current_tvl` joins it under the latest bound, and
 `pool_price_snapshot` (018) without one, instead of searching the hypertable
 twice per pool: their cost follows the tokens, not the pools.
 
-⚠️ It is not the last price of *every* token. 017 filled it from the 15-minute
-window only, so a token not priced since may be missing while `token_prices`
-still holds an older row. That is the same answer under the latest bound, and
-for `pool_price_snapshot`, whose reader drops an old price in Rust; a wrong one
-for an unbounded read such as `find_latest_by_mint`.
+It holds the last price of every token in the series: 017 filled the 15-minute
+window, 018 every other token. A token missing from it has never been priced.
 
 ⚠️ A write to `token_prices` outside `insert_batch` — a raw fixture, a repair
 that deletes rows — leaves this table behind. Tests price through

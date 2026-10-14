@@ -103,15 +103,21 @@ async fn the_price_worker_writes_the_last_price_as_yog_context(pool: PgPool) {
     assert_eq!(last_prices(&pool).await, latest_of_the_series(&pool).await);
 }
 
-/// Against 017 without its fill, filling past the 15-minute window, or
-/// stamping the rows with another time than their price's.
+/// Against 017 without its fill or past its 15-minute window, 018 without its
+/// fill, or either stamping a row with another time than its price's.
 #[sqlx::test(migrations = false)]
-async fn the_migration_fills_the_last_price_from_the_window(pool: PgPool) {
+async fn the_migrations_fill_the_last_price_of_every_token(pool: PgPool) {
     let migrator = sqlx::migrate!("./migrations");
     migrator.run_to(16, &pool).await.unwrap();
 
     // Raw SQL: the writer of this schema does not know the table yet.
-    for (mint, usd, minutes_ago) in [(pk(2), 1, 10), (pk(2), 2, 5), (pk(3), 3, 20), (pk(4), 4, 1)] {
+    for (mint, usd, minutes_ago) in [
+        (pk(2), 1, 10),
+        (pk(2), 2, 5),
+        (pk(3), 9, 30),
+        (pk(3), 3, 20),
+        (pk(4), 4, 1),
+    ] {
         sqlx::query(
             "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
              VALUES ($1, $2, 'jupiter', now() - $3 * INTERVAL '1 minute')",
@@ -124,10 +130,14 @@ async fn the_migration_fills_the_last_price_from_the_window(pool: PgPool) {
         .unwrap();
     }
 
-    migrator.run(&pool).await.unwrap();
+    migrator.run_to(17, &pool).await.unwrap();
+    let mut window = latest_of_the_series(&pool).await;
+    window.retain(|(mint, ..)| *mint != pk(3).to_string());
+    assert_eq!(window.len(), 2);
+    assert_eq!(last_prices(&pool).await, window);
 
-    let mut expected = latest_of_the_series(&pool).await;
-    expected.retain(|(mint, ..)| *mint != pk(3).to_string());
-    assert_eq!(expected.len(), 2);
-    assert_eq!(last_prices(&pool).await, expected);
+    migrator.run(&pool).await.unwrap();
+    let every_token = latest_of_the_series(&pool).await;
+    assert_eq!(every_token.len(), 3);
+    assert_eq!(last_prices(&pool).await, every_token);
 }

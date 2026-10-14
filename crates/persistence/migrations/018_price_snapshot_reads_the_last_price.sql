@@ -1,10 +1,15 @@
--- 018_price_snapshot_reads_the_last_price.sql — pool_price_snapshot joins one
--- row per token in token_last_price (017) instead of searching the hypertable
--- twice per pool. Same columns, same inner joins, still no bound on the
--- price's age: the view stays exempt from the staleness rule.
+-- 018_price_snapshot_reads_the_last_price.sql — token_last_price completed with
+-- the last price of every token in the series, and pool_price_snapshot joining
+-- it.
 
--- ⚠️ The last price since 017, not of the whole series: a token missing here has
--- no recent price, and price_oracle_deviation drops an old one in Rust anyway.
+INSERT INTO token_last_price (mint, price_usd, fetched_at)
+SELECT DISTINCT ON (mint) mint, price_usd, fetched_at
+  FROM token_prices
+ ORDER BY mint, fetched_at DESC
+ON CONFLICT (mint) DO UPDATE
+   SET price_usd = EXCLUDED.price_usd, fetched_at = EXCLUDED.fetched_at
+ WHERE token_last_price.fetched_at < EXCLUDED.fetched_at;
+
 CREATE OR REPLACE VIEW pool_price_snapshot AS
 SELECT
     pcs.pool_address,

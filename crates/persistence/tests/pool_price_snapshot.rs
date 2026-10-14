@@ -1,4 +1,4 @@
-//! Integration test for the pool price snapshot view (baseline §15) and
+//! Integration test for the pool price snapshot view and
 //! the `PgPoolPriceSnapshotRepository` read path.
 //!
 //! Gated behind `integration-tests`. Validates the vertical slice: a pool
@@ -73,7 +73,6 @@ async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
     insert_metadata(&pool, &mint_a, 6, now).await;
     insert_metadata(&pool, &mint_b, 9, now).await;
-    // Two observations per mint — the view must pick the most recent one.
     price_at(&pool, &mint_a, "1.5", now - Duration::hours(2)).await;
     price_at(&pool, &mint_a, "2.0", now - Duration::minutes(3)).await;
     price_at(&pool, &mint_b, "80.0", now - Duration::hours(2)).await;
