@@ -43,9 +43,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
-import {
-  MARKETING_NAV_LINKS,
-} from "./marketing-nav-links";
+import { MARKETING_NAV_LINKS } from "./marketing-nav-links";
 import { CloseIcon, HamburgerIcon } from "@/components/shared/icon";
 import { DashboardButton } from "@/components/shared/dashboard-button";
 
@@ -91,7 +89,7 @@ export function MarketingNav() {
 
   return (
     <nav className="relative z-40 border-b border-sothoth-500/15 bg-cosmos-950">
-      <div className="relative z-40 mx-auto flex max-w-[1800px] items-center justify-between px-6 py-[18px] lg:px-12">
+      <div className="relative z-40 mx-auto flex max-w-[1800px] items-center justify-between px-6 py-4.5 lg:px-12">
         <BrandMark />
 
         {/* Desktop links — inline, lg+ only. */}
@@ -177,21 +175,21 @@ function MobileMenu({
 function BrandMark() {
   const t = useTranslations("Brand");
   return (
-    <Link href="/" className="flex items-center gap-[11px]">
+    <Link href="/" className="flex items-center gap-2.75">
       <div className="flex items-center text-letf">
         <Image
-          src="/logo.png"
+          src="/logo_ys.png"
           alt={t("name")}
-          width={40}
-          height={40}
+          width={48}
+          height={54}
           priority
-          className="h-[40] w-[40] object-contain [filter:drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
+          className="h-13.5 w-12 object-contain filter-[drop-shadow(0_0_14px_rgba(139,92,246,0.55))]"
         />
         <div className="flex flex-col ml-2">
-          <p className="font-display text-[24px] font-semibold tracking-[0.22em] text-[#f1ecff] [text-indent:0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
+          <p className="font-display text-[24px] font-semibold tracking-[0.22em] text-[#f1ecff] indent-[0.22em] [text-shadow:0_0_16px_rgba(139,92,246,0.75)]">
             {t("name")}
           </p>
-          <p className="text-[14px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase [text-indent:0.34em]">
+          <p className="text-[14px] font-semibold tracking-[0.34em] text-sothoth-500 uppercase indent-[0.34em]">
             {t("tagline")}
           </p>
         </div>

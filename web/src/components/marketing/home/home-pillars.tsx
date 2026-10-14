@@ -128,10 +128,10 @@ function PillarCard({
   const t = useTranslations("Marketing.pillars.items");
 
   return (
-    <article className="flex gap-4 rounded-[6px] border border-sothoth-500/15 bg-cosmos-900/60 p-5 transition-colors hover:border-sothoth-500/35">
+    <article className="flex gap-4 rounded-md border border-sothoth-500/15 bg-cosmos-900/60 p-5 transition-colors hover:border-sothoth-500/35">
       {/* Left column — icon badge, per-card accent colour */}
       <div
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[24px] border ${accent}`}
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border ${accent}`}
       >
         <Icon size={24} />
       </div>

@@ -197,7 +197,7 @@ function Field({
   return (
     <div className="grid grid-cols-1 gap-1 py-3 text-[14px] sm:grid-cols-[160px_1fr] sm:gap-4">
       <dt className="text-slate-500">{label}</dt>
-      <dd className="break-words text-slate-200">{children}</dd>
+      <dd className="wrap-break-word text-slate-200">{children}</dd>
     </div>
   );
 }

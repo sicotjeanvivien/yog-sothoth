@@ -43,6 +43,12 @@ export const RELEASES: readonly Release[] = [
       "The Overview's figures load again: they now read the values computed once per hour instead of being recomputed at each request.",
     sections: [
       {
+        kind: "features",
+        items: [
+          "A new Yog-Scope logo and new browser icons, on the site and in the dashboard.",
+        ],
+      },
+      {
         kind: "fixes",
         items: [
           "The Overview's 24h volume, fees and total TVL now read the hourly values introduced in v0.1.4, instead of revaluing a full day of swaps at each request, which had made them fail to load. A figure the hourly service has not caught up with shows as — rather than as a partial sum.",

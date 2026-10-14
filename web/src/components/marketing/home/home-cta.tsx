@@ -31,20 +31,20 @@ export function HomeCta() {
         />
 
         {/* Content, above the glow. */}
-        <div className="relative z-[1] flex flex-col items-center">
+        <div className="relative z-1 flex flex-col items-center">
           <Image
-            src="/logo.png"
+            src="/logo_ys.png"
             alt=""
             width={64}
-            height={64}
-            className="h-[64px] w-[64px] object-contain [filter:drop-shadow(0_0_16px_rgba(139,92,246,0.55))]"
+            height={71}
+            className="h-17.75 w-16 object-contain filter-[drop-shadow(0_0_16px_rgba(139,92,246,0.55))]"
           />
 
           <h2 className="mt-6 font-display text-[28px] font-bold tracking-[0.04em] text-[#f5f2ff] lg:text-[36px]">
             {t("title")}
           </h2>
 
-          <p className="mt-3 max-w-[460px] text-[17px] leading-[1.65] text-slate-400">
+          <p className="mt-3 max-w-115 text-[17px] leading-[1.65] text-slate-400">
             {t("subtitle")}
           </p>
 
