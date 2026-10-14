@@ -22,8 +22,8 @@ fn hour_of(at: DateTime<Utc>) -> DateTime<Utc> {
 /// One pool, its two mints registered with decimals, optionally priced.
 async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
     let pool_addr = pk(seed).to_string();
-    let mint_a = format!("mint_a_{seed}");
-    let mint_b = format!("mint_b_{seed}");
+    let mint_a = pk(seed + 100).to_string();
+    let mint_b = pk(seed + 200).to_string();
     let long_ago = Utc::now() - Duration::hours(48);
 
     sqlx::query(

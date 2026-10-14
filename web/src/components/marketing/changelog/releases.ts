@@ -37,6 +37,21 @@ export type Release = {
 /** Newest first — the order the page renders. */
 export const RELEASES: readonly Release[] = [
   {
+    version: "v0.1.5",
+    date: "2026-10-14",
+    summary:
+      "The Overview's figures load again: they now read the values computed once per hour instead of being recomputed at each request.",
+    sections: [
+      {
+        kind: "fixes",
+        items: [
+          "The Overview's 24h volume, fees and total TVL now read the hourly values introduced in v0.1.4, instead of revaluing a full day of swaps at each request, which had made them fail to load. A figure the hourly service has not caught up with shows as — rather than as a partial sum.",
+          "Valuing the TVL of every pool now looks up each token's latest price once, instead of once per pool. It was the slowest step of the hourly service.",
+        ],
+      },
+    ],
+  },
+  {
     version: "v0.1.4",
     date: "2026-10-13",
     summary:

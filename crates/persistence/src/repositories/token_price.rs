@@ -1,6 +1,7 @@
 //! Postgres implementation of `TokenPriceRepository`.
 //!
-//! Backed by the `token_prices` hypertable (baseline §7).
+//! Backed by the `token_prices` hypertable (baseline §7) and the
+//! `token_last_price` table (017), written together by one statement.
 mod rows;
 
 use crate::repositories::helper::map_sqlx_error;
@@ -50,7 +51,8 @@ impl TokenPriceRepository for PgTokenPriceRepository {
         // here, the `query!` macros can't generate VALUES tuples at
         // a runtime-determined arity.
         let mut builder = QueryBuilder::new(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, confidence, fetched_at) ",
+            "WITH kept AS (\
+             INSERT INTO token_prices (mint, price_usd, price_provider, confidence, fetched_at) ",
         );
 
         builder.push_values(prices, |mut row, price| {
@@ -61,7 +63,19 @@ impl TokenPriceRepository for PgTokenPriceRepository {
                 .push_bind(price.fetched_at);
         });
 
-        builder.push(" ON CONFLICT (mint, fetched_at) DO NOTHING");
+        // ⚠️ `DISTINCT ON`: an upsert may not touch one row twice, and a batch
+        // can carry a mint twice. The `WHERE` keeps an older price from winning.
+        builder.push(
+            " ON CONFLICT (mint, fetched_at) DO NOTHING
+              RETURNING mint, price_usd, fetched_at)
+            INSERT INTO token_last_price (mint, price_usd, fetched_at)
+            SELECT DISTINCT ON (mint) mint, price_usd, fetched_at
+              FROM kept
+             ORDER BY mint, fetched_at DESC
+            ON CONFLICT (mint) DO UPDATE
+               SET price_usd = EXCLUDED.price_usd, fetched_at = EXCLUDED.fetched_at
+             WHERE token_last_price.fetched_at < EXCLUDED.fetched_at",
+        );
 
         builder
             .build()

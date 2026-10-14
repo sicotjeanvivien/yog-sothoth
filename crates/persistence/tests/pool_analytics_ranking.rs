@@ -7,7 +7,8 @@
 //! asserts the ranking is by TVL descending, capped by `limit`, with the
 //! NULL-TVL pool excluded rather than sorted last.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_at};
+use chrono::Utc;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
 
@@ -28,14 +29,7 @@ async fn seed_token(pool: &PgPool, mint: &str, priced: bool) {
     .unwrap();
 
     if priced {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1, 1.0, 'jupiter', NOW())",
-        )
-        .bind(mint)
-        .execute(pool)
-        .await
-        .unwrap();
+        price_at(pool, mint, "1.0", Utc::now()).await;
     }
 }
 

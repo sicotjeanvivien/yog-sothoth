@@ -44,6 +44,21 @@ const DEC_B: i16 = 9;
 /// The anchor price used throughout: $180 per unit of token B.
 const PRICE_B: &str = "180.0";
 
+/// 48 hourly prices that store as zero.
+///
+/// ⚠️ Raw SQL: `insert_batch` refuses a price below the column's scale.
+async fn price_mint_as_zero(pool: &PgPool, mint: &str) {
+    sqlx::query(
+        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
+         SELECT $1, 0.00000000000000000000123, 'jupiter', now() - h * INTERVAL '1 hour'
+           FROM generate_series(0, 48) h",
+    )
+    .bind(mint)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 async fn insert_pool(pool: &PgPool, pool_addr: &str, mint_a: &str, mint_b: &str) {
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)
@@ -573,8 +588,7 @@ async fn a_price_rounded_to_zero_does_not_fabricate_coverage(pool: PgPool) {
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
     allow_zero_prices(&pool).await;
-    // Rounds to exactly 0 in the column's scale.
-    price_mint(&pool, &mint_b, "0.00000000000000000000123").await;
+    price_mint_as_zero(&pool, &mint_b).await;
 
     insert_balanced_pair(&pool, &pool_addr, "zero", Utc::now() - Duration::hours(2)).await;
 
@@ -783,7 +797,7 @@ async fn a_zero_price_yields_to_the_implied_rate_instead_of_winning(pool: PgPool
     let (mint_a, mint_b) = (pk(2).to_string(), pk(3).to_string());
     insert_pool(&pool, &pool_addr, &mint_a, &mint_b).await;
     allow_zero_prices(&pool).await;
-    price_mint(&pool, &mint_a, "0.00000000000000000000123").await; // stored as 0
+    price_mint_as_zero(&pool, &mint_a).await;
     price_mint(&pool, &mint_b, PRICE_B).await;
 
     insert_balanced_pair(

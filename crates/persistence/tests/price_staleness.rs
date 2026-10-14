@@ -22,7 +22,7 @@
 //! `SUM`, migration 006 — the `COALESCE` that used to flatten a NULL into a
 //! real-looking zero is gone).
 
-use super::helpers::pk;
+use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use sqlx::PgPool;
 
@@ -58,19 +58,6 @@ async fn seed_pool(pool: &PgPool) -> (String, String, String) {
     }
 
     (pool_addr, mint_a, mint_b)
-}
-
-async fn insert_price(pool: &PgPool, mint: &str, price: &str, at: DateTime<Utc>) {
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(mint)
-    .bind(price)
-    .bind(at)
-    .execute(pool)
-    .await
-    .unwrap();
 }
 
 async fn insert_swap(pool: &PgPool, pool_addr: &str, at: DateTime<Utc>) {
@@ -117,7 +104,7 @@ async fn as_of_price_inside_the_window_values_the_bucket(pool: PgPool) {
 
     // Ten minutes before the bucket opened: comfortably inside the hour the
     // policy allows.
-    insert_price(&pool, &mint_a, "2.0", bucket - Duration::minutes(10)).await;
+    price_at(&pool, &mint_a, "2.0", bucket - Duration::minutes(10)).await;
     insert_swap(&pool, &pool_addr, bucket + Duration::minutes(30)).await;
 
     let value = flow_a_to_b(&pool)
@@ -136,7 +123,7 @@ async fn as_of_price_older_than_the_window_does_not_value_the_bucket(pool: PgPoo
 
     // Ninety minutes before the bucket opened. The only difference with the test
     // above — and it must be the difference between a figure and no figure.
-    insert_price(&pool, &mint_a, "2.0", bucket - Duration::minutes(90)).await;
+    price_at(&pool, &mint_a, "2.0", bucket - Duration::minutes(90)).await;
     insert_swap(&pool, &pool_addr, bucket + Duration::minutes(30)).await;
 
     assert!(
@@ -156,8 +143,8 @@ async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
 
     // The API feed is bound by the same rule as the detectors: both legs priced,
     // but too long before the event to describe it.
-    insert_price(&pool, &mint_a, "2.0", event_at - Duration::minutes(90)).await;
-    insert_price(&pool, &mint_b, "100.0", event_at - Duration::minutes(90)).await;
+    price_at(&pool, &mint_a, "2.0", event_at - Duration::minutes(90)).await;
+    price_at(&pool, &mint_b, "100.0", event_at - Duration::minutes(90)).await;
 
     sqlx::query(
         "INSERT INTO meteora_damm_v2_liquidity_events
@@ -191,8 +178,8 @@ async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
     // it this would stay green if view 021 were changed to NULL `value_usd`
     // unconditionally. A guard that only ever asserts absence proves nothing
     // about the bound.
-    insert_price(&pool, &mint_a, "2.0", event_at - Duration::minutes(20)).await;
-    insert_price(&pool, &mint_b, "100.0", event_at - Duration::minutes(20)).await;
+    price_at(&pool, &mint_a, "2.0", event_at - Duration::minutes(20)).await;
+    price_at(&pool, &mint_b, "100.0", event_at - Duration::minutes(20)).await;
 
     let value: Option<f64> = sqlx::query_scalar(
         "SELECT value_usd::DOUBLE PRECISION
@@ -240,8 +227,8 @@ async fn current_tvl_uses_a_fresh_price(pool: PgPool) {
     seed_current_state(&pool, &pool_addr).await;
 
     let now = Utc::now();
-    insert_price(&pool, &mint_a, "2.0", now - Duration::minutes(5)).await;
-    insert_price(&pool, &mint_b, "100.0", now - Duration::minutes(5)).await;
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(5)).await;
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(5)).await;
 
     // 10.0 A × $2 + 1.0 B × $100 = $120.
     let tvl = current_tvl(&pool)
@@ -257,14 +244,24 @@ async fn current_tvl_goes_absent_when_the_price_stops_being_refreshed(pool: PgPo
 
     // yog-context died 30 minutes ago. Reserves are current; the prices are not.
     let now = Utc::now();
-    insert_price(&pool, &mint_a, "2.0", now - Duration::minutes(30)).await;
-    insert_price(&pool, &mint_b, "100.0", now - Duration::minutes(30)).await;
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(30)).await;
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(30)).await;
 
     assert!(
         current_tvl(&pool).await.is_none(),
         "a TVL computed from half-hour-old quotes is not a current TVL; before \
          this policy the dashboard and tvl_drain both kept using it, silently"
     );
+}
+
+#[sqlx::test]
+async fn current_tvl_is_absent_for_a_token_never_priced(pool: PgPool) {
+    let (pool_addr, _mint_a, mint_b) = seed_pool(&pool).await;
+    seed_current_state(&pool, &pool_addr).await;
+
+    price_at(&pool, &mint_b, "100.0", Utc::now() - Duration::minutes(5)).await;
+
+    assert!(current_tvl(&pool).await.is_none());
 }
 
 // ── 4. The constraint: no view reads prices without a bound ─────────────────
@@ -300,27 +297,25 @@ const EXEMPT: &str = "pool_price_snapshot";
 /// rather than stay silent. `catches_a_price_read_that_is_not_a_lateral` below
 /// is the proof this branch bites.
 fn unbounded_lookups(definition: &str) -> Option<(usize, usize)> {
-    let lookups = definition.matches("FROM token_prices").count();
+    let lookups = definition.matches("FROM token_prices").count()
+        + definition.matches("JOIN token_last_price").count()
+        + definition.matches("FROM token_last_price").count();
     let bounds = definition.matches("yog_price_max_age").count();
     (lookups == 0 || bounds != lookups).then_some((bounds, lookups))
 }
 
-/// Every relation in `public` that reads `token_prices`, with its definition.
+/// Every relation in `public` that reads `token_prices` or `token_last_price`.
 ///
-/// ⚠️ `pg_matviews` as well as `pg_views`. A `MATERIALIZED VIEW` — or a
-/// TimescaleDB continuous aggregate, which is one — lives in a different
-/// catalog and would escape a `pg_views`-only guard entirely. That is not a
-/// hypothetical shape: CLAUDE.md names materialization as *the* performance
-/// tool of this project ("the perf tool is materialization … that's what the
-/// hourly CAs already do"), so the next price-reading relation is as likely to
-/// be materialized as not. Zero today; the guard covers it before there is one.
+/// ⚠️ `pg_matviews` too: a continuous aggregate escapes a `pg_views`-only guard.
 async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
     sqlx::query_as(
         "SELECT viewname, definition FROM pg_views
-         WHERE schemaname = 'public' AND definition LIKE '%token_prices%'
+         WHERE schemaname = 'public'
+           AND (definition LIKE '%token_prices%' OR definition LIKE '%token_last_price%')
          UNION ALL
          SELECT matviewname, definition FROM pg_matviews
-         WHERE schemaname = 'public' AND definition LIKE '%token_prices%'
+         WHERE schemaname = 'public'
+           AND (definition LIKE '%token_prices%' OR definition LIKE '%token_last_price%')
          ORDER BY 1",
     )
     .fetch_all(pool)
@@ -329,7 +324,7 @@ async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
 }
 
 #[sqlx::test]
-async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
+async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
     let views = price_reading_views(&pool).await;
 
     // Six since migration 006. `meteora_damm_v2_pool_hourly_flow` used to be
@@ -363,7 +358,7 @@ async fn every_view_reading_token_prices_bounds_the_price_age(pool: PgPool) {
 
     assert!(
         unbounded.is_empty(),
-        "these views read token_prices without applying the staleness policy to \
+        "these views read prices without applying the staleness policy to \
          every lookup: {unbounded:?}. Add `fetched_at >= <reference> - \
          yog_price_max_age_asof()` (or the _latest() variant for a current-price \
          lookup) — the rule used to live at one site out of seventeen, which is \

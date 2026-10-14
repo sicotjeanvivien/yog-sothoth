@@ -6,7 +6,7 @@
 //! uses the price *as-of the event* (not a later price), and it is NULL when a
 //! leg has no price as-of the event (rather than fabricating a partial value).
 
-use super::helpers::pk;
+use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
 
@@ -30,19 +30,6 @@ async fn insert_metadata(pool: &PgPool, mint: &str, decimals: i16, at: DateTime<
     )
     .bind(mint)
     .bind(decimals)
-    .bind(at)
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-async fn insert_price(pool: &PgPool, mint: &str, price: &str, at: DateTime<Utc>) {
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(mint)
-    .bind(price)
     .bind(at)
     .execute(pool)
     .await
@@ -107,9 +94,9 @@ async fn values_both_legs_at_the_as_of_price(pool: PgPool) {
     // (`yog_price_max_age_asof()`, one hour), and view 021 measures that against
     // the event's own timestamp. At -2h both legs went unpriced and `value_usd`
     // came back NULL.
-    insert_price(&pool, &mint_a, "71.5", event_at - Duration::minutes(30)).await;
-    insert_price(&pool, &mint_a, "999.0", event_at + Duration::hours(2)).await;
-    insert_price(&pool, &mint_b, "1.0", event_at - Duration::minutes(30)).await;
+    price_at(&pool, &mint_a, "71.5", event_at - Duration::minutes(30)).await;
+    price_at(&pool, &mint_a, "999.0", event_at + Duration::hours(2)).await;
+    price_at(&pool, &mint_b, "1.0", event_at - Duration::minutes(30)).await;
 
     // 5 SOL (5e9 @ 9 dec) + 100 USDC (100e6 @ 6 dec)
     //   = 5 × 71.5 + 100 × 1.0 = 457.5
@@ -143,7 +130,7 @@ async fn value_is_null_when_a_leg_has_no_price(pool: PgPool) {
     insert_metadata(&pool, &mint_b, 6, event_at - Duration::days(1)).await;
 
     // Only token A is priced; token B has no price row → value unknown.
-    insert_price(&pool, &mint_a, "71.5", event_at - Duration::hours(2)).await;
+    price_at(&pool, &mint_a, "71.5", event_at - Duration::hours(2)).await;
 
     insert_liquidity(
         &pool,
