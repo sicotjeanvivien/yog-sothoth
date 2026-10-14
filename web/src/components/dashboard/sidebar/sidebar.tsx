@@ -79,12 +79,12 @@ function Brand({ collapsed }: { collapsed: boolean }) {
     <div className={`flex ${collapsed ? "lg:justify-center" : ""}`}>
       <Link href="/" className="flex items-center gap-3">
         <Image
-          src="/logo.png"
+          src="/logo_ys.png"
           alt=""
-          width={40}
-          height={43}
+          width={48}
+          height={54}
           priority
-          className="h-auto w-10 shrink-0"
+          className="h-13.5 w-12 shrink-0 object-contain"
         />
         <span
           className={`font-display text-[16px] font-semibold tracking-[0.16em] whitespace-nowrap uppercase ${collapsed ? "lg:sr-only" : ""}`}

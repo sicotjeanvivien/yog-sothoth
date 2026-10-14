@@ -41,12 +41,12 @@
  * `md` is the default (nav, inline use); `lg` is for prominent
  * placements (hero, closing CTA).
  */
- 
+
 import { useTranslations } from "next-intl";
- 
+
 import { Link } from "@/i18n/navigation";
 import { ArrowRightIcon } from "./icon";
- 
+
 type DashboardButtonProps = {
   /** Overrides the default i18n label. */
   label?: string;
@@ -55,7 +55,7 @@ type DashboardButtonProps = {
   /** Extra classes appended to the button (layout tweaks, etc.). */
   className?: string;
 };
- 
+
 /*
  * The visual identity, as one class string.
  *
@@ -80,12 +80,12 @@ const STYLE_CLASS = [
   "hover:shadow-[inset_0_1px_0_rgba(221,214,254,0.6),0_0_32px_rgba(124,58,237,0.65)]",
   "transition-all duration-150",
 ].join(" ");
- 
+
 const SIZE_CLASS: Record<NonNullable<DashboardButtonProps["size"]>, string> = {
   md: "px-5 py-[10px] text-[14px]",
   lg: "px-6 py-3 text-[17px]",
 };
- 
+
 export function DashboardButton({
   label,
   size = "md",
@@ -93,11 +93,11 @@ export function DashboardButton({
 }: DashboardButtonProps) {
   const t = useTranslations("Marketing");
   const text = label ?? t("dashboardButton");
- 
+
   return (
     <Link
       href="/overview"
-      className={`inline-flex items-center gap-2 rounded-[8px] font-semibold text-[#f5f2ff] ${STYLE_CLASS} ${SIZE_CLASS[size]} ${className}`}
+      className={`inline-flex items-center gap-2 rounded-lg font-semibold text-[#f5f2ff] ${STYLE_CLASS} ${SIZE_CLASS[size]} ${className}`}
     >
       {text}
       <ArrowRightIcon />
