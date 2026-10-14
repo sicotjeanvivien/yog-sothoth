@@ -126,7 +126,7 @@ per-protocol directly.
 
 Cross-protocol concepts stay generic, single-table: `pools`,
 `pool_current_state`, `watched_pools`, `network_status`, `token_metadata`,
-`token_prices` — and `signals`, where the discrimination is two *columns*
+`token_prices`, `token_last_price` — and `signals`, where the discrimination is two *columns*
 (`detector`, `protocol`), not per-anything tables: a signal is a uniform
 conclusion, not a heterogeneous event.
 

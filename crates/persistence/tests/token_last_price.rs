@@ -103,7 +103,8 @@ async fn the_price_worker_writes_the_last_price_as_yog_context(pool: PgPool) {
     assert_eq!(last_prices(&pool).await, latest_of_the_series(&pool).await);
 }
 
-/// Against 017 without its fill, or filling past the 15-minute window.
+/// Against 017 without its fill, filling past the 15-minute window, or
+/// stamping the rows with another time than their price's.
 #[sqlx::test(migrations = false)]
 async fn the_migration_fills_the_last_price_from_the_window(pool: PgPool) {
     let migrator = sqlx::migrate!("./migrations");
@@ -125,16 +126,8 @@ async fn the_migration_fills_the_last_price_from_the_window(pool: PgPool) {
 
     migrator.run(&pool).await.unwrap();
 
-    let mut filled: Vec<(String, Decimal)> = last_prices(&pool)
-        .await
-        .into_iter()
-        .map(|(mint, usd, _)| (mint, usd))
-        .collect();
-    filled.sort();
-    let mut expected = vec![
-        (pk(2).to_string(), Decimal::new(2, 0)),
-        (pk(4).to_string(), Decimal::new(4, 0)),
-    ];
-    expected.sort();
-    assert_eq!(filled, expected);
+    let mut expected = latest_of_the_series(&pool).await;
+    expected.retain(|(mint, ..)| *mint != pk(3).to_string());
+    assert_eq!(expected.len(), 2);
+    assert_eq!(last_prices(&pool).await, expected);
 }

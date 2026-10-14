@@ -8,7 +8,10 @@ CREATE TABLE token_last_price (
     price_usd  NUMERIC(38, 18) NOT NULL,
     fetched_at TIMESTAMPTZ     NOT NULL,
     CONSTRAINT token_last_price_price_usd_positive CHECK (price_usd > 0)
-);
+)
+-- ⚠️ Half-full pages: every kept price rewrites its row, and the room left on
+-- the page is what keeps that update HOT instead of bloating the key.
+WITH (fillfactor = 50);
 
 -- ⚠️ SELECT too: the upsert's `WHERE` reads the row it would replace.
 GRANT SELECT, INSERT, UPDATE ON token_last_price TO yog_context;

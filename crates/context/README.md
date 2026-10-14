@@ -375,9 +375,9 @@ The type reaches the wire: `HeliusDasClient` and `SolanaAccountClient` hold a
 the `x-api-key` header is built. See [`yog-bootstrap`](../bootstrap/README.md#secrets--one-invariant-two-types)
 for the invariant and the guard that enforces it.
 
-Connects to Postgres as `yog_context` — RW on `token_metadata`,
-`token_prices` and `token_last_price`, `UPDATE` on the pool-property columns of
-`pools`, RO otherwise.
+Connects to Postgres as `yog_context` — RW on `token_metadata` and
+`token_last_price`, INSERT-only on `token_prices`, `UPDATE` on the
+pool-property columns of `pools`, RO otherwise.
 
 ## Run
 

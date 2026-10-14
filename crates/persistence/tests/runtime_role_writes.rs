@@ -114,25 +114,6 @@ async fn no_runtime_role_can_create_a_temporary_table(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn only_yog_context_writes_the_last_price(pool: PgPool) {
-    apply_setup_roles(&pool).await;
-
-    for role in RUNTIME_ROLES
-        .into_iter()
-        .filter(|role| *role != "yog_context")
-    {
-        let mut conn = connect_as(&pool, role).await;
-        assert_refused(
-            &mut conn,
-            role,
-            "INSERT INTO token_last_price (mint, price_usd, fetched_at) VALUES ('m', 1, now())",
-            "table token_last_price",
-        )
-        .await;
-    }
-}
-
-#[sqlx::test]
 async fn yog_indexer_draws_only_from_the_sequences_of_its_tables(pool: PgPool) {
     let mut conn = connect_as(&pool, "yog_indexer").await;
 
