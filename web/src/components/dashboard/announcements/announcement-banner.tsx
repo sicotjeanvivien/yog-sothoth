@@ -23,7 +23,7 @@ import { Link } from "@/i18n/navigation";
 import type {
   AnnouncementResponse,
   AnnouncementSeverity,
-} from "@/lib/api/schema/announcement";
+} from "@/lib/api/schema/zod.gen";
 import {
   ANNOUNCEMENTS_COOKIE_MAX_AGE_S,
   ANNOUNCEMENTS_DISMISSED_COOKIE,

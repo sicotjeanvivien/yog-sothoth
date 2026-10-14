@@ -22,6 +22,11 @@ use axum::{Json, extract::State};
 /// The `network_status` row is seeded by the baseline migration (§5), so a
 /// healthy system always has one — its absence is treated as an internal
 /// error rather than a 404, since it means the seed row is missing.
+#[utoipa::path(
+    get,
+    path = "/api/network/status",
+    responses((status = 200, body = NetworkStatusResponse))
+)]
 pub(crate) async fn get_network_status(
     State(state): State<AppState>,
 ) -> Result<Json<NetworkStatusResponse>, ApiError> {

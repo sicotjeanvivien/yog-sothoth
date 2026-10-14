@@ -27,7 +27,7 @@ import { useState } from "react";
 
 import { useTranslations } from "next-intl";
 
-import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
+import type { Severity, SignalResponse } from "@/lib/api/schema/zod.gen";
 import { filterSignals } from "@/lib/signals/filter-signals";
 
 import { SignalCard } from "./signal-card";

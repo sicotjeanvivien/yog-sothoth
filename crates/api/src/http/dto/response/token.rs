@@ -7,7 +7,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-
+use utoipa::ToSchema;
 use yog_core::domain::{TokenMetadata, TokenPrice};
 
 use crate::http::dto::response::TokenPriceResponse;
@@ -17,7 +17,7 @@ use crate::http::dto::response::TokenPriceResponse;
 /// Mirrors the convention used by `PoolResponse` and the other
 /// `*Response` DTOs: a flat camelCase JSON shape, the domain types
 /// never leak through.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TokenResponse {
     /// SPL mint address, base58.
@@ -35,6 +35,7 @@ pub(crate) struct TokenResponse {
     decimals: u8,
 
     /// Logo URI, as returned by DAS. May be an `ipfs://` URI.
+    #[schema(format = "uri")]
     logo_uri: Option<String>,
 
     /// When the metadata was first fetched.

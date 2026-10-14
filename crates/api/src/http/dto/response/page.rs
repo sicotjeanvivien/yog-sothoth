@@ -1,4 +1,7 @@
 use serde::Serialize;
+use utoipa::ToSchema;
+
+use crate::http::dto::schema::Count;
 
 /// Wire shape of a paginated response.
 ///
@@ -13,7 +16,7 @@ use serde::Serialize;
 ///   redundant with cursor nullity: a single-page result has both
 ///   cursors `null` AND both flags `true`, which the client uses to
 ///   disable all four navigation buttons.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PageResponse<T> {
     pub(crate) items: Vec<T>,
@@ -44,11 +47,12 @@ pub(crate) struct PageResponse<T> {
 /// back on the first page: it carries a cursor, so it carries a real count. It
 /// is also an upper bound on what the reader missed rather than a count of it;
 /// `crates/api/README.md` states both caveats in full.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolPageResponse<T> {
     #[serde(flatten)]
     pub(crate) page: PageResponse<T>,
     pub(crate) as_of: Option<String>,
+    #[schema(value_type = Count)]
     pub(crate) touched_since: i64,
 }

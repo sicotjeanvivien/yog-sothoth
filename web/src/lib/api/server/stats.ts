@@ -8,10 +8,10 @@
  */
 
 import { apiGet } from "../client/server";
-import { StatsSchema, type StatsResponse } from "../schema/stats";
+import { zStatsResponse, type StatsResponse } from "../schema/zod.gen";
 
 /** Fetch the current protocol-wide statistics snapshot from `yog-api`. */
 export async function fetchStats(): Promise<StatsResponse> {
   // No query parameters — the empty object keeps the `apiGet` signature satisfied.
-  return apiGet("/api/stats", {}, StatsSchema);
+  return apiGet("/api/stats", {}, zStatsResponse);
 }

@@ -26,7 +26,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AnnouncementBanner } from "@/components/dashboard/announcements/announcement-banner";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/components/dashboard/sidebar/sidebar-state";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
-import type { AnnouncementResponse } from "@/lib/api/schema/announcement";
+import type { AnnouncementResponse } from "@/lib/api/schema/zod.gen";
 import { fetchActiveAnnouncements } from "@/lib/api/server/announcements";
 import {
   ANNOUNCEMENTS_DISMISSED_COOKIE,

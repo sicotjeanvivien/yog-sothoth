@@ -1,9 +1,11 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::LastEventKind;
+use utoipa::ToSchema;
+use yog_core::domain;
 
 use crate::application::PoolCurrentStateView;
+use crate::http::dto::schema::{U128String, UnsignedDecimal};
 
 /// `GET /api/pools/{address}/latest-state` response body.
 ///
@@ -16,20 +18,26 @@ use crate::application::PoolCurrentStateView;
 /// removed in migration 003. Per-movement liquidity lives on
 /// `GET /api/pools/{address}/liquidity-events`, under its own name and next to
 /// the add/remove kind that gives it a sign.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolCurrentStateResponse {
+    #[schema(min_length = 1)]
     pub(crate) pool_address: String,
+    #[schema(min_length = 1)]
     pub(crate) protocol: String,
 
     pub(crate) last_event_at: DateTime<Utc>,
-    pub(crate) last_event_kind: String,
+    pub(crate) last_event_kind: LastEventKind,
+    #[schema(min_length = 1)]
     pub(crate) last_signature: String,
 
+    #[schema(value_type = U128String)]
     pub(crate) reserve_a: String,
+    #[schema(value_type = U128String)]
     pub(crate) reserve_b: String,
 
     /// Q64.64 fixed-point; encoded as a string to keep precision in JS.
+    #[schema(value_type = Option<U128String>)]
     pub(crate) last_sqrt_price: Option<String>,
 
     /// Spot price derived from `last_sqrt_price`: units of token B per 1 token
@@ -37,6 +45,7 @@ pub(crate) struct PoolCurrentStateResponse {
     /// (concentrated liquidity), **not** the reserve ratio. `None` when there
     /// is no `sqrt_price` yet or the token decimals are unresolved. Serialized
     /// as a string (`rust_decimal` default) to match the other prices.
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) spot_price_a_in_b: Option<Decimal>,
 
     pub(crate) last_swap_at: Option<DateTime<Utc>>,
@@ -54,7 +63,7 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
             pool_address: state.pool_address.to_string(),
             protocol: state.protocol.as_str().to_string(),
             last_event_at: state.last_event_at,
-            last_event_kind: last_event_kind_str(state.last_event_kind),
+            last_event_kind: state.last_event_kind.into(),
             last_signature: state.last_signature.to_string(),
             reserve_a: state.reserve_a.to_string(),
             reserve_b: state.reserve_b.to_string(),
@@ -66,6 +75,21 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
     }
 }
 
-fn last_event_kind_str(kind: LastEventKind) -> String {
-    kind.as_str().to_string()
+/// The kind of the event that last changed the pool's state.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum LastEventKind {
+    Swap,
+    LiquidityAdd,
+    LiquidityRemove,
+}
+
+impl From<domain::LastEventKind> for LastEventKind {
+    fn from(kind: domain::LastEventKind) -> Self {
+        match kind {
+            domain::LastEventKind::Swap => Self::Swap,
+            domain::LastEventKind::LiquidityAdd => Self::LiquidityAdd,
+            domain::LastEventKind::LiquidityRemove => Self::LiquidityRemove,
+        }
+    }
 }

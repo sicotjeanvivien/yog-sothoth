@@ -5,7 +5,7 @@
  * escalation order) lives in exactly one place.
  */
 
-import type { Severity } from "@/lib/api/schema/signal";
+import type { Severity } from "@/lib/api/schema/zod.gen";
 
 const SEVERITY_RANK: Record<Severity, number> = {
   info: 0,

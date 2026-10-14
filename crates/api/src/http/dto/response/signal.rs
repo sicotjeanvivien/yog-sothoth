@@ -2,21 +2,28 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use utoipa::ToSchema;
+use yog_core::domain;
 
 use crate::application::EnrichedSignal;
 use crate::http::dto::EmbeddedTokenResponse;
+use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
 
 /// `GET /api/signals` item (and `GET /api/signals/stream` event — both
 /// endpoints emit exactly this object).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SignalResponse {
     /// Storage identity — stable across pages, usable as a client-side
     /// list key. Emitted as a JSON number: signals are sparse, the
     /// sequence will never approach 2^53.
+    #[schema(value_type = Count)]
     pub(crate) id: i64,
+    #[schema(min_length = 1)]
     pub(crate) detector: String,
+    #[schema(min_length = 1)]
     pub(crate) protocol: String,
+    #[schema(min_length = 1)]
     pub(crate) pool_address: String,
     /// The pool's token pair, embedded in the same shape as
     /// `PoolResponse` (`EmbeddedTokenResponse`). Every field inside is
@@ -24,14 +31,35 @@ pub(crate) struct SignalResponse {
     /// minimal view, and the client falls back to `pool_address`.
     pub(crate) token_a: EmbeddedTokenResponse,
     pub(crate) token_b: EmbeddedTokenResponse,
-    pub(crate) severity: String,
+    pub(crate) severity: Severity,
     // Exact decimals are emitted as strings, like every other decimal
     // quantity of the API (a JSON-number consumer would go through
     // lossy f64).
+    #[schema(value_type = SignedDecimal)]
     pub(crate) value: String,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) threshold: Option<String>,
     pub(crate) message: Option<String>,
     pub(crate) triggered_at: DateTime<Utc>,
+}
+
+/// How serious a signal is.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Severity {
+    Info,
+    Warning,
+    Critical,
+}
+
+impl From<domain::Severity> for Severity {
+    fn from(severity: domain::Severity) -> Self {
+        match severity {
+            domain::Severity::Info => Self::Info,
+            domain::Severity::Warning => Self::Warning,
+            domain::Severity::Critical => Self::Critical,
+        }
+    }
 }
 
 impl From<EnrichedSignal> for SignalResponse {
@@ -44,7 +72,7 @@ impl From<EnrichedSignal> for SignalResponse {
             pool_address: signal.pool_address.to_string(),
             token_a: enriched.token_a.into(),
             token_b: enriched.token_b.into(),
-            severity: signal.severity.to_string(),
+            severity: signal.severity.into(),
             value: signal.value.to_string(),
             threshold: signal.threshold.map(|t| t.to_string()),
             message: signal.message,

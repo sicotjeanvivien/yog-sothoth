@@ -129,6 +129,10 @@ rust_decimal = "1.43"
 
 # Axum
 axum = "0.8.9"
+# ⚠️ No `decimal` feature: without it, a `Decimal` field of a DTO does not
+# compile until its wire form is named (`value_type`), signed or not.
+utoipa = { version = "6.0.0", features = ["axum_extras", "chrono"] }
+utoipa-axum = "0.3.0"
 # Test-only: `ServiceExt::oneshot` drives a router without a socket. Already
 # compiled with `util` through axum, so declaring it costs no new crate.
 tower = { version = "0.5", default-features = false, features = ["util"] }

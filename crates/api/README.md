@@ -34,6 +34,8 @@ api/src/
 │   ├── handlers/          ← one module per route family
 │   ├── dto/request/       ← query/path DTOs, validated before any DB call
 │   ├── dto/response/      ← wire shapes, decoupled from the domain
+│   ├── dto/schema.rs      ← the wire forms the contract names (UnsignedDecimal, Count…)
+│   ├── contract.rs        ← test-only: the OpenAPI document, as committed in openapi.json
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── query.rs           ← shared query-param validation helpers
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
@@ -249,6 +251,111 @@ signals over the last 24h (newest first, capped per pool,
 `severity`/`detector`/`triggeredAt` only), which powers the pools-list signal
 indicator. One batched query per request (`SignalFeed::recent_by_pools`), not one
 per pool.
+
+## What a route may return
+
+These rules hold for every `/api` route. Some current routes predate them
+(`/api/stats`, the pool routes); each changes with the page that needs it.
+
+1. **A route names a resource of the data.** Its path is a noun phrase:
+   `/api/<collection>`, `/api/<collection>/<id>`,
+   `/api/<collection>/<id>/<sub-resource>`. Collections are the names of the
+   domain and of the analytic model: protocols, pools, tokens, signals, events,
+   announcements.
+2. **Every field of a response completes the name of its route.** The route
+   reads as a sentence ("the activity of the DAMM v2 protocol over 24 h") and
+   each field is an attribute of it. A field that needs another name to describe
+   itself belongs to another route. A response embeds the *identity* of another
+   resource (the symbol and logo of a signal's tokens), nothing else: neither
+   its state nor its measures.
+3. **A response does not mix what is read live and what `yog-analytic`
+   computes.**
+   - Live: the catalogue (pools, tokens, protocols), the current state
+     (reserves, price, a pool's TVL), events, signals — written by the indexer
+     and `yog-context`, fresh to the second.
+   - Computed: every measure over a window (volume, fees, swaps, active pools,
+     births, the TVL of a protocol or a token and its history) — written by
+     `yog-analytic`, fresh to a few minutes.
+   - Mixed, the slower makes the other unavailable, and a response can no longer
+     state the age of what it holds.
+   - The boundary is the nature of the data, not today's cost: a measure over a
+     window is computed, even if it would count fast live.
+   - A computed response embeds the identity of what it measures (a ranking by
+     volume carries each pool's address and tokens): an identity does not age
+     and costs nothing. The reverse is forbidden.
+4. **A measure is read from `yog-analytic`'s tables**, never from a view that
+   values at read time. That is what holds the delay whatever the window.
+5. **Measures have one shape**: how many X, over the window W, grouped by G.
+   - The subject is in the path, the window in a parameter:
+     `/api/protocols/{protocol}/activity?window=24h` for the totals,
+     `/api/protocols/{protocol}/activity/hourly?window=24h` for the series. A
+     collection returns one row per subject: `/api/tokens/activity?window=24h`.
+   - TVL has its own routes on the same model: `/api/protocols/{protocol}/tvl`,
+     `/api/protocols/{protocol}/tvl/hourly`.
+   - A measure's response carries its window, the instant it reflects, and its
+     coverage.
+6. **What belongs to one protocol is named after it.** The shared resources
+   (pools, tokens, signals) carry the protocol as a field and accept it as a
+   filter. What exists in one protocol only goes in a block named after it (the
+   pool detail's rule, below) or under `/api/protocols/{protocol}/…`.
+7. **The form rules stay as they are** — cursor pagination, Problem Details,
+   camelCase, RFC 3339 — written once, in the contract.
+8. **The contract is written once, on the server, and the client derives from
+   it**: an OpenAPI document drawn from the Rust types, from which the web's zod
+   is generated ([The contract](#the-contract)).
+
+**Names.** `activity` for the flows over a window (volume, fees, swaps,
+liquidity, claims, rewards, active pools, births), `tvl` for the value
+deposited. A series is a sub-resource, `hourly` then `daily`: a parameter never
+changes the shape of a response. `window=24h|7d|30d`, a closed list, 400
+otherwise; `offset` for the previous window; `asOf` for the instant a response
+reflects. The protocol is written `meteora_damm_v2` everywhere (field, filter,
+path); paths in kebab-case, collections plural, fields camelCase. No catch-all
+name (`analytics`, `metrics`, `stats`): a category name excludes nothing.
+
+**Delay.** Every route but the probes and the live stream answers in under
+**2 s** in production, network included, at the heaviest its parameters allow,
+cold and warm. A route above 2 s in production is a bug.
+
+## The contract
+
+Every `/api` route is mounted by `api_routes` (`http.rs`) with
+`.routes(routes!(handler))`, and declared on its handler by `#[utoipa::path]`:
+path, parameters, 200 body. Its DTOs derive `ToSchema`. The OpenAPI document
+read from that list is committed as [`openapi.json`](./openapi.json), and the
+web generates its zod from it — see
+[`web/README.md`](../../web/README.md#the-api-contract). The API does not serve
+it.
+
+What the derive cannot say is said once:
+
+- **Named wire forms** (`http/dto/schema.rs`): `UnsignedDecimal`,
+  `SignedDecimal`, `U128String`, `Count`. A field points at one with
+  `#[schema(value_type = …)]`. A `Decimal` has no default form — utoipa's
+  `decimal` feature is off — so a `Decimal` field does not compile until it
+  names one, signed or not.
+- **Closed sets** are API enums built from their domain enum by an exhaustive
+  `From`: a variant added to the domain breaks the build there, and a test
+  checks that each serialises as the domain's `as_str()`.
+- **The finish** (`http/contract.rs`), applied to the whole document: a nullable
+  property is required — `null` is written, never omitted, and a key that may be
+  absent says `#[schema(nullable = false)]`; every operation answers its
+  failures as `ProblemDetails`; an `int64` anywhere fails the document, because
+  the generated zod would read it as a `BigInt` (point it at `Count`).
+- **Refinements** the Rust type does not carry: `min_length = 1`,
+  `maximum = 100`, `format = "uri"`.
+
+After changing a route or a DTO, regenerate both, and commit them:
+
+```bash
+YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract   # rewrites crates/api/openapi.json
+cd web && npm run gen:api                             # rewrites web/src/lib/api/schema/
+```
+
+`cargo test` fails while `openapi.json` is stale, and the CI `contract` job
+regenerates both and fails on any difference with what is committed. A route
+mounted with a literal path — `.route("/api/…")` serves it without a contract —
+fails `every_api_route_is_mounted_with_its_contract`.
 
 ## The SSE signal stream
 

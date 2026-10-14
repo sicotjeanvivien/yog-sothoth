@@ -37,8 +37,7 @@
 
 import { getTranslations } from "next-intl/server";
 
-import type { PoolResponse } from "@/lib/api/schema/pool";
-import type { PoolCurrentStateResponse } from "@/lib/api/schema/pool-current-state";
+import type { PoolCurrentStateResponse, PoolResponse } from "@/lib/api/schema/zod.gen";
 
 import { isFeatureEnabled } from "@/config/features";
 import { formatUsdCompact } from "@/lib/format/format-usd";

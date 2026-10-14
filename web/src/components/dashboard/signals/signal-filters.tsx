@@ -19,7 +19,7 @@
 import { useTranslations } from "next-intl";
 
 import { InfoPopover } from "@/components/shared/info-popover";
-import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
+import type { Severity, SignalResponse } from "@/lib/api/schema/zod.gen";
 
 import { KNOWN_DETECTORS } from "./signal-display";
 

@@ -14,7 +14,7 @@
  */
 
 import { apiGet } from "../client/server";
-import { PoolsPageSchema, type PoolsPageResponse } from "../schema/page";
+import { zPoolPageResponsePoolResponse, type PoolPageResponsePoolResponse } from "../schema/zod.gen";
 import type { PageDir, PagePosition, PoolSort } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
@@ -50,7 +50,7 @@ export type FetchPoolsParams = {
  */
 export async function fetchPools(
   params: FetchPoolsParams = {},
-): Promise<PoolsPageResponse> {
+): Promise<PoolPageResponsePoolResponse> {
   const limit = params.limit ?? DEFAULT_LIMIT;
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
     throw new RangeError(
@@ -71,7 +71,7 @@ export async function fetchPools(
         params.feeBps && params.feeBps.length > 0 ? params.feeBps : undefined,
       limit,
     },
-    PoolsPageSchema,
+    zPoolPageResponsePoolResponse,
   );
 }
 

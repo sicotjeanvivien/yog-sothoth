@@ -8,9 +8,9 @@
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
 import {
-  SwapEventsPageSchema,
-  type SwapEventsPageResponse,
-} from "../schema/page";
+  zPageResponseSwapEventResponse,
+  type PageResponseSwapEventResponse,
+} from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
@@ -33,7 +33,7 @@ export type FetchPoolSwapEventsParams = {
 export async function fetchPoolSwapEvents(
   address: string,
   params: FetchPoolSwapEventsParams = {},
-): Promise<SwapEventsPageResponse> {
+): Promise<PageResponseSwapEventResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
@@ -55,7 +55,7 @@ export async function fetchPoolSwapEvents(
       position: params.position,
       limit,
     },
-    SwapEventsPageSchema,
+    zPageResponseSwapEventResponse,
   );
 }
 

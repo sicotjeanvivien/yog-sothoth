@@ -9,6 +9,8 @@
 //! sole purpose is to answer load-balancer polling — quietly and
 //! often — and routing them through tracing would flood the logs.
 
+#[cfg(test)]
+mod contract;
 mod cursor;
 mod dto;
 mod error;
@@ -40,6 +42,9 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::info;
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+use crate::application::WorkSlots;
 
 use crate::http::middleware::capacity::{REQUEST_TIMEOUT, request_deadline, work_slot_limit};
 use crate::http::middleware::tracing::{
@@ -53,11 +58,11 @@ use crate::http::middleware::tracing::{
 /// 1. `probes`  — `/healthz`, `/readyz`. No tracing, no request id.
 ///    Designed to be hit constantly by orchestration tooling without
 ///    leaving a trace in the logs.
-/// 2. `app` — every business endpoint. Wrapped in `TraceLayer` for
-///    per-request spans and in the request-id layers for correlation,
-///    and bounded by [`REQUEST_TIMEOUT`]. Its slow routes form the
-///    `slotted` sub-router, sharing the [`crate::application::WorkSlots`] — see
-///    [`middleware::capacity`] for the measurements behind each bound.
+/// 2. `app` — every business endpoint, from [`api_routes`]. Wrapped in
+///    `TraceLayer` for per-request spans and in the request-id layers for
+///    correlation, and bounded by [`REQUEST_TIMEOUT`]. Its slow routes share
+///    the [`WorkSlots`] — see [`middleware::capacity`] for the measurements
+///    behind each bound.
 ///
 /// Cross-cutting headers (security, CORS, frame-options) apply to
 /// both — they are hung on the merged router below.
@@ -66,67 +71,9 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .route("/healthz", get(handlers::health::healthz))
         .route("/readyz", get(handlers::health::readyz));
 
-    // ── Slotted routes: each request takes a work slot first ────────────
-    // The routes measured above 0.5 s at rest (25 September 2026). They
-    // share the `WORK_SLOTS` slots, below the pool's size, so that a burst
-    // on them cannot take the connections the light routes need.
-    //
-    // `/api/pools/top` and `/api/stats` are slow too, and stay out on
-    // purpose: their computation takes a slot itself, inside the cache, so
-    // the callers waiting on it hold none. Behind the route slots, each
-    // waiter held one — measured: 30 parallel `/top` on a cold cache gave
-    // 24 × 503 for a single ranking.
-    let slotted = Router::new()
-        // ── Pool collection ─────────────────────────────────────────────
-        .route("/api/pools", get(handlers::pools::list_pools))
-        // ── Single-pool resources ───────────────────────────────────────
-        .route("/api/pools/{address}", get(handlers::pools::get_pool))
-        .route(
-            "/api/pools/{address}/history",
-            get(handlers::pools::get_pool_history),
-        )
-        // ── Signal feed (paginated) ─────────────────────────────────────
-        .route("/api/signals", get(handlers::signals::list_signals))
-        .route_layer(from_fn_with_state(
-            state.work_slots.clone(),
-            work_slot_limit,
-        ));
+    let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
 
-    let app = Router::new()
-        // ── Operator announcements (non-paginated, active window) ───────
-        .route(
-            "/api/announcements/active",
-            get(handlers::announcements::list_active_announcements),
-        )
-        // ── Shared results (cached, see the note on `slotted` above) ──────
-        .route("/api/pools/top", get(handlers::pools::list_top_pools))
-        .route("/api/stats", get(handlers::stats::get_stats))
-        // ── Fee-tier option list (non-paginated) — powers the fee filter ──
-        .route("/api/pools/fee-tiers", get(handlers::pools::list_fee_tiers))
-        // ── Single-pool resources ───────────────────────────────────────
-        .route(
-            "/api/pools/{address}/latest-state",
-            get(handlers::pools::get_pool_latest_state),
-        )
-        .route(
-            "/api/pools/{address}/swap-events",
-            get(handlers::pools::list_pool_swaps),
-        )
-        .route(
-            "/api/pools/{address}/liquidity-events",
-            get(handlers::pools::list_pool_liquidity_events),
-        )
-        .route(
-            "/api/network/status",
-            get(handlers::network_status::get_network_status),
-        )
-        // ── Signal feed (live) — capped by its own slots, see the handler ──
-        .route(
-            "/api/signals/stream",
-            get(handlers::signals::stream_signals),
-        )
-        .route("/api/tokens/{mint}", get(handlers::token::get_token))
-        .merge(slotted)
+    let app = api
         // ── Deadline (innermost: the tracing span records its 503) ───────
         .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
         // ── Tracing and request id (applied only here) ───────────────────
@@ -159,6 +106,49 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .layer(middleware::security_headers_layer())
         .layer(middleware::frame_options_layer())
         .layer(middleware::cors_layer(cors_allowed_origins))
+}
+
+/// Every `/api` route, each mounted with its contract (`#[utoipa::path]`). The
+/// committed OpenAPI document is read from this same list, so a route cannot be
+/// served without being declared.
+fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
+    // ── Slotted routes: each request takes a work slot first ────────────
+    // The routes measured above 0.5 s at rest (25 September 2026). They
+    // share the `WORK_SLOTS` slots, below the pool's size, so that a burst
+    // on them cannot take the connections the light routes need.
+    //
+    // `/api/pools/top` and `/api/stats` are slow too, and stay out on
+    // purpose: their computation takes a slot itself, inside the cache, so
+    // the callers waiting on it hold none. Behind the route slots, each
+    // waiter held one — measured: 30 parallel `/top` on a cold cache gave
+    // 24 × 503 for a single ranking.
+    let slotted = OpenApiRouter::new()
+        // ── Pool collection ─────────────────────────────────────────────
+        .routes(routes!(handlers::pools::list_pools))
+        // ── Single-pool resources ───────────────────────────────────────
+        .routes(routes!(handlers::pools::get_pool))
+        .routes(routes!(handlers::pools::get_pool_history))
+        // ── Signal feed (paginated) ─────────────────────────────────────
+        .routes(routes!(handlers::signals::list_signals))
+        .route_layer(from_fn_with_state(work_slots, work_slot_limit));
+
+    OpenApiRouter::new()
+        // ── Operator announcements (non-paginated, active window) ───────
+        .routes(routes!(handlers::announcements::list_active_announcements))
+        // ── Shared results (cached, see the note on `slotted` above) ──────
+        .routes(routes!(handlers::pools::list_top_pools))
+        .routes(routes!(handlers::stats::get_stats))
+        // ── Fee-tier option list (non-paginated) — powers the fee filter ──
+        .routes(routes!(handlers::pools::list_fee_tiers))
+        // ── Single-pool resources ───────────────────────────────────────
+        .routes(routes!(handlers::pools::get_pool_latest_state))
+        .routes(routes!(handlers::pools::list_pool_swaps))
+        .routes(routes!(handlers::pools::list_pool_liquidity_events))
+        .routes(routes!(handlers::network_status::get_network_status))
+        // ── Signal feed (live) — capped by its own slots, see the handler ──
+        .routes(routes!(handlers::signals::stream_signals))
+        .routes(routes!(handlers::token::get_token))
+        .merge(slotted)
 }
 
 /// Bind the listener the server will accept on.

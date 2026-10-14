@@ -27,6 +27,12 @@ use crate::http::{
 // GET /api/signals
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/signals",
+    params(SignalsQuery),
+    responses((status = 200, body = PageResponse<SignalResponse>))
+)]
 pub(crate) async fn list_signals(
     State(state): State<AppState>,
     Query(query): Query<SignalsQuery>,
@@ -73,6 +79,16 @@ pub(crate) async fn list_signals(
 ///
 /// [`SignalStreamPoller`]: crate::application::SignalStreamPoller
 /// [`SSE_MAX_STREAMS`]: crate::http::SSE_MAX_STREAMS
+#[utoipa::path(
+    get,
+    path = "/api/signals/stream",
+    responses((
+        status = 200,
+        description = "Server-sent events: each `data` is a `SignalResponse`.",
+        content_type = "text/event-stream",
+        body = String
+    ))
+)]
 pub(crate) async fn stream_signals(State(state): State<AppState>) -> Response {
     open_signal_stream(
         state.stream_slots.clone(),

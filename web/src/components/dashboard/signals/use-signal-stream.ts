@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { fetchSignalsBrowser } from "@/lib/api/browser/signals";
 import { loadClientEnv } from "@/lib/config/client-env.schema";
-import { SignalSchema, type SignalResponse } from "@/lib/api/schema/signal";
+import { zSignalResponse, type SignalResponse } from "@/lib/api/schema/zod.gen";
 import { mergeSignals } from "@/lib/signals/merge-signals";
 
 /** Connection state surfaced to the UI. */
@@ -74,7 +74,7 @@ export function useSignalStream(initial: readonly SignalResponse[]) {
         console.warn("signal stream: unparseable event skipped", event.data);
         return;
       }
-      const parsed = SignalSchema.safeParse(raw);
+      const parsed = zSignalResponse.safeParse(raw);
       if (!parsed.success) {
         console.warn("signal stream: invalid event skipped", parsed.error);
         return;

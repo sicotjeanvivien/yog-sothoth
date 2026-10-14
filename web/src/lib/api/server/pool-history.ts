@@ -8,7 +8,7 @@
 
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
-import { PoolHistorySchema, type PoolHistoryResponse } from "../schema/pool-history";
+import { zGetPoolHistoryResponse, type PoolHistoryBucketResponse } from "../schema/zod.gen";
 
 const DEFAULT_DAYS = 7;
 const MAX_DAYS = 90;
@@ -23,7 +23,7 @@ const MAX_DAYS = 90;
 export async function fetchPoolHistory(
   address: string,
   days: number = DEFAULT_DAYS,
-): Promise<PoolHistoryResponse> {
+): Promise<PoolHistoryBucketResponse[]> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
@@ -31,7 +31,7 @@ export async function fetchPoolHistory(
     throw new RangeError(`\`days\` must be an integer in [1, ${MAX_DAYS}], got ${days}`);
   }
 
-  return apiGet(`/api/pools/${address}/history`, { days }, PoolHistorySchema);
+  return apiGet(`/api/pools/${address}/history`, { days }, zGetPoolHistoryResponse);
 }
 
 export const POOL_HISTORY_QUERY_BOUNDS = { DEFAULT_DAYS, MAX_DAYS } as const;

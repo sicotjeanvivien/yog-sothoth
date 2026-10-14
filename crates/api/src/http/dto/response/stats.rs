@@ -12,8 +12,10 @@
 
 use rust_decimal::Decimal;
 use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::application::StatsAggregate;
+use crate::http::dto::schema::{Count, UnsignedDecimal};
 
 /// Protocol-wide statistics payload.
 ///
@@ -29,16 +31,24 @@ use crate::application::StatsAggregate;
 ///     total is indistinguishable from a complete one.
 ///   - `pools_observed`: every pool ever seen. `pools_discovered_24h`: those
 ///     first seen in the last 24h (the discovery pulse).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StatsResponse {
+    #[schema(value_type = Option<UnsignedDecimal>)]
     total_tvl_usd: Option<Decimal>,
+    #[schema(value_type = Count)]
     pools_priced: i64,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     volume_24h_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     fees_24h_usd: Option<Decimal>,
+    #[schema(value_type = Count)]
     swap_buckets_24h: i64,
+    #[schema(value_type = Count)]
     swap_buckets_priced_24h: i64,
+    #[schema(value_type = Count)]
     pools_observed: i64,
+    #[schema(value_type = Count)]
     pools_discovered_24h: i64,
 }
 

@@ -16,7 +16,7 @@
 import * as z from "zod";
 
 import { ApiClientError } from "../errors";
-import { ApiErrorBodySchema } from "../schema/api-error-body";
+import { zProblemDetails } from "../schema/zod.gen";
 
 /**
  * Try to read the RFC 9457 Problem Details body returned by yog-api
@@ -28,7 +28,7 @@ import { ApiErrorBodySchema } from "../schema/api-error-body";
 async function readRemoteErrorMessage(response: Response): Promise<string | null> {
   try {
     const body: unknown = await response.json();
-    const parsed = ApiErrorBodySchema.safeParse(body);
+    const parsed = zProblemDetails.safeParse(body);
     return parsed.success ? parsed.data.detail : null;
   } catch {
     return null;

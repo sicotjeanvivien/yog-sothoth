@@ -22,7 +22,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { InfoPopover } from "@/components/shared/info-popover";
-import type { TokenResponse } from "@/lib/api/schema/token";
+import type { EmbeddedTokenResponse } from "@/lib/api/schema/zod.gen";
 import type { PoolComposition } from "@/lib/format/pool-composition";
 import { shareToCircleCoords } from "@/lib/format/pool-composition";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
@@ -56,8 +56,8 @@ export async function PoolCompositionCard({
   info,
 }: {
   label: string;
-  tokenA: TokenResponse;
-  tokenB: TokenResponse;
+  tokenA: EmbeddedTokenResponse;
+  tokenB: EmbeddedTokenResponse;
   composition: PoolComposition;
   tvlUsd: string | null;
   /** Reserve in native units (integer string from the API) per side. */

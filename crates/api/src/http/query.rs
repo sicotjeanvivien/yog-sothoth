@@ -6,11 +6,13 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
 use std::str::FromStr;
+use utoipa::{IntoParams, ToSchema};
 use yog_core::{
     PageDirection, PagePosition, PoolSort,
     domain::{PoolCursor, PoolRankMetric, Severity},
 };
 
+use crate::http::dto::schema::Count;
 use crate::http::error::ApiError;
 
 pub(crate) const DEFAULT_LIMIT: i64 = 50;
@@ -21,7 +23,7 @@ pub(crate) const DEFAULT_TOP_LIMIT: i64 = 10;
 /// The service computes the shared ranking at this size.
 pub(crate) const MAX_TOP_LIMIT: i64 = crate::application::TOP_POOLS_MAX;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct PageQuery {
     pub(crate) cursor: Option<String>,
     #[serde(default)]
@@ -34,6 +36,7 @@ pub(crate) struct PageQuery {
     /// wire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.
     pub(crate) fee_bps: Option<String>,
     #[serde(default = "default_limit")]
+    #[param(value_type = Count)]
     pub(crate) limit: i64,
 }
 
@@ -45,9 +48,10 @@ pub(crate) const DEFAULT_HISTORY_DAYS: i64 = 7;
 pub(crate) const MAX_HISTORY_DAYS: i64 = 90;
 
 /// Query params for the pool history endpoint: a single `days` window.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct HistoryQuery {
     #[serde(default = "default_history_days")]
+    #[param(value_type = Count)]
     pub(crate) days: i64,
 }
 
@@ -66,7 +70,7 @@ pub(crate) fn validate_history_days(days: i64) -> Result<(), ApiError> {
     Ok(())
 }
 
-#[derive(Debug, Default, Deserialize, Clone, Copy)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum PageDirectionParam {
     #[default]
@@ -83,7 +87,7 @@ impl From<PageDirectionParam> for PageDirection {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum PagePositionParam {
     First,
@@ -99,7 +103,7 @@ impl From<PagePositionParam> for PagePosition {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Clone, Copy)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum PoolSortParam {
     FirstSeenDesc,
@@ -123,7 +127,7 @@ impl From<PoolSortParam> for PoolSort {
 /// Query params for `GET /api/signals`: standard cursor pagination plus
 /// optional exact severity and pool filters. No sort (the feed ordering
 /// is fixed by contract) and no free-text search.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct SignalsQuery {
     pub(crate) cursor: Option<String>,
     #[serde(default)]
@@ -132,12 +136,13 @@ pub(crate) struct SignalsQuery {
     pub(crate) severity: Option<SeverityParam>,
     pub(crate) pool: Option<String>,
     #[serde(default = "default_limit")]
+    #[param(value_type = Count)]
     pub(crate) limit: i64,
 }
 
 /// Wire form of the severity filter. An unknown value fails serde
 /// deserialization → axum returns 400 before the handler runs.
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Clone, Copy, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum SeverityParam {
     Info,
@@ -157,11 +162,12 @@ impl From<SeverityParam> for Severity {
 
 /// Query params for `GET /api/pools/top`: the ranking metric and how many
 /// rows. Non-paginated — a small capped ranking, not a navigable list.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct TopPoolsQuery {
     #[serde(default)]
     pub(crate) metric: PoolRankMetricParam,
     #[serde(default = "default_top_limit")]
+    #[param(value_type = Count)]
     pub(crate) limit: i64,
 }
 
@@ -171,7 +177,7 @@ pub(crate) fn default_top_limit() -> i64 {
 
 /// Wire form of the ranking metric. An unknown value fails serde
 /// deserialization → axum returns 400 before the handler runs.
-#[derive(Debug, Default, Deserialize, Clone, Copy)]
+#[derive(Debug, Default, Deserialize, Clone, Copy, ToSchema)]
 pub(crate) enum PoolRankMetricParam {
     #[default]
     #[serde(rename = "volume_24h")]

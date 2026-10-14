@@ -6,7 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-
+use utoipa::ToSchema;
 use yog_core::domain::{FreshnessStatus, NetworkStatus};
 
 /// The "Solana Live" panel payload.
@@ -21,7 +21,7 @@ use yog_core::domain::{FreshnessStatus, NetworkStatus};
 /// and the second *is our ingestion keeping up*. Reading the first as the
 /// health of our own link is the mistake this panel is built to prevent, and
 /// the one the indexer's probe itself made until 21 September 2026.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NetworkStatusResponse {
     /// Latest Solana slot the probe saw.
@@ -38,11 +38,30 @@ pub(crate) struct NetworkStatusResponse {
     observed_at: DateTime<Utc>,
 
     /// Ingestion freshness verdict: "live" | "delayed" | "stale".
-    freshness: String,
+    freshness: Freshness,
 
     /// Timestamp of the most recent indexed event, if any. `null`
     /// when the database holds no events yet.
     last_event_at: Option<DateTime<Utc>>,
+}
+
+/// How recent the last indexed event is.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Freshness {
+    Live,
+    Delayed,
+    Stale,
+}
+
+impl From<FreshnessStatus> for Freshness {
+    fn from(status: FreshnessStatus) -> Self {
+        match status {
+            FreshnessStatus::Live => Self::Live,
+            FreshnessStatus::Delayed => Self::Delayed,
+            FreshnessStatus::Stale => Self::Stale,
+        }
+    }
 }
 
 impl NetworkStatusResponse {
@@ -57,7 +76,7 @@ impl NetworkStatusResponse {
             slot: status.slot.to_string(),
             rpc_latency_ms: status.rpc_latency_ms,
             observed_at: status.observed_at,
-            freshness: freshness.as_str().to_string(),
+            freshness: freshness.into(),
             last_event_at,
         }
     }

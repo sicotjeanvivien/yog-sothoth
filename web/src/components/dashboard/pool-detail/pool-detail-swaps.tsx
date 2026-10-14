@@ -25,9 +25,11 @@
 
 import { getTranslations } from "next-intl/server";
 
-import { TokenResponse } from "@/lib/api/schema/token";
-import type { PoolResponse } from "@/lib/api/schema/pool";
-import type { SwapEventResponse } from "@/lib/api/schema/swap-event";
+import type {
+  EmbeddedTokenResponse,
+  PoolResponse,
+  SwapEventResponse,
+} from "@/lib/api/schema/zod.gen";
 
 import { SolscanIcon } from "@/components/shared/icon";
 import { CopyButton } from "@/components/shared/copy-button";
@@ -144,8 +146,8 @@ function SwapRow({
   solscanLabel,
 }: {
   swap: SwapEventResponse;
-  tokenA: TokenResponse;
-  tokenB: TokenResponse;
+  tokenA: EmbeddedTokenResponse;
+  tokenB: EmbeddedTokenResponse;
   locale: string;
   copyLabel: string;
   solscanLabel: string;

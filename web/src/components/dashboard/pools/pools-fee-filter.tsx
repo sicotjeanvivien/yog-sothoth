@@ -34,14 +34,14 @@ import { useTranslations } from "next-intl";
 
 import { ChevronDownIcon } from "@/components/shared/icon";
 import { useRouter, usePathname } from "@/i18n/navigation";
-import type { FeeTier } from "@/lib/api/server/fee-tiers";
+import type { FeeTierResponse } from "@/lib/api/schema/zod.gen";
 import { formatFeeBps } from "@/lib/format/format-fee";
 
 /** Sentinel value for "no fee filter". Empty string can't be a real
  *  tier, so it unambiguously means "all". */
 const ALL = "";
 
-export function PoolsFeeFilter({ tiers }: { tiers: FeeTier[] }) {
+export function PoolsFeeFilter({ tiers }: { tiers: FeeTierResponse[] }) {
   const t = useTranslations("Dashboard.Pools.feeFilter");
   const router = useRouter();
   const pathname = usePathname();

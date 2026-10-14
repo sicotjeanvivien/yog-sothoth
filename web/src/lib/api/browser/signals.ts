@@ -10,13 +10,13 @@
  */
 
 import { apiGetBrowser } from "@/lib/api/client/browser";
-import { SignalsPageSchema, type SignalsPageResponse } from "../schema/page";
+import { zPageResponseSignalResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
 
 const DEFAULT_LIMIT = 50;
 
 /** Fetch the newest signals (first page of the feed) from the browser. */
 export async function fetchSignalsBrowser(
   limit: number = DEFAULT_LIMIT,
-): Promise<SignalsPageResponse> {
-  return apiGetBrowser("/api/signals", { limit }, SignalsPageSchema);
+): Promise<PageResponseSignalResponse> {
+  return apiGetBrowser("/api/signals", { limit }, zPageResponseSignalResponse);
 }

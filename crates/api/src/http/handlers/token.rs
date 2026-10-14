@@ -11,6 +11,11 @@ use crate::http::{
     error::ApiError,
 };
 
+#[utoipa::path(
+    get,
+    path = "/api/tokens/{mint}",
+    responses((status = 200, body = TokenResponse))
+)]
 pub(crate) async fn get_token(
     State(state): State<AppState>,
     Path(mint): Path<String>,

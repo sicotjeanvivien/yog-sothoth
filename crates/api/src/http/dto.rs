@@ -1,4 +1,5 @@
 pub(crate) mod request;
+pub(crate) mod schema;
 // Visible: callers need items that are not re-exported here.
 pub(crate) mod response;
 

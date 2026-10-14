@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AnnouncementResponse } from "@/lib/api/schema/announcement";
+import type { AnnouncementResponse } from "@/lib/api/schema/zod.gen";
 import {
   DISMISSED_IDS_MAX,
   parseDismissedIds,

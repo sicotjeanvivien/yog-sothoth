@@ -17,9 +17,9 @@
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "./pool";
 import {
-  PoolCurrentStateSchema,
+  zPoolCurrentStateResponse,
   type PoolCurrentStateResponse,
-} from "../schema/pool-current-state";
+} from "../schema/zod.gen";
 
 /**
  * Fetch the latest projected state of a pool.
@@ -40,6 +40,6 @@ export async function fetchPoolLatestState(
   return apiGet(
     `/api/pools/${address}/latest-state`,
     {},
-    PoolCurrentStateSchema,
+    zPoolCurrentStateResponse,
   );
 }

@@ -21,6 +21,7 @@
 //! Reference: <https://www.rfc-editor.org/rfc/rfc9457>
 
 use serde::Serialize;
+use utoipa::ToSchema;
 
 /// RFC 9457 content type. The handler sets this on the response,
 /// not the DTO itself — [`axum::Json`] would force `application/json`.
@@ -46,7 +47,7 @@ pub(crate) const PROBLEM_CONTENT_TYPE: &str = "application/problem+json";
 /// `instance` is intentionally omitted: it would carry the request
 /// path, which the client already knows. It can be added later
 /// without breaking the contract (it's an optional field).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub(crate) struct ProblemDetails {
     #[serde(rename = "type")]
     pub(crate) type_uri: &'static str,

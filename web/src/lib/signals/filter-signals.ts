@@ -12,7 +12,7 @@
  * reappear the moment the filter releases them.
  */
 
-import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
+import type { Severity, SignalResponse } from "@/lib/api/schema/zod.gen";
 
 export function filterSignals(
   signals: readonly SignalResponse[],

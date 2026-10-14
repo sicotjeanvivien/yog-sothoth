@@ -40,7 +40,7 @@ fn pool_signal_response_carries_severity_detector_and_time() {
 
     // Severity crosses the wire as its snake_case tag, like the feed's
     // SignalResponse.
-    assert_eq!(resp.severity, "warning");
+    assert_eq!(serde_json::to_value(&resp).unwrap()["severity"], "warning");
     assert_eq!(resp.detector, "flow_imbalance");
     assert_eq!(resp.triggered_at, expected_at);
 }
@@ -109,7 +109,7 @@ fn pool_detail_keeps_shared_fields_at_top_level() {
     let json = detail_response(None);
 
     // Flattened: a client holding the *list* schema can still parse a detail
-    // payload. If this regresses, every consumer of PoolSchema breaks at once.
+    // payload. If this regresses, every consumer of the list schema breaks.
     assert!(json.get("poolAddress").is_some());
     assert!(json.get("protocol").is_some());
     assert!(json.get("tokenA").is_some());

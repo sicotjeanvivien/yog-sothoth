@@ -20,7 +20,7 @@
 
 import { getTranslations } from "next-intl/server";
 
-import type { StatsResponse } from "@/lib/api/schema/stats";
+import type { StatsResponse } from "@/lib/api/schema/zod.gen";
 import { formatCount } from "@/lib/format/format-count";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";

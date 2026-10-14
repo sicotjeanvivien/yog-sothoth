@@ -1,12 +1,15 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
+use utoipa::ToSchema;
 use yog_core::amm::damm_v2::{base_fee_numerator_at, fee_numerator_to_bps};
 use yog_core::domain::{
     MeteoraDammV2PoolProperties, MeteoraDlmmPoolProperties, Pool, PoolAnalytics, PoolProperties,
     SignalRecord,
 };
 
+use super::signal::Severity;
+use crate::http::dto::schema::{Count, UnsignedDecimal};
 use crate::{
     application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken},
     http::dto::EmbeddedTokenResponse,
@@ -16,10 +19,11 @@ use crate::{
 /// pools-list signal indicator. Deliberately slimmer than the feed's
 /// `SignalResponse`: the indicator needs severity, kind and recency,
 /// nothing else; the full signal lives on the pool's Alerts tab.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolSignalResponse {
-    pub(crate) severity: String,
+    pub(crate) severity: Severity,
+    #[schema(min_length = 1)]
     pub(crate) detector: String,
     pub(crate) triggered_at: DateTime<Utc>,
 }
@@ -27,7 +31,7 @@ pub(crate) struct PoolSignalResponse {
 impl From<SignalRecord> for PoolSignalResponse {
     fn from(record: SignalRecord) -> Self {
         Self {
-            severity: record.signal.severity.to_string(),
+            severity: record.signal.severity.into(),
             detector: record.signal.detector,
             triggered_at: record.signal.triggered_at,
         }
@@ -45,29 +49,31 @@ impl From<SignalRecord> for PoolSignalResponse {
 /// `Option` because their computation requires data that may not be
 /// available yet (no current state, no priced token, no swap in the
 /// window). Serialised as JSON **strings** via `rust_decimal`'s default
-/// representation — consistent with the price block in `EmbeddedPriceResponse`,
-/// and with the web's `BigDecimal` zod type, which keeps the trailing digits a
-/// JS `number` would drop. (This said "JSON numbers" until a serialisation test
-/// pinned the real shape.)
+/// representation, which keeps the trailing digits a JS `number` would drop.
 ///
 /// A non-null 24h figure is not necessarily a *complete* one: the sum skips
 /// the hours it cannot value. `swapBuckets24h` / `swapBucketsPriced24h` carry
 /// that coverage so a partial total cannot pass for a full one.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolResponse {
+    #[schema(min_length = 1)]
     pub(crate) pool_address: String,
+    #[schema(min_length = 1)]
     pub(crate) protocol: String,
     pub(crate) token_a: EmbeddedTokenResponse,
     pub(crate) token_b: EmbeddedTokenResponse,
     /// Base trading fee in basis points (genesis fee tier). `None` until the
     /// pool's `InitializePool` event has been indexed.
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) fee_bps: Option<Decimal>,
     // NOTE: the cp-amm fee properties (fee-split percents, fee shape) are NOT
     // here. They are protocol-specific, and only the pool *detail* sheet shows
     // them — see `PoolDetailResponse`. Keeping them on the list payload would
     // put one protocol's vocabulary in every protocol's row.
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) tvl_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) volume_24h_usd: Option<Decimal>,
     /// Realized trading fee over the last 24h (USD), and its three shares:
     /// Meteora's cut, the referrer's cut, and what is left for the LPs. They
@@ -78,9 +84,13 @@ pub(crate) struct PoolResponse {
     /// once in SQL. `lp_fees_24h_usd` is **not** `fees - protocol`: cp-amm
     /// takes the referral out of the protocol share, so that formula credits
     /// it to the LPs (corrected by migration 007). Do not reintroduce it here.
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) fees_24h_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) protocol_fees_24h_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) referral_fees_24h_usd: Option<Decimal>,
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) lp_fees_24h_usd: Option<Decimal>,
     /// Effective realized fee rate in basis points (`fees / volume * 10000`)
     /// over the 24h window. `None` when volume is absent or zero.
@@ -95,6 +105,7 @@ pub(crate) struct PoolResponse {
     /// hours**, not of the window. Unbiased as far as anyone knows — nothing
     /// links an hour's fee tier to whether its tokens were priced — but it is
     /// not the same statement as "the rate is unaffected".
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) effective_fee_bps: Option<Decimal>,
     /// Coverage of the five swap-derived USD figures above — `volume_24h_usd`
     /// and the four fee figures, **not** `tvl_usd`, which is valued at the
@@ -103,7 +114,9 @@ pub(crate) struct PoolResponse {
     /// counters like `poolsPriced`/`poolsObserved` on `/api/stats` — the
     /// presentation layer turns them into a coverage label. Equal values mean
     /// full coverage; a lower numerator means the sums are sub-totals.
+    #[schema(value_type = Count)]
     pub(crate) swap_buckets_24h: i64,
+    #[schema(value_type = Count)]
     pub(crate) swap_buckets_priced_24h: i64,
     /// Signals emitted by this pool over the last 24h, newest first,
     /// capped per pool (service-side). Empty when the pool was quiet —
@@ -202,14 +215,16 @@ impl From<EnrichedPool> for PoolResponse {
 /// DLMM later means adding a sibling field (`meteoraDlmm`) and no change to the
 /// existing one. `None` when the pool has no satellite row yet: discovered, but
 /// neither enriched by yog-context nor seen at genesis.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolDetailResponse {
     #[serde(flatten)]
     pub(crate) pool: PoolResponse,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
     pub(crate) meteora_damm_v2: Option<MeteoraDammV2PropertiesResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
     pub(crate) meteora_dlmm: Option<MeteoraDlmmPropertiesResponse>,
 }
 
@@ -219,7 +234,7 @@ pub(crate) struct PoolDetailResponse {
 /// by yog-context from the on-chain account, the fee shape is decoded from the
 /// genesis `InitializePool` event, and either group can be present without the
 /// other.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MeteoraDammV2PropertiesResponse {
     /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's
@@ -227,7 +242,9 @@ pub(crate) struct MeteoraDammV2PropertiesResponse {
     ///
     /// There is no partner cut. `partnerFeePercent` was served here until
     /// migration 037; it decoded a padding byte and was always 0.
+    #[schema(maximum = 100)]
     pub(crate) protocol_fee_percent: Option<u8>,
+    #[schema(maximum = 100)]
     pub(crate) referral_fee_percent: Option<u8>,
     /// How the base fee behaves over time: `constant`, `scheduler_linear`,
     /// `scheduler_exponential` or `rate_limiter`. Comes from the protocol
@@ -250,6 +267,7 @@ pub(crate) struct MeteoraDammV2PropertiesResponse {
     /// constant fee already tells the whole truth), a market-cap scheduler or a
     /// rate limiter (neither decays on time), an unresolved account — or a
     /// **slot-activated** pool, see below.
+    #[schema(value_type = Option<UnsignedDecimal>)]
     pub(crate) current_fee_bps: Option<Decimal>,
 
     /// Whether the decay has finished — `currentFeeBps` will not move again.
@@ -321,7 +339,7 @@ const TIMESTAMP_ACTIVATION: u8 = 1;
 ///
 /// The pool's *state* — the active bin, the volatility accumulator — is not
 /// here. It moves on every swap and belongs to the current-state surface.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MeteoraDlmmPropertiesResponse {
     /// Price increment between adjacent bins, in basis points: bin `i` sits at

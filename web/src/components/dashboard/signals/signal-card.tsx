@@ -31,8 +31,7 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
-import type { SignalResponse, Severity } from "@/lib/api/schema/signal";
-import type { TokenResponse } from "@/lib/api/schema/token";
+import type { EmbeddedTokenResponse, Severity, SignalResponse } from "@/lib/api/schema/zod.gen";
 import {
   formatPercent,
   formatSignedPercent,
@@ -111,7 +110,7 @@ function detectorSummary(
  * side qualifies, and the card omits the block.
  */
 function tokenPriceLine(signal: SignalResponse): string | null {
-  const side = (token: TokenResponse): string | null =>
+  const side = (token: EmbeddedTokenResponse): string | null =>
     token.symbol && token.price
       ? `${token.symbol} $${formatPrice(Number(token.price.usd))}`
       : null;

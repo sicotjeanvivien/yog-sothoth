@@ -34,3 +34,7 @@ pub(crate) use stats::StatsResponse;
 pub(crate) use swap_event::SwapEventResponse;
 pub(crate) use token::TokenResponse;
 pub(crate) use token_price::TokenPriceResponse;
+
+#[cfg(test)]
+#[path = "response/tests/wire_enum_tests.rs"]
+mod wire_enum_tests;

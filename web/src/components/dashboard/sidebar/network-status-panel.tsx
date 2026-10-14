@@ -36,7 +36,7 @@ import { fetchNetworkStatusBrowser } from "@/lib/api/browser/network-status";
 import type {
   Freshness,
   NetworkStatusResponse,
-} from "@/lib/api/schema/network-status";
+} from "@/lib/api/schema/zod.gen";
 
 /** How often the panel re-fetches the network status. */
 const POLL_INTERVAL_MS = 10_000;

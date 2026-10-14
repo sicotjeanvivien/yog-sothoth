@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SignalResponse } from "@/lib/api/schema/signal";
+import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 import { mergeSignals } from "../merge-signals";
 
 function signal(id: number, triggeredAt: string): SignalResponse {

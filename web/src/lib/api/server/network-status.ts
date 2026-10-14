@@ -9,11 +9,11 @@
  */
 
 import { apiGet } from "../client/server";
-import { NetworkStatusSchema, type NetworkStatusResponse } from "../schema/network-status";
+import { zNetworkStatusResponse, type NetworkStatusResponse } from "../schema/zod.gen";
 
 /** Fetch the current network status snapshot from `yog-api`. */
 export async function fetchNetworkStatus(): Promise<NetworkStatusResponse> {
   // No query parameters — the empty object keeps the `apiGet`
   // signature satisfied.
-  return apiGet("/api/network/status", {}, NetworkStatusSchema);
+  return apiGet("/api/network/status", {}, zNetworkStatusResponse);
 }

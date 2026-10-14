@@ -18,13 +18,13 @@
 //! resource (e.g. later, in `SwapEventResponse` to show
 //! "1.2 SOL → 240 USDC").
 use serde::Serialize;
-
+use utoipa::ToSchema;
 use yog_core::domain::{TokenMetadata, TokenPrice};
 
 use crate::http::dto::response::EmbeddedPriceResponse;
 
 /// A token, embedded in another resource's response.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EmbeddedTokenResponse {
     /// SPL mint address, base58. `null` until the pool's mints are
@@ -42,6 +42,7 @@ pub(crate) struct EmbeddedTokenResponse {
     decimals: u8,
 
     /// Logo URI as returned by DAS. May be an `ipfs://` URI.
+    #[schema(format = "uri")]
     logo_uri: Option<String>,
 
     /// Latest known price observation, or `null` when the token has

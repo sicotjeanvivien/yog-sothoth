@@ -8,9 +8,9 @@
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "./pool";
 import {
-  LiquidityEventsPageSchema,
-  type LiquidityEventsPageResponse,
-} from "../schema/page";
+  zPageResponseLiquidityEventResponse,
+  type PageResponseLiquidityEventResponse,
+} from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
@@ -33,7 +33,7 @@ export type FetchPoolLiquidityEventsParams = {
 export async function fetchPoolLiquidityEvents(
   address: string,
   params: FetchPoolLiquidityEventsParams = {},
-): Promise<LiquidityEventsPageResponse> {
+): Promise<PageResponseLiquidityEventResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
@@ -55,7 +55,7 @@ export async function fetchPoolLiquidityEvents(
       position: params.position,
       limit,
     },
-    LiquidityEventsPageSchema,
+    zPageResponseLiquidityEventResponse,
   );
 }
 

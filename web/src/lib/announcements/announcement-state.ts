@@ -12,7 +12,7 @@
  * list is capped so the header can never grow unbounded.
  */
 
-import type { AnnouncementResponse } from "@/lib/api/schema/announcement";
+import type { AnnouncementResponse } from "@/lib/api/schema/zod.gen";
 
 export const ANNOUNCEMENTS_DISMISSED_COOKIE = "yog_announcements_dismissed";
 

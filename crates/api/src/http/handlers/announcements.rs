@@ -13,6 +13,11 @@ use axum::{Json, extract::State};
 /// Returns the announcements whose display window contains the request
 /// instant, most severe first then most recent. An empty array is the
 /// normal case, not an error.
+#[utoipa::path(
+    get,
+    path = "/api/announcements/active",
+    responses((status = 200, body = Vec<AnnouncementResponse>))
+)]
 pub(crate) async fn list_active_announcements(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<AnnouncementResponse>>, ApiError> {

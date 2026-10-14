@@ -12,14 +12,14 @@
  * Helius DAS does not return metadata for.
  */
 
-import type { TokenResponse } from "@/lib/api/schema/token";
+import type { EmbeddedTokenResponse } from "@/lib/api/schema/zod.gen";
 
 export function PoolPairCell({
   tokenA,
   tokenB,
 }: {
-  tokenA: TokenResponse;
-  tokenB: TokenResponse;
+  tokenA: EmbeddedTokenResponse;
+  tokenB: EmbeddedTokenResponse;
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -43,7 +43,7 @@ export function PoolPairCell({
 
 // ── Sub-component ─────────────────────────────────────────────────────
 
-function TokenLogo({ token }: { token: TokenResponse }) {
+function TokenLogo({ token }: { token: EmbeddedTokenResponse }) {
   const sharedClass =
     "h-6 w-6 rounded-full border border-cosmos-900 bg-cosmos-800 ring-1 ring-sothoth-500/20";
 

@@ -15,7 +15,7 @@
 
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../pool-address";
-import { PoolDetailSchema, type PoolDetailResponse } from "../schema/pool";
+import { zPoolDetailResponse, type PoolDetailResponse } from "../schema/zod.gen";
 
 // Re-exported for the existing server fetchers that import it from here; the
 // implementation now lives in the runtime-neutral `../pool-address` so the
@@ -34,5 +34,5 @@ export async function fetchPool(address: string): Promise<PoolDetailResponse> {
     throw new TypeError(`invalid pool address: ${address}`);
   }
 
-  return apiGet(`/api/pools/${address}`, {}, PoolDetailSchema);
+  return apiGet(`/api/pools/${address}`, {}, zPoolDetailResponse);
 }

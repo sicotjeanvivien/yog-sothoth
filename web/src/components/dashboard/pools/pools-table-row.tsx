@@ -19,7 +19,7 @@
 
 import { Link } from "@/i18n/navigation";
 
-import type { PoolResponse } from "@/lib/api/schema/pool";
+import type { PoolResponse } from "@/lib/api/schema/zod.gen";
 import { formatFeeBps } from "@/lib/format/format-fee";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatUsdCompact } from "@/lib/format/format-usd";

@@ -62,9 +62,8 @@ lib/api/
 │   │                    # envelope parsing, zod validation
 │   ├── server.ts        # apiGet()        — reads YOG_API_INTERNAL_URL
 │   └── browser.ts       # apiGetBrowser() — reads NEXT_PUBLIC_YOG_API_URL
-├── schema/              # one zod schema per resource (pool, signal, stats,
-│                        # swap-event, …) + shared primitives (BigDecimal,
-│                        # SignedBigDecimal, page envelope, RFC 9457 body)
+├── schema/zod.gen.ts    # generated: one zod schema and one type per wire
+│                        # shape, from crates/api/openapi.json — never edited
 ├── server/              # one fetcher per resource for Server Components:
 │                        # fetchPools, fetchPool, fetchStats, fetchSignals,
 │                        # fetchPoolHistory, fetchTopPools, …
@@ -79,10 +78,39 @@ Every response body is validated with zod before it reaches a
 component; a payload that violates the schema is a `validation` error,
 not a rendering surprise.
 
+### The API contract
+
+The schemas are **generated**, not written: `npm run gen:api` rewrites
+`schema/zod.gen.ts` from `crates/api/openapi.json`, the OpenAPI document the API
+derives from its routes ([`crates/api/README.md`](../crates/api/README.md#the-contract)).
+The names are the Rust ones — `zPoolResponse` and its type `PoolResponse`,
+`EmbeddedTokenResponse` for a token inside a pool or a signal — and each route
+has its response schema, named after the handler (`zListTopPoolsResponse`). A
+fetcher passes that one to `apiGet`. CI's `contract` job fails when the file is
+not what the committed document generates.
+
+What the schemas cannot say, and a component must still know:
+
+- **Numbers that stay strings.** A token quantity or a reserve
+  (`U128String`) can exceed 2^53: use `BigInt(value)` for arithmetic. A USD
+  amount or a rate (`UnsignedDecimal`, `SignedDecimal`) keeps digits a JS
+  `number` drops: format it, never compute on `Number(value)`. The `slot` of the
+  network status is shown as is.
+- **Closed sets fail loudly.** A severity, a kind or a freshness outside its
+  enum is a `validation` error, never an unknown tag reaching the UI.
+- **An announcement's `linkUrl` is usually a relative path** (`/changelog#v0.1.0`),
+  so it is not a URL; its `severity` is an editorial scale, distinct from a
+  signal's even though the tags coincide.
+- **A signal's `id`** is the reconciliation key of the live feed after a
+  reconnect, and the React key.
+- **An error body is read best-effort**: `readRemoteErrorMessage` falls back to
+  `null` when it does not match `zProblemDetails`, leaving the status code as
+  the signal. `type` is `about:blank` today; `title` is what discriminates.
+
 ### The schemas are strict, so the API deploys first
 
-Required fields are required. `eventIndex` on `swap-event.ts` and
-`liquidity-event.ts` is the live example: it identifies which hop of a routed
+Required fields are required. `eventIndex` on the swap and liquidity events
+is the live example: it identifies which hop of a routed
 transaction a row is (several rows share a signature and a timestamp), so
 making it optional would silently default it to `0` and bring back the
 duplicate React keys it exists to remove. A schema that tolerates a missing
@@ -236,15 +264,15 @@ state; the active metric is deliberately *not* a link, since ranking is always
 descending and re-picking it would be a no-op click that reads as broken.
 
 **Pool detail** — tabs for swaps, liquidity and alerts, plus the fee block. The
-zod schema (`schema/pool.ts`) models the detail payload's optional
+generated schema (`zPoolDetailResponse`) carries the detail payload's optional
 `meteoraDammV2` block (protocol/referral fee percents, `baseFeeKind`,
 `hasDynamicFee`, `currentFeeBps`, `feeSchedulerExpired`), surfaced as the
 `FeeTypeBadge` and, for a pool whose fee decays, a "current fee" row under the
 tier. That row uses `formatComputedFeeBps`, not `formatFeeBps`: a tier is
 human-chosen and clean, a decayed fee is the chain's integer arithmetic and
 renders as `4.000006%` if trimmed rather than rounded. The API also serves a
-`meteoraDlmm` sibling block; the dashboard does not model it yet — no DLMM pool
-reaches `pools` until DLMM event extraction lands.
+`meteoraDlmm` sibling block, which the schema carries and the dashboard does not
+display yet — no DLMM pool reaches `pools` until DLMM event extraction lands.
 
 ## Operator announcements
 
@@ -274,6 +302,7 @@ dashboard's role colours: neutral for info, `dash-warn`, `dash-down`.
 | `npm run lint`       | Run ESLint with the Next.js config     |
 | `npm run lint:fix`   | Run ESLint and fix what it can         |
 | `npm run typecheck`  | Run `tsc --noEmit` against the project |
+| `npm run gen:api`    | Regenerate `src/lib/api/schema/` from `crates/api/openapi.json` |
 | `npm test`           | Run the Vitest suite once              |
 | `npm run test:watch` | Run Vitest in watch mode               |
 

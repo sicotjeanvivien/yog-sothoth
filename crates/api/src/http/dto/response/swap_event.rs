@@ -17,19 +17,24 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use utoipa::ToSchema;
+use yog_core::domain::{self, MeteoraDammV2SwapEvent, Protocol};
 
-use yog_core::domain::{MeteoraDammV2SwapEvent, Protocol, TradeDirection};
+use crate::http::dto::schema::U128String;
 
 // ---------------------------------------------------------------------------
 // Swap event
 // ---------------------------------------------------------------------------
 
 /// `GET /api/pools/{address}/swaps` item.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwapEventResponse {
+    #[schema(min_length = 1)]
     pub(crate) pool_address: String,
+    #[schema(min_length = 1)]
     pub(crate) protocol: String,
+    #[schema(min_length = 1)]
     pub(crate) signature: String,
     /// Position of this event among its transaction's emissions. A routed
     /// transaction produces several rows sharing `signature` and `timestamp`;
@@ -37,20 +42,29 @@ pub(crate) struct SwapEventResponse {
     pub(crate) event_index: u16,
     pub(crate) timestamp: DateTime<Utc>,
 
-    pub(crate) trade_direction: String,
+    pub(crate) trade_direction: TradeDirection,
     // All `u64` token quantities (amounts, reserves, fees) are emitted as
     // strings: an atomic-unit value can exceed 2^53, which a JSON-number
     // consumer (JS) silently truncates. Same rationale as `next_sqrt_price`.
+    #[schema(value_type = U128String)]
     pub(crate) amount_a: String,
+    #[schema(value_type = U128String)]
     pub(crate) amount_b: String,
 
+    #[schema(value_type = U128String)]
     pub(crate) reserve_a_after: String,
+    #[schema(value_type = U128String)]
     pub(crate) reserve_b_after: String,
+    #[schema(value_type = U128String)]
     pub(crate) next_sqrt_price: String,
 
+    #[schema(value_type = U128String)]
     pub(crate) claiming_fee: String,
+    #[schema(value_type = U128String)]
     pub(crate) protocol_fee: String,
+    #[schema(value_type = U128String)]
     pub(crate) compounding_fee: String,
+    #[schema(value_type = U128String)]
     pub(crate) referral_fee: String,
     pub(crate) fee_token_is_a: bool,
 }
@@ -63,7 +77,7 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
             signature: event.signature.to_string(),
             event_index: event.event_index,
             timestamp: event.timestamp,
-            trade_direction: trade_direction_str(event.trade_direction),
+            trade_direction: event.trade_direction.into(),
             amount_a: event.amount_a.to_string(),
             amount_b: event.amount_b.to_string(),
             reserve_a_after: event.reserve_a_after.to_string(),
@@ -78,6 +92,20 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
     }
 }
 
-fn trade_direction_str(d: TradeDirection) -> String {
-    d.as_str().to_string()
+/// Which way a swap went: token A sold for B, or B for A.
+#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
+pub(crate) enum TradeDirection {
+    #[serde(rename = "a_to_b")]
+    AToB,
+    #[serde(rename = "b_to_a")]
+    BToA,
+}
+
+impl From<domain::TradeDirection> for TradeDirection {
+    fn from(direction: domain::TradeDirection) -> Self {
+        match direction {
+            domain::TradeDirection::AtoB => Self::AToB,
+            domain::TradeDirection::BtoA => Self::BToA,
+        }
+    }
 }

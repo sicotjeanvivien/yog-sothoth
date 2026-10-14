@@ -11,7 +11,7 @@
 
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
-import { SignalsPageSchema, type SignalsPageResponse } from "../schema/page";
+import { zPageResponseSignalResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
@@ -35,7 +35,7 @@ export type FetchSignalsParams = {
  */
 export async function fetchSignals(
   params: FetchSignalsParams = {},
-): Promise<SignalsPageResponse> {
+): Promise<PageResponseSignalResponse> {
   if (params.pool !== undefined && !isValidPoolAddress(params.pool)) {
     throw new TypeError(`invalid pool address: ${params.pool}`);
   }
@@ -58,7 +58,7 @@ export async function fetchSignals(
       position: params.position,
       limit,
     },
-    SignalsPageSchema,
+    zPageResponseSignalResponse,
   );
 }
 

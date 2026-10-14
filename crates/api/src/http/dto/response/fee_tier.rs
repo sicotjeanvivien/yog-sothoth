@@ -1,6 +1,9 @@
 use rust_decimal::Decimal;
 use serde::Serialize;
+use utoipa::ToSchema;
 use yog_core::domain::FeeTier;
+
+use crate::http::dto::schema::{Count, UnsignedDecimal};
 
 /// Wire shape of one pools fee-filter option — a base-fee tier and how many
 /// pools carry it.
@@ -9,10 +12,12 @@ use yog_core::domain::FeeTier;
 /// `feeBps` on the pool responses (precision-safe). `pool_count` is a plain
 /// JSON number. The list is the *most common* tiers only, ascending by fee —
 /// see [`yog_core::domain::PoolCatalog::list_fee_tiers`].
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct FeeTierResponse {
+    #[schema(value_type = UnsignedDecimal)]
     pub(crate) fee_bps: Decimal,
+    #[schema(value_type = Count)]
     pub(crate) pool_count: i64,
 }
 

@@ -9,7 +9,7 @@
 
 import type { FC } from "react";
 
-import type { Severity } from "@/lib/api/schema/signal";
+import type { Severity } from "@/lib/api/schema/zod.gen";
 import {
   AlertOctagonIcon,
   AlertTriangleIcon,

@@ -43,8 +43,7 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import type { PoolDetailResponse } from "@/lib/api/schema/pool";
-import type { TokenResponse } from "@/lib/api/schema/token";
+import type { EmbeddedTokenResponse, PoolDetailResponse } from "@/lib/api/schema/zod.gen";
 
 import { formatAbsoluteDate } from "@/lib/format/format-absolute-date";
 import { formatComputedFeeBps, formatFeeBps, formatFeeSplit } from "@/lib/format/format-fee";
@@ -281,7 +280,7 @@ function TokenLine({
   token,
   copyLabel,
 }: {
-  token: TokenResponse;
+  token: EmbeddedTokenResponse;
   copyLabel: string;
 }) {
   return (
