@@ -1,6 +1,6 @@
 ---
 name: add-protocol
-description: Add a new Meteora/AMM protocol (or product) to Yog-Sothoth following the "voie 3" per-protocol pattern. Use when the user wants to support a new on-chain protocol/product end-to-end — new domain events, SQL tables, repositories, indexer sub-persistor, and optional API surface. Walks the exact recipe from crates/README.md and the seven dispatch points that must change.
+description: Add a new Meteora/AMM protocol (or product) to Yog-Sothoth following the "voie 3" per-protocol pattern. Use when the user wants to support a new on-chain protocol/product end-to-end — new domain events, SQL tables, repositories, indexer sub-persistor, and optional API surface. Walks the exact recipe from crates/README.md and the eight dispatch points that must change.
 ---
 
 # Add a new protocol (voie 3)
@@ -56,6 +56,9 @@ In the order of the table in `crates/README.md` → *What stays narrow*:
 7. The `PoolProperties` match — `crates/api/src/http/dto/response/pool.rs`. One optional
    field named after the protocol; the `match` is exhaustive with no wildcard arm, so the
    compiler asks.
+8. The `Protocol` wire enum — `crates/api/src/http/dto/response/protocol.rs`. One variant and
+   its `From` arm, exhaustive like the match above; then regenerate the contract
+   (`YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract`, `npm run gen:api` in `web/`).
 
 If you find yourself touching a central registry outside this list, stop — you've left
 the pattern.
@@ -197,8 +200,9 @@ Confirm the sub-persistor actually runs end-to-end against a DB before calling i
 
 ## Definition of done
 
-- [ ] All seven dispatch points updated (extract / implemented_protocols /
-      decode_pool_account / persist / init / pool_account_resolvers / PoolProperties match)
+- [ ] All eight dispatch points updated (extract / implemented_protocols /
+      decode_pool_account / persist / init / pool_account_resolvers / PoolProperties match /
+      Protocol wire enum), and the contract regenerated
 - [ ] `is_implemented` answers `true` once the extractor really extracts
 - [ ] Account decoder grounded on real mainnet accounts; satellite table + resolver
 - [ ] `DomainEvent` outer variant + all five accessors updated

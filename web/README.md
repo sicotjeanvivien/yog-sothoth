@@ -98,8 +98,9 @@ What the schemas cannot say, and a component must still know:
   amount or a rate (`UnsignedDecimal`, `SignedDecimal`) keeps digits a JS
   `number` drops: format it, never compute on `Number(value)`. The `slot` of the
   network status is shown as is.
-- **Closed sets fail loudly.** A protocol, a severity, a kind or a freshness
-  outside its enum is a `validation` error, never an unknown tag reaching the UI.
+- **Closed sets fail loudly.** A protocol, a severity, an announcement or event
+  kind, a provider or a freshness outside its enum is a `validation` error, never
+  an unknown tag reaching the UI. `baseFeeKind` is the exception: a string.
 - **A fee share is read, never derived.** `lpFees24hUsd` is not
   `fees24hUsd − protocolFees24hUsd`: cp-amm takes the referral out of the
   protocol share, so that formula credits it to the LPs. Same for `lpFeesUsd`

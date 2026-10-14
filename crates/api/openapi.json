@@ -285,7 +285,7 @@
         "description": "DAMM v2-only pool properties (baseline §8's satellite table).\n\nEvery field is independently optional: the fee-split percents are resolved\nby yog-context from the on-chain account, the fee shape is decoded from the\ngenesis `InitializePool` event, and either group can be present without the\nother.",
         "properties": {
           "baseFeeKind": {
-            "description": "How the base fee behaves over time: `constant`, `scheduler_linear`,\n`scheduler_exponential` or `rate_limiter`. Comes from the protocol\nsatellite, written by yog-context from the on-chain account. `None`\nwhile the pool is still unresolved, or if its `BaseFeeMode` discriminant\nis one this crate does not map — never \"no genesis event\", which plays\nno part in filling this column.",
+            "description": "How the base fee behaves over time. Comes from the protocol\nsatellite, written by yog-context from the on-chain account. `None`\nwhile the pool is still unresolved, or if its `BaseFeeMode` discriminant\nis one this crate does not map — never \"no genesis event\", which plays\nno part in filling this column.",
             "type": [
               "string",
               "null"

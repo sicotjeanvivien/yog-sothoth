@@ -12,12 +12,16 @@ const COMMITTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
 /// document. `YOG_WRITE_OPENAPI=1` rewrites it instead of comparing.
 #[test]
 fn the_committed_document_is_the_one_the_routes_declare() {
-    let derived = serde_json::to_string_pretty(&document()).expect("serialises") + "\n";
-    if std::env::var_os("YOG_WRITE_OPENAPI").is_some() {
-        fs::write(COMMITTED, &derived).expect("crates/api/openapi.json is writable");
+    let derived = document();
+    if std::env::var("YOG_WRITE_OPENAPI").as_deref() == Ok("1") {
+        let text = serde_json::to_string_pretty(&derived).expect("serialises") + "\n";
+        fs::write(COMMITTED, text).expect("crates/api/openapi.json is writable");
         return;
     }
-    let committed = fs::read_to_string(COMMITTED).unwrap_or_default();
+    let committed: serde_json::Value = fs::read_to_string(COMMITTED)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
     assert!(
         committed == derived,
         "crates/api/openapi.json is stale: run `YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract`, \
@@ -160,12 +164,12 @@ fn the_documented_bounds_are_the_validated_ones() {
     assert_eq!(seen, 6, "limit on five routes, days on one");
 }
 
-/// Red when an `Option` the API omits (`skip_serializing_if`) is not declared
-/// `nullable = false`: the walk would make it a required key.
+/// Red when `skip_serializing_if` and `nullable = false` part: without the
+/// second the walk requires the key, without the first the zod refuses `null`.
 #[test]
-fn every_omitted_option_is_declared_absent_not_null() {
+fn an_option_is_omitted_exactly_when_declared_absent() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/dto/response");
-    let mut undeclared = Vec::new();
+    let mut unpaired = Vec::new();
     for entry in fs::read_dir(&dir).expect("readable response directory") {
         let path = entry.expect("readable entry").path();
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -180,27 +184,25 @@ fn every_omitted_option_is_declared_absent_not_null() {
             .map(str::to_string)
             .collect();
         for (i, line) in lines.iter().enumerate() {
-            if !line.contains("skip_serializing_if") {
+            let other = if line.contains("skip_serializing_if") {
+                "nullable = false"
+            } else if line.contains("nullable = false") {
+                "skip_serializing_if"
+            } else {
                 continue;
-            }
-            let attrs = lines[..i]
+            };
+            let is_attr = |l: &&String| l.trim_start().starts_with("#[");
+            let mut attrs = lines[..i]
                 .iter()
                 .rev()
-                .take_while(|l| l.trim_start().starts_with("#["))
-                .chain(
-                    lines[i..]
-                        .iter()
-                        .take_while(|l| l.trim_start().starts_with("#[")),
-                );
-            if !attrs.into_iter().any(|l| l.contains("nullable = false")) {
-                undeclared.push(format!("{name}:{}", i + 1));
+                .take_while(is_attr)
+                .chain(lines[i..].iter().take_while(is_attr));
+            if !attrs.any(|l| l.contains(other)) {
+                unpaired.push(format!("{name}:{} lacks `{other}`", i + 1));
             }
         }
     }
-    assert!(
-        undeclared.is_empty(),
-        "add `#[schema(nullable = false)]`: {undeclared:?}"
-    );
+    assert!(unpaired.is_empty(), "{unpaired:?}");
 }
 
 #[test]
@@ -213,4 +215,65 @@ fn every_operation_answers_its_failures_as_problem_details() {
             "{path}"
         );
     }
+}
+
+/// Red when a handler's `#[utoipa::path]` declares another body or query type
+/// than its signature returns and extracts: nothing else ties the two.
+#[test]
+fn every_handler_declares_the_body_and_query_it_has() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/handlers");
+    let mut drift = Vec::new();
+    let mut checked = 0;
+    for entry in fs::read_dir(&dir).expect("readable handlers directory") {
+        let path = entry.expect("readable entry").path();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+            continue;
+        }
+        let source = fs::read_to_string(&path).expect("readable source file");
+        for (at, _) in source.match_indices("#[utoipa::path(") {
+            let rest = &source[at..];
+            let attr: String = rest[..rest.find("\n)]").expect("closed attribute")]
+                .split_whitespace()
+                .collect();
+            let fn_at = rest.find("async fn ").expect("the annotated handler");
+            let fn_end = fn_at + rest[fn_at..].find('{').expect("a body");
+            let sig: String = rest[fn_at..fn_end].split_whitespace().collect();
+            let body = between(&attr, "body=", ')').unwrap_or_default();
+            let query = between(&attr, "params(", ')').unwrap_or_default();
+            let returned = generic_of(&sig, "Json<").unwrap_or("String");
+            let extracted = generic_of(&sig, "Query<").unwrap_or_default();
+            if body != returned || query != extracted {
+                drift.push(format!(
+                    "{name}: body {body} for {returned}, params {query} for {extracted}"
+                ));
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 14, "one #[utoipa::path] per /api route");
+    assert!(drift.is_empty(), "{drift:?}");
+}
+
+fn between<'a>(text: &'a str, start: &str, end: char) -> Option<&'a str> {
+    let from = text.find(start)? + start.len();
+    Some(&text[from..from + text[from..].find(end)?])
+}
+
+/// The type argument of the first `wrapper` (`Json<`, `Query<`) in `text`.
+fn generic_of<'a>(text: &'a str, wrapper: &str) -> Option<&'a str> {
+    let from = text.find(wrapper)? + wrapper.len();
+    let mut depth = 1;
+    for (i, c) in text[from..].char_indices() {
+        match c {
+            '<' => depth += 1,
+            '>' if depth == 1 => return Some(&text[from..from + i]),
+            '>' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }

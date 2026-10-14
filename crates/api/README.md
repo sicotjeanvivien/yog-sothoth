@@ -359,7 +359,7 @@ cd web && npm run gen:api                             # rewrites web/src/lib/api
 ```
 
 `cargo test` fails while `openapi.json` is stale, and the CI `contract` job
-regenerates both and fails on any difference with what is committed. A route
+regenerates the zod from it and fails on any difference with what is committed. A route
 mounted with a literal path — `.route("/api/…")` serves it without a contract —
 fails `every_api_route_is_mounted_with_its_contract`.
 

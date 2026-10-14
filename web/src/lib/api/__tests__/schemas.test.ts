@@ -145,10 +145,6 @@ describe("zPoolResponse", () => {
     expect(parsed.feeBps).toBeNull();
   });
 
-  // The cp-amm fee properties moved to zPoolDetailResponse's `meteoraDammV2`
-  // block — they are protocol-specific and only the detail endpoint returns
-  // them. Their coverage moved with them, below.
-
   it("omits the protocol block on a list payload", () => {
     const parsed = zPoolDetailResponse.parse(validPool());
     expect(parsed.meteoraDammV2).toBeUndefined();

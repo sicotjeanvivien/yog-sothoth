@@ -286,6 +286,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
 | `PoolProperties` match in `http/dto/response/pool.rs` | `api` | detail wire shape |
+| `From<domain::Protocol>` in `http/dto/response/protocol.rs` | `api` | protocol name in the contract (then regenerate it) |
 
 The two-level enums (`DomainEvent`, `PoolAccountProperties`, `PoolProperties`) are matched exhaustively, so adding a variant breaks the build at each site that must follow instead of silently dropping the protocol.
 

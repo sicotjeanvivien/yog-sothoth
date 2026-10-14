@@ -65,8 +65,8 @@ jobs:
   # Decides whether the jobs below run. The workflow starts on every pull
   # request so that its verdict always exists: a required check that never
   # starts stays "Expected" and blocks the merge for good. The work itself
-  # only runs when the PR touches this workflow's paths — the same ones the
-  # `push:` filter names. On a push to main that filter has already decided.
+  # only runs when the PR touches this workflow's paths. On a push to main
+  # the `push:` filter has already decided.
   # The logic, and the traps it avoids: .github/actions/changes/changes.sh.
   changes:
     name: Changes
@@ -534,14 +534,14 @@ jobs:
         run: npm run gen:api
       - name: Nothing differs from what is committed
         run: |
-          changed=$(git status --porcelain -- crates/api/openapi.json web/src/lib/api/schema)
+          changed=$(git status --porcelain -- web/src/lib/api/schema)
           if [ -n "$changed" ]; then
             echo "$changed"
-            git diff -- crates/api/openapi.json web/src/lib/api/schema | head -100
-            echo "::error::regenerate: YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract, then npm run gen:api in web/"
+            git diff -- web/src/lib/api/schema | head -100
+            echo "::error::regenerate: npm run gen:api in web/"
             exit 1
           fi
-          echo "the committed contract matches the routes"
+          echo "the committed zod matches the committed OpenAPI document"
 
   # ── Disabled while WASM activation is deferred ────────────────────
   #

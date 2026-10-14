@@ -29,7 +29,7 @@ export type CompositionInput = {
   /** Decimals of each token. */
   decimalsA: number;
   decimalsB: number;
-  /** Latest USD price as a string ("BigDecimal" on the wire). Null when not priced. */
+  /** Latest USD price as a string. Null when not priced. */
   priceAUsd: string | null;
   priceBUsd: string | null;
 };
