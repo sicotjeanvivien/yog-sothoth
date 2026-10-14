@@ -15,12 +15,12 @@
 import { apiGetBrowser } from "@/lib/api/client/browser";
 
 import { isValidPoolAddress } from "../pool-address";
-import { zPoolDetailResponse, type PoolDetailResponse } from "../schema/zod.gen";
+import { zGetPoolResponse, type PoolDetailResponse } from "../schema/zod.gen";
 
 export async function fetchPoolBrowser(address: string): Promise<PoolDetailResponse> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
 
-  return apiGetBrowser(`/api/pools/${address}`, {}, zPoolDetailResponse);
+  return apiGetBrowser(`/api/pools/${address}`, {}, zGetPoolResponse);
 }

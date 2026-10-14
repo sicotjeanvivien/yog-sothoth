@@ -95,7 +95,7 @@ impl From<TokenPrice> for EmbeddedPriceResponse {
     fn from(price: TokenPrice) -> Self {
         Self {
             usd: price.price_usd,
-            provider: price.price_provider.as_str().to_string(),
+            provider: price.price_provider.into(),
             fetched_at: price.fetched_at,
         }
     }

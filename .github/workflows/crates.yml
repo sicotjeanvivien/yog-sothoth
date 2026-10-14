@@ -21,8 +21,8 @@
 #                        the dependency tree.
 #   - sqlx-check       : the committed `.sqlx/` cache still matches the
 #                        `query!` macros, against a freshly migrated database.
-#   - contract         : the committed OpenAPI document and the web's
-#                        generated zod still match the routes' declarations.
+#   - contract         : the web's generated zod still matches the committed
+#                        OpenAPI document, which `test` checks against the routes.
 #
 # Around them: `changes` decides whether they run on a pull request, and
 # `verdict` is the one check the ruleset of main requires (crates/README.md,
@@ -507,8 +507,9 @@ jobs:
           cargo sqlx prepare --check -- --tests
  
   # ─────────────────────────────────────────────────────────────────
-  # contract — regenerate the OpenAPI document, then the zod from it,
-  # and fail on any difference with what is committed (as sqlx-check).
+  # contract — regenerate the zod from the committed OpenAPI document and
+  # fail on any difference (as sqlx-check). The document itself is checked
+  # against the routes by `test` (`the_committed_document_is_…`).
   # ─────────────────────────────────────────────────────────────────
   contract:
     name: Contract
@@ -517,8 +518,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -530,10 +529,6 @@ jobs:
       - name: Install dependencies
         working-directory: web
         run: npm ci --no-audit --no-fund
-      - name: Regenerate the OpenAPI document
-        env:
-          YOG_WRITE_OPENAPI: "1"
-        run: cargo test -p yog-api contract::tests::the_committed_document_is_the_one_the_routes_declare
       - name: Regenerate the zod
         working-directory: web
         run: npm run gen:api

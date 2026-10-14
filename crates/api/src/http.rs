@@ -51,21 +51,9 @@ use crate::http::middleware::tracing::{
     GenerateRequestId, REQUEST_ID_HEADER, make_request_span, on_failure, on_request, on_response,
 };
 
-/// Build the axum router from the application state.
-///
-/// Two sub-routers are merged:
-///
-/// 1. `probes`  — `/healthz`, `/readyz`. No tracing, no request id.
-///    Designed to be hit constantly by orchestration tooling without
-///    leaving a trace in the logs.
-/// 2. `app` — every business endpoint, from [`api_routes`]. Wrapped in
-///    `TraceLayer` for per-request spans and in the request-id layers for
-///    correlation, and bounded by [`REQUEST_TIMEOUT`]. Its slow routes share
-///    the [`WorkSlots`] — see [`middleware::capacity`] for the measurements
-///    behind each bound.
-///
-/// Cross-cutting headers (security, CORS, frame-options) apply to
-/// both — they are hung on the merged router below.
+/// The probes (`/healthz`, `/readyz`, untraced) merged with [`api_routes`],
+/// which is traced, request-id'd and bounded by [`REQUEST_TIMEOUT`]; both get
+/// the security and CORS headers. The bounds are in [`middleware::capacity`].
 pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValue>) -> Router {
     let probes = Router::new()
         .route("/healthz", get(handlers::health::healthz))
@@ -112,16 +100,8 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
 /// committed OpenAPI document is read from this same list, so a route cannot be
 /// served without being declared.
 fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
-    // ── Slotted routes: each request takes a work slot first ────────────
-    // The routes measured above 0.5 s at rest (25 September 2026). They
-    // share the `WORK_SLOTS` slots, below the pool's size, so that a burst
-    // on them cannot take the connections the light routes need.
-    //
-    // `/api/pools/top` and `/api/stats` are slow too, and stay out on
-    // purpose: their computation takes a slot itself, inside the cache, so
-    // the callers waiting on it hold none. Behind the route slots, each
-    // waiter held one — measured: 30 parallel `/top` on a cold cache gave
-    // 24 × 503 for a single ranking.
+    // ⚠️ `/api/pools/top` and `/api/stats` are slow too, but stay out: their
+    // computation takes a slot inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
         // ── Pool collection ─────────────────────────────────────────────
         .routes(routes!(handlers::pools::list_pools))

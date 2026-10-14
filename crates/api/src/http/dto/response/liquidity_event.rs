@@ -6,10 +6,9 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{
-    MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventValued, Protocol,
-};
+use yog_core::domain::{self, MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventValued};
 
+use super::protocol::Protocol;
 use crate::http::dto::schema::{U128String, UnsignedDecimal};
 
 /// `GET /api/pools/{address}/liquidity-events` item.
@@ -18,8 +17,7 @@ use crate::http::dto::schema::{U128String, UnsignedDecimal};
 pub(crate) struct LiquidityEventResponse {
     #[schema(min_length = 1)]
     pub(super) pool_address: String,
-    #[schema(min_length = 1)]
-    pub(super) protocol: String,
+    pub(super) protocol: Protocol,
     #[schema(min_length = 1)]
     pub(super) signature: String,
     /// Position of this event among its transaction's emissions. A routed
@@ -59,7 +57,7 @@ impl From<MeteoraDammV2LiquidityEventValued> for LiquidityEventResponse {
         let MeteoraDammV2LiquidityEventValued { event, value_usd } = valued;
         Self {
             pool_address: event.pool_address.to_string(),
-            protocol: Protocol::MeteoraDammV2.to_string(),
+            protocol: domain::Protocol::MeteoraDammV2.into(),
             signature: event.signature.to_string(),
             event_index: event.event_index,
             timestamp: event.timestamp,

@@ -56,12 +56,12 @@ export const zLiquidityEventKind = z.enum(['add', 'remove']);
 export type LiquidityEventKind = z.infer<typeof zLiquidityEventKind>;
 
 export const zMeteoraDlmmPropertiesResponse = z.object({
-    baseFactor: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    baseFeePowerFactor: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    binStep: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    maxVolatilityAccumulator: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    protocolShare: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable(),
-    variableFeeControl: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).nullable()
+    baseFactor: z.int().gte(0).nullable(),
+    baseFeePowerFactor: z.int().gte(0).nullable(),
+    binStep: z.int().gte(0).nullable(),
+    maxVolatilityAccumulator: z.int().gte(0).nullable(),
+    protocolShare: z.int().gte(0).nullable(),
+    variableFeeControl: z.int().gte(0).nullable()
 });
 
 export type MeteoraDlmmPropertiesResponse = z.infer<typeof zMeteoraDlmmPropertiesResponse>;
@@ -70,20 +70,32 @@ export const zNetworkStatusResponse = z.object({
     freshness: zFreshness,
     lastEventAt: z.iso.datetime({ offset: true }).nullable(),
     observedAt: z.iso.datetime({ offset: true }),
-    rpcLatencyMs: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    rpcLatencyMs: z.int().gte(0),
     slot: z.string()
 });
 
 export type NetworkStatusResponse = z.infer<typeof zNetworkStatusResponse>;
 
+export const zPriceProvider = z.enum([
+    'jupiter',
+    'helius',
+    'fallback'
+]);
+
+export type PriceProvider = z.infer<typeof zPriceProvider>;
+
 export const zProblemDetails = z.object({
     detail: z.string(),
-    status: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    status: z.int().gte(0),
     title: z.string(),
     type: z.string()
 });
 
 export type ProblemDetails = z.infer<typeof zProblemDetails>;
+
+export const zProtocol = z.enum(['meteora_damm_v2', 'meteora_dlmm']);
+
+export type Protocol = z.infer<typeof zProtocol>;
 
 export const zSeverity = z.enum([
     'info',
@@ -121,11 +133,11 @@ export const zPageResponseSwapEventResponse = z.object({
         amountB: zU128String,
         claimingFee: zU128String,
         compoundingFee: zU128String,
-        eventIndex: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+        eventIndex: z.int().gte(0),
         feeTokenIsA: z.boolean(),
         nextSqrtPrice: zU128String,
         poolAddress: z.string().min(1),
-        protocol: z.string().min(1),
+        protocol: zProtocol,
         protocolFee: zU128String,
         referralFee: zU128String,
         reserveAAfter: zU128String,
@@ -145,11 +157,11 @@ export const zSwapEventResponse = z.object({
     amountB: zU128String,
     claimingFee: zU128String,
     compoundingFee: zU128String,
-    eventIndex: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    eventIndex: z.int().gte(0),
     feeTokenIsA: z.boolean(),
     nextSqrtPrice: zU128String,
     poolAddress: z.string().min(1),
-    protocol: z.string().min(1),
+    protocol: zProtocol,
     protocolFee: zU128String,
     referralFee: zU128String,
     reserveAAfter: zU128String,
@@ -167,14 +179,14 @@ export type UnsignedDecimal = z.infer<typeof zUnsignedDecimal>;
 
 export const zEmbeddedPriceResponse = z.object({
     fetchedAt: z.iso.datetime({ offset: true }),
-    provider: z.string(),
+    provider: zPriceProvider,
     usd: zUnsignedDecimal
 });
 
 export type EmbeddedPriceResponse = z.infer<typeof zEmbeddedPriceResponse>;
 
 export const zEmbeddedTokenResponse = z.object({
-    decimals: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    decimals: z.int().gte(0),
     logoUri: z.url().nullable(),
     mint: z.string().nullable(),
     name: z.string().nullable(),
@@ -194,13 +206,13 @@ export type FeeTierResponse = z.infer<typeof zFeeTierResponse>;
 export const zLiquidityEventResponse = z.object({
     amountA: zU128String,
     amountB: zU128String,
-    eventIndex: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    eventIndex: z.int().gte(0),
     liquidityDelta: zU128String,
     liquidityEventKind: zLiquidityEventKind,
     owner: z.string().min(1),
     poolAddress: z.string().min(1),
     position: z.string().min(1),
-    protocol: z.string().min(1),
+    protocol: zProtocol,
     reserveAAfter: zU128String,
     reserveBAfter: zU128String,
     signature: z.string().min(1),
@@ -227,13 +239,13 @@ export const zPageResponseLiquidityEventResponse = z.object({
     items: z.array(z.object({
         amountA: zU128String,
         amountB: zU128String,
-        eventIndex: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+        eventIndex: z.int().gte(0),
         liquidityDelta: zU128String,
         liquidityEventKind: zLiquidityEventKind,
         owner: z.string().min(1),
         poolAddress: z.string().min(1),
         position: z.string().min(1),
-        protocol: z.string().min(1),
+        protocol: zProtocol,
         reserveAAfter: zU128String,
         reserveBAfter: zU128String,
         signature: z.string().min(1),
@@ -257,7 +269,7 @@ export const zPageResponsePoolResponse = z.object({
         lastSeenAt: z.iso.datetime({ offset: true }),
         lpFees24hUsd: zUnsignedDecimal.nullable(),
         poolAddress: z.string().min(1),
-        protocol: z.string().min(1),
+        protocol: zProtocol,
         protocolFees24hUsd: zUnsignedDecimal.nullable(),
         referralFees24hUsd: zUnsignedDecimal.nullable(),
         signals24h: z.array(zPoolSignalResponse),
@@ -282,7 +294,7 @@ export const zPageResponseSignalResponse = z.object({
         id: zCount,
         message: z.string().nullable(),
         poolAddress: z.string().min(1),
-        protocol: z.string().min(1),
+        protocol: zProtocol,
         severity: zSeverity,
         threshold: zUnsignedDecimal.nullable(),
         tokenA: zEmbeddedTokenResponse,
@@ -303,7 +315,7 @@ export const zPoolCurrentStateResponse = z.object({
     lastSqrtPrice: zU128String.nullable(),
     lastSwapAt: z.iso.datetime({ offset: true }).nullable(),
     poolAddress: z.string().min(1),
-    protocol: z.string().min(1),
+    protocol: zProtocol,
     reserveA: zU128String,
     reserveB: zU128String,
     spotPriceAInB: zUnsignedDecimal.nullable(),
@@ -344,7 +356,7 @@ export const zPoolResponse = z.object({
     lastSeenAt: z.iso.datetime({ offset: true }),
     lpFees24hUsd: zUnsignedDecimal.nullable(),
     poolAddress: z.string().min(1),
-    protocol: z.string().min(1),
+    protocol: zProtocol,
     protocolFees24hUsd: zUnsignedDecimal.nullable(),
     referralFees24hUsd: zUnsignedDecimal.nullable(),
     signals24h: z.array(zPoolSignalResponse),
@@ -370,7 +382,7 @@ export const zSignalResponse = z.object({
     id: zCount,
     message: z.string().nullable(),
     poolAddress: z.string().min(1),
-    protocol: z.string().min(1),
+    protocol: zProtocol,
     severity: zSeverity,
     threshold: zUnsignedDecimal.nullable(),
     tokenA: zEmbeddedTokenResponse,
@@ -396,14 +408,14 @@ export type StatsResponse = z.infer<typeof zStatsResponse>;
 
 export const zTokenPriceResponse = z.object({
     fetchedAt: z.iso.datetime({ offset: true }),
-    provider: z.string(),
+    provider: zPriceProvider,
     usd: zUnsignedDecimal
 });
 
 export type TokenPriceResponse = z.infer<typeof zTokenPriceResponse>;
 
 export const zTokenResponse = z.object({
-    decimals: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    decimals: z.int().gte(0),
     fetchedAt: z.iso.datetime({ offset: true }),
     lastRefreshAt: z.iso.datetime({ offset: true }),
     logoUri: z.url().nullable(),
@@ -434,7 +446,7 @@ export const zListPoolsQuery = z.object({
     ]).optional(),
     q: z.string().nullish(),
     fee_bps: z.string().nullish(),
-    limit: zCount.optional()
+    limit: z.int().gte(1).lte(200).optional()
 });
 
 export const zListPoolsResponse = zPoolPageResponsePoolResponse;
@@ -443,7 +455,7 @@ export const zListFeeTiersResponse = z.array(zFeeTierResponse);
 
 export const zListTopPoolsQuery = z.object({
     metric: z.enum(['volume_24h', 'tvl']).optional(),
-    limit: zCount.optional()
+    limit: z.int().gte(1).lte(20).optional()
 });
 
 export const zListTopPoolsResponse = z.array(zPoolResponse);
@@ -459,7 +471,7 @@ export const zGetPoolHistoryPath = z.object({
 });
 
 export const zGetPoolHistoryQuery = z.object({
-    days: zCount.optional()
+    days: z.int().gte(1).lte(90).optional()
 });
 
 export const zGetPoolHistoryResponse = z.array(zPoolHistoryBucketResponse);
@@ -481,15 +493,7 @@ export const zListPoolLiquidityEventsQuery = z.object({
         z.literal('first'),
         z.literal('last')
     ]).nullish(),
-    sort: z.enum([
-        'first_seen_desc',
-        'first_seen_asc',
-        'last_seen_desc',
-        'last_seen_asc'
-    ]).optional(),
-    q: z.string().nullish(),
-    fee_bps: z.string().nullish(),
-    limit: zCount.optional()
+    limit: z.int().gte(1).lte(200).optional()
 });
 
 export const zListPoolLiquidityEventsResponse = zPageResponseLiquidityEventResponse;
@@ -505,15 +509,7 @@ export const zListPoolSwapsQuery = z.object({
         z.literal('first'),
         z.literal('last')
     ]).nullish(),
-    sort: z.enum([
-        'first_seen_desc',
-        'first_seen_asc',
-        'last_seen_desc',
-        'last_seen_asc'
-    ]).optional(),
-    q: z.string().nullish(),
-    fee_bps: z.string().nullish(),
-    limit: zCount.optional()
+    limit: z.int().gte(1).lte(200).optional()
 });
 
 export const zListPoolSwapsResponse = zPageResponseSwapEventResponse;
@@ -531,7 +527,7 @@ export const zListSignalsQuery = z.object({
         z.literal('critical')
     ]).nullish(),
     pool: z.string().nullish(),
-    limit: zCount.optional()
+    limit: z.int().gte(1).lte(200).optional()
 });
 
 export const zListSignalsResponse = zPageResponseSignalResponse;

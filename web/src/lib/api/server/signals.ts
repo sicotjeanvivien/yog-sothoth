@@ -11,7 +11,7 @@
 
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
-import { zPageResponseSignalResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
+import { zListSignalsResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
@@ -58,7 +58,7 @@ export async function fetchSignals(
       position: params.position,
       limit,
     },
-    zPageResponseSignalResponse,
+    zListSignalsResponse,
   );
 }
 

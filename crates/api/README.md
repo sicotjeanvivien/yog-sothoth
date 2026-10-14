@@ -339,11 +339,17 @@ What the derive cannot say is said once:
   checks that each serialises as the domain's `as_str()`.
 - **The finish** (`http/contract.rs`), applied to the whole document: a nullable
   property is required — `null` is written, never omitted, and a key that may be
-  absent says `#[schema(nullable = false)]`; every operation answers its
-  failures as `ProblemDetails`; an `int64` anywhere fails the document, because
-  the generated zod would read it as a `BigInt` (point it at `Count`).
+  absent says `#[schema(nullable = false)]` (a test fails on a
+  `skip_serializing_if` without it); every operation declares its failures —
+  Problem Details, or plain text when axum cannot parse the query string or the
+  path; an `int64` (or `u64`) anywhere fails the document, because the generated
+  zod would read it as a `BigInt` (point it at `Count`); so does a `$ref` to an
+  undeclared schema, which the generator would skip in silence.
+- **Integers carry their Rust range**: utoipa's `non_strict_integers` writes a
+  `u8`, `u16` or `u32` with its own format (`u-int8`…), never a capped `int32`.
 - **Refinements** the Rust type does not carry: `min_length = 1`,
-  `maximum = 100`, `format = "uri"`.
+  `maximum = 100`, `format = "uri"`. A bound the server validates (`limit`,
+  `days`) is written in its `#[param]`, and a test pins it to the constant.
 
 After changing a route or a DTO, regenerate both, and commit them:
 
@@ -466,10 +472,14 @@ served as `application/problem+json`:
 
 | Status | `title` | Common causes |
 |--------|---------|---------------|
-| 400 | `Bad Request` | Invalid address, malformed cursor, limit out of range, unknown `severity`/`metric`, mutually exclusive params |
+| 400 | `Bad Request` | Invalid address, malformed cursor, limit out of range, mutually exclusive params |
 | 404 | `Not Found` | Pool or token unknown, no observed state yet for a known pool |
 | 503 | `Service Unavailable` | Over capacity: no work slot within 2 s, too many open signal streams, the request past its deadline, or the database out of connections or past `statement_timeout`. Carries `Retry-After`; see [Capacity bounds](#capacity-bounds) |
 | 500 | `Internal Server Error` | DB failure, encoding bug. `detail` is always the generic message; the real cause is logged server-side under a `request_id` correlatable via the `x-request-id` response header |
+
+⚠️ A query string axum cannot parse — an unknown `severity` or `metric`, a
+non-numeric `limit` — is refused **400 in plain text** by the extractor, before
+any `ApiError` exists.
 
 ## Cursor wire format
 

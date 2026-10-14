@@ -86,8 +86,10 @@ derives from its routes ([`crates/api/README.md`](../crates/api/README.md#the-co
 The names are the Rust ones — `zPoolResponse` and its type `PoolResponse`,
 `EmbeddedTokenResponse` for a token inside a pool or a signal — and each route
 has its response schema, named after the handler (`zListTopPoolsResponse`). A
-fetcher passes that one to `apiGet`. CI's `contract` job fails when the file is
-not what the committed document generates.
+fetcher passes that one to `apiGet`. The values of the query parameters
+(`PoolSort`, `PageDir`, `PoolRankMetric`) are derived from the generated query
+schemas, so a value renamed server-side breaks `tsc`. CI's `contract` job fails
+when the file is not what the committed document generates.
 
 What the schemas cannot say, and a component must still know:
 
@@ -96,16 +98,21 @@ What the schemas cannot say, and a component must still know:
   amount or a rate (`UnsignedDecimal`, `SignedDecimal`) keeps digits a JS
   `number` drops: format it, never compute on `Number(value)`. The `slot` of the
   network status is shown as is.
-- **Closed sets fail loudly.** A severity, a kind or a freshness outside its
-  enum is a `validation` error, never an unknown tag reaching the UI.
+- **Closed sets fail loudly.** A protocol, a severity, a kind or a freshness
+  outside its enum is a `validation` error, never an unknown tag reaching the UI.
+- **A fee share is read, never derived.** `lpFees24hUsd` is not
+  `fees24hUsd − protocolFees24hUsd`: cp-amm takes the referral out of the
+  protocol share, so that formula credits it to the LPs. Same for `lpFeesUsd`
+  in the history.
 - **An announcement's `linkUrl` is usually a relative path** (`/changelog#v0.1.0`),
   so it is not a URL; its `severity` is an editorial scale, distinct from a
   signal's even though the tags coincide.
 - **A signal's `id`** is the reconciliation key of the live feed after a
   reconnect, and the React key.
 - **An error body is read best-effort**: `readRemoteErrorMessage` falls back to
-  `null` when it does not match `zProblemDetails`, leaving the status code as
-  the signal. `type` is `about:blank` today; `title` is what discriminates.
+  `null` when it does not match `zProblemDetails` — a query string the API
+  cannot parse is refused in plain text — leaving the status code as the
+  signal. `type` is `about:blank` today; `title` is what discriminates.
 
 ### The schemas are strict, so the API deploys first
 

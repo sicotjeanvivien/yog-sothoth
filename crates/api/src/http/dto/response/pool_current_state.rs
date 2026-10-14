@@ -4,6 +4,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain;
 
+use super::protocol::Protocol;
 use crate::application::PoolCurrentStateView;
 use crate::http::dto::schema::{U128String, UnsignedDecimal};
 
@@ -23,8 +24,7 @@ use crate::http::dto::schema::{U128String, UnsignedDecimal};
 pub(crate) struct PoolCurrentStateResponse {
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
-    #[schema(min_length = 1)]
-    pub(crate) protocol: String,
+    pub(crate) protocol: Protocol,
 
     pub(crate) last_event_at: DateTime<Utc>,
     pub(crate) last_event_kind: LastEventKind,
@@ -61,7 +61,7 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
         } = view;
         Self {
             pool_address: state.pool_address.to_string(),
-            protocol: state.protocol.as_str().to_string(),
+            protocol: state.protocol.into(),
             last_event_at: state.last_event_at,
             last_event_kind: state.last_event_kind.into(),
             last_signature: state.last_signature.to_string(),

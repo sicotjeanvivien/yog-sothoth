@@ -28,11 +28,10 @@ impl NetworkStatusReporterMetrics {
     /// rising while `yog_indexer_*` keeps advancing says the probe is the only
     /// thing hurting.
     ///
-    /// ⚠️ **And it is the only signal there is** — raised in review of PR #141.
+    /// ⚠️ **And it is the only signal there is.**
     /// A failing probe freezes `network_status.observed_at`, and nothing
     /// surfaces that freeze: the dashboard parses `observedAt` and never reads
-    /// it (`web/src/lib/api/schema/zod.gen.ts` is its only occurrence in
-    /// `web/src`), and the freshness dot beside the slot is computed from the
+    /// it, and the freshness dot beside the slot is computed from the
     /// last *indexed event* — `NetworkStatusService::get_status` — which keeps
     /// advancing precisely when the probe alone is down. The sidebar therefore
     /// shows a stale slot and a stale latency under a pulsing "live" badge.

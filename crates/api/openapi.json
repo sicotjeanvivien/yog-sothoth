@@ -84,8 +84,8 @@
             "type": "string"
           },
           "provider": {
-            "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\".",
-            "type": "string"
+            "$ref": "#/components/schemas/PriceProvider",
+            "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\"."
           },
           "usd": {
             "$ref": "#/components/schemas/UnsignedDecimal",
@@ -104,7 +104,7 @@
         "properties": {
           "decimals": {
             "description": "Decimal precision.",
-            "format": "int32",
+            "format": "u-int8",
             "minimum": 0,
             "type": "integer"
           },
@@ -212,7 +212,7 @@
           },
           "eventIndex": {
             "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
-            "format": "int32",
+            "format": "u-int16",
             "minimum": 0,
             "type": "integer"
           },
@@ -235,8 +235,7 @@
             "type": "string"
           },
           "protocol": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/components/schemas/Protocol"
           },
           "reserveAAfter": {
             "$ref": "#/components/schemas/U128String"
@@ -319,7 +318,7 @@
           },
           "protocolFeePercent": {
             "description": "Fee-split percents (0..=100) from the on-chain pool account: Meteora's\ncut and a referrer's cut of the trading fee.\n\nThere is no partner cut. `partnerFeePercent` was served here until\nmigration 037; it decoded a padding byte and was always 0.",
-            "format": "int32",
+            "format": "u-int8",
             "maximum": 100,
             "minimum": 0,
             "type": [
@@ -328,7 +327,7 @@
             ]
           },
           "referralFeePercent": {
-            "format": "int32",
+            "format": "u-int8",
             "maximum": 100,
             "minimum": 0,
             "type": [
@@ -352,7 +351,7 @@
         "properties": {
           "baseFactor": {
             "description": "The two other inputs to the pool's base fee, served raw so a client can\nrecompute `feeBps` rather than trust it: `baseFactor × binStep ×\n10^baseFeePowerFactor / 10_000`.",
-            "format": "int32",
+            "format": "u-int16",
             "minimum": 0,
             "type": [
               "integer",
@@ -360,7 +359,7 @@
             ]
           },
           "baseFeePowerFactor": {
-            "format": "int32",
+            "format": "u-int8",
             "minimum": 0,
             "type": [
               "integer",
@@ -369,7 +368,7 @@
           },
           "binStep": {
             "description": "Price increment between adjacent bins, in basis points: bin `i` sits at\n`(1 + binStep / 10_000)^i`. The defining property of a DLMM pool.",
-            "format": "int32",
+            "format": "u-int16",
             "minimum": 0,
             "type": [
               "integer",
@@ -378,7 +377,7 @@
           },
           "maxVolatilityAccumulator": {
             "description": "Per-pool ceiling on the volatility accumulator, and so on how far the\nvariable fee can climb.",
-            "format": "int32",
+            "format": "u-int32",
             "minimum": 0,
             "type": [
               "integer",
@@ -387,7 +386,7 @@
           },
           "protocolShare": {
             "description": "Meteora's cut of the trading fee, in **basis points** — not the whole\npercent DAMM v2's `protocolFeePercent` uses. The two are not comparable\nwithout scaling.",
-            "format": "int32",
+            "format": "u-int16",
             "minimum": 0,
             "type": [
               "integer",
@@ -396,7 +395,7 @@
           },
           "variableFeeControl": {
             "description": "Magnitude of the volatility-driven fee charged on top of the base fee.\n**Zero means no dynamic fee** — DLMM has no boolean flag, unlike DAMM\nv2's `hasDynamicFee`.",
-            "format": "int32",
+            "format": "u-int32",
             "minimum": 0,
             "type": [
               "integer",
@@ -436,7 +435,7 @@
           },
           "rpcLatencyMs": {
             "description": "Round-trip latency of the probe's last `getSlot` call, in ms — the\ndistance to *that* endpoint, not to the one ingestion uses.",
-            "format": "int32",
+            "format": "u-int32",
             "minimum": 0,
             "type": "integer"
           },
@@ -475,7 +474,7 @@
                 },
                 "eventIndex": {
                   "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
-                  "format": "int32",
+                  "format": "u-int16",
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -498,8 +497,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "minLength": 1,
-                  "type": "string"
+                  "$ref": "#/components/schemas/Protocol"
                 },
                 "reserveAAfter": {
                   "$ref": "#/components/schemas/U128String"
@@ -638,8 +636,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "minLength": 1,
-                  "type": "string"
+                  "$ref": "#/components/schemas/Protocol"
                 },
                 "protocolFees24hUsd": {
                   "oneOf": [
@@ -779,8 +776,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "minLength": 1,
-                  "type": "string"
+                  "$ref": "#/components/schemas/Protocol"
                 },
                 "severity": {
                   "$ref": "#/components/schemas/Severity"
@@ -860,7 +856,6 @@
           },
           "items": {
             "items": {
-              "description": "`GET /api/pools/{address}/swaps` item.",
               "properties": {
                 "amountA": {
                   "$ref": "#/components/schemas/U128String"
@@ -876,7 +871,7 @@
                 },
                 "eventIndex": {
                   "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
-                  "format": "int32",
+                  "format": "u-int16",
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -891,8 +886,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "minLength": 1,
-                  "type": "string"
+                  "$ref": "#/components/schemas/Protocol"
                 },
                 "protocolFee": {
                   "$ref": "#/components/schemas/U128String"
@@ -999,8 +993,7 @@
             "type": "string"
           },
           "protocol": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/components/schemas/Protocol"
           },
           "reserveA": {
             "$ref": "#/components/schemas/U128String"
@@ -1276,8 +1269,7 @@
             "type": "string"
           },
           "protocol": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/components/schemas/Protocol"
           },
           "protocolFees24hUsd": {
             "oneOf": [
@@ -1383,6 +1375,15 @@
         ],
         "type": "object"
       },
+      "PriceProvider": {
+        "description": "Where a price came from.",
+        "enum": [
+          "jupiter",
+          "helius",
+          "fallback"
+        ],
+        "type": "string"
+      },
       "ProblemDetails": {
         "description": "Problem Details for HTTP APIs — the wire shape returned for every\nerror response.\n\nField semantics, all per RFC 9457 §3:\n\n  - `type` — URI reference identifying the problem type. Opaque\n    to clients except for equality comparison. `\"about:blank\"` is\n    the reserved value meaning \"no specific type, see `title`\".\n  - `title` — short, human-readable summary. Should not change\n    across occurrences of the same problem type. Clients can\n    branch on `(type, title)` together.\n  - `status` — the HTTP status code. Redundant with the response\n    line, but useful for clients that log only the body.\n  - `detail` — human-readable per-occurrence message. May vary\n    across occurrences of the same type. This is where the\n    contextual information lives (\"invalid pool address: foo\").\n\n`instance` is intentionally omitted: it would carry the request\npath, which the client already knows. It can be added later\nwithout breaking the contract (it's an optional field).",
         "properties": {
@@ -1390,7 +1391,7 @@
             "type": "string"
           },
           "status": {
-            "format": "int32",
+            "format": "u-int16",
             "minimum": 0,
             "type": "integer"
           },
@@ -1408,6 +1409,14 @@
           "detail"
         ],
         "type": "object"
+      },
+      "Protocol": {
+        "description": "The protocol a pool, an event or a signal belongs to.",
+        "enum": [
+          "meteora_damm_v2",
+          "meteora_dlmm"
+        ],
+        "type": "string"
       },
       "Severity": {
         "description": "How serious a signal is.",
@@ -1440,8 +1449,7 @@
             "type": "string"
           },
           "protocol": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/components/schemas/Protocol"
           },
           "severity": {
             "$ref": "#/components/schemas/Severity"
@@ -1552,7 +1560,6 @@
         "type": "object"
       },
       "SwapEventResponse": {
-        "description": "`GET /api/pools/{address}/swaps` item.",
         "properties": {
           "amountA": {
             "$ref": "#/components/schemas/U128String"
@@ -1568,7 +1575,7 @@
           },
           "eventIndex": {
             "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
-            "format": "int32",
+            "format": "u-int16",
             "minimum": 0,
             "type": "integer"
           },
@@ -1583,8 +1590,7 @@
             "type": "string"
           },
           "protocol": {
-            "minLength": 1,
-            "type": "string"
+            "$ref": "#/components/schemas/Protocol"
           },
           "protocolFee": {
             "$ref": "#/components/schemas/U128String"
@@ -1639,12 +1645,12 @@
             "type": "string"
           },
           "provider": {
-            "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\".",
-            "type": "string"
+            "$ref": "#/components/schemas/PriceProvider",
+            "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\"."
           },
           "usd": {
             "$ref": "#/components/schemas/UnsignedDecimal",
-            "description": "USD price. Serialised as a JSON number — `rust_decimal`'s\ndefault Serialize uses an exact decimal representation."
+            "description": "USD price."
           }
         },
         "required": [
@@ -1659,7 +1665,7 @@
         "properties": {
           "decimals": {
             "description": "Decimal precision of the mint.",
-            "format": "int32",
+            "format": "u-int8",
             "minimum": 0,
             "type": "integer"
           },
@@ -1770,9 +1776,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
         "summary": "`GET /api/announcements/active`"
@@ -1798,9 +1809,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
         "summary": "`GET /api/network/status`"
@@ -1894,7 +1910,10 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Count"
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
             }
           }
         ],
@@ -1914,9 +1933,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -1943,9 +1967,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
         "summary": "The most common base-fee tiers (basis points) with their pool counts,\nascending by fee — the option list of the pools fee filter. A JSON array\nof `{ feeBps, poolCount }`; `feeBps` is a decimal string like on the pool\nresponses, `poolCount` a plain number."
@@ -1973,7 +2002,10 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Count"
+              "format": "u-int8",
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
             }
           }
         ],
@@ -1996,9 +2028,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2032,9 +2069,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2048,7 +2090,10 @@
             "name": "days",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Count"
+              "format": "u-int8",
+              "maximum": 90,
+              "minimum": 1,
+              "type": "integer"
             }
           },
           {
@@ -2079,9 +2124,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2115,9 +2165,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2170,47 +2225,13 @@
           },
           {
             "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "enum": [
-                "first_seen_desc",
-                "first_seen_asc",
-                "last_seen_desc",
-                "last_seen_asc"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "q",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          {
-            "description": "Exact base-fee tier filter (basis points), as a decimal string on the\nwire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.",
-            "in": "query",
-            "name": "fee_bps",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          {
-            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Count"
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
             }
           },
           {
@@ -2238,9 +2259,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2293,47 +2319,13 @@
           },
           {
             "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "enum": [
-                "first_seen_desc",
-                "first_seen_asc",
-                "last_seen_desc",
-                "last_seen_asc"
-              ],
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "q",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          {
-            "description": "Exact base-fee tier filter (basis points), as a decimal string on the\nwire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.",
-            "in": "query",
-            "name": "fee_bps",
-            "required": false,
-            "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          {
-            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Count"
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
             }
           },
           {
@@ -2361,9 +2353,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2451,7 +2448,10 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "$ref": "#/components/schemas/Count"
+              "format": "u-int8",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
             }
           }
         ],
@@ -2471,9 +2471,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }
@@ -2499,9 +2504,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
         "summary": "Live tail of the signal feed, as Server-Sent Events."
@@ -2527,9 +2537,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
         "summary": "`GET /api/stats`"
@@ -2564,9 +2579,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetails"
                 }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Any failure, as RFC 9457 Problem Details."
+            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         }
       }

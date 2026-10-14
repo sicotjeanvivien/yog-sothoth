@@ -5,9 +5,11 @@ use serde::Serialize;
 use yog_core::domain;
 
 use super::announcement::{AnnouncementKind, AnnouncementSeverity};
+use super::embedded_price::PriceProvider;
 use super::liquidity_event::LiquidityEventKind;
 use super::network_status::Freshness;
 use super::pool_current_state::LastEventKind;
+use super::protocol::Protocol;
 use super::signal::Severity;
 use super::swap_event::TradeDirection;
 
@@ -68,5 +70,20 @@ fn last_event_kind_matches_the_domain() {
     use domain::LastEventKind::*;
     for k in [Swap, LiquidityAdd, LiquidityRemove] {
         assert_eq!(wire(LastEventKind::from(k)), k.as_str());
+    }
+}
+
+#[test]
+fn protocol_matches_the_domain() {
+    for p in yog_core::domain::Protocol::all() {
+        assert_eq!(wire(Protocol::from(*p)), p.as_str());
+    }
+}
+
+#[test]
+fn price_provider_matches_the_domain() {
+    use domain::PriceProvider::*;
+    for p in [Jupiter, Helius, Fallback] {
+        assert_eq!(wire(PriceProvider::from(p)), p.as_str());
     }
 }

@@ -16,7 +16,7 @@ use crate::http::{
         },
     },
     error::ApiError,
-    query::{HistoryQuery, PageQuery, TopPoolsQuery},
+    query::{EventPageQuery, HistoryQuery, PageQuery, TopPoolsQuery},
 };
 
 // ===========================================================================
@@ -188,13 +188,13 @@ pub(crate) async fn get_pool_history(
 #[utoipa::path(
     get,
     path = "/api/pools/{address}/swap-events",
-    params(PageQuery),
+    params(EventPageQuery),
     responses((status = 200, body = PageResponse<SwapEventResponse>))
 )]
 pub(crate) async fn list_pool_swaps(
     State(state): State<AppState>,
     Path(address): Path<String>,
-    Query(query): Query<PageQuery>,
+    Query(query): Query<EventPageQuery>,
 ) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
     let request = ListPoolSwapsRequest::parse(address, query)?;
     let page = state
@@ -226,13 +226,13 @@ pub(crate) async fn list_pool_swaps(
 #[utoipa::path(
     get,
     path = "/api/pools/{address}/liquidity-events",
-    params(PageQuery),
+    params(EventPageQuery),
     responses((status = 200, body = PageResponse<LiquidityEventResponse>))
 )]
 pub(crate) async fn list_pool_liquidity_events(
     State(state): State<AppState>,
     Path(address): Path<String>,
-    Query(query): Query<PageQuery>,
+    Query(query): Query<EventPageQuery>,
 ) -> Result<Json<PageResponse<LiquidityEventResponse>>, ApiError> {
     let request = ListPoolLiquidityRequest::parse(address, query)?;
     let page = state

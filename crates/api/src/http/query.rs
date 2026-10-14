@@ -12,7 +12,6 @@ use yog_core::{
     domain::{PoolCursor, PoolRankMetric, Severity},
 };
 
-use crate::http::dto::schema::Count;
 use crate::http::error::ApiError;
 
 pub(crate) const DEFAULT_LIMIT: i64 = 50;
@@ -39,12 +38,26 @@ pub(crate) struct PageQuery {
     /// wire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.
     pub(crate) fee_bps: Option<String>,
     #[serde(default = "default_limit")]
-    #[param(value_type = Count)]
+    #[param(value_type = u8, minimum = 1, maximum = 200)]
     pub(crate) limit: i64,
 }
 
 pub(crate) fn default_limit() -> i64 {
     DEFAULT_LIMIT
+}
+
+/// The pagination of a pool's event feed: no sort, no search, no filter.
+#[derive(Debug, Deserialize, IntoParams)]
+pub(crate) struct EventPageQuery {
+    pub(crate) cursor: Option<String>,
+    #[serde(default)]
+    #[param(inline)]
+    pub(crate) dir: PageDirectionParam,
+    #[param(inline)]
+    pub(crate) position: Option<PagePositionParam>,
+    #[serde(default = "default_limit")]
+    #[param(value_type = u8, minimum = 1, maximum = 200)]
+    pub(crate) limit: i64,
 }
 
 pub(crate) const DEFAULT_HISTORY_DAYS: i64 = 7;
@@ -54,7 +67,7 @@ pub(crate) const MAX_HISTORY_DAYS: i64 = 90;
 #[derive(Debug, Deserialize, IntoParams)]
 pub(crate) struct HistoryQuery {
     #[serde(default = "default_history_days")]
-    #[param(value_type = Count)]
+    #[param(value_type = u8, minimum = 1, maximum = 90)]
     pub(crate) days: i64,
 }
 
@@ -142,7 +155,7 @@ pub(crate) struct SignalsQuery {
     pub(crate) severity: Option<SeverityParam>,
     pub(crate) pool: Option<String>,
     #[serde(default = "default_limit")]
-    #[param(value_type = Count)]
+    #[param(value_type = u8, minimum = 1, maximum = 200)]
     pub(crate) limit: i64,
 }
 
@@ -174,7 +187,7 @@ pub(crate) struct TopPoolsQuery {
     #[param(inline)]
     pub(crate) metric: PoolRankMetricParam,
     #[serde(default = "default_top_limit")]
-    #[param(value_type = Count)]
+    #[param(value_type = u8, minimum = 1, maximum = 20)]
     pub(crate) limit: i64,
 }
 

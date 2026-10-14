@@ -44,23 +44,33 @@ fn finish(doc: &mut Value) {
     refuse_dangling_refs(doc);
 }
 
-/// Every operation answers its failures as RFC 9457 Problem Details.
+/// The keys of a path item that are operations; it also holds `parameters`, `summary`…
+const HTTP_METHODS: [&str; 8] = [
+    "get", "put", "post", "delete", "options", "head", "patch", "trace",
+];
+
+/// Every operation answers its failures as RFC 9457 Problem Details — except
+/// a query string or a path axum cannot parse, which it refuses in plain text.
 fn answer_problems(doc: &mut Value) {
     let problem = json!({
-        "description": "Any failure, as RFC 9457 Problem Details.",
-        "content": { PROBLEM_CONTENT_TYPE: {
-            "schema": { "$ref": "#/components/schemas/ProblemDetails" }
-        } }
+        "description": "A failure: RFC 9457 Problem Details, or plain text when the \
+                        query string or the path cannot be parsed.",
+        "content": {
+            PROBLEM_CONTENT_TYPE: { "schema": { "$ref": "#/components/schemas/ProblemDetails" } },
+            "text/plain": { "schema": { "type": "string" } }
+        }
     });
     let Some(paths) = doc["paths"].as_object_mut() else {
         return;
     };
     for item in paths.values_mut() {
-        let Some(operations) = item.as_object_mut() else {
+        let Some(item) = item.as_object_mut() else {
             continue;
         };
-        for operation in operations.values_mut() {
-            operation["responses"]["default"] = problem.clone();
+        for (method, operation) in item.iter_mut() {
+            if HTTP_METHODS.contains(&method.as_str()) {
+                operation["responses"]["default"] = problem.clone();
+            }
         }
     }
 }
@@ -115,7 +125,9 @@ fn is_nullable(schema: &Value) -> bool {
 fn refuse_int64(node: &Value, at: &str) {
     match node {
         Value::Object(map) => {
-            if let Some(format @ ("int64" | "uint64")) = map.get("format").and_then(Value::as_str) {
+            if let Some(format @ ("int64" | "uint64" | "u-int64")) =
+                map.get("format").and_then(Value::as_str)
+            {
                 panic!("{at} is an {format}: point it at `Count` (`value_type = Count`)");
             }
             for (key, value) in map {

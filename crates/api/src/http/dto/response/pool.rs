@@ -8,6 +8,7 @@ use yog_core::domain::{
     SignalRecord,
 };
 
+use super::protocol::Protocol;
 use super::signal::Severity;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 use crate::{
@@ -59,8 +60,7 @@ impl From<SignalRecord> for PoolSignalResponse {
 pub(crate) struct PoolResponse {
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
-    #[schema(min_length = 1)]
-    pub(crate) protocol: String,
+    pub(crate) protocol: Protocol,
     pub(crate) token_a: EmbeddedTokenResponse,
     pub(crate) token_b: EmbeddedTokenResponse,
     /// Base trading fee in basis points (genesis fee tier). `None` until the
@@ -163,7 +163,7 @@ impl PoolResponse {
     ) -> Self {
         Self {
             pool_address: pool.pool_address.to_string(),
-            protocol: pool.protocol.to_string(),
+            protocol: pool.protocol.into(),
             token_a,
             token_b,
             fee_bps: pool.fee_bps,

@@ -10,7 +10,7 @@
  */
 
 import { apiGetBrowser } from "@/lib/api/client/browser";
-import { zPageResponseSignalResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
+import { zListSignalsResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
 
 const DEFAULT_LIMIT = 50;
 
@@ -18,5 +18,5 @@ const DEFAULT_LIMIT = 50;
 export async function fetchSignalsBrowser(
   limit: number = DEFAULT_LIMIT,
 ): Promise<PageResponseSignalResponse> {
-  return apiGetBrowser("/api/signals", { limit }, zPageResponseSignalResponse);
+  return apiGetBrowser("/api/signals", { limit }, zListSignalsResponse);
 }

@@ -10,11 +10,17 @@
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 
-import { apiGet } from "../client/server";
-import { zListTopPoolsResponse, type PoolResponse } from "../schema/zod.gen";
+import type * as z from "zod";
 
-/** Ranking metric for the top-N pools — mirrors the API's `metric` param. */
-export type PoolRankMetric = "volume_24h" | "tvl";
+import { apiGet } from "../client/server";
+import {
+  type zListTopPoolsQuery,
+  zListTopPoolsResponse,
+  type PoolResponse,
+} from "../schema/zod.gen";
+
+/** Ranking metric for the top-N pools — the API's `metric` param. */
+export type PoolRankMetric = NonNullable<z.infer<typeof zListTopPoolsQuery>["metric"]>;
 
 /**
  * Fetch the top pools ranked by `metric` (default `volume_24h`) from `yog-api`.

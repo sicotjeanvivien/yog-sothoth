@@ -14,7 +14,7 @@
  */
 
 import { apiGet } from "../client/server";
-import { zPoolPageResponsePoolResponse, type PoolPageResponsePoolResponse } from "../schema/zod.gen";
+import { zListPoolsResponse, type PoolPageResponsePoolResponse } from "../schema/zod.gen";
 import type { PageDir, PagePosition, PoolSort } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
@@ -71,7 +71,7 @@ export async function fetchPools(
         params.feeBps && params.feeBps.length > 0 ? params.feeBps : undefined,
       limit,
     },
-    zPoolPageResponsePoolResponse,
+    zListPoolsResponse,
   );
 }
 

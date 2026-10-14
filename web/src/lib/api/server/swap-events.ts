@@ -8,7 +8,7 @@
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
 import {
-  zPageResponseSwapEventResponse,
+  zListPoolSwapsResponse,
   type PageResponseSwapEventResponse,
 } from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
@@ -55,7 +55,7 @@ export async function fetchPoolSwapEvents(
       position: params.position,
       limit,
     },
-    zPageResponseSwapEventResponse,
+    zListPoolSwapsResponse,
   );
 }
 

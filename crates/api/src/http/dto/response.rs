@@ -8,6 +8,7 @@ mod page;
 mod pool;
 mod pool_current_state;
 mod pool_history;
+mod protocol;
 // Visible: target of a doc link (http/error.rs).
 pub(crate) mod problem;
 mod readiness;

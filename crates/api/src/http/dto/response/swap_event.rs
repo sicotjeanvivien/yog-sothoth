@@ -18,22 +18,21 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{self, MeteoraDammV2SwapEvent, Protocol};
+use yog_core::domain::{self, MeteoraDammV2SwapEvent};
 
+use super::protocol::Protocol;
 use crate::http::dto::schema::U128String;
 
 // ---------------------------------------------------------------------------
 // Swap event
 // ---------------------------------------------------------------------------
 
-/// `GET /api/pools/{address}/swaps` item.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwapEventResponse {
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
-    #[schema(min_length = 1)]
-    pub(crate) protocol: String,
+    pub(crate) protocol: Protocol,
     #[schema(min_length = 1)]
     pub(crate) signature: String,
     /// Position of this event among its transaction's emissions. A routed
@@ -73,7 +72,7 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
     fn from(event: MeteoraDammV2SwapEvent) -> Self {
         Self {
             pool_address: event.pool_address.to_string(),
-            protocol: Protocol::MeteoraDammV2.to_string(),
+            protocol: domain::Protocol::MeteoraDammV2.into(),
             signature: event.signature.to_string(),
             event_index: event.event_index,
             timestamp: event.timestamp,

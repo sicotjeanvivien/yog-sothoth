@@ -5,6 +5,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain;
 
+use super::protocol::Protocol;
 use crate::application::EnrichedSignal;
 use crate::http::dto::EmbeddedTokenResponse;
 use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
@@ -21,8 +22,7 @@ pub(crate) struct SignalResponse {
     pub(crate) id: i64,
     #[schema(min_length = 1)]
     pub(crate) detector: String,
-    #[schema(min_length = 1)]
-    pub(crate) protocol: String,
+    pub(crate) protocol: Protocol,
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
     /// The pool's token pair, embedded in the same shape as
@@ -68,7 +68,7 @@ impl From<EnrichedSignal> for SignalResponse {
         Self {
             id: enriched.record.id,
             detector: signal.detector,
-            protocol: signal.protocol.to_string(),
+            protocol: signal.protocol.into(),
             pool_address: signal.pool_address.to_string(),
             token_a: enriched.token_a.into(),
             token_b: enriched.token_b.into(),
