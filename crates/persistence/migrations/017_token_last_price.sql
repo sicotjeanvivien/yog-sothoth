@@ -13,8 +13,6 @@ CREATE TABLE token_last_price (
 -- ⚠️ SELECT too: the upsert's `WHERE` reads the row it would replace.
 GRANT SELECT, INSERT, UPDATE ON token_last_price TO yog_context;
 
--- ⚠️ The window only: a token missing here may still hold an older price in
--- token_prices, so this table is not "every token's last price".
 INSERT INTO token_last_price (mint, price_usd, fetched_at)
 SELECT DISTINCT ON (mint) mint, price_usd, fetched_at
   FROM token_prices

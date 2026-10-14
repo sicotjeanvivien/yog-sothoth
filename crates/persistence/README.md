@@ -332,9 +332,10 @@ window only, so a token not priced since may be missing while `token_prices`
 still holds an older row — the same answer under the latest bound, a wrong one
 for an unbounded read such as `find_latest_by_mint`.
 
-⚠️ A fixture that writes `token_prices` in raw SQL leaves this table behind.
-Tests price through `helpers::price_mint_since` and `helpers::price_at`, which
-call the writer; raw SQL stays for the prices the writer refuses.
+⚠️ A write to `token_prices` outside `insert_batch` — a raw fixture, a repair
+that deletes rows — leaves this table behind. Tests price through
+`helpers::price_mint_since` and `helpers::price_at`; raw SQL stays for the
+prices the writer refuses.
 
 ### Three ways to say "we don't know", and what each one does
 

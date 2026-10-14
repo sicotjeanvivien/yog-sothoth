@@ -123,7 +123,7 @@ pub async fn price_at(pool: &PgPool, mint: &str, price: &str, at: DateTime<Utc>)
     record_prices(pool, &[token_price(mint, price, at)]).await;
 }
 
-fn token_price(mint: &str, price: &str, at: DateTime<Utc>) -> TokenPrice {
+pub fn token_price(mint: &str, price: &str, at: DateTime<Utc>) -> TokenPrice {
     TokenPrice {
         mint: Pubkey::from_str(mint).expect("a priced fixture mint must be a pubkey"),
         price_usd: Decimal::from_str(price).unwrap(),
@@ -133,8 +133,7 @@ fn token_price(mint: &str, price: &str, at: DateTime<Utc>) -> TokenPrice {
     }
 }
 
-/// ⚠️ Through the writer, never raw SQL: `token_last_price`, which
-/// `pool_current_tvl` reads, is written by `insert_batch` only.
+/// Write prices the way yog-context does.
 pub async fn record_prices(pool: &PgPool, prices: &[TokenPrice]) {
     PgTokenPriceRepository::new(pool.clone())
         .insert_batch(prices)

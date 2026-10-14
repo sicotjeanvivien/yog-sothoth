@@ -44,7 +44,7 @@ const DEC_B: i16 = 9;
 /// The anchor price used throughout: $180 per unit of token B.
 const PRICE_B: &str = "180.0";
 
-/// 48 hourly prices that store as zero.
+/// Hourly prices that store as zero.
 ///
 /// ⚠️ Raw SQL: `insert_batch` refuses a price below the column's scale.
 async fn price_mint_as_zero(pool: &PgPool, mint: &str) {

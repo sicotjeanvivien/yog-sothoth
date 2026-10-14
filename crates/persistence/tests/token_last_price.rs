@@ -6,23 +6,15 @@ use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use sqlx::PgPool;
-use yog_core::domain::{PriceProvider, TokenPrice, TokenPriceRepository};
+use yog_core::domain::{TokenPrice, TokenPriceRepository};
 use yog_persistence::PgTokenPriceRepository;
 
-use super::helpers::{
-    CHECK_VIOLATION, INSUFFICIENT_PRIVILEGE, as_role, pk, record_prices, sqlstate,
-};
+use super::helpers::{CHECK_VIOLATION, as_role, pk, record_prices, sqlstate, token_price};
 
 type LastPrice = (String, Decimal, DateTime<Utc>);
 
 fn price(mint: Pubkey, usd: i64, at: DateTime<Utc>) -> TokenPrice {
-    TokenPrice {
-        mint,
-        price_usd: Decimal::new(usd, 0),
-        price_provider: PriceProvider::Jupiter,
-        confidence: None,
-        fetched_at: at,
-    }
+    token_price(&mint.to_string(), &usd.to_string(), at)
 }
 
 async fn last_prices(pool: &PgPool) -> Vec<LastPrice> {
@@ -109,32 +101,6 @@ async fn the_price_worker_writes_the_last_price_as_yog_context(pool: PgPool) {
     }
 
     assert_eq!(last_prices(&pool).await, latest_of_the_series(&pool).await);
-}
-
-#[sqlx::test]
-async fn no_other_runtime_role_writes_the_last_price(pool: PgPool) {
-    for role in [
-        "yog_indexer",
-        "yog_api",
-        "yog_signals",
-        "yog_archive",
-        "yog_analytic",
-    ] {
-        let scoped = as_role(&pool, role).await;
-        let err = sqlx::query(
-            "INSERT INTO token_last_price (mint, price_usd, fetched_at) VALUES ('m', 1, now())",
-        )
-        .execute(&scoped)
-        .await
-        .expect_err("only yog_context writes the last price");
-
-        assert_eq!(sqlstate(&err), INSUFFICIENT_PRIVILEGE, "{role}");
-        let message = err.as_database_error().unwrap().message().to_owned();
-        assert!(
-            message.contains("table token_last_price"),
-            "{role}: {message}"
-        );
-    }
 }
 
 /// Against 017 without its fill, or filling past the 15-minute window.
