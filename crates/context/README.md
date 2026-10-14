@@ -376,8 +376,8 @@ the `x-api-key` header is built. See [`yog-bootstrap`](../bootstrap/README.md#se
 for the invariant and the guard that enforces it.
 
 Connects to Postgres as `yog_context` — RW on `token_metadata` and
-`token_prices`, `UPDATE` on the pool-property columns of `pools`, RO
-otherwise.
+`token_last_price`, INSERT-only on `token_prices`, `UPDATE` on the
+pool-property columns of `pools`, RO otherwise.
 
 ## Run
 

@@ -172,7 +172,7 @@ Migrations are **forward-only** (committed migrations never change; no `.down.sq
 | `yog_migrate` | DDL, owns schema | `yog-migrate` |
 | `yog_indexer` | writes event tables, `pools`, `pool_current_state`, `network_status` | indexer |
 | `yog_api` | writes nothing | api |
-| `yog_context` | writes `token_metadata`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
+| `yog_context` | writes `token_metadata`, `token_last_price`, pool-properties satellites and pool-property columns of `pools`; INSERT-only on `token_prices` | context |
 | `yog_signals` | INSERT (append-only) on `signals`; EXECUTE on `yog_cagg_materialization_backlog()` | signals |
 | `yog_analytic` | writes the `analytic_*` tables | analytic |
 | `yog_archive` | RO on every schema, granted schema by schema by `setup_roles.sql`; writes nothing | archive |

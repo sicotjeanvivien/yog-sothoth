@@ -6,7 +6,7 @@
 //! tokens comes back as one complete snapshot; a pool missing any input
 //! (no swap yet, or an unpriced token) is absent rather than half-populated.
 
-use super::helpers::pk;
+use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, SubsecRound, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -34,19 +34,6 @@ async fn insert_metadata(pool: &PgPool, mint: &str, decimals: i16, at: DateTime<
     )
     .bind(mint)
     .bind(decimals)
-    .bind(at)
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-async fn insert_price(pool: &PgPool, mint: &str, price: &str, at: DateTime<Utc>) {
-    sqlx::query(
-        "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-         VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-    )
-    .bind(mint)
-    .bind(price)
     .bind(at)
     .execute(pool)
     .await
@@ -87,10 +74,10 @@ async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
     insert_metadata(&pool, &mint_a, 6, now).await;
     insert_metadata(&pool, &mint_b, 9, now).await;
     // Two observations per mint — the view must pick the most recent one.
-    insert_price(&pool, &mint_a, "1.5", now - Duration::hours(2)).await;
-    insert_price(&pool, &mint_a, "2.0", now - Duration::minutes(3)).await;
-    insert_price(&pool, &mint_b, "80.0", now - Duration::hours(2)).await;
-    insert_price(&pool, &mint_b, "100.0", now - Duration::minutes(2)).await;
+    price_at(&pool, &mint_a, "1.5", now - Duration::hours(2)).await;
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(3)).await;
+    price_at(&pool, &mint_b, "80.0", now - Duration::hours(2)).await;
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(2)).await;
     // sqrt_price = 2^64 (raw price 1.0 before decimal rescaling).
     insert_current_state(
         &pool,
@@ -127,8 +114,8 @@ async fn incomparable_pools_are_absent(pool: PgPool) {
     insert_pool(&pool, &no_swap, &mint_a1, &mint_b1).await;
     insert_metadata(&pool, &mint_a1, 6, now).await;
     insert_metadata(&pool, &mint_b1, 6, now).await;
-    insert_price(&pool, &mint_a1, "1.0", now).await;
-    insert_price(&pool, &mint_b1, "1.0", now).await;
+    price_at(&pool, &mint_a1, "1.0", now).await;
+    price_at(&pool, &mint_b1, "1.0", now).await;
     insert_current_state(&pool, &no_swap, None, None).await;
 
     // Pool 2: complete except token B has no price observation.
@@ -137,7 +124,7 @@ async fn incomparable_pools_are_absent(pool: PgPool) {
     insert_pool(&pool, &unpriced, &mint_a2, &mint_b2).await;
     insert_metadata(&pool, &mint_a2, 6, now).await;
     insert_metadata(&pool, &mint_b2, 6, now).await;
-    insert_price(&pool, &mint_a2, "1.0", now).await;
+    price_at(&pool, &mint_a2, "1.0", now).await;
     insert_current_state(&pool, &unpriced, Some("18446744073709551616"), Some(now)).await;
 
     let repo = PgPoolPriceSnapshotRepository::new(pool.clone());

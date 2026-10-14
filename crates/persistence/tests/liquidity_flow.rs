@@ -293,11 +293,14 @@ async fn an_untouched_leg_does_not_void_a_valuable_bucket(pool: PgPool) {
     let pool_addr = seed_pool(&pool, now - Duration::hours(2)).await;
 
     // Token B loses its price entirely — a mint Jupiter does not cover.
-    sqlx::query("DELETE FROM token_prices WHERE mint = $1")
-        .bind(pk(3).to_string())
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "WITH gone AS (DELETE FROM token_prices WHERE mint = $1)
+         DELETE FROM token_last_price WHERE mint = $1",
+    )
+    .bind(pk(3).to_string())
+    .execute(&pool)
+    .await
+    .unwrap();
 
     // 2.0 A added (6 dec) at $2, and not one lamport of B.
     insert_liquidity_event(

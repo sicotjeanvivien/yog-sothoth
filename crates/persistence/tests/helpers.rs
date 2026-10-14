@@ -1,9 +1,14 @@
 //! Sentinels shared by every ring-2 round-trip test.
 
+use std::str::FromStr;
+
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 use sqlx::PgPool;
+use yog_core::domain::{PriceProvider, TokenPrice, TokenPriceRepository};
+use yog_persistence::PgTokenPriceRepository;
 
 pub fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
@@ -66,6 +71,21 @@ pub async fn apply_setup_roles(pool: &PgPool) {
         .await
         .expect("apply setup_roles.sql");
 }
+
+/// A pool on the test's database whose connections act as `role`, after
+/// [`apply_setup_roles`].
+pub async fn as_role(pool: &PgPool, role: &str) -> PgPool {
+    apply_setup_roles(pool).await;
+    let options = (*pool.connect_options()).clone().options([("role", role)]);
+    let scoped = PgPool::connect_with(options).await.unwrap();
+    let user: String = sqlx::query_scalar("SELECT current_user::TEXT")
+        .fetch_one(&scoped)
+        .await
+        .unwrap();
+    assert_eq!(user, role);
+    scoped
+}
+
 pub fn sg() -> Signature {
     Signature::from([7u8; 64])
 }
@@ -92,18 +112,33 @@ pub fn ts() -> DateTime<Utc> {
 /// does not treat.
 pub async fn price_mint_since(pool: &PgPool, mint: &str, price: &str, since_hours_ago: i64) {
     let now = Utc::now();
-    for h in 0..=since_hours_ago {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
-             VALUES ($1,$2::NUMERIC,'jupiter',$3)",
-        )
-        .bind(mint)
-        .bind(price)
-        .bind(now - Duration::hours(h))
-        .execute(pool)
+    let series: Vec<TokenPrice> = (0..=since_hours_ago)
+        .map(|h| token_price(mint, price, now - Duration::hours(h)))
+        .collect();
+    record_prices(pool, &series).await;
+}
+
+/// One price at `at`, written like [`price_mint_since`].
+pub async fn price_at(pool: &PgPool, mint: &str, price: &str, at: DateTime<Utc>) {
+    record_prices(pool, &[token_price(mint, price, at)]).await;
+}
+
+pub fn token_price(mint: &str, price: &str, at: DateTime<Utc>) -> TokenPrice {
+    TokenPrice {
+        mint: Pubkey::from_str(mint).expect("a priced fixture mint must be a pubkey"),
+        price_usd: Decimal::from_str(price).unwrap(),
+        price_provider: PriceProvider::Jupiter,
+        confidence: None,
+        fetched_at: at,
+    }
+}
+
+/// Write prices the way yog-context does.
+pub async fn record_prices(pool: &PgPool, prices: &[TokenPrice]) {
+    PgTokenPriceRepository::new(pool.clone())
+        .insert_batch(prices)
         .await
         .unwrap();
-    }
 }
 
 /// A continuously-priced mint, covering any bucket a fixture is likely to place.

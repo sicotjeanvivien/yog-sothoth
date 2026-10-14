@@ -93,7 +93,7 @@ All coordination between the binaries happens through the schema, and the schema
 | `yog_migrate` | DDL — owns the schema, applies migrations | `yog-migrate` binary, `cargo sqlx migrate run` |
 | `yog_indexer` | `INSERT, UPDATE` on the event tables, `pools` (table-level), `pool_current_state` and `network_status`; `nextval` on the sequences of the event tables only | indexer |
 | `yog_api` | writes nothing | api |
-| `yog_context` | `INSERT, UPDATE` on `token_metadata` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
+| `yog_context` | `INSERT, UPDATE` on `token_metadata`, `token_last_price` and every per-protocol pool-properties satellite; `INSERT` only on `token_prices`; `UPDATE` on the pool-property columns of `pools` — **the sole writer of account-derived properties** | context |
 | `yog_signals` | `INSERT` (append-only) on `signals`; `EXECUTE` on `yog_cagg_materialization_backlog()`, which no other role holds | signals |
 | `yog_analytic` | `INSERT, UPDATE` on the `analytic_*` tables | analytic |
 | `yog_archive` | `SELECT` on every schema, granted schema by schema by `setup_roles.sql` at each run; writes nothing | archive |

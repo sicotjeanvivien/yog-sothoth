@@ -22,7 +22,9 @@
 //! asserts `is_compressed` before re-reading: remove the compression step and
 //! it must go red there, not silently keep passing.
 
-use super::helpers::{UNIQUE_VIOLATION, pk, price_mint_since, sqlstate};
+use super::helpers::{UNIQUE_VIOLATION, pk, price_mint_since, record_prices, sqlstate};
+use std::str::FromStr;
+
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Row};
@@ -181,9 +183,6 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
 /// way.
 #[derive(Debug, PartialEq, Eq)]
 struct Readings {
-    /// `pool_current_tvl` — the *latest* shape, bounded to
-    /// `yog_price_max_age_latest()` (15 minutes) since migration 005.
-    tvl_usd: Option<String>,
     /// `meteora_damm_v2_pool_hourly_activity` — the *as-of* shape, bounded to
     /// one hour before each bucket.
     buckets: i64,
@@ -204,13 +203,6 @@ struct Readings {
 }
 
 async fn read_both_shapes(pool: &PgPool, pool_addr: &str) -> Readings {
-    let tvl_usd: Option<String> =
-        sqlx::query_scalar("SELECT tvl_usd::TEXT FROM pool_current_tvl WHERE pool_address = $1")
-            .bind(pool_addr)
-            .fetch_one(pool)
-            .await
-            .expect("the pool must be present in pool_current_tvl");
-
     let activity = sqlx::query(
         "SELECT count(*)::BIGINT AS buckets, sum(volume_usd)::TEXT AS volume_usd
            FROM meteora_damm_v2_pool_hourly_activity
@@ -236,7 +228,6 @@ async fn read_both_shapes(pool: &PgPool, pool_addr: &str) -> Readings {
     .unwrap();
 
     Readings {
-        tvl_usd,
         buckets: activity.get("buckets"),
         volume_usd: activity.get("volume_usd"),
         latest_price: latest.as_ref().map(|p| p.price_usd.to_string()),
@@ -246,8 +237,7 @@ async fn read_both_shapes(pool: &PgPool, pool_addr: &str) -> Readings {
     }
 }
 
-/// A pool with resolved mints, reserves, and `SEEDED_DAYS` of hourly prices and
-/// swaps — enough for both lookup shapes to return a number, over several
+/// A pool with resolved mints and `SEEDED_DAYS` of hourly prices and swaps — enough for both lookup shapes to return a number, over several
 /// chunks.
 async fn seed(pool: &PgPool) -> String {
     let pool_addr = pk(1).to_string();
@@ -279,18 +269,6 @@ async fn seed(pool: &PgPool) -> String {
         .unwrap();
     }
 
-    sqlx::query(
-        "INSERT INTO pool_current_state
-           (pool_address, protocol, last_event_at, last_event_kind, last_signature,
-            reserve_a, reserve_b, last_sqrt_price, last_swap_at, last_slot, last_event_index)
-         VALUES ($1,'meteora_damm_v2',NOW(),'swap','sig',
-                 1000000000, 2000000000000, 18446744073709551616, NOW(), 1, 0)",
-    )
-    .bind(&pool_addr)
-    .execute(pool)
-    .await
-    .unwrap();
-
     // One observation per hour per mint. A price moving from hour to hour is
     // what makes the comparison meaningful: a constant series would read the
     // same whichever row the lookup picked.
@@ -298,20 +276,17 @@ async fn seed(pool: &PgPool) -> String {
     // `confidence` is populated on the first mint and left NULL on the second,
     // on purpose: it is the table's only nullable column, and both states have
     // to survive a round trip through the compressed form.
-    for (mint, base, confidence) in [(&mint_a, "1.5", Some(0.75_f32)), (&mint_b, "100.0", None)] {
-        sqlx::query(
-            "INSERT INTO token_prices (mint, price_usd, price_provider, confidence, fetched_at)
-             SELECT $1, $2::NUMERIC + h / 1000.0, 'jupiter', $4,
-                    now() - (h || ' hours')::interval
-               FROM generate_series(0, $3::INT * 24) h",
-        )
-        .bind(mint)
-        .bind(base)
-        .bind(SEEDED_DAYS as i32)
-        .bind(confidence)
-        .execute(pool)
-        .await
-        .unwrap();
+    for (mint, base, confidence) in [(pk(2), "1.5", Some(0.75_f32)), (pk(3), "100.0", None)] {
+        let series: Vec<TokenPrice> = (0..=SEEDED_DAYS * 24)
+            .map(|h| TokenPrice {
+                mint,
+                price_usd: Decimal::from_str(base).unwrap() + Decimal::new(h, 3),
+                price_provider: PriceProvider::Jupiter,
+                confidence,
+                fetched_at: now - Duration::hours(h),
+            })
+            .collect();
+        record_prices(pool, &series).await;
     }
 
     sqlx::query(
@@ -337,9 +312,7 @@ async fn seed(pool: &PgPool) -> String {
 /// compressed.
 ///
 /// The hot chunk is compressed on purpose although the policy will never touch
-/// it: a 15-minute-bounded reader like `pool_current_tvl` can otherwise only
-/// ever read the open chunk, and compressing everything is what puts it — and
-/// the unbounded `find_latest_by_mint` — on top of compressed rows here.
+/// it: that is what puts `find_latest_by_mint` on top of compressed rows here.
 async fn compress_every_chunk(pool: &PgPool) {
     sqlx::query("SELECT compress_chunk(c) FROM show_chunks('token_prices') c")
         .execute(pool)
@@ -375,11 +348,8 @@ async fn a_compressed_chunk_serves_the_same_prices(pool: PgPool) {
 
     let before = read_both_shapes(&pool, &pool_addr).await;
     assert!(
-        before.tvl_usd.is_some()
-            && before.volume_usd.is_some()
-            && before.buckets > 0
-            && before.latest_confidence.is_some(),
-        "the fixture must produce a valued TVL, valued buckets and a non-NULL \
+        before.volume_usd.is_some() && before.buckets > 0 && before.latest_confidence.is_some(),
+        "the fixture must produce valued buckets and a non-NULL \
          confidence before anything is compressed, or the comparison below \
          compares two absences: {before:?}"
     );
@@ -390,7 +360,7 @@ async fn a_compressed_chunk_serves_the_same_prices(pool: PgPool) {
     assert_eq!(
         after, before,
         "compression must be invisible to both shapes of price lookup — the \
-         current-price one (pool_current_tvl, no time bound) and the as-of one \
+         latest one (find_latest_by_mint, no time bound) and the as-of one \
          (the hourly activity view, bounded to one hour before each bucket). \
          Baseline §7 refused compression for fear of exactly these lookups"
     );

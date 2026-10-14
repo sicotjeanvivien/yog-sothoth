@@ -126,7 +126,7 @@ per-protocol directly.
 
 Cross-protocol concepts stay generic, single-table: `pools`,
 `pool_current_state`, `watched_pools`, `network_status`, `token_metadata`,
-`token_prices` — and `signals`, where the discrimination is two *columns*
+`token_prices`, `token_last_price` — and `signals`, where the discrimination is two *columns*
 (`detector`, `protocol`), not per-anything tables: a signal is a uniform
 conclusion, not a heterogeneous event.
 
@@ -306,8 +306,9 @@ Two consequences worth knowing before you touch a valuation view:
   in Rust alongside its `max_spot_age` guard. **The policy binds valuation, not
   comparison.**
 
-`price_staleness.rs` enumerates the price-reading views from `pg_views` and fails
-on any whose **bound count differs from its lookup count** — per lookup, not per
+`price_staleness.rs` enumerates the views reading `token_prices` or
+`token_last_price` from `pg_views` and fails on any whose **bound count differs
+from its lookup count** — per lookup, not per
 view, so a view with five price LATERALs and one bound is caught. A view that
 reads `token_prices` without any countable lookup (a plain `JOIN` deparses
 without `FROM token_prices`) is a failure too, not a pass. So a view added later
@@ -317,6 +318,24 @@ substring counting cannot tell two bounds on one lookup from one bound each.
 Note what this does *not* cover: a mint carries no price at all before
 `yog-context` first knows it. That is **absence**, not expiry, and no staleness
 bound reaches it — see the implied price below.
+
+### The last price of each token (migration 017)
+
+`token_last_price` holds one row per token: the most recent price written for
+it. `insert_batch` writes it in the statement that inserts into `token_prices`,
+so its only writer is `yog_context`, and an older price never replaces a newer
+one. `pool_current_tvl` joins it under the latest bound, instead of searching
+the hypertable twice per pool: its cost follows the tokens, not the pools.
+
+⚠️ It is not the last price of *every* token. 017 filled it from the 15-minute
+window only, so a token not priced since may be missing while `token_prices`
+still holds an older row — the same answer under the latest bound, a wrong one
+for an unbounded read such as `find_latest_by_mint`.
+
+⚠️ A write to `token_prices` outside `insert_batch` — a raw fixture, a repair
+that deletes rows — leaves this table behind. Tests price through
+`helpers::price_mint_since` and `helpers::price_at`; raw SQL stays for the
+prices the writer refuses.
 
 ### Three ways to say "we don't know", and what each one does
 
