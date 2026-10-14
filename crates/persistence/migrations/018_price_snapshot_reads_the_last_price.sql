@@ -2,13 +2,14 @@
 -- the last price of every token in the series, and pool_price_snapshot joining
 -- it.
 
+-- ⚠️ No `WHERE`, unlike insert_batch's upsert: this sets each token to the
+-- series' latest row, whatever the table held before.
 INSERT INTO token_last_price (mint, price_usd, fetched_at)
 SELECT DISTINCT ON (mint) mint, price_usd, fetched_at
   FROM token_prices
  ORDER BY mint, fetched_at DESC
 ON CONFLICT (mint) DO UPDATE
-   SET price_usd = EXCLUDED.price_usd, fetched_at = EXCLUDED.fetched_at
- WHERE token_last_price.fetched_at < EXCLUDED.fetched_at;
+   SET price_usd = EXCLUDED.price_usd, fetched_at = EXCLUDED.fetched_at;
 
 CREATE OR REPLACE VIEW pool_price_snapshot AS
 SELECT

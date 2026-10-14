@@ -329,12 +329,13 @@ one. `pool_current_tvl` joins it under the latest bound, and
 twice per pool: their cost follows the tokens, not the pools.
 
 It holds the last price of every token in the series: 017 filled the 15-minute
-window, 018 every other token. A token missing from it has never been priced.
+window, 018 every token.
 
 ⚠️ A write to `token_prices` outside `insert_batch` — a raw fixture, a repair
-that deletes rows — leaves this table behind. Tests price through
-`helpers::price_mint_since` and `helpers::price_at`; raw SQL stays for the
-prices the writer refuses.
+that deletes rows — leaves this table behind. After a repair, re-run the
+`INSERT … ON CONFLICT` of 018: it sets every token still in the series to its
+latest row. Tests price through `helpers::price_mint_since` and
+`helpers::price_at`; raw SQL stays for the prices the writer refuses.
 
 ### Three ways to say "we don't know", and what each one does
 
@@ -513,7 +514,9 @@ Forward-only: committed migrations never change, no `.down.sql`, rollback is a
 backup restore. GRANTs live in the migration that creates the object. Full
 conventions and the local workflow: [`migrations/README.md`](./migrations/README.md).
 
-The suite at a glance: `001` consolidated v0.1 baseline → `002`–`008` DAMM v2
+The suite before the squash of 5 August 2026, now folded into
+`001_baseline.sql` — its numbers are not those of the files: `001` consolidated
+v0.1 baseline → `002`–`008` DAMM v2
 position-lifecycle and pool-admin event tables → `009` differentiated
 retention/compression → `010`–`013` + `017` hourly continuous aggregates →
 `014`–`016` + `018` pool properties resolved by yog-context (mints, fee_bps,

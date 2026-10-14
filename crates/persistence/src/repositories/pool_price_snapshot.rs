@@ -1,9 +1,5 @@
-//! Postgres implementation of [`PoolPriceSnapshotRepository`].
-//!
-//! Reads the `pool_price_snapshot` view, which encapsulates
-//! the join of a pool's current on-chain state with its tokens' decimals and
-//! latest oracle prices. The query is a slim `SELECT` the sqlx macro still
-//! verifies against the view's columns.
+//! Postgres implementation of [`PoolPriceSnapshotRepository`], over the
+//! `pool_price_snapshot` view.
 //!
 //! [`PoolPriceSnapshotRepository`]: yog_core::domain::PoolPriceSnapshotRepository
 
