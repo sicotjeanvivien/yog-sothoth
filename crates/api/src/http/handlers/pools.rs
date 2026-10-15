@@ -27,7 +27,11 @@ use crate::http::{
     get,
     path = "/api/pools",
     params(PageQuery),
-    responses((status = 200, body = PoolPageResponse<PoolResponse>))
+    responses((
+        status = 200,
+        description = "A page of pools.",
+        body = PoolPageResponse<PoolResponse>
+    ))
 )]
 pub(crate) async fn list_pools(
     State(state): State<AppState>,
@@ -64,7 +68,11 @@ pub(crate) async fn list_pools(
 #[utoipa::path(
     get,
     path = "/api/pools/fee-tiers",
-    responses((status = 200, body = Vec<FeeTierResponse>))
+    responses((
+        status = 200,
+        description = "The most common base-fee tiers, with their pool counts.",
+        body = Vec<FeeTierResponse>
+    ))
 )]
 pub(crate) async fn list_fee_tiers(
     State(state): State<AppState>,
@@ -82,7 +90,11 @@ pub(crate) async fn list_fee_tiers(
     get,
     path = "/api/pools/top",
     params(TopPoolsQuery),
-    responses((status = 200, body = Vec<PoolResponse>))
+    responses((
+        status = 200,
+        description = "The top pools by the requested metric.",
+        body = Vec<PoolResponse>
+    ))
 )]
 pub(crate) async fn list_top_pools(
     State(state): State<AppState>,
@@ -105,7 +117,11 @@ pub(crate) async fn list_top_pools(
 #[utoipa::path(
     get,
     path = "/api/pools/{address}",
-    responses((status = 200, body = PoolDetailResponse))
+    responses((
+        status = 200,
+        description = "The pool, with its own protocol's properties.",
+        body = PoolDetailResponse
+    ))
 )]
 pub(crate) async fn get_pool(
     State(state): State<AppState>,
@@ -129,7 +145,11 @@ pub(crate) async fn get_pool(
 #[utoipa::path(
     get,
     path = "/api/pools/{address}/latest-state",
-    responses((status = 200, body = PoolCurrentStateResponse))
+    responses((
+        status = 200,
+        description = "The pool's latest observed state.",
+        body = PoolCurrentStateResponse
+    ))
 )]
 pub(crate) async fn get_pool_latest_state(
     State(state): State<AppState>,
@@ -159,7 +179,11 @@ pub(crate) async fn get_pool_latest_state(
     get,
     path = "/api/pools/{address}/history",
     params(HistoryQuery),
-    responses((status = 200, body = Vec<PoolHistoryBucketResponse>))
+    responses((
+        status = 200,
+        description = "The pool's activity, one bucket per hour.",
+        body = Vec<PoolHistoryBucketResponse>
+    ))
 )]
 pub(crate) async fn get_pool_history(
     State(state): State<AppState>,
@@ -189,7 +213,11 @@ pub(crate) async fn get_pool_history(
     get,
     path = "/api/pools/{address}/swap-events",
     params(EventPageQuery),
-    responses((status = 200, body = PageResponse<SwapEventResponse>))
+    responses((
+        status = 200,
+        description = "A page of the pool's swaps.",
+        body = PageResponse<SwapEventResponse>
+    ))
 )]
 pub(crate) async fn list_pool_swaps(
     State(state): State<AppState>,
@@ -227,7 +255,11 @@ pub(crate) async fn list_pool_swaps(
     get,
     path = "/api/pools/{address}/liquidity-events",
     params(EventPageQuery),
-    responses((status = 200, body = PageResponse<LiquidityEventResponse>))
+    responses((
+        status = 200,
+        description = "A page of the pool's liquidity events.",
+        body = PageResponse<LiquidityEventResponse>
+    ))
 )]
 pub(crate) async fn list_pool_liquidity_events(
     State(state): State<AppState>,

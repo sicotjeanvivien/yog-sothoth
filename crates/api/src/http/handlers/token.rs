@@ -14,7 +14,11 @@ use crate::http::{
 #[utoipa::path(
     get,
     path = "/api/tokens/{mint}",
-    responses((status = 200, body = TokenResponse))
+    responses((
+        status = 200,
+        description = "The token, with its latest price.",
+        body = TokenResponse
+    ))
 )]
 pub(crate) async fn get_token(
     State(state): State<AppState>,

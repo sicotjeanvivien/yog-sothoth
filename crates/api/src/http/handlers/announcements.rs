@@ -16,7 +16,11 @@ use axum::{Json, extract::State};
 #[utoipa::path(
     get,
     path = "/api/announcements/active",
-    responses((status = 200, body = Vec<AnnouncementResponse>))
+    responses((
+        status = 200,
+        description = "The announcements active now.",
+        body = Vec<AnnouncementResponse>
+    ))
 )]
 pub(crate) async fn list_active_announcements(
     State(state): State<AppState>,

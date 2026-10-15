@@ -15,7 +15,11 @@ use axum::{Json, extract::State};
 #[utoipa::path(
     get,
     path = "/api/stats",
-    responses((status = 200, body = StatsResponse))
+    responses((
+        status = 200,
+        description = "Totals across every observed pool.",
+        body = StatsResponse
+    ))
 )]
 pub(crate) async fn get_stats(
     State(state): State<AppState>,

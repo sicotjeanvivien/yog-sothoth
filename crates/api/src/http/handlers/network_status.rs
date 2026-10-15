@@ -25,7 +25,11 @@ use axum::{Json, extract::State};
 #[utoipa::path(
     get,
     path = "/api/network/status",
-    responses((status = 200, body = NetworkStatusResponse))
+    responses((
+        status = 200,
+        description = "The chain's latest slot, and how fresh ingestion is.",
+        body = NetworkStatusResponse
+    ))
 )]
 pub(crate) async fn get_network_status(
     State(state): State<AppState>,

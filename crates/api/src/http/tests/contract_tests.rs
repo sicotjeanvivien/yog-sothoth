@@ -251,6 +251,26 @@ fn every_operation_answers_its_failures_as_problem_details() {
     }
 }
 
+/// Red when a response has no `description`, which OpenAPI 3.1 requires.
+#[test]
+fn every_response_has_a_description() {
+    let doc = document();
+    let mut missing = Vec::new();
+    for (path, item) in doc["paths"].as_object().expect("paths") {
+        for method in super::HTTP_METHODS {
+            let Some(responses) = item[method]["responses"].as_object() else {
+                continue;
+            };
+            for (status, response) in responses {
+                if response["description"].as_str().is_none_or(str::is_empty) {
+                    missing.push(format!("{method} {path} {status}"));
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:?}");
+}
+
 /// Red when a handler's `#[utoipa::path]` declares another body or query type
 /// than its signature returns and extracts: nothing else ties the two.
 #[test]

@@ -31,7 +31,11 @@ use crate::http::{
     get,
     path = "/api/signals",
     params(SignalsQuery),
-    responses((status = 200, body = PageResponse<SignalResponse>))
+    responses((
+        status = 200,
+        description = "A page of signals.",
+        body = PageResponse<SignalResponse>
+    ))
 )]
 pub(crate) async fn list_signals(
     State(state): State<AppState>,
