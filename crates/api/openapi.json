@@ -1767,14 +1767,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         },
         "summary": "The announcements whose display window contains the request instant, most\nsevere first then most recent. An empty array is the normal case."
@@ -1800,14 +1795,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         },
         "summary": "Where the chain is (slot, probe latency) and, apart, whether ingestion keeps\nup. The `network_status` row is seeded by the baseline migration: its absence\nis a 500, not a 404."
@@ -1960,14 +1950,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         },
         "summary": "The most common base-fee tiers, ascending, with their pool counts: the\noption list of the pools fee filter."
@@ -2504,14 +2489,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         },
         "summary": "Live tail of the signal feed as Server-Sent Events: new signals only, each a\n`SignalResponse` with its id as the event id. History comes from\n`GET /api/signals`, re-fetched on (re)connect."
@@ -2538,14 +2518,9 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
               }
             },
-            "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
+            "description": "A failure: RFC 9457 Problem Details."
           }
         },
         "summary": "`GET /api/stats`"

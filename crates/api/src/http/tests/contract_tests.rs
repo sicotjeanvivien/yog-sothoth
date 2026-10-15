@@ -160,6 +160,23 @@ fn a_ref_to_an_undeclared_schema_is_refused() {
     finish(&mut doc);
 }
 
+/// Red if plain text is promised to an operation with nothing to parse, or denied to one with parameters.
+#[test]
+fn only_an_operation_with_parameters_may_answer_plain_text() {
+    let mut doc = json!({
+        "paths": {
+            "/api/stats": { "get": { "responses": {} } },
+            "/api/pools": { "get": { "parameters": [{ "name": "limit", "in": "query" }], "responses": {} } }
+        },
+        "components": { "schemas": { "ProblemDetailsResponse": {} } }
+    });
+    finish(&mut doc);
+    let content = |path: &str| doc["paths"][path]["get"]["responses"]["default"]["content"].clone();
+    assert!(content("/api/stats")["text/plain"].is_null());
+    assert!(content("/api/stats")["application/problem+json"].is_object());
+    assert!(content("/api/pools")["text/plain"].is_object());
+}
+
 /// Red if a path item's `parameters` or `summary` is treated as an operation.
 #[test]
 fn only_the_operations_of_a_path_item_answer_problems() {

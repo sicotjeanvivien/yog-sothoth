@@ -367,8 +367,8 @@ What the derive cannot say is said once:
   property is required — `null` is written, never omitted, and a key that may be
   absent says `#[schema(nullable = false)]` (a test fails on a
   `skip_serializing_if` without it); every operation declares its failures —
-  Problem Details, or plain text when axum cannot parse the query string or the
-  path; an `int64` (or `u64`) anywhere fails the document, because the generated
+  Problem Details, and plain text too on an operation with parameters, which
+  axum refuses that way when it cannot parse them; an `int64` (or `u64`) anywhere fails the document, because the generated
   zod would read it as a `BigInt` (point it at `Count`); so does a `$ref` to an
   undeclared schema, which the generator would skip in silence.
 - **Integers carry their Rust range**: utoipa's `non_strict_integers` writes a
