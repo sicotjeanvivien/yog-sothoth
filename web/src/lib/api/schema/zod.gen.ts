@@ -56,12 +56,12 @@ export const zLiquidityEventKindResponse = z.enum(['add', 'remove']);
 export type LiquidityEventKindResponse = z.infer<typeof zLiquidityEventKindResponse>;
 
 export const zMeteoraDlmmPropertiesResponse = z.object({
-    baseFactor: z.int().gte(0).nullable(),
-    baseFeePowerFactor: z.int().gte(0).nullable(),
-    binStep: z.int().gte(0).nullable(),
-    maxVolatilityAccumulator: z.int().gte(0).nullable(),
-    protocolShare: z.int().gte(0).nullable(),
-    variableFeeControl: z.int().gte(0).nullable()
+    baseFactor: z.int().gte(0).lte(65535).nullable(),
+    baseFeePowerFactor: z.int().gte(0).lte(255).nullable(),
+    binStep: z.int().gte(0).lte(65535).nullable(),
+    maxVolatilityAccumulator: z.int().gte(0).lte(4294967295).nullable(),
+    protocolShare: z.int().gte(0).lte(65535).nullable(),
+    variableFeeControl: z.int().gte(0).lte(4294967295).nullable()
 });
 
 export type MeteoraDlmmPropertiesResponse = z.infer<typeof zMeteoraDlmmPropertiesResponse>;
@@ -76,7 +76,7 @@ export type PriceProviderResponse = z.infer<typeof zPriceProviderResponse>;
 
 export const zProblemDetailsResponse = z.object({
     detail: z.string(),
-    status: z.int().gte(0),
+    status: z.int().gte(0).lte(65535),
     title: z.string(),
     type: z.string()
 });
@@ -119,7 +119,7 @@ export const zNetworkStatusResponse = z.object({
     freshness: zFreshnessStatusResponse,
     lastEventAt: z.iso.datetime({ offset: true }).nullable(),
     observedAt: z.iso.datetime({ offset: true }),
-    rpcLatencyMs: z.int().gte(0),
+    rpcLatencyMs: z.int().gte(0).lte(4294967295),
     slot: zU128String
 });
 
@@ -133,7 +133,7 @@ export const zPageResponseSwapEventResponse = z.object({
         amountB: zU128String,
         claimingFee: zU128String,
         compoundingFee: zU128String,
-        eventIndex: z.int().gte(0),
+        eventIndex: z.int().gte(0).lte(65535),
         feeTokenIsA: z.boolean(),
         nextSqrtPrice: zU128String,
         poolAddress: z.string().min(1),
@@ -157,7 +157,7 @@ export const zSwapEventResponse = z.object({
     amountB: zU128String,
     claimingFee: zU128String,
     compoundingFee: zU128String,
-    eventIndex: z.int().gte(0),
+    eventIndex: z.int().gte(0).lte(65535),
     feeTokenIsA: z.boolean(),
     nextSqrtPrice: zU128String,
     poolAddress: z.string().min(1),
@@ -187,7 +187,7 @@ export type FeeTierResponse = z.infer<typeof zFeeTierResponse>;
 export const zLiquidityEventResponse = z.object({
     amountA: zU128String,
     amountB: zU128String,
-    eventIndex: z.int().gte(0),
+    eventIndex: z.int().gte(0).lte(65535),
     liquidityDelta: zU128String,
     liquidityEventKind: zLiquidityEventKindResponse,
     owner: z.string().min(1),
@@ -220,7 +220,7 @@ export const zPageResponseLiquidityEventResponse = z.object({
     items: z.array(z.object({
         amountA: zU128String,
         amountB: zU128String,
-        eventIndex: z.int().gte(0),
+        eventIndex: z.int().gte(0).lte(65535),
         liquidityDelta: zU128String,
         liquidityEventKind: zLiquidityEventKindResponse,
         owner: z.string().min(1),
@@ -294,7 +294,7 @@ export const zTokenPriceResponse = z.object({
 export type TokenPriceResponse = z.infer<typeof zTokenPriceResponse>;
 
 export const zEmbeddedTokenResponse = z.object({
-    decimals: z.int().gte(0),
+    decimals: z.int().gte(0).lte(255),
     logoUri: z.url().nullable(),
     mint: z.string().nullable(),
     name: z.string().nullable(),
@@ -407,7 +407,7 @@ export const zSignalResponse = z.object({
 export type SignalResponse = z.infer<typeof zSignalResponse>;
 
 export const zTokenResponse = z.object({
-    decimals: z.int().gte(0),
+    decimals: z.int().gte(0).lte(255),
     fetchedAt: z.iso.datetime({ offset: true }),
     lastRefreshAt: z.iso.datetime({ offset: true }),
     logoUri: z.url().nullable(),

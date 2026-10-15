@@ -40,6 +40,7 @@ pub(crate) fn document() -> Value {
 fn finish(doc: &mut Value) {
     answer_problems(doc);
     require_nullable(doc);
+    bound_small_integers(doc);
     refuse_int64(doc, "#");
     refuse_dangling_refs(doc);
 }
@@ -106,6 +107,25 @@ fn require_nullable(node: &mut Value) {
             map.values_mut().for_each(require_nullable);
         }
         Value::Array(items) => items.iter_mut().for_each(require_nullable),
+        _ => {}
+    }
+}
+
+fn bound_small_integers(node: &mut Value) {
+    match node {
+        Value::Object(map) => {
+            let max = match map.get("format").and_then(Value::as_str) {
+                Some("u-int8") => Some(u64::from(u8::MAX)),
+                Some("u-int16") => Some(u64::from(u16::MAX)),
+                Some("u-int32") => Some(u64::from(u32::MAX)),
+                _ => None,
+            };
+            if let Some(max) = max {
+                map.entry("maximum").or_insert_with(|| json!(max));
+            }
+            map.values_mut().for_each(bound_small_integers);
+        }
+        Value::Array(items) => items.iter_mut().for_each(bound_small_integers),
         _ => {}
     }
 }

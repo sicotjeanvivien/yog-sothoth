@@ -81,6 +81,7 @@
           "decimals": {
             "description": "Decimal precision.",
             "format": "u-int8",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           },
@@ -189,6 +190,7 @@
           "eventIndex": {
             "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
             "format": "u-int16",
+            "maximum": 65535,
             "minimum": 0,
             "type": "integer"
           },
@@ -328,6 +330,7 @@
           "baseFactor": {
             "description": "The two other inputs to the pool's base fee, served raw so a client can\nrecompute `feeBps` rather than trust it: `baseFactor × binStep ×\n10^baseFeePowerFactor / 10_000`.",
             "format": "u-int16",
+            "maximum": 65535,
             "minimum": 0,
             "type": [
               "integer",
@@ -336,6 +339,7 @@
           },
           "baseFeePowerFactor": {
             "format": "u-int8",
+            "maximum": 255,
             "minimum": 0,
             "type": [
               "integer",
@@ -345,6 +349,7 @@
           "binStep": {
             "description": "Price increment between adjacent bins, in basis points: bin `i` sits at\n`(1 + binStep / 10_000)^i`. The defining property of a DLMM pool.",
             "format": "u-int16",
+            "maximum": 65535,
             "minimum": 0,
             "type": [
               "integer",
@@ -354,6 +359,7 @@
           "maxVolatilityAccumulator": {
             "description": "Per-pool ceiling on the volatility accumulator, and so on how far the\nvariable fee can climb.",
             "format": "u-int32",
+            "maximum": 4294967295,
             "minimum": 0,
             "type": [
               "integer",
@@ -363,6 +369,7 @@
           "protocolShare": {
             "description": "Meteora's cut of the trading fee, in **basis points** — not the whole\npercent DAMM v2's `protocolFeePercent` uses. The two are not comparable\nwithout scaling.",
             "format": "u-int16",
+            "maximum": 65535,
             "minimum": 0,
             "type": [
               "integer",
@@ -372,6 +379,7 @@
           "variableFeeControl": {
             "description": "Magnitude of the volatility-driven fee charged on top of the base fee.\n**Zero means no dynamic fee** — DLMM has no boolean flag, unlike DAMM\nv2's `hasDynamicFee`.",
             "format": "u-int32",
+            "maximum": 4294967295,
             "minimum": 0,
             "type": [
               "integer",
@@ -412,6 +420,7 @@
           "rpcLatencyMs": {
             "description": "Round-trip latency of the probe's last `getSlot` call, in ms — the\ndistance to *that* endpoint, not to the one ingestion uses.",
             "format": "u-int32",
+            "maximum": 4294967295,
             "minimum": 0,
             "type": "integer"
           },
@@ -451,6 +460,7 @@
                 "eventIndex": {
                   "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
                   "format": "u-int16",
+                  "maximum": 65535,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -848,6 +858,7 @@
                 "eventIndex": {
                   "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
                   "format": "u-int16",
+                  "maximum": 65535,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -1369,6 +1380,7 @@
           },
           "status": {
             "format": "u-int16",
+            "maximum": 65535,
             "minimum": 0,
             "type": "integer"
           },
@@ -1553,6 +1565,7 @@
           "eventIndex": {
             "description": "Position of this event among its transaction's emissions. A routed\ntransaction produces several rows sharing `signature` and `timestamp`;\nthis is what tells them apart — and the only stable key for a list row.",
             "format": "u-int16",
+            "maximum": 65535,
             "minimum": 0,
             "type": "integer"
           },
@@ -1643,6 +1656,7 @@
           "decimals": {
             "description": "Decimal precision of the mint.",
             "format": "u-int8",
+            "maximum": 255,
             "minimum": 0,
             "type": "integer"
           },

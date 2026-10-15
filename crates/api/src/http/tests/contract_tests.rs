@@ -123,6 +123,23 @@ fn a_nullable_property_is_required_and_an_absent_one_is_not() {
     );
 }
 
+/// Red if `finish` stops bounding an unsigned integer by its width, or widens a declared bound.
+#[test]
+fn an_unsigned_integer_carries_its_maximum() {
+    let mut doc = with_schema(json!({ "properties": {
+        "decimals": { "type": "integer", "format": "u-int8", "minimum": 0 },
+        "eventIndex": { "type": ["integer", "null"], "format": "u-int16", "minimum": 0 },
+        "rpcLatencyMs": { "type": "integer", "format": "u-int32", "minimum": 0 },
+        "protocolFeePercent": { "type": "integer", "format": "u-int8", "maximum": 100 }
+    } }));
+    finish(&mut doc);
+    let props = &doc["components"]["schemas"]["X"]["properties"];
+    assert_eq!(props["decimals"]["maximum"], 255);
+    assert_eq!(props["eventIndex"]["maximum"], 65_535);
+    assert_eq!(props["rpcLatencyMs"]["maximum"], 4_294_967_295_u64);
+    assert_eq!(props["protocolFeePercent"]["maximum"], 100);
+}
+
 /// Red if `finish` stops refusing an `int64`.
 #[test]
 #[should_panic(expected = "#/components/schemas/X/properties/swapBuckets24h is an int64")]

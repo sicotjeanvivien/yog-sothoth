@@ -372,7 +372,8 @@ What the derive cannot say is said once:
   zod would read it as a `BigInt` (point it at `Count`); so does a `$ref` to an
   undeclared schema, which the generator would skip in silence.
 - **Integers carry their Rust range**: utoipa's `non_strict_integers` writes a
-  `u8`, `u16` or `u32` with its own format (`u-int8`…), never a capped `int32`.
+  `u8`, `u16` or `u32` with its own format (`u-int8`…), never a capped `int32`,
+  and the finish gives it the maximum of its width unless it declares a lower one.
 - **Refinements** the Rust type does not carry: `min_length = 1`,
   `maximum = 100`, `format = "uri"`. A bound the server validates (`limit`,
   `days`) is written in its `#[param]`, and a test pins it to the constant.
