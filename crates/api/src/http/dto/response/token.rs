@@ -5,12 +5,16 @@
 //! optional: a mint may have metadata but no price yet (very fresh,
 //! flagged by Jupiter, or no Jupiter call has succeeded for it).
 
+mod price_provider_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{TokenMetadata, TokenPrice};
 
 use crate::http::dto::response::TokenPriceResponse;
+
+pub(super) use price_provider_response::PriceProviderResponse;
 
 /// The token detail payload.
 ///
@@ -75,3 +79,7 @@ impl From<TokenPrice> for TokenPriceResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/token_tests.rs"]
+mod tests;

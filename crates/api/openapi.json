@@ -1,7 +1,7 @@
 {
   "components": {
     "schemas": {
-      "AnnouncementKind": {
+      "AnnouncementKindResponse": {
         "description": "What an announcement is about.",
         "enum": [
           "maintenance",
@@ -27,7 +27,7 @@
             "description": "Storage identity — the client's dismiss-cookie key."
           },
           "kind": {
-            "$ref": "#/components/schemas/AnnouncementKind",
+            "$ref": "#/components/schemas/AnnouncementKindResponse",
             "description": "What it is about: \"maintenance\" | \"incident\" | \"release\" | \"beta\"."
           },
           "linkUrl": {
@@ -42,7 +42,7 @@
             "type": "string"
           },
           "severity": {
-            "$ref": "#/components/schemas/AnnouncementSeverity",
+            "$ref": "#/components/schemas/AnnouncementSeverityResponse",
             "description": "Display prominence: \"info\" | \"warning\" | \"critical\"."
           },
           "startsAt": {
@@ -62,7 +62,7 @@
         ],
         "type": "object"
       },
-      "AnnouncementSeverity": {
+      "AnnouncementSeverityResponse": {
         "description": "How prominently an announcement is shown.",
         "enum": [
           "info",
@@ -84,7 +84,7 @@
             "type": "string"
           },
           "provider": {
-            "$ref": "#/components/schemas/PriceProvider",
+            "$ref": "#/components/schemas/PriceProviderResponse",
             "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\"."
           },
           "usd": {
@@ -175,7 +175,7 @@
         ],
         "type": "object"
       },
-      "Freshness": {
+      "FreshnessStatusResponse": {
         "description": "How recent the last indexed event is.",
         "enum": [
           "live",
@@ -184,7 +184,7 @@
         ],
         "type": "string"
       },
-      "LastEventKind": {
+      "LastEventKindResponse": {
         "description": "The kind of the event that last changed the pool's state.",
         "enum": [
           "swap",
@@ -193,7 +193,7 @@
         ],
         "type": "string"
       },
-      "LiquidityEventKind": {
+      "LiquidityEventKindResponse": {
         "description": "Whether liquidity went into the pool or out of it.",
         "enum": [
           "add",
@@ -220,7 +220,7 @@
             "$ref": "#/components/schemas/U128String"
           },
           "liquidityEventKind": {
-            "$ref": "#/components/schemas/LiquidityEventKind"
+            "$ref": "#/components/schemas/LiquidityEventKindResponse"
           },
           "owner": {
             "minLength": 1,
@@ -235,7 +235,7 @@
             "type": "string"
           },
           "protocol": {
-            "$ref": "#/components/schemas/Protocol"
+            "$ref": "#/components/schemas/ProtocolResponse"
           },
           "reserveAAfter": {
             "$ref": "#/components/schemas/U128String"
@@ -417,7 +417,7 @@
         "description": "The \"Solana Live\" panel payload.\n\nTwo concerns combined, and they **fail separately** — which is the whole\nreason they sit side by side: the chain itself (slot + RPC latency, from the\n`network_status` singleton, measured over an endpoint chosen for being\nindependent of ingestion) and ingestion freshness (derived from the most\nrecent indexed event, with no network call at all).\n\nSo the first pair answers *is the chain advancing, and how far away is it*,\nand the second *is our ingestion keeping up*. Reading the first as the\nhealth of our own link is the mistake this panel is built to prevent, and\nthe one the indexer's probe itself made until 21 September 2026.",
         "properties": {
           "freshness": {
-            "$ref": "#/components/schemas/Freshness",
+            "$ref": "#/components/schemas/FreshnessStatusResponse",
             "description": "Ingestion freshness verdict: \"live\" | \"delayed\" | \"stale\"."
           },
           "lastEventAt": {
@@ -482,7 +482,7 @@
                   "$ref": "#/components/schemas/U128String"
                 },
                 "liquidityEventKind": {
-                  "$ref": "#/components/schemas/LiquidityEventKind"
+                  "$ref": "#/components/schemas/LiquidityEventKindResponse"
                 },
                 "owner": {
                   "minLength": 1,
@@ -497,7 +497,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "$ref": "#/components/schemas/Protocol"
+                  "$ref": "#/components/schemas/ProtocolResponse"
                 },
                 "reserveAAfter": {
                   "$ref": "#/components/schemas/U128String"
@@ -636,7 +636,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "$ref": "#/components/schemas/Protocol"
+                  "$ref": "#/components/schemas/ProtocolResponse"
                 },
                 "protocolFees24hUsd": {
                   "oneOf": [
@@ -776,10 +776,10 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "$ref": "#/components/schemas/Protocol"
+                  "$ref": "#/components/schemas/ProtocolResponse"
                 },
                 "severity": {
-                  "$ref": "#/components/schemas/Severity"
+                  "$ref": "#/components/schemas/SeverityResponse"
                 },
                 "threshold": {
                   "oneOf": [
@@ -886,7 +886,7 @@
                   "type": "string"
                 },
                 "protocol": {
-                  "$ref": "#/components/schemas/Protocol"
+                  "$ref": "#/components/schemas/ProtocolResponse"
                 },
                 "protocolFee": {
                   "$ref": "#/components/schemas/U128String"
@@ -909,7 +909,7 @@
                   "type": "string"
                 },
                 "tradeDirection": {
-                  "$ref": "#/components/schemas/TradeDirection"
+                  "$ref": "#/components/schemas/TradeDirectionResponse"
                 }
               },
               "required": [
@@ -964,7 +964,7 @@
             "type": "string"
           },
           "lastEventKind": {
-            "$ref": "#/components/schemas/LastEventKind"
+            "$ref": "#/components/schemas/LastEventKindResponse"
           },
           "lastSignature": {
             "minLength": 1,
@@ -993,7 +993,7 @@
             "type": "string"
           },
           "protocol": {
-            "$ref": "#/components/schemas/Protocol"
+            "$ref": "#/components/schemas/ProtocolResponse"
           },
           "reserveA": {
             "$ref": "#/components/schemas/U128String"
@@ -1269,7 +1269,7 @@
             "type": "string"
           },
           "protocol": {
-            "$ref": "#/components/schemas/Protocol"
+            "$ref": "#/components/schemas/ProtocolResponse"
           },
           "protocolFees24hUsd": {
             "oneOf": [
@@ -1361,7 +1361,7 @@
             "type": "string"
           },
           "severity": {
-            "$ref": "#/components/schemas/Severity"
+            "$ref": "#/components/schemas/SeverityResponse"
           },
           "triggeredAt": {
             "format": "date-time",
@@ -1375,7 +1375,7 @@
         ],
         "type": "object"
       },
-      "PriceProvider": {
+      "PriceProviderResponse": {
         "description": "Where a price came from.",
         "enum": [
           "jupiter",
@@ -1410,7 +1410,7 @@
         ],
         "type": "object"
       },
-      "Protocol": {
+      "ProtocolResponse": {
         "description": "The protocol a pool, an event or a signal belongs to.",
         "enum": [
           "meteora_damm_v2",
@@ -1418,7 +1418,7 @@
         ],
         "type": "string"
       },
-      "Severity": {
+      "SeverityResponse": {
         "description": "How serious a signal is.",
         "enum": [
           "info",
@@ -1449,10 +1449,10 @@
             "type": "string"
           },
           "protocol": {
-            "$ref": "#/components/schemas/Protocol"
+            "$ref": "#/components/schemas/ProtocolResponse"
           },
           "severity": {
-            "$ref": "#/components/schemas/Severity"
+            "$ref": "#/components/schemas/SeverityResponse"
           },
           "threshold": {
             "oneOf": [
@@ -1590,7 +1590,7 @@
             "type": "string"
           },
           "protocol": {
-            "$ref": "#/components/schemas/Protocol"
+            "$ref": "#/components/schemas/ProtocolResponse"
           },
           "protocolFee": {
             "$ref": "#/components/schemas/U128String"
@@ -1613,7 +1613,7 @@
             "type": "string"
           },
           "tradeDirection": {
-            "$ref": "#/components/schemas/TradeDirection"
+            "$ref": "#/components/schemas/TradeDirectionResponse"
           }
         },
         "required": [
@@ -1645,7 +1645,7 @@
             "type": "string"
           },
           "provider": {
-            "$ref": "#/components/schemas/PriceProvider",
+            "$ref": "#/components/schemas/PriceProviderResponse",
             "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\"."
           },
           "usd": {
@@ -1729,7 +1729,7 @@
         ],
         "type": "object"
       },
-      "TradeDirection": {
+      "TradeDirectionResponse": {
         "description": "Which way a swap went: token A sold for B, or B for A.",
         "enum": [
           "a_to_b",

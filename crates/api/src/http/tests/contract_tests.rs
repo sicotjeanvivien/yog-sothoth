@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
@@ -46,32 +46,42 @@ fn every_api_route_is_mounted_with_its_contract() {
 }
 
 fn literal_routes(dir: &Path, found: &mut Vec<(String, String)>) {
-    for entry in fs::read_dir(dir).expect("readable source directory") {
-        let path = entry.expect("readable directory entry").path();
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-        if path.is_dir() {
-            if name != "tests" {
-                literal_routes(&path, found);
-            }
-            continue;
-        }
-        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
-            continue;
-        }
+    for path in source_files(dir) {
         let source = fs::read_to_string(&path).expect("readable source file");
         for call in [".route(", ".route_service(", ".nest(", ".nest_service("] {
             for (at, _) in source.match_indices(call) {
                 let rest = source[at + call.len()..].trim_start();
                 if let Some(literal) = rest.strip_prefix('"') {
                     let end = literal.find('"').expect("a closed string literal");
-                    found.push((name.to_string(), literal[..end].to_string()));
+                    found.push((file_name(&path), literal[..end].to_string()));
                 }
             }
         }
     }
+}
+
+/// Every non-test `.rs` file under `dir`, subdirectories included.
+fn source_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(dir).expect("readable source directory") {
+        let path = entry.expect("readable directory entry").path();
+        let name = file_name(&path);
+        if path.is_dir() {
+            if name != "tests" {
+                files.extend(source_files(&path));
+            }
+        } else if name.ends_with(".rs") && !name.ends_with("_tests.rs") {
+            files.push(path);
+        }
+    }
+    files
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_string()
 }
 
 #[test]
@@ -170,14 +180,8 @@ fn the_documented_bounds_are_the_validated_ones() {
 fn an_option_is_omitted_exactly_when_declared_absent() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/dto/response");
     let mut unpaired = Vec::new();
-    for entry in fs::read_dir(&dir).expect("readable response directory") {
-        let path = entry.expect("readable entry").path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !name.ends_with(".rs") {
-            continue;
-        }
+    for path in source_files(&dir) {
+        let name = file_name(&path);
         let lines: Vec<String> = fs::read_to_string(&path)
             .expect("readable source file")
             .lines()
@@ -224,15 +228,8 @@ fn every_handler_declares_the_body_and_query_it_has() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/handlers");
     let mut drift = Vec::new();
     let mut checked = 0;
-    for entry in fs::read_dir(&dir).expect("readable handlers directory") {
-        let path = entry.expect("readable entry").path();
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
-            continue;
-        }
+    for path in source_files(&dir) {
+        let name = file_name(&path);
         let source = fs::read_to_string(&path).expect("readable source file");
         for (at, _) in source.match_indices("#[utoipa::path(") {
             let rest = &source[at..];

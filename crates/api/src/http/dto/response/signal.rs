@@ -1,14 +1,17 @@
 //! Response DTO for the signal feed.
 
+mod severity_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain;
 
-use super::protocol::Protocol;
+use super::pool::ProtocolResponse;
 use crate::application::EnrichedSignal;
 use crate::http::dto::EmbeddedTokenResponse;
 use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
+
+pub(super) use severity_response::SeverityResponse;
 
 /// `GET /api/signals` item (and `GET /api/signals/stream` event — both
 /// endpoints emit exactly this object).
@@ -22,7 +25,7 @@ pub(crate) struct SignalResponse {
     pub(crate) id: i64,
     #[schema(min_length = 1)]
     pub(crate) detector: String,
-    pub(crate) protocol: Protocol,
+    pub(crate) protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
     /// The pool's token pair, embedded in the same shape as
@@ -31,7 +34,7 @@ pub(crate) struct SignalResponse {
     /// minimal view, and the client falls back to `pool_address`.
     pub(crate) token_a: EmbeddedTokenResponse,
     pub(crate) token_b: EmbeddedTokenResponse,
-    pub(crate) severity: Severity,
+    pub(crate) severity: SeverityResponse,
     // Exact decimals are emitted as strings, like every other decimal
     // quantity of the API (a JSON-number consumer would go through
     // lossy f64).
@@ -41,25 +44,6 @@ pub(crate) struct SignalResponse {
     pub(crate) threshold: Option<String>,
     pub(crate) message: Option<String>,
     pub(crate) triggered_at: DateTime<Utc>,
-}
-
-/// How serious a signal is.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum Severity {
-    Info,
-    Warning,
-    Critical,
-}
-
-impl From<domain::Severity> for Severity {
-    fn from(severity: domain::Severity) -> Self {
-        match severity {
-            domain::Severity::Info => Self::Info,
-            domain::Severity::Warning => Self::Warning,
-            domain::Severity::Critical => Self::Critical,
-        }
-    }
 }
 
 impl From<EnrichedSignal> for SignalResponse {
@@ -80,3 +64,7 @@ impl From<EnrichedSignal> for SignalResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/signal_tests.rs"]
+mod tests;

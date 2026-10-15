@@ -22,7 +22,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import type {
   AnnouncementResponse,
-  AnnouncementSeverity,
+  AnnouncementSeverityResponse,
 } from "@/lib/api/schema/zod.gen";
 import {
   ANNOUNCEMENTS_COOKIE_MAX_AGE_S,
@@ -39,19 +39,19 @@ import {
 
 // Shape + colour, never colour alone: each severity has its own icon.
 // Info stays neutral.
-const BANNER_RULE: Record<AnnouncementSeverity, string> = {
+const BANNER_RULE: Record<AnnouncementSeverityResponse, string> = {
   info: "border-l-dash-ink-3",
   warning: "border-l-dash-warn",
   critical: "border-l-dash-down",
 };
 
-const BANNER_ICON_COLOR: Record<AnnouncementSeverity, string> = {
+const BANNER_ICON_COLOR: Record<AnnouncementSeverityResponse, string> = {
   info: "text-dash-ink-3",
   warning: "text-dash-warn",
   critical: "text-dash-down",
 };
 
-const BANNER_ICON: Record<AnnouncementSeverity, React.FC<IconProps>> = {
+const BANNER_ICON: Record<AnnouncementSeverityResponse, React.FC<IconProps>> = {
   info: InfoIcon,
   warning: AlertTriangleIcon,
   critical: AlertOctagonIcon,

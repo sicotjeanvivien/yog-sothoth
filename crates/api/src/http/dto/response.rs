@@ -8,7 +8,6 @@ mod page;
 mod pool;
 mod pool_current_state;
 mod pool_history;
-mod protocol;
 // Visible: target of a doc link (http/error.rs).
 pub(crate) mod problem;
 mod readiness;
@@ -35,7 +34,3 @@ pub(crate) use stats::StatsResponse;
 pub(crate) use swap_event::SwapEventResponse;
 pub(crate) use token::TokenResponse;
 pub(crate) use token_price::TokenPriceResponse;
-
-#[cfg(test)]
-#[path = "response/tests/wire_enum_tests.rs"]
-mod wire_enum_tests;

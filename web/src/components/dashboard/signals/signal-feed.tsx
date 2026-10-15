@@ -27,7 +27,7 @@ import { useState } from "react";
 
 import { useTranslations } from "next-intl";
 
-import type { Severity, SignalResponse } from "@/lib/api/schema/zod.gen";
+import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import { filterSignals } from "@/lib/signals/filter-signals";
 
 import { SignalCard } from "./signal-card";
@@ -55,7 +55,7 @@ export function SignalFeed({
   const { signals, status } = useSignalStream(initial);
 
   const [activeSeverities, setActiveSeverities] = useState<
-    ReadonlySet<Severity>
+    ReadonlySet<SeverityResponse>
   >(new Set());
   const [activeDetectors, setActiveDetectors] = useState<ReadonlySet<string>>(
     new Set(),

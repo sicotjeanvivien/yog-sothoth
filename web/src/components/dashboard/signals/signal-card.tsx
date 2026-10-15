@@ -31,7 +31,7 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
-import type { EmbeddedTokenResponse, Severity, SignalResponse } from "@/lib/api/schema/zod.gen";
+import type { EmbeddedTokenResponse, SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import {
   formatPercent,
   formatSignedPercent,
@@ -52,7 +52,7 @@ import {
 // clear rung apart (critical > warning > info). Info stays close to
 // neutral — when most of the feed is warning/critical, a tinted info
 // row would flatten the scale.
-const SEVERITY_CARD: Record<Severity, string> = {
+const SEVERITY_CARD: Record<SeverityResponse, string> = {
   info: "border-sothoth-500/15 border-l-sky-400/60 bg-cosmos-700/40",
   warning: "border-amber-400/30 border-l-amber-400 bg-amber-400/[0.06]",
   critical: "border-rose-400/40 border-l-rose-400 bg-rose-500/[0.10]",

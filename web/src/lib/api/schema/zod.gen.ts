@@ -2,22 +2,22 @@
 
 import * as z from 'zod';
 
-export const zAnnouncementKind = z.enum([
+export const zAnnouncementKindResponse = z.enum([
     'maintenance',
     'incident',
     'release',
     'beta'
 ]);
 
-export type AnnouncementKind = z.infer<typeof zAnnouncementKind>;
+export type AnnouncementKindResponse = z.infer<typeof zAnnouncementKindResponse>;
 
-export const zAnnouncementSeverity = z.enum([
+export const zAnnouncementSeverityResponse = z.enum([
     'info',
     'warning',
     'critical'
 ]);
 
-export type AnnouncementSeverity = z.infer<typeof zAnnouncementSeverity>;
+export type AnnouncementSeverityResponse = z.infer<typeof zAnnouncementSeverityResponse>;
 
 export const zCount = z.int().gte(0);
 
@@ -26,34 +26,34 @@ export type Count = z.infer<typeof zCount>;
 export const zAnnouncementResponse = z.object({
     endsAt: z.iso.datetime({ offset: true }).nullable(),
     id: zCount,
-    kind: zAnnouncementKind,
+    kind: zAnnouncementKindResponse,
     linkUrl: z.string().nullable(),
     message: z.string(),
-    severity: zAnnouncementSeverity,
+    severity: zAnnouncementSeverityResponse,
     startsAt: z.iso.datetime({ offset: true })
 });
 
 export type AnnouncementResponse = z.infer<typeof zAnnouncementResponse>;
 
-export const zFreshness = z.enum([
+export const zFreshnessStatusResponse = z.enum([
     'live',
     'delayed',
     'stale'
 ]);
 
-export type Freshness = z.infer<typeof zFreshness>;
+export type FreshnessStatusResponse = z.infer<typeof zFreshnessStatusResponse>;
 
-export const zLastEventKind = z.enum([
+export const zLastEventKindResponse = z.enum([
     'swap',
     'liquidity_add',
     'liquidity_remove'
 ]);
 
-export type LastEventKind = z.infer<typeof zLastEventKind>;
+export type LastEventKindResponse = z.infer<typeof zLastEventKindResponse>;
 
-export const zLiquidityEventKind = z.enum(['add', 'remove']);
+export const zLiquidityEventKindResponse = z.enum(['add', 'remove']);
 
-export type LiquidityEventKind = z.infer<typeof zLiquidityEventKind>;
+export type LiquidityEventKindResponse = z.infer<typeof zLiquidityEventKindResponse>;
 
 export const zMeteoraDlmmPropertiesResponse = z.object({
     baseFactor: z.int().gte(0).nullable(),
@@ -67,7 +67,7 @@ export const zMeteoraDlmmPropertiesResponse = z.object({
 export type MeteoraDlmmPropertiesResponse = z.infer<typeof zMeteoraDlmmPropertiesResponse>;
 
 export const zNetworkStatusResponse = z.object({
-    freshness: zFreshness,
+    freshness: zFreshnessStatusResponse,
     lastEventAt: z.iso.datetime({ offset: true }).nullable(),
     observedAt: z.iso.datetime({ offset: true }),
     rpcLatencyMs: z.int().gte(0),
@@ -76,13 +76,13 @@ export const zNetworkStatusResponse = z.object({
 
 export type NetworkStatusResponse = z.infer<typeof zNetworkStatusResponse>;
 
-export const zPriceProvider = z.enum([
+export const zPriceProviderResponse = z.enum([
     'jupiter',
     'helius',
     'fallback'
 ]);
 
-export type PriceProvider = z.infer<typeof zPriceProvider>;
+export type PriceProviderResponse = z.infer<typeof zPriceProviderResponse>;
 
 export const zProblemDetails = z.object({
     detail: z.string(),
@@ -93,21 +93,21 @@ export const zProblemDetails = z.object({
 
 export type ProblemDetails = z.infer<typeof zProblemDetails>;
 
-export const zProtocol = z.enum(['meteora_damm_v2', 'meteora_dlmm']);
+export const zProtocolResponse = z.enum(['meteora_damm_v2', 'meteora_dlmm']);
 
-export type Protocol = z.infer<typeof zProtocol>;
+export type ProtocolResponse = z.infer<typeof zProtocolResponse>;
 
-export const zSeverity = z.enum([
+export const zSeverityResponse = z.enum([
     'info',
     'warning',
     'critical'
 ]);
 
-export type Severity = z.infer<typeof zSeverity>;
+export type SeverityResponse = z.infer<typeof zSeverityResponse>;
 
 export const zPoolSignalResponse = z.object({
     detector: z.string().min(1),
-    severity: zSeverity,
+    severity: zSeverityResponse,
     triggeredAt: z.iso.datetime({ offset: true })
 });
 
@@ -117,9 +117,9 @@ export const zSignedDecimal = z.string().regex(/^-?\d+(\.\d+)?$/);
 
 export type SignedDecimal = z.infer<typeof zSignedDecimal>;
 
-export const zTradeDirection = z.enum(['a_to_b', 'b_to_a']);
+export const zTradeDirectionResponse = z.enum(['a_to_b', 'b_to_a']);
 
-export type TradeDirection = z.infer<typeof zTradeDirection>;
+export type TradeDirectionResponse = z.infer<typeof zTradeDirectionResponse>;
 
 export const zU128String = z.string().regex(/^\d+$/);
 
@@ -137,14 +137,14 @@ export const zPageResponseSwapEventResponse = z.object({
         feeTokenIsA: z.boolean(),
         nextSqrtPrice: zU128String,
         poolAddress: z.string().min(1),
-        protocol: zProtocol,
+        protocol: zProtocolResponse,
         protocolFee: zU128String,
         referralFee: zU128String,
         reserveAAfter: zU128String,
         reserveBAfter: zU128String,
         signature: z.string().min(1),
         timestamp: z.iso.datetime({ offset: true }),
-        tradeDirection: zTradeDirection
+        tradeDirection: zTradeDirectionResponse
     })),
     nextCursor: z.string().nullable(),
     prevCursor: z.string().nullable()
@@ -161,14 +161,14 @@ export const zSwapEventResponse = z.object({
     feeTokenIsA: z.boolean(),
     nextSqrtPrice: zU128String,
     poolAddress: z.string().min(1),
-    protocol: zProtocol,
+    protocol: zProtocolResponse,
     protocolFee: zU128String,
     referralFee: zU128String,
     reserveAAfter: zU128String,
     reserveBAfter: zU128String,
     signature: z.string().min(1),
     timestamp: z.iso.datetime({ offset: true }),
-    tradeDirection: zTradeDirection
+    tradeDirection: zTradeDirectionResponse
 });
 
 export type SwapEventResponse = z.infer<typeof zSwapEventResponse>;
@@ -179,7 +179,7 @@ export type UnsignedDecimal = z.infer<typeof zUnsignedDecimal>;
 
 export const zEmbeddedPriceResponse = z.object({
     fetchedAt: z.iso.datetime({ offset: true }),
-    provider: zPriceProvider,
+    provider: zPriceProviderResponse,
     usd: zUnsignedDecimal
 });
 
@@ -208,11 +208,11 @@ export const zLiquidityEventResponse = z.object({
     amountB: zU128String,
     eventIndex: z.int().gte(0),
     liquidityDelta: zU128String,
-    liquidityEventKind: zLiquidityEventKind,
+    liquidityEventKind: zLiquidityEventKindResponse,
     owner: z.string().min(1),
     poolAddress: z.string().min(1),
     position: z.string().min(1),
-    protocol: zProtocol,
+    protocol: zProtocolResponse,
     reserveAAfter: zU128String,
     reserveBAfter: zU128String,
     signature: z.string().min(1),
@@ -241,11 +241,11 @@ export const zPageResponseLiquidityEventResponse = z.object({
         amountB: zU128String,
         eventIndex: z.int().gte(0),
         liquidityDelta: zU128String,
-        liquidityEventKind: zLiquidityEventKind,
+        liquidityEventKind: zLiquidityEventKindResponse,
         owner: z.string().min(1),
         poolAddress: z.string().min(1),
         position: z.string().min(1),
-        protocol: zProtocol,
+        protocol: zProtocolResponse,
         reserveAAfter: zU128String,
         reserveBAfter: zU128String,
         signature: z.string().min(1),
@@ -269,7 +269,7 @@ export const zPageResponsePoolResponse = z.object({
         lastSeenAt: z.iso.datetime({ offset: true }),
         lpFees24hUsd: zUnsignedDecimal.nullable(),
         poolAddress: z.string().min(1),
-        protocol: zProtocol,
+        protocol: zProtocolResponse,
         protocolFees24hUsd: zUnsignedDecimal.nullable(),
         referralFees24hUsd: zUnsignedDecimal.nullable(),
         signals24h: z.array(zPoolSignalResponse),
@@ -294,8 +294,8 @@ export const zPageResponseSignalResponse = z.object({
         id: zCount,
         message: z.string().nullable(),
         poolAddress: z.string().min(1),
-        protocol: zProtocol,
-        severity: zSeverity,
+        protocol: zProtocolResponse,
+        severity: zSeverityResponse,
         threshold: zUnsignedDecimal.nullable(),
         tokenA: zEmbeddedTokenResponse,
         tokenB: zEmbeddedTokenResponse,
@@ -310,12 +310,12 @@ export type PageResponseSignalResponse = z.infer<typeof zPageResponseSignalRespo
 
 export const zPoolCurrentStateResponse = z.object({
     lastEventAt: z.iso.datetime({ offset: true }),
-    lastEventKind: zLastEventKind,
+    lastEventKind: zLastEventKindResponse,
     lastSignature: z.string().min(1),
     lastSqrtPrice: zU128String.nullable(),
     lastSwapAt: z.iso.datetime({ offset: true }).nullable(),
     poolAddress: z.string().min(1),
-    protocol: zProtocol,
+    protocol: zProtocolResponse,
     reserveA: zU128String,
     reserveB: zU128String,
     spotPriceAInB: zUnsignedDecimal.nullable(),
@@ -356,7 +356,7 @@ export const zPoolResponse = z.object({
     lastSeenAt: z.iso.datetime({ offset: true }),
     lpFees24hUsd: zUnsignedDecimal.nullable(),
     poolAddress: z.string().min(1),
-    protocol: zProtocol,
+    protocol: zProtocolResponse,
     protocolFees24hUsd: zUnsignedDecimal.nullable(),
     referralFees24hUsd: zUnsignedDecimal.nullable(),
     signals24h: z.array(zPoolSignalResponse),
@@ -382,8 +382,8 @@ export const zSignalResponse = z.object({
     id: zCount,
     message: z.string().nullable(),
     poolAddress: z.string().min(1),
-    protocol: zProtocol,
-    severity: zSeverity,
+    protocol: zProtocolResponse,
+    severity: zSeverityResponse,
     threshold: zUnsignedDecimal.nullable(),
     tokenA: zEmbeddedTokenResponse,
     tokenB: zEmbeddedTokenResponse,
@@ -408,7 +408,7 @@ export type StatsResponse = z.infer<typeof zStatsResponse>;
 
 export const zTokenPriceResponse = z.object({
     fetchedAt: z.iso.datetime({ offset: true }),
-    provider: zPriceProvider,
+    provider: zPriceProviderResponse,
     usd: zUnsignedDecimal
 });
 

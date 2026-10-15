@@ -1,10 +1,10 @@
 use super::{
     MeteoraDammV2PropertiesResponse, MeteoraDlmmPropertiesResponse, PoolDetailResponse,
-    PoolResponse, PoolSignalResponse, effective_fee_bps,
+    PoolResponse, PoolSignalResponse, ProtocolResponse, effective_fee_bps,
 };
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 use crate::http::dto::EmbeddedTokenResponse;
-use crate::testing::{make_pool, make_signal_record, pk};
+use crate::testing::{make_pool, make_signal_record, pk, wire_tag};
 use rust_decimal::Decimal;
 use yog_core::domain::{
     MeteoraDammV2PoolProperties, MeteoraDlmmPoolProperties, PoolAnalytics, PoolProperties,
@@ -29,6 +29,13 @@ fn effective_fee_bps_none_when_volume_zero() {
 fn effective_fee_bps_none_when_an_input_missing() {
     assert_eq!(effective_fee_bps(None, Some(Decimal::new(10, 0))), None);
     assert_eq!(effective_fee_bps(Some(Decimal::new(10, 0)), None), None);
+}
+
+#[test]
+fn protocol_matches_the_domain() {
+    for p in yog_core::domain::Protocol::all() {
+        assert_eq!(wire_tag(ProtocolResponse::from(*p)), p.as_str());
+    }
 }
 
 #[test]

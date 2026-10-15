@@ -3,12 +3,18 @@
 //! Kept separate from the domain type, like every other `*Response` in
 //! this module — the domain model never leaks into the JSON wire shape.
 
+mod kind_response;
+mod severity_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{self, Announcement};
+use yog_core::domain::Announcement;
 
 use crate::http::dto::schema::Count;
+
+use kind_response::AnnouncementKindResponse;
+use severity_response::AnnouncementSeverityResponse;
 
 /// One active operator announcement, as displayed by the web banner.
 #[derive(Debug, Serialize, ToSchema)]
@@ -19,10 +25,10 @@ pub(crate) struct AnnouncementResponse {
     id: i64,
 
     /// What it is about: "maintenance" | "incident" | "release" | "beta".
-    kind: AnnouncementKind,
+    kind: AnnouncementKindResponse,
 
     /// Display prominence: "info" | "warning" | "critical".
-    severity: AnnouncementSeverity,
+    severity: AnnouncementSeverityResponse,
 
     /// Free operator text (English, v1 decision).
     message: String,
@@ -35,46 +41,6 @@ pub(crate) struct AnnouncementResponse {
 
     /// End of the display window; `null` = open-ended.
     ends_at: Option<DateTime<Utc>>,
-}
-
-/// What an announcement is about.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum AnnouncementKind {
-    Maintenance,
-    Incident,
-    Release,
-    Beta,
-}
-
-impl From<domain::AnnouncementKind> for AnnouncementKind {
-    fn from(kind: domain::AnnouncementKind) -> Self {
-        match kind {
-            domain::AnnouncementKind::Maintenance => Self::Maintenance,
-            domain::AnnouncementKind::Incident => Self::Incident,
-            domain::AnnouncementKind::Release => Self::Release,
-            domain::AnnouncementKind::Beta => Self::Beta,
-        }
-    }
-}
-
-/// How prominently an announcement is shown.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum AnnouncementSeverity {
-    Info,
-    Warning,
-    Critical,
-}
-
-impl From<domain::AnnouncementSeverity> for AnnouncementSeverity {
-    fn from(severity: domain::AnnouncementSeverity) -> Self {
-        match severity {
-            domain::AnnouncementSeverity::Info => Self::Info,
-            domain::AnnouncementSeverity::Warning => Self::Warning,
-            domain::AnnouncementSeverity::Critical => Self::Critical,
-        }
-    }
 }
 
 impl From<Announcement> for AnnouncementResponse {
@@ -90,3 +56,7 @@ impl From<Announcement> for AnnouncementResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/announcement_tests.rs"]
+mod tests;

@@ -2,14 +2,18 @@
 // Liquidity event
 // ---------------------------------------------------------------------------
 
+mod kind_response;
+
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{self, MeteoraDammV2LiquidityEventKind, MeteoraDammV2LiquidityEventValued};
+use yog_core::domain::{self, MeteoraDammV2LiquidityEventValued};
 
-use super::protocol::Protocol;
+use super::pool::ProtocolResponse;
 use crate::http::dto::schema::{U128String, UnsignedDecimal};
+
+use kind_response::LiquidityEventKindResponse;
 
 /// `GET /api/pools/{address}/liquidity-events` item.
 #[derive(Debug, Serialize, ToSchema)]
@@ -17,7 +21,7 @@ use crate::http::dto::schema::{U128String, UnsignedDecimal};
 pub(crate) struct LiquidityEventResponse {
     #[schema(min_length = 1)]
     pub(super) pool_address: String,
-    pub(super) protocol: Protocol,
+    pub(super) protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pub(super) signature: String,
     /// Position of this event among its transaction's emissions. A routed
@@ -26,7 +30,7 @@ pub(crate) struct LiquidityEventResponse {
     pub(super) event_index: u16,
     pub(super) timestamp: DateTime<Utc>,
 
-    pub(super) liquidity_event_kind: LiquidityEventKind,
+    pub(super) liquidity_event_kind: LiquidityEventKindResponse,
     // u64 quantities emitted as strings (can exceed 2^53); see SwapEventResponse.
     #[schema(value_type = U128String)]
     pub(super) amount_a: String,
@@ -74,19 +78,6 @@ impl From<MeteoraDammV2LiquidityEventValued> for LiquidityEventResponse {
     }
 }
 
-/// Whether liquidity went into the pool or out of it.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum LiquidityEventKind {
-    Add,
-    Remove,
-}
-
-impl From<MeteoraDammV2LiquidityEventKind> for LiquidityEventKind {
-    fn from(kind: MeteoraDammV2LiquidityEventKind) -> Self {
-        match kind {
-            MeteoraDammV2LiquidityEventKind::Add => Self::Add,
-            MeteoraDammV2LiquidityEventKind::Remove => Self::Remove,
-        }
-    }
-}
+#[cfg(test)]
+#[path = "tests/liquidity_event_tests.rs"]
+mod tests;

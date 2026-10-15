@@ -1,3 +1,5 @@
+mod protocol_response;
+
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -8,13 +10,14 @@ use yog_core::domain::{
     SignalRecord,
 };
 
-use super::protocol::Protocol;
-use super::signal::Severity;
+use super::signal::SeverityResponse;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 use crate::{
     application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken},
     http::dto::EmbeddedTokenResponse,
 };
+
+pub(super) use protocol_response::ProtocolResponse;
 
 /// Wire shape of one entry of a pool's recent-signals list — the
 /// pools-list signal indicator. Deliberately slimmer than the feed's
@@ -23,7 +26,7 @@ use crate::{
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolSignalResponse {
-    pub(crate) severity: Severity,
+    pub(crate) severity: SeverityResponse,
     #[schema(min_length = 1)]
     pub(crate) detector: String,
     pub(crate) triggered_at: DateTime<Utc>,
@@ -60,7 +63,7 @@ impl From<SignalRecord> for PoolSignalResponse {
 pub(crate) struct PoolResponse {
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
-    pub(crate) protocol: Protocol,
+    pub(crate) protocol: ProtocolResponse,
     pub(crate) token_a: EmbeddedTokenResponse,
     pub(crate) token_b: EmbeddedTokenResponse,
     /// Base trading fee in basis points (genesis fee tier). `None` until the

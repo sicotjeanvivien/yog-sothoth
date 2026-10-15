@@ -5,9 +5,9 @@
  * escalation order) lives in exactly one place.
  */
 
-import type { Severity } from "@/lib/api/schema/zod.gen";
+import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
 
-const SEVERITY_RANK: Record<Severity, number> = {
+const SEVERITY_RANK: Record<SeverityResponse, number> = {
   info: 0,
   warning: 1,
   critical: 2,
@@ -15,9 +15,9 @@ const SEVERITY_RANK: Record<Severity, number> = {
 
 /** `null` when the list is empty — nothing to indicate. */
 export function worstSeverity(
-  signals: readonly { severity: Severity }[],
-): Severity | null {
-  let worst: Severity | null = null;
+  signals: readonly { severity: SeverityResponse }[],
+): SeverityResponse | null {
+  let worst: SeverityResponse | null = null;
   for (const { severity } of signals) {
     if (worst === null || SEVERITY_RANK[severity] > SEVERITY_RANK[worst]) {
       worst = severity;

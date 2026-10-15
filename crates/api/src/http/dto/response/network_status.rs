@@ -4,10 +4,14 @@
 //! in this module — the domain model never leaks into the JSON wire
 //! shape.
 
+mod freshness_status_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{FreshnessStatus, NetworkStatus};
+
+use freshness_status_response::FreshnessStatusResponse;
 
 /// The "Solana Live" panel payload.
 ///
@@ -38,30 +42,11 @@ pub(crate) struct NetworkStatusResponse {
     observed_at: DateTime<Utc>,
 
     /// Ingestion freshness verdict: "live" | "delayed" | "stale".
-    freshness: Freshness,
+    freshness: FreshnessStatusResponse,
 
     /// Timestamp of the most recent indexed event, if any. `null`
     /// when the database holds no events yet.
     last_event_at: Option<DateTime<Utc>>,
-}
-
-/// How recent the last indexed event is.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum Freshness {
-    Live,
-    Delayed,
-    Stale,
-}
-
-impl From<FreshnessStatus> for Freshness {
-    fn from(status: FreshnessStatus) -> Self {
-        match status {
-            FreshnessStatus::Live => Self::Live,
-            FreshnessStatus::Delayed => Self::Delayed,
-            FreshnessStatus::Stale => Self::Stale,
-        }
-    }
 }
 
 impl NetworkStatusResponse {
@@ -81,3 +66,7 @@ impl NetworkStatusResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/network_status_tests.rs"]
+mod tests;

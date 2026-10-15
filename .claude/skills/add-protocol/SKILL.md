@@ -56,7 +56,7 @@ In the order of the table in `crates/README.md` → *What stays narrow*:
 7. The `PoolProperties` match — `crates/api/src/http/dto/response/pool.rs`. One optional
    field named after the protocol; the `match` is exhaustive with no wildcard arm, so the
    compiler asks.
-8. The `Protocol` wire enum — `crates/api/src/http/dto/response/protocol.rs`. One variant and
+8. The `ProtocolResponse` wire enum — `crates/api/src/http/dto/response/pool/protocol_response.rs`. One variant and
    its `From` arm, exhaustive like the match above; then regenerate the contract
    (`YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract`, `npm run gen:api` in `web/`).
 

@@ -15,13 +15,17 @@
 //!   Frontends should use `BigInt(value)` to consume these fields.
 //! * Optional fields are rendered as `null` when absent (`serde` default).
 
+mod trade_direction_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{self, MeteoraDammV2SwapEvent};
 
-use super::protocol::Protocol;
+use super::pool::ProtocolResponse;
 use crate::http::dto::schema::U128String;
+
+use trade_direction_response::TradeDirectionResponse;
 
 // ---------------------------------------------------------------------------
 // Swap event
@@ -32,7 +36,7 @@ use crate::http::dto::schema::U128String;
 pub(crate) struct SwapEventResponse {
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
-    pub(crate) protocol: Protocol,
+    pub(crate) protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pub(crate) signature: String,
     /// Position of this event among its transaction's emissions. A routed
@@ -41,7 +45,7 @@ pub(crate) struct SwapEventResponse {
     pub(crate) event_index: u16,
     pub(crate) timestamp: DateTime<Utc>,
 
-    pub(crate) trade_direction: TradeDirection,
+    pub(crate) trade_direction: TradeDirectionResponse,
     // All `u64` token quantities (amounts, reserves, fees) are emitted as
     // strings: an atomic-unit value can exceed 2^53, which a JSON-number
     // consumer (JS) silently truncates. Same rationale as `next_sqrt_price`.
@@ -91,20 +95,6 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
     }
 }
 
-/// Which way a swap went: token A sold for B, or B for A.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-pub(crate) enum TradeDirection {
-    #[serde(rename = "a_to_b")]
-    AToB,
-    #[serde(rename = "b_to_a")]
-    BToA,
-}
-
-impl From<domain::TradeDirection> for TradeDirection {
-    fn from(direction: domain::TradeDirection) -> Self {
-        match direction {
-            domain::TradeDirection::AtoB => Self::AToB,
-            domain::TradeDirection::BtoA => Self::BToA,
-        }
-    }
-}
+#[cfg(test)]
+#[path = "tests/swap_event_tests.rs"]
+mod tests;

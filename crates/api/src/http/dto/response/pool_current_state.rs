@@ -1,12 +1,15 @@
+mod last_event_kind_response;
+
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain;
 
-use super::protocol::Protocol;
+use super::pool::ProtocolResponse;
 use crate::application::PoolCurrentStateView;
 use crate::http::dto::schema::{U128String, UnsignedDecimal};
+
+use last_event_kind_response::LastEventKindResponse;
 
 /// `GET /api/pools/{address}/latest-state` response body.
 ///
@@ -24,10 +27,10 @@ use crate::http::dto::schema::{U128String, UnsignedDecimal};
 pub(crate) struct PoolCurrentStateResponse {
     #[schema(min_length = 1)]
     pub(crate) pool_address: String,
-    pub(crate) protocol: Protocol,
+    pub(crate) protocol: ProtocolResponse,
 
     pub(crate) last_event_at: DateTime<Utc>,
-    pub(crate) last_event_kind: LastEventKind,
+    pub(crate) last_event_kind: LastEventKindResponse,
     #[schema(min_length = 1)]
     pub(crate) last_signature: String,
 
@@ -75,21 +78,6 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
     }
 }
 
-/// The kind of the event that last changed the pool's state.
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum LastEventKind {
-    Swap,
-    LiquidityAdd,
-    LiquidityRemove,
-}
-
-impl From<domain::LastEventKind> for LastEventKind {
-    fn from(kind: domain::LastEventKind) -> Self {
-        match kind {
-            domain::LastEventKind::Swap => Self::Swap,
-            domain::LastEventKind::LiquidityAdd => Self::LiquidityAdd,
-            domain::LastEventKind::LiquidityRemove => Self::LiquidityRemove,
-        }
-    }
-}
+#[cfg(test)]
+#[path = "tests/pool_current_state_tests.rs"]
+mod tests;

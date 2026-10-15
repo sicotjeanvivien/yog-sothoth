@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use super::embedded_price::PriceProvider;
+use super::token::PriceProviderResponse;
 use crate::http::dto::schema::UnsignedDecimal;
 
 /// The price block embedded in `TokenResponse`.
@@ -15,7 +15,7 @@ pub(crate) struct TokenPriceResponse {
     pub(super) usd: Decimal,
 
     /// Origin tag: "jupiter" | "helius" | "fallback".
-    pub(super) provider: PriceProvider,
+    pub(super) provider: PriceProviderResponse,
 
     /// When the price was observed.
     pub(super) fetched_at: DateTime<Utc>,
