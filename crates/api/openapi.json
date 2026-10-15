@@ -261,7 +261,7 @@
         "description": "DAMM v2-only pool properties (baseline §8's satellite table).",
         "properties": {
           "baseFeeKind": {
-            "description": "How the base fee behaves over time. Comes from the protocol\nsatellite, written by yog-context from the on-chain account. `None`\nwhile the pool is still unresolved, or if its `BaseFeeMode` discriminant\nis one this crate does not map — never \"no genesis event\", which plays\nno part in filling this column.",
+            "description": "How the base fee behaves over time, from the on-chain account. `None`\nwhile the pool is unresolved, or for a `BaseFeeMode` this crate does not map.",
             "type": [
               "string",
               "null"
@@ -271,7 +271,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "The base fee **actually in force right now**, in bps, for a pool whose\nfee decays over time.\n\n`feeBps` is the genesis tier — the fee at period 0, which for a\nscheduler is the *maximum* of a decreasing curve. This is the same curve\nevaluated at read time, and the two differ by up to ×49 on real pools.\n\n`None` whenever it cannot be established honestly: no scheduler (a\nconstant fee already tells the whole truth), a market-cap scheduler or a\nrate limiter (neither decays on time), an unresolved account — or a\n**slot-activated** pool, see below."
+                "description": "The base fee in force right now, in bps; `feeBps` is the genesis tier, the\ntop of a decaying curve. `None` without a time scheduler (constant fee,\nmarket-cap scheduler, rate limiter), for an unresolved or slot-activated pool."
               },
               {
                 "type": "null"
@@ -1025,7 +1025,7 @@
             "type": "object"
           }
         ],
-        "description": "The pool detail sheet: everything in [`PoolResponse`], plus the properties\nthat only exist for the pool's own protocol.\n\nFlattened on the wire, so the shared fields stay at the top level exactly as\non the list — a client can parse a detail payload with the list schema and\nsimply ignore the extra block.\n\nThe protocol block is named after its protocol rather than tagged. `None`\nwhen the pool has no satellite row yet: discovered, not enriched by yog-context."
+        "description": "The pool detail sheet: [`PoolResponse`] flattened, plus the properties of the\npool's own protocol under its name. `None` when the pool has no satellite row\nyet: discovered, not enriched by yog-context."
       },
       "PoolHistoryBucketResponse": {
         "properties": {

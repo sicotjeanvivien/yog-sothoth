@@ -325,7 +325,7 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 
 - **Pagination** — all collection endpoints use cursor-based pagination via `Page<T>` and a domain-specific cursor type. Default `limit = 50`, hard cap `200`.
 - **Error responses** — RFC 9457 Problem Details (see [`api/README.md`](./api/README.md#error-responses)).
-- **Contract** — the OpenAPI document `api/openapi.json` is derived from the routes, the web's zod from it; CI's `contract` job fails when either is stale.
+- **Contract** — the OpenAPI document `api/openapi.json` is derived from the routes, the web's zod from it; `cargo test` fails when the document is stale, CI's `contract` job when the zod is.
 - **Validation** — client-supplied data is validated at the handler boundary, before any DB call.
 - **Pubkeys** — base58 strings in responses (matching `Pubkey::Display`); same format on input.
 - **Timestamps** — RFC3339 / ISO8601.

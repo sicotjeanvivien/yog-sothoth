@@ -11,15 +11,9 @@ use crate::application::EnrichedPoolDetail;
 use meteora_damm_v2_properties_response::MeteoraDammV2PropertiesResponse;
 use meteora_dlmm_properties_response::MeteoraDlmmPropertiesResponse;
 
-/// The pool detail sheet: everything in [`PoolResponse`], plus the properties
-/// that only exist for the pool's own protocol.
-///
-/// Flattened on the wire, so the shared fields stay at the top level exactly as
-/// on the list — a client can parse a detail payload with the list schema and
-/// simply ignore the extra block.
-///
-/// The protocol block is named after its protocol rather than tagged. `None`
-/// when the pool has no satellite row yet: discovered, not enriched by yog-context.
+/// The pool detail sheet: [`PoolResponse`] flattened, plus the properties of the
+/// pool's own protocol under its name. `None` when the pool has no satellite row
+/// yet: discovered, not enriched by yog-context.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolDetailResponse {

@@ -20,26 +20,15 @@ pub(super) struct MeteoraDammV2PropertiesResponse {
     pub(super) protocol_fee_percent: Option<u8>,
     #[schema(maximum = 100)]
     pub(super) referral_fee_percent: Option<u8>,
-    /// How the base fee behaves over time. Comes from the protocol
-    /// satellite, written by yog-context from the on-chain account. `None`
-    /// while the pool is still unresolved, or if its `BaseFeeMode` discriminant
-    /// is one this crate does not map — never "no genesis event", which plays
-    /// no part in filling this column.
+    /// How the base fee behaves over time, from the on-chain account. `None`
+    /// while the pool is unresolved, or for a `BaseFeeMode` this crate does not map.
     pub(super) base_fee_kind: Option<String>,
     /// Whether a volatility-based dynamic fee sits on top of the base fee.
     pub(super) has_dynamic_fee: Option<bool>,
 
-    /// The base fee **actually in force right now**, in bps, for a pool whose
-    /// fee decays over time.
-    ///
-    /// `feeBps` is the genesis tier — the fee at period 0, which for a
-    /// scheduler is the *maximum* of a decreasing curve. This is the same curve
-    /// evaluated at read time, and the two differ by up to ×49 on real pools.
-    ///
-    /// `None` whenever it cannot be established honestly: no scheduler (a
-    /// constant fee already tells the whole truth), a market-cap scheduler or a
-    /// rate limiter (neither decays on time), an unresolved account — or a
-    /// **slot-activated** pool, see below.
+    /// The base fee in force right now, in bps; `feeBps` is the genesis tier, the
+    /// top of a decaying curve. `None` without a time scheduler (constant fee,
+    /// market-cap scheduler, rate limiter), for an unresolved or slot-activated pool.
     #[schema(value_type = Option<UnsignedDecimal>)]
     pub(super) current_fee_bps: Option<Decimal>,
 
