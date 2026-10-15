@@ -202,7 +202,7 @@ Confirm the sub-persistor actually runs end-to-end against a DB before calling i
 
 - [ ] All eight dispatch points updated (extract / implemented_protocols /
       decode_pool_account / persist / init / pool_account_resolvers / PoolProperties match /
-      Protocol wire enum), and the contract regenerated
+      `ProtocolResponse` wire enum), and the contract regenerated
 - [ ] `is_implemented` answers `true` once the extractor really extracts
 - [ ] Account decoder grounded on real mainnet accounts; satellite table + resolver
 - [ ] `DomainEvent` outer variant + all five accessors updated

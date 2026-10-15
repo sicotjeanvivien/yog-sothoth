@@ -12,7 +12,7 @@ use crate::http::dto::response::signal::SeverityResponse;
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct PoolSignalResponse {
-    pub(super) severity: SeverityResponse,
+    severity: SeverityResponse,
     #[schema(min_length = 1)]
     pub(super) detector: String,
     pub(super) triggered_at: DateTime<Utc>,

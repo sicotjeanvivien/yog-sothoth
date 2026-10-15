@@ -8,11 +8,6 @@ use yog_core::domain::MeteoraDammV2PoolProperties;
 use crate::http::dto::schema::UnsignedDecimal;
 
 /// DAMM v2-only pool properties (baseline §8's satellite table).
-///
-/// Every field is independently optional: the fee-split percents are resolved
-/// by yog-context from the on-chain account, the fee shape is decoded from the
-/// genesis `InitializePool` event, and either group can be present without the
-/// other.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct MeteoraDammV2PropertiesResponse {
@@ -37,7 +32,7 @@ pub(super) struct MeteoraDammV2PropertiesResponse {
     /// The base fee **actually in force right now**, in bps, for a pool whose
     /// fee decays over time.
     ///
-    /// `feeBps` above is the genesis tier — the fee at period 0, which for a
+    /// `feeBps` is the genesis tier — the fee at period 0, which for a
     /// scheduler is the *maximum* of a decreasing curve. This is the same curve
     /// evaluated at read time, and the two differ by up to ×49 on real pools.
     ///

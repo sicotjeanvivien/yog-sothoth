@@ -53,7 +53,7 @@ fn literal_routes(dir: &Path, found: &mut Vec<(String, String)>) {
                 let rest = source[at + call.len()..].trim_start();
                 if let Some(literal) = rest.strip_prefix('"') {
                     let end = literal.find('"').expect("a closed string literal");
-                    found.push((file_name(&path), literal[..end].to_string()));
+                    found.push((shown(&path), literal[..end].to_string()));
                 }
             }
         }
@@ -75,6 +75,13 @@ fn source_files(dir: &Path) -> Vec<PathBuf> {
         }
     }
     files
+}
+
+fn shown(path: &Path) -> String {
+    path.strip_prefix(env!("CARGO_MANIFEST_DIR"))
+        .unwrap_or(path)
+        .display()
+        .to_string()
 }
 
 fn file_name(path: &Path) -> String {
@@ -181,7 +188,7 @@ fn an_option_is_omitted_exactly_when_declared_absent() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/dto/response");
     let mut unpaired = Vec::new();
     for path in source_files(&dir) {
-        let name = file_name(&path);
+        let name = shown(&path);
         let lines: Vec<String> = fs::read_to_string(&path)
             .expect("readable source file")
             .lines()
@@ -228,7 +235,7 @@ fn every_schema_is_a_response_or_a_wire_form() {
         .collect();
     assert!(
         misnamed.is_empty(),
-        "name these `*Response` (crates/api/README.md, Where a response type goes): {misnamed:?}"
+        "name these `*Response`, or declare them as wire forms in dto/schema.rs: {misnamed:?}"
     );
 }
 
@@ -252,7 +259,7 @@ fn every_handler_declares_the_body_and_query_it_has() {
     let mut drift = Vec::new();
     let mut checked = 0;
     for path in source_files(&dir) {
-        let name = file_name(&path);
+        let name = shown(&path);
         let source = fs::read_to_string(&path).expect("readable source file");
         for (at, _) in source.match_indices("#[utoipa::path(") {
             let rest = &source[at..];

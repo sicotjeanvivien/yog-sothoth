@@ -193,6 +193,17 @@ fn the_from_impl_routes_each_protocol_to_its_own_block() {
     assert!(dlmm.meteora_dlmm.is_some(), "DLMM must reach its own block");
     assert!(dlmm.meteora_damm_v2.is_none());
 
+    let damm = PoolDetailResponse::from(EnrichedPoolDetail {
+        pool: enriched_pool(),
+        properties: Some(PoolProperties::MeteoraDammV2(scheduler_properties())),
+        evaluated_at: chrono::Utc::now(),
+    });
+    assert!(
+        damm.meteora_damm_v2.is_some(),
+        "DAMM v2 must reach its own block"
+    );
+    assert!(damm.meteora_dlmm.is_none());
+
     let none = PoolDetailResponse::from(EnrichedPoolDetail {
         pool: enriched_pool(),
         properties: None,

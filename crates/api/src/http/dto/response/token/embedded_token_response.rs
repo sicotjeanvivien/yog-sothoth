@@ -53,16 +53,9 @@ pub(in crate::http::dto::response) struct EmbeddedTokenResponse {
 }
 
 impl EmbeddedTokenResponse {
-    /// Build the embedded view from the two sources. Both arguments
-    /// are `Option` because, when this is called during a pool
-    /// enrichment, neither metadata nor price is guaranteed to
-    /// exist yet — the response then falls back to a minimal view
-    /// keyed only by the mint pubkey (passed in via the metadata's
-    /// `mint` field when available, otherwise via the second arg).
-    ///
-    /// The caller (the pool handler) always knows the mint pubkey
-    /// from the pool itself, so it can construct a meaningful
-    /// response even when no metadata row exists yet.
+    /// Build the embedded view from the two sources. Both are `Option`:
+    /// without metadata the response falls back to a minimal view keyed
+    /// only by `mint`.
     pub(in crate::http::dto::response) fn from_sources(
         mint: Option<solana_pubkey::Pubkey>,
         metadata: Option<TokenMetadata>,

@@ -126,9 +126,7 @@ pub(super) fn effective_fee_bps(
 
 impl PoolResponse {
     /// Compose the pool with its two enriched token sides and the
-    /// derived analytics. The caller (the pool handler) is
-    /// responsible for fetching the analytics for the requested
-    /// pools in batch — see `enrich_pool` in `handlers/pools.rs`.
+    /// derived analytics.
     pub(super) fn new(
         pool: Pool,
         token_a: EmbeddedTokenResponse,

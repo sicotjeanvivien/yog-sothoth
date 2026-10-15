@@ -258,7 +258,7 @@
         "type": "object"
       },
       "MeteoraDammV2PropertiesResponse": {
-        "description": "DAMM v2-only pool properties (baseline §8's satellite table).\n\nEvery field is independently optional: the fee-split percents are resolved\nby yog-context from the on-chain account, the fee shape is decoded from the\ngenesis `InitializePool` event, and either group can be present without the\nother.",
+        "description": "DAMM v2-only pool properties (baseline §8's satellite table).",
         "properties": {
           "baseFeeKind": {
             "description": "How the base fee behaves over time. Comes from the protocol\nsatellite, written by yog-context from the on-chain account. `None`\nwhile the pool is still unresolved, or if its `BaseFeeMode` discriminant\nis one this crate does not map — never \"no genesis event\", which plays\nno part in filling this column.",
@@ -271,7 +271,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "The base fee **actually in force right now**, in bps, for a pool whose\nfee decays over time.\n\n`feeBps` above is the genesis tier — the fee at period 0, which for a\nscheduler is the *maximum* of a decreasing curve. This is the same curve\nevaluated at read time, and the two differ by up to ×49 on real pools.\n\n`None` whenever it cannot be established honestly: no scheduler (a\nconstant fee already tells the whole truth), a market-cap scheduler or a\nrate limiter (neither decays on time), an unresolved account — or a\n**slot-activated** pool, see below."
+                "description": "The base fee **actually in force right now**, in bps, for a pool whose\nfee decays over time.\n\n`feeBps` is the genesis tier — the fee at period 0, which for a\nscheduler is the *maximum* of a decreasing curve. This is the same curve\nevaluated at read time, and the two differ by up to ×49 on real pools.\n\n`None` whenever it cannot be established honestly: no scheduler (a\nconstant fee already tells the whole truth), a market-cap scheduler or a\nrate limiter (neither decays on time), an unresolved account — or a\n**slot-activated** pool, see below."
               },
               {
                 "type": "null"
@@ -1025,7 +1025,7 @@
             "type": "object"
           }
         ],
-        "description": "The pool detail sheet: everything in [`PoolResponse`], plus the properties\nthat only exist for the pool's own protocol.\n\nFlattened on the wire, so the shared fields stay at the top level exactly as\non the list — a client can parse a detail payload with the list schema and\nsimply ignore the extra block.\n\nThe protocol block is named after its protocol rather than tagged, so adding\nDLMM later means adding a sibling field (`meteoraDlmm`) and no change to the\nexisting one. `None` when the pool has no satellite row yet: discovered, but\nneither enriched by yog-context nor seen at genesis."
+        "description": "The pool detail sheet: everything in [`PoolResponse`], plus the properties\nthat only exist for the pool's own protocol.\n\nFlattened on the wire, so the shared fields stay at the top level exactly as\non the list — a client can parse a detail payload with the list schema and\nsimply ignore the extra block.\n\nThe protocol block is named after its protocol rather than tagged. `None`\nwhen the pool has no satellite row yet: discovered, not enriched by yog-context."
       },
       "PoolHistoryBucketResponse": {
         "properties": {

@@ -18,10 +18,8 @@ use meteora_dlmm_properties_response::MeteoraDlmmPropertiesResponse;
 /// on the list — a client can parse a detail payload with the list schema and
 /// simply ignore the extra block.
 ///
-/// The protocol block is named after its protocol rather than tagged, so adding
-/// DLMM later means adding a sibling field (`meteoraDlmm`) and no change to the
-/// existing one. `None` when the pool has no satellite row yet: discovered, but
-/// neither enriched by yog-context nor seen at genesis.
+/// The protocol block is named after its protocol rather than tagged. `None`
+/// when the pool has no satellite row yet: discovered, not enriched by yog-context.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolDetailResponse {
