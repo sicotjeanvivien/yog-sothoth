@@ -5,16 +5,17 @@
  * Display order is most-recent first.
  */
 
+import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
 import {
+  zListPoolSwapsQuery,
   zListPoolSwapsResponse,
   type PageResponseSwapEventResponse,
 } from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
 
 export type FetchPoolSwapEventsParams = {
   cursor?: string | undefined;
@@ -27,7 +28,7 @@ export type FetchPoolSwapEventsParams = {
  * Fetch a paginated page of swap events for a pool.
  *
  * @throws TypeError if `address` is syntactically invalid.
- * @throws RangeError if `limit` is outside `[1, MAX_LIMIT]`.
+ * @throws RangeError if `limit` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 export async function fetchPoolSwapEvents(
@@ -40,11 +41,7 @@ export async function fetchPoolSwapEvents(
 
   const limit = params.limit ?? DEFAULT_LIMIT;
 
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-    throw new RangeError(
-      `\`limit\` must be an integer in [1, ${MAX_LIMIT}], got ${limit}`,
-    );
-  }
+  assertInBounds("limit", limit, zListPoolSwapsQuery.shape.limit.unwrap());
 
   return apiGet(
     `/api/pools/${address}/swap-events`,
@@ -58,8 +55,3 @@ export async function fetchPoolSwapEvents(
     zListPoolSwapsResponse,
   );
 }
-
-export const POOL_SWAPS_QUERY_BOUNDS = {
-  DEFAULT_LIMIT,
-  MAX_LIMIT,
-} as const;

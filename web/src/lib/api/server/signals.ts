@@ -9,13 +9,17 @@
  *     (`pool` param) with full bidirectional pagination.
  */
 
+import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
-import { zListSignalsResponse, type PageResponseSignalResponse } from "../schema/zod.gen";
+import {
+  zListSignalsQuery,
+  zListSignalsResponse,
+  type PageResponseSignalResponse,
+} from "../schema/zod.gen";
 import type { PageDir, PagePosition } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
 
 export type FetchSignalsParams = {
   /** Restrict the feed to one pool's signals (base58 address). */
@@ -30,7 +34,7 @@ export type FetchSignalsParams = {
  * Fetch a page of the signal feed, newest first.
  *
  * @throws TypeError if `pool` is set but syntactically invalid.
- * @throws RangeError if `limit` is outside `[1, MAX_LIMIT]`.
+ * @throws RangeError if `limit` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 export async function fetchSignals(
@@ -42,11 +46,7 @@ export async function fetchSignals(
 
   const limit = params.limit ?? DEFAULT_LIMIT;
 
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-    throw new RangeError(
-      `\`limit\` must be an integer in [1, ${MAX_LIMIT}], got ${limit}`,
-    );
-  }
+  assertInBounds("limit", limit, zListSignalsQuery.shape.limit.unwrap());
 
   return apiGet(
     "/api/signals",
@@ -61,8 +61,3 @@ export async function fetchSignals(
     zListSignalsResponse,
   );
 }
-
-export const SIGNALS_QUERY_BOUNDS = {
-  DEFAULT_LIMIT,
-  MAX_LIMIT,
-} as const;

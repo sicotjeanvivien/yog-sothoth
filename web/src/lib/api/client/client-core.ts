@@ -139,3 +139,15 @@ export function buildUrl(
   }
   return url.toString();
 }
+
+/**
+ * Throws a `RangeError` unless `value` passes `schema`, the generated zod of a
+ * bounded query parameter, whose own bounds the message quotes.
+ */
+export function assertInBounds(name: string, value: number, schema: z.ZodNumber): void {
+  if (!schema.safeParse(value).success) {
+    throw new RangeError(
+      `\`${name}\` must be an integer in [${schema.minValue}, ${schema.maxValue}], got ${value}`,
+    );
+  }
+}
