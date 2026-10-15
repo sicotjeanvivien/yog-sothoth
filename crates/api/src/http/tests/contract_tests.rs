@@ -209,6 +209,29 @@ fn an_option_is_omitted_exactly_when_declared_absent() {
     assert!(unpaired.is_empty(), "{unpaired:?}");
 }
 
+/// Red when a schema is named without `Response` and is not one of the wire
+/// forms `dto/schema.rs` declares.
+#[test]
+fn every_schema_is_a_response_or_a_wire_form() {
+    let schema_rs = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/http/dto/schema.rs");
+    let source = fs::read_to_string(schema_rs).expect("readable schema.rs");
+    let forms: Vec<&str> = source
+        .lines()
+        .filter_map(|l| l.strip_prefix("pub(crate) struct ")?.strip_suffix(';'))
+        .collect();
+    let doc = document();
+    let misnamed: Vec<&String> = doc["components"]["schemas"]
+        .as_object()
+        .expect("schemas")
+        .keys()
+        .filter(|name| !name.ends_with("Response") && !forms.contains(&name.as_str()))
+        .collect();
+    assert!(
+        misnamed.is_empty(),
+        "name these `*Response` (crates/api/README.md, Where a response type goes): {misnamed:?}"
+    );
+}
+
 #[test]
 fn every_operation_answers_its_failures_as_problem_details() {
     let doc = document();
