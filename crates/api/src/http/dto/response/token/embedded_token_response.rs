@@ -21,7 +21,9 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{TokenMetadata, TokenPrice};
 
-use crate::http::dto::response::EmbeddedPriceResponse;
+use super::logo_uri;
+use super::price_response::TokenPriceResponse;
+use crate::application::EnrichedToken;
 
 /// A token, embedded in another resource's response.
 #[derive(Debug, Serialize, ToSchema)]
@@ -47,7 +49,7 @@ pub(crate) struct EmbeddedTokenResponse {
 
     /// Latest known price observation, or `null` when the token has
     /// never been priced.
-    price: Option<EmbeddedPriceResponse>,
+    price: Option<TokenPriceResponse>,
 }
 
 impl EmbeddedTokenResponse {
@@ -70,13 +72,7 @@ impl EmbeddedTokenResponse {
         // showing just the mint with nulls — the dashboard can
         // render a placeholder rather than hiding the pool.
         let (symbol, name, decimals, logo_uri) = match metadata {
-            // Treat an empty logo as absent: the API contract is "URL or null".
-            Some(m) => (
-                m.symbol,
-                m.name,
-                m.decimals,
-                m.logo_uri.filter(|s| !s.is_empty()),
-            ),
+            Some(m) => (m.symbol, m.name, m.decimals, logo_uri(m.logo_uri)),
             None => (None, None, 0, None),
         };
 
@@ -86,21 +82,13 @@ impl EmbeddedTokenResponse {
             name,
             decimals,
             logo_uri,
-            price: price.map(EmbeddedPriceResponse::from),
+            price: price.map(TokenPriceResponse::from),
         }
     }
 }
 
-impl From<TokenPrice> for EmbeddedPriceResponse {
-    fn from(price: TokenPrice) -> Self {
-        Self {
-            usd: price.price_usd,
-            provider: price.price_provider.into(),
-            fetched_at: price.fetched_at,
-        }
+impl From<EnrichedToken> for EmbeddedTokenResponse {
+    fn from(t: EnrichedToken) -> Self {
+        EmbeddedTokenResponse::from_sources(t.mint, t.metadata, t.price)
     }
 }
-
-#[cfg(test)]
-#[path = "tests/embedded_token_tests.rs"]
-mod tests;

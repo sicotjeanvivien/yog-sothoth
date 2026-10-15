@@ -75,30 +75,6 @@
         "minimum": 0,
         "type": "integer"
       },
-      "EmbeddedPriceResponse": {
-        "description": "The price block inside an embedded token. Same shape and intent\nas the one in `TokenResponse`, kept here to keep the embedded\nview self-contained.",
-        "properties": {
-          "fetchedAt": {
-            "description": "When the price was observed.",
-            "format": "date-time",
-            "type": "string"
-          },
-          "provider": {
-            "$ref": "#/components/schemas/PriceProviderResponse",
-            "description": "Origin tag: \"jupiter\" | \"helius\" | \"fallback\"."
-          },
-          "usd": {
-            "$ref": "#/components/schemas/UnsignedDecimal",
-            "description": "USD price."
-          }
-        },
-        "required": [
-          "usd",
-          "provider",
-          "fetchedAt"
-        ],
-        "type": "object"
-      },
       "EmbeddedTokenResponse": {
         "description": "A token, embedded in another resource's response.",
         "properties": {
@@ -133,7 +109,7 @@
           "price": {
             "oneOf": [
               {
-                "$ref": "#/components/schemas/EmbeddedPriceResponse",
+                "$ref": "#/components/schemas/TokenPriceResponse",
                 "description": "Latest known price observation, or `null` when the token has\nnever been priced."
               },
               {
@@ -1637,7 +1613,7 @@
         "type": "object"
       },
       "TokenPriceResponse": {
-        "description": "The price block embedded in `TokenResponse`.",
+        "description": "A token's latest price, in `TokenResponse` and in `EmbeddedTokenResponse`.",
         "properties": {
           "fetchedAt": {
             "description": "When the price was observed.",

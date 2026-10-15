@@ -5,16 +5,17 @@
 //! optional: a mint may have metadata but no price yet (very fresh,
 //! flagged by Jupiter, or no Jupiter call has succeeded for it).
 
+mod embedded_token_response;
 mod price_provider_response;
+mod price_response;
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{TokenMetadata, TokenPrice};
 
-use crate::http::dto::response::TokenPriceResponse;
-
-pub(super) use price_provider_response::PriceProviderResponse;
+pub(super) use embedded_token_response::EmbeddedTokenResponse;
+use price_response::TokenPriceResponse;
 
 /// The token detail payload.
 ///
@@ -61,8 +62,7 @@ impl TokenResponse {
             symbol: metadata.symbol,
             name: metadata.name,
             decimals: metadata.decimals,
-            // Treat an empty logo as absent: the API contract is "URL or null".
-            logo_uri: metadata.logo_uri.filter(|s| !s.is_empty()),
+            logo_uri: logo_uri(metadata.logo_uri),
             fetched_at: metadata.fetched_at,
             last_refresh_at: metadata.last_refresh_at,
             price: price.map(TokenPriceResponse::from),
@@ -70,14 +70,9 @@ impl TokenResponse {
     }
 }
 
-impl From<TokenPrice> for TokenPriceResponse {
-    fn from(price: TokenPrice) -> Self {
-        Self {
-            usd: price.price_usd,
-            provider: price.price_provider.into(),
-            fetched_at: price.fetched_at,
-        }
-    }
+/// An empty logo is absent: the API contract is "URL or null".
+fn logo_uri(raw: Option<String>) -> Option<String> {
+    raw.filter(|s| !s.is_empty())
 }
 
 #[cfg(test)]

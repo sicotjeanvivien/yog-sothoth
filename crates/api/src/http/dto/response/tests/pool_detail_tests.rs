@@ -5,8 +5,8 @@ use yog_core::domain::{
 
 use super::{MeteoraDammV2PropertiesResponse, MeteoraDlmmPropertiesResponse, PoolDetailResponse};
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
-use crate::http::dto::EmbeddedTokenResponse;
 use crate::http::dto::PoolResponse;
+use crate::http::dto::response::token::EmbeddedTokenResponse;
 use crate::testing::{make_pool, pk};
 
 // ---------------------------------------------------------------------------

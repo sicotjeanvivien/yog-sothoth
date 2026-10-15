@@ -7,8 +7,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use super::pool::ProtocolResponse;
+use super::token::EmbeddedTokenResponse;
 use crate::application::EnrichedSignal;
-use crate::http::dto::EmbeddedTokenResponse;
 use crate::http::dto::schema::{Count, SignedDecimal, UnsignedDecimal};
 
 pub(super) use severity_response::SeverityResponse;

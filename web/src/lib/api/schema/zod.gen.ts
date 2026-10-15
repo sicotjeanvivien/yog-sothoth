@@ -177,25 +177,6 @@ export const zUnsignedDecimal = z.string().regex(/^\d+(\.\d+)?$/);
 
 export type UnsignedDecimal = z.infer<typeof zUnsignedDecimal>;
 
-export const zEmbeddedPriceResponse = z.object({
-    fetchedAt: z.iso.datetime({ offset: true }),
-    provider: zPriceProviderResponse,
-    usd: zUnsignedDecimal
-});
-
-export type EmbeddedPriceResponse = z.infer<typeof zEmbeddedPriceResponse>;
-
-export const zEmbeddedTokenResponse = z.object({
-    decimals: z.int().gte(0),
-    logoUri: z.url().nullable(),
-    mint: z.string().nullable(),
-    name: z.string().nullable(),
-    price: zEmbeddedPriceResponse.nullable(),
-    symbol: z.string().nullable()
-});
-
-export type EmbeddedTokenResponse = z.infer<typeof zEmbeddedTokenResponse>;
-
 export const zFeeTierResponse = z.object({
     feeBps: zUnsignedDecimal,
     poolCount: zCount
@@ -258,6 +239,71 @@ export const zPageResponseLiquidityEventResponse = z.object({
 
 export type PageResponseLiquidityEventResponse = z.infer<typeof zPageResponseLiquidityEventResponse>;
 
+export const zPoolCurrentStateResponse = z.object({
+    lastEventAt: z.iso.datetime({ offset: true }),
+    lastEventKind: zLastEventKindResponse,
+    lastSignature: z.string().min(1),
+    lastSqrtPrice: zU128String.nullable(),
+    lastSwapAt: z.iso.datetime({ offset: true }).nullable(),
+    poolAddress: z.string().min(1),
+    protocol: zProtocolResponse,
+    reserveA: zU128String,
+    reserveB: zU128String,
+    spotPriceAInB: zUnsignedDecimal.nullable(),
+    updatedAt: z.iso.datetime({ offset: true })
+});
+
+export type PoolCurrentStateResponse = z.infer<typeof zPoolCurrentStateResponse>;
+
+export const zPoolHistoryBucketResponse = z.object({
+    bucket: z.iso.datetime({ offset: true }),
+    effectiveFeeBps: zUnsignedDecimal.nullable(),
+    feesClaimedUsd: zUnsignedDecimal.nullable(),
+    feesUsd: zUnsignedDecimal.nullable(),
+    liquidityAddedUsd: zUnsignedDecimal.nullable(),
+    liquidityRemovedUsd: zUnsignedDecimal.nullable(),
+    lpFeesUsd: zUnsignedDecimal.nullable(),
+    protocolFeesUsd: zUnsignedDecimal.nullable(),
+    referralFeesUsd: zUnsignedDecimal.nullable(),
+    rewardsClaimedUsd: zUnsignedDecimal.nullable(),
+    swapCount: zCount.nullable(),
+    volumeUsd: zUnsignedDecimal.nullable()
+});
+
+export type PoolHistoryBucketResponse = z.infer<typeof zPoolHistoryBucketResponse>;
+
+export const zStatsResponse = z.object({
+    fees24hUsd: zUnsignedDecimal.nullable(),
+    poolsDiscovered24h: zCount,
+    poolsObserved: zCount,
+    poolsPriced: zCount,
+    swapBuckets24h: zCount,
+    swapBucketsPriced24h: zCount,
+    totalTvlUsd: zUnsignedDecimal.nullable(),
+    volume24hUsd: zUnsignedDecimal.nullable()
+});
+
+export type StatsResponse = z.infer<typeof zStatsResponse>;
+
+export const zTokenPriceResponse = z.object({
+    fetchedAt: z.iso.datetime({ offset: true }),
+    provider: zPriceProviderResponse,
+    usd: zUnsignedDecimal
+});
+
+export type TokenPriceResponse = z.infer<typeof zTokenPriceResponse>;
+
+export const zEmbeddedTokenResponse = z.object({
+    decimals: z.int().gte(0),
+    logoUri: z.url().nullable(),
+    mint: z.string().nullable(),
+    name: z.string().nullable(),
+    price: zTokenPriceResponse.nullable(),
+    symbol: z.string().nullable()
+});
+
+export type EmbeddedTokenResponse = z.infer<typeof zEmbeddedTokenResponse>;
+
 export const zPageResponsePoolResponse = z.object({
     isFirst: z.boolean(),
     isLast: z.boolean(),
@@ -307,39 +353,6 @@ export const zPageResponseSignalResponse = z.object({
 });
 
 export type PageResponseSignalResponse = z.infer<typeof zPageResponseSignalResponse>;
-
-export const zPoolCurrentStateResponse = z.object({
-    lastEventAt: z.iso.datetime({ offset: true }),
-    lastEventKind: zLastEventKindResponse,
-    lastSignature: z.string().min(1),
-    lastSqrtPrice: zU128String.nullable(),
-    lastSwapAt: z.iso.datetime({ offset: true }).nullable(),
-    poolAddress: z.string().min(1),
-    protocol: zProtocolResponse,
-    reserveA: zU128String,
-    reserveB: zU128String,
-    spotPriceAInB: zUnsignedDecimal.nullable(),
-    updatedAt: z.iso.datetime({ offset: true })
-});
-
-export type PoolCurrentStateResponse = z.infer<typeof zPoolCurrentStateResponse>;
-
-export const zPoolHistoryBucketResponse = z.object({
-    bucket: z.iso.datetime({ offset: true }),
-    effectiveFeeBps: zUnsignedDecimal.nullable(),
-    feesClaimedUsd: zUnsignedDecimal.nullable(),
-    feesUsd: zUnsignedDecimal.nullable(),
-    liquidityAddedUsd: zUnsignedDecimal.nullable(),
-    liquidityRemovedUsd: zUnsignedDecimal.nullable(),
-    lpFeesUsd: zUnsignedDecimal.nullable(),
-    protocolFeesUsd: zUnsignedDecimal.nullable(),
-    referralFeesUsd: zUnsignedDecimal.nullable(),
-    rewardsClaimedUsd: zUnsignedDecimal.nullable(),
-    swapCount: zCount.nullable(),
-    volumeUsd: zUnsignedDecimal.nullable()
-});
-
-export type PoolHistoryBucketResponse = z.infer<typeof zPoolHistoryBucketResponse>;
 
 export const zPoolPageResponsePoolResponse = zPageResponsePoolResponse.and(z.object({
     asOf: z.string().nullable(),
@@ -392,27 +405,6 @@ export const zSignalResponse = z.object({
 });
 
 export type SignalResponse = z.infer<typeof zSignalResponse>;
-
-export const zStatsResponse = z.object({
-    fees24hUsd: zUnsignedDecimal.nullable(),
-    poolsDiscovered24h: zCount,
-    poolsObserved: zCount,
-    poolsPriced: zCount,
-    swapBuckets24h: zCount,
-    swapBucketsPriced24h: zCount,
-    totalTvlUsd: zUnsignedDecimal.nullable(),
-    volume24hUsd: zUnsignedDecimal.nullable()
-});
-
-export type StatsResponse = z.infer<typeof zStatsResponse>;
-
-export const zTokenPriceResponse = z.object({
-    fetchedAt: z.iso.datetime({ offset: true }),
-    provider: zPriceProviderResponse,
-    usd: zUnsignedDecimal
-});
-
-export type TokenPriceResponse = z.infer<typeof zTokenPriceResponse>;
 
 export const zTokenResponse = z.object({
     decimals: z.int().gte(0),

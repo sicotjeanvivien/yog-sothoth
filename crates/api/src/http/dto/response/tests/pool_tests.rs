@@ -1,5 +1,5 @@
 use super::{PoolResponse, PoolSignalResponse, ProtocolResponse, effective_fee_bps};
-use crate::http::dto::EmbeddedTokenResponse;
+use crate::http::dto::response::token::EmbeddedTokenResponse;
 use crate::testing::{make_pool, make_signal_record, pk, wire_tag};
 use rust_decimal::Decimal;
 use yog_core::domain::PoolAnalytics;

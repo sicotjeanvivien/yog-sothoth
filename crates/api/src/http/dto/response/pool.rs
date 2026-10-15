@@ -7,11 +7,9 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{Pool, PoolAnalytics, SignalRecord};
 
+use super::token::EmbeddedTokenResponse;
+use crate::application::EnrichedPool;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
-use crate::{
-    application::{EnrichedPool, EnrichedToken},
-    http::dto::EmbeddedTokenResponse,
-};
 
 pub(super) use protocol_response::ProtocolResponse;
 use signal_response::PoolSignalResponse;
@@ -160,12 +158,6 @@ impl PoolResponse {
             first_seen_at: pool.first_seen_at,
             last_seen_at: pool.last_seen_at,
         }
-    }
-}
-
-impl From<EnrichedToken> for EmbeddedTokenResponse {
-    fn from(t: EnrichedToken) -> Self {
-        EmbeddedTokenResponse::from_sources(t.mint, t.metadata, t.price)
     }
 }
 
