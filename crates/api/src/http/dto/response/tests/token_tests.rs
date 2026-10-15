@@ -99,6 +99,17 @@ fn empty_logo_uri_serializes_as_null() {
     assert!(j["logoUri"].is_null(), "empty logo must be null, not \"\"");
 }
 
+#[test]
+fn embedded_token_filters_its_logo() {
+    // Mutation: `from_sources` keeping any non-empty logo.
+    let mut meta = full_metadata(mint());
+    meta.logo_uri = Some("token-image.png".to_string());
+
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(meta), None);
+
+    assert!(to_json(&dto)["logoUri"].is_null());
+}
+
 // ── Branch 2: metadata absent ────────────────────────────────────────
 
 #[test]
