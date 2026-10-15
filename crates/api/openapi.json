@@ -1868,6 +1868,7 @@
             "name": "q",
             "required": false,
             "schema": {
+              "maxLength": 100,
               "type": [
                 "string",
                 "null"

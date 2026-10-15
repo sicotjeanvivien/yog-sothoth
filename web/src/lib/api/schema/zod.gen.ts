@@ -436,7 +436,7 @@ export const zListPoolsQuery = z.object({
         'last_seen_desc',
         'last_seen_asc'
     ]).optional(),
-    q: z.string().nullish(),
+    q: z.string().max(100).nullish(),
     fee_bps: z.string().nullish(),
     limit: z.int().gte(1).lte(200).optional()
 });

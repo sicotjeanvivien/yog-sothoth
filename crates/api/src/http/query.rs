@@ -33,6 +33,7 @@ pub(crate) struct PageQuery {
     #[serde(default)]
     #[param(inline)]
     pub(crate) sort: PoolSortParam,
+    #[param(max_length = 100)]
     pub(crate) q: Option<String>,
     /// Exact base-fee tier filter (basis points), as a decimal string on the
     /// wire (e.g. `fee_bps=25`). Parsed and validated in the request DTO.

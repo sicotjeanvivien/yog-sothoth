@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::{document, finish};
-use crate::http::query::{MAX_HISTORY_DAYS, MAX_LIMIT, MAX_TOP_LIMIT};
+use crate::http::query::{MAX_HISTORY_DAYS, MAX_LIMIT, MAX_SEARCH_LEN, MAX_TOP_LIMIT};
 
 const COMMITTED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/openapi.json");
 
@@ -202,6 +202,11 @@ fn the_documented_bounds_are_the_validated_ones() {
     for (path, item) in doc["paths"].as_object().expect("paths") {
         for param in item["get"]["parameters"].as_array().into_iter().flatten() {
             let max = match (path.as_str(), param["name"].as_str()) {
+                (_, Some("q")) => {
+                    assert_eq!(param["schema"]["maxLength"], MAX_SEARCH_LEN, "{path}");
+                    seen += 1;
+                    continue;
+                }
                 ("/api/pools/top", Some("limit")) => MAX_TOP_LIMIT,
                 (_, Some("limit")) => MAX_LIMIT,
                 (_, Some("days")) => MAX_HISTORY_DAYS,
@@ -212,7 +217,7 @@ fn the_documented_bounds_are_the_validated_ones() {
             seen += 1;
         }
     }
-    assert_eq!(seen, 6, "limit on five routes, days on one");
+    assert_eq!(seen, 7, "limit on five routes, days and q on one each");
 }
 
 /// Red when `skip_serializing_if` and `nullable = false` part: without the

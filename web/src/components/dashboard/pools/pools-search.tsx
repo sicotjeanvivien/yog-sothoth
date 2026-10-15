@@ -24,6 +24,9 @@ import { useTranslations } from "next-intl";
 
 import { useRouter, usePathname } from "@/i18n/navigation";
 import { SearchIcon, CloseIcon } from "@/components/shared/icon"; // adapt if names differ
+import { zListPoolsQuery } from "@/lib/api/schema/zod.gen";
+
+const SEARCH_MAX_LENGTH = zListPoolsQuery.shape.q.unwrap().unwrap().maxLength ?? undefined;
 
 const DEBOUNCE_MS = 300;
 
@@ -103,7 +106,7 @@ export function PoolsSearch() {
         onChange={(e) => setValue(e.target.value)}
         placeholder={t("placeholder")}
         aria-label={t("ariaLabel")}
-        maxLength={100}
+        maxLength={SEARCH_MAX_LENGTH}
         className="
           w-full rounded-md border border-sothoth-500/20 bg-cosmos-900/60
           py-2 pl-9 pr-9 text-sm text-slate-100 placeholder:text-slate-500
