@@ -136,7 +136,7 @@
         "type": "object"
       },
       "FeeTierResponse": {
-        "description": "Wire shape of one pools fee-filter option — a base-fee tier and how many\npools carry it.\n\n`fee_bps` is basis points, serialised as a `rust_decimal` string like\n`feeBps` on the pool responses (precision-safe). `pool_count` is a plain\nJSON number. The list is the *most common* tiers only, ascending by fee —\nsee [`yog_core::domain::PoolCatalog::list_fee_tiers`].",
+        "description": "One option of the pools fee filter: a base-fee tier and how many pools carry\nit. The list holds the most common tiers only, ascending by fee.",
         "properties": {
           "feeBps": {
             "$ref": "#/components/schemas/UnsignedDecimal"
@@ -279,7 +279,7 @@
             ]
           },
           "feeSchedulerExpired": {
-            "description": "Whether the decay has finished — `currentFeeBps` will not move again.\n`None` under the same conditions as above.\n\nIt is the *floor* in every case a real account can produce. The one\nexception is a curve with a zero `period_frequency`, which never advances\nand stays at its **cliff** while still reporting as finished — cp-amm\nsays the same, and its `validate` makes the combination unreachable on\nchain.",
+            "description": "Whether the decay has finished — `currentFeeBps` will not move again.\n`None` under the same conditions as `currentFeeBps`.\n⚠️ A zero `period_frequency` stays at its cliff while reporting finished;\ncp-amm's `validate` makes it unreachable on chain.",
             "type": [
               "boolean",
               "null"
@@ -293,7 +293,7 @@
             ]
           },
           "protocolFeePercent": {
-            "description": "Fee-split percents (0..=100) from the on-chain pool account: Meteora's\ncut and a referrer's cut of the trading fee.\n\nThere is no partner cut. `partnerFeePercent` was served here until\nmigration 037; it decoded a padding byte and was always 0.",
+            "description": "Fee-split percents (0..=100) from the on-chain pool account: Meteora's\ncut and a referrer's cut of the trading fee.",
             "format": "u-int8",
             "maximum": 100,
             "minimum": 0,
@@ -323,7 +323,7 @@
         "type": "object"
       },
       "MeteoraDlmmPropertiesResponse": {
-        "description": "DLMM-only pool properties (baseline §9's satellite table).\n\nEvery field is optional together, not independently: all six come from one\nread of one `LbPair` account, so they are present for a resolved pool and\nabsent for one yog-context has not reached.\n\nThe pool's *state* — the active bin, the volatility accumulator — is not\nhere. It moves on every swap and belongs to the current-state surface.",
+        "description": "DLMM-only pool properties. All six come from one read of the `LbPair`\naccount: present together for a resolved pool, absent together otherwise.",
         "properties": {
           "baseFactor": {
             "description": "The two other inputs to the pool's base fee, served raw so a client can\nrecompute `feeBps` rather than trust it: `baseFactor × binStep ×\n10^baseFeePowerFactor / 10_000`.",
@@ -390,7 +390,7 @@
         "type": "object"
       },
       "NetworkStatusResponse": {
-        "description": "The \"Solana Live\" panel payload.\n\nTwo concerns combined, and they **fail separately** — which is the whole\nreason they sit side by side: the chain itself (slot + RPC latency, from the\n`network_status` singleton, measured over an endpoint chosen for being\nindependent of ingestion) and ingestion freshness (derived from the most\nrecent indexed event, with no network call at all).\n\nSo the first pair answers *is the chain advancing, and how far away is it*,\nand the second *is our ingestion keeping up*. Reading the first as the\nhealth of our own link is the mistake this panel is built to prevent, and\nthe one the indexer's probe itself made until 21 September 2026.",
+        "description": "Where the chain is (slot, probe latency) and whether ingestion keeps up. The\ntwo fail apart: the probe's endpoint is not the one ingestion uses.",
         "properties": {
           "freshness": {
             "$ref": "#/components/schemas/FreshnessStatusResponse",
@@ -417,7 +417,7 @@
           },
           "slot": {
             "$ref": "#/components/schemas/U128String",
-            "description": "Latest Solana slot the probe saw.\n\nSerialized as a string: slots are u64 and can exceed the safe\ninteger range of a JSON number consumer."
+            "description": "Latest Solana slot the probe saw."
           }
         },
         "required": [
@@ -430,7 +430,7 @@
         "type": "object"
       },
       "PageResponse_LiquidityEventResponse": {
-        "description": "Wire shape of a paginated response.\n\nGeneric over the item type so every paginated endpoint shares the\nsame envelope. Carries enough information for the client to render\nPrevious / Next / First / Last navigation without follow-up calls:\n\n- `nextCursor` / `prevCursor` are opaque strings used to fetch the\n  adjacent pages. Either may be `null` when the current page sits\n  at the corresponding boundary.\n- `isFirst` / `isLast` are explicit boundary flags. They are not\n  redundant with cursor nullity: a single-page result has both\n  cursors `null` AND both flags `true`, which the client uses to\n  disable all four navigation buttons.",
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
           "isFirst": {
             "type": "boolean"
@@ -544,7 +544,7 @@
         "type": "object"
       },
       "PageResponse_PoolResponse": {
-        "description": "Wire shape of a paginated response.\n\nGeneric over the item type so every paginated endpoint shares the\nsame envelope. Carries enough information for the client to render\nPrevious / Next / First / Last navigation without follow-up calls:\n\n- `nextCursor` / `prevCursor` are opaque strings used to fetch the\n  adjacent pages. Either may be `null` when the current page sits\n  at the corresponding boundary.\n- `isFirst` / `isLast` are explicit boundary flags. They are not\n  redundant with cursor nullity: a single-page result has both\n  cursors `null` AND both flags `true`, which the client uses to\n  disable all four navigation buttons.",
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
           "isFirst": {
             "type": "boolean"
@@ -554,13 +554,13 @@
           },
           "items": {
             "items": {
-              "description": "Wire shape of a pool in API responses.\n\nIndependent from the domain `Pool` so the public contract can evolve\n(rename `pool_address` → `address`, etc.) without breaking internal\nrepresentations. Pubkeys are formatted as base58, protocol as\nsnake_case (matching its `Serialize` impl).\n\nAnalytics (TVL, 24h volume) are denominated in USD. They are\n`Option` because their computation requires data that may not be\navailable yet (no current state, no priced token, no swap in the\nwindow). Serialised as JSON **strings** via `rust_decimal`'s default\nrepresentation, which keeps the trailing digits a JS `number` would drop.\n\nA non-null 24h figure is not necessarily a *complete* one: the sum skips\nthe hours it cannot value. `swapBuckets24h` / `swapBucketsPriced24h` carry\nthat coverage so a partial total cannot pass for a full one.",
+              "description": "A pool in API responses. A 24h USD figure skips the hours it cannot value:\n`swapBucketsPriced24h` of `swapBuckets24h` says how much of the window it\ncovers.",
               "properties": {
                 "effectiveFeeBps": {
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Effective realized fee rate in basis points (`fees / volume * 10000`)\nover the 24h window. `None` when volume is absent or zero.\n\nNOT affected by the coverage below, and deliberately so: fees and volume\nare lost on exactly the same buckets (one valuation, one join), so an\nunvalued hour leaves the ratio's numerator AND denominator together.\nOnly the absolute values are clipped. Do not \"fix\" this one.\n\nRead it precisely, though: the cancellation is exact per bucket, but this\nis a ratio of 24h *sums*, so it is the realized rate **of the covered\nhours**, not of the window. Unbiased as far as anyone knows — nothing\nlinks an hour's fee tier to whether its tokens were priced — but it is\nnot the same statement as \"the rate is unaffected\"."
+                      "description": "Realized fee rate over the 24h window, in bps (`fees / volume × 10 000`), of\nthe hours that could be valued; `None` when volume is absent or zero.\n⚠️ Not clipped by the coverage: fees and volume are lost on the same buckets."
                     },
                     {
                       "type": "null"
@@ -571,7 +571,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Base trading fee in basis points (genesis fee tier). `None` until the\npool's `InitializePool` event has been indexed."
+                      "description": "Base trading fee in basis points (the genesis tier). `None` while the pool\nis unresolved."
                     },
                     {
                       "type": "null"
@@ -582,7 +582,7 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/UnsignedDecimal",
-                      "description": "Realized trading fee over the last 24h (USD), and its three shares:\nMeteora's cut, the referrer's cut, and what is left for the LPs. They\nsum back to `fees_24h_usd` exactly, and are `None` together with it,\nunder the same partial-price coverage rules as `volume_24h_usd`.\n\nAll four are read straight from the analytics — the split is computed\nonce in SQL. `lp_fees_24h_usd` is **not** `fees - protocol`: cp-amm\ntakes the referral out of the protocol share, so that formula credits\nit to the LPs (corrected by migration 007). Do not reintroduce it here."
+                      "description": "Realized trading fee over the last 24h (USD); its three shares below sum\nback to it exactly, and are `None` together with it.\n⚠️ `lpFees24hUsd` is not `fees − protocol`: cp-amm takes the referral out\nof the protocol share. All four are read from the analytics."
                     },
                     {
                       "type": "null"
@@ -635,7 +635,7 @@
                   ]
                 },
                 "signals24h": {
-                  "description": "Signals emitted by this pool over the last 24h, newest first,\ncapped per pool (service-side). Empty when the pool was quiet —\nthe indicator's window is fixed server-side, like the 24h\nanalytics above.",
+                  "description": "The pool's signals over the last 24h, newest first, capped per pool. Empty\nwhen the pool was quiet.",
                   "items": {
                     "$ref": "#/components/schemas/PoolSignalResponse"
                   },
@@ -643,7 +643,7 @@
                 },
                 "swapBuckets24h": {
                   "$ref": "#/components/schemas/Count",
-                  "description": "Coverage of the five swap-derived USD figures above — `volume_24h_usd`\nand the four fee figures, **not** `tvl_usd`, which is valued at the\nlatest price rather than per bucket: hours of the window that had at\nleast one swap, and how many of them could be valued. Shipped as raw\ncounters like `poolsPriced`/`poolsObserved` on `/api/stats` — the\npresentation layer turns them into a coverage label. Equal values mean\nfull coverage; a lower numerator means the sums are sub-totals."
+                  "description": "Coverage of the volume and fee figures, not `tvlUsd`: hours of the window\nwith at least one swap, and how many could be valued. Equal values mean\nfull coverage."
                 },
                 "swapBucketsPriced24h": {
                   "$ref": "#/components/schemas/Count"
@@ -721,7 +721,7 @@
         "type": "object"
       },
       "PageResponse_SignalResponse": {
-        "description": "Wire shape of a paginated response.\n\nGeneric over the item type so every paginated endpoint shares the\nsame envelope. Carries enough information for the client to render\nPrevious / Next / First / Last navigation without follow-up calls:\n\n- `nextCursor` / `prevCursor` are opaque strings used to fetch the\n  adjacent pages. Either may be `null` when the current page sits\n  at the corresponding boundary.\n- `isFirst` / `isLast` are explicit boundary flags. They are not\n  redundant with cursor nullity: a single-page result has both\n  cursors `null` AND both flags `true`, which the client uses to\n  disable all four navigation buttons.",
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
           "isFirst": {
             "type": "boolean"
@@ -769,7 +769,7 @@
                 },
                 "tokenA": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse",
-                  "description": "The pool's token pair, embedded in the same shape as\n`PoolResponse` (`EmbeddedTokenResponse`). Every field inside is\nnullable — a pool not yet resolved by yog-context embeds the\nminimal view, and the client falls back to `pool_address`."
+                  "description": "The pool's token pair: every field nullable until yog-context resolves\nthe pool."
                 },
                 "tokenB": {
                   "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -822,7 +822,7 @@
         "type": "object"
       },
       "PageResponse_SwapEventResponse": {
-        "description": "Wire shape of a paginated response.\n\nGeneric over the item type so every paginated endpoint shares the\nsame envelope. Carries enough information for the client to render\nPrevious / Next / First / Last navigation without follow-up calls:\n\n- `nextCursor` / `prevCursor` are opaque strings used to fetch the\n  adjacent pages. Either may be `null` when the current page sits\n  at the corresponding boundary.\n- `isFirst` / `isLast` are explicit boundary flags. They are not\n  redundant with cursor nullity: a single-page result has both\n  cursors `null` AND both flags `true`, which the client uses to\n  disable all four navigation buttons.",
+        "description": "The envelope of every paginated response. `nextCursor`/`prevCursor` are\nopaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with\nthem — a single page has both cursors `null` and both flags `true`.",
         "properties": {
           "isFirst": {
             "type": "boolean"
@@ -933,7 +933,7 @@
         "type": "object"
       },
       "PoolCurrentStateResponse": {
-        "description": "`GET /api/pools/{address}/latest-state` response body.\n\n`reserve_a` / `reserve_b` (u64) and `last_sqrt_price` (u128) are all\nemitted as JSON strings to preserve their full range across the JS bridge —\na JSON-number consumer truncates above 2^53.\n\nThere is no liquidity `L` here, deliberately: the field that claimed to be\none published a position's unsigned `liquidity_delta` instead, and was\nremoved in migration 003. Per-movement liquidity lives on\n`GET /api/pools/{address}/liquidity-events`, under its own name and next to\nthe add/remove kind that gives it a sign.",
+        "description": "The latest observed state of a pool. There is no liquidity `L` here: the\nper-movement liquidity is on `/liquidity-events`, beside the kind that signs it.",
         "properties": {
           "lastEventAt": {
             "format": "date-time",
@@ -981,7 +981,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "Spot price derived from `last_sqrt_price`: units of token B per 1 token\nA, in human (decimal-adjusted) terms. This is the true DAMM v2 price\n(concentrated liquidity), **not** the reserve ratio. `None` when there\nis no `sqrt_price` yet or the token decimals are unresolved. Serialized\nas a string (`rust_decimal` default) to match the other prices."
+                "description": "Units of token B per token A, decimal-adjusted, from `last_sqrt_price`: the\nconcentrated-liquidity price, not the reserve ratio. `None` without a\n`sqrt_price` or with unresolved decimals."
               },
               {
                 "type": "null"
@@ -1185,16 +1185,16 @@
             "type": "object"
           }
         ],
-        "description": "Wire shape of `GET /api/pools` — the standard envelope plus what the pool\nlisting alone needs to say about its traversal.\n\nFlattened rather than a field of its own so the four paginated endpoints\nkeep one envelope on the wire: a client reads `items` / `nextCursor` /\n`isLast` the same way here as on the event feeds.\n\n- `asOf` is the instant this traversal is anchored to. `null` when the sort\n  is over an immutable column, which needs no anchor.\n- `touchedSince` is how many pools matching the same filters became active\n  after `asOf`, and so moved to the **end of the ordering** — the head of\n  the list under `last_seen_desc`, its tail under `last_seen_asc`. It exists\n  so that a listing which cannot show those pools can at least say how many\n  there are; a client that reports it should send the reader to the end the\n  sort actually points at, not to the first page in both cases.\n\n`touchedSince` is `0` whenever the anchor was minted by that same call — a\nfirst page, or a `position` jump — but **not** on a backward page that lands\nback on the first page: it carries a cursor, so it carries a real count. It\nis also an upper bound on what the reader missed rather than a count of it;\n`crates/api/README.md` states both caveats in full."
+        "description": "The page envelope, flattened, plus `asOf` — the instant the traversal is\nanchored to, `null` on an immutable sort — and `touchedSince`, an upper bound\non the pools active since `asOf` (see `crates/api/README.md`)."
       },
       "PoolResponse": {
-        "description": "Wire shape of a pool in API responses.\n\nIndependent from the domain `Pool` so the public contract can evolve\n(rename `pool_address` → `address`, etc.) without breaking internal\nrepresentations. Pubkeys are formatted as base58, protocol as\nsnake_case (matching its `Serialize` impl).\n\nAnalytics (TVL, 24h volume) are denominated in USD. They are\n`Option` because their computation requires data that may not be\navailable yet (no current state, no priced token, no swap in the\nwindow). Serialised as JSON **strings** via `rust_decimal`'s default\nrepresentation, which keeps the trailing digits a JS `number` would drop.\n\nA non-null 24h figure is not necessarily a *complete* one: the sum skips\nthe hours it cannot value. `swapBuckets24h` / `swapBucketsPriced24h` carry\nthat coverage so a partial total cannot pass for a full one.",
+        "description": "A pool in API responses. A 24h USD figure skips the hours it cannot value:\n`swapBucketsPriced24h` of `swapBuckets24h` says how much of the window it\ncovers.",
         "properties": {
           "effectiveFeeBps": {
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "Effective realized fee rate in basis points (`fees / volume * 10000`)\nover the 24h window. `None` when volume is absent or zero.\n\nNOT affected by the coverage below, and deliberately so: fees and volume\nare lost on exactly the same buckets (one valuation, one join), so an\nunvalued hour leaves the ratio's numerator AND denominator together.\nOnly the absolute values are clipped. Do not \"fix\" this one.\n\nRead it precisely, though: the cancellation is exact per bucket, but this\nis a ratio of 24h *sums*, so it is the realized rate **of the covered\nhours**, not of the window. Unbiased as far as anyone knows — nothing\nlinks an hour's fee tier to whether its tokens were priced — but it is\nnot the same statement as \"the rate is unaffected\"."
+                "description": "Realized fee rate over the 24h window, in bps (`fees / volume × 10 000`), of\nthe hours that could be valued; `None` when volume is absent or zero.\n⚠️ Not clipped by the coverage: fees and volume are lost on the same buckets."
               },
               {
                 "type": "null"
@@ -1205,7 +1205,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "Base trading fee in basis points (genesis fee tier). `None` until the\npool's `InitializePool` event has been indexed."
+                "description": "Base trading fee in basis points (the genesis tier). `None` while the pool\nis unresolved."
               },
               {
                 "type": "null"
@@ -1216,7 +1216,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/UnsignedDecimal",
-                "description": "Realized trading fee over the last 24h (USD), and its three shares:\nMeteora's cut, the referrer's cut, and what is left for the LPs. They\nsum back to `fees_24h_usd` exactly, and are `None` together with it,\nunder the same partial-price coverage rules as `volume_24h_usd`.\n\nAll four are read straight from the analytics — the split is computed\nonce in SQL. `lp_fees_24h_usd` is **not** `fees - protocol`: cp-amm\ntakes the referral out of the protocol share, so that formula credits\nit to the LPs (corrected by migration 007). Do not reintroduce it here."
+                "description": "Realized trading fee over the last 24h (USD); its three shares below sum\nback to it exactly, and are `None` together with it.\n⚠️ `lpFees24hUsd` is not `fees − protocol`: cp-amm takes the referral out\nof the protocol share. All four are read from the analytics."
               },
               {
                 "type": "null"
@@ -1269,7 +1269,7 @@
             ]
           },
           "signals24h": {
-            "description": "Signals emitted by this pool over the last 24h, newest first,\ncapped per pool (service-side). Empty when the pool was quiet —\nthe indicator's window is fixed server-side, like the 24h\nanalytics above.",
+            "description": "The pool's signals over the last 24h, newest first, capped per pool. Empty\nwhen the pool was quiet.",
             "items": {
               "$ref": "#/components/schemas/PoolSignalResponse"
             },
@@ -1277,7 +1277,7 @@
           },
           "swapBuckets24h": {
             "$ref": "#/components/schemas/Count",
-            "description": "Coverage of the five swap-derived USD figures above — `volume_24h_usd`\nand the four fee figures, **not** `tvl_usd`, which is valued at the\nlatest price rather than per bucket: hours of the window that had at\nleast one swap, and how many of them could be valued. Shipped as raw\ncounters like `poolsPriced`/`poolsObserved` on `/api/stats` — the\npresentation layer turns them into a coverage label. Equal values mean\nfull coverage; a lower numerator means the sums are sub-totals."
+            "description": "Coverage of the volume and fee figures, not `tvlUsd`: hours of the window\nwith at least one swap, and how many could be valued. Equal values mean\nfull coverage."
           },
           "swapBucketsPriced24h": {
             "$ref": "#/components/schemas/Count"
@@ -1331,7 +1331,7 @@
         "type": "object"
       },
       "PoolSignalResponse": {
-        "description": "Wire shape of one entry of a pool's recent-signals list — the\npools-list signal indicator. Deliberately slimmer than the feed's\n`SignalResponse`: the indicator needs severity, kind and recency,\nnothing else; the full signal lives on the pool's Alerts tab.",
+        "description": "One entry of a pool's recent-signals indicator: severity, detector and time\nonly; the full signal lives on the feed.",
         "properties": {
           "detector": {
             "minLength": 1,
@@ -1362,7 +1362,7 @@
         "type": "string"
       },
       "ProblemDetailsResponse": {
-        "description": "Problem Details for HTTP APIs — the wire shape returned for every\nerror response.\n\nField semantics, all per RFC 9457 §3:\n\n  - `type` — URI reference identifying the problem type. Opaque\n    to clients except for equality comparison. `\"about:blank\"` is\n    the reserved value meaning \"no specific type, see `title`\".\n  - `title` — short, human-readable summary. Should not change\n    across occurrences of the same problem type. Clients can\n    branch on `(type, title)` together.\n  - `status` — the HTTP status code. Redundant with the response\n    line, but useful for clients that log only the body.\n  - `detail` — human-readable per-occurrence message. May vary\n    across occurrences of the same type. This is where the\n    contextual information lives (\"invalid pool address: foo\").\n\n`instance` is intentionally omitted: it would carry the request\npath, which the client already knows. It can be added later\nwithout breaking the contract (it's an optional field).",
+        "description": "RFC 9457 Problem Details, the body of every error response. `type` is\n`\"about:blank\"` until specific problem types exist, so clients branch on\n`title`; `instance` is omitted, the client knows the path.",
         "properties": {
           "detail": {
             "type": "string"
@@ -1443,7 +1443,7 @@
           },
           "tokenA": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse",
-            "description": "The pool's token pair, embedded in the same shape as\n`PoolResponse` (`EmbeddedTokenResponse`). Every field inside is\nnullable — a pool not yet resolved by yog-context embeds the\nminimal view, and the client falls back to `pool_address`."
+            "description": "The pool's token pair: every field nullable until yog-context resolves\nthe pool."
           },
           "tokenB": {
             "$ref": "#/components/schemas/EmbeddedTokenResponse"
@@ -1476,7 +1476,7 @@
         "type": "string"
       },
       "StatsResponse": {
-        "description": "Protocol-wide statistics payload.\n\nThree USD aggregates plus two pool counters:\n  - `total_tvl_usd` + `pools_priced`: summed current TVL and how many pools\n    it covers (the coverage numerator; denominator is `pools_observed`).\n  - `volume_24h_usd` / `fees_24h_usd`: summed realized volume and trading\n    fee over the last 24h, trade-time valued — with\n    `swap_buckets_priced_24h` / `swap_buckets_24h` as *their* coverage, the\n    same numerator/denominator pattern as the TVL pair above: (pool, hour)\n    buckets that had swaps, and how many of them could be valued. The sum\n    skips what it cannot value, so without this pair a partially covered\n    total is indistinguishable from a complete one.\n  - `pools_observed`: every pool ever seen. `pools_discovered_24h`: those\n    first seen in the last 24h (the discovery pulse).",
+        "description": "Protocol-wide totals. Each USD sum comes with its coverage: `poolsPriced` of\n`poolsObserved` for the TVL, `swapBucketsPriced24h` of `swapBuckets24h` for\nvolume and fees, since a sum skips what it cannot value.",
         "properties": {
           "fees24hUsd": {
             "oneOf": [
@@ -1638,7 +1638,7 @@
         "type": "object"
       },
       "TokenResponse": {
-        "description": "The token detail payload.\n\nMirrors the convention used by `PoolResponse` and the other\n`*Response` DTOs: a flat camelCase JSON shape, the domain types\nnever leak through.",
+        "description": "The token detail payload.",
         "properties": {
           "decimals": {
             "description": "Decimal precision of the mint.",
@@ -1732,7 +1732,6 @@
   "paths": {
     "/api/announcements/active": {
       "get": {
-        "description": "Returns the announcements whose display window contains the request\ninstant, most severe first then most recent. An empty array is the\nnormal case, not an error.",
         "operationId": "list_active_announcements",
         "responses": {
           "200": {
@@ -1764,12 +1763,11 @@
             "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
-        "summary": "`GET /api/announcements/active`"
+        "summary": "The announcements whose display window contains the request instant, most\nsevere first then most recent. An empty array is the normal case."
       }
     },
     "/api/network/status": {
       "get": {
-        "description": "Returns where the chain is — slot and round-trip latency, measured by the\nindexer's probe over an endpoint chosen for being independent of ingestion —\nand, separately, whether our ingestion is keeping up. Two answers that fail\napart; see [`NetworkStatusResponse`] for why they are one payload.\nThe `network_status` row is seeded by the baseline migration (§5), so a\nhealthy system always has one — its absence is treated as an internal\nerror rather than a 404, since it means the seed row is missing.",
         "operationId": "get_network_status",
         "responses": {
           "200": {
@@ -1798,7 +1796,7 @@
             "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
-        "summary": "`GET /api/network/status`"
+        "summary": "Where the chain is (slot, probe latency) and, apart, whether ingestion keeps\nup. The `network_status` row is seeded by the baseline migration: its absence\nis a 500, not a 404."
       }
     },
     "/api/pools": {
@@ -1958,7 +1956,7 @@
             "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
-        "summary": "The most common base-fee tiers (basis points) with their pool counts,\nascending by fee — the option list of the pools fee filter. A JSON array\nof `{ feeBps, poolCount }`; `feeBps` is a decimal string like on the pool\nresponses, `poolCount` a plain number."
+        "summary": "The most common base-fee tiers, ascending, with their pool counts: the\noption list of the pools fee filter."
       }
     },
     "/api/pools/top": {
@@ -2473,7 +2471,7 @@
     },
     "/api/signals/stream": {
       "get": {
-        "description": "Each connection subscribes to the process-wide broadcast fed by the\n[`SignalStreamPoller`]; events carry the same JSON shape as the list\nitems (`SignalResponse`), with the signal's id as the SSE event id.\nThe stream carries **new** signals only — clients load history from\n`GET /api/signals` and re-fetch it when they (re)connect.\n\nThe stream ends when the subscriber lags past the broadcast capacity\n(a too-slow client would otherwise silently miss alerts) — the\nbrowser's EventSource then reconnects on its own.\n\n**At most [`SSE_MAX_STREAMS`] are open at once**; past that the answer is\n`503` with `Retry-After`. Each stream costs memory for as long as it\nlives, and ~500 of them OOM-killed the process under its production\nlimit (measured 25 September 2026).\n\n[`SignalStreamPoller`]: crate::application::SignalStreamPoller\n[`SSE_MAX_STREAMS`]: crate::http::SSE_MAX_STREAMS",
+        "description": "⚠️ A subscriber that lags past the broadcast capacity is dropped and its\nEventSource reconnects: a silent gap would hide alerts.\n⚠️ At most `SSE_MAX_STREAMS` streams at once, then `503` with `Retry-After`:\neach stream holds memory for as long as it lives.",
         "operationId": "stream_signals",
         "responses": {
           "200": {
@@ -2502,7 +2500,7 @@
             "description": "A failure: RFC 9457 Problem Details, or plain text when the query string or the path cannot be parsed."
           }
         },
-        "summary": "Live tail of the signal feed, as Server-Sent Events."
+        "summary": "Live tail of the signal feed as Server-Sent Events: new signals only, each a\n`SignalResponse` with its id as the event id. History comes from\n`GET /api/signals`, re-fetched on (re)connect."
       }
     },
     "/api/stats": {

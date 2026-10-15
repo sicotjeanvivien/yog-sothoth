@@ -8,11 +8,8 @@
 use crate::http::{AppState, dto::AnnouncementResponse, error::ApiError};
 use axum::{Json, extract::State};
 
-/// `GET /api/announcements/active`
-///
-/// Returns the announcements whose display window contains the request
-/// instant, most severe first then most recent. An empty array is the
-/// normal case, not an error.
+/// The announcements whose display window contains the request instant, most
+/// severe first then most recent. An empty array is the normal case.
 #[utoipa::path(
     get,
     path = "/api/announcements/active",

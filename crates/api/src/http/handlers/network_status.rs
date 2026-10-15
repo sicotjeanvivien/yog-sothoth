@@ -13,15 +13,9 @@
 use crate::http::{AppState, dto::NetworkStatusResponse, error::ApiError};
 use axum::{Json, extract::State};
 
-/// `GET /api/network/status`
-///
-/// Returns where the chain is — slot and round-trip latency, measured by the
-/// indexer's probe over an endpoint chosen for being independent of ingestion —
-/// and, separately, whether our ingestion is keeping up. Two answers that fail
-/// apart; see [`NetworkStatusResponse`] for why they are one payload.
-/// The `network_status` row is seeded by the baseline migration (§5), so a
-/// healthy system always has one — its absence is treated as an internal
-/// error rather than a 404, since it means the seed row is missing.
+/// Where the chain is (slot, probe latency) and, apart, whether ingestion keeps
+/// up. The `network_status` row is seeded by the baseline migration: its absence
+/// is a 500, not a 404.
 #[utoipa::path(
     get,
     path = "/api/network/status",

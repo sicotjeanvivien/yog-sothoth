@@ -11,17 +11,8 @@ use crate::http::dto::schema::{U128String, UnsignedDecimal};
 
 use last_event_kind_response::LastEventKindResponse;
 
-/// `GET /api/pools/{address}/latest-state` response body.
-///
-/// `reserve_a` / `reserve_b` (u64) and `last_sqrt_price` (u128) are all
-/// emitted as JSON strings to preserve their full range across the JS bridge —
-/// a JSON-number consumer truncates above 2^53.
-///
-/// There is no liquidity `L` here, deliberately: the field that claimed to be
-/// one published a position's unsigned `liquidity_delta` instead, and was
-/// removed in migration 003. Per-movement liquidity lives on
-/// `GET /api/pools/{address}/liquidity-events`, under its own name and next to
-/// the add/remove kind that gives it a sign.
+/// The latest observed state of a pool. There is no liquidity `L` here: the
+/// per-movement liquidity is on `/liquidity-events`, beside the kind that signs it.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolCurrentStateResponse {
@@ -43,11 +34,9 @@ pub(crate) struct PoolCurrentStateResponse {
     #[schema(value_type = Option<U128String>)]
     last_sqrt_price: Option<String>,
 
-    /// Spot price derived from `last_sqrt_price`: units of token B per 1 token
-    /// A, in human (decimal-adjusted) terms. This is the true DAMM v2 price
-    /// (concentrated liquidity), **not** the reserve ratio. `None` when there
-    /// is no `sqrt_price` yet or the token decimals are unresolved. Serialized
-    /// as a string (`rust_decimal` default) to match the other prices.
+    /// Units of token B per token A, decimal-adjusted, from `last_sqrt_price`: the
+    /// concentrated-liquidity price, not the reserve ratio. `None` without a
+    /// `sqrt_price` or with unresolved decimals.
     #[schema(value_type = Option<UnsignedDecimal>)]
     spot_price_a_in_b: Option<Decimal>,
 

@@ -28,10 +28,8 @@ pub(crate) struct SignalResponse {
     protocol: ProtocolResponse,
     #[schema(min_length = 1)]
     pool_address: String,
-    /// The pool's token pair, embedded in the same shape as
-    /// `PoolResponse` (`EmbeddedTokenResponse`). Every field inside is
-    /// nullable — a pool not yet resolved by yog-context embeds the
-    /// minimal view, and the client falls back to `pool_address`.
+    /// The pool's token pair: every field nullable until yog-context resolves
+    /// the pool.
     token_a: EmbeddedTokenResponse,
     token_b: EmbeddedTokenResponse,
     severity: SeverityResponse,

@@ -2,14 +2,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::MeteoraDlmmPoolProperties;
 
-/// DLMM-only pool properties (baseline §9's satellite table).
-///
-/// Every field is optional together, not independently: all six come from one
-/// read of one `LbPair` account, so they are present for a resolved pool and
-/// absent for one yog-context has not reached.
-///
-/// The pool's *state* — the active bin, the volatility accumulator — is not
-/// here. It moves on every swap and belongs to the current-state surface.
+/// DLMM-only pool properties. All six come from one read of the `LbPair`
+/// account: present together for a resolved pool, absent together otherwise.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct MeteoraDlmmPropertiesResponse {

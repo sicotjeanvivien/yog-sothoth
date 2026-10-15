@@ -64,25 +64,14 @@ pub(crate) async fn list_signals(
 // GET /api/signals/stream
 // ===========================================================================
 
-/// Live tail of the signal feed, as Server-Sent Events.
+/// Live tail of the signal feed as Server-Sent Events: new signals only, each a
+/// `SignalResponse` with its id as the event id. History comes from
+/// `GET /api/signals`, re-fetched on (re)connect.
 ///
-/// Each connection subscribes to the process-wide broadcast fed by the
-/// [`SignalStreamPoller`]; events carry the same JSON shape as the list
-/// items (`SignalResponse`), with the signal's id as the SSE event id.
-/// The stream carries **new** signals only — clients load history from
-/// `GET /api/signals` and re-fetch it when they (re)connect.
-///
-/// The stream ends when the subscriber lags past the broadcast capacity
-/// (a too-slow client would otherwise silently miss alerts) — the
-/// browser's EventSource then reconnects on its own.
-///
-/// **At most [`SSE_MAX_STREAMS`] are open at once**; past that the answer is
-/// `503` with `Retry-After`. Each stream costs memory for as long as it
-/// lives, and ~500 of them OOM-killed the process under its production
-/// limit (measured 25 September 2026).
-///
-/// [`SignalStreamPoller`]: crate::application::SignalStreamPoller
-/// [`SSE_MAX_STREAMS`]: crate::http::SSE_MAX_STREAMS
+/// ⚠️ A subscriber that lags past the broadcast capacity is dropped and its
+/// EventSource reconnects: a silent gap would hide alerts.
+/// ⚠️ At most `SSE_MAX_STREAMS` streams at once, then `503` with `Retry-After`:
+/// each stream holds memory for as long as it lives.
 #[utoipa::path(
     get,
     path = "/api/signals/stream",

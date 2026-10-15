@@ -14,22 +14,9 @@ use crate::http::dto::schema::{Count, UnsignedDecimal};
 pub(super) use protocol_response::ProtocolResponse;
 use signal_response::PoolSignalResponse;
 
-/// Wire shape of a pool in API responses.
-///
-/// Independent from the domain `Pool` so the public contract can evolve
-/// (rename `pool_address` → `address`, etc.) without breaking internal
-/// representations. Pubkeys are formatted as base58, protocol as
-/// snake_case (matching its `Serialize` impl).
-///
-/// Analytics (TVL, 24h volume) are denominated in USD. They are
-/// `Option` because their computation requires data that may not be
-/// available yet (no current state, no priced token, no swap in the
-/// window). Serialised as JSON **strings** via `rust_decimal`'s default
-/// representation, which keeps the trailing digits a JS `number` would drop.
-///
-/// A non-null 24h figure is not necessarily a *complete* one: the sum skips
-/// the hours it cannot value. `swapBuckets24h` / `swapBucketsPriced24h` carry
-/// that coverage so a partial total cannot pass for a full one.
+/// A pool in API responses. A 24h USD figure skips the hours it cannot value:
+/// `swapBucketsPriced24h` of `swapBuckets24h` says how much of the window it
+/// covers.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolResponse {
@@ -38,8 +25,8 @@ pub(crate) struct PoolResponse {
     protocol: ProtocolResponse,
     token_a: EmbeddedTokenResponse,
     token_b: EmbeddedTokenResponse,
-    /// Base trading fee in basis points (genesis fee tier). `None` until the
-    /// pool's `InitializePool` event has been indexed.
+    /// Base trading fee in basis points (the genesis tier). `None` while the pool
+    /// is unresolved.
     #[schema(value_type = Option<UnsignedDecimal>)]
     fee_bps: Option<Decimal>,
     // NOTE: the cp-amm fee properties (fee-split percents, fee shape) are NOT
@@ -50,15 +37,10 @@ pub(crate) struct PoolResponse {
     tvl_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
     volume_24h_usd: Option<Decimal>,
-    /// Realized trading fee over the last 24h (USD), and its three shares:
-    /// Meteora's cut, the referrer's cut, and what is left for the LPs. They
-    /// sum back to `fees_24h_usd` exactly, and are `None` together with it,
-    /// under the same partial-price coverage rules as `volume_24h_usd`.
-    ///
-    /// All four are read straight from the analytics — the split is computed
-    /// once in SQL. `lp_fees_24h_usd` is **not** `fees - protocol`: cp-amm
-    /// takes the referral out of the protocol share, so that formula credits
-    /// it to the LPs (corrected by migration 007). Do not reintroduce it here.
+    /// Realized trading fee over the last 24h (USD); its three shares below sum
+    /// back to it exactly, and are `None` together with it.
+    /// ⚠️ `lpFees24hUsd` is not `fees − protocol`: cp-amm takes the referral out
+    /// of the protocol share. All four are read from the analytics.
     #[schema(value_type = Option<UnsignedDecimal>)]
     fees_24h_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
@@ -67,36 +49,20 @@ pub(crate) struct PoolResponse {
     referral_fees_24h_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
     lp_fees_24h_usd: Option<Decimal>,
-    /// Effective realized fee rate in basis points (`fees / volume * 10000`)
-    /// over the 24h window. `None` when volume is absent or zero.
-    ///
-    /// NOT affected by the coverage below, and deliberately so: fees and volume
-    /// are lost on exactly the same buckets (one valuation, one join), so an
-    /// unvalued hour leaves the ratio's numerator AND denominator together.
-    /// Only the absolute values are clipped. Do not "fix" this one.
-    ///
-    /// Read it precisely, though: the cancellation is exact per bucket, but this
-    /// is a ratio of 24h *sums*, so it is the realized rate **of the covered
-    /// hours**, not of the window. Unbiased as far as anyone knows — nothing
-    /// links an hour's fee tier to whether its tokens were priced — but it is
-    /// not the same statement as "the rate is unaffected".
+    /// Realized fee rate over the 24h window, in bps (`fees / volume × 10 000`), of
+    /// the hours that could be valued; `None` when volume is absent or zero.
+    /// ⚠️ Not clipped by the coverage: fees and volume are lost on the same buckets.
     #[schema(value_type = Option<UnsignedDecimal>)]
     effective_fee_bps: Option<Decimal>,
-    /// Coverage of the five swap-derived USD figures above — `volume_24h_usd`
-    /// and the four fee figures, **not** `tvl_usd`, which is valued at the
-    /// latest price rather than per bucket: hours of the window that had at
-    /// least one swap, and how many of them could be valued. Shipped as raw
-    /// counters like `poolsPriced`/`poolsObserved` on `/api/stats` — the
-    /// presentation layer turns them into a coverage label. Equal values mean
-    /// full coverage; a lower numerator means the sums are sub-totals.
+    /// Coverage of the volume and fee figures, not `tvlUsd`: hours of the window
+    /// with at least one swap, and how many could be valued. Equal values mean
+    /// full coverage.
     #[schema(value_type = Count)]
     swap_buckets_24h: i64,
     #[schema(value_type = Count)]
     swap_buckets_priced_24h: i64,
-    /// Signals emitted by this pool over the last 24h, newest first,
-    /// capped per pool (service-side). Empty when the pool was quiet —
-    /// the indicator's window is fixed server-side, like the 24h
-    /// analytics above.
+    /// The pool's signals over the last 24h, newest first, capped per pool. Empty
+    /// when the pool was quiet.
     signals_24h: Vec<PoolSignalResponse>,
     first_seen_at: DateTime<Utc>,
     last_seen_at: DateTime<Utc>,

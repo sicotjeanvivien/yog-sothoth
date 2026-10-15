@@ -17,20 +17,9 @@ use utoipa::ToSchema;
 use crate::application::StatsAggregate;
 use crate::http::dto::schema::{Count, UnsignedDecimal};
 
-/// Protocol-wide statistics payload.
-///
-/// Three USD aggregates plus two pool counters:
-///   - `total_tvl_usd` + `pools_priced`: summed current TVL and how many pools
-///     it covers (the coverage numerator; denominator is `pools_observed`).
-///   - `volume_24h_usd` / `fees_24h_usd`: summed realized volume and trading
-///     fee over the last 24h, trade-time valued — with
-///     `swap_buckets_priced_24h` / `swap_buckets_24h` as *their* coverage, the
-///     same numerator/denominator pattern as the TVL pair above: (pool, hour)
-///     buckets that had swaps, and how many of them could be valued. The sum
-///     skips what it cannot value, so without this pair a partially covered
-///     total is indistinguishable from a complete one.
-///   - `pools_observed`: every pool ever seen. `pools_discovered_24h`: those
-///     first seen in the last 24h (the discovery pulse).
+/// Protocol-wide totals. Each USD sum comes with its coverage: `poolsPriced` of
+/// `poolsObserved` for the TVL, `swapBucketsPriced24h` of `swapBuckets24h` for
+/// volume and fees, since a sum skips what it cannot value.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct StatsResponse {

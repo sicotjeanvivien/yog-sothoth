@@ -61,10 +61,8 @@ pub(crate) async fn list_pools(
 // GET /api/pools/fee-tiers
 // ===========================================================================
 
-/// The most common base-fee tiers (basis points) with their pool counts,
-/// ascending by fee — the option list of the pools fee filter. A JSON array
-/// of `{ feeBps, poolCount }`; `feeBps` is a decimal string like on the pool
-/// responses, `poolCount` a plain number.
+/// The most common base-fee tiers, ascending, with their pool counts: the
+/// option list of the pools fee filter.
 #[utoipa::path(
     get,
     path = "/api/pools/fee-tiers",

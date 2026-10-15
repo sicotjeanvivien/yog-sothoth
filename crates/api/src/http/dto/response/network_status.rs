@@ -15,25 +15,12 @@ use crate::http::dto::schema::U128String;
 
 use freshness_status_response::FreshnessStatusResponse;
 
-/// The "Solana Live" panel payload.
-///
-/// Two concerns combined, and they **fail separately** — which is the whole
-/// reason they sit side by side: the chain itself (slot + RPC latency, from the
-/// `network_status` singleton, measured over an endpoint chosen for being
-/// independent of ingestion) and ingestion freshness (derived from the most
-/// recent indexed event, with no network call at all).
-///
-/// So the first pair answers *is the chain advancing, and how far away is it*,
-/// and the second *is our ingestion keeping up*. Reading the first as the
-/// health of our own link is the mistake this panel is built to prevent, and
-/// the one the indexer's probe itself made until 21 September 2026.
+/// Where the chain is (slot, probe latency) and whether ingestion keeps up. The
+/// two fail apart: the probe's endpoint is not the one ingestion uses.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NetworkStatusResponse {
     /// Latest Solana slot the probe saw.
-    ///
-    /// Serialized as a string: slots are u64 and can exceed the safe
-    /// integer range of a JSON number consumer.
     #[schema(value_type = U128String)]
     slot: String,
 

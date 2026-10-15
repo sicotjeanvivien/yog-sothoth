@@ -1,19 +1,9 @@
 use serde::Serialize;
 use utoipa::ToSchema;
 
-/// Wire shape of a paginated response.
-///
-/// Generic over the item type so every paginated endpoint shares the
-/// same envelope. Carries enough information for the client to render
-/// Previous / Next / First / Last navigation without follow-up calls:
-///
-/// - `nextCursor` / `prevCursor` are opaque strings used to fetch the
-///   adjacent pages. Either may be `null` when the current page sits
-///   at the corresponding boundary.
-/// - `isFirst` / `isLast` are explicit boundary flags. They are not
-///   redundant with cursor nullity: a single-page result has both
-///   cursors `null` AND both flags `true`, which the client uses to
-///   disable all four navigation buttons.
+/// The envelope of every paginated response. `nextCursor`/`prevCursor` are
+/// opaque, `null` at their boundary; `isFirst`/`isLast` are not redundant with
+/// them — a single page has both cursors `null` and both flags `true`.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PageResponse<T> {

@@ -18,10 +18,6 @@ pub(super) use embedded_token_response::EmbeddedTokenResponse;
 use price_response::TokenPriceResponse;
 
 /// The token detail payload.
-///
-/// Mirrors the convention used by `PoolResponse` and the other
-/// `*Response` DTOs: a flat camelCase JSON shape, the domain types
-/// never leak through.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TokenResponse {

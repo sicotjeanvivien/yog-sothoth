@@ -5,10 +5,8 @@ use yog_core::domain::SignalRecord;
 
 use crate::http::dto::response::signal::SeverityResponse;
 
-/// Wire shape of one entry of a pool's recent-signals list — the
-/// pools-list signal indicator. Deliberately slimmer than the feed's
-/// `SignalResponse`: the indicator needs severity, kind and recency,
-/// nothing else; the full signal lives on the pool's Alerts tab.
+/// One entry of a pool's recent-signals indicator: severity, detector and time
+/// only; the full signal lives on the feed.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct PoolSignalResponse {

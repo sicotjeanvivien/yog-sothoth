@@ -13,9 +13,6 @@ use crate::http::dto::schema::UnsignedDecimal;
 pub(super) struct MeteoraDammV2PropertiesResponse {
     /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's
     /// cut and a referrer's cut of the trading fee.
-    ///
-    /// There is no partner cut. `partnerFeePercent` was served here until
-    /// migration 037; it decoded a padding byte and was always 0.
     #[schema(maximum = 100)]
     pub(super) protocol_fee_percent: Option<u8>,
     #[schema(maximum = 100)]
@@ -33,13 +30,9 @@ pub(super) struct MeteoraDammV2PropertiesResponse {
     pub(super) current_fee_bps: Option<Decimal>,
 
     /// Whether the decay has finished — `currentFeeBps` will not move again.
-    /// `None` under the same conditions as above.
-    ///
-    /// It is the *floor* in every case a real account can produce. The one
-    /// exception is a curve with a zero `period_frequency`, which never advances
-    /// and stays at its **cliff** while still reporting as finished — cp-amm
-    /// says the same, and its `validate` makes the combination unreachable on
-    /// chain.
+    /// `None` under the same conditions as `currentFeeBps`.
+    /// ⚠️ A zero `period_frequency` stays at its cliff while reporting finished;
+    /// cp-amm's `validate` makes it unreachable on chain.
     pub(super) fee_scheduler_expired: Option<bool>,
 }
 
