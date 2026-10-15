@@ -26,29 +26,29 @@ use crate::http::dto::schema::{Count, UnsignedDecimal};
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolHistoryBucketResponse {
-    pub(crate) bucket: DateTime<Utc>,
+    bucket: DateTime<Utc>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) volume_usd: Option<Decimal>,
+    volume_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) fees_usd: Option<Decimal>,
+    fees_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) protocol_fees_usd: Option<Decimal>,
+    protocol_fees_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) referral_fees_usd: Option<Decimal>,
+    referral_fees_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) lp_fees_usd: Option<Decimal>,
+    lp_fees_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) effective_fee_bps: Option<Decimal>,
+    effective_fee_bps: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) liquidity_added_usd: Option<Decimal>,
+    liquidity_added_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) liquidity_removed_usd: Option<Decimal>,
+    liquidity_removed_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) fees_claimed_usd: Option<Decimal>,
+    fees_claimed_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) rewards_claimed_usd: Option<Decimal>,
+    rewards_claimed_usd: Option<Decimal>,
     #[schema(value_type = Option<Count>)]
-    pub(crate) swap_count: Option<i64>,
+    swap_count: Option<i64>,
 }
 
 impl From<PoolHistoryBucket> for PoolHistoryBucketResponse {

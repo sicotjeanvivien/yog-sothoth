@@ -5,7 +5,7 @@ use yog_core::domain;
 /// How serious a signal is.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum SeverityResponse {
+pub(in crate::http::dto::response) enum SeverityResponse {
     Info,
     Warning,
     Critical,

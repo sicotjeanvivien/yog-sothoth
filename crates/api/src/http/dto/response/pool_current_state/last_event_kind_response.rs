@@ -5,7 +5,7 @@ use yog_core::domain;
 /// The kind of the event that last changed the pool's state.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum LastEventKindResponse {
+pub(super) enum LastEventKindResponse {
     Swap,
     LiquidityAdd,
     LiquidityRemove,

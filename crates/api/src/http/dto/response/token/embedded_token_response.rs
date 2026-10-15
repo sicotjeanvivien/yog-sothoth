@@ -28,7 +28,7 @@ use crate::application::EnrichedToken;
 /// A token, embedded in another resource's response.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct EmbeddedTokenResponse {
+pub(in crate::http::dto::response) struct EmbeddedTokenResponse {
     /// SPL mint address, base58. `null` until the pool's mints are
     /// resolved by yog-context.
     mint: Option<String>,
@@ -63,7 +63,7 @@ impl EmbeddedTokenResponse {
     /// The caller (the pool handler) always knows the mint pubkey
     /// from the pool itself, so it can construct a meaningful
     /// response even when no metadata row exists yet.
-    pub(crate) fn from_sources(
+    pub(in crate::http::dto::response) fn from_sources(
         mint: Option<solana_pubkey::Pubkey>,
         metadata: Option<TokenMetadata>,
         price: Option<TokenPrice>,

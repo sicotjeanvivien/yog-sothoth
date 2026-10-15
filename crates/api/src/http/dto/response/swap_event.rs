@@ -35,41 +35,41 @@ use trade_direction_response::TradeDirectionResponse;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwapEventResponse {
     #[schema(min_length = 1)]
-    pub(crate) pool_address: String,
-    pub(crate) protocol: ProtocolResponse,
+    pool_address: String,
+    protocol: ProtocolResponse,
     #[schema(min_length = 1)]
-    pub(crate) signature: String,
+    signature: String,
     /// Position of this event among its transaction's emissions. A routed
     /// transaction produces several rows sharing `signature` and `timestamp`;
     /// this is what tells them apart — and the only stable key for a list row.
-    pub(crate) event_index: u16,
-    pub(crate) timestamp: DateTime<Utc>,
+    event_index: u16,
+    timestamp: DateTime<Utc>,
 
-    pub(crate) trade_direction: TradeDirectionResponse,
+    trade_direction: TradeDirectionResponse,
     // All `u64` token quantities (amounts, reserves, fees) are emitted as
     // strings: an atomic-unit value can exceed 2^53, which a JSON-number
     // consumer (JS) silently truncates. Same rationale as `next_sqrt_price`.
     #[schema(value_type = U128String)]
-    pub(crate) amount_a: String,
+    amount_a: String,
     #[schema(value_type = U128String)]
-    pub(crate) amount_b: String,
+    amount_b: String,
 
     #[schema(value_type = U128String)]
-    pub(crate) reserve_a_after: String,
+    reserve_a_after: String,
     #[schema(value_type = U128String)]
-    pub(crate) reserve_b_after: String,
+    reserve_b_after: String,
     #[schema(value_type = U128String)]
-    pub(crate) next_sqrt_price: String,
+    next_sqrt_price: String,
 
     #[schema(value_type = U128String)]
-    pub(crate) claiming_fee: String,
+    claiming_fee: String,
     #[schema(value_type = U128String)]
-    pub(crate) protocol_fee: String,
+    protocol_fee: String,
     #[schema(value_type = U128String)]
-    pub(crate) compounding_fee: String,
+    compounding_fee: String,
     #[schema(value_type = U128String)]
-    pub(crate) referral_fee: String,
-    pub(crate) fee_token_is_a: bool,
+    referral_fee: String,
+    fee_token_is_a: bool,
 }
 
 impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {

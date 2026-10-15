@@ -15,24 +15,24 @@ use crate::http::dto::schema::UnsignedDecimal;
 /// other.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct MeteoraDammV2PropertiesResponse {
+pub(super) struct MeteoraDammV2PropertiesResponse {
     /// Fee-split percents (0..=100) from the on-chain pool account: Meteora's
     /// cut and a referrer's cut of the trading fee.
     ///
     /// There is no partner cut. `partnerFeePercent` was served here until
     /// migration 037; it decoded a padding byte and was always 0.
     #[schema(maximum = 100)]
-    pub(crate) protocol_fee_percent: Option<u8>,
+    pub(super) protocol_fee_percent: Option<u8>,
     #[schema(maximum = 100)]
-    pub(crate) referral_fee_percent: Option<u8>,
+    pub(super) referral_fee_percent: Option<u8>,
     /// How the base fee behaves over time. Comes from the protocol
     /// satellite, written by yog-context from the on-chain account. `None`
     /// while the pool is still unresolved, or if its `BaseFeeMode` discriminant
     /// is one this crate does not map — never "no genesis event", which plays
     /// no part in filling this column.
-    pub(crate) base_fee_kind: Option<String>,
+    pub(super) base_fee_kind: Option<String>,
     /// Whether a volatility-based dynamic fee sits on top of the base fee.
-    pub(crate) has_dynamic_fee: Option<bool>,
+    pub(super) has_dynamic_fee: Option<bool>,
 
     /// The base fee **actually in force right now**, in bps, for a pool whose
     /// fee decays over time.
@@ -46,7 +46,7 @@ pub(crate) struct MeteoraDammV2PropertiesResponse {
     /// rate limiter (neither decays on time), an unresolved account — or a
     /// **slot-activated** pool, see below.
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) current_fee_bps: Option<Decimal>,
+    pub(super) current_fee_bps: Option<Decimal>,
 
     /// Whether the decay has finished — `currentFeeBps` will not move again.
     /// `None` under the same conditions as above.
@@ -56,7 +56,7 @@ pub(crate) struct MeteoraDammV2PropertiesResponse {
     /// and stays at its **cliff** while still reporting as finished — cp-amm
     /// says the same, and its `validate` makes the combination unreachable on
     /// chain.
-    pub(crate) fee_scheduler_expired: Option<bool>,
+    pub(super) fee_scheduler_expired: Option<bool>,
 }
 
 impl MeteoraDammV2PropertiesResponse {

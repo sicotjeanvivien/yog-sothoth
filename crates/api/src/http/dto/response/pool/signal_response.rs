@@ -11,11 +11,11 @@ use crate::http::dto::response::signal::SeverityResponse;
 /// nothing else; the full signal lives on the pool's Alerts tab.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct PoolSignalResponse {
-    pub(crate) severity: SeverityResponse,
+pub(super) struct PoolSignalResponse {
+    pub(super) severity: SeverityResponse,
     #[schema(min_length = 1)]
-    pub(crate) detector: String,
-    pub(crate) triggered_at: DateTime<Utc>,
+    pub(super) detector: String,
+    pub(super) triggered_at: DateTime<Utc>,
 }
 
 impl From<SignalRecord> for PoolSignalResponse {

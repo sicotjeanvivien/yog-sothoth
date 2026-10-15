@@ -5,7 +5,7 @@ use yog_core::domain;
 /// How prominently an announcement is shown.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum AnnouncementSeverityResponse {
+pub(super) enum AnnouncementSeverityResponse {
     Info,
     Warning,
     Critical,

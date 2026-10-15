@@ -26,22 +26,22 @@ use last_event_kind_response::LastEventKindResponse;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolCurrentStateResponse {
     #[schema(min_length = 1)]
-    pub(crate) pool_address: String,
-    pub(crate) protocol: ProtocolResponse,
+    pool_address: String,
+    protocol: ProtocolResponse,
 
-    pub(crate) last_event_at: DateTime<Utc>,
-    pub(crate) last_event_kind: LastEventKindResponse,
+    last_event_at: DateTime<Utc>,
+    last_event_kind: LastEventKindResponse,
     #[schema(min_length = 1)]
-    pub(crate) last_signature: String,
+    last_signature: String,
 
     #[schema(value_type = U128String)]
-    pub(crate) reserve_a: String,
+    reserve_a: String,
     #[schema(value_type = U128String)]
-    pub(crate) reserve_b: String,
+    reserve_b: String,
 
     /// Q64.64 fixed-point; encoded as a string to keep precision in JS.
     #[schema(value_type = Option<U128String>)]
-    pub(crate) last_sqrt_price: Option<String>,
+    last_sqrt_price: Option<String>,
 
     /// Spot price derived from `last_sqrt_price`: units of token B per 1 token
     /// A, in human (decimal-adjusted) terms. This is the true DAMM v2 price
@@ -49,11 +49,11 @@ pub(crate) struct PoolCurrentStateResponse {
     /// is no `sqrt_price` yet or the token decimals are unresolved. Serialized
     /// as a string (`rust_decimal` default) to match the other prices.
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) spot_price_a_in_b: Option<Decimal>,
+    spot_price_a_in_b: Option<Decimal>,
 
-    pub(crate) last_swap_at: Option<DateTime<Utc>>,
+    last_swap_at: Option<DateTime<Utc>>,
 
-    pub(crate) updated_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 impl From<PoolCurrentStateView> for PoolCurrentStateResponse {

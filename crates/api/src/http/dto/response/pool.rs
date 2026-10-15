@@ -34,22 +34,22 @@ use signal_response::PoolSignalResponse;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolResponse {
     #[schema(min_length = 1)]
-    pub(crate) pool_address: String,
-    pub(crate) protocol: ProtocolResponse,
-    pub(crate) token_a: EmbeddedTokenResponse,
-    pub(crate) token_b: EmbeddedTokenResponse,
+    pool_address: String,
+    protocol: ProtocolResponse,
+    token_a: EmbeddedTokenResponse,
+    token_b: EmbeddedTokenResponse,
     /// Base trading fee in basis points (genesis fee tier). `None` until the
     /// pool's `InitializePool` event has been indexed.
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) fee_bps: Option<Decimal>,
+    fee_bps: Option<Decimal>,
     // NOTE: the cp-amm fee properties (fee-split percents, fee shape) are NOT
     // here. They are protocol-specific, and only the pool *detail* sheet shows
     // them — see `PoolDetailResponse`. Keeping them on the list payload would
     // put one protocol's vocabulary in every protocol's row.
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) tvl_usd: Option<Decimal>,
+    tvl_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) volume_24h_usd: Option<Decimal>,
+    volume_24h_usd: Option<Decimal>,
     /// Realized trading fee over the last 24h (USD), and its three shares:
     /// Meteora's cut, the referrer's cut, and what is left for the LPs. They
     /// sum back to `fees_24h_usd` exactly, and are `None` together with it,
@@ -60,13 +60,13 @@ pub(crate) struct PoolResponse {
     /// takes the referral out of the protocol share, so that formula credits
     /// it to the LPs (corrected by migration 007). Do not reintroduce it here.
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) fees_24h_usd: Option<Decimal>,
+    fees_24h_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) protocol_fees_24h_usd: Option<Decimal>,
+    protocol_fees_24h_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) referral_fees_24h_usd: Option<Decimal>,
+    referral_fees_24h_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) lp_fees_24h_usd: Option<Decimal>,
+    lp_fees_24h_usd: Option<Decimal>,
     /// Effective realized fee rate in basis points (`fees / volume * 10000`)
     /// over the 24h window. `None` when volume is absent or zero.
     ///
@@ -81,7 +81,7 @@ pub(crate) struct PoolResponse {
     /// links an hour's fee tier to whether its tokens were priced — but it is
     /// not the same statement as "the rate is unaffected".
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) effective_fee_bps: Option<Decimal>,
+    effective_fee_bps: Option<Decimal>,
     /// Coverage of the five swap-derived USD figures above — `volume_24h_usd`
     /// and the four fee figures, **not** `tvl_usd`, which is valued at the
     /// latest price rather than per bucket: hours of the window that had at
@@ -90,16 +90,16 @@ pub(crate) struct PoolResponse {
     /// presentation layer turns them into a coverage label. Equal values mean
     /// full coverage; a lower numerator means the sums are sub-totals.
     #[schema(value_type = Count)]
-    pub(crate) swap_buckets_24h: i64,
+    swap_buckets_24h: i64,
     #[schema(value_type = Count)]
-    pub(crate) swap_buckets_priced_24h: i64,
+    swap_buckets_priced_24h: i64,
     /// Signals emitted by this pool over the last 24h, newest first,
     /// capped per pool (service-side). Empty when the pool was quiet —
     /// the indicator's window is fixed server-side, like the 24h
     /// analytics above.
-    pub(crate) signals_24h: Vec<PoolSignalResponse>,
-    pub(crate) first_seen_at: DateTime<Utc>,
-    pub(crate) last_seen_at: DateTime<Utc>,
+    signals_24h: Vec<PoolSignalResponse>,
+    first_seen_at: DateTime<Utc>,
+    last_seen_at: DateTime<Utc>,
 }
 
 /// Effective realized fee rate in basis points over the window:
@@ -129,7 +129,7 @@ impl PoolResponse {
     /// derived analytics. The caller (the pool handler) is
     /// responsible for fetching the analytics for the requested
     /// pools in batch — see `enrich_pool` in `handlers/pools.rs`.
-    pub(crate) fn new(
+    pub(super) fn new(
         pool: Pool,
         token_a: EmbeddedTokenResponse,
         token_b: EmbeddedTokenResponse,

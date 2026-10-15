@@ -50,10 +50,10 @@ pub(crate) const PROBLEM_CONTENT_TYPE: &str = "application/problem+json";
 #[derive(Debug, Serialize, ToSchema)]
 pub(crate) struct ProblemDetailsResponse {
     #[serde(rename = "type")]
-    pub(crate) type_uri: &'static str,
-    pub(crate) title: &'static str,
-    pub(crate) status: u16,
-    pub(crate) detail: String,
+    type_uri: &'static str,
+    title: &'static str,
+    status: u16,
+    detail: String,
 }
 
 impl ProblemDetailsResponse {

@@ -5,7 +5,7 @@ use yog_core::domain;
 /// The protocol a pool, an event or a signal belongs to.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum ProtocolResponse {
+pub(in crate::http::dto::response) enum ProtocolResponse {
     MeteoraDammV2,
     MeteoraDlmm,
 }

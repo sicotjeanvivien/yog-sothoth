@@ -73,6 +73,30 @@ The one place the read path matches on a protocol is
 its `PoolProperties` `match` is exhaustive with no wildcard arm, so adding a
 variant breaks the build there instead of silently dropping a field.
 
+### Where a response type goes
+
+`http/dto/response/` follows one rule throughout:
+
+- **Name.** Every type ends in `Response`. An enum takes the name of the domain
+  type it translates (`domain::FreshnessStatus` → `FreshnessStatusResponse`),
+  so the two never share a name.
+- **Place.** One type per file. At the top level, what a route returns — its
+  body, or the item of a page. A part of a response lives in that response's
+  folder, one level deep, named without the owner's prefix
+  (`announcement.rs` + `announcement/kind_response.rs`). A part several
+  responses share lives with the one it is about, and the others reach it
+  through it: `pool/protocol_response.rs`, `signal/severity_response.rs`,
+  `token/embedded_token_response.rs`.
+- **Visibility.** Each item and field declares the reach it has. A field is
+  private unless something outside its file builds or reads it — the handlers
+  build `PageResponse`, `PoolPageResponse` and the readiness types. `pub(super)`
+  is for what only the owner and its tests use, `pub(in
+  crate::http::dto::response)` for a shared part, `pub(crate)` for what the
+  handlers see.
+- **Conversions** live with the type they build, and a behaviour two responses
+  share is written once (`logo_uri` in `token.rs`).
+- **Tests** of a part go in its owner's file, `response/tests/<owner>_tests.rs`.
+
 ## Endpoints
 
 | Method | Path | Description |

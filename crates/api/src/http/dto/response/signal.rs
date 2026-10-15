@@ -22,28 +22,28 @@ pub(crate) struct SignalResponse {
     /// list key. Emitted as a JSON number: signals are sparse, the
     /// sequence will never approach 2^53.
     #[schema(value_type = Count)]
-    pub(crate) id: i64,
+    id: i64,
     #[schema(min_length = 1)]
-    pub(crate) detector: String,
-    pub(crate) protocol: ProtocolResponse,
+    detector: String,
+    protocol: ProtocolResponse,
     #[schema(min_length = 1)]
-    pub(crate) pool_address: String,
+    pool_address: String,
     /// The pool's token pair, embedded in the same shape as
     /// `PoolResponse` (`EmbeddedTokenResponse`). Every field inside is
     /// nullable — a pool not yet resolved by yog-context embeds the
     /// minimal view, and the client falls back to `pool_address`.
-    pub(crate) token_a: EmbeddedTokenResponse,
-    pub(crate) token_b: EmbeddedTokenResponse,
-    pub(crate) severity: SeverityResponse,
+    token_a: EmbeddedTokenResponse,
+    token_b: EmbeddedTokenResponse,
+    severity: SeverityResponse,
     // Exact decimals are emitted as strings, like every other decimal
     // quantity of the API (a JSON-number consumer would go through
     // lossy f64).
     #[schema(value_type = SignedDecimal)]
-    pub(crate) value: String,
+    value: String,
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(crate) threshold: Option<String>,
-    pub(crate) message: Option<String>,
-    pub(crate) triggered_at: DateTime<Utc>,
+    threshold: Option<String>,
+    message: Option<String>,
+    triggered_at: DateTime<Utc>,
 }
 
 impl From<EnrichedSignal> for SignalResponse {

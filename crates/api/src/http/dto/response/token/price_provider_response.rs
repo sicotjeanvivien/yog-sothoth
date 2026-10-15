@@ -5,7 +5,7 @@ use yog_core::domain;
 /// Where a price came from.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum PriceProviderResponse {
+pub(super) enum PriceProviderResponse {
     Jupiter,
     Helius,
     Fallback,

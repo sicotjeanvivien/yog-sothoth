@@ -26,13 +26,13 @@ use meteora_dlmm_properties_response::MeteoraDlmmPropertiesResponse;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolDetailResponse {
     #[serde(flatten)]
-    pub(crate) pool: PoolResponse,
+    pool: PoolResponse,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(nullable = false)]
-    pub(crate) meteora_damm_v2: Option<MeteoraDammV2PropertiesResponse>,
+    meteora_damm_v2: Option<MeteoraDammV2PropertiesResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(nullable = false)]
-    pub(crate) meteora_dlmm: Option<MeteoraDlmmPropertiesResponse>,
+    meteora_dlmm: Option<MeteoraDlmmPropertiesResponse>,
 }
 
 /// The one place a pool's protocol is matched on the read path.

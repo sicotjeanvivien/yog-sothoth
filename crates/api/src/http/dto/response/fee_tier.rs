@@ -16,9 +16,9 @@ use crate::http::dto::schema::{Count, UnsignedDecimal};
 #[serde(rename_all = "camelCase")]
 pub(crate) struct FeeTierResponse {
     #[schema(value_type = UnsignedDecimal)]
-    pub(crate) fee_bps: Decimal,
+    fee_bps: Decimal,
     #[schema(value_type = Count)]
-    pub(crate) pool_count: i64,
+    pool_count: i64,
 }
 
 impl From<FeeTier> for FeeTierResponse {

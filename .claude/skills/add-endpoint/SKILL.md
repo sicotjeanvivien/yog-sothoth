@@ -62,7 +62,8 @@ If the query already exists, skip to Step 3.
   (template: `meteora_damm_v2_swap_service.rs`). The service holds the repo trait object
   and contains the read logic; the handler stays thin.
 - **DTOs** — request DTO under `crates/api/src/http/dto/request/`, response DTO under
-  `crates/api/src/http/dto/response/`. Validate client-supplied data in the request DTO,
+  `crates/api/src/http/dto/response/`, named and placed as *Where a response type goes*
+  says (`crates/api/README.md`). Validate client-supplied data in the request DTO,
   before any DB call. The response DTO derives `utoipa::ToSchema`, the query struct
   `IntoParams`; a `Decimal`, an `i64`, a closed set of strings each need their wire form
   (`crates/api/README.md` → *The contract*).

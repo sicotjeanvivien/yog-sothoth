@@ -10,16 +10,16 @@ use crate::http::dto::schema::UnsignedDecimal;
 /// A token's latest price, in `TokenResponse` and in `EmbeddedTokenResponse`.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct TokenPriceResponse {
+pub(super) struct TokenPriceResponse {
     /// USD price.
     #[schema(value_type = UnsignedDecimal)]
-    pub(super) usd: Decimal,
+    usd: Decimal,
 
     /// Origin tag: "jupiter" | "helius" | "fallback".
-    pub(super) provider: PriceProviderResponse,
+    provider: PriceProviderResponse,
 
     /// When the price was observed.
-    pub(super) fetched_at: DateTime<Utc>,
+    fetched_at: DateTime<Utc>,
 }
 
 impl From<TokenPrice> for TokenPriceResponse {

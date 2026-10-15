@@ -4,7 +4,7 @@ use yog_core::domain;
 
 /// Which way a swap went: token A sold for B, or B for A.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-pub(crate) enum TradeDirectionResponse {
+pub(super) enum TradeDirectionResponse {
     #[serde(rename = "a_to_b")]
     AToB,
     #[serde(rename = "b_to_a")]

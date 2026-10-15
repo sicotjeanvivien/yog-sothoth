@@ -12,26 +12,26 @@ use yog_core::domain::MeteoraDlmmPoolProperties;
 /// here. It moves on every swap and belongs to the current-state surface.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct MeteoraDlmmPropertiesResponse {
+pub(super) struct MeteoraDlmmPropertiesResponse {
     /// Price increment between adjacent bins, in basis points: bin `i` sits at
     /// `(1 + binStep / 10_000)^i`. The defining property of a DLMM pool.
-    pub(crate) bin_step: Option<u16>,
+    pub(super) bin_step: Option<u16>,
     /// The two other inputs to the pool's base fee, served raw so a client can
     /// recompute `feeBps` rather than trust it: `baseFactor × binStep ×
     /// 10^baseFeePowerFactor / 10_000`.
-    pub(crate) base_factor: Option<u16>,
-    pub(crate) base_fee_power_factor: Option<u8>,
+    pub(super) base_factor: Option<u16>,
+    pub(super) base_fee_power_factor: Option<u8>,
     /// Magnitude of the volatility-driven fee charged on top of the base fee.
     /// **Zero means no dynamic fee** — DLMM has no boolean flag, unlike DAMM
     /// v2's `hasDynamicFee`.
-    pub(crate) variable_fee_control: Option<u32>,
+    pub(super) variable_fee_control: Option<u32>,
     /// Per-pool ceiling on the volatility accumulator, and so on how far the
     /// variable fee can climb.
-    pub(crate) max_volatility_accumulator: Option<u32>,
+    pub(super) max_volatility_accumulator: Option<u32>,
     /// Meteora's cut of the trading fee, in **basis points** — not the whole
     /// percent DAMM v2's `protocolFeePercent` uses. The two are not comparable
     /// without scaling.
-    pub(crate) protocol_share: Option<u16>,
+    pub(super) protocol_share: Option<u16>,
 }
 
 impl From<MeteoraDlmmPoolProperties> for MeteoraDlmmPropertiesResponse {

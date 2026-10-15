@@ -5,7 +5,7 @@ use yog_core::domain;
 /// What an announcement is about.
 #[derive(Debug, Clone, Copy, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum AnnouncementKindResponse {
+pub(super) enum AnnouncementKindResponse {
     Maintenance,
     Incident,
     Release,

@@ -20,40 +20,40 @@ use kind_response::LiquidityEventKindResponse;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LiquidityEventResponse {
     #[schema(min_length = 1)]
-    pub(super) pool_address: String,
-    pub(super) protocol: ProtocolResponse,
+    pool_address: String,
+    protocol: ProtocolResponse,
     #[schema(min_length = 1)]
-    pub(super) signature: String,
+    signature: String,
     /// Position of this event among its transaction's emissions. A routed
     /// transaction produces several rows sharing `signature` and `timestamp`;
     /// this is what tells them apart — and the only stable key for a list row.
-    pub(super) event_index: u16,
-    pub(super) timestamp: DateTime<Utc>,
+    event_index: u16,
+    timestamp: DateTime<Utc>,
 
-    pub(super) liquidity_event_kind: LiquidityEventKindResponse,
+    liquidity_event_kind: LiquidityEventKindResponse,
     // u64 quantities emitted as strings (can exceed 2^53); see SwapEventResponse.
     #[schema(value_type = U128String)]
-    pub(super) amount_a: String,
+    amount_a: String,
     #[schema(value_type = U128String)]
-    pub(super) amount_b: String,
+    amount_b: String,
     #[schema(value_type = U128String)]
-    pub(super) liquidity_delta: String,
+    liquidity_delta: String,
 
     #[schema(value_type = U128String)]
-    pub(super) reserve_a_after: String,
+    reserve_a_after: String,
     #[schema(value_type = U128String)]
-    pub(super) reserve_b_after: String,
+    reserve_b_after: String,
 
     #[schema(min_length = 1)]
-    pub(super) position: String,
+    position: String,
     #[schema(min_length = 1)]
-    pub(super) owner: String,
+    owner: String,
 
     /// Trade-time USD value of the event (both legs valued at the price
     /// as-of the event). `null` when not computable (a leg unpriced, or
     /// unresolved mints/decimals). `Decimal` → a string, like the other USD.
     #[schema(value_type = Option<UnsignedDecimal>)]
-    pub(super) value_usd: Option<Decimal>,
+    value_usd: Option<Decimal>,
 }
 
 impl From<MeteoraDammV2LiquidityEventValued> for LiquidityEventResponse {
