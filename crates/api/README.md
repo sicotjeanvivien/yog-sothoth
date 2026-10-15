@@ -69,7 +69,7 @@ protocol's vocabulary, which is what migration 036 removed from the `pools`
 table and what the layout above keeps out of the service layer.
 
 The one place the read path matches on a protocol is
-`http/dto/response/pool.rs` — the wire shape genuinely differs per protocol, and
+`http/dto/response/pool_detail.rs` — the wire shape genuinely differs per protocol, and
 its `PoolProperties` `match` is exhaustive with no wildcard arm, so adding a
 variant breaks the build there instead of silently dropping a field.
 

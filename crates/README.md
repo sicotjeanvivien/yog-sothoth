@@ -267,7 +267,7 @@ The "voie 3" per-protocol shape means a new protocol creates new domain types, n
 
 - If the protocol introduces new event kinds the API wants to expose, add a service under `application/services/`. A service goes under `services/<platform>/<product>/` only when its repository, params and result are irreducibly that product's; cross-protocol services stay at the root and must not name a protocol in their constructor.
 - Add handlers and DTOs as needed. For a cross-protocol read surface, point the handler at the matching VIEW; for protocol-specific detail, point at the table directly.
-- Add the protocol's block to `http/dto/response/pool.rs` — an optional field named after the protocol, alongside its siblings. The `PoolProperties` `match` there is exhaustive with no wildcard arm, so this one is compiler-forced rather than optional.
+- Add the protocol's block to `http/dto/response/pool_detail.rs` — an optional field named after the protocol, alongside its siblings, its properties type in `pool_detail/`. The `PoolProperties` `match` there is exhaustive with no wildcard arm, so this one is compiler-forced rather than optional.
 
 ### 6. Tests
 
@@ -285,7 +285,7 @@ There is no central registry. A protocol is added by writing isolated per-protoc
 | `EventPersistor::persist` | `indexer` | event → sub-persistor |
 | `init_event_persistor` (`bootstrap/daemon/init.rs`) | `indexer` | sub-persistor instantiation |
 | `pool_account_resolvers` vec (`bootstrap/daemon.rs`) | `context` | property backfill |
-| `PoolProperties` match in `http/dto/response/pool.rs` | `api` | detail wire shape |
+| `PoolProperties` match in `http/dto/response/pool_detail.rs` | `api` | detail wire shape |
 | `From<domain::Protocol>` in `http/dto/response/pool/protocol_response.rs` | `api` | protocol name in the contract (then regenerate it) |
 
 The two-level enums (`DomainEvent`, `PoolAccountProperties`, `PoolProperties`) are matched exhaustively, so adding a variant breaks the build at each site that must follow instead of silently dropping the protocol.

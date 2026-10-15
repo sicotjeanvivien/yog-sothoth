@@ -48,7 +48,7 @@ pub(crate) const PROBLEM_CONTENT_TYPE: &str = "application/problem+json";
 /// path, which the client already knows. It can be added later
 /// without breaking the contract (it's an optional field).
 #[derive(Debug, Serialize, ToSchema)]
-pub(crate) struct ProblemDetails {
+pub(crate) struct ProblemDetailsResponse {
     #[serde(rename = "type")]
     pub(crate) type_uri: &'static str,
     pub(crate) title: &'static str,
@@ -56,7 +56,7 @@ pub(crate) struct ProblemDetails {
     pub(crate) detail: String,
 }
 
-impl ProblemDetails {
+impl ProblemDetailsResponse {
     /// Build a Problem Details payload with `type = "about:blank"`.
     /// `title` carries the discrimination role until specific type
     /// URIs are introduced.

@@ -84,14 +84,14 @@ export const zPriceProviderResponse = z.enum([
 
 export type PriceProviderResponse = z.infer<typeof zPriceProviderResponse>;
 
-export const zProblemDetails = z.object({
+export const zProblemDetailsResponse = z.object({
     detail: z.string(),
     status: z.int().gte(0),
     title: z.string(),
     type: z.string()
 });
 
-export type ProblemDetails = z.infer<typeof zProblemDetails>;
+export type ProblemDetailsResponse = z.infer<typeof zProblemDetailsResponse>;
 
 export const zProtocolResponse = z.enum(['meteora_damm_v2', 'meteora_dlmm']);
 

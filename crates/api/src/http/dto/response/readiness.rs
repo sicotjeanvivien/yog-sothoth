@@ -5,7 +5,15 @@
 //! breaking change for monitoring tooling. Today the only check is
 //! the database.
 
+mod checks_report_response;
+mod component_status_response;
+mod status_response;
+
 use serde::Serialize;
+
+pub(crate) use checks_report_response::ChecksReportResponse;
+pub(crate) use component_status_response::ComponentStatusResponse;
+pub(crate) use status_response::ReadinessStatusResponse;
 
 /// The top-level payload returned by `/readyz`.
 ///
@@ -15,28 +23,6 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReadinessResponse {
-    pub(crate) status: ReadinessStatus,
-    pub(crate) checks: ChecksReport,
-}
-
-/// Overall verdict — the only value clients should branch on.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum ReadinessStatus {
-    Ready,
-    Unhealthy,
-}
-
-/// Per-component status. Each field is the verdict for one check.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ChecksReport {
-    pub(crate) db: ComponentStatus,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum ComponentStatus {
-    Up,
-    Down,
+    pub(crate) status: ReadinessStatusResponse,
+    pub(crate) checks: ChecksReportResponse,
 }

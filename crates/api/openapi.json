@@ -1384,7 +1384,7 @@
         ],
         "type": "string"
       },
-      "ProblemDetails": {
+      "ProblemDetailsResponse": {
         "description": "Problem Details for HTTP APIs — the wire shape returned for every\nerror response.\n\nField semantics, all per RFC 9457 §3:\n\n  - `type` — URI reference identifying the problem type. Opaque\n    to clients except for equality comparison. `\"about:blank\"` is\n    the reserved value meaning \"no specific type, see `title`\".\n  - `title` — short, human-readable summary. Should not change\n    across occurrences of the same problem type. Clients can\n    branch on `(type, title)` together.\n  - `status` — the HTTP status code. Redundant with the response\n    line, but useful for clients that log only the body.\n  - `detail` — human-readable per-occurrence message. May vary\n    across occurrences of the same type. This is where the\n    contextual information lives (\"invalid pool address: foo\").\n\n`instance` is intentionally omitted: it would carry the request\npath, which the client already knows. It can be added later\nwithout breaking the contract (it's an optional field).",
         "properties": {
           "detail": {
@@ -1774,7 +1774,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -1807,7 +1807,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -1931,7 +1931,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -1965,7 +1965,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2026,7 +2026,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2067,7 +2067,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2122,7 +2122,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2163,7 +2163,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2257,7 +2257,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2351,7 +2351,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2469,7 +2469,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2502,7 +2502,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2535,7 +2535,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {
@@ -2577,7 +2577,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
+                  "$ref": "#/components/schemas/ProblemDetailsResponse"
                 }
               },
               "text/plain": {

@@ -145,7 +145,7 @@ fn only_the_operations_of_a_path_item_answer_problems() {
             "parameters": [{ "name": "address", "in": "path" }],
             "get": { "responses": {} }
         } },
-        "components": { "schemas": { "ProblemDetails": {} } }
+        "components": { "schemas": { "ProblemDetailsResponse": {} } }
     });
     finish(&mut doc);
     let item = &doc["paths"]["/api/x"];
@@ -215,7 +215,7 @@ fn every_operation_answers_its_failures_as_problem_details() {
     for (path, item) in doc["paths"].as_object().expect("paths") {
         assert_eq!(
             item["get"]["responses"]["default"]["content"]["application/problem+json"]["schema"]["$ref"],
-            "#/components/schemas/ProblemDetails",
+            "#/components/schemas/ProblemDetailsResponse",
             "{path}"
         );
     }

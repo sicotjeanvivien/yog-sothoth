@@ -9,7 +9,7 @@ use utoipa::openapi::{ComponentsBuilder, InfoBuilder, OpenApiBuilder};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::application::WorkSlots;
-use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetails};
+use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// The document as committed: the routes' declarations, then [`finish`].
 pub(crate) fn document() -> Value {
@@ -22,7 +22,7 @@ pub(crate) fn document() -> Value {
         )
         .components(Some(
             ComponentsBuilder::new()
-                .schema_from::<ProblemDetails>()
+                .schema_from::<ProblemDetailsResponse>()
                 .build(),
         ))
         .build();
@@ -56,7 +56,7 @@ fn answer_problems(doc: &mut Value) {
         "description": "A failure: RFC 9457 Problem Details, or plain text when the \
                         query string or the path cannot be parsed.",
         "content": {
-            PROBLEM_CONTENT_TYPE: { "schema": { "$ref": "#/components/schemas/ProblemDetails" } },
+            PROBLEM_CONTENT_TYPE: { "schema": { "$ref": "#/components/schemas/ProblemDetailsResponse" } },
             "text/plain": { "schema": { "type": "string" } }
         }
     });

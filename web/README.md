@@ -111,7 +111,7 @@ What the schemas cannot say, and a component must still know:
 - **A signal's `id`** is the reconciliation key of the live feed after a
   reconnect, and the React key.
 - **An error body is read best-effort**: `readRemoteErrorMessage` falls back to
-  `null` when it does not match `zProblemDetails` — a query string the API
+  `null` when it does not match `zProblemDetailsResponse` — a query string the API
   cannot parse is refused in plain text — leaving the status code as the
   signal. `type` is `about:blank` today; `title` is what discriminates.
 

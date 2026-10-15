@@ -11,7 +11,7 @@ import {
   zPoolDetailResponse,
   zPoolPageResponsePoolResponse,
   zPoolResponse,
-  zProblemDetails,
+  zProblemDetailsResponse,
   zSignalResponse,
   zStatsResponse,
 } from "../schema/zod.gen";
@@ -367,7 +367,7 @@ describe("zGetPoolHistoryResponse", () => {
   });
 });
 
-describe("zProblemDetails", () => {
+describe("zProblemDetailsResponse", () => {
   function validProblem() {
     return {
       type: "about:blank",
@@ -378,7 +378,7 @@ describe("zProblemDetails", () => {
   }
 
   it("accepts a well-formed RFC 9457 problem", () => {
-    const parsed = zProblemDetails.parse(validProblem());
+    const parsed = zProblemDetailsResponse.parse(validProblem());
     expect(parsed.type).toBe("about:blank");
     expect(parsed.title).toBe("Bad Request");
     expect(parsed.status).toBe(400);
@@ -388,7 +388,7 @@ describe("zProblemDetails", () => {
   it("accepts a future type URI", () => {
     // Forward compat: when yog-api moves off `about:blank`, the schema
     // must still parse.
-    const parsed = zProblemDetails.parse({
+    const parsed = zProblemDetailsResponse.parse({
       ...validProblem(),
       type: "https://api.yog-sothoth.fr/errors/invalid-cursor",
     });
@@ -396,13 +396,13 @@ describe("zProblemDetails", () => {
   });
 
   it("rejects a body missing required RFC 9457 fields", () => {
-    expect(() => zProblemDetails.parse({ error: "old format" })).toThrow();
-    expect(() => zProblemDetails.parse({ detail: "no other fields" })).toThrow();
+    expect(() => zProblemDetailsResponse.parse({ error: "old format" })).toThrow();
+    expect(() => zProblemDetailsResponse.parse({ detail: "no other fields" })).toThrow();
   });
 
   it("rejects a non-numeric status", () => {
     expect(() =>
-      zProblemDetails.parse({ ...validProblem(), status: "400" }),
+      zProblemDetailsResponse.parse({ ...validProblem(), status: "400" }),
     ).toThrow();
   });
 });

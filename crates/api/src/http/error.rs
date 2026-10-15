@@ -4,7 +4,7 @@ use axum::{
 };
 use tracing::{error, warn};
 
-use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetails};
+use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
 /// API-level errors surfaced by handlers.
 ///
@@ -62,11 +62,11 @@ impl IntoResponse for ApiError {
             }
         };
 
-        let problem = ProblemDetails::generic(title, status.as_u16(), detail);
+        let problem = ProblemDetailsResponse::generic(title, status.as_u16(), detail);
 
         // Hand-roll the response rather than using `axum::Json`, because
         // we need the RFC 9457 content type, not `application/json`.
-        let body = serde_json::to_vec(&problem).expect("ProblemDetails always serialises");
+        let body = serde_json::to_vec(&problem).expect("ProblemDetailsResponse always serialises");
 
         let mut response = (
             status,
