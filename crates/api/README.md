@@ -79,7 +79,8 @@ variant breaks the build there instead of silently dropping a field.
 
 - **Name.** Every type ends in `Response`. An enum takes the name of the domain
   type it translates (`domain::FreshnessStatus` → `FreshnessStatusResponse`),
-  so the two never share a name. `every_schema_is_a_response_or_a_wire_form`
+  so the two never share a name — without the protocol prefix when its response
+  has none (`LiquidityEventKindResponse` beside `LiquidityEventResponse`). `every_schema_is_a_response_or_a_wire_form`
   fails on a schema of the contract named otherwise.
 - **Place.** One type per file. At the top level, what a route returns — its
   body, or the item of a page. A part of a response lives in that response's

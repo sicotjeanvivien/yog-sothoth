@@ -43,10 +43,6 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/audit.toml"
       - ".github/workflows/crates.yml"
-      - "web/src/lib/api/schema/**"
-      - "web/openapi-ts.config.ts"
-      - "web/package.json"
-      - "web/package-lock.json"
   # Every pull request, whatever it touches: see the `changes` job.
   pull_request:
 
