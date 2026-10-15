@@ -35,7 +35,7 @@ api/src/
 │   ├── dto/request/       ← query/path DTOs, validated before any DB call
 │   ├── dto/response/      ← wire shapes, decoupled from the domain
 │   ├── dto/schema.rs      ← the wire forms the contract names (UnsignedDecimal, Count…)
-│   ├── contract.rs        ← test-only: the OpenAPI document, as committed in openapi.json
+│   ├── tests/contract.rs  ← test-only: the OpenAPI document, as committed in openapi.json
 │   ├── cursor.rs          ← base64/JSON cursor codec
 │   ├── query.rs           ← shared query-param validation helpers
 │   ├── middleware.rs      ← CORS, security headers, request-id tracing,
@@ -337,7 +337,7 @@ What the derive cannot say is said once:
 - **Closed sets** are API enums built from their domain enum by an exhaustive
   `From`: a variant added to the domain breaks the build there, and a test
   checks that each serialises as the domain's `as_str()`.
-- **The finish** (`http/contract.rs`), applied to the whole document: a nullable
+- **The finish** (`http/tests/contract.rs`), applied to the whole document: a nullable
   property is required — `null` is written, never omitted, and a key that may be
   absent says `#[schema(nullable = false)]` (a test fails on a
   `skip_serializing_if` without it); every operation declares its failures —

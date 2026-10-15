@@ -10,6 +10,7 @@
 //! often — and routing them through tracing would flood the logs.
 
 #[cfg(test)]
+#[path = "http/tests/contract.rs"]
 mod contract;
 mod cursor;
 mod dto;
