@@ -28,7 +28,7 @@ import { Link } from "@/i18n/navigation";
 
 import { ArrowLeftIcon, ExternalLinkIcon } from "@/components/shared/icon";
 
-import type { PoolResponse } from "@/lib/api/schema/pool";
+import type { PoolResponse } from "@/lib/api/schema/zod.gen";
 import { formatMeteoraUrl } from "@/lib/format/format-meteora-url";
 
 import { PoolPairCell } from "@/components/dashboard/pools/pool-pair-cell";

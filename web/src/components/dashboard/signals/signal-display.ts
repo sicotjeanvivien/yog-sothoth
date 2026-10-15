@@ -9,7 +9,7 @@
 
 import type { FC } from "react";
 
-import type { Severity } from "@/lib/api/schema/signal";
+import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
 import {
   AlertOctagonIcon,
   AlertTriangleIcon,
@@ -18,7 +18,7 @@ import {
 } from "@/components/shared/icon";
 
 /** Icon and headline value inherit the severity color. */
-export const SEVERITY_COLOR: Record<Severity, string> = {
+export const SEVERITY_COLOR: Record<SeverityResponse, string> = {
   info: "text-sky-300",
   warning: "text-amber-300",
   critical: "text-rose-300",
@@ -29,7 +29,7 @@ export const SEVERITY_COLOR: Record<Severity, string> = {
  * the scale survives color-blindness; the label stays in `title` +
  * sr-only text wherever these are rendered.
  */
-export const SEVERITY_ICON: Record<Severity, FC<IconProps>> = {
+export const SEVERITY_ICON: Record<SeverityResponse, FC<IconProps>> = {
   info: InfoIcon,
   warning: AlertTriangleIcon,
   critical: AlertOctagonIcon,

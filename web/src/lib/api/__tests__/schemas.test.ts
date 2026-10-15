@@ -1,19 +1,20 @@
 /**
- * Tests for the wire schemas.
- *
- * These tests act as the executable counterpart to the comments in
- * `schemas.ts`: if the Rust side drifts from the shape captured here,
- * the suite fails fast with a precise zod issue.
+ * Tests for the generated wire schemas: what each refuses is what the API's
+ * contract refuses. Regenerate with `npm run gen:api` after a DTO change.
  */
 
 import { describe, expect, it } from "vitest";
-import { AnnouncementSchema } from "../schema/announcement";
-import { PoolDetailSchema, PoolSchema } from "../schema/pool";
-import { PoolsPageSchema, SignalsPageSchema } from "../schema/page";
-import { PoolHistorySchema } from "../schema/pool-history";
-import { ApiErrorBodySchema } from "../schema/api-error-body";
-import { SignalSchema } from "../schema/signal";
-import { StatsSchema } from "../schema/stats";
+import {
+  zAnnouncementResponse,
+  zGetPoolHistoryResponse,
+  zPageResponseSignalResponse,
+  zPoolDetailResponse,
+  zPoolPageResponsePoolResponse,
+  zPoolResponse,
+  zProblemDetailsResponse,
+  zSignalResponse,
+  zStatsResponse,
+} from "../schema/zod.gen";
 import { validPoolsPage, validPoolHistoryBucket } from "./fixtures";
 
 
@@ -82,51 +83,51 @@ function validAnnouncement() {
   };
 }
 
-describe("AnnouncementSchema", () => {
+describe("zAnnouncementResponse", () => {
   it("accepts a complete valid announcement", () => {
-    const parsed = AnnouncementSchema.parse(validAnnouncement());
+    const parsed = zAnnouncementResponse.parse(validAnnouncement());
     expect(parsed.id).toBe(1);
     expect(parsed.kind).toBe("release");
   });
 
   it("accepts a null linkUrl and a relative one", () => {
     expect(
-      AnnouncementSchema.parse({ ...validAnnouncement(), linkUrl: null })
+      zAnnouncementResponse.parse({ ...validAnnouncement(), linkUrl: null })
         .linkUrl,
     ).toBeNull();
     // Relative in-app paths are the main use case — must not require
     // an absolute URL.
     expect(
-      AnnouncementSchema.parse({ ...validAnnouncement(), linkUrl: "/changelog" })
+      zAnnouncementResponse.parse({ ...validAnnouncement(), linkUrl: "/changelog" })
         .linkUrl,
     ).toBe("/changelog");
   });
 
   it("rejects an unknown kind or severity", () => {
     expect(() =>
-      AnnouncementSchema.parse({ ...validAnnouncement(), kind: "party" }),
+      zAnnouncementResponse.parse({ ...validAnnouncement(), kind: "party" }),
     ).toThrow();
     expect(() =>
-      AnnouncementSchema.parse({ ...validAnnouncement(), severity: "loud" }),
+      zAnnouncementResponse.parse({ ...validAnnouncement(), severity: "loud" }),
     ).toThrow();
   });
 });
 
-describe("PoolSchema", () => {
+describe("zPoolResponse", () => {
   it("accepts a complete valid pool", () => {
-    const parsed = PoolSchema.parse(validPool());
+    const parsed = zPoolResponse.parse(validPool());
     expect(parsed.poolAddress).toBe("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie");
     expect(parsed.protocol).toBe("meteora_damm_v2");
   });
 
   it("accepts an empty signals24h (quiet pool)", () => {
-    const parsed = PoolSchema.parse({ ...validPool(), signals24h: [] });
+    const parsed = zPoolResponse.parse({ ...validPool(), signals24h: [] });
     expect(parsed.signals24h).toEqual([]);
   });
 
   it("rejects a signals24h entry with an unknown severity", () => {
     expect(() =>
-      PoolSchema.parse({
+      zPoolResponse.parse({
         ...validPool(),
         signals24h: [
           {
@@ -140,21 +141,17 @@ describe("PoolSchema", () => {
   });
 
   it("accepts a null feeBps (pool seen before its InitializePool)", () => {
-    const parsed = PoolSchema.parse({ ...validPool(), feeBps: null });
+    const parsed = zPoolResponse.parse({ ...validPool(), feeBps: null });
     expect(parsed.feeBps).toBeNull();
   });
 
-  // The cp-amm fee properties moved to PoolDetailSchema's `meteoraDammV2`
-  // block — they are protocol-specific and only the detail endpoint returns
-  // them. Their coverage moved with them, below.
-
   it("omits the protocol block on a list payload", () => {
-    const parsed = PoolDetailSchema.parse(validPool());
+    const parsed = zPoolDetailResponse.parse(validPool());
     expect(parsed.meteoraDammV2).toBeUndefined();
   });
 
   it("accepts a DAMM v2 block with a null fee shape (genesis never seen)", () => {
-    const parsed = PoolDetailSchema.parse({
+    const parsed = zPoolDetailResponse.parse({
       ...validPool(),
       meteoraDammV2: {
         protocolFeePercent: 20,
@@ -170,7 +167,7 @@ describe("PoolSchema", () => {
   });
 
   it("accepts a DAMM v2 block with null fee-split percents (account unresolved)", () => {
-    const parsed = PoolDetailSchema.parse({
+    const parsed = zPoolDetailResponse.parse({
       ...validPool(),
       meteoraDammV2: {
         protocolFeePercent: null,
@@ -187,7 +184,7 @@ describe("PoolSchema", () => {
 
   it("rejects a fee-split percent out of the 0..=100 range", () => {
     expect(() =>
-      PoolDetailSchema.parse({
+      zPoolDetailResponse.parse({
         ...validPool(),
         meteoraDammV2: {
           protocolFeePercent: 101,
@@ -202,7 +199,7 @@ describe("PoolSchema", () => {
   });
 
   it("accepts null fee analytics (no priced swap in the window)", () => {
-    const parsed = PoolSchema.parse({
+    const parsed = zPoolResponse.parse({
       ...validPool(),
       fees24hUsd: null,
       protocolFees24hUsd: null,
@@ -217,7 +214,7 @@ describe("PoolSchema", () => {
   });
 
   it("accepts RFC3339 with a numeric timezone offset", () => {
-    const parsed = PoolSchema.parse({
+    const parsed = zPoolResponse.parse({
       ...validPool(),
       firstSeenAt: "2026-05-21T10:01:35.084596Z",
     });
@@ -226,26 +223,26 @@ describe("PoolSchema", () => {
 
   it("rejects an empty poolAddress", () => {
     expect(() =>
-      PoolSchema.parse({ ...validPool(), poolAddress: "" }),
+      zPoolResponse.parse({ ...validPool(), poolAddress: "" }),
     ).toThrow();
   });
 
   it("rejects a non-RFC3339 timestamp", () => {
     expect(() =>
-      PoolSchema.parse({ ...validPool(), firstSeenAt: "yesterday" }),
+      zPoolResponse.parse({ ...validPool(), firstSeenAt: "yesterday" }),
     ).toThrow();
   });
 
   it("rejects a missing field", () => {
     const { protocol, ...rest } = validPool();
     void protocol;
-    expect(() => PoolSchema.parse(rest)).toThrow();
+    expect(() => zPoolResponse.parse(rest)).toThrow();
   });
 });
 
-describe("PoolsPageSchema", () => {
+describe("zPoolPageResponsePoolResponse", () => {
   it("accepts a single-page result (no neighbours)", () => {
-    const parsed = PoolsPageSchema.parse(
+    const parsed = zPoolPageResponsePoolResponse.parse(
       validPoolsPage({
         items: [],
         nextCursor: null,
@@ -262,7 +259,7 @@ describe("PoolsPageSchema", () => {
   });
 
   it("accepts a first page with more data after", () => {
-    const parsed = PoolsPageSchema.parse(validPoolsPage());
+    const parsed = zPoolPageResponsePoolResponse.parse(validPoolsPage());
     expect(parsed.items).toHaveLength(1);
     expect(parsed.prevCursor).toBeNull();
     expect(parsed.nextCursor).not.toBeNull();
@@ -271,7 +268,7 @@ describe("PoolsPageSchema", () => {
   });
 
   it("accepts a middle page with neighbours on both sides", () => {
-    const parsed = PoolsPageSchema.parse(
+    const parsed = zPoolPageResponsePoolResponse.parse(
       validPoolsPage({
         items: [validPool(), validPool()],
         nextCursor: "next-x",
@@ -288,7 +285,7 @@ describe("PoolsPageSchema", () => {
   });
 
   it("accepts a terminal page (last page reached)", () => {
-    const parsed = PoolsPageSchema.parse(
+    const parsed = zPoolPageResponsePoolResponse.parse(
       validPoolsPage({
         nextCursor: null,
         prevCursor: "prev-z",
@@ -302,7 +299,7 @@ describe("PoolsPageSchema", () => {
 
   it("rejects items that fail individual validation", () => {
     expect(() =>
-      PoolsPageSchema.parse(
+      zPoolPageResponsePoolResponse.parse(
         validPoolsPage({
           items: [{ ...validPool(), poolAddress: "" }],
         }),
@@ -313,37 +310,37 @@ describe("PoolsPageSchema", () => {
   it("rejects a missing nextCursor field", () => {
     const { nextCursor, ...rest } = validPoolsPage();
     void nextCursor;
-    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
   });
 
   it("rejects a missing prevCursor field", () => {
     const { prevCursor, ...rest } = validPoolsPage();
     void prevCursor;
-    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
   });
 
   it("rejects a missing isFirst flag", () => {
     const { isFirst, ...rest } = validPoolsPage();
     void isFirst;
-    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
   });
 
   it("rejects a missing isLast flag", () => {
     const { isLast, ...rest } = validPoolsPage();
     void isLast;
-    expect(() => PoolsPageSchema.parse(rest)).toThrow();
+    expect(() => zPoolPageResponsePoolResponse.parse(rest)).toThrow();
   });
 
   it("rejects a non-boolean isFirst flag", () => {
     expect(() =>
-      PoolsPageSchema.parse(validPoolsPage({ isFirst: "true" as unknown as boolean })),
+      zPoolPageResponsePoolResponse.parse(validPoolsPage({ isFirst: "true" as unknown as boolean })),
     ).toThrow();
   });
 });
 
-describe("PoolHistorySchema", () => {
+describe("zGetPoolHistoryResponse", () => {
   it("accepts an array of valid buckets", () => {
-    const parsed = PoolHistorySchema.parse([
+    const parsed = zGetPoolHistoryResponse.parse([
       validPoolHistoryBucket(),
       validPoolHistoryBucket(),
     ]);
@@ -353,11 +350,11 @@ describe("PoolHistorySchema", () => {
   });
 
   it("accepts an empty series", () => {
-    expect(PoolHistorySchema.parse([])).toHaveLength(0);
+    expect(zGetPoolHistoryResponse.parse([])).toHaveLength(0);
   });
 
   it("accepts null USD metrics (a bucket with one source of activity)", () => {
-    const parsed = PoolHistorySchema.parse([
+    const parsed = zGetPoolHistoryResponse.parse([
       { ...validPoolHistoryBucket(), feesUsd: null, effectiveFeeBps: null },
     ]);
     expect(parsed[0]?.feesUsd).toBeNull();
@@ -365,12 +362,12 @@ describe("PoolHistorySchema", () => {
 
   it("rejects a non-RFC3339 bucket timestamp", () => {
     expect(() =>
-      PoolHistorySchema.parse([{ ...validPoolHistoryBucket(), bucket: "nope" }]),
+      zGetPoolHistoryResponse.parse([{ ...validPoolHistoryBucket(), bucket: "nope" }]),
     ).toThrow();
   });
 });
 
-describe("ApiErrorBodySchema", () => {
+describe("zProblemDetailsResponse", () => {
   function validProblem() {
     return {
       type: "about:blank",
@@ -381,7 +378,7 @@ describe("ApiErrorBodySchema", () => {
   }
 
   it("accepts a well-formed RFC 9457 problem", () => {
-    const parsed = ApiErrorBodySchema.parse(validProblem());
+    const parsed = zProblemDetailsResponse.parse(validProblem());
     expect(parsed.type).toBe("about:blank");
     expect(parsed.title).toBe("Bad Request");
     expect(parsed.status).toBe(400);
@@ -391,7 +388,7 @@ describe("ApiErrorBodySchema", () => {
   it("accepts a future type URI", () => {
     // Forward compat: when yog-api moves off `about:blank`, the schema
     // must still parse.
-    const parsed = ApiErrorBodySchema.parse({
+    const parsed = zProblemDetailsResponse.parse({
       ...validProblem(),
       type: "https://api.yog-sothoth.fr/errors/invalid-cursor",
     });
@@ -399,18 +396,18 @@ describe("ApiErrorBodySchema", () => {
   });
 
   it("rejects a body missing required RFC 9457 fields", () => {
-    expect(() => ApiErrorBodySchema.parse({ error: "old format" })).toThrow();
-    expect(() => ApiErrorBodySchema.parse({ detail: "no other fields" })).toThrow();
+    expect(() => zProblemDetailsResponse.parse({ error: "old format" })).toThrow();
+    expect(() => zProblemDetailsResponse.parse({ detail: "no other fields" })).toThrow();
   });
 
   it("rejects a non-numeric status", () => {
     expect(() =>
-      ApiErrorBodySchema.parse({ ...validProblem(), status: "400" }),
+      zProblemDetailsResponse.parse({ ...validProblem(), status: "400" }),
     ).toThrow();
   });
 });
 
-describe("StatsSchema", () => {
+describe("zStatsResponse", () => {
   const validStats = () => ({
     totalTvlUsd: "10427935.81",
     poolsPriced: 348,
@@ -423,14 +420,14 @@ describe("StatsSchema", () => {
   });
 
   it("accepts a complete valid payload", () => {
-    const parsed = StatsSchema.parse(validStats());
+    const parsed = zStatsResponse.parse(validStats());
     expect(parsed.totalTvlUsd).toBe("10427935.81");
     expect(parsed.poolsObserved).toBe(359);
     expect(parsed.poolsDiscovered24h).toBe(52);
   });
 
   it("accepts null USD aggregates (empty universe / no activity)", () => {
-    const parsed = StatsSchema.parse({
+    const parsed = zStatsResponse.parse({
       ...validStats(),
       totalTvlUsd: null,
       volume24hUsd: null,
@@ -446,7 +443,7 @@ describe("StatsSchema", () => {
     // The payload the counters exist for: a non-null volume that covers only
     // 767 of the 1246 hours that traded. Nothing about the value itself says
     // so — the pair does.
-    const parsed = StatsSchema.parse(validStats());
+    const parsed = zStatsResponse.parse(validStats());
     expect(parsed.volume24hUsd).toBe("508193.05");
     expect(parsed.swapBuckets24h).toBe(1246);
     expect(parsed.swapBucketsPriced24h).toBe(767);
@@ -454,23 +451,23 @@ describe("StatsSchema", () => {
 
   it("rejects a USD aggregate sent as a JS number (precision contract)", () => {
     expect(() =>
-      StatsSchema.parse({ ...validStats(), totalTvlUsd: 10427935.81 }),
+      zStatsResponse.parse({ ...validStats(), totalTvlUsd: 10427935.81 }),
     ).toThrow();
   });
 
   it("rejects a negative or fractional count", () => {
     expect(() =>
-      StatsSchema.parse({ ...validStats(), poolsObserved: -1 }),
+      zStatsResponse.parse({ ...validStats(), poolsObserved: -1 }),
     ).toThrow();
     expect(() =>
-      StatsSchema.parse({ ...validStats(), poolsDiscovered24h: 1.5 }),
+      zStatsResponse.parse({ ...validStats(), poolsDiscovered24h: 1.5 }),
     ).toThrow();
   });
 
   it("rejects a missing field", () => {
     const { poolsObserved, ...rest } = validStats();
     void poolsObserved;
-    expect(() => StatsSchema.parse(rest)).toThrow();
+    expect(() => zStatsResponse.parse(rest)).toThrow();
   });
 });
 // A representative valid signal payload, copied from a real yog-api
@@ -509,18 +506,18 @@ function validSignal() {
   };
 }
 
-describe("SignalSchema", () => {
+describe("zSignalResponse", () => {
   it("accepts a real payload", () => {
-    expect(() => SignalSchema.parse(validSignal())).not.toThrow();
+    expect(() => zSignalResponse.parse(validSignal())).not.toThrow();
   });
 
   it("accepts a negative value (a deviation can be below the oracle)", () => {
-    const parsed = SignalSchema.parse({ ...validSignal(), value: "-0.2157" });
+    const parsed = zSignalResponse.parse({ ...validSignal(), value: "-0.2157" });
     expect(parsed.value).toBe("-0.2157");
   });
 
   it("accepts null threshold and message", () => {
-    const parsed = SignalSchema.parse({
+    const parsed = zSignalResponse.parse({
       ...validSignal(),
       threshold: null,
       message: null,
@@ -531,25 +528,25 @@ describe("SignalSchema", () => {
 
   it("rejects an unknown severity (closed set)", () => {
     expect(() =>
-      SignalSchema.parse({ ...validSignal(), severity: "panic" }),
+      zSignalResponse.parse({ ...validSignal(), severity: "panic" }),
     ).toThrow();
   });
 
   it("rejects a value sent as a JS number (precision contract)", () => {
     expect(() =>
-      SignalSchema.parse({ ...validSignal(), value: 1.1059 }),
+      zSignalResponse.parse({ ...validSignal(), value: 1.1059 }),
     ).toThrow();
   });
 
   it("rejects a fractional id", () => {
-    expect(() => SignalSchema.parse({ ...validSignal(), id: 1.5 })).toThrow();
+    expect(() => zSignalResponse.parse({ ...validSignal(), id: 1.5 })).toThrow();
   });
 });
 
-describe("SignalsPageSchema", () => {
+describe("zPageResponseSignalResponse", () => {
   it("accepts a page envelope of signals", () => {
     expect(() =>
-      SignalsPageSchema.parse({
+      zPageResponseSignalResponse.parse({
         items: [validSignal()],
         nextCursor: "opaque",
         prevCursor: null,
@@ -557,5 +554,42 @@ describe("SignalsPageSchema", () => {
         isLast: false,
       }),
     ).not.toThrow();
+  });
+});
+
+// One test per wire form the contract has to state on its own: each is red when
+// the rule that states it leaves the spec, then the zod is regenerated.
+describe("the contract's wire forms", () => {
+  it("refuses an amount out of format (the `UnsignedDecimal` pattern)", () => {
+    for (const tvlUsd of ["abc", "-1", "1e-7", "", " 25"]) {
+      expect(zPoolResponse.safeParse({ ...validPool(), tvlUsd }).success).toBe(false);
+    }
+  });
+
+  it("refuses a date out of RFC 3339, and keeps the offsets `to_rfc3339` writes", () => {
+    for (const firstSeenAt of ["2026-05-21T10:01:35", "2026-05-21", "yesterday"]) {
+      expect(zPoolResponse.safeParse({ ...validPool(), firstSeenAt }).success).toBe(false);
+    }
+    const offset = { ...validPool(), firstSeenAt: "2026-05-21T10:01:35+00:00" };
+    expect(zPoolResponse.safeParse(offset).success).toBe(true);
+  });
+
+  it("refuses a protocol block that is null where it must be absent", () => {
+    expect(zPoolDetailResponse.safeParse(validPool()).success).toBe(true);
+    const nulled = { ...validPool(), meteoraDammV2: null };
+    expect(zPoolDetailResponse.safeParse(nulled).success).toBe(false);
+  });
+
+  it("refuses a missing key where the API writes null (the required walk)", () => {
+    const { feeBps, ...rest } = validPool();
+    void feeBps;
+    expect(zPoolResponse.safeParse(rest).success).toBe(false);
+  });
+
+  it("reads a count as a number, never a BigInt (no int64 in the spec)", () => {
+    const parsed = zPoolResponse.parse(validPool());
+    expect(typeof parsed.swapBuckets24h).toBe("number");
+    const asString = { ...validPool(), swapBuckets24h: "24" };
+    expect(zPoolResponse.safeParse(asString).success).toBe(false);
   });
 });

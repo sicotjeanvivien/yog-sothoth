@@ -1,3 +1,10 @@
+import type * as z from "zod";
+
+import type { zListPoolsQuery } from "../schema/zod.gen";
+
+// The values come from the contract: a value renamed server-side breaks the build here.
+type ListPoolsQuery = z.infer<typeof zListPoolsQuery>;
+
 /**
  * Traversal direction relative to a cursor.
  *
@@ -5,22 +12,18 @@
  * back toward newer pools. Defaults to `next` server-side when
  * unspecified.
  */
-export type PageDir = "next" | "prev";
+export type PageDir = NonNullable<ListPoolsQuery["dir"]>;
 
 /**
  * Absolute jump to a list boundary, ignoring any cursor.
  */
-export type PagePosition = "first" | "last";
+export type PagePosition = NonNullable<ListPoolsQuery["position"]>;
 
 
 export type SortColumn = "first_seen" | "last_seen";
 export type SortDir = "asc" | "desc";
 
-export type PoolSort =
-  | "first_seen_asc"
-  | "first_seen_desc"
-  | "last_seen_asc"
-  | "last_seen_desc";
+export type PoolSort = NonNullable<ListPoolsQuery["sort"]>;
 
 // Maps the URL's `sort` value to its (column, dir) decomposition.
 export function parseSortValue(sort: PoolSort): { column: SortColumn; dir: SortDir } {

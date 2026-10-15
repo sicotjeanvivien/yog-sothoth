@@ -26,14 +26,14 @@
 import { useState } from "react";
 
 import { useRouter } from "@/i18n/navigation";
-import type { Severity } from "@/lib/api/schema/signal";
+import type { SeverityResponse } from "@/lib/api/schema/zod.gen";
 import {
   SEVERITY_COLOR,
   SEVERITY_ICON,
 } from "@/components/dashboard/signals/signal-display";
 
 export type PoolSignalItem = {
-  severity: Severity;
+  severity: SeverityResponse;
   /** Localized detector tag (raw detector name when unknown). */
   label: string;
 };
@@ -51,7 +51,7 @@ export function PoolSignalsCell({
   ariaLabel: string;
   /** Popover heading (localized). */
   title: string;
-  worst: Severity;
+  worst: SeverityResponse;
   items: PoolSignalItem[];
 }) {
   const [open, setOpen] = useState(false);

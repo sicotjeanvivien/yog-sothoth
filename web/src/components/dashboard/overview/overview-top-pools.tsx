@@ -28,7 +28,7 @@ import { InfoPopover } from "@/components/shared/info-popover";
 import { Link } from "@/i18n/navigation";
 import { volumeCoverage } from "@/lib/coverage/volume-coverage";
 import { ApiClientError } from "@/lib/api/errors";
-import type { PoolResponse } from "@/lib/api/schema/pool";
+import type { PoolResponse } from "@/lib/api/schema/zod.gen";
 import { fetchTopPools, type PoolRankMetric } from "@/lib/api/server/top-pools";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 

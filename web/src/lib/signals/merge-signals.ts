@@ -8,7 +8,7 @@
  * reconciliation logic is unit-testable on its own.
  */
 
-import type { SignalResponse } from "@/lib/api/schema/signal";
+import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 
 /**
  * In-memory cap of the feed. The page is a live tail, not an infinite

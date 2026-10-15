@@ -1,47 +1,48 @@
+mod last_event_kind_response;
+
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::Serialize;
-use yog_core::domain::LastEventKind;
+use utoipa::ToSchema;
 
+use super::pool::ProtocolResponse;
 use crate::application::PoolCurrentStateView;
+use crate::http::dto::schema::{U128String, UnsignedDecimal};
 
-/// `GET /api/pools/{address}/latest-state` response body.
-///
-/// `reserve_a` / `reserve_b` (u64) and `last_sqrt_price` (u128) are all
-/// emitted as JSON strings to preserve their full range across the JS bridge —
-/// a JSON-number consumer truncates above 2^53.
-///
-/// There is no liquidity `L` here, deliberately: the field that claimed to be
-/// one published a position's unsigned `liquidity_delta` instead, and was
-/// removed in migration 003. Per-movement liquidity lives on
-/// `GET /api/pools/{address}/liquidity-events`, under its own name and next to
-/// the add/remove kind that gives it a sign.
-#[derive(Debug, Serialize)]
+use last_event_kind_response::LastEventKindResponse;
+
+/// The latest observed state of a pool. There is no liquidity `L` here: the
+/// per-movement liquidity is on `/liquidity-events`, beside the kind that signs it.
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PoolCurrentStateResponse {
-    pub(crate) pool_address: String,
-    pub(crate) protocol: String,
+    #[schema(min_length = 1)]
+    pool_address: String,
+    protocol: ProtocolResponse,
 
-    pub(crate) last_event_at: DateTime<Utc>,
-    pub(crate) last_event_kind: String,
-    pub(crate) last_signature: String,
+    last_event_at: DateTime<Utc>,
+    last_event_kind: LastEventKindResponse,
+    #[schema(min_length = 1)]
+    last_signature: String,
 
-    pub(crate) reserve_a: String,
-    pub(crate) reserve_b: String,
+    #[schema(value_type = U128String)]
+    reserve_a: String,
+    #[schema(value_type = U128String)]
+    reserve_b: String,
 
     /// Q64.64 fixed-point; encoded as a string to keep precision in JS.
-    pub(crate) last_sqrt_price: Option<String>,
+    #[schema(value_type = Option<U128String>)]
+    last_sqrt_price: Option<String>,
 
-    /// Spot price derived from `last_sqrt_price`: units of token B per 1 token
-    /// A, in human (decimal-adjusted) terms. This is the true DAMM v2 price
-    /// (concentrated liquidity), **not** the reserve ratio. `None` when there
-    /// is no `sqrt_price` yet or the token decimals are unresolved. Serialized
-    /// as a string (`rust_decimal` default) to match the other prices.
-    pub(crate) spot_price_a_in_b: Option<Decimal>,
+    /// Units of token B per token A, decimal-adjusted, from `last_sqrt_price`: the
+    /// concentrated-liquidity price, not the reserve ratio. `None` without a
+    /// `sqrt_price` or with unresolved decimals.
+    #[schema(value_type = Option<UnsignedDecimal>)]
+    spot_price_a_in_b: Option<Decimal>,
 
-    pub(crate) last_swap_at: Option<DateTime<Utc>>,
+    last_swap_at: Option<DateTime<Utc>>,
 
-    pub(crate) updated_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
@@ -52,9 +53,9 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
         } = view;
         Self {
             pool_address: state.pool_address.to_string(),
-            protocol: state.protocol.as_str().to_string(),
+            protocol: state.protocol.into(),
             last_event_at: state.last_event_at,
-            last_event_kind: last_event_kind_str(state.last_event_kind),
+            last_event_kind: state.last_event_kind.into(),
             last_signature: state.last_signature.to_string(),
             reserve_a: state.reserve_a.to_string(),
             reserve_b: state.reserve_b.to_string(),
@@ -66,6 +67,6 @@ impl From<PoolCurrentStateView> for PoolCurrentStateResponse {
     }
 }
 
-fn last_event_kind_str(kind: LastEventKind) -> String {
-    kind.as_str().to_string()
-}
+#[cfg(test)]
+#[path = "tests/pool_current_state_tests.rs"]
+mod tests;

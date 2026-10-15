@@ -27,7 +27,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { KNOWN_DETECTORS } from "@/components/dashboard/signals/signal-display";
 import { CtaLink } from "@/components/shared/cta-link";
 import { fetchPoolBrowser } from "@/lib/api/browser/pool";
-import type { PoolResponse } from "@/lib/api/schema/pool";
+import type { PoolResponse } from "@/lib/api/schema/zod.gen";
 import { useWatchlist } from "@/lib/watchlist/use-watchlist";
 
 import { PoolsTableRow } from "@/components/dashboard/pools/pools-table-row";

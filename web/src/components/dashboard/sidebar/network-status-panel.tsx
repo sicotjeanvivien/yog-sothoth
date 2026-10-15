@@ -34,9 +34,9 @@ import { useTranslations } from "next-intl";
 import { ApiClientError } from "@/lib/api/errors";
 import { fetchNetworkStatusBrowser } from "@/lib/api/browser/network-status";
 import type {
-  Freshness,
+  FreshnessStatusResponse,
   NetworkStatusResponse,
-} from "@/lib/api/schema/network-status";
+} from "@/lib/api/schema/zod.gen";
 
 /** How often the panel re-fetches the network status. */
 const POLL_INTERVAL_MS = 10_000;
@@ -167,7 +167,7 @@ function presentation(state: PanelState): Presentation {
   return BY_FRESHNESS[state.data.freshness];
 }
 
-const BY_FRESHNESS: Record<Freshness, Presentation> = {
+const BY_FRESHNESS: Record<FreshnessStatusResponse, Presentation> = {
   live: {
     dotClass: "bg-dash-accent",
     labelClass: "text-dash-ink-2",

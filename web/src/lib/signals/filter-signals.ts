@@ -12,11 +12,11 @@
  * reappear the moment the filter releases them.
  */
 
-import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
+import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 
 export function filterSignals(
   signals: readonly SignalResponse[],
-  activeSeverities: ReadonlySet<Severity>,
+  activeSeverities: ReadonlySet<SeverityResponse>,
   activeDetectors: ReadonlySet<string>,
 ): readonly SignalResponse[] {
   if (activeSeverities.size === 0 && activeDetectors.size === 0) {

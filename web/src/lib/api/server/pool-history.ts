@@ -6,32 +6,32 @@
  * Not paginated: the window is bounded by `days`.
  */
 
+import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
 import { isValidPoolAddress } from "../server/pool";
-import { PoolHistorySchema, type PoolHistoryResponse } from "../schema/pool-history";
+import {
+  zGetPoolHistoryQuery,
+  zGetPoolHistoryResponse,
+  type PoolHistoryBucketResponse,
+} from "../schema/zod.gen";
 
 const DEFAULT_DAYS = 7;
-const MAX_DAYS = 90;
 
 /**
  * Fetch the hourly history for a pool.
  *
  * @throws TypeError if `address` is syntactically invalid.
- * @throws RangeError if `days` is outside `[1, MAX_DAYS]`.
+ * @throws RangeError if `days` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 export async function fetchPoolHistory(
   address: string,
   days: number = DEFAULT_DAYS,
-): Promise<PoolHistoryResponse> {
+): Promise<PoolHistoryBucketResponse[]> {
   if (!isValidPoolAddress(address)) {
     throw new TypeError(`invalid pool address: ${address}`);
   }
-  if (!Number.isInteger(days) || days < 1 || days > MAX_DAYS) {
-    throw new RangeError(`\`days\` must be an integer in [1, ${MAX_DAYS}], got ${days}`);
-  }
+  assertInBounds("days", days, zGetPoolHistoryQuery.shape.days.unwrap());
 
-  return apiGet(`/api/pools/${address}/history`, { days }, PoolHistorySchema);
+  return apiGet(`/api/pools/${address}/history`, { days }, zGetPoolHistoryResponse);
 }
-
-export const POOL_HISTORY_QUERY_BOUNDS = { DEFAULT_DAYS, MAX_DAYS } as const;

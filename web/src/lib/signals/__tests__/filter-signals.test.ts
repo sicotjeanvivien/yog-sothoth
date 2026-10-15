@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
+import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import { filterSignals } from "../filter-signals";
 
 function signal(
   id: number,
-  severity: Severity,
+  severity: SeverityResponse,
   detector: string,
 ): SignalResponse {
   return {

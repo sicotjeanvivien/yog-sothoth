@@ -18,15 +18,17 @@
 //! resource (e.g. later, in `SwapEventResponse` to show
 //! "1.2 SOL → 240 USDC").
 use serde::Serialize;
-
+use utoipa::ToSchema;
 use yog_core::domain::{TokenMetadata, TokenPrice};
 
-use crate::http::dto::response::EmbeddedPriceResponse;
+use super::logo_uri;
+use super::price_response::TokenPriceResponse;
+use crate::application::EnrichedToken;
 
 /// A token, embedded in another resource's response.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct EmbeddedTokenResponse {
+pub(in crate::http::dto::response) struct EmbeddedTokenResponse {
     /// SPL mint address, base58. `null` until the pool's mints are
     /// resolved by yog-context.
     mint: Option<String>,
@@ -42,25 +44,19 @@ pub(crate) struct EmbeddedTokenResponse {
     decimals: u8,
 
     /// Logo URI as returned by DAS. May be an `ipfs://` URI.
+    #[schema(format = "uri")]
     logo_uri: Option<String>,
 
     /// Latest known price observation, or `null` when the token has
     /// never been priced.
-    price: Option<EmbeddedPriceResponse>,
+    price: Option<TokenPriceResponse>,
 }
 
 impl EmbeddedTokenResponse {
-    /// Build the embedded view from the two sources. Both arguments
-    /// are `Option` because, when this is called during a pool
-    /// enrichment, neither metadata nor price is guaranteed to
-    /// exist yet — the response then falls back to a minimal view
-    /// keyed only by the mint pubkey (passed in via the metadata's
-    /// `mint` field when available, otherwise via the second arg).
-    ///
-    /// The caller (the pool handler) always knows the mint pubkey
-    /// from the pool itself, so it can construct a meaningful
-    /// response even when no metadata row exists yet.
-    pub(crate) fn from_sources(
+    /// Build the embedded view from the two sources. Both are `Option`:
+    /// without metadata the response falls back to a minimal view keyed
+    /// only by `mint`.
+    pub(in crate::http::dto::response) fn from_sources(
         mint: Option<solana_pubkey::Pubkey>,
         metadata: Option<TokenMetadata>,
         price: Option<TokenPrice>,
@@ -69,13 +65,7 @@ impl EmbeddedTokenResponse {
         // showing just the mint with nulls — the dashboard can
         // render a placeholder rather than hiding the pool.
         let (symbol, name, decimals, logo_uri) = match metadata {
-            // Treat an empty logo as absent: the API contract is "URL or null".
-            Some(m) => (
-                m.symbol,
-                m.name,
-                m.decimals,
-                m.logo_uri.filter(|s| !s.is_empty()),
-            ),
+            Some(m) => (m.symbol, m.name, m.decimals, logo_uri(m.logo_uri)),
             None => (None, None, 0, None),
         };
 
@@ -85,21 +75,13 @@ impl EmbeddedTokenResponse {
             name,
             decimals,
             logo_uri,
-            price: price.map(EmbeddedPriceResponse::from),
+            price: price.map(TokenPriceResponse::from),
         }
     }
 }
 
-impl From<TokenPrice> for EmbeddedPriceResponse {
-    fn from(price: TokenPrice) -> Self {
-        Self {
-            usd: price.price_usd,
-            provider: price.price_provider.as_str().to_string(),
-            fetched_at: price.fetched_at,
-        }
+impl From<EnrichedToken> for EmbeddedTokenResponse {
+    fn from(t: EnrichedToken) -> Self {
+        EmbeddedTokenResponse::from_sources(t.mint, t.metadata, t.price)
     }
 }
-
-#[cfg(test)]
-#[path = "tests/embedded_token_tests.rs"]
-mod tests;

@@ -24,7 +24,7 @@ import {
 } from "@/components/dashboard/signals/signal-display";
 import { useSignalStream } from "@/components/dashboard/signals/use-signal-stream";
 import { Link } from "@/i18n/navigation";
-import type { SignalResponse } from "@/lib/api/schema/signal";
+import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 
 export function OverviewLatestSignalsLive({
   initial,

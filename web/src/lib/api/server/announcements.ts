@@ -11,13 +11,13 @@
 
 import { apiGet } from "../client/server";
 import {
-  AnnouncementListSchema,
+  zListActiveAnnouncementsResponse,
   type AnnouncementResponse,
-} from "../schema/announcement";
+} from "../schema/zod.gen";
 
 /** Fetch the currently-active operator announcements from `yog-api`. */
 export async function fetchActiveAnnouncements(): Promise<
   AnnouncementResponse[]
 > {
-  return apiGet("/api/announcements/active", {}, AnnouncementListSchema);
+  return apiGet("/api/announcements/active", {}, zListActiveAnnouncementsResponse);
 }

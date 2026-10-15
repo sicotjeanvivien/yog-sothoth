@@ -15,55 +15,72 @@
 //!   Frontends should use `BigInt(value)` to consume these fields.
 //! * Optional fields are rendered as `null` when absent (`serde` default).
 
+mod trade_direction_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use utoipa::ToSchema;
+use yog_core::domain::{self, MeteoraDammV2SwapEvent};
 
-use yog_core::domain::{MeteoraDammV2SwapEvent, Protocol, TradeDirection};
+use super::pool::ProtocolResponse;
+use crate::http::dto::schema::U128String;
+
+use trade_direction_response::TradeDirectionResponse;
 
 // ---------------------------------------------------------------------------
 // Swap event
 // ---------------------------------------------------------------------------
 
-/// `GET /api/pools/{address}/swaps` item.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SwapEventResponse {
-    pub(crate) pool_address: String,
-    pub(crate) protocol: String,
-    pub(crate) signature: String,
+    #[schema(min_length = 1)]
+    pool_address: String,
+    protocol: ProtocolResponse,
+    #[schema(min_length = 1)]
+    signature: String,
     /// Position of this event among its transaction's emissions. A routed
     /// transaction produces several rows sharing `signature` and `timestamp`;
     /// this is what tells them apart — and the only stable key for a list row.
-    pub(crate) event_index: u16,
-    pub(crate) timestamp: DateTime<Utc>,
+    event_index: u16,
+    timestamp: DateTime<Utc>,
 
-    pub(crate) trade_direction: String,
+    trade_direction: TradeDirectionResponse,
     // All `u64` token quantities (amounts, reserves, fees) are emitted as
     // strings: an atomic-unit value can exceed 2^53, which a JSON-number
     // consumer (JS) silently truncates. Same rationale as `next_sqrt_price`.
-    pub(crate) amount_a: String,
-    pub(crate) amount_b: String,
+    #[schema(value_type = U128String)]
+    amount_a: String,
+    #[schema(value_type = U128String)]
+    amount_b: String,
 
-    pub(crate) reserve_a_after: String,
-    pub(crate) reserve_b_after: String,
-    pub(crate) next_sqrt_price: String,
+    #[schema(value_type = U128String)]
+    reserve_a_after: String,
+    #[schema(value_type = U128String)]
+    reserve_b_after: String,
+    #[schema(value_type = U128String)]
+    next_sqrt_price: String,
 
-    pub(crate) claiming_fee: String,
-    pub(crate) protocol_fee: String,
-    pub(crate) compounding_fee: String,
-    pub(crate) referral_fee: String,
-    pub(crate) fee_token_is_a: bool,
+    #[schema(value_type = U128String)]
+    claiming_fee: String,
+    #[schema(value_type = U128String)]
+    protocol_fee: String,
+    #[schema(value_type = U128String)]
+    compounding_fee: String,
+    #[schema(value_type = U128String)]
+    referral_fee: String,
+    fee_token_is_a: bool,
 }
 
 impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
     fn from(event: MeteoraDammV2SwapEvent) -> Self {
         Self {
             pool_address: event.pool_address.to_string(),
-            protocol: Protocol::MeteoraDammV2.to_string(),
+            protocol: domain::Protocol::MeteoraDammV2.into(),
             signature: event.signature.to_string(),
             event_index: event.event_index,
             timestamp: event.timestamp,
-            trade_direction: trade_direction_str(event.trade_direction),
+            trade_direction: event.trade_direction.into(),
             amount_a: event.amount_a.to_string(),
             amount_b: event.amount_b.to_string(),
             reserve_a_after: event.reserve_a_after.to_string(),
@@ -78,6 +95,6 @@ impl From<MeteoraDammV2SwapEvent> for SwapEventResponse {
     }
 }
 
-fn trade_direction_str(d: TradeDirection) -> String {
-    d.as_str().to_string()
-}
+#[cfg(test)]
+#[path = "tests/swap_event_tests.rs"]
+mod tests;

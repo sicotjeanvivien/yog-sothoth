@@ -39,7 +39,7 @@ import type {
   PagePosition,
   PoolSort,
 } from "@/lib/api/type/pagination";
-import type { PoolsPageResponse } from "@/lib/api/schema/page";
+import type { PoolPageResponsePoolResponse } from "@/lib/api/schema/zod.gen";
 import { PoolsNoResults } from "@/components/dashboard/pools/pool-no-result";
 
 // ── Page metadata ─────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ function parseSort(raw: string | string[] | undefined): PoolSort | undefined {
 // ── Fetch result type ────────────────────────────────────────────────
 
 type FetchOutcome =
-  | { kind: "ok"; data: PoolsPageResponse }
+  | { kind: "ok"; data: PoolPageResponsePoolResponse }
   | { kind: "error"; reason: ApiClientErrorKind };
 
 async function load(args: {

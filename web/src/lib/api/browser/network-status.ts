@@ -16,11 +16,11 @@
 
 import { apiGetBrowser } from "@/lib/api/client/browser";
 import {
-  NetworkStatusSchema,
+  zGetNetworkStatusResponse,
   type NetworkStatusResponse,
-} from "../schema/network-status";
+} from "../schema/zod.gen";
 
 /** Fetch the current network status snapshot from `yog-api` via the public gateway. */
 export async function fetchNetworkStatusBrowser(): Promise<NetworkStatusResponse> {
-  return apiGetBrowser("/api/network/status", {}, NetworkStatusSchema);
+  return apiGetBrowser("/api/network/status", {}, zGetNetworkStatusResponse);
 }

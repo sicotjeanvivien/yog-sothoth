@@ -26,8 +26,11 @@
 
 import { getTranslations } from "next-intl/server";
 
-import type { PoolResponse } from "@/lib/api/schema/pool";
-import type { LiquidityEventResponse } from "@/lib/api/schema/liquidity-event";
+import type {
+  EmbeddedTokenResponse,
+  LiquidityEventResponse,
+  PoolResponse,
+} from "@/lib/api/schema/zod.gen";
 
 import { SolscanIcon } from "@/components/shared/icon";
 import { CopyButton } from "@/components/shared/copy-button";
@@ -35,7 +38,6 @@ import { CopyButton } from "@/components/shared/copy-button";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
 import { formatUsd } from "@/lib/format/format-usd";
-import { TokenResponse } from "@/lib/api/schema/token";
 
 // ── Tailwind class fragments ─────────────────────────────────────────
 
@@ -159,8 +161,8 @@ function LiquidityRow({
   solscanLabel,
 }: {
   event: LiquidityEventResponse;
-  tokenA: TokenResponse;
-  tokenB: TokenResponse;
+  tokenA: EmbeddedTokenResponse;
+  tokenB: EmbeddedTokenResponse;
   locale: string;
   addLabel: string;
   removeLabel: string;

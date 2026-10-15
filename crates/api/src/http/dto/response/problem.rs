@@ -21,41 +21,25 @@
 //! Reference: <https://www.rfc-editor.org/rfc/rfc9457>
 
 use serde::Serialize;
+use utoipa::ToSchema;
 
 /// RFC 9457 content type. The handler sets this on the response,
 /// not the DTO itself — [`axum::Json`] would force `application/json`.
 pub(crate) const PROBLEM_CONTENT_TYPE: &str = "application/problem+json";
 
-/// Problem Details for HTTP APIs — the wire shape returned for every
-/// error response.
-///
-/// Field semantics, all per RFC 9457 §3:
-///
-///   - `type` — URI reference identifying the problem type. Opaque
-///     to clients except for equality comparison. `"about:blank"` is
-///     the reserved value meaning "no specific type, see `title`".
-///   - `title` — short, human-readable summary. Should not change
-///     across occurrences of the same problem type. Clients can
-///     branch on `(type, title)` together.
-///   - `status` — the HTTP status code. Redundant with the response
-///     line, but useful for clients that log only the body.
-///   - `detail` — human-readable per-occurrence message. May vary
-///     across occurrences of the same type. This is where the
-///     contextual information lives ("invalid pool address: foo").
-///
-/// `instance` is intentionally omitted: it would carry the request
-/// path, which the client already knows. It can be added later
-/// without breaking the contract (it's an optional field).
-#[derive(Debug, Serialize)]
-pub(crate) struct ProblemDetails {
+/// RFC 9457 Problem Details, the body of every error response. `type` is
+/// `"about:blank"` until specific problem types exist, so clients branch on
+/// `title`; `instance` is omitted, the client knows the path.
+#[derive(Debug, Serialize, ToSchema)]
+pub(crate) struct ProblemDetailsResponse {
     #[serde(rename = "type")]
-    pub(crate) type_uri: &'static str,
-    pub(crate) title: &'static str,
-    pub(crate) status: u16,
-    pub(crate) detail: String,
+    type_uri: &'static str,
+    title: &'static str,
+    status: u16,
+    detail: String,
 }
 
-impl ProblemDetails {
+impl ProblemDetailsResponse {
     /// Build a Problem Details payload with `type = "about:blank"`.
     /// `title` carries the discrimination role until specific type
     /// URIs are introduced.

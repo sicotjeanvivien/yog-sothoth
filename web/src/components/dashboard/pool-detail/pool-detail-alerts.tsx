@@ -15,7 +15,7 @@
 
 import { getTranslations } from "next-intl/server";
 
-import type { SignalResponse } from "@/lib/api/schema/signal";
+import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 
 import { SignalCard } from "@/components/dashboard/signals/signal-card";
 

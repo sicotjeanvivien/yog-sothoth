@@ -45,6 +45,17 @@ pub(crate) fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
 
+/// The string a wire enum serialises to. Each `*_matches_the_domain` test
+/// compares it with the domain's `as_str()`: red when a wire variant is renamed,
+/// or loses its `rename`, without its domain string.
+pub(crate) fn wire_tag(value: impl serde::Serialize) -> String {
+    serde_json::to_value(value)
+        .expect("a wire enum serialises")
+        .as_str()
+        .expect("a wire enum is a JSON string")
+        .to_string()
+}
+
 pub(crate) fn make_pool(addr: Pubkey, token_a: Pubkey, token_b: Pubkey) -> Pool {
     Pool {
         pool_address: addr,

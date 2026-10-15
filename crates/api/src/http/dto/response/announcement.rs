@@ -3,23 +3,32 @@
 //! Kept separate from the domain type, like every other `*Response` in
 //! this module — the domain model never leaks into the JSON wire shape.
 
+mod kind_response;
+mod severity_response;
+
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-
+use utoipa::ToSchema;
 use yog_core::domain::Announcement;
 
+use crate::http::dto::schema::Count;
+
+use kind_response::AnnouncementKindResponse;
+use severity_response::AnnouncementSeverityResponse;
+
 /// One active operator announcement, as displayed by the web banner.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AnnouncementResponse {
     /// Storage identity — the client's dismiss-cookie key.
+    #[schema(value_type = Count)]
     id: i64,
 
     /// What it is about: "maintenance" | "incident" | "release" | "beta".
-    kind: String,
+    kind: AnnouncementKindResponse,
 
     /// Display prominence: "info" | "warning" | "critical".
-    severity: String,
+    severity: AnnouncementSeverityResponse,
 
     /// Free operator text (English, v1 decision).
     message: String,
@@ -38,8 +47,8 @@ impl From<Announcement> for AnnouncementResponse {
     fn from(a: Announcement) -> Self {
         Self {
             id: a.id,
-            kind: a.kind.as_str().to_string(),
-            severity: a.severity.as_str().to_string(),
+            kind: a.kind.into(),
+            severity: a.severity.into(),
             message: a.message,
             link_url: a.link_url,
             starts_at: a.starts_at,
@@ -47,3 +56,7 @@ impl From<Announcement> for AnnouncementResponse {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/announcement_tests.rs"]
+mod tests;

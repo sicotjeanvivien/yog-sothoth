@@ -8,7 +8,9 @@ use crate::application::MeteoraDammV2SwapListParams;
 use crate::http::{
     cursor::decode_swap_cursor,
     error::ApiError,
-    query::{PageQuery, parse_pool_address, validate_limit, validate_pagination_query},
+    query::{
+        EventPageQuery, parse_pool_address, validate_cursor_position_exclusive, validate_limit,
+    },
 };
 
 #[derive(Debug)]
@@ -26,10 +28,10 @@ impl ListPoolSwapsRequest {
     /// Search and sort are intentionally not exposed by this endpoint —
     /// swap events are ordered by `(timestamp DESC, signature ASC)` by
     /// contract.
-    pub(crate) fn parse(address: String, query: PageQuery) -> Result<Self, ApiError> {
+    pub(crate) fn parse(address: String, query: EventPageQuery) -> Result<Self, ApiError> {
         let pool_address = parse_pool_address(&address)?;
         validate_limit(query.limit)?;
-        validate_pagination_query(&query)?;
+        validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())?;
 
         let cursor = match query.cursor.as_deref() {
             Some(raw) if !raw.is_empty() => Some(decode_swap_cursor(raw)?),

@@ -1,16 +1,14 @@
-//! Unit tests for `EmbeddedTokenResponse::from_sources`.
-//!
-//! Focused on the fallback branch — the only piece of conditional
-//! logic in the response DTO layer. Also pins the camelCase wire
-//! shape, since a misplaced `rename_all` would break frontend
-//! consumers silently.
+//! `EmbeddedTokenResponse::from_sources` — its fallback when metadata is absent,
+//! and its camelCase wire shape — then the tag of each price provider.
 
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
-use yog_core::domain::{MetadataProvider, PriceProvider, TokenMetadata, TokenPrice};
+use yog_core::domain::{self, MetadataProvider, PriceProvider, TokenMetadata, TokenPrice};
 
 use super::EmbeddedTokenResponse;
+use super::price_provider_response::PriceProviderResponse;
+use crate::testing::wire_tag;
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -197,5 +195,13 @@ fn wire_field_names_are_camel_case() {
     // Other fields with no case difference but still pinned:
     for k in ["mint", "symbol", "name", "decimals", "price"] {
         assert!(j.get(k).is_some(), "expected field `{k}`");
+    }
+}
+
+#[test]
+fn price_provider_matches_the_domain() {
+    use domain::PriceProvider::*;
+    for v in [Jupiter, Helius, Fallback] {
+        assert_eq!(wire_tag(PriceProviderResponse::from(v)), v.as_str());
     }
 }

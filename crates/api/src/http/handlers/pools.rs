@@ -16,13 +16,23 @@ use crate::http::{
         },
     },
     error::ApiError,
-    query::{HistoryQuery, PageQuery, TopPoolsQuery},
+    query::{EventPageQuery, HistoryQuery, PageQuery, TopPoolsQuery},
 };
 
 // ===========================================================================
 // GET /api/pools
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools",
+    params(PageQuery),
+    responses((
+        status = 200,
+        description = "A page of pools.",
+        body = PoolPageResponse<PoolResponse>
+    ))
+)]
 pub(crate) async fn list_pools(
     State(state): State<AppState>,
     Query(query): Query<PageQuery>,
@@ -51,10 +61,17 @@ pub(crate) async fn list_pools(
 // GET /api/pools/fee-tiers
 // ===========================================================================
 
-/// The most common base-fee tiers (basis points) with their pool counts,
-/// ascending by fee — the option list of the pools fee filter. A JSON array
-/// of `{ feeBps, poolCount }`; `feeBps` is a decimal string like on the pool
-/// responses, `poolCount` a plain number.
+/// The most common base-fee tiers, ascending, with their pool counts: the
+/// option list of the pools fee filter.
+#[utoipa::path(
+    get,
+    path = "/api/pools/fee-tiers",
+    responses((
+        status = 200,
+        description = "The most common base-fee tiers, with their pool counts.",
+        body = Vec<FeeTierResponse>
+    ))
+)]
 pub(crate) async fn list_fee_tiers(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<FeeTierResponse>>, ApiError> {
@@ -67,6 +84,16 @@ pub(crate) async fn list_fee_tiers(
 // GET /api/pools/top
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools/top",
+    params(TopPoolsQuery),
+    responses((
+        status = 200,
+        description = "The top pools by the requested metric.",
+        body = Vec<PoolResponse>
+    ))
+)]
 pub(crate) async fn list_top_pools(
     State(state): State<AppState>,
     Query(query): Query<TopPoolsQuery>,
@@ -85,6 +112,15 @@ pub(crate) async fn list_top_pools(
 // GET /api/pools/{address}
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools/{address}",
+    responses((
+        status = 200,
+        description = "The pool, with its own protocol's properties.",
+        body = PoolDetailResponse
+    ))
+)]
 pub(crate) async fn get_pool(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -104,6 +140,15 @@ pub(crate) async fn get_pool(
 // GET /api/pools/{address}/latest-state
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools/{address}/latest-state",
+    responses((
+        status = 200,
+        description = "The pool's latest observed state.",
+        body = PoolCurrentStateResponse
+    ))
+)]
 pub(crate) async fn get_pool_latest_state(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -128,6 +173,16 @@ pub(crate) async fn get_pool_latest_state(
 // GET /api/pools/{address}/history
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools/{address}/history",
+    params(HistoryQuery),
+    responses((
+        status = 200,
+        description = "The pool's activity, one bucket per hour.",
+        body = Vec<PoolHistoryBucketResponse>
+    ))
+)]
 pub(crate) async fn get_pool_history(
     State(state): State<AppState>,
     Path(address): Path<String>,
@@ -152,10 +207,20 @@ pub(crate) async fn get_pool_history(
 // GET /api/pools/{address}/swaps
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools/{address}/swap-events",
+    params(EventPageQuery),
+    responses((
+        status = 200,
+        description = "A page of the pool's swaps.",
+        body = PageResponse<SwapEventResponse>
+    ))
+)]
 pub(crate) async fn list_pool_swaps(
     State(state): State<AppState>,
     Path(address): Path<String>,
-    Query(query): Query<PageQuery>,
+    Query(query): Query<EventPageQuery>,
 ) -> Result<Json<PageResponse<SwapEventResponse>>, ApiError> {
     let request = ListPoolSwapsRequest::parse(address, query)?;
     let page = state
@@ -184,10 +249,20 @@ pub(crate) async fn list_pool_swaps(
 // GET /api/pools/{address}/liquidity-events
 // ===========================================================================
 
+#[utoipa::path(
+    get,
+    path = "/api/pools/{address}/liquidity-events",
+    params(EventPageQuery),
+    responses((
+        status = 200,
+        description = "A page of the pool's liquidity events.",
+        body = PageResponse<LiquidityEventResponse>
+    ))
+)]
 pub(crate) async fn list_pool_liquidity_events(
     State(state): State<AppState>,
     Path(address): Path<String>,
-    Query(query): Query<PageQuery>,
+    Query(query): Query<EventPageQuery>,
 ) -> Result<Json<PageResponse<LiquidityEventResponse>>, ApiError> {
     let request = ListPoolLiquidityRequest::parse(address, query)?;
     let page = state

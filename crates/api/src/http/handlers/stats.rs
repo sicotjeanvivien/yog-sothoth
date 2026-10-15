@@ -12,6 +12,15 @@ use axum::{Json, extract::State};
 ///
 /// Returns the current protocol-wide statistics. Always a 200 with a payload —
 /// empty inputs surface as `null`/`0` fields, never a 404.
+#[utoipa::path(
+    get,
+    path = "/api/stats",
+    responses((
+        status = 200,
+        description = "Totals across every observed pool.",
+        body = StatsResponse
+    ))
+)]
 pub(crate) async fn get_stats(
     State(state): State<AppState>,
 ) -> Result<Json<StatsResponse>, ApiError> {

@@ -17,7 +17,9 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
 use crate::http::{
     AppState,
-    dto::response::{ChecksReport, ComponentStatus, ReadinessResponse, ReadinessStatus},
+    dto::response::{
+        ChecksReportResponse, ComponentStatusResponse, ReadinessResponse, ReadinessStatusResponse,
+    },
 };
 
 /// `GET /healthz` — liveness probe.
@@ -38,15 +40,15 @@ pub(crate) async fn readyz(State(state): State<AppState>) -> impl IntoResponse {
 
     let body = ReadinessResponse {
         status: if db_ok {
-            ReadinessStatus::Ready
+            ReadinessStatusResponse::Ready
         } else {
-            ReadinessStatus::Unhealthy
+            ReadinessStatusResponse::Unhealthy
         },
-        checks: ChecksReport {
+        checks: ChecksReportResponse {
             db: if db_ok {
-                ComponentStatus::Up
+                ComponentStatusResponse::Up
             } else {
-                ComponentStatus::Down
+                ComponentStatusResponse::Down
             },
         },
     };

@@ -16,7 +16,7 @@
 import * as z from "zod";
 
 import { ApiClientError } from "../errors";
-import { ApiErrorBodySchema } from "../schema/api-error-body";
+import { zProblemDetailsResponse } from "../schema/zod.gen";
 
 /**
  * Try to read the RFC 9457 Problem Details body returned by yog-api
@@ -28,7 +28,7 @@ import { ApiErrorBodySchema } from "../schema/api-error-body";
 async function readRemoteErrorMessage(response: Response): Promise<string | null> {
   try {
     const body: unknown = await response.json();
-    const parsed = ApiErrorBodySchema.safeParse(body);
+    const parsed = zProblemDetailsResponse.safeParse(body);
     return parsed.success ? parsed.data.detail : null;
   } catch {
     return null;
@@ -138,4 +138,16 @@ export function buildUrl(
     }
   }
   return url.toString();
+}
+
+/**
+ * Throws a `RangeError` unless `value` passes `schema`, the generated zod of a
+ * bounded query parameter, whose own bounds the message quotes.
+ */
+export function assertInBounds(name: string, value: number, schema: z.ZodNumber): void {
+  if (!schema.safeParse(value).success) {
+    throw new RangeError(
+      `\`${name}\` must be an integer in [${schema.minValue}, ${schema.maxValue}], got ${value}`,
+    );
+  }
 }

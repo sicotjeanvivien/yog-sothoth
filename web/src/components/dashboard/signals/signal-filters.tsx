@@ -19,12 +19,12 @@
 import { useTranslations } from "next-intl";
 
 import { InfoPopover } from "@/components/shared/info-popover";
-import type { Severity, SignalResponse } from "@/lib/api/schema/signal";
+import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 
 import { KNOWN_DETECTORS } from "./signal-display";
 
 // Active chip styling per severity — same hues as the cards.
-const SEVERITY_CHIP_ACTIVE: Record<Severity, string> = {
+const SEVERITY_CHIP_ACTIVE: Record<SeverityResponse, string> = {
   info: "border-sky-400/40 bg-sky-400/10 text-sky-300",
   warning: "border-amber-400/40 bg-amber-400/10 text-amber-300",
   critical: "border-rose-400/40 bg-rose-400/10 text-rose-300",
@@ -36,7 +36,7 @@ const DETECTOR_CHIP_ACTIVE =
 const CHIP_INACTIVE =
   "border-sothoth-500/15 text-slate-400 hover:border-sothoth-500/30 hover:text-slate-300";
 
-const SEVERITIES: readonly Severity[] = ["critical", "warning", "info"];
+const SEVERITIES: readonly SeverityResponse[] = ["critical", "warning", "info"];
 
 type Translate = ReturnType<typeof useTranslations>;
 
@@ -66,15 +66,15 @@ export function SignalFilters({
   onToggleDetector,
 }: {
   signals: readonly SignalResponse[];
-  activeSeverities: ReadonlySet<Severity>;
+  activeSeverities: ReadonlySet<SeverityResponse>;
   activeDetectors: ReadonlySet<string>;
-  onToggleSeverity: (severity: Severity) => void;
+  onToggleSeverity: (severity: SeverityResponse) => void;
   onToggleDetector: (detector: string) => void;
 }) {
   const t = useTranslations("Dashboard.Signals.feed");
   const tShell = useTranslations("Dashboard.shell");
 
-  const severityCounts = new Map<Severity, number>();
+  const severityCounts = new Map<SeverityResponse, number>();
   const detectorCounts = new Map<string, number>();
   for (const signal of signals) {
     severityCounts.set(

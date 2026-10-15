@@ -15,7 +15,7 @@
 
 import { getTranslations } from "next-intl/server";
 
-import type { PoolHistoryResponse } from "@/lib/api/schema/pool-history";
+import type { PoolHistoryBucketResponse } from "@/lib/api/schema/zod.gen";
 
 import {
   TimeSeriesChart,
@@ -36,8 +36,8 @@ const FEE_COLOR = "#5eead4"; // teal
 const RATE_COLOR = "#a78bfa"; // violet
 
 function series(
-  history: PoolHistoryResponse,
-  pick: (b: PoolHistoryResponse[number]) => string | null,
+  history: PoolHistoryBucketResponse[],
+  pick: (b: PoolHistoryBucketResponse) => string | null,
 ): ChartPoint[] {
   return history
     .filter((b) => pick(b) !== null)
@@ -48,7 +48,7 @@ export async function PoolDetailFees({
   history,
   locale,
 }: {
-  history: PoolHistoryResponse;
+  history: PoolHistoryBucketResponse[];
   locale: string;
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.fees");

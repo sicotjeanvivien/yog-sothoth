@@ -19,6 +19,9 @@ Templates to copy: the swap/pool read path —
 
 ## Before you start — clarify scope
 
+Read the rules first — `crates/api/README.md` → *What a route may return*: what a route
+may return, how it is named, and the 2 s it must answer in.
+
 Confirm with the user (don't assume):
 - The **route** (e.g. `GET /api/pools/{address}/liquidity`) and its path/query params.
 - Whether the data is **cross-protocol** (read a VIEW: `swap_events`, `liquidity_events`, …)
@@ -59,8 +62,11 @@ If the query already exists, skip to Step 3.
   (template: `meteora_damm_v2_swap_service.rs`). The service holds the repo trait object
   and contains the read logic; the handler stays thin.
 - **DTOs** — request DTO under `crates/api/src/http/dto/request/`, response DTO under
-  `crates/api/src/http/dto/response/`. Validate client-supplied data in the request DTO,
-  before any DB call.
+  `crates/api/src/http/dto/response/`, named and placed as *Where a response type goes*
+  says (`crates/api/README.md`). Validate client-supplied data in the request DTO,
+  before any DB call. The response DTO derives `utoipa::ToSchema`, the query struct
+  `IntoParams`; a `Decimal`, an `i64`, a closed set of strings each need their wire form
+  (`crates/api/README.md` → *The contract*).
 - **Handler** — add to `crates/api/src/http/handlers/<aggregate>.rs`. Reuse `ApiError`
   (`crates/api/src/http/error.rs`); its `From<RepositoryError>` impl maps repo failures to
   RFC 9457 Problem Details uniformly — don't hand-roll error responses.
@@ -68,9 +74,16 @@ If the query already exists, skip to Step 3.
   its construction in `build_app_state` (`crates/api/src/bootstrap/app_state.rs`), where the
   concrete `Pg*` repositories are injected. Two files, two layers — the state belongs to
   the HTTP layer, its wiring to the bootstrap.
-- **Mount the route** in `build_router` in `crates/api/src/http.rs` (NB: the README says
-  `http/mod.rs` — it's actually `http.rs`). Add the `.route("/api/…", get(...))` line next
-  to the existing ones.
+- **Declare and mount the route** — `#[utoipa::path(get, path = "/api/…", params(…),
+  responses((status = 200, body = …)))]` on the handler, then
+  `.routes(routes!(handlers::…))` in `api_routes` (`crates/api/src/http.rs`), in the
+  slotted router if it is slow. Never `.route("/api/…")`: it serves the route without a
+  contract, and a test fails on it.
+- **Regenerate the contract**, and commit both:
+  ```bash
+  YOG_WRITE_OPENAPI=1 cargo test -p yog-api contract
+  cd web && npm run gen:api
+  ```
 
 ## Conventions (enforced)
 
@@ -101,6 +114,7 @@ curl http://127.0.0.1:5000/api/<your-endpoint> | jq
 - [ ] Repository trait method added + ordering/pagination contract documented (if new)
 - [ ] `Pg*` impl added; `.sqlx/` regenerated and committed
 - [ ] Service + request/response DTOs created; input validated at the handler boundary
-- [ ] Route mounted in `build_router` (`http.rs`)
+- [ ] Route declared with `#[utoipa::path]` and mounted in `api_routes` (`http.rs`)
+- [ ] `crates/api/openapi.json` and `web/src/lib/api/schema/` regenerated and committed
 - [ ] Cursor pagination + RFC 9457 errors respected; endpoint is read-only (RO `yog_api`)
 - [ ] fmt / clippy (-D warnings) / tests green; route returns expected JSON via curl

@@ -13,12 +13,16 @@
  * `ApiClientError`.
  */
 
+import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
-import { PoolsPageSchema, type PoolsPageResponse } from "../schema/page";
+import {
+  zListPoolsQuery,
+  zListPoolsResponse,
+  type PoolPageResponsePoolResponse,
+} from "../schema/zod.gen";
 import type { PageDir, PagePosition, PoolSort } from "../type/pagination";
 
 const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
 
 /**
  * Parameters accepted by `fetchPools`. All optional.
@@ -45,18 +49,14 @@ export type FetchPoolsParams = {
 /**
  * Fetch a paginated page of pools from `yog-api`.
  *
- * @throws RangeError if `limit` is outside `[1, MAX_LIMIT]`.
+ * @throws RangeError if `limit` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 export async function fetchPools(
   params: FetchPoolsParams = {},
-): Promise<PoolsPageResponse> {
+): Promise<PoolPageResponsePoolResponse> {
   const limit = params.limit ?? DEFAULT_LIMIT;
-  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-    throw new RangeError(
-      `\`limit\` must be an integer in [1, ${MAX_LIMIT}], got ${limit}`,
-    );
-  }
+  assertInBounds("limit", limit, zListPoolsQuery.shape.limit.unwrap());
 
   return apiGet(
     "/api/pools",
@@ -71,11 +71,6 @@ export async function fetchPools(
         params.feeBps && params.feeBps.length > 0 ? params.feeBps : undefined,
       limit,
     },
-    PoolsPageSchema,
+    zListPoolsResponse,
   );
 }
-
-export const POOLS_QUERY_BOUNDS = {
-  DEFAULT_LIMIT,
-  MAX_LIMIT,
-} as const;

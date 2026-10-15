@@ -1,15 +1,15 @@
-//! Unit tests for the RFC 9457 ProblemDetails wire shape.
+//! Unit tests for the RFC 9457 ProblemDetailsResponse wire shape.
 //!
 //! The DTO carries the public error format. These tests pin the
 //! exact field names and the discriminator value (`about:blank`)
 //! so they fail at `cargo test` time if a refactor accidentally
 //! changes the contract.
 
-use super::ProblemDetails;
+use super::ProblemDetailsResponse;
 
 #[test]
 fn serialises_all_four_required_fields() {
-    let p = ProblemDetails::generic("Bad Request", 400, "invalid pool address".to_string());
+    let p = ProblemDetailsResponse::generic("Bad Request", 400, "invalid pool address".to_string());
     let json = serde_json::to_value(&p).unwrap();
 
     // The four RFC 9457 fields, in their wire form.
@@ -23,7 +23,7 @@ fn serialises_all_four_required_fields() {
 fn type_field_uses_rfc_name_not_rust_name() {
     // The Rust struct field is `type_uri` to avoid the keyword
     // collision; the wire field must still be `type`.
-    let p = ProblemDetails::generic("Bad Request", 400, "x".to_string());
+    let p = ProblemDetailsResponse::generic("Bad Request", 400, "x".to_string());
     let json = serde_json::to_value(&p).unwrap();
 
     assert!(json.get("type").is_some());
@@ -36,7 +36,7 @@ fn generic_constructor_sets_type_to_about_blank() {
     // When specific URIs are introduced later, they will live in a
     // new constructor (`with_type(...)`); this one must remain the
     // safe default for unclassified errors.
-    let p = ProblemDetails::generic("Bad Request", 400, "x".to_string());
+    let p = ProblemDetailsResponse::generic("Bad Request", 400, "x".to_string());
     let json = serde_json::to_value(&p).unwrap();
 
     assert_eq!(json["type"], "about:blank");
@@ -45,7 +45,7 @@ fn generic_constructor_sets_type_to_about_blank() {
 #[test]
 fn status_is_serialised_as_number() {
     // RFC 9457 §3.1.3: `status` MUST be a number, not a string.
-    let p = ProblemDetails::generic("Bad Request", 400, "x".to_string());
+    let p = ProblemDetailsResponse::generic("Bad Request", 400, "x".to_string());
     let json = serde_json::to_value(&p).unwrap();
 
     assert!(json["status"].is_number(), "`status` must be a number");
@@ -54,7 +54,11 @@ fn status_is_serialised_as_number() {
 
 #[test]
 fn detail_carries_per_occurrence_message() {
-    let p = ProblemDetails::generic("Bad Request", 400, "invalid pool address: foo".to_string());
+    let p = ProblemDetailsResponse::generic(
+        "Bad Request",
+        400,
+        "invalid pool address: foo".to_string(),
+    );
     let json = serde_json::to_value(&p).unwrap();
 
     assert_eq!(json["detail"], "invalid pool address: foo");
@@ -66,8 +70,8 @@ fn title_is_stable_per_problem_type() {
     // even when their `detail` differs. This is what clients can
     // branch on for type-based discrimination at the `about:blank`
     // stage.
-    let p1 = ProblemDetails::generic("Bad Request", 400, "msg one".to_string());
-    let p2 = ProblemDetails::generic("Bad Request", 400, "msg two".to_string());
+    let p1 = ProblemDetailsResponse::generic("Bad Request", 400, "msg one".to_string());
+    let p2 = ProblemDetailsResponse::generic("Bad Request", 400, "msg two".to_string());
 
     let j1 = serde_json::to_value(&p1).unwrap();
     let j2 = serde_json::to_value(&p2).unwrap();

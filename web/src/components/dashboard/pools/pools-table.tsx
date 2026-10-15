@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { KNOWN_DETECTORS } from "@/components/dashboard/signals/signal-display";
-import type { PoolResponse } from "@/lib/api/schema/pool";
+import type { PoolResponse } from "@/lib/api/schema/zod.gen";
 import type { PoolSort } from "@/lib/api/type/pagination";
 
 import { PoolsTableRow } from "./pools-table-row";
