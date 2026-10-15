@@ -66,9 +66,12 @@ impl TokenResponse {
     }
 }
 
-/// An empty logo is absent: the API contract is "URL or null".
+/// Only what parses as a WHATWG URL — the rule of the web's `z.url()` — is
+/// kept: the API contract is "URL or null".
 fn logo_uri(raw: Option<String>) -> Option<String> {
-    raw.filter(|s| !s.is_empty())
+    // ⚠️ No `trim()`: Rust's strips U+0085, JS's keeps it, so a trimmed
+    // value would pass here and fail on the web.
+    raw.filter(|s| url::Url::parse(s).is_ok())
 }
 
 #[cfg(test)]

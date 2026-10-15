@@ -1,13 +1,14 @@
 //! `EmbeddedTokenResponse::from_sources` — its fallback when metadata is absent,
-//! and its camelCase wire shape — then the tag of each price provider.
+//! and its camelCase wire shape — then `logo_uri`, and the tag of each price
+//! provider.
 
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::domain::{self, MetadataProvider, PriceProvider, TokenMetadata, TokenPrice};
 
-use super::EmbeddedTokenResponse;
 use super::price_provider_response::PriceProviderResponse;
+use super::{EmbeddedTokenResponse, logo_uri};
 use crate::testing::wire_tag;
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -195,6 +196,32 @@ fn wire_field_names_are_camel_case() {
     // Other fields with no case difference but still pinned:
     for k in ["mint", "symbol", "name", "decimals", "price"] {
         assert!(j.get(k).is_some(), "expected field `{k}`");
+    }
+}
+
+// ── Logo ─────────────────────────────────────────────────────────────
+
+#[test]
+fn logo_uri_keeps_only_a_url() {
+    // Mutations: back to the empty-string filter alone, and a `trim()` before
+    // parsing (the U+0085 case, which `z.url()` refuses).
+    for refused in [
+        "d",
+        "token-image.png",
+        "/_next/static/media/icon_solana_16px_bold_dark_s.62336f77.1255ba95.webp",
+        "HaH5hiDBTxzXUcd7bRXbshrZ3BtcNQA8nhpd6H45iinu",
+        "sgrs.debot.ai/logo/d09738ba72e94446ee1bc4d606bce723.png",
+        "src=\"https://sgrs.debot.ai/logo/d09738ba72e94446ee1bc4d606bce723.png\"",
+        "\u{85}https://example.test/logo.png",
+    ] {
+        assert_eq!(logo_uri(Some(refused.to_string())), None, "{refused:?}");
+    }
+
+    for kept in [
+        "https://example.test/logo.png",
+        "ipfs://bafybeihi7twfp4lljqegiyg6xlojwrrs7r6qrpdz24g7t63zn37qovumyu",
+    ] {
+        assert_eq!(logo_uri(Some(kept.to_string())).as_deref(), Some(kept));
     }
 }
 
