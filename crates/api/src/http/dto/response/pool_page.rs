@@ -30,6 +30,7 @@ use crate::http::dto::schema::Count;
 pub(crate) struct PoolPageResponse<T> {
     #[serde(flatten)]
     pub(crate) page: PageResponse<T>,
+    #[schema(value_type = Option<String>, format = DateTime)]
     pub(crate) as_of: Option<String>,
     #[schema(value_type = Count)]
     pub(crate) touched_since: i64,

@@ -11,6 +11,8 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use yog_core::domain::{FreshnessStatus, NetworkStatus};
 
+use crate::http::dto::schema::U128String;
+
 use freshness_status_response::FreshnessStatusResponse;
 
 /// The "Solana Live" panel payload.
@@ -32,6 +34,7 @@ pub(crate) struct NetworkStatusResponse {
     ///
     /// Serialized as a string: slots are u64 and can exceed the safe
     /// integer range of a JSON number consumer.
+    #[schema(value_type = U128String)]
     slot: String,
 
     /// Round-trip latency of the probe's last `getSlot` call, in ms — the

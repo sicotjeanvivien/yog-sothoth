@@ -10,7 +10,7 @@ pub(crate) struct UnsignedDecimal;
 /// A decimal that carries a direction, written as a string (`"-0.2157"`).
 pub(crate) struct SignedDecimal;
 
-/// A token quantity written as a string of digits: it can exceed 2^53.
+/// An integer written as a string of digits: it can exceed 2^53.
 pub(crate) struct U128String;
 
 /// A count or an id, as a JSON number.

@@ -66,16 +66,6 @@ export const zMeteoraDlmmPropertiesResponse = z.object({
 
 export type MeteoraDlmmPropertiesResponse = z.infer<typeof zMeteoraDlmmPropertiesResponse>;
 
-export const zNetworkStatusResponse = z.object({
-    freshness: zFreshnessStatusResponse,
-    lastEventAt: z.iso.datetime({ offset: true }).nullable(),
-    observedAt: z.iso.datetime({ offset: true }),
-    rpcLatencyMs: z.int().gte(0),
-    slot: z.string()
-});
-
-export type NetworkStatusResponse = z.infer<typeof zNetworkStatusResponse>;
-
 export const zPriceProviderResponse = z.enum([
     'jupiter',
     'helius',
@@ -124,6 +114,16 @@ export type TradeDirectionResponse = z.infer<typeof zTradeDirectionResponse>;
 export const zU128String = z.string().regex(/^\d+$/);
 
 export type U128String = z.infer<typeof zU128String>;
+
+export const zNetworkStatusResponse = z.object({
+    freshness: zFreshnessStatusResponse,
+    lastEventAt: z.iso.datetime({ offset: true }).nullable(),
+    observedAt: z.iso.datetime({ offset: true }),
+    rpcLatencyMs: z.int().gte(0),
+    slot: zU128String
+});
+
+export type NetworkStatusResponse = z.infer<typeof zNetworkStatusResponse>;
 
 export const zPageResponseSwapEventResponse = z.object({
     isFirst: z.boolean(),
@@ -355,7 +355,7 @@ export const zPageResponseSignalResponse = z.object({
 export type PageResponseSignalResponse = z.infer<typeof zPageResponseSignalResponse>;
 
 export const zPoolPageResponsePoolResponse = zPageResponsePoolResponse.and(z.object({
-    asOf: z.string().nullable(),
+    asOf: z.iso.datetime({ offset: true }).nullable(),
     touchedSince: zCount
 }));
 

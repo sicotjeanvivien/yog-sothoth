@@ -416,8 +416,8 @@
             "type": "integer"
           },
           "slot": {
-            "description": "Latest Solana slot the probe saw.\n\nSerialized as a string: slots are u64 and can exceed the safe\ninteger range of a JSON number consumer.",
-            "type": "string"
+            "$ref": "#/components/schemas/U128String",
+            "description": "Latest Solana slot the probe saw.\n\nSerialized as a string: slots are u64 and can exceed the safe\ninteger range of a JSON number consumer."
           }
         },
         "required": [
@@ -1168,6 +1168,7 @@
           {
             "properties": {
               "asOf": {
+                "format": "date-time",
                 "type": [
                   "string",
                   "null"
