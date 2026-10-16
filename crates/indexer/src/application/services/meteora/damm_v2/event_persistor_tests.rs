@@ -160,8 +160,7 @@ impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
     }
 }
 
-// PoolMaintenance's two repos: `pool:upsert` is upsert_pool_full, `pool:touch` touch_pool,
-// `pcs:upsert` the current-state projection.
+// PoolMaintenance's two repos: `pool:touch` is touch_pool, `pcs:upsert` the current-state projection.
 struct MockPoolRepo(Calls);
 #[async_trait]
 impl PoolRepository for MockPoolRepo {

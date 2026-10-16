@@ -45,8 +45,7 @@ impl FetchMetrics {
     }
 
     /// Work this stage discarded without handing it on, apart from fetch failures.
-    /// ⚠️ `shutdown` and `downstream_closed` spent a request, `shutdown_before_fetch` did not:
-    /// the total over-counts wasted quota by the queued backlog at shutdown.
+    /// ⚠️ `shutdown` and `downstream_closed` spent a request, `shutdown_before_fetch` did not.
     pub(crate) fn record_dropped(protocol: &Protocol, reason: &'static str) {
         counter!(FETCH_DROPPED, "protocol" => protocol.as_str(), "reason" => reason).increment(1);
     }
