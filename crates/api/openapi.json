@@ -86,7 +86,7 @@
             "type": "integer"
           },
           "logoUri": {
-            "description": "Logo URI as returned by DAS. May be an `ipfs://` URI.",
+            "description": "Logo URL as returned by DAS. `null` unless it is `http` or `https`.",
             "format": "uri",
             "type": [
               "string",
@@ -1671,7 +1671,7 @@
             "type": "string"
           },
           "logoUri": {
-            "description": "Logo URI, as returned by DAS. May be an `ipfs://` URI.",
+            "description": "Logo URL, as returned by DAS. `null` unless it is `http` or `https`.",
             "format": "uri",
             "type": [
               "string",

@@ -43,7 +43,7 @@ pub(in crate::http::dto::response) struct EmbeddedTokenResponse {
     /// Decimal precision.
     decimals: u8,
 
-    /// Logo URI as returned by DAS. May be an `ipfs://` URI.
+    /// Logo URL as returned by DAS. `null` unless it is `http` or `https`.
     #[schema(format = "uri")]
     logo_uri: Option<String>,
 

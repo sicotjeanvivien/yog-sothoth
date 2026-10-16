@@ -1,13 +1,14 @@
 //! `EmbeddedTokenResponse::from_sources` — its fallback when metadata is absent,
-//! and its camelCase wire shape — then the tag of each price provider.
+//! and its camelCase wire shape — then `logo_uri`, which `TokenResponse::new`
+//! applies too, and the tag of each price provider.
 
 use chrono::{TimeZone, Utc};
 use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use yog_core::domain::{self, MetadataProvider, PriceProvider, TokenMetadata, TokenPrice};
 
-use super::EmbeddedTokenResponse;
 use super::price_provider_response::PriceProviderResponse;
+use super::{EmbeddedTokenResponse, TokenResponse, logo_uri};
 use crate::testing::wire_tag;
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -96,6 +97,17 @@ fn empty_logo_uri_serializes_as_null() {
     let j = to_json(&dto);
 
     assert!(j["logoUri"].is_null(), "empty logo must be null, not \"\"");
+}
+
+#[test]
+fn embedded_token_filters_its_logo() {
+    // Mutation: `from_sources` keeping any non-empty logo.
+    let mut meta = full_metadata(mint());
+    meta.logo_uri = Some("token-image.png".to_string());
+
+    let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(meta), None);
+
+    assert!(to_json(&dto)["logoUri"].is_null());
 }
 
 // ── Branch 2: metadata absent ────────────────────────────────────────
@@ -196,6 +208,48 @@ fn wire_field_names_are_camel_case() {
     for k in ["mint", "symbol", "name", "decimals", "price"] {
         assert!(j.get(k).is_some(), "expected field `{k}`");
     }
+}
+
+// ── Logo ─────────────────────────────────────────────────────────────
+
+#[test]
+fn logo_uri_keeps_only_an_http_url() {
+    // Mutations: back to the empty-string filter alone, no scheme check
+    // (`ipfs://@`, which `z.url()` refuses), a `trim()` before parsing (U+0085),
+    // and an `http(s)://` prefix check in place of the parse (port 65536).
+    for refused in [
+        "d",
+        "token-image.png",
+        "/_next/static/media/icon_solana_16px_bold_dark_s.62336f77.1255ba95.webp",
+        "HaH5hiDBTxzXUcd7bRXbshrZ3BtcNQA8nhpd6H45iinu",
+        "sgrs.debot.ai/logo/d09738ba72e94446ee1bc4d606bce723.png",
+        "src=\"https://sgrs.debot.ai/logo/d09738ba72e94446ee1bc4d606bce723.png\"",
+        "ipfs://@",
+        "ipfs://bafybeihi7twfp4lljqegiyg6xlojwrrs7r6qrpdz24g7t63zn37qovumyu",
+        "blob:https://x.com/5d74a49d-97ac-4c85-8f2c-27a1447c2c13",
+        "\u{85}https://example.test/logo.png",
+        "https://example.test:65536/logo.png",
+    ] {
+        assert_eq!(logo_uri(Some(refused.to_string())), None, "{refused:?}");
+    }
+
+    for kept in [
+        "https://example.test/logo.png",
+        "http://example.test/logo.png",
+    ] {
+        assert_eq!(logo_uri(Some(kept.to_string())).as_deref(), Some(kept));
+    }
+}
+
+#[test]
+fn token_response_filters_its_logo() {
+    // Mutation: `TokenResponse::new` passing the raw logo through.
+    let mut meta = full_metadata(mint());
+    meta.logo_uri = Some("token-image.png".to_string());
+
+    let j = serde_json::to_value(TokenResponse::new(meta, None)).expect("DTO must serialize");
+
+    assert!(j["logoUri"].is_null());
 }
 
 #[test]

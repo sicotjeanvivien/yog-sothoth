@@ -35,7 +35,7 @@ pub(crate) struct TokenResponse {
     /// Decimal precision of the mint.
     decimals: u8,
 
-    /// Logo URI, as returned by DAS. May be an `ipfs://` URI.
+    /// Logo URL, as returned by DAS. `null` unless it is `http` or `https`.
     #[schema(format = "uri")]
     logo_uri: Option<String>,
 
@@ -66,9 +66,12 @@ impl TokenResponse {
     }
 }
 
-/// An empty logo is absent: the API contract is "URL or null".
+/// Only an `http`/`https` URL is kept: under another scheme `url` accepts what
+/// the web's `z.url()` refuses, and a browser shows neither `ipfs:` nor `blob:`.
 fn logo_uri(raw: Option<String>) -> Option<String> {
-    raw.filter(|s| !s.is_empty())
+    // ⚠️ No `trim()`: Rust's strips U+0085, JS's keeps it, so a trimmed
+    // value would pass here and fail on the web.
+    raw.filter(|s| url::Url::parse(s).is_ok_and(|u| matches!(u.scheme(), "http" | "https")))
 }
 
 #[cfg(test)]
