@@ -246,8 +246,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Every crate must be listed: clippy only DRIVES the packages named with
       # `-p`. A crate reached as a path dependency is compiled by rustc and
-      # never linted — which is how yog-bootstrap went unlinted until 1 Sept
-      # 2026.
+      # never linted.
       - run: |
           cargo clippy \
             -p yog-analytic \
