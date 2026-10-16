@@ -4,9 +4,7 @@ use crate::application::extraction::meteora::damm_v2::events::EvtFundReward;
 use crate::domain::{EventPosition, MeteoraDammV2FundRewardEvent};
 
 /// Translate an [`EvtFundReward`] into a [`MeteoraDammV2FundRewardEvent`].
-///
-/// This translation is infallible — every field maps directly. The Q64.64 rate
-/// pair is carried through unscaled; interpreting it is the reader's job.
+/// The Q64.64 rate pair is carried through unscaled.
 pub(super) fn translate_fund_reward(
     wire: &EvtFundReward,
     event_position: EventPosition,

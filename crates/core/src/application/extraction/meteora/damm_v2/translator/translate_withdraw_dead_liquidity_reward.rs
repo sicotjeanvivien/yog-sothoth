@@ -4,7 +4,7 @@ use crate::application::extraction::meteora::damm_v2::events::EvtWithdrawDeadLiq
 use crate::domain::{EventPosition, MeteoraDammV2WithdrawDeadLiquidityRewardEvent};
 
 /// Translate an [`EvtWithdrawDeadLiquidityReward`] into a
-/// [`MeteoraDammV2WithdrawDeadLiquidityRewardEvent`]. Infallible.
+/// [`MeteoraDammV2WithdrawDeadLiquidityRewardEvent`].
 pub(super) fn translate_withdraw_dead_liquidity_reward(
     wire: &EvtWithdrawDeadLiquidityReward,
     event_position: EventPosition,

@@ -4,8 +4,6 @@ use crate::application::extraction::meteora::damm_v2::events::EvtInitializeRewar
 use crate::domain::{EventPosition, MeteoraDammV2InitializeRewardEvent};
 
 /// Translate an [`EvtInitializeReward`] into a [`MeteoraDammV2InitializeRewardEvent`].
-///
-/// This translation is infallible — every field maps directly.
 pub(super) fn translate_initialize_reward(
     wire: &EvtInitializeReward,
     event_position: EventPosition,

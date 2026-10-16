@@ -5,8 +5,6 @@ use crate::domain::{EventPosition, MeteoraDammV2WithdrawIneligibleRewardEvent};
 
 /// Translate an [`EvtWithdrawIneligibleReward`] into a
 /// [`MeteoraDammV2WithdrawIneligibleRewardEvent`].
-///
-/// This translation is infallible — every field maps directly.
 pub(super) fn translate_withdraw_ineligible_reward(
     wire: &EvtWithdrawIneligibleReward,
     event_position: EventPosition,

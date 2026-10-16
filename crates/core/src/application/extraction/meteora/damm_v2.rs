@@ -39,9 +39,7 @@ impl EventExtractor for MeteoraDammV2 {
         self.program_id
     }
 
-    /// Yes: `extract_events` below decodes nineteen event kinds into
-    /// `DomainEvent::MeteoraDammV2`, and the ingestion may subscribe to this
-    /// program id knowing the transactions it pays for produce rows.
+    /// Yes: `extract_events` decodes every DAMM v2 event kind it dispatches on.
     fn is_implemented(&self) -> bool {
         true
     }
@@ -50,17 +48,13 @@ impl EventExtractor for MeteoraDammV2 {
         // Step 1: extract wire events from the inner-instruction payloads.
         let wire_outcome = extract_wire_events(tx, &self.program_id);
 
-        // Step 2: translate each wire event into a domain event. The
-        // coordinate comes ready-made — whichever source filled it.
+        // Step 2: translate each wire event into a domain event.
         translate_extracted_events(wire_outcome, self.protocol, tx.position)
     }
 }
 
-/// Glue between the wire-event extraction layer and the translation layer.
-///
-/// Produces one domain event per successfully translated wire event.
-/// Translation failures are reported in `failures`; the loop continues on each
-/// failure (skip-and-log).
+/// One domain event per translated wire event; a translation failure goes to
+/// `failures` and the loop continues.
 fn translate_extracted_events(
     wire_outcome: extractor::ExtractedEvents,
     protocol: Protocol,
@@ -68,8 +62,7 @@ fn translate_extracted_events(
 ) -> CoreResult<ExtractionOutcome> {
     let mut outcome = ExtractionOutcome::default();
 
-    // Carry over decode-time failures and unknowns into the protocol-agnostic
-    // ExtractionOutcome.
+    // Carry decode-time failures and unknowns over.
     for unknown in wire_outcome.unknown {
         outcome.unknown.push(UnknownEventInfo {
             protocol,

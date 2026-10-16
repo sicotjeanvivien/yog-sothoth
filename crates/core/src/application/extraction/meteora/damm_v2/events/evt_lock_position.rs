@@ -10,15 +10,8 @@ pub fn discriminator_lock_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtLockPosition")
 }
 
-/// Mirror of `cp-amm::EvtLockPosition`.
-///
-/// Emitted when an LP locks a position under a vesting schedule. The locked
-/// liquidity unlocks linearly: `cliff_unlock_liquidity` becomes available at
-/// `cliff_point`, then `liquidity_per_period` every `period_frequency` for
-/// `number_of_period` periods. `vesting` is the account holding the schedule.
-///
-/// Field order mirrors the on-chain struct exactly (pool, position, owner,
-/// vesting, …) — do not reorder, it is the borsh contract.
+/// Mirror of `cp-amm::EvtLockPosition`: `cliff_unlock_liquidity` at `cliff_point`,
+/// then `liquidity_per_period` every `period_frequency`, `number_of_period` times.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtLockPosition {
     pub pool: Pubkey,

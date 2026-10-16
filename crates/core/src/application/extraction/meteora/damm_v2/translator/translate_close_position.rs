@@ -4,8 +4,6 @@ use crate::application::extraction::meteora::damm_v2::events::EvtClosePosition;
 use crate::domain::{EventPosition, MeteoraDammV2ClosePositionEvent};
 
 /// Translate an [`EvtClosePosition`] into a [`MeteoraDammV2ClosePositionEvent`].
-///
-/// Infallible — self-contained wire event, no transferChecked context needed.
 pub(super) fn translate_close_position(
     wire: &EvtClosePosition,
     event_position: EventPosition,

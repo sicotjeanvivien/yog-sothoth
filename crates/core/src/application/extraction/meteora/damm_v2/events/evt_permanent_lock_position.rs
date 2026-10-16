@@ -10,13 +10,8 @@ pub fn discriminator_permanent_lock_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtPermanentLockPosition")
 }
 
-/// Mirror of `cp-amm::EvtPermanentLockPosition`.
-///
-/// Emitted when an LP permanently locks part of a position's liquidity (no
-/// vesting, never unlocks). `lock_liquidity_amount` is the amount locked by
-/// this action; `total_permanent_locked_liquidity` is the position's running
-/// total after it. Carries no owner field — only pool and position identify
-/// it on-chain.
+/// Mirror of `cp-amm::EvtPermanentLockPosition`: `lock_liquidity_amount` locked
+/// by this action, `total_permanent_locked_liquidity` the running total after it.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtPermanentLockPosition {
     pub pool: Pubkey,

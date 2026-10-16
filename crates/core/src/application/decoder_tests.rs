@@ -1,12 +1,5 @@
-//! Unit tests for pool-account decoding.
-//!
-//! No network and no base64: build a synthetic account buffer matching the
-//! cp-amm `Pool` layout and assert the fields come out of the right offsets,
-//! and that every non-pool input is rejected rather than mis-decoded.
-//!
-//! Ported from `context/src/providers/cpamm_pool_tests.rs` when the decoder
-//! moved into `core`, plus the case that motivates the whole guard discipline
-//! (`foreign_account_is_not_decoded_at_our_offsets`).
+//! Pool-account decoding on synthetic buffers: fields come out of the right
+//! offsets, and every non-pool input is rejected rather than mis-decoded.
 
 use super::*;
 use crate::amm::damm_v2::BaseFeeKind;
@@ -32,9 +25,7 @@ fn pk(seed: u8) -> Pubkey {
 
 const CP_AMM_ACCOUNT_LEN: usize = 1112;
 
-/// Byte 49 of the account: cp-amm's `padding_0`, between `protocol_fee_percent`
-/// and `referral_fee_percent`. Named here only so the regression test below can
-/// poison it — the decoder must have no constant for it.
+/// cp-amm's `padding_0`, named only so a test can poison it.
 const PADDING_0_OFFSET: usize = 49;
 
 /// A cp-amm `Pool` account with the discriminator, the cliff fee numerator, the
@@ -71,12 +62,7 @@ fn decode_shape(bytes: &[u8]) -> (Option<BaseFeeKind>, bool) {
     (props.base_fee_kind, props.has_dynamic_fee)
 }
 
-/// The cp-amm half of a successful decode, unwrapped to its concrete type.
-///
-/// Unwrapping through a `match` rather than an irrefutable `let`: the enum has
-/// more than one variant now, and a decode landing on another one is a routing
-/// bug the assertions below would otherwise report as a confusing field
-/// mismatch.
+/// The cp-amm half of a successful decode; panics on another variant.
 fn damm_v2_properties(bytes: &[u8]) -> MeteoraDammV2PoolAccountProperties {
     let properties = decode_pool_account(&cp_amm_owner(), bytes)
         .expect("should decode")
@@ -96,9 +82,8 @@ fn cp_amm_owner() -> Pubkey {
 
 const LB_PAIR_ACCOUNT_LEN: usize = 904;
 
-/// A DLMM `LbPair` account with the discriminator, the fee parameters and the
-/// two mints at their real offsets. Mints are `pk(4)` / `pk(5)`, chosen distinct
-/// from the cp-amm fixtures' so a cross-decode cannot pass by coincidence.
+/// A DLMM `LbPair` account with the discriminator, fee parameters and mints.
+/// ⚠️ Mints distinct from the cp-amm fixtures', so a cross-decode cannot pass.
 fn lb_pair_account(bin_step: u16, base_factor: u16, base_fee_power_factor: u8) -> Vec<u8> {
     let mut bytes = vec![0u8; LB_PAIR_ACCOUNT_LEN];
     bytes[..8].copy_from_slice(&LB_PAIR_DISCRIMINATOR);
@@ -163,14 +148,7 @@ fn decodes_cp_amm_fields_at_their_offsets() {
     assert_eq!(props.referral_fee_percent, 20);
 }
 
-/// Byte 49 is cp-amm's `padding_0`, not a partner fee (migration 037). Poison it
-/// and assert **nothing** changes: the two real percents keep their values and
-/// the padding leaks into no field.
-///
-/// The regression this pins is not "wrong value" but "field with no referent".
-/// It went unnoticed for a month because the decoded value was always 0, which
-/// is exactly what a plausible partner cut looks like — so the guard has to be
-/// on the decoder reading the byte at all, not on what it produced.
+/// Mutation: reading byte 49 (`padding_0`) into any field; poisoned, it must change nothing.
 #[test]
 fn padding_between_the_percents_is_not_decoded() {
     let mut data = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
@@ -183,11 +161,8 @@ fn padding_between_the_percents_is_not_decoded() {
 
 // ── Fee shape ───────────────────────────────────────────────────────
 
-/// Every `BaseFeeMode` cp-amm defines, including the two market-cap schedulers.
-///
-/// The period count is what separates a constant fee from a decaying one, so
-/// each scheduler mode is asserted **both ways** — the mode byte alone is not
-/// the answer.
+/// Every `BaseFeeMode`, each scheduler both ways.
+/// Mutation: deciding on the mode byte alone, ignoring the period count.
 #[test]
 fn every_base_fee_mode_maps_to_its_kind() {
     let base = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
@@ -211,9 +186,7 @@ fn every_base_fee_mode_maps_to_its_kind() {
     }
 }
 
-/// The rate limiter is the one mode that must **not** consult the period count:
-/// its layout puts `fee_increment_bps` at those bytes. A non-zero value there is
-/// therefore meaningless, and must not turn it into a "constant" fee.
+/// Mutation: the rate limiter consulting the period count, its `fee_increment_bps`.
 #[test]
 fn the_rate_limiter_ignores_the_period_count() {
     let base = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
@@ -224,14 +197,8 @@ fn the_rate_limiter_ignores_the_period_count() {
     }
 }
 
-/// **The starvation guard.** An unknown `BaseFeeMode` — a mode cp-amm adds after
-/// this build — must cost the fee shape and *nothing else*: the account still
-/// decodes, so the mints and the fee tier still land.
-///
-/// Rejecting the account instead would strand the pool in
-/// `list_unresolved` forever, and since that queue is ordered by `first_seen_at`
-/// and capped, such pools would accumulate at its head and starve every pool
-/// behind them.
+/// Mutation: rejecting the account on an unknown `BaseFeeMode`, which strands
+/// the pool at the head of the unresolved queue; only the fee shape may be lost.
 #[test]
 fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
     let data = with_fee_shape(
@@ -258,9 +225,7 @@ fn an_unknown_base_fee_mode_costs_only_the_fee_shape() {
     assert!(props.has_dynamic_fee, "the flag is independent of the mode");
 }
 
-/// `dynamic_fee.initialized` is a flag, not a borsh `Option` tag: any non-zero
-/// value means enabled. It sits at a fixed offset, so unlike the genesis blob it
-/// cannot move with what precedes it.
+/// Mutation: `!= 0` → `== 1`; any non-zero `dynamic_fee.initialized` means enabled.
 #[test]
 fn the_dynamic_fee_flag_is_any_non_zero_byte() {
     let base = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));
@@ -275,9 +240,7 @@ fn the_dynamic_fee_flag_is_any_non_zero_byte() {
 
 // ── The two guards ──────────────────────────────────────────────────
 
-// Each rejection is asserted by *variant*, not merely as "not decoded": the
-// whole point of the typed rejection is that these four situations mean
-// different things and must stay distinguishable to whoever logs them.
+// Each rejection is asserted by *variant*, not merely as "not decoded".
 
 #[test]
 fn an_unindexed_program_is_rejected_as_such() {
@@ -302,9 +265,7 @@ fn wrong_discriminator_is_rejected_as_not_a_pool_account() {
     );
 }
 
-/// Distinct from the discriminator case on purpose: a short account is the
-/// signature of an ABI change, and that must not read the same as "wrong
-/// account".
+/// Mutation: reporting a short account as the wrong discriminator.
 #[test]
 fn a_short_account_is_rejected_as_truncated_with_its_sizes() {
     let err = decode_pool_account(&cp_amm_owner(), &[0u8; 16]).expect_err("should reject");
@@ -319,14 +280,8 @@ fn a_short_account_is_rejected_as_truncated_with_its_sizes() {
     }
 }
 
-/// **The case the guards exist for.** A DLMM `LbPair` account holds valid,
-/// aligned `Pubkey`s exactly where cp-amm keeps its mints — `reserve_x` at 168
-/// and `reserve_y` at 200. Decoding it at cp-amm's offsets would therefore
-/// *succeed* and write the pool's vault addresses into its mint columns:
-/// plausible, silently wrong data rather than an error.
-///
-/// Here the owner dispatch rejects it first; the discriminator check is the
-/// second line. Both must stay.
+/// A DLMM `LbPair` holds valid `Pubkey`s at cp-amm's mint offsets.
+/// Mutation: dropping either guard, the owner dispatch or the discriminator.
 #[test]
 fn foreign_account_is_not_decoded_at_our_offsets() {
     let mut lb_pair = lb_pair_account(1, 10_000, 0);
@@ -342,9 +297,7 @@ fn foreign_account_is_not_decoded_at_our_offsets() {
         Protocol::MeteoraDlmm
     );
 
-    // …and the cp-amm decoder still rejects it on the discriminator, which is
-    // the guard that matters: the reserves above sit exactly where cp-amm reads
-    // its mints, so without it they would be written as the token pair.
+    // …and the cp-amm decoder still rejects it on the discriminator.
     assert_eq!(
         super::meteora::damm_v2::decode_pool_account(&lb_pair),
         Err(PoolAccountRejection::NotAPoolAccount {
@@ -356,15 +309,8 @@ fn foreign_account_is_not_decoded_at_our_offsets() {
 
 // ── DLMM `LbPair` ───────────────────────────────────────────────────
 
-/// The offsets, against the values read from a live account before the decoder
-/// existed: pool `HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR` (SOL/USDC) has
-/// `base_factor = 10000`, `bin_step = 1`, `base_fee_power_factor = 0`,
-/// `variable_fee_control = 2000000`, `max_volatility_accumulator = 100000`,
-/// `protocol_share = 1000` — and Meteora shows 0.01 % for it, which is the
-/// 1 bps asserted below.
-///
-/// This is what ties the layout to the chain rather than to a self-consistent
-/// fixture: every constant here was observed, not chosen.
+/// The parameters of pool `HTvjzs…` (SOL/USDC), which Meteora shows at 0.01 %:
+/// observed values, not chosen ones.
 #[test]
 fn decodes_lb_pair_fields_at_their_offsets() {
     let data = with_dlmm_fee_params(lb_pair_account(1, 10_000, 0), 2_000_000, 100_000, 1_000);
@@ -390,9 +336,7 @@ fn decodes_lb_pair_fields_at_their_offsets() {
     assert_eq!(props.protocol_share, 1_000);
 }
 
-/// `bin_step` and `base_factor` are adjacent to fields this decoder ignores
-/// (`active_id` at 76, `filter_period` at 10). Distinct non-zero values in each
-/// catch an off-by-one that a fixture of equal values would hide.
+/// Mutation: an off-by-one onto the adjacent `active_id` or `filter_period`.
 #[test]
 fn the_fee_inputs_do_not_bleed_into_each_other() {
     let props = dlmm_properties(&lb_pair_account(25, 5_000, 2));
@@ -402,9 +346,7 @@ fn the_fee_inputs_do_not_bleed_into_each_other() {
     assert_eq!(props.base_fee_power_factor, 2);
 }
 
-/// `active_id` is state, not configuration — it moves on every swap. Poison its
-/// bytes and assert nothing this decoder produces changes: it belongs to
-/// `pool_current_state`, and reading it here would make the satellite churn.
+/// Mutation: reading `active_id`, per-swap state; poisoned, it must change nothing.
 #[test]
 fn state_bytes_are_not_decoded_into_the_satellite() {
     let baseline = dlmm_properties(&lb_pair_account(1, 10_000, 0));
@@ -420,8 +362,7 @@ fn state_bytes_are_not_decoded_into_the_satellite() {
     );
 }
 
-/// A DLMM pool with no variable fee is expressed by a zero magnitude, not by a
-/// flag — there is no `has_dynamic_fee` byte in this layout.
+/// No variable fee is a zero magnitude: this layout has no flag for it.
 #[test]
 fn a_zero_variable_fee_control_means_no_dynamic_fee() {
     let props = dlmm_properties(&with_dlmm_fee_params(
@@ -434,9 +375,7 @@ fn a_zero_variable_fee_control_means_no_dynamic_fee() {
     assert_eq!(props.variable_fee_control, 0);
 }
 
-/// The full `u32` range must survive — `variable_fee_control` and
-/// `max_volatility_accumulator` are stored in signed SQL columns, so a lossy
-/// conversion would surface here first.
+/// Mutation: a narrowing read of any field; the full `u32` range must survive.
 #[test]
 fn the_dynamic_fee_parameters_keep_their_full_range() {
     let props = dlmm_properties(&with_dlmm_fee_params(
@@ -446,8 +385,6 @@ fn the_dynamic_fee_parameters_keep_their_full_range() {
         u16::MAX,
     ));
 
-    // Every field, not a sample: a narrowing bug in any one of them is what
-    // this pins, and the SQL widths downstream are justified column by column.
     assert_eq!(props.bin_step, u16::MAX);
     assert_eq!(props.base_factor, u16::MAX);
     assert_eq!(props.base_fee_power_factor, 0, "not set by this fixture");
@@ -456,10 +393,8 @@ fn the_dynamic_fee_parameters_keep_their_full_range() {
     assert_eq!(props.protocol_share, u16::MAX);
 }
 
-/// The mirror of the cp-amm guard: a cp-amm `Pool` handed to the DLMM decoder
-/// must be rejected on the discriminator. At DLMM's mint offsets (88, 120) a
-/// cp-amm account holds parts of its `pool_fees` block — bytes that would decode
-/// as perfectly valid `Pubkey`s.
+/// Mutation: dropping the DLMM discriminator check; a cp-amm `Pool` yields valid
+/// `Pubkey`s at DLMM's mint offsets.
 #[test]
 fn cp_amm_account_is_rejected_by_the_dlmm_decoder() {
     let cp_amm = cp_amm_account(2_500_000, (20, 20), pk(2), pk(3));

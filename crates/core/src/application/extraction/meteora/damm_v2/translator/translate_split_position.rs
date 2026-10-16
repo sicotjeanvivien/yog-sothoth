@@ -9,11 +9,7 @@ use crate::domain::{
 };
 
 /// Translate an [`EvtSplitPosition3`] into a [`MeteoraDammV2SplitPositionEvent`].
-///
-/// Infallible. The three nested wire sub-structs map one-to-one onto their
-/// domain counterparts; note that `amount_splits` and the two `*_position_info`
-/// carry their leading `u128`s in a *different order* on the wire, which is why
-/// they stay separate types on both sides.
+/// ⚠️ `amount_splits` and `*_position_info` order their leading `u128`s differently.
 pub(super) fn translate_split_position(
     wire: &EvtSplitPosition3,
     event_position: EventPosition,

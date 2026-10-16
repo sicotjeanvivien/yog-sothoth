@@ -26,11 +26,7 @@ pub(super) fn translate_swap(
             }
         })?;
 
-    // EvtSwap2 reports input/output amounts in
-    // `included_transfer_fee_amount_in` / `included_transfer_fee_amount_out`.
-    // Map them onto (amount_a, amount_b) according to trade direction:
-    //   AtoB → input is on a, output is on b
-    //   BtoA → input is on b, output is on a
+    // Input and output onto (amount_a, amount_b): AtoB → (in, out), BtoA → (out, in).
     let (amount_a, amount_b) = match trade_direction {
         TradeDirection::AtoB => (
             wire.included_transfer_fee_amount_in,
@@ -65,13 +61,8 @@ pub(super) fn translate_swap(
     })
 }
 
-/// Determine whether the fee was charged on token A (`true`) or token B
-/// (`false`), based on the on-chain `collect_fee_mode` and the swap's
-/// `trade_direction`.
-///
-/// Mirrors `cp-amm::FeeMode::get_fee_mode` — see source comments in
-/// `cp-amm/programs/cp-amm/src/state/fee.rs`. Updated alongside cp-amm
-/// upgrades.
+/// Whether the fee was charged on token A (`true`) or B, as cp-amm's
+/// `FeeMode::get_fee_mode` (`state/fee.rs`) decides it.
 pub(super) fn compute_fee_token_is_a(
     collect_fee_mode: u8,
     trade_direction: TradeDirection,

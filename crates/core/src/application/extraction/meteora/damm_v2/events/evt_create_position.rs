@@ -10,15 +10,8 @@ pub fn discriminator_create_position() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtCreatePosition")
 }
 
-/// Mirror of `cp-amm::EvtCreatePosition`.
-///
-/// Emitted when an LP opens a new position on a pool. The position is
-/// represented on-chain by an NFT (`position_nft_mint`); `position` is the
-/// PDA holding the position state. Carries no token amounts — a freshly
-/// created position is empty until liquidity is added (see
-/// [`EvtLiquidityChange`]).
-///
-/// [`EvtLiquidityChange`]: crate::application::extraction::meteora::damm_v2::events::EvtLiquidityChange
+/// Mirror of `cp-amm::EvtCreatePosition`: an LP opens an empty position, an NFT
+/// (`position_nft_mint`) over the `position` PDA.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtCreatePosition {
     pub pool: Pubkey,

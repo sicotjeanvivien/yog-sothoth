@@ -10,15 +10,8 @@ pub fn discriminator_update_pool_fees() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtUpdatePoolFees")
 }
 
-/// Mirror of `cp-amm::EvtUpdatePoolFees`.
-///
-/// Emitted when a pool's fee parameters are updated by an operator. The
-/// nested `UpdatePoolFeesParameters` is **not** modelled — there is no test
-/// fixture to validate its (version-sensitive) layout, and "voie C" defers
-/// fee interpretation anyway. Instead, [`BorshDeserialize`] reads the two
-/// leading pubkeys and captures the remaining payload bytes verbatim into
-/// `params_raw`. This is robust to fee-struct schema changes: a later decode
-/// works from these stored bytes.
+/// Mirror of `cp-amm::EvtUpdatePoolFees`: the two leading pubkeys, then the
+/// `UpdatePoolFeesParameters` bytes kept verbatim; that layout has no fixture.
 #[derive(Debug, Clone)]
 pub struct EvtUpdatePoolFees {
     pub pool: Pubkey,

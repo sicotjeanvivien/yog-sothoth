@@ -10,11 +10,8 @@ pub fn discriminator_claim_reward() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtClaimReward")
 }
 
-/// Mirror of `cp-amm::EvtClaimReward`.
-///
-/// Emitted when an LP claims farming rewards distributed by a separate
-/// `mint_reward` token. `reward_index` identifies the reward stream within
-/// the pool (a pool can have multiple concurrent reward streams).
+/// Mirror of `cp-amm::EvtClaimReward`: an LP claims farming rewards from slot
+/// `reward_index`.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtClaimReward {
     pub pool: Pubkey,

@@ -4,11 +4,7 @@ use crate::application::extraction::meteora::damm_v2::events::EvtInitializePool;
 use crate::domain::{EventPosition, MeteoraDammV2InitializePoolEvent};
 
 /// Translate an [`EvtInitializePool`] into a [`MeteoraDammV2InitializePoolEvent`].
-///
-/// Self-contained — the wire event carries both mints, so no transferChecked
-/// context is needed. The fee parameters are re-serialized to borsh and stored
-/// raw (undecoded) under "voie C". [`borsh::to_vec`] into a `Vec` cannot fail in
-/// practice (no I/O), so the `expect` is unreachable.
+/// The fee parameters are re-serialized and stored raw.
 pub(super) fn translate_initialize_pool(
     wire: &EvtInitializePool,
     event_position: EventPosition,

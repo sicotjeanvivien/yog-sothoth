@@ -51,10 +51,7 @@ fn rejects_payload_with_wrong_tag() {
 
 #[test]
 fn tag_constant_matches_documented_value() {
-    // EVENT_IX_TAG_LE must equal the bytes 1d 9a cb 51 2e a5 45 e4 —
-    // this is sha256("anchor:event")[..8] in little-endian.
-    // If this assertion ever fails, every Anchor program's events
-    // would be unparseable; this guards against accidental edits.
+    // Mutation: any edit of the tag, which would make every Anchor event unparseable.
     assert_eq!(
         EVENT_IX_TAG,
         [0xe4, 0x45, 0xa5, 0x2e, 0x51, 0xcb, 0x9a, 0x1d]

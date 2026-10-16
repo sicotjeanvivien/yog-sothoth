@@ -1,28 +1,6 @@
-//! Extract DAMM v2 wire events from a confirmed Solana transaction.
-//!
-//! Bridges three pieces:
-//! - the generic Anchor event_cpi decoder (`crate::application::extraction::anchor_event`)
-//! - the DAMM v2 wire event mirrors ([`super::events`])
-//! - the neutral transaction shape ([`OnChainTransaction`])
-//!
-//! The extractor walks every inner-instruction payload targeted at the cp-amm
-//! program, decodes those that look like Anchor self-CPI event emissions,
-//! and dispatches each one to the matching wire event struct based on its
-//! 8-byte discriminator.
-//!
-//! ## Error handling philosophy
-//!
-//! `core` is a pure, log-free crate. The extractor never logs and never
-//! aborts the whole transaction. Instead, it surfaces three distinct kinds
-//! of outcome via [`ExtractedEvents`]:
-//!
-//! - successfully recognized and decoded events → `events`
-//! - inner instructions whose discriminator is unknown to us → `unknown`
-//! - inner instructions that match a known discriminator but whose payload
-//!   fails to deserialize → `failures`
-//!
-//! Each failure carries enough structured information for the caller (in
-//! `indexer/`) to log it and emit metrics with appropriate cardinality.
+//! Extract DAMM v2 wire events from a confirmed transaction's self-CPI payloads.
+//! Never logs, never aborts the transaction: each payload ends up decoded,
+//! unknown or failed, for the caller to log and count.
 
 use borsh::BorshDeserialize;
 use solana_pubkey::Pubkey;
@@ -54,70 +32,46 @@ use super::events::{
 // Public types
 // ---------------------------------------------------------------------------
 
-/// Outcome of extracting wire events from a transaction.
-///
-/// Always well-formed — extraction never fails as a whole. Per-event
-/// problems are reported through `unknown` and `failures`.
+/// Outcome of extracting wire events from a transaction; never fails as a whole.
 #[derive(Debug, Default)]
 pub struct ExtractedEvents {
-    /// All recognized events, in the order they appeared in the transaction,
-    /// each carrying its index among the transaction's self-CPI payloads.
+    /// Recognized events, in transaction order.
     pub events: Vec<IndexedWireEvent>,
 
-    /// Inner instructions whose discriminator did not match any known
-    /// event. Most often correspond to events from rings we haven't
-    /// implemented yet (CreatePosition, ClaimProtocolFee, etc.) — the
-    /// caller should report them as a metric, not as an error.
+    /// Payloads whose discriminator matches no known event: a metric, not an error.
     pub unknown: Vec<UnknownEvent>,
 
-    /// Inner instructions that targeted the cp-amm program but failed to
-    /// be decoded into a wire event. Each entry carries enough context
-    /// for the caller to log + emit a metric.
+    /// Payloads addressed to cp-amm that failed to decode.
     pub failures: Vec<ExtractFailure>,
 }
 
-/// A recognized wire event, paired with where it sat in the transaction.
-///
-/// `event_index` counts **every** self-CPI payload the transaction emitted to
-/// the program, not just the ones we decode: a payload we skip still consumes
-/// its index. That is what keeps the index stable across releases — see
-/// [`crate::domain::EventPosition`], which it ends up on.
+/// A recognized wire event and its position in the transaction.
+/// ⚠️ `event_index` counts **every** self-CPI payload, skipped ones included: that
+/// keeps it stable across releases ([`crate::domain::EventPosition`]).
 #[derive(Debug)]
 pub struct IndexedWireEvent {
     pub event_index: u16,
     pub event: DammV2WireEvent,
 }
 
-/// A self-CPI inner instruction whose discriminator does not match any
-/// event we know about.
-///
-/// Carrying the discriminator (rather than just a count) lets the caller
-/// emit metrics labelled by discriminator hex — useful for spotting which
-/// unrecognized event type appears most often.
+/// A self-CPI payload whose discriminator matches no known event; the
+/// discriminator labels the caller's metric.
 #[derive(Debug, Clone, Copy)]
 pub struct UnknownEvent {
     pub discriminator: [u8; DISCRIMINATOR_LEN],
 }
 
-/// A failed extraction attempt, paired with the reason why.
-///
-/// The variants are intentionally narrow so the caller can route each
-/// kind of failure to the right metric / log level.
+/// A failed extraction attempt and its reason.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractFailure {
-    /// Inner instruction targets cp-amm but the bytes don't form a valid
-    /// Anchor event_cpi payload (wrong tag, payload too short, etc.).
-    /// Could indicate a non-event self-CPI we don't recognize, or a
-    /// truly malformed payload.
+    /// Addressed to cp-amm but not a valid Anchor event_cpi payload.
     #[error("anchor event_cpi decode failed: {source}")]
     AnchorDecode {
         #[source]
         source: AnchorDecodeError,
     },
 
-    /// Discriminator matches a known event, but borsh deserialization of
-    /// the payload failed. Usually indicates schema drift between cp-amm
-    /// and our mirror structs.
+    /// Known discriminator, but borsh failed: usually schema drift in our mirror.
     #[error("borsh deserialization of {event_name} failed: {reason}")]
     Borsh {
         event_name: &'static str,
@@ -125,11 +79,8 @@ pub enum ExtractFailure {
         reason: String,
     },
 
-    /// The transaction emitted more self-CPI payloads than an `event_index`
-    /// can number. Unreachable in practice — the runtime caps inner
-    /// instructions two orders of magnitude below `u16::MAX` — but the event
-    /// is dropped rather than given a truncated index, because a wrong index
-    /// is a duplicate or a lost row later on.
+    /// More self-CPI payloads than an `event_index` can number.
+    /// ⚠️ Dropped, never truncated: a wrong index is a duplicate or a lost row.
     #[error("event index {index} exceeds u16")]
     EventIndexOverflow { index: usize },
 }
@@ -138,15 +89,7 @@ pub enum ExtractFailure {
 // Public entry point
 // ---------------------------------------------------------------------------
 
-/// Extract every DAMM v2 wire event the transaction emitted.
-///
-/// `program_id` is the cp-amm program ID — it must match the program the
-/// transaction's inner instructions were addressed to (e.g.
-/// `cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG` on mainnet).
-///
-/// Never errors out. A transaction with no inner instructions, no events
-/// for cp-amm, or only events we don't recognize all return a well-formed
-/// [`ExtractedEvents`].
+/// Extract every DAMM v2 wire event the transaction emitted to `program_id`.
 pub fn extract_wire_events(tx: &OnChainTransaction, program_id: &Pubkey) -> ExtractedEvents {
     let raw_payloads = extract_anchor_event_cpis(tx, program_id);
 
@@ -176,8 +119,7 @@ pub fn extract_wire_events(tx: &OnChainTransaction, program_id: &Pubkey) -> Extr
     let mut out = ExtractedEvents::default();
 
     for (index, raw) in raw_payloads.iter().enumerate() {
-        // Numbered before decoding, so a payload we don't recognize still
-        // consumes its index (see `IndexedWireEvent`).
+        // ⚠️ Numbered before decoding: an unrecognized payload still consumes its index.
         let Ok(event_index) = u16::try_from(index) else {
             out.failures
                 .push(ExtractFailure::EventIndexOverflow { index });
@@ -203,8 +145,7 @@ pub fn extract_wire_events(tx: &OnChainTransaction, program_id: &Pubkey) -> Extr
                 }
             },
             Err(AnchorDecodeError::NotAnAnchorEvent) => {
-                // Not an event_cpi emission — could be a legitimate
-                // non-event self-CPI from cp-amm. Not a failure.
+                // A non-event self-CPI from cp-amm: not a failure.
             }
             Err(e) => {
                 out.failures
@@ -248,9 +189,8 @@ struct KnownDiscriminators {
 /// Outcome of dispatching a single decoded event by its discriminator.
 enum Dispatch {
     Recognized(DammV2WireEvent),
-    /// Discriminator we know, and deliberately do not index. Distinct from
-    /// [`Dispatch::Unknown`], which must keep meaning "an event type we are
-    /// missing" — a deprecated duplicate is not a gap in coverage.
+    /// Known, and deliberately not indexed; [`Dispatch::Unknown`] keeps meaning
+    /// "an event type we are missing".
     Ignored,
     Unknown,
     BorshFailed {
@@ -345,10 +285,7 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
                 reason,
             })
     } else if disc == &known.split_position2_deprecated {
-        // cp-amm emits EvtSplitPosition2 alongside EvtSplitPosition3 on every
-        // split, for backwards compatibility. v3 is a strict superset, so
-        // indexing both would double-count the same split. Drop it here rather
-        // than let it register as an unknown discriminator once per split.
+        // ⚠️ cp-amm emits v2 beside v3 on every split; indexing both double-counts it.
         Dispatch::Ignored
     } else if disc == &known.create_position {
         deserialize::<EvtCreatePosition>(body, "EvtCreatePosition")
@@ -404,8 +341,7 @@ fn dispatch(disc: &[u8; DISCRIMINATOR_LEN], body: &[u8], known: &KnownDiscrimina
     }
 }
 
-/// Borsh-deserialize a wire event. On failure, returns the error message
-/// as a `String` so the caller can wrap it in a typed `ExtractFailure`.
+/// Borsh-deserialize a wire event; the error message goes into a typed `ExtractFailure`.
 fn deserialize<T: BorshDeserialize>(body: &[u8], _event_name: &'static str) -> Result<T, String> {
     T::try_from_slice(body).map_err(|e| e.to_string())
 }

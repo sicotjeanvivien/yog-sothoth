@@ -10,21 +10,9 @@ pub fn discriminator_initialize_reward() -> [u8; DISCRIMINATOR_LEN] {
     compute_discriminator("EvtInitializeReward")
 }
 
-/// Mirror of `cp-amm::EvtInitializeReward`.
-///
-/// Emitted when an admin **opens a reward slot** on a pool: it declares which
-/// token will be distributed (`reward_mint`), who is allowed to fund it
-/// (`funder`), which of the pool's slots is being opened (`reward_index`) and
-/// the length of a funding window in seconds (`reward_duration`).
-///
-/// Opening a slot distributes nothing on its own — the tokens and the emission
-/// rate arrive with [`EvtFundReward`], which typically follows in the same
-/// transaction.
-///
-/// `funder` and `creator` are frequently the same wallet, so a fixture cannot
-/// discriminate their order — it comes from the cp-amm source.
-///
-/// [`EvtFundReward`]: crate::application::extraction::meteora::damm_v2::events::EvtFundReward
+/// Mirror of `cp-amm::EvtInitializeReward`: an admin opens a reward slot; tokens
+/// and rate arrive with `EvtFundReward`.
+/// ⚠️ The `funder`/`creator` order comes from the source: fixtures often share the wallet.
 #[derive(Debug, Clone, Copy, BorshDeserialize)]
 pub struct EvtInitializeReward {
     pub pool: Pubkey,

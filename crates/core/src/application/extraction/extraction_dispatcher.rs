@@ -1,9 +1,4 @@
-//! Dispatch entry point for protocol-specific event extraction.
-//!
-//! Given a [`Protocol`], routes the transaction to the right per-protocol
-//! handler and returns a unified [`ExtractionOutcome`]. Holds one
-//! pre-instantiated handler per supported protocol, so dispatch is a
-//! cheap enum match — no dyn dispatch, no allocation per call.
+//! Routes a transaction to its protocol's extractor: an enum match, no dyn dispatch.
 
 use crate::CoreResult;
 use crate::application::extraction::EventExtractor;
@@ -28,8 +23,7 @@ impl ExtractionDispatcher {
         }
     }
 
-    /// Extract every domain event the transaction emitted for the given
-    /// protocol. Delegates to the protocol-specific [`EventExtractor`] impl.
+    /// Extract every domain event the transaction emitted for `protocol`.
     pub fn extract(
         &self,
         protocol: Protocol,
@@ -41,23 +35,9 @@ impl ExtractionDispatcher {
         }
     }
 
-    /// The protocols this build can actually extract — what the ingestion
-    /// should subscribe to.
-    ///
-    /// ⚠️ **Not [`Protocol::all`], and the difference costs money.** `all` is
-    /// what the domain *names*; this is what extraction *handles*. A protocol
-    /// whose extractor is a stub returns an empty outcome, so subscribing to
-    /// its program id buys a firehose to decode and discard — see
-    /// [`EventExtractor::is_implemented`], which each extractor answers for
-    /// itself so that the answer lives beside the stub, and is flipped with it,
-    /// rather than in a second list somebody has to remember.
-    ///
-    /// Written as a `match` over `all()` rather than a hand-kept list: a new
-    /// protocol can neither be omitted from the iteration nor escape the
-    /// compiler's exhaustiveness check. It is deliberately *not* factored with
-    /// `extract` behind a `&dyn EventExtractor` — this module promises "a cheap
-    /// enum match, no dyn dispatch", and a vtable call per transaction is not
-    /// worth paying for a question asked once at start-up.
+    /// The protocols this build can actually extract: what ingestion subscribes to.
+    /// ⚠️ Not [`Protocol::all`]: a stub's program id is a firehose for nothing
+    /// ([`EventExtractor::is_implemented`]).
     pub fn implemented_protocols(&self) -> Vec<Protocol> {
         Protocol::all()
             .iter()
