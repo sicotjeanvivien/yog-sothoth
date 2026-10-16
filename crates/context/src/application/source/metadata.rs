@@ -18,7 +18,7 @@ pub(crate) struct FetchedMetadata {
 /// Abstraction over a source of token metadata, implemented by `HeliusDasClient`.
 #[async_trait]
 pub trait MetadataSource: Send + Sync {
-    /// Fetch metadata for a batch of mints, within the source's own batch limit; a mint unknown
+    /// Fetch metadata for a batch of mints; a mint unknown
     /// or lacking data is dropped from the result.
     async fn fetch_metadata(&self, mints: &[Pubkey]) -> Result<Vec<FetchedMetadata>, SourceError>;
 }

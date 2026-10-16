@@ -41,7 +41,6 @@ const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(10);
 const SPACING_PER_REQUEST_ALLOWED: Duration = Duration::from_secs(66);
 
 /// One price entry from Jupiter's V3 response, reduced to `usdPrice`.
-/// ⚠️ `#[serde(default)]` too: Jupiter sends `null` or omits the field for a mint it cannot price.
 #[derive(Debug, Deserialize)]
 struct JupiterPriceEntry {
     #[serde(rename = "usdPrice", default)]

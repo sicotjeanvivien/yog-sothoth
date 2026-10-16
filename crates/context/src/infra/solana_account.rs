@@ -52,7 +52,7 @@ struct RpcAccount {
 #[derive(Clone)]
 pub struct SolanaAccountClient {
     http: reqwest::Client,
-    /// Wrapped like [`super::helius_das::HeliusDasClient`]'s: same key in the query string.
+    /// Wrapped like [`super::helius_das::HeliusDasClient`]'s.
     rpc_url: SecretUrl,
 }
 

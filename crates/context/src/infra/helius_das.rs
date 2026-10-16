@@ -1,6 +1,6 @@
 //! Helius DAS client, the token metadata source: one `getAssetBatch` call per chunk rather than a
 //! `getAsset` per mint. A mint DAS does not know, or without `token_info.decimals`, is skipped and
-//! retried next cycle; errors are returned typed.
+//! retried next cycle.
 
 use super::metrics::ProviderMetrics;
 use async_trait::async_trait;
@@ -91,7 +91,7 @@ struct DasTokenInfo {
 #[derive(Clone)]
 pub struct HeliusDasClient {
     http: reqwest::Client,
-    /// ⚠️ Stays wrapped for the client's whole life: the provider key sits in this URL's query string.
+    /// ⚠️ Stays wrapped for the client's whole life: the provider key sits in this URL.
     rpc_url: SecretUrl,
 }
 

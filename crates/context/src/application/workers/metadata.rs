@@ -84,7 +84,7 @@ impl MetadataWorker {
         let fetched = match self.source.fetch_metadata(&missing).await {
             Ok(fetched) => fetched,
             Err(e) => {
-                // Hard failures only (misconfiguration); partial results do not come here.
+                // Hard failures only; partial results do not come here.
                 warn!(error = %e, "metadata worker: source returned a hard error");
                 MetadataWorkerMetrics::record_tick(
                     "source_hard_error",

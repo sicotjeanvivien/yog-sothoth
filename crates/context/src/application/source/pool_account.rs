@@ -17,7 +17,7 @@ pub(crate) struct RawAccount {
 #[async_trait]
 pub trait PoolAccountSource: Send + Sync {
     /// Fetch the accounts for a batch of pool addresses; one that cannot be fetched is absent and
-    /// retried next cycle. Only a hard transport failure is an error.
+    /// retried next cycle.
     async fn fetch_accounts(
         &self,
         pool_addresses: &[Pubkey],

@@ -78,8 +78,7 @@ impl SignalDetector for FlowImbalanceDetector {
 
         let mut signals = Vec::new();
         for flow in flows {
-            // ⚠️ Valuation guard first: a window not entirely valuable gives `None` on both sides,
-            // and reading either as 0 would make a guaranteed Critical at −1.0.
+            // Valuation guard first.
             let (Some(a_to_b), Some(b_to_a)) = (flow.volume_a_to_b_usd, flow.volume_b_to_a_usd)
             else {
                 DetectorMetrics::record_skipped(self.name(), SkipReason::Unpriced);

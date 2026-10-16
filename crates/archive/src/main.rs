@@ -1,4 +1,4 @@
-//! `yog-archive`, the backup daemon: every six hours, streams `pg_dump` into an S3-compatible
+//! `yog-archive`, the backup daemon: streams `pg_dump` into an S3-compatible
 //! bucket without touching disk, checks it reads as an archive, and tells a dead man's switch.
 //! It does not restore: that is by hand, per `crates/persistence/README.md`, *Backup and restore*.
 
