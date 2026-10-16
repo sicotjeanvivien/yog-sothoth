@@ -1,15 +1,6 @@
-//! Bootstrap utilities shared by yog-sothoth's binaries, `yog-migrate`
-//! included — what every binary needs at startup, and only that:
-//!
-//! - reading and validating environment variables (`env`);
-//! - wrapping secrets so they cannot be printed (`secret`), and holding an
-//!   endpoint's address apart from its credential (`endpoint`);
-//! - the `ConfigError` every `Config::load` returns (`error`);
-//! - rustls and the shared tracing subscriber (`runtime`);
-//! - the stop: its signals, what a task's end says, and the grace (`shutdown`);
-//! - what a daemon tells a dead man's switch (`heartbeat`, behind its feature).
-//!
-//! Each binary keeps its own `Config`: only the building blocks live here.
+//! What every binary needs at startup, and only that: environment variables,
+//! secrets and endpoints, `ConfigError`, rustls and tracing, the stop, and the
+//! dead man's switch. Each binary keeps its own `Config`.
 
 mod endpoint;
 mod env;

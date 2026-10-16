@@ -2,48 +2,20 @@ use std::str::FromStr;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
 
-/// Install the rustls crypto provider.
-///
-/// rustls 0.23 removed the implicit crypto provider selection — without
-/// this call, the first TLS handshake (e.g. the WebSocket to Helius, an
-/// HTTPS RPC request) panics. Each binary that performs TLS must call
-/// this exactly once, **before** any TLS connection is established.
-///
-/// Panics on failure: this is a process-level invariant, and no recovery
-/// is meaningful if the crypto provider cannot be installed.
+/// Install the rustls crypto provider; panics on failure.
+/// ⚠️ Once per binary, before the first TLS connection: rustls picks no provider
+/// itself, and the first handshake would panic.
 pub fn init_rustls() {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("failed to install rustls crypto provider");
 }
 
-/// Initialise the global tracing subscriber.
-///
-/// Format is selected from the `LOG_FORMAT` environment variable:
-///   - `json` → machine-readable, suitable for log collectors
-///     (Loki, Datadog, …).
-///   - anything else → human-readable text, suitable for local
-///     development.
-///
-/// Log level is controlled by `RUST_LOG` (defaults to `info`):
-///
-/// ```text
-/// RUST_LOG=yog_indexer=debug,yog_core=debug,warn
-/// ```
-///
-/// Idempotent in the sense that subsequent calls are silently ignored
-/// by `tracing`. Each binary should call this once at the top of `main`,
-/// after `init_rustls` and before any code that emits logs.
+/// Install the global tracing subscriber: JSON when `LOG_FORMAT=json`, text
+/// otherwise, filtered by `RUST_LOG` (default `info`). Once, at the top of `main`.
 pub fn init_tracing() {
-    // Both reads are trimmed, and `RUST_LOG` is the one that bites hardest.
-    // `try_from_default_env` reads it raw, so a `\r` from the CRLF `.env`
-    // sourced into the shell turns `info` into the directive `info\r` —
-    // parsed as a *target* name rather than a level, matching nothing.
-    // Measured 2 September 2026 on this binary: `RUST_LOG=info` emits its
-    // startup lines, `RUST_LOG=info\r` emits **none at all**. A daemon that
-    // silently stops logging is the worst of the failure modes here, and it
-    // was one line below a comment congratulating itself for avoiding a
-    // milder one on `LOG_FORMAT`.
+    // ⚠️ Both reads are trimmed: a CRLF `\r` turns `RUST_LOG=info` into a target
+    // matching nothing, and the daemon logs nothing at all.
     let format = std::env::var("LOG_FORMAT").unwrap_or_default();
     let format = format.trim();
 
@@ -63,13 +35,8 @@ pub fn init_tracing() {
     }
 }
 
-/// Build the log filter from a raw `RUST_LOG` value.
-///
-/// Split out of `init_tracing` so it can be tested: the subscriber it feeds
-/// is global and installed once per process, which a test cannot exercise
-/// twice. Absent, blank, or unparseable all fall back to `info` — the same
-/// fallback the caller had before, kept deliberately silent because logging
-/// is not yet up to report on itself.
+/// Build the log filter from a raw `RUST_LOG`; absent, blank or unparseable is
+/// `info`, silently, since logging is not up yet to report on itself.
 fn build_filter(raw: Option<&str>) -> EnvFilter {
     raw.map(str::trim)
         .filter(|raw| !raw.is_empty())
@@ -78,29 +45,12 @@ fn build_filter(raw: Option<&str>) -> EnvFilter {
         .unwrap_or_else(|| EnvFilter::new("info"))
 }
 
-/// The target every daemon's stop speaks under.
-///
-/// `shutdown.rs` holds the stop for all of them, so its lines carry this
-/// target rather than the binary's own — see that module's header.
+/// The target every daemon's stop logs under, `shutdown.rs` being shared.
 const SHUTDOWN_TARGET: &str = "yog_bootstrap";
 
-/// Ensure a `RUST_LOG` of per-target directives cannot silence the stop.
-///
-/// ⚠️ **The loss this closes is silent, which is why documenting it was not
-/// enough.** `EnvFilter` has no implicit global level: a value made only of
-/// directives prints *nothing* for a target it does not name. On 14 September
-/// 2026 the stop moved to [`yog_bootstrap::shutdown`], and this repository's own
-/// `RUST_LOG` — six per-crate directives, no bare level — stopped printing
-/// every line of it, the `warn!` naming a stage destroyed mid-write included. A
-/// torn stop then reads exactly like a clean one, and ten measured cycles said
-/// so before the filter was suspected.
-///
-/// It only ever *adds*, and only when the operator has said nothing that
-/// covers the target: a bare level anywhere in the value already covers it, and
-/// so does naming `yog_bootstrap` — at any level, silencing it included, which
-/// stays possible on purpose.
-///
-/// [`yog_bootstrap::shutdown`]: crate::shutdown
+/// Add `yog_bootstrap=info` to a `RUST_LOG` that neither sets a bare level nor
+/// names `yog_bootstrap`: per-target directives alone print nothing else.
+/// ⚠️ Without it a torn stop reads exactly like a clean one; naming the target silences it.
 fn keep_shutdown_audible(raw: &str) -> String {
     let already_covered = raw
         .split(',')
@@ -115,27 +65,13 @@ fn keep_shutdown_audible(raw: &str) -> String {
 }
 
 /// Does this directive set the level for *everything*?
-///
-/// ⚠️ **"Has no `=`" is not the test, and reading it that way reopened the
-/// hole this guard closes.** `EnvFilter` accepts a bare **target** too, and it
-/// means TRACE: `yog_indexer,yog_context` parses to
-/// `yog_indexer=trace,yog_context=trace` — a per-target filter with no global
-/// level, precisely the shape the guard exists for, which an `=`-based test
-/// waves through as though it were a level. Asking `LevelFilter` tells the two
-/// apart.
-///
-/// ⚠️ **And an empty segment is not a level either**, though `LevelFilter`
-/// says it is — `"".parse()` yields `error`. A trailing comma
-/// (`RUST_LOG=yog_indexer=debug,`) leaves one, and it would otherwise pass for
-/// a global level nobody wrote.
+/// ⚠️ Not "has no `=`": a bare target means TRACE for it alone. And an empty
+/// segment (a trailing comma) parses as `error` but is no level.
 fn is_bare_level(directive: &str) -> bool {
     !directive.is_empty() && LevelFilter::from_str(directive).is_ok()
 }
 
-/// Does this directive name the target the stop speaks under?
-///
-/// Compares the target itself rather than a prefix, so a crate merely starting
-/// with the same letters cannot stand in for it.
+/// Does this directive name the stop's target, exactly rather than by prefix?
 fn targets_shutdown(directive: &str) -> bool {
     directive
         .split(['=', '['])

@@ -1,15 +1,6 @@
-//! The dead man's switch: tell Healthchecks.io how a daemon's work went.
-//!
-//! The service raises the alarm when an expected signal does **not** arrive,
-//! which is the only alert a stopped or wedged daemon can still produce. A
-//! failure is signalled too, with its reason, so the alert says why.
-//!
-//! A signal that cannot be delivered is logged and counted, and changes
-//! nothing else: the work already happened or already failed, and the missing
-//! signal will itself raise the alarm on the other side.
-//!
-//! Behind the `heartbeat` feature: it brings an HTTP client, which only the
-//! daemons that report to a check should pay for.
+//! The dead man's switch: tell Healthchecks.io how a daemon's work went, a
+//! failure with its reason. An undelivered signal is logged and counted only:
+//! its absence raises the alarm on the other side. Behind the `heartbeat` feature.
 
 use std::time::Duration;
 
@@ -41,13 +32,9 @@ pub struct HeartbeatSettings {
     pub undelivered_counter: &'static str,
 }
 
-/// Healthchecks.io's ping API: `POST <check-url>` on success,
-/// `POST <check-url>/fail` on failure, the body shown in its log.
-///
-/// `/fail` goes into the URL's **path**. Appended as text, it would land in
-/// the query of a slug URL (`…/<ping-key>/<slug>?create=1/fail`), and the
-/// service would record every failure as a success — the one mistake a dead
-/// man's switch exists to prevent.
+/// Healthchecks.io's ping API: `POST <check-url>`, or `<check-url>/fail` on failure.
+/// ⚠️ `/fail` goes into the **path**: appended as text it lands in a slug URL's
+/// query, and every failure is recorded as a success.
 pub struct HealthchecksHeartbeat {
     client: reqwest::Client,
     url: SecretUrl,
@@ -55,9 +42,8 @@ pub struct HealthchecksHeartbeat {
 }
 
 impl HealthchecksHeartbeat {
-    /// Refuses, at startup, a URL that cannot take `/fail`: better a daemon
-    /// that will not start than one whose failures cannot be reported. The
-    /// error does not quote the URL, which carries the check's secret.
+    /// Refuses at startup a URL that cannot take `/fail`.
+    /// ⚠️ The error never quotes the URL: it carries the check's secret.
     pub fn new(url: SecretUrl, settings: HeartbeatSettings) -> anyhow::Result<Self> {
         if fail_url(url.expose()).is_none() {
             anyhow::bail!(
