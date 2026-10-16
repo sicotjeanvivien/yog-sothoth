@@ -1,14 +1,6 @@
 /**
- * Overview KPI card — label, a large value, and an optional context line.
- *
- * Visually aligned with the pool-detail `KpiCard`, but carries an optional
- * `hint` sub-line used for honest context: the TVL coverage ("348 / 359
- * priced"), the volume coverage ("767 / 1246 pool-hours priced") and the pool
- * discovery pulse ("+52 discovered (24h)"). Cards without a hint (Fees, which
- * shares the volume's coverage exactly) simply omit it.
- *
- * `info` adds an ⓘ popover next to the label — the metric's definition
- * on demand. Stays a Server Component; the popover is the client island.
+ * The Overview's KPI card: a label, a large value, and an optional `hint` line for coverage
+ * or discovery. A Server Component; the ⓘ popover is the client island.
  */
 
 import { getTranslations } from "next-intl/server";

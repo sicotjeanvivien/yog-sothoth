@@ -1,46 +1,8 @@
 /**
- * Notice shown when pools became active after the current listing was
- * anchored.
- *
- * `last_seen_at` is rewritten on every event touching a pool, so a listing
- * sorted on it is pinned to the instant it started (`asOf`) and reads only
- * pools at or below that anchor. Without the anchor, a pool touched
- * mid-traversal would cross the pagination cursor and be skipped outright.
- * With it, the pool leaves the traversal instead — it has moved to the end of
- * the live ordering, which under `last_seen_desc` means the head of the list
- * and under `last_seen_asc` its tail.
- *
- * Either way this page cannot show it. The difference this notice makes is
- * that the reader is told, and given the one action that resolves it: re-anchor
- * at the end of the ordering where the pool now sits, keeping their search and
- * filters. Silence here would be the same data loss without the
- * acknowledgement.
- *
- * # Two things this count is not
- *
- * It is **not** "pools you missed": a pool the reader already read on an
- * earlier page and which was touched again since is counted too. Once touched,
- * a pool's previous position is gone from the database — nothing can tell the
- * two apart after the fact — so the count is an upper bound, and the wording
- * says only what is certain ("became active since {when}").
- *
- * It is **not** relative to now: `asOf` is stamped in the URL, so a page kept
- * open or shared carries its own anchor rather than the reader's clock. That is
- * why the message names the anchor instant instead of saying "since this page
- * loaded", which would be a lie on a link opened later. (The server re-anchors
- * a cursor older than an hour, so the wording never has to explain a snapshot
- * from last week.)
- *
- * And it counts *movement*, not membership: with a fee or search filter active,
- * a pool can enter the filtered set mid-traversal because `yog-context`
- * resolved its properties, without its activity moving at all. Such a pool is
- * neither shown nor counted. So this notice reports what it can see leave, not
- * everything the page cannot show.
- *
- * Renders wherever the count is non-zero, first page included — a backward
- * navigation that lands back on page 1 still carries a cursor, so it carries a
- * real count, and the action still resolves it (dropping the cursor re-anchors
- * the listing and brings the moved pools back into view).
+ * The pools that became active after the listing's anchor (`asOf`) and left the traversal,
+ * with the action that re-anchors at the end of the ordering. ⚠️ An upper bound: a pool
+ * already read and touched since counts too. It names the anchor, not "since this page
+ * loaded": `asOf` travels in the URL.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -66,10 +28,7 @@ export async function PoolsMovedNotice({
   const t = await getTranslations("Dashboard.Pools.movedNotice");
   const { dir } = parseSortValue(sort);
 
-  // A touched pool is the most recently active there is, so it sits at the
-  // end of the ordering: the head of the list under `desc`, the tail under
-  // `asc`. Sending the reader to the head in both cases would point them at
-  // the *least* recently active pools half the time.
+  // A touched pool is the most recent: the head under `desc`, the tail under `asc`.
   const toHead = dir === "desc";
   const href = toHead
     ? buildHref("/pools", searchParams, "", {})

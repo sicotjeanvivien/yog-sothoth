@@ -1,31 +1,9 @@
 /**
- * Marketing footer links.
- *
- * Pure data — no React, no JSX. The footer has two link columns:
- *
- *   - Product : destinations that already exist (Overview, Features,
- *               Support);
- *   - Company : About / Privacy / Terms — these pages do NOT exist
- *               yet and currently 404. They are listed deliberately;
- *               the routes are stubbed below with TODOs so the pages
- *               can be wired in later without hunting for the spot.
- *
- * Kept separate from `marketing-nav-links.ts` on purpose — a footer
- * and a nav don't list the same things, and forcing a shared list
- * would couple two surfaces that evolve independently.
+ * The footer's links, as data. Apart from the nav's on purpose: the two surfaces list
+ * different things.
  */
 
-/**
- * A single footer link.
- *
- * - `key`      stable identity, also the React list key.
- * - `labelKey` i18n key, relative to its column's namespace.
- * - `href`     internal locale-free path, in-page anchor, or full
- *              external URL — see `kind`.
- * - `kind`     "route"   internal locale route (next-intl Link);
- *              "anchor"  in-page fragment (plain anchor, no locale);
- *              "external" full URL (plain anchor, new tab).
- */
+/** `kind`: a locale `route` (next-intl Link), an in-page `anchor`, or an `external` URL in a new tab. */
 export type FooterLink = {
   key: string;
   labelKey: string;
@@ -33,18 +11,13 @@ export type FooterLink = {
   kind: "route" | "anchor" | "external";
 };
 
-/**
- * A footer link column — a heading plus its links. `headingKey` and
- * each link's `labelKey` resolve against `namespace`.
- */
+/** `headingKey` and each `labelKey` resolve against `namespace`. */
 export type FooterColumn = {
   key: string;
-  /** i18n namespace holding `heading` and the link labels. */
   namespace: string;
   links: readonly FooterLink[];
 };
 
-/** Product column — all destinations exist today. */
 const PRODUCT_COLUMN: FooterColumn = {
   key: "product",
   namespace: "Marketing.footer.product",
@@ -71,12 +44,6 @@ const PRODUCT_COLUMN: FooterColumn = {
   ],
 };
 
-/**
- * Company column — every destination exists under `(marketing)/`.
- * (Historical note: these pages were listed here before they were
- * built; the GDPR content review of privacy/terms/legal-notice remains
- * to be done before deployment.)
- */
 const COMPANY_COLUMN: FooterColumn = {
   key: "company",
   namespace: "Marketing.footer.company",
@@ -93,15 +60,10 @@ const COMPANY_COLUMN: FooterColumn = {
   ],
 };
 
-/** The footer link columns, in display order. */
 export const FOOTER_COLUMNS: readonly FooterColumn[] = [
   PRODUCT_COLUMN,
   COMPANY_COLUMN,
 ] as const;
-/**
- * Social links shown under the brand block. Both external.
- * `icon` keys map to glyphs in the footer component.
- */
 export type FooterSocial = {
   key: string;
   label: string;
@@ -124,7 +86,6 @@ export const FOOTER_SOCIALS: readonly FooterSocial[] = [
   },
 ] as const;
 
-/** The "Built by AWSD" credit box — external link to the AWSD site. */
 export const FOOTER_AWSD = {
   href: "https://awsd.fr/",
 } as const;

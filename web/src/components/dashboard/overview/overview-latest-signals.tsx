@@ -1,12 +1,6 @@
 /**
- * Overview page — the latest signals block (server side).
- *
- * Self-contained async Server Component, same contract as
- * `OverviewTopPools`: fetches the seed (`GET /api/signals?limit=5`)
- * itself and degrades to a `BlockError` on failure so a signal hiccup
- * never takes down the rest of the page. The rendering and the live
- * SSE tail belong to the client child (`OverviewLatestSignalsLive`),
- * which reuses the exact `SignalCard` of the `/signals` feed.
+ * The Overview's latest signals: fetches the seed and degrades to a `BlockError` on its own;
+ * rendering and the live tail belong to `OverviewLatestSignalsLive`.
  */
 
 import { getTranslations } from "next-intl/server";

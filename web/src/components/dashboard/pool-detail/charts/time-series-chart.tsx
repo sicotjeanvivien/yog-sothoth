@@ -1,15 +1,9 @@
 "use client";
 
 /**
- * Minimal responsive time-series chart built on visx primitives (no
- * batteries-included charting lib — primitives we compose, so we're never
- * boxed in). Renders either an `area` or a `line` over a time x-axis, with a
- * value y-axis and a hover tooltip.
- *
- * Props are serializable only (it's a Client Component fed by a Server
- * Component): data points are `{ t: epoch ms, value }`, and formatting is
- * driven by a `valueFormat` flag rather than a function prop (functions can't
- * cross the RSC boundary).
+ * A responsive area or line chart over time, on visx primitives, with a hover tooltip.
+ * ⚠️ Serializable props only, fed by a Server Component: `valueFormat` is a flag, since a
+ * function cannot cross the RSC boundary.
  */
 
 import { useCallback, useMemo } from "react";
@@ -37,10 +31,8 @@ const MARGIN = { top: 8, right: 16, bottom: 24, left: 52 };
 
 function formatValue(value: number, kind: ValueFormat, locale: string): string {
   if (kind === "bps") {
-    // Effective rate in basis points; keep it terse.
     return `${Number(value.toFixed(2))} bps`;
   }
-  // USD, compact ($1.2K, $3.4M) — these are per-hour amounts, often small.
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "USD",
@@ -98,7 +90,6 @@ function Inner({
       const rect = event.currentTarget.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const t = xScale.invert(x).getTime();
-      // Nearest point by time — small series, a linear scan is fine.
       let nearest: ChartPoint = first;
       for (const p of data) {
         if (Math.abs(p.t - t) < Math.abs(nearest.t - t)) nearest = p;
@@ -177,7 +168,6 @@ function Inner({
             />
           )}
 
-          {/* Transparent capture surface for hover. */}
           <rect
             width={innerW}
             height={innerH}

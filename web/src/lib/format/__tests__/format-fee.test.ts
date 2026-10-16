@@ -41,9 +41,7 @@ describe("formatFeeSplit", () => {
 });
 
 describe("formatComputedFeeBps", () => {
-  // The PR's headline case: 28BDU1…'s linear floor is numerator 40_000_064,
-  // i.e. 400.00064 bps. `formatFeeBps` renders that as "4.000006%", which reads
-  // as a glitch beside a tidy "50%" tier.
+  // 28BDU1…'s floor, 400.00064 bps: `formatFeeBps` would show "4.000006%".
   it("rounds a decayed fee instead of showing the chain's last digits", () => {
     expect(formatComputedFeeBps("400.00064")).toBe("4%");
     expect(formatFeeBps("400.00064")).toBe("4.000006%");

@@ -32,8 +32,7 @@ export async function PoolsTable({
   const t = await getTranslations("Dashboard.Pools.table");
   const tSignals = await getTranslations("Dashboard.Signals.feed");
 
-  // Resolved once for the whole table; rows pass plain strings to the
-  // client-side signal cell, keeping all i18n on the server.
+  // Resolved once, so the client signal cell gets plain strings.
   const signalLabels: SignalCellLabels = {
     tagFor: (detector) =>
       KNOWN_DETECTORS.has(detector)
@@ -49,7 +48,6 @@ export async function PoolsTable({
   return (
     <div className="mx-6 overflow-x-auto rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 lg:mx-10">
       <div role="table" className={TABLE_MIN_WIDTH_CLASS}>
-        {/* Header row */}
         <div
           role="rowgroup"
           className="border-b border-sothoth-500/20 bg-cosmos-900/60"
@@ -101,7 +99,6 @@ export async function PoolsTable({
           </div>
         </div>
 
-        {/* Body rows */}
         <div role="rowgroup">
           {pools.map((pool) => (
             <PoolsTableRow

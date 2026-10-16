@@ -1,15 +1,4 @@
-/**
- * Triggered by `notFound()` in the pool detail page when
- * `fetchPool(address)` returns a 404 — the address is well-formed
- * but the indexer has never observed a pool at that address.
- *
- * Distinguishes itself from a generic "page not found" by being
- * specific to the pool-detail route: we know exactly what's
- * missing and can offer the right next step (back to the list).
- *
- * Next.js automatically picks up `not-found.tsx` next to a page
- * file. The translations live in the dashboard namespace.
- */
+/** The pool detail's 404: a well-formed address the indexer has never observed. */
 
 import { getTranslations } from "next-intl/server";
 

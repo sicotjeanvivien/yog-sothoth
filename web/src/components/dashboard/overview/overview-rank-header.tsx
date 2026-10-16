@@ -1,21 +1,7 @@
 /**
- * Clickable ranking header for the Overview top-N pools table.
- *
- * Server Component — the click target is a next-intl `<Link>` with a
- * precomputed href, no client state (same approach as the pools
- * `SortableHeader`). Clicking a metric re-ranks the strip by writing
- * `?rank=<metric>` to the URL; the page re-renders server-side with the
- * new ranking.
- *
- * The ranking is always descending (biggest first) — there is no
- * asc/desc cycle. So the *active* header is deliberately NOT a link: it
- * renders as plain (brighter) text, because clicking it would re-rank by
- * what is already selected and do nothing — a no-op click that reads as
- * broken. Only the *inactive* metric is a clickable link. No direction
- * chevron either, for the same reason (it implies a toggle that isn't
- * there). `volume_24h` is the default ranking, so selecting it *drops*
- * the `rank` param to keep the URL clean (a bare `/overview` means "by
- * volume").
+ * The Overview ranking header, a Server Component of precomputed `<Link>`s. Always descending,
+ * so the active metric is plain text, not a no-op link, with no chevron. Selecting the default,
+ * `volume_24h`, drops `rank` from the URL.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -26,13 +12,10 @@ import type { PoolRankMetric } from "@/lib/api/server/top-pools";
 const DEFAULT_METRIC: PoolRankMetric = "volume_24h";
 
 type OverviewRankHeaderProps = {
-  /** Metric this header ranks by when clicked. */
   metric: PoolRankMetric;
-  /** Visible label. */
   label: string;
-  /** Currently active ranking, resolved from the URL. */
   activeMetric: PoolRankMetric;
-  /** Current search params — unrelated ones are preserved. */
+  /** Unrelated params are preserved. */
   searchParams: Record<string, string | string[] | undefined>;
 };
 
@@ -49,8 +32,6 @@ export async function OverviewRankHeader({
   const baseClass =
     "inline-flex items-center justify-end text-[12px] font-semibold tracking-[0.2em] uppercase whitespace-nowrap";
 
-  // Active header: plain text, not a link — nothing to click, so no
-  // misleading no-op. `aria-current` marks it as the current ranking.
   if (isActive) {
     return (
       <span aria-current="true" className={`${baseClass} text-slate-200`}>
@@ -59,7 +40,6 @@ export async function OverviewRankHeader({
     );
   }
 
-  // Inactive metric: the clickable switch to that ranking.
   return (
     <Link
       href={buildHref(searchParams, metric)}
@@ -75,10 +55,6 @@ export async function OverviewRankHeader({
   );
 }
 
-/**
- * Build the target href: keep every unrelated param, set `rank` — or drop
- * it when selecting the default (volume) so the URL stays bare.
- */
 function buildHref(
   searchParams: Record<string, string | string[] | undefined>,
   metric: PoolRankMetric,

@@ -1,17 +1,6 @@
 /**
- * Terms — prose section.
- *
- * Eight stacked cards covering, in order: a short summary, the
- * service, who can use it, acceptable use, the no-financial-advice
- * disclaimer, availability and accuracy limits, intellectual
- * property, and governing law.
- *
- * The "no financial advice" card uses a distinct `warning` variant
- * — amber accents instead of the default violet — to make the
- * legally critical disclaimer visually unmissable. The shell is
- * otherwise identical to the other cards.
- *
- * Copy lives under `Terms.prose` in `messages/{en,fr}/terms.json`.
+ * The terms' prose cards; the no-financial-advice one uses the amber `warning` variant. Copy
+ * under `Terms.prose` in `messages/{en,fr}/terms.json`.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -28,8 +17,6 @@ import {
   UsersIcon,
   type IconProps,
 } from "@/components/shared/icon";
-
-// ── Style tokens ─────────────────────────────────────────────────────
 
 type Variant = "default" | "warning";
 
@@ -59,12 +46,6 @@ const BODY_CLASS: Record<Variant, string> = {
   warning: "mt-3 text-[17px] leading-[1.7] text-amber-100/90",
 };
 
-// ── Card configuration ────────────────────────────────────────────────
-//
-// The reading flow is intentional: summary → what is the service →
-// who can use it → how → critical disclaimer → service-level
-// disclaimer → IP → legal framework. Reordering breaks the narrative.
-
 type CardConfig = {
   key: string;
   Icon: FC<IconProps>;
@@ -81,8 +62,6 @@ const CARDS: readonly CardConfig[] = [
   { key: "intellectualProperty", Icon: OpenSourceIcon, variant: "default" },
   { key: "governingLaw", Icon: RefreshIcon, variant: "default" },
 ] as const;
-
-// ── Component ─────────────────────────────────────────────────────────
 
 export async function TermsProse() {
   const t = await getTranslations("Terms.prose");
@@ -105,13 +84,6 @@ export async function TermsProse() {
   );
 }
 
-// ── Sub-component ─────────────────────────────────────────────────────
-
-/**
- * One titled prose card. The `variant` prop toggles between the
- * default violet styling and an amber `warning` style — body and
- * icon are otherwise identical.
- */
 function ProseCard({
   Icon,
   title,

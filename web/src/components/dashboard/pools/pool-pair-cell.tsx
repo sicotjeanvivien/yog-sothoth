@@ -1,15 +1,6 @@
 /**
- * Token pair cell — two overlapping logos + "SYMBOL_A / SYMBOL_B".
- *
- * Uses a native `<img>` rather than `next/image`:
- *   - logos are 24px and one per row; the optimisation gain from
- *     `next/image` is negligible at this scale,
- *   - external hosts vary across token registries — going native
- *     avoids a maintenance burden on `next.config.ts`.
- *
- * If a token has no `logoUri` we fall back to a filled circle
- * showing the first letter of its symbol. That covers tokens
- * Helius DAS does not return metadata for.
+ * The pair cell: two overlapping logos and the symbols. A native `<img>`, not `next/image`:
+ * logo hosts vary per registry. A token without `logoUri` shows its symbol's first letter.
  */
 
 import type { EmbeddedTokenResponse } from "@/lib/api/schema/zod.gen";
@@ -23,7 +14,6 @@ export function PoolPairCell({
 }) {
   return (
     <div className="flex items-center gap-3">
-      {/* Stacked logos */}
       <div className="relative flex shrink-0 items-center">
         <TokenLogo token={tokenA} />
         <div className="-ml-2">
@@ -31,7 +21,6 @@ export function PoolPairCell({
         </div>
       </div>
 
-      {/* Symbols */}
       <span className="font-medium text-slate-100">
         {tokenA.symbol}
         <span className="mx-1 text-slate-500">/</span>
@@ -40,8 +29,6 @@ export function PoolPairCell({
     </div>
   );
 }
-
-// ── Sub-component ─────────────────────────────────────────────────────
 
 function TokenLogo({ token }: { token: EmbeddedTokenResponse }) {
   const sharedClass =
@@ -60,7 +47,6 @@ function TokenLogo({ token }: { token: EmbeddedTokenResponse }) {
     );
   }
 
-  // Fallback — filled circle with the first letter of the symbol.
   return (
     <div
       aria-hidden="true"

@@ -1,22 +1,7 @@
 "use client";
 
 /**
- * Copy-to-clipboard button.
- *
- * Isolated Client Component so the rest of the page stays on the
- * server. Renders a small icon-only button next to whatever text
- * the caller wants to copy; on click, writes `value` to the
- * clipboard and shows a brief checkmark confirmation.
- *
- * Two design choices worth flagging:
- *
- *   - Confirmation lives in local state, not in the URL or in any
- *     global store. The button is self-contained.
- *
- *   - `aria-label` is required (the button has no visible text),
- *     so the caller passes a localised label — copying is a generic
- *     UI affordance, the surrounding context disambiguates which
- *     value is being copied.
+ * An icon-only copy button, a client island; `label` is required, the button showing no text.
  */
 
 import { useState } from "react";
@@ -41,10 +26,7 @@ export function CopyButton({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard API can fail in insecure contexts or when the
-      // user denies permission. We silently no-op rather than
-      // showing an error — the worst case is the user sees no
-      // confirmation and tries again.
+      // Insecure context or denied permission: no confirmation, no error.
     }
   };
 

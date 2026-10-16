@@ -1,15 +1,6 @@
 /**
- * Local filtering of the signal feed — pure, framework-free.
- *
- * Selection model (mirrors the chips UI):
- *   - within a dimension, active values are OR'd;
- *   - across dimensions (severity × detector), filters are AND'd;
- *   - an EMPTY selection means "no filter" for that dimension — the
- *     default state of an alert feed must never hide anything.
- *
- * Applied at render time on the merged live list: the SSE stream and
- * the 200-item merge are untouched, hidden signals stay in memory and
- * reappear the moment the filter releases them.
+ * The feed's local filters: OR within a dimension, AND across. ⚠️ An empty selection is no
+ * filter: an alert feed's default must never hide anything.
  */
 
 import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";

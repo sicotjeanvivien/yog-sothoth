@@ -1,17 +1,6 @@
 /**
- * Per-row pool actions — the trailing "actions" cell of the pool table.
- *
- * Three utilities on one pool, right-aligned: copy the address, open it on
- * Solscan, and toggle it on the LocalStorage watchlist. Client island because
- * the copy and the star are interactive and the star reads `useWatchlist`.
- *
- * The star is *page-correlated by state*, not by page: it fills when the pool
- * is on the watchlist and empties otherwise, so on `/pools` it reads as "add",
- * on `/watchlist` (every row watched) as "remove" — one component, both jobs.
- *
- * These controls must NOT sit inside the row's navigation `<Link>` (a button
- * or link nested in an `<a>` is invalid); the row places this cell as a
- * sibling of the linked data cells.
+ * A pool row's actions: copy, Solscan, watchlist star — filled when watched, so "add" on
+ * `/pools` and "remove" on `/watchlist`.
  */
 
 "use client";

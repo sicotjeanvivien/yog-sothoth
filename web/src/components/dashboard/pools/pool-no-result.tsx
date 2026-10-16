@@ -1,15 +1,6 @@
 /**
- * Empty state shown when an active refinement (search and/or fee
- * filter) yields no matching pools.
- *
- * Distinct from <PoolsEmpty />, which means "no pools indexed at
- * all". Here the index is non-empty; the active refinement just
- * doesn't match anything.
- *
- * When a text `query` is present we echo it back (the search case);
- * otherwise the refinement is the fee filter alone and we show a
- * filter-neutral message. Either way the CTA clears everything by
- * linking back to the bare `/pools`.
+ * No pool matches the search or fee filter — unlike `PoolsEmpty`, nothing indexed. The CTA
+ * clears everything.
  */
 
 import { CtaLink } from "@/components/shared/cta-link";
@@ -27,8 +18,6 @@ export async function PoolsNoResults({
       <p className="text-[15px] text-slate-300">
         {query !== undefined ? t("title", { query }) : t("titleFiltered")}
       </p>
-      {/* The spelling hint only fits the text-search case; the fee filter
-          has nothing to misspell. */}
       {query !== undefined && (
         <p className="mt-2 text-[14px] text-slate-500">{t("hint")}</p>
       )}

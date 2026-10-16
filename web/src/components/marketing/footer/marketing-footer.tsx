@@ -1,33 +1,6 @@
 /**
- * Marketing footer.
- *
- * Shared marketing chrome — mounted by `(marketing)/layout.tsx`, so
- * it appears on every marketing page, the counterpart of
- * `MarketingNav`.
- *
- * # Layout
- *
- * Four zones in the upper row:
- *
- *   1. brand   — logo, wordmark, one-line description, social icons;
- *   2. Product — link column (Overview / Features / Support-us);
- *   3. Company — link column (About / Privacy / Terms);
- *   4. AWSD    — a "Built by AWSD" credit box, links to awsd.fr.
- *
- * A copyright bar sits below, separated by a hairline border.
- *
- * The two link columns are driven by `FOOTER_COLUMNS` — the
- * component renders whatever columns the config lists. Note the
- * Company links currently 404 (the pages don't exist yet); see the
- * config file.
- *
- * Static content, Server Component.
- *
- * # Assets
- *
- * Expects `web/public/logo_ys.png` (Yog-Sothoth, already present) and
- * `web/public/awsd-logo.png` (AWSD — drop the file there; adjust the
- * src if your filename differs).
+ * The marketing footer, a Server Component: brand, the `FOOTER_COLUMNS` link columns, the
+ * AWSD credit, then the copyright bar.
  */
 
 import Image from "next/image";
@@ -49,7 +22,6 @@ export function MarketingFooter() {
   return (
     <footer className="border-t border-sothoth-500/15 bg-cosmos-950">
       <div className="mx-auto max-w-[1800px] px-6 lg:px-12">
-        {/* Upper row — brand / links / AWSD box */}
         <div className="grid grid-cols-1 gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1.4fr]">
           <BrandBlock />
           {FOOTER_COLUMNS.map((column) => (
@@ -58,7 +30,6 @@ export function MarketingFooter() {
           <AwsdBox />
         </div>
 
-        {/* Copyright bar */}
         <div className="border-t border-sothoth-500/10 py-6 text-center text-[12px] text-slate-500">
           {t("copyright", { year })}
         </div>
@@ -67,9 +38,6 @@ export function MarketingFooter() {
   );
 }
 
-// ── Brand block ───────────────────────────────────────────────────────
-
-/** Logo + wordmark + one-line description + social icons. */
 function BrandBlock() {
   const t = useTranslations("Marketing.footer");
   const tBrand = useTranslations("Brand");
@@ -119,12 +87,6 @@ function BrandBlock() {
   );
 }
 
-// ── Links column ──────────────────────────────────────────────────────
-
-/**
- * The single column of footer links. Each entry is a route, an
- * in-page anchor, or an external URL — rendered accordingly.
- */
 function LinksColumn({ column }: { column: FooterColumn }) {
   const t = useTranslations(column.namespace);
 
@@ -141,7 +103,6 @@ function LinksColumn({ column }: { column: FooterColumn }) {
         {column.links.map((link) => {
           const label = t(link.labelKey);
 
-          // In-page fragment or external URL — plain anchor.
           if (link.kind === "anchor" || link.kind === "external") {
             const external = link.kind === "external";
             return (
@@ -159,7 +120,6 @@ function LinksColumn({ column }: { column: FooterColumn }) {
             );
           }
 
-          // Internal locale route.
           return (
             <li key={link.key}>
               <Link href={link.href} className={itemClass}>
@@ -173,12 +133,6 @@ function LinksColumn({ column }: { column: FooterColumn }) {
   );
 }
 
-// ── AWSD credit box ───────────────────────────────────────────────────
-
-/**
- * "Built by AWSD" box — the company credit. A single external link
- * to the AWSD site; the whole box is the click target.
- */
 function AwsdBox() {
   const t = useTranslations("Marketing.footer.awsd");
 

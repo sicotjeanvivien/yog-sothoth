@@ -1,40 +1,17 @@
 /**
- * Date display helpers.
- *
- * Two formatters cover the dashboard's needs:
- *
- *   - `formatRelative`: human-friendly "3 minutes ago" for recent
- *     events. Locale-aware via the standard `Intl.RelativeTimeFormat`.
- *   - `formatAbsolute`: deterministic "2026-05-12 03:18 UTC" for
- *     timestamps shown in table cells or tooltips. Locale-independent
- *     output (intentional — pubkey-style precision).
- *
- * Both accept either an ISO-8601 string (yog-api wire format) or a
- * `Date` instance, and return null for invalid inputs so the React
- * layer can branch without try/catch.
+ * Dates from yog-api's ISO-8601 strings or a `Date`: `formatRelative` is locale-aware,
+ * `formatAbsolute` deliberately not. Both return null on invalid input.
  */
 
-/** Locale tag passed to Intl APIs. Matches the next-intl supported locales. */
+/** The next-intl locales. */
 export type FormatLocale = "en" | "fr";
 
-/**
- * Parse the input into a `Date` once, returning null on invalid input
- * so the rest of the formatter chain can branch on a single check.
- */
 function toDate(input: string | Date): Date | null {
   const date = input instanceof Date ? input : new Date(input);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/**
- * Thresholds used by `formatRelative` to pick a unit. Order matters:
- * the first threshold whose absolute delta exceeds the value is used.
- *
- * Calibration choices:
- *   - Anything under a minute is rounded to "just now" — avoids
- *     flickering "1 second ago / 2 seconds ago" updates.
- *   - "1 day" kicks in at 24h, "1 month" at 30d (Intl default).
- */
+/** Largest first: the first unit the delta reaches is used. */
 const RELATIVE_UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; seconds: number }> = [
   { unit: "year", seconds: 60 * 60 * 24 * 365 },
   { unit: "month", seconds: 60 * 60 * 24 * 30 },
@@ -44,16 +21,7 @@ const RELATIVE_UNITS: Array<{ unit: Intl.RelativeTimeFormatUnit; seconds: number
 ];
 
 /**
- * Format a timestamp as a human-friendly relative phrase.
- *
- * @param input  ISO-8601 string from `yog-api`, or a `Date`.
- * @param locale Active locale, controls phrasing ("3 minutes ago" / "il y a 3 minutes").
- * @param now    Reference point. Defaulting to `new Date()` makes the
- *               function impure but matches typical UI usage; for tests,
- *               pass a deterministic `Date`.
- *
- * Returns null for malformed input. Returns "just now" for any delta
- * shorter than one minute.
+ * "3 minutes ago", or a fixed "just now" under a minute. Pass `now` for a deterministic test.
  */
 export function formatRelative(
   input: string | Date,
@@ -68,9 +36,6 @@ export function formatRelative(
   const deltaSeconds = (target.getTime() - now.getTime()) / 1000;
   const absDelta = Math.abs(deltaSeconds);
 
-  // Below one minute: collapse to a fixed phrase per locale. The
-  // standard `Intl.RelativeTimeFormat` would otherwise yield "0 minutes
-  // ago" which reads worse than a dedicated label.
   if (absDelta < 60) {
     return locale === "fr" ? "à l'instant" : "just now";
   }
@@ -84,19 +49,11 @@ export function formatRelative(
     }
   }
 
-  // Theoretically unreachable: a delta >= 60s but smaller than every
-  // unit's threshold cannot exist (the smallest unit is 60s). Kept as
-  // a defensive fallback.
+  // Unreachable: the smallest unit is 60 s.
   return formatter.format(Math.round(deltaSeconds / 60), "minute");
 }
 
-/**
- * Format a timestamp as a deterministic UTC string suitable for table
- * cells: `YYYY-MM-DD HH:mm UTC`. Locale-independent on purpose — the
- * absolute date is metadata, not narrative content.
- *
- * Returns null for malformed input.
- */
+/** `YYYY-MM-DD HH:mm UTC`, locale-independent on purpose. */
 export function formatAbsolute(input: string | Date): string | null {
   const date = toDate(input);
   if (date === null) {

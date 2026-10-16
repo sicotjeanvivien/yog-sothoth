@@ -1,11 +1,4 @@
-/**
- * Changelog page.
- *
- * Static, data-driven release history (`releases.ts` — no MDX, no
- * dependency): one anchored block per release, newest first. Release
- * announcements published in the `announcements` table point here via
- * `link_url` (`/changelog#vX.Y.Z`).
- */
+/** The changelog, from `releases.ts`: one anchored block per release, newest first. */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";

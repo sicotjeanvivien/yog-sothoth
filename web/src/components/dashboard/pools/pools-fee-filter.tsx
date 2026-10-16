@@ -1,29 +1,7 @@
 /**
- * Fee-tier filter for the pools list.
- *
- * Client island on an otherwise Server-Component page. Its options are
- * the *most common* fee tiers actually observed in the data (fetched
- * server-side, passed in as `tiers`), each with its pool count — so the
- * filter can never offer a tier that would match nothing, and each row
- * shows how many pools it covers. Picking one drives the `fee_bps` URL
- * search param via `router.replace`; the "all fees" option clears it.
- *
- * A custom popover rather than a native `<select>`: an `<option>` can't
- * lay its content out (fee left, count right), so we mirror the house
- * `InfoPopover` pattern — a click-toggled button + a listbox panel,
- * closing on outside pointer-down or Escape. The options are real
- * `<button>`s so they stay keyboard-operable (Tab + Enter). Trade-off:
- * no native mobile picker, but for a short capped list a styled panel
- * reads fine.
- *
- * Changing the filter resets pagination: the `cursor` / `dir` /
- * `position` params are cleared, because a cursor into the previous
- * result set is meaningless once the filter changes — same rule as the
- * search box. `replace` rather than `push`: the filter is a refinement
- * of the current view, not a distinct destination worth a Back stop.
- *
- * The selection is seeded from the URL, so a shared link like
- * `/pools?fee_bps=25` pre-selects the tier on load.
+ * The fee-tier filter: the most common observed tiers with their pool counts, driving
+ * `fee_bps` through `router.replace`. A custom listbox, not a `<select>`, whose `<option>`
+ * cannot lay out a count. ⚠️ A change clears `cursor`/`dir`/`position`, like the search.
  */
 
 "use client";
@@ -37,8 +15,7 @@ import { useRouter, usePathname } from "@/i18n/navigation";
 import type { FeeTierResponse } from "@/lib/api/schema/zod.gen";
 import { formatFeeBps } from "@/lib/format/format-fee";
 
-/** Sentinel value for "no fee filter". Empty string can't be a real
- *  tier, so it unambiguously means "all". */
+/** "All fees": an empty string is never a tier. */
 const ALL = "";
 
 export function PoolsFeeFilter({ tiers }: { tiers: FeeTierResponse[] }) {
@@ -51,15 +28,11 @@ export function PoolsFeeFilter({ tiers }: { tiers: FeeTierResponse[] }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
-  // Seed from the URL so a shared/bookmarked ?fee_bps= pre-selects the
-  // tier. An out-of-vocabulary value (a tier no longer among the most
-  // common) simply matches no row, so the button falls back to "all".
+  // A tier no longer among the most common matches no row.
   const current = searchParams.get("fee_bps") ?? ALL;
   const selectedLabel =
     current !== ALL ? formatFeeBps(current) : t("all");
 
-  // Global listeners only while open: outside pointer-down or Escape
-  // closes. Mirrors InfoPopover so the two feel identical.
   useEffect(() => {
     if (!open) {
       return;
@@ -92,7 +65,6 @@ export function PoolsFeeFilter({ tiers }: { tiers: FeeTierResponse[] }) {
       params.set("fee_bps", next);
     }
 
-    // Reset pagination on any filter change.
     params.delete("cursor");
     params.delete("dir");
     params.delete("position");

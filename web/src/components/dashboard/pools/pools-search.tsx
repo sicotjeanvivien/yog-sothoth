@@ -1,19 +1,6 @@
 /**
- * Search box for the pools list.
- *
- * Client island on an otherwise Server-Component page. Debounced
- * (300ms) input that drives the `q` URL search param via
- * `router.replace`. Typing a new query resets pagination: the
- * `cursor` / `dir` / `position` params are cleared, because a cursor
- * into the previous (unfiltered or differently-filtered) result set
- * is meaningless once the filter changes.
- *
- * `replace` rather than `push`: a search-as-you-type box would
- * otherwise stack one history entry per debounced keystroke, making
- * the browser Back button useless.
- *
- * The initial value comes from the URL so a shared link like
- * `/pools?q=SOL` pre-fills the box on load.
+ * The pools search box, debounced, driving `q`. ⚠️ `replace`, not `push`: one history entry
+ * per keystroke would break Back. A new query clears `cursor`/`dir`/`position`.
  */
 
 "use client";
@@ -36,14 +23,10 @@ export function PoolsSearch() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Seed from the URL so a shared/bookmarked ?q= pre-fills the input.
   const initialQuery = searchParams.get("q") ?? "";
   const [value, setValue] = useState(initialQuery);
 
-  // Keep the input in sync if the URL changes from the outside
-  // (e.g. browser Back/Forward landing on a different ?q=). We only
-  // overwrite when the incoming URL value actually differs from what
-  // we last pushed, to avoid clobbering mid-typing.
+  // Synced from the URL only when it differs from what was last pushed: no clobbering mid-typing.
   const lastPushedRef = useRef(initialQuery);
   useEffect(() => {
     const urlQuery = searchParams.get("q") ?? "";
@@ -53,15 +36,12 @@ export function PoolsSearch() {
     }
   }, [searchParams]);
 
-  // Debounced navigation. Whenever `value` settles for DEBOUNCE_MS,
-  // push it to the URL (or clear it). Pagination params are dropped.
   useEffect(() => {
     const handle = setTimeout(() => {
       const trimmed = value.trim();
       const current = searchParams.get("q") ?? "";
 
-      // No-op if nothing changed — avoids a redundant navigation
-      // (and an infinite loop with the sync effect above).
+      // ⚠️ Without it, this and the sync effect above loop.
       if (trimmed === current) return;
 
       const params = new URLSearchParams(searchParams.toString());
@@ -72,7 +52,6 @@ export function PoolsSearch() {
         params.delete("q");
       }
 
-      // Reset pagination on any query change.
       params.delete("cursor");
       params.delete("dir");
       params.delete("position");
@@ -87,7 +66,6 @@ export function PoolsSearch() {
 
   const handleClear = () => {
     setValue("");
-    // The debounce effect will fire and clear `q` from the URL.
   };
 
   return (

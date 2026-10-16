@@ -1,16 +1,8 @@
 import React from "react";
 
 /**
- * Icon set for the Yog-Sothoth dashboard.
- *
- * All icons share one geometry contract:
- *   - 24x24 viewBox,
- *   - 1.6px stroke by default, `currentColor` based (they shade with
- *     the surrounding text colour),
- *   - `shrink-0` so they never get squeezed by a flex parent.
- *
- * Sizes are expressed in rendered pixels via the `size` prop; the
- * viewBox stays 24x24 regardless so the line weight scales evenly.
+ * The dashboard's icon set: a 24x24 viewBox, a 1.6px `currentColor` stroke and `shrink-0`.
+ * `size` is in rendered pixels; the viewBox stays 24x24 so the line weight scales evenly.
  */
 
 export type IconProps = {
@@ -19,10 +11,6 @@ export type IconProps = {
   strokeWidth?: number;
 };
 
-/**
- * Shared SVG attributes. The viewBox is 24x24 — every path below is
- * authored against that coordinate space.
- */
 const base = (size: number, strokeWidth: number) => ({
   width: size,
   height: size,
@@ -46,11 +34,6 @@ export const OverviewIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Pools — stacked layers. Matches the validated sidebar prototype:
- * a top rhombus over two parallel "sheets". Authored on the 24x24
- * grid (top vertex at y=3, base sheet near y=20).
- */
 export const PoolsIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -140,11 +123,7 @@ export const ChevronDownIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Stylised Solana-style network glyph (three angled bars in a rounded
- * square). Generic chain-mark — not an exact reproduction of any
- * brand asset.
- */
+/** A generic chain mark, not a reproduction of any brand asset. */
 export const SolanaGlyph: React.FC<{ size?: number }> = ({ size = 28 }) => {
   const id = React.useId();
   return (
@@ -184,11 +163,8 @@ export const SolanaGlyph: React.FC<{ size?: number }> = ({ size = 28 }) => {
 };
 
 /**
- * Solscan — brand mark (the explorer logo). Like `SolanaGlyph` this
- * is a fixed-colour brand glyph, not a `currentColor` stroke icon, so
- * it keeps its own green/purple palette regardless of surrounding
- * text. The source SVG's full-bounds `<clipPath>` is dropped — it
- * clips nothing and would emit a duplicate DOM id per rendered row.
+ * Solscan's brand mark, in its own colours. ⚠️ The source's full-bounds `<clipPath>` is
+ * dropped: it clips nothing and would emit a duplicate DOM id per rendered row.
  */
 export const SolscanIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 14,
@@ -213,11 +189,6 @@ export const SolscanIcon: React.FC<{ size?: number; className?: string }> = ({
   </svg>
 );
 
-/**
- * Hamburger — three stacked lines. Used by the mobile drawer trigger
- * in the dashboard shell. Authored on the 24x24 grid like the rest of
- * the set.
- */
 export const HamburgerIcon: React.FC<IconProps> = ({
   size = 20,
   strokeWidth = 1.6,
@@ -248,10 +219,6 @@ export const ArrowRightIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Eye — used by the "Observe" feature pillar. A simple almond outline
- * with a round pupil. Echoes the brand sigil without reproducing it.
- */
 export const EyeIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -263,10 +230,6 @@ export const EyeIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Pulse — used by the "Analyze" feature pillar. A heartbeat / signal
- * trace: a flat baseline broken by a spike.
- */
 export const PulseIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -277,7 +240,6 @@ export const PulseIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/** X (formerly Twitter) glyph. */
 export const XIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.6,
@@ -288,7 +250,6 @@ export const XIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/** GitHub mark. */
 export const GithubIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.6,
@@ -299,13 +260,6 @@ export const GithubIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Open source — an open padlock. Symbolises unlocked / freely
- * accessible. Used to mark the "How it's available" section on the
- * About page, in the same visual family as `EyeIcon` and
- * `PulseIcon`. The shackle is drawn open on the right side; the
- * body is a rounded square.
- */
 export const OpenSourceIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -318,32 +272,19 @@ export const OpenSourceIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Users — two overlapping silhouettes. Used to mark the "Who is
- * behind it" section on the About page. A larger figure on the left
- * and a smaller one behind on the right; both share the simple
- * head-circle plus rounded-shoulder torso pattern of generic user
- * glyphs. Authored on the 24x24 grid.
- */
 export const UsersIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
   className,
 }) => (
   <svg {...base(size, strokeWidth)} className={className}>
-    {/* Front figure */}
     <circle cx="9" cy="8" r="3" />
     <path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1" />
-    {/* Back figure — slightly offset, smaller arc */}
     <path d="M16 11a3 3 0 1 0-2-5.2" />
     <path d="M16.5 14h.5a4 4 0 0 1 4 4v1" />
   </svg>
 );
 
-/**
- * Info — outlined circle with a vertical accent. Used as a "TL;DR"
- * marker on policy pages.
- */
 export const InfoIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -356,12 +297,6 @@ export const InfoIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * User card — a single silhouette inside a framed card. Used to
- * identify the data controller / responsible party. Distinct from
- * `UsersIcon` (which depicts multiple people) so the same page can
- * use both without semantic overlap.
- */
 export const UserCardIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -376,10 +311,6 @@ export const UserCardIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Cookie — disc with three "chip" dots. Used to mark cookie-related
- * sections on policy pages.
- */
 export const CookieIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -393,12 +324,6 @@ export const CookieIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Shield — a closed-loop shield outline. Used to mark
- * rights / protection sections on policy pages. Distinct from
- * `OpenSourceIcon` (an opened padlock) since this one signals
- * protection rather than openness.
- */
 export const ShieldIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -409,10 +334,6 @@ export const ShieldIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Refresh — circular arrow. Used to mark "changes to this policy"
- * sections — the policy is a living document and may be updated.
- */
 export const RefreshIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -424,10 +345,6 @@ export const RefreshIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Server — two stacked horizontal racks with a status LED on each.
- * Used to mark the hosting provider section on legal pages.
- */
 export const ServerIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -443,10 +360,6 @@ export const ServerIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Edit / pen-on-paper — used to mark the publishing director
- * section on legal pages. A simple sheet with a pen overlay.
- */
 export const EditIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -459,10 +372,6 @@ export const EditIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Alert triangle — equilateral triangle with an exclamation mark.
- * Used to mark warning sections on policy pages.
- */
 export const AlertTriangleIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -475,12 +384,7 @@ export const AlertTriangleIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Alert octagon — the "stop"-shaped counterpart of
- * `AlertTriangleIcon`, one rung above it in severity (critical
- * signals). Two distinct shapes so the severity scale survives
- * color-blindness, not just hue.
- */
+/** One rung above `AlertTriangleIcon`: a distinct shape, so severity survives colour-blindness. */
 export const AlertOctagonIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -493,11 +397,7 @@ export const AlertOctagonIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * LinkedIn mark — used for share buttons. Authored on the 24x24
- * grid, fill rather than stroke (the geometry is too dense for the
- * 1.6px stroke contract).
- */
+/** Filled, not stroked: the geometry is too dense for the 1.6px stroke. */
 export const LinkedinIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.6,
@@ -512,9 +412,6 @@ export const LinkedinIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Mail — outlined envelope. Used to mark email contact links.
- */
 export const MailIcon: React.FC<IconProps> = ({
   size = 18,
   strokeWidth = 1.6,
@@ -526,9 +423,6 @@ export const MailIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Copy — outlined "two squares" copy affordance. 1.6px stroke.
- */
 export const CopyIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.6,
@@ -540,9 +434,6 @@ export const CopyIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * Check — outlined tick mark. Used as the copy confirmation state.
- */
 export const CheckIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.8,
@@ -553,10 +444,6 @@ export const CheckIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * External link — outlined "arrow out of box". Marks links that
- * leave the site.
- */
 export const ExternalLinkIcon: React.FC<IconProps> = ({
   size = 14,
   strokeWidth = 1.6,
@@ -569,9 +456,6 @@ export const ExternalLinkIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-/**
- * ArrowLeft — used for "back" navigation links.
- */
 export const ArrowLeftIcon: React.FC<IconProps> = ({
   size = 16,
   strokeWidth = 1.6,
@@ -667,16 +551,11 @@ export const ChevronDownSortableIcon: React.FC<IconProps> = ({
   </svg>
 );
 
-// ── Brand marks ───────────────────────────────────────────────────────
-// Not stroke icons: filled paths with their own colours, so they don't go
-// through `base()`. Official asset provided by the project owner.
+// Brand marks: filled paths in their own colours, outside `base()`.
 
 /**
- * Meteora logo (the meteor mark, gold→orange→purple gradient). Non-square
- * source (24×26) — width is derived from `size` (the height) to keep the
- * aspect ratio. The gradient id is fixed and shared across instances; every
- * instance renders the same gradient, so referencing the first def is
- * correct.
+ * Meteora's mark, on a 24×26 source: the width derives from `size`, the height. The gradient
+ * id is shared by every instance, which all render the same gradient.
  */
 export const MeteoraIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 16,

@@ -1,18 +1,7 @@
 /**
- * The `yog-web` service of the root `docker-compose.yml`, checked against
- * what the web app actually reads.
- *
- * The compose file and the web app name the same variables from two sides,
- * and nothing else compares them. A mismatch costs nothing at build time
- * and everything at run time: the compose once passed `API_INTERNAL_URL`
- * while the server reads `YOG_API_INTERNAL_URL`, and every data page of
- * `--profile full` answered 500.
- *
- * The server case runs the real schema on the real values, so it needs no
- * copied list of names to keep in sync. The build-argument case exists
- * because Docker ignores an argument the Dockerfile does not declare,
- * with a warning only — the browser's API URL would then silently not
- * reach `next build`.
+ * The `yog-web` service of `docker-compose.yml` against what the web app reads: nothing else
+ * compares them, and a mismatch breaks only at run time. ⚠️ Docker ignores a build argument
+ * the Dockerfile does not declare, with a warning only.
  */
 
 import { readFileSync } from "node:fs";

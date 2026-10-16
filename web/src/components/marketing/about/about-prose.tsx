@@ -1,18 +1,4 @@
-/**
- * About — prose section.
- *
- * Sits directly under the hero. Five stacked cards, each answering
- * one question in plain prose, prefixed with a small icon badge:
- *
- *   1. The problem        — EyeIcon
- *   2. The approach       — PulseIcon
- *   3. Who it's for       — SignalsIcon
- *   4. How it's available — OpenSourceIcon
- *   5. Who is behind it   — UsersIcon
- *
- * Constrained to a comfortable reading width. Copy lives under
- * `About.prose` in `messages/{en,fr}.json`.
- */
+/** The About page's prose cards, copy under `About.prose` in `messages/{en,fr}/about.json`. */
 
 import { getTranslations } from "next-intl/server";
 import type { FC, ReactNode } from "react";
@@ -42,11 +28,6 @@ const TITLE_CLASS =
   "font-display text-[24px] font-semibold tracking-[0.02em] text-[#f1ecff] lg:text-[20px]";
 
 const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
-
-// ── Card ordering ─────────────────────────────────────────────────────
-//
-// The reading flow is intentional: problem → approach → audience →
-// access → identity. Reordering breaks the narrative.
 
 type CardConfig = {
   key: string;
@@ -100,13 +81,6 @@ export async function AboutProse() {
   );
 }
 
-// ── Sub-component ─────────────────────────────────────────────────────
-
-/**
- * One titled prose card with an icon badge on the left. The badge
- * is fixed-size and aligned to the top of the content so paragraphs
- * of different lengths don't push it around.
- */
 function ProseCard({
   Icon,
   title,

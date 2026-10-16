@@ -1,43 +1,7 @@
 /**
- * Pool detail page — "Pool info" + "Pool analytics" blocks.
- *
- * Two factual key/value cards sitting side by side (stacked on
- * mobile, two columns from `lg`). The split separates the pool's
- * *identity* (stable facts) from its *analytics* (computed 24h
- * figures), which read very differently:
- *
- * "Pool info" — identity:
- *   - Pool address  (full, copy-friendly)
- *   - Protocol      (display label)
- *   - Fee tier      (base trading fee, `—` until InitializePool indexed)
- *   - Fee split     (configured protocol/referral percents)
- *   - Network       (hardcoded "Solana" while we only index Solana)
- *   - Token A      (symbol + truncated mint + copy)
- *   - Token B      (symbol + truncated mint + copy)
- *   - First seen   (absolute date, locale-aware)
- *   - Last activity (relative time, locale-aware)
- *
- * "Pool analytics" — computed figures. TVL / Volume / Fees also head
- * the KPI strip above, but there as an *order of magnitude* (compact,
- * "$1.2M"); here they're the *precise* full-precision USD value — the
- * strip is for scanning, this card for exact reading.
- *   - TVL           (precise USD)
- *   - Volume 24h    (precise USD)
- *   - Fees 24h      (precise USD, realized trading-fee revenue)
- *   - Effective fee (realized 24h rate: fees / volume, `—` when no volume)
- *   - Protocol cut  (Meteora's share of the realized 24h fee, USD)
- *   - Referral cut  (the referrers' share — taken out of Meteora's, not the LPs')
- *   - LP cut        (what is left for the liquidity providers)
- *
- * ⚠️ The last three are shares of "Fees 24h" and are formatted as a GROUP
- * (`formatUsdShares`), not one by one: rounded independently to the cent they
- * can display a sum a cent off the total they sit under, on a card that
- * invites exactly that check.
- *
- * The block is a Server Component end-to-end; only the embedded
- * `CopyButton` islands hydrate on the client. Each row is a two-
- * column grid (label / value), which scales naturally on mobile by
- * widening the value column (handled by `min-w-0` on the value).
+ * The pool detail's "Pool info" (identity) and "Pool analytics" (24h figures to full
+ * precision, where the KPI strip shows them compact). A Server Component; only the copy
+ * buttons hydrate.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -57,8 +21,6 @@ import { InfoPopover } from "@/components/shared/info-popover";
 
 import { FeeTypeBadge } from "./fee-type-badge";
 
-// ── Tailwind class fragments ─────────────────────────────────────────
-
 const CARD_CLASS =
   "rounded-[8px] border border-sothoth-500/15 bg-cosmos-900/40 p-6 lg:p-8";
 
@@ -73,8 +35,6 @@ const LABEL_CLASS = "text-[14px] text-slate-400";
 const VALUE_CLASS =
   "flex items-center gap-2 text-[14px] text-slate-200 min-w-0";
 
-// ── Component ─────────────────────────────────────────────────────────
-
 export async function PoolDetailInfo({
   pool,
   locale,
@@ -84,8 +44,7 @@ export async function PoolDetailInfo({
 }) {
   const t = await getTranslations("Dashboard.PoolDetail.info");
 
-  // Formatted as one group so the three rows add up to the "Fees 24h" row
-  // above them. Order matters only for tie-breaking, not for the values.
+  // ⚠️ One group, so the three cuts add up to the "Fees 24h" row above them.
   const [protocolCut, referralCut, lpCut] = formatUsdShares(pool.fees24hUsd, [
     pool.protocolFees24hUsd,
     pool.referralFees24hUsd,
@@ -95,7 +54,6 @@ export async function PoolDetailInfo({
   return (
     <section className="mt-6 px-6 lg:px-10">
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        {/* Identity */}
         <div className={CARD_CLASS}>
           <h2 className={SECTION_TITLE_CLASS}>{t("title")}</h2>
 
@@ -116,9 +74,7 @@ export async function PoolDetailInfo({
               <span>{formatFeeBps(pool.feeBps)}</span>
             </InfoRow>
 
-            {/* Only for a pool whose fee decays: for every other shape the tier
-                above is already the whole truth, and a second identical number
-                would be noise. */}
+            {/* Only for a decaying fee: otherwise the tier above is the whole truth. */}
             {pool.meteoraDammV2?.currentFeeBps != null && (
               <InfoRow label={t("currentFee")} info={t("help.currentFee")}>
                 <span>
@@ -187,8 +143,7 @@ export async function PoolDetailInfo({
             </InfoRow>
 
             <InfoRow label={t("lastActivity")}>
-              {/* suppressHydrationWarning: relative to now, so the SSR text
-                  can legitimately lag the client by a minute boundary. */}
+              {/* Relative to now: the SSR text may lag the client by a minute. */}
               <time dateTime={pool.lastSeenAt} suppressHydrationWarning>
                 {formatRelativeTime(pool.lastSeenAt, locale)}
               </time>
@@ -196,8 +151,6 @@ export async function PoolDetailInfo({
           </div>
         </div>
 
-        {/* Analytics — realized 24h figures (TVL/Volume/Fees are in the
-            KPI strip above, so they aren't repeated here). */}
         <div className={CARD_CLASS}>
           <h2 className={SECTION_TITLE_CLASS}>{t("analyticsTitle")}</h2>
 
@@ -236,13 +189,6 @@ export async function PoolDetailInfo({
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────
-
-/**
- * Single label/value row. The label column has a fixed width so
- * every row aligns vertically; the value column takes the rest and
- * truncates with ellipsis when needed.
- */
 async function InfoRow({
   label,
   children,
@@ -270,12 +216,7 @@ async function InfoRow({
   );
 }
 
-/**
- * "SYMBOL  mint_truncated  [copy]" line, used for both token rows.
- * The symbol falls back to "—" only when the embedded token has no
- * symbol at all (token-metadata never enriched). The mint is
- * always present.
- */
+/** `SYMBOL  mint…  [copy]`; the symbol is "—" for a token never enriched. */
 function TokenLine({
   token,
   copyLabel,

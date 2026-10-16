@@ -1,28 +1,14 @@
 /**
- * Pure data-shaping for the live signal feed.
- *
- * The feed's in-memory list is fed from two directions — SSE events
- * prepend one by one, and a post-reconnect refill brings a whole page —
- * so both paths funnel through one merge: dedup by `id`, re-sort to the
- * feed's display order, cap the length. Kept free of React so the
- * reconciliation logic is unit-testable on its own.
+ * The live feed's one merge, for SSE events and post-reconnect refills alike: dedup by `id`,
+ * display order, cap.
  */
 
 import type { SignalResponse } from "@/lib/api/schema/zod.gen";
 
-/**
- * In-memory cap of the feed. The page is a live tail, not an infinite
- * history — older entries fall off; the paginated API remains the way
- * to browse back.
- */
+/** A live tail, not a history: older entries fall off, the paginated API browses back. */
 export const FEED_CAP = 200;
 
-/**
- * Merge `incoming` signals into `current`: union by `id` (incoming
- * wins — signals are immutable so both copies are identical anyway),
- * sorted newest first (`triggeredAt` desc, `id` desc — the feed's
- * display order), truncated to `cap`.
- */
+/** Union by `id`, newest first (`triggeredAt` desc, `id` desc), truncated to `cap`. */
 export function mergeSignals(
   current: readonly SignalResponse[],
   incoming: readonly SignalResponse[],

@@ -1,8 +1,6 @@
 /**
- * Guard rails for the hand-edited release data. The operator appends a
- * block at each release — these tests catch the realistic slips:
- * duplicated or malformed version (it doubles as the anchor id the
- * announcements' link_url targets), wrong ordering, empty content.
+ * The hand-edited release data: unique, well-formed versions (each is an anchor id), newest
+ * first, no empty content.
  */
 
 import { describe, expect, it } from "vitest";
@@ -30,10 +28,7 @@ describe("RELEASES", () => {
       return t;
     });
     times.slice(1).forEach((time, i) => {
-      // `times[i]` is the previous entry; the slice guarantees it exists.
-      // Not strictly: two versions can ship the same day — an urgent fix
-      // goes out at once — so the order within a day is the version's,
-      // checked below.
+      // Not strictly: two versions can ship the same day, ordered by version below.
       expect(times[i]!).toBeGreaterThanOrEqual(time);
     });
   });

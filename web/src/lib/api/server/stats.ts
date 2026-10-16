@@ -1,17 +1,11 @@
 /**
- * High-level fetcher for `GET /api/stats`.
- *
- * This endpoint takes no parameters — a thin
- * wrapper over `apiGet` that pins the path and the schema.
- *
+ * `GET /api/stats`.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
  */
 
 import { apiGet } from "../client/server";
 import { zGetStatsResponse, type StatsResponse } from "../schema/zod.gen";
 
-/** Fetch the current protocol-wide statistics snapshot from `yog-api`. */
 export async function fetchStats(): Promise<StatsResponse> {
-  // No query parameters — the empty object keeps the `apiGet` signature satisfied.
   return apiGet("/api/stats", {}, zGetStatsResponse);
 }

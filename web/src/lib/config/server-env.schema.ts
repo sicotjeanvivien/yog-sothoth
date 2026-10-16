@@ -1,45 +1,23 @@
 /**
- * Schema and parser for the server-only environment variables.
- *
- * This module is intentionally free of the `server-only` directive so
- * it can be imported from the vitest test suite (which runs in plain
- * Node without the Next.js bundler boundary). The directive lives in
- * the sibling `server-env.ts` module, which re-exports `getServerEnv`
- * for production code paths.
+ * The server-only environment. ⚠️ No `server-only` directive here, so vitest can import it:
+ * the directive lives in `server-env.ts`.
  */
 
 import * as z from "zod";
 
-// ─────────────────────────────────────────────────────────────────────
-// Schema
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Schema describing every server-only environment variable the Next.js
- * server consumes. Keep this list narrow: only what is actually read
- * by server code lives here, so we can fail fast on misconfiguration.
- */
+/** Only what server code reads, so a misconfiguration fails fast. */
 const ServerEnvSchema = z.object({
   /**
-  * Internal URL of yog-api, used by Server Components and other
-  * server-side code to reach the Rust API directly. Never exposed to
-  * the browser — the browser talks to yog-api through the public
-  * gateway (api.yog-scope.xyz) configured at the Caddy layer.
-  *
-  * In Docker: `http://yog-api:5000` (the service hostname on the
-  * compose network). In local dev outside Docker: `http://127.0.0.1:5000`.
-  */
+   * yog-api's internal URL, for server-side code; never sent to the browser, which uses the
+   * public gateway. `http://yog-api:5000` in Docker, `http://127.0.0.1:5000` outside.
+   */
   YOG_API_INTERNAL_URL: z
     .url({ message: "YOG_API_INTERNAL_URL must be a valid URL" })
     .refine((u) => !u.endsWith("/"), {
       message: "YOG_API_INTERNAL_URL must not end with a trailing slash",
     }),
 
-  /**
-   * Timeout (in milliseconds) for BFF → yog-api calls. Optional;
-   * defaults to 5000ms. Coerced from a string because environment
-   * variables are always strings.
-   */
+  /** Timeout of server-side yog-api calls, in ms; 5000 by default. */
   YOG_API_TIMEOUT_MS: z.coerce
     .number()
     .int({ message: "YOG_API_TIMEOUT_MS must be an integer" })
@@ -47,20 +25,9 @@ const ServerEnvSchema = z.object({
     .default(5000),
 });
 
-/**
- * Inferred type of the parsed server env. Consumers receive this shape;
- * the raw `process.env` is never exposed.
- */
 export type ServerEnv = z.infer<typeof ServerEnvSchema>;
 
-// ─────────────────────────────────────────────────────────────────────
-// Parsing
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Parse the given record against the schema and return the validated
- * env, or throw a formatted error listing every failure at once.
- */
+/** The validated env, or one error listing every failure at once. */
 export function parseServerEnv(source: Record<string, string | undefined>): ServerEnv {
   const result = ServerEnvSchema.safeParse(source);
 
@@ -72,9 +39,6 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
       })
       .join("\n");
 
-    // Throw a single error that lists every failure — easier to fix
-    // a misconfigured deployment in one round trip than chasing them
-    // one at a time.
     throw new Error(
       `Invalid server-only environment configuration:\n${issues}\n` +
       `See web/.env.example for the expected shape.`,
@@ -84,20 +48,9 @@ export function parseServerEnv(source: Record<string, string | undefined>): Serv
   return result.data;
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Cached singleton accessor
-// ─────────────────────────────────────────────────────────────────────
-
 let cached: ServerEnv | null = null;
 
-/**
- * Return the validated server env. The first call performs the parse
- * (and may throw); subsequent calls return the cached value.
- *
- * Caching is intentional: the env is process-wide and immutable for
- * the lifetime of the server, so reparsing on every call would be
- * wasted work.
- */
+/** The validated server env, parsed on the first call (which may throw) and then cached. */
 export function loadServerEnv(): ServerEnv {
   if (cached === null) {
     cached = parseServerEnv(process.env);
@@ -106,9 +59,7 @@ export function loadServerEnv(): ServerEnv {
 }
 
 /**
- * Reset the cached singleton. Used by tests only — production code
- * should never call this.
- *
+ * Resets the cached env, for tests only.
  * @internal
  */
 export function __resetServerEnv(): void {

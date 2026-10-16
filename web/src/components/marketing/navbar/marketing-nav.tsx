@@ -1,41 +1,8 @@
 "use client";
 
 /**
- * Marketing navigation — top banner, responsive.
- *
- * Its own block: solid cosmos background, hairline bottom border.
- * NOT overlaid on the hero — it sits above it in the flow. Mounted by
- * `(marketing)/layout.tsx`, so it appears on every marketing page.
- *
- * # Two modes at the lg breakpoint (1024px)
- *
- *   >= lg : the full row — links + CTA — is shown inline.
- *   <  lg : links + CTA collapse behind a hamburger button. Tapping
- *           it opens a dropdown panel under the bar, over a dark
- *           overlay. The panel is rendered only while open.
- *
- * The mode switch is pure CSS (`lg:` variants). React only tracks
- * `isOpen` for the mobile dropdown.
- *
- * # Behaviours wired here
- *
- *   - toggle via the hamburger;
- *   - close on link click (so navigating doesn't leave it open);
- *   - close on Escape;
- *   - body scroll-lock while open;
- *   - reset to closed when the viewport reaches lg, so the state
- *     can't get stuck after a resize.
- *
- * # Internal vs external links
- *
- * Links come from `MARKETING_NAV_LINKS`. Each carries an `external`
- * flag: internal entries render through next-intl's `Link` (locale
- * prefix handled automatically), external entries render as a plain
- * anchor opened in a new tab.
- *
- * `MarketingNavLinks` is shared between the desktop row and the
- * mobile panel — same links, different layout via the `orientation`
- * prop.
+ * The marketing nav, above the hero rather than over it. Below `lg` the links and CTA
+ * collapse behind a hamburger: the switch is CSS, React only tracks `isOpen`.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -47,8 +14,7 @@ import { MARKETING_NAV_LINKS } from "./marketing-nav-links";
 import { CloseIcon, HamburgerIcon } from "@/components/shared/icon";
 import { DashboardButton } from "@/components/shared/dashboard-button";
 
-// The dropdown/inline switch happens at this width. Kept as a
-// constant for the resize listener; the CSS side uses Tailwind `lg:`.
+// ⚠️ Tailwind's `lg:`, repeated for the resize listener.
 const LG_BREAKPOINT_PX = 1024;
 
 export function MarketingNav() {
@@ -57,7 +23,6 @@ export function MarketingNav() {
   const close = useCallback(() => setIsOpen(false), []);
   const toggle = useCallback(() => setIsOpen((v) => !v), []);
 
-  // ── Close on Escape ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -67,7 +32,6 @@ export function MarketingNav() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, close]);
 
-  // ── Body scroll-lock while the panel is open ────────────────────────
   useEffect(() => {
     if (!isOpen) return;
     const previous = document.body.style.overflow;
@@ -77,7 +41,7 @@ export function MarketingNav() {
     };
   }, [isOpen]);
 
-  // ── Reset to closed once the viewport reaches the inline mode ───────
+  // Reset to closed at `lg`, or the state sticks after a resize.
   useEffect(() => {
     const query = window.matchMedia(`(min-width: ${LG_BREAKPOINT_PX}px)`);
     function onChange(event: MediaQueryListEvent) {
@@ -92,17 +56,14 @@ export function MarketingNav() {
       <div className="relative z-40 mx-auto flex max-w-[1800px] items-center justify-between px-6 py-4.5 lg:px-12">
         <BrandMark />
 
-        {/* Desktop links — inline, lg+ only. */}
         <div className="hidden items-center gap-9 lg:flex">
           <MarketingNavLinks orientation="row" />
         </div>
 
-        {/* Desktop CTA — lg+ only. */}
         <div className="hidden lg:block">
           <DashboardButton />
         </div>
 
-        {/* Mobile hamburger — below lg only. */}
         <button
           type="button"
           onClick={toggle}
@@ -114,23 +75,12 @@ export function MarketingNav() {
         </button>
       </div>
 
-      {/* Mobile dropdown panel + overlay. */}
       <MobileMenu isOpen={isOpen} onClose={close} />
     </nav>
   );
 }
 
-// ── Mobile menu ───────────────────────────────────────────────────────
-
-/**
- * The dropdown panel shown below lg. Rendered only while open —
- * removed from the DOM when closed, which makes the closed state
- * unambiguous (no reliance on max-height/opacity collapsing).
- *
- * No slide animation as a result: the panel appears directly. A
- * follow-up could reintroduce an animated reveal with a grid-rows
- * technique if desired.
- */
+/** The dropdown panel below `lg`, removed from the DOM when closed. */
 function MobileMenu({
   isOpen,
   onClose,
@@ -138,17 +88,11 @@ function MobileMenu({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  // Closed: render nothing. The hamburger in the bar is the only
-  // affordance, and the bar itself stays untouched.
   if (!isOpen) return null;
 
   return (
     <div className="lg:hidden">
-      {/*
-       * Overlay — full-screen, but sits BELOW the nav bar in the
-       * stacking order (the <nav> is z-40, this is z-30) so the bar
-       * stays visible and interactive above it. Click closes.
-       */}
+      {/* ⚠️ z-30, under the z-40 <nav>: the bar stays usable above the overlay. */}
       <button
         type="button"
         onClick={onClose}
@@ -156,7 +100,6 @@ function MobileMenu({
         className="fixed inset-0 z-30 bg-cosmos-950/70 backdrop-blur-[2px]"
       />
 
-      {/* Panel — sits directly under the bar, above the overlay. */}
       <div className="relative z-40 border-b border-sothoth-500/15 bg-cosmos-950">
         <div className="flex flex-col gap-1 px-6 py-4">
           <MarketingNavLinks orientation="column" onNavigate={onClose} />
@@ -168,8 +111,6 @@ function MobileMenu({
     </div>
   );
 }
-
-// ── Shared sub-components ─────────────────────────────────────────────
 
 /** Logo + wordmark, links to the marketing home. */
 function BrandMark() {
@@ -198,14 +139,7 @@ function BrandMark() {
   );
 }
 
-/**
- * The nav links. Shared between the desktop row and the mobile
- * dropdown — `orientation` only affects per-item layout; the
- * internal/external link logic is identical in both.
- *
- * `onNavigate` (used by the mobile panel) closes the menu when a
- * link is clicked.
- */
+/** The nav links of both the desktop row and the mobile panel; `onNavigate` closes the panel. */
 export function MarketingNavLinks({
   orientation,
   onNavigate,
@@ -225,8 +159,6 @@ export function MarketingNavLinks({
       {MARKETING_NAV_LINKS.map((link) => {
         const label = t(link.labelKey);
 
-        // External links bypass the locale router — plain anchor,
-        // new tab, with the security rel attributes.
         if (link.external) {
           return (
             <a

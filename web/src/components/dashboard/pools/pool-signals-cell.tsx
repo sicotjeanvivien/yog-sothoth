@@ -1,26 +1,9 @@
 "use client";
 
 /**
- * Signal-indicator cell of the pools table.
- *
- * Shows the worst-severity icon of the pool's last-24h signals;
- * hovering (or keyboard-focusing) it reveals the window's signal list
- * — severity icon + detector tag per line; activating it jumps
- * straight to the pool's Alerts tab.
- *
- * Interaction notes:
- * - The whole row is already a `<Link>` to the pool page, so this
- *   cell cannot nest an `<a>` or `<button>` (invalid interactive
- *   nesting). It is a focusable `role="link"` span that swallows the
- *   row's navigation and pushes its own.
- * - The list is hover/focus-revealed, unlike the click-based house
- *   `InfoPopover`, because *click* already has a meaning here (open
- *   the Alerts tab). On touch, where hover doesn't exist, the tap
- *   lands on the full Alerts list — exactly what the popover
- *   previews — so nothing becomes unreachable.
- *
- * The parent (Server Component) resolves all labels; this component
- * only handles interactivity, so the i18n stays server-side.
+ * The pools table's signal cell: the worst severity, the list on hover or focus, the Alerts tab
+ * on activation. Hover, not click, reveals the list, as click opens the tab. Labels come
+ * resolved from the server parent.
  */
 
 import { useState } from "react";
@@ -49,7 +32,6 @@ export function PoolSignalsCell({
   alertsHref: string;
   /** Accessible name — carries the count and the destination. */
   ariaLabel: string;
-  /** Popover heading (localized). */
   title: string;
   worst: SeverityResponse;
   items: PoolSignalItem[];
@@ -71,8 +53,6 @@ export function PoolSignalsCell({
         tabIndex={0}
         aria-label={ariaLabel}
         onClick={(event) => {
-          // Keep the row's own <Link> out of it: this click means
-          // "Alerts tab", not "pool page".
           event.preventDefault();
           event.stopPropagation();
           navigate();

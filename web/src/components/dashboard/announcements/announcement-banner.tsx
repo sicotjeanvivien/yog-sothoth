@@ -1,19 +1,9 @@
 "use client";
 
 /**
- * Operator announcement banner — one announcement at a time, at the
- * top of the dashboard content area.
- *
- * The Server Component side (the dashboard layout) fetches the active
- * set, reads the dismiss cookie and picks what to show
- * (`pickAnnouncement`), so the first paint is already correct — the
- * `sidebar-state` cookie pattern. This client island only owns the
- * dismiss interaction: append the id to the cookie, hide locally.
- *
- * Severity styling is the banner's own mapping onto the dashboard's
- * role colours. It deliberately does NOT import the signals'
- * `signal-display` vocabulary: an announcement severity is an
- * editorial display choice, not a detector conclusion.
+ * The operator announcement banner. The server layout picks it from the cookie, so the first
+ * paint is right; this island only dismisses. Its severity styling is its own, not the
+ * signals' vocabulary: an announcement is editorial, not a detector's conclusion.
  */
 
 import { useState } from "react";
@@ -37,8 +27,7 @@ import {
   type IconProps,
 } from "@/components/shared/icon";
 
-// Shape + colour, never colour alone: each severity has its own icon.
-// Info stays neutral.
+// Shape and colour, never colour alone: each severity has its own icon.
 const BANNER_RULE: Record<AnnouncementSeverityResponse, string> = {
   info: "border-l-dash-ink-3",
   warning: "border-l-dash-warn",
@@ -77,13 +66,8 @@ export function AnnouncementBanner({
 
   const Icon = BANNER_ICON[announcement.severity];
 
-  // Sticky, not in-flow: browsers restore the scroll position on
-  // reload, so an in-flow banner appearing at the top of the page
-  // would land outside the viewport for anyone scrolled down — an
-  // announcement nobody sees fails its purpose. Sticks below the
-  // fixed mobile header (`top-14`) until lg, where the header is
-  // gone; its opaque surface keeps scrolled content from showing
-  // through. z-20 stays under the header/drawer/overlay (z-30/40).
+  // ⚠️ Sticky, not in-flow: a reload restores the scroll, which would leave an in-flow banner
+  // out of view. z-20 stays under the header, drawer and overlay.
   return (
     <div className="sticky top-14 z-20 border-b border-dash-rule bg-dash-surface font-dash-sans lg:top-0">
       <div

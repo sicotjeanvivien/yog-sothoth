@@ -1,14 +1,6 @@
 /**
- * Ratio → localized percentage, for detector metrics.
- *
- * Signal `value` / `threshold` arrive as exact decimal strings where
- * both current detectors express a *ratio* (0.05 = 5%). Display-only:
- * parsing through `Number` is fine here, the exact string stays in the
- * payload for anything that needs precision.
- *
- * A string that doesn't parse (future detector with non-numeric
- * semantics, drifted payload) is returned as-is rather than rendered
- * "NaN %".
+ * A detector's ratio as a localized percentage, for display only. A string that does not parse
+ * is returned as is, never "NaN %".
  */
 
 /** "0.0523" → "+5.2 %" — sign always shown except on zero. */

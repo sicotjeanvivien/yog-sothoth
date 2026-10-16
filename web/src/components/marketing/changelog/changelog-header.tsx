@@ -1,11 +1,4 @@
-/**
- * Changelog — header section.
- *
- * Sober introductory block: eyebrow, title, lead. Mirrors
- * `TermsHeader`/`PrivacyHeader` for visual consistency across the
- * marketing pages. No last-updated line — the newest release block
- * right below carries its own date.
- */
+/** The changelog's header; the newest release below carries its own date. */
 
 import { getTranslations } from "next-intl/server";
 

@@ -1,14 +1,6 @@
 /**
- * Watchlist star toggle.
- *
- * Client island: adds/removes a pool from the LocalStorage watchlist via
- * `useWatchlist`. The star is `WatchlistIcon` — outline when off, filled
- * (`fill-current`) when the pool is watched. `aria-pressed` exposes the toggle
- * state; the label flips between "Watch" and "Watching".
- *
- * SSR-safe by construction: `useWatchlist` renders "empty" on the server and
- * the first client paint, so this button starts as "Watch" and flips to
- * "Watching" after hydration if the pool is already on the list — no mismatch.
+ * The watchlist star, `aria-pressed`. It starts as "Watch" and flips after hydration: the
+ * store reads empty on the server and the first paint.
  */
 
 "use client";

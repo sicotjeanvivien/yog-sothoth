@@ -1,22 +1,7 @@
 /**
- * Legal notice — content section.
- *
- * Five identification cards rendered as definition lists. Unlike
- * the prose pattern used on About and Privacy, this page is a
- * factual record sheet — each card contains key/value pairs rather
- * than paragraphs. The visual shell (border, padding, icon badge)
- * is identical to the other policy cards for consistency.
- *
- * Card order:
- *
- *   1. Editor — corporate identity of the publisher, with the
- *      registration number and phone LCEN article 1-1 requires
- *   2. Publishing director — legal representative
- *   3. Contact — email (the phone sits with the editor)
- *   4. Hosting — hosting provider's identity
- *   5. Intellectual property — short statement on rights
- *
- * Copy lives under `LegalNotice.cards` in `messages/{en,fr}.json`.
+ * The legal notice: five identification cards as definition lists, copy under
+ * `LegalNotice.cards` in `messages/{en,fr}/legal-notice.json`. The editor card carries the registration
+ * number and phone LCEN article 1-1 requires.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -45,12 +30,7 @@ const ICON_BADGE_CLASS =
 const TITLE_CLASS =
   "font-display text-[24px] font-semibold tracking-[0.02em] text-[#f1ecff] lg:text-[20px]";
 
-// ── Card schemas ──────────────────────────────────────────────────────
-//
-// Each card declares the keys it expects from its i18n bundle. The
-// list of keys is held here at the source code level rather than
-// in the JSON so adding a new field requires both a code change and
-// a translation change — a useful nudge to keep the structure tidy.
+// Each card lists its field keys here, so a new field needs a code and a translation change.
 
 type FieldKey = string;
 
@@ -66,9 +46,7 @@ const CARDS: readonly CardSchema[] = [
   {
     key: "editor",
     Icon: UserCardIcon,
-    // No VAT line: AWSD is not subject to intra-EU VAT (franchise en
-    // base de TVA) — the standard practice is to omit the field
-    // rather than display a permanent "not applicable".
+    // No VAT line: AWSD is under the franchise en base de TVA, and the field is omitted.
     fields: [
       "name",
       "legalForm",
@@ -96,12 +74,9 @@ const CARDS: readonly CardSchema[] = [
   {
     key: "intellectualProperty",
     Icon: OpenSourceIcon,
-    /** Single free-form paragraph rather than k/v pairs. */
     fields: ["body"],
   },
 ] as const;
-
-// ── Component ─────────────────────────────────────────────────────────
 
 export async function LegalNoticeContent() {
   const t = await getTranslations("LegalNotice.cards");
@@ -144,13 +119,6 @@ export async function LegalNoticeContent() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────
-
-/**
- * Outer card with icon badge and title. Body is passed in as
- * children so callers can decide between a field list and a
- * free-form paragraph.
- */
 function Card({
   Icon,
   title,
@@ -173,20 +141,12 @@ function Card({
   );
 }
 
-/**
- * Definition-list wrapper. Renders each child `Field` as a label /
- * value row, with a hairline divider between rows.
- */
 function FieldList({ children }: { children: ReactNode }) {
   return (
     <dl className="mt-4 divide-y divide-sothoth-500/10">{children}</dl>
   );
 }
 
-/**
- * One row in a field list. Label on the left at a fixed width,
- * value on the right. On narrow screens the row stacks.
- */
 function Field({
   label,
   children,
@@ -202,10 +162,6 @@ function Field({
   );
 }
 
-/**
- * Free-form prose body — used for the IP statement, which doesn't
- * fit a key/value layout.
- */
 function Prose({ children }: { children: ReactNode }) {
   return (
     <p className="mt-3 text-[16px] leading-[1.7] text-slate-300">{children}</p>

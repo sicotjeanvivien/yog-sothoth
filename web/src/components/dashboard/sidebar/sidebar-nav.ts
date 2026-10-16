@@ -1,20 +1,8 @@
-/**
- * Sidebar navigation configuration.
- *
- * Pure data — no React, no JSX. Describes *which* entries the sidebar
- * renders, in *what order*, pointing at *which routes*. The renderer
- * (`sidebar-nav-list.tsx`) only turns it into markup.
- */
+/** The sidebar's navigation, as data, in display order. */
 
 import type { ClosedNavKey, OpenNavKey } from "./sidebar-keys";
 
-/**
- * An entry with a page.
- *
- * - `href`     route path *without* the locale segment; next-intl's
- *              `Link` prepends the active locale at render time.
- * - `labelKey` i18n key, relative to `Dashboard.Sidebar.nav`.
- */
+/** `href` without the locale, which next-intl's `Link` prepends. */
 export type OpenNavEntry = {
   kind: "open";
   key: OpenNavKey;
@@ -22,10 +10,7 @@ export type OpenNavEntry = {
   labelKey: string;
 };
 
-/**
- * An entry without a page: shown with a lock, never a link. It has no
- * `href` on purpose — there is nothing to point at.
- */
+/** An entry without a page, shown with a lock, never a link. */
 export type ClosedNavEntry = {
   kind: "closed";
   key: ClosedNavKey;
@@ -43,7 +28,6 @@ export type SidebarNavGroup = {
 
 export type SidebarNavItem = SidebarNavEntry | SidebarNavGroup;
 
-/** The navigation, in display order. */
 export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
   { kind: "open", key: "overview", href: "/overview", labelKey: "overview" },
   {

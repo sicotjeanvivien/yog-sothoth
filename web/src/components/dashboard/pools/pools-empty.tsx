@@ -1,11 +1,4 @@
-/**
- * Empty state for the pools table.
- *
- * Shown when the API returns zero pools. In v0.1 with the indexer
- * running on DAMM v2, this typically indicates that no activity
- * has been captured yet rather than a real absence of pools — the
- * message reflects that.
- */
+/** No pool at all: most likely nothing captured yet, and the message says so. */
 
 import { getTranslations } from "next-intl/server";
 

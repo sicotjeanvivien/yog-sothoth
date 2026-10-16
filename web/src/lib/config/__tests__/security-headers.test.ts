@@ -1,9 +1,5 @@
 /**
- * Tests for the dashboard's security headers.
- *
- * The expected values are written out whole: a directive dropped or
- * loosened is a change of the page's exposure, and must show up here as a
- * failing case rather than pass through a looser assertion.
+ * The security headers, written out whole: a dropped or loosened directive must fail here.
  */
 
 import { describe, expect, it } from "vitest";

@@ -1,24 +1,6 @@
 /**
- * Pools page (`/[locale]/(dashboard)/pools`).
- *
- * Server Component. Calls `fetchPools` directly from `lib/api`; no
- * BFF round-trip is needed since the call already happens on the
- * Next.js server. The BFF route handlers are for browser-initiated
- * requests, which this page doesn't perform.
- *
- * Three display states are mutually exclusive:
- *
- *   - error  → `PoolsError` (driven by `ApiClientError.details.kind`)
- *   - empty  → `PoolsEmpty`
- *   - filled → `PoolsTable` + `<Pagination />`
- *
- * URL state drives pagination: `?cursor=...&dir=next|prev` for
- * cursor-relative navigation, `?position=first|last` for absolute
- * jumps. Invalid combinations are tolerated client-side and
- * surfaced as a 400 from yog-api → rendered as PoolsError.
- *
- * Search, filters and sortable column headers are intentionally
- * out of scope here — each lands in a dedicated commit.
+ * The pools page, a Server Component calling `fetchPools` directly. Error, empty and filled
+ * states are exclusive; the URL carries the pagination (`cursor` + `dir`, or `position`).
  */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
@@ -42,8 +24,6 @@ import type {
 import type { PoolPageResponsePoolResponse } from "@/lib/api/schema/zod.gen";
 import { PoolsNoResults } from "@/components/dashboard/pools/pool-no-result";
 
-// ── Page metadata ─────────────────────────────────────────────────────
-
 type PoolsPageProps = {
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -63,13 +43,7 @@ export async function generateMetadata({
   };
 }
 
-// ── Search params parsing ─────────────────────────────────────────────
-//
-// We accept anything as a search param shape and narrow defensively.
-// Out-of-vocabulary values (e.g. `dir=sideways`) are silently dropped
-// rather than rejected — the URL is user-editable and a stale link
-// shouldn't crash the page. yog-api gets a request without the bad
-// param and returns a normal first page.
+// The URL is user-editable: an out-of-vocabulary value is dropped.
 
 function parseDir(raw: string | string[] | undefined): PageDir | undefined {
   if (raw === "next" || raw === "prev") return raw;
@@ -95,11 +69,8 @@ function parseSearch(raw: string | string[] | undefined): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-// A fee tier is a decimal string in basis points (e.g. "25", "2.5").
-// We forward any well-formed value to the API and let it decide the
-// match — an unknown tier just yields an empty page, no need to
-// validate against the observed set here. A malformed value is dropped
-// so a stale/edited URL doesn't 400 the whole page.
+// Any well-formed tier goes to the API, an unknown one giving an empty page; a malformed
+// one is dropped rather than 400 the page.
 function parseFeeBps(raw: string | string[] | undefined): string | undefined {
   if (typeof raw !== "string") return undefined;
   const trimmed = raw.trim();
@@ -118,8 +89,6 @@ function parseSort(raw: string | string[] | undefined): PoolSort | undefined {
   }
   return undefined;
 }
-
-// ── Fetch result type ────────────────────────────────────────────────
 
 type FetchOutcome =
   | { kind: "ok"; data: PoolPageResponsePoolResponse }
@@ -151,8 +120,6 @@ async function load(args: {
   }
 }
 
-// ── Page ──────────────────────────────────────────────────────────────
-
 export default async function PoolsPage({
   params,
   searchParams,
@@ -169,29 +136,19 @@ export default async function PoolsPage({
   const feeBps = parseFeeBps(sp["fee_bps"]);
   const outcome = await load({ cursor, dir, position, search, sort, feeBps });
 
-  // Resolve the effective sort for the header indicators: defaults to
-  // last_seen_desc when the URL doesn't specify one (most-recent activity
-  // first — matches the backend default; the two must stay in sync).
+  // ⚠️ The backend's default sort: the two must stay in step.
   const effectiveSort: PoolSort = sort ?? "last_seen_desc";
 
-  // Any refinement (search or fee filter) turns the empty result into a
-  // "no match" state rather than the cold "nothing indexed yet" one.
   const hasActiveRefinement = search !== undefined || feeBps !== undefined;
 
-  // An anchored listing can come back empty *mid-traversal*: every pool that
-  // was left became active while the reader was reading, and so moved out of
-  // this listing. That is not "no pools indexed" and not "no match" — both of
-  // those would tell the reader something false and, worse, leave them at a
-  // dead end, since an empty page carries no cursor either way. The notice is
-  // the only thing on screen that both explains it and offers the way out.
+  // Empty mid-traversal: every remaining pool moved out. Neither "nothing indexed" nor "no
+  // match" — the moved notice is the only way out, as an empty page carries no cursor.
   const emptied =
     outcome.kind === "ok" &&
     outcome.data.items.length === 0 &&
     outcome.data.touchedSince > 0 &&
     outcome.data.asOf !== null;
 
-  // The notice needs a non-null anchor; it is non-null exactly when the sort
-  // is over `last_seen_at`, which is also the only case producing a count.
   const movedNotice =
     outcome.kind === "ok" &&
     outcome.data.touchedSince > 0 &&
@@ -224,9 +181,6 @@ export default async function PoolsPage({
         )
       ) : (
         <>
-          {/* Pools that became active after this listing was anchored: they
-              have moved to the end of the ordering, past the reader. See
-              <PoolsMovedNotice />. */}
           {movedNotice}
           <PoolsTable
             pools={outcome.data.items}

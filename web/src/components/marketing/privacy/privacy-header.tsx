@@ -1,13 +1,6 @@
 /**
- * Privacy — header section.
- *
- * Sober introductory block: eyebrow, title, lead paragraph, and
- * the "last updated" date. Deliberately minimal — no split layout,
- * no decorative visual. Sets the right tone for a policy page.
- *
- * The "last updated" date is read from the i18n bundle so each
- * locale carries its own formatting. Update it whenever the policy
- * substantively changes.
+ * The privacy page's header. The "last updated" date comes from each locale's bundle: update
+ * it with any substantive change.
  */
 
 import { getTranslations } from "next-intl/server";

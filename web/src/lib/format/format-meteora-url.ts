@@ -1,16 +1,6 @@
 /**
- * Pool protocol identifier + address → Meteora app URL.
- *
- * The Meteora app routes each product under its own path segment
- * (`dammv2`, `dlmm`), so the segment is protocol-dependent — it is
- * *not* a constant `/pools/`.
- *
- * Mapping is a closed switch, mirroring `formatProtocolLabel`: the
- * indexer's protocol set is finite and known here, and an unexpected
- * (or not-yet-mapped) value returns `null` so the caller hides the
- * link rather than producing a broken URL.
- *
- * Add a case when a new protocol's Meteora route is known.
+ * A pool's Meteora app URL; the path segment depends on the protocol (`dammv2`, `dlmm`). An
+ * unmapped protocol is `null`, and the caller hides the link. Add a case per protocol.
  */
 
 export function formatMeteoraUrl(

@@ -1,19 +1,7 @@
 /**
- * Clickable column header for the pools table.
- *
- * Renders as a Server Component — the click target is a next-intl
- * <Link> with a precomputed href. No client state, no event handlers.
- *
- * Cycle semantics: clicking a column that is already the active sort
- * flips its direction. Clicking a different column lands on `desc`
- * (the "most recent first" default, intuitive for both timestamp
- * columns).
- *
- * Sort change resets pagination — the cursor pointed into the
- * previous ordering and is no longer valid. The href deliberately
- * drops `cursor`, `dir` and `position`.
- *
- * Other unrelated params (q, future filters) are preserved.
+ * A sortable column header, a Server Component of precomputed `<Link>`s: the active column
+ * flips, another lands on `desc`. ⚠️ The href drops `cursor`/`dir`/`position`, which point into
+ * the previous ordering.
  */
 
 import { Link } from "@/i18n/navigation";
@@ -24,18 +12,11 @@ import { PoolSort } from "@/lib/api/type/pagination";
 import { getTranslations } from "next-intl/server";
 
 type SortableHeaderProps = {
-  /// Column this header represents. Determines what the click means.
   column: SortColumn;
-  /// Visible label.
   label: string;
-  /// Currently active sort, from the URL.
   currentSort: PoolSort;
-  /// All current search params. Unrelated ones are preserved; the
-  /// pagination triplet (cursor/dir/position) is dropped on click.
   searchParams: Record<string, string | string[] | undefined>;
-  /// Base path of the listing.
   basePath: string;
-  /// Optional alignment ("left" | "right") for numeric vs text columns.
   align?: "left" | "right";
 };
 
@@ -95,10 +76,6 @@ type SortableHeaderProps = {
   );
 }
 
-/**
- * Build the target href: keep every unrelated param, set the new
- * `sort`, drop the three pagination params.
- */
 function buildHref(
   basePath: string,
   searchParams: Record<string, string | string[] | undefined>,

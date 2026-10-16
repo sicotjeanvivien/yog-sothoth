@@ -1,18 +1,8 @@
 "use client";
 
 /**
- * Overview page — the latest signals, kept live.
- *
- * Client Component: seeded with the server-fetched newest signals,
- * then kept live by `useSignalStream` (the same SSE machinery as the
- * `/signals` feed — one more subscriber on the API's shared
- * broadcast costs nothing). Renders the top `LATEST_SIGNALS_COUNT` of
- * the merged list with the feed's `SignalCard` in its `compact`
- * density — severity column + pair/time/value only: a control tower
- * scans, `/signals` analyses.
- *
- * The header carries the stream-status dot (a broken stream must not
- * look like a quiet one) and the "see all" link to `/signals`.
+ * The Overview's latest signals, seeded by the server and kept live by `useSignalStream`, as
+ * compact `SignalCard`s, with the stream-status dot.
  */
 
 import { useTranslations } from "next-intl";

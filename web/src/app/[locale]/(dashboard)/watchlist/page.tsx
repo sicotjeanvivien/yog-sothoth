@@ -1,11 +1,4 @@
-/**
- * Watchlist page (`/[locale]/(dashboard)/watchlist`).
- *
- * Server Component shell (title + ⓘ) around the client `WatchlistContent`,
- * which owns the LocalStorage read and the per-pool fetches. The watchlist
- * lives entirely in the browser — no account, no backend — until a
- * server-side watchlist replaces the store behind the same hook.
- */
+/** The watchlist page: a server shell around the client `WatchlistContent`. */
 
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -44,8 +37,7 @@ export default async function WatchlistPage({ params }: WatchlistPageProps) {
         <h1 className="font-display text-[20px] leading-[1.2] font-bold tracking-[0.03em] text-[#f5f2ff]">
           {t("title")}
         </h1>
-        {/* `description` doubles as the page's <meta description>, so the
-            coverage caveat lives in its own key — see the pools header. */}
+        {/* ⚠️ `description` is also the <meta description>: the caveat has its own key. */}
         <InfoPopover label={tShell("pageInfo")}>
           {t("description")} {t("coverageNote")}
         </InfoPopover>

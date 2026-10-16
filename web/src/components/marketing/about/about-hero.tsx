@@ -1,19 +1,5 @@
 /**
- * Homepage hero section.
- *
- * A full-bleed background image with the copy overlaid on the left
- * half. Three stacked layers:
- *
- *   1. the artwork (`next/image` with `fill`), composed empty-left
- *      so the copy has a calm dark area to sit on;
- *   2. a light scrim — a left-to-right gradient that only nudges
- *      contrast, since the image's left side is already near-black;
- *   3. the copy itself, capped at half the page width so it never
- *      crosses the mid-line into the artwork.
- *
- * Static content — no state, no data. Server Component.
- *
- * The hero image lives at `web/public/hero-visual.png`.
+ * The About page hero, a Server Component.
  */
 
 import { useTranslations } from "next-intl";
@@ -28,13 +14,8 @@ export function AboutHero() {
 
   return (
     <section className="relative flex min-h-[86vh] items-center overflow-hidden">
-      {/* Layer 1 — artwork */}
-     
-
-      {/* Layer 2 — light scrim for legibility */}
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,3,13,0.80)_0%,rgba(5,3,13,0.55)_30%,rgba(5,3,13,0.15)_50%,transparent_66%)]" />
 
-      {/* Layer 3 — copy */}
       <div className="relative z-[1] mx-auto w-full max-w-[1800px] px-6 lg:px-12">
         <div className="max-w-full lg:max-w-[50%]">
           <p className="text-[14px] font-semibold tracking-[0.28em] text-slate-400 uppercase">

@@ -8,7 +8,6 @@
 import { apiGetBrowser } from "@/lib/api/client/browser";
 import { zGetIngestionResponse, type IngestionResponse } from "../schema/zod.gen";
 
-/** Fetch how fresh our ingestion is. */
 export async function fetchIngestionBrowser(): Promise<IngestionResponse> {
   return apiGetBrowser("/api/ingestion", {}, zGetIngestionResponse);
 }

@@ -1,39 +1,7 @@
 /**
- * Pool detail page — KPI strip block.
- *
- * KPI cards, stacked on mobile:
- *
- *   - TVL              (always rendered; `—` when null)
- *   - Volume 24h       (always rendered; `—` when null)
- *   - Fees 24h         (always rendered; `—` when null) — realized
- *                      trading fee revenue over the window
- *   - Current price    (the pool's quoted A↔B spot rate, derived
- *                      server-side from `sqrt_price`; rendered only when
- *                      computable)
- *   - Pool composition (donut, rendered only when computable)
- *
- * The price and composition cards are dropped from the layout when
- * the pool has no current state yet (or, for composition, when a side
- * has no USD value) — the grid collapses rather than showing a
- * placeholder, in line with the broader rule of "factual or absent,
- * never fake". The price is `spotPriceAInB` from the API (already
- * decimal-adjusted); the card additionally needs both symbols to label
- * the pair.
- *
- * Layout: the scalar KPI cards (TVL, Volume, Fees, Price) and the
- * composition donut are two visually distinct things, so when the
- * donut is present they split into two side-by-side blocks on large
- * screens — the KPIs as a 2-column grid (two rows) on the left, the
- * donut as its own wider block on the right. Cramming all five into a
- * single five-up row squeezed the donut. Without the donut, the KPIs
- * just flow as one responsive row.
- *
- * Inputs:
- *   - `pool`: identity + analytics from `GET /api/pools/{address}`
- *   - `state`: current reserves and the USD value of each side, from
- *              `GET /api/pools/{address}/latest-state`,
- *              null when the endpoint returned 404 (pool observed
- *              but no swap/liquidity event yet).
+ * The pool detail's KPI strip: TVL, volume, fees, and when computable the spot price and the
+ * composition donut — dropped, not faked, otherwise. `state` is null for a pool with no
+ * current state (the latest-state 404).
  */
 
 import { getTranslations } from "next-intl/server";
@@ -67,12 +35,8 @@ export async function PoolDetailKpis({
       })
       : null;
 
-  // Current price: the spot price derived server-side from the pool's
-  // `sqrt_price` (the true DAMM v2 concentrated-liquidity price — the
-  // reserve ratio would be wrong here). Behind the `poolPriceImbalance`
-  // flag. The API already returns `null` when the price isn't computable
-  // (no sqrt_price, or unresolved token decimals); we additionally require
-  // both symbols, which label the card in pair notation.
+  // From `sqrt_price`, not the reserve ratio, which would be wrong for a concentrated pool.
+  // Both symbols are required too: they label the card.
   const spotPrice =
     isFeatureEnabled("poolPriceImbalance") &&
       state?.spotPriceAInB != null &&
@@ -81,13 +45,7 @@ export async function PoolDetailKpis({
       ? Number(state.spotPriceAInB)
       : null;
 
-  // Coverage of the 24h volume: how many of the hours that actually traded
-  // could be valued in USD. The sum skips the rest, so a bare figure can be a
-  // sub-total passing for a total. `volumeCoverage` owns the one question both
-  // surfaces share — is there anything to qualify at all — and the two answer
-  // the next one differently: a KPI states the coverage even when COMPLETE (an
-  // absent line would read as "no data"), where a table row marks only what is
-  // partial (a mark on every row is noise).
+  // A KPI states the coverage even when complete, where a table row marks only a partial one.
   const coverage = volumeCoverage(pool);
   const coverageHint =
     coverage !== null
@@ -112,11 +70,7 @@ export async function PoolDetailKpis({
         hint={coverageHint}
         info={t("info.volume24h")}
       />
-      {/* Same hint as the volume: the schema states the coverage governs
-          `volume24hUsd`, `fees24hUsd` and the three fee shares at once — they
-          share one valuation, so an hour skipped for one is skipped for all.
-          Marking one and not the other would let the reader assume the fee
-          figure is complete. */}
+      {/* The volume's coverage hint: fees share its valuation, so its gaps too. */}
       <KpiCard
         label={t("fees24h")}
         valueCompact={formatUsdCompact(pool.fees24hUsd)}
@@ -124,8 +78,7 @@ export async function PoolDetailKpis({
         info={t("info.fees24h")}
       />
       {spotPrice !== null && (
-        // Pair notation: "SOL/USDC" reads as "price of SOL in USDC",
-        // i.e. token A (base) quoted in token B. `spotPriceAInB` matches.
+        // "SOL/USDC" is the price of A in B, as `spotPriceAInB` is.
         <KpiCard
           label={`${pool.tokenA.symbol ?? "?"}/${pool.tokenB.symbol ?? "?"}`}
           valueCompact={formatPrice(spotPrice)}
@@ -134,8 +87,6 @@ export async function PoolDetailKpis({
     </>
   );
 
-  // `composition` is non-null only when `state` is non-null, so the reserves
-  // are present here.
   const compositionCard = composition && state && (
     <PoolCompositionCard
       label={t("composition")}
@@ -152,11 +103,7 @@ export async function PoolDetailKpis({
   return (
     <section className="px-6 lg:px-10">
       {compositionCard ? (
-        // Two blocks side by side on large screens: the KPI cards as a
-        // 2-up grid (two rows) over five ninths, the donut its own four
-        // ninths. Both columns stretch to the same height (default grid
-        // `items-stretch`); the KPI grid fills it via `grid-rows-2` and
-        // the donut card via `h-full`, so the two blocks line up exactly.
+        // Both columns stretch alike: `grid-rows-2` fills the KPI grid, `h-full` the donut.
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-9">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-5 lg:h-full lg:grid-rows-2">
             {kpiCards}
@@ -164,7 +111,6 @@ export async function PoolDetailKpis({
           {compositionCard}
         </div>
       ) : (
-        // No donut → KPIs flow as a single responsive row.
         <div
           className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${kpiCount === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
         >

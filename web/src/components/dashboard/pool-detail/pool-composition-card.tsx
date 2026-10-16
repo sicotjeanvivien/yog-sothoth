@@ -1,22 +1,5 @@
 /**
- * Pool composition card — donut chart + legend.
- *
- * Renders only when both sides of the pool have a USD value (the
- * computation helper returns null otherwise). The parent block
- * decides what to show in the null case; this component assumes a
- * non-null `composition`; the centre TVL is the sum of its two sides.
- *
- * The donut is a single SVG with two arc paths:
- *   - arc A from 12 o'clock clockwise to share-A boundary
- *   - arc B from share-A boundary clockwise back to 12 o'clock
- *
- * Center text shows the TVL value with a small "TVL" label below.
- *
- * Colours come from the same palette as the rest of the dashboard
- * (sothoth-500 for token A, a contrasting blue for token B). They
- * are passed inline so the SVG renders identically in light/dark
- * preview tooling without depending on Tailwind variable
- * resolution inside `<svg>`.
+ * The pool composition donut and legend, for a non-null `composition`: both sides valued.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -28,13 +11,10 @@ import { shareToCircleCoords } from "@/lib/format/pool-composition";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
 import { formatUsdCompact } from "@/lib/format/format-usd";
 
-// Visual tuning. The donut viewBox is centered on (0,0) with the
-// circle of radius 1, then scaled by the wrapping <svg>'s width.
+// The viewBox is centred on (0,0), radius 1, scaled by the <svg>'s width.
 const RADIUS_OUTER = 1;
 const RADIUS_INNER = 0.62;
 
-// Token A — Yog-Scope brand violet. Token B — a complementary
-// blue. Stay readable on the dark cosmos background.
 const COLOR_A = "#8b5cf6"; // sothoth violet
 const COLOR_B = "#3b82f6"; // signal blue
 
@@ -79,17 +59,13 @@ export async function PoolCompositionCard({
         )}
       </div>
 
-      {/* `flex-1` lets the donut row absorb any extra height when the card is
-          stretched to match the KPI block, keeping the donut vertically
-          centred instead of leaving dead space at the bottom. */}
+      {/* `flex-1` keeps the donut centred when the card stretches to the KPI block. */}
       <div className="mt-1 flex flex-1 items-center gap-5">
-        {/* Donut */}
         <Donut
           shareA={composition.shareA}
           tvlUsd={composition.valueAUsd + composition.valueBUsd}
         />
 
-        {/* Legend */}
         <div className="flex flex-1 flex-col gap-3 text-[14px]">
           <LegendRow
             color={COLOR_A}
@@ -113,8 +89,6 @@ export async function PoolCompositionCard({
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────
-
 function Donut({
   shareA,
   tvlUsd,
@@ -122,10 +96,7 @@ function Donut({
   shareA: number;
   tvlUsd: number;
 }) {
-  // Edge case: when one side is 100%, a single full-circle arc
-  // doesn't render correctly with the path-based approach (the
-  // arc collapses to zero length). We special-case by rendering a
-  // single ring of the dominant colour.
+  // ⚠️ A full-circle arc collapses to zero length: one side at 100% is drawn as a ring.
   const isSingleColor = shareA >= 0.999 || shareA <= 0.001;
   const dominantColor = shareA >= 0.5 ? COLOR_A : COLOR_B;
 
@@ -137,7 +108,6 @@ function Donut({
         className="h-full w-full"
       >
         {isSingleColor ? (
-          // Single-colour ring (one side at 100%)
           <g>
             <circle
               cx="0"
@@ -155,13 +125,11 @@ function Donut({
               startShare={shareA}
               color={COLOR_B}
             />
-            {/* Punch out the centre to make it a donut */}
             <circle cx="0" cy="0" r={RADIUS_INNER} fill="#0c0a14" />
           </>
         )}
       </svg>
 
-      {/* Centre label */}
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <span className="font-display text-[14px] font-bold tracking-[0.02em] text-[#f5f2ff] lg:text-[15px]">
           {formatUsdCompact(String(tvlUsd))}
@@ -174,16 +142,7 @@ function Donut({
   );
 }
 
-/**
- * Render a single coloured arc that starts at `startShare` of the
- * way around the circle (measured from 12 o'clock, clockwise) and
- * covers `share` of the full circumference.
- *
- * The path is built as: line from centre → arc to first point →
- * arc along the outer circle to the second point → close back to
- * centre. The donut shape comes from the centre circle drawn on
- * top by the parent.
- */
+/** An arc covering `share` of the circle from `startShare`, clockwise from 12 o'clock. */
 function ArcPath({
   share,
   startShare,
@@ -207,17 +166,7 @@ function ArcPath({
   return <path d={d} fill={color} />;
 }
 
-/**
- * Two-line legend entry for one side of the pool:
- *
- *   [dot] SOL                    $1.2M
- *         1,234 SOL              51.2%
- *
- * Top line carries the identity (colour dot + symbol) and the USD value
- * of the side; bottom line the human-readable reserve and the share of
- * TVL. All four numbers are factual (reserves and values from current
- * state) — no derived signal.
- */
+/** One side: symbol and USD value, then the reserve and its share of the TVL. */
 function LegendRow({
   color,
   symbol,

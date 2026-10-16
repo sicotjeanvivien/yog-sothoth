@@ -1,11 +1,6 @@
 /**
- * Integration tests for `fetchPools`.
- *
- * The unit under test is the full chain: input validation → URL build
- * (from env) → fetch call → status check → schema parsing. The only
- * thing mocked is `globalThis.fetch` and the env singleton — every
- * other module loads its real implementation, so a regression in
- * `client.ts` or `schemas.ts` shows up here too.
+ * `fetchPools` end to end, from input validation to schema parsing: only `fetch` and the env
+ * singleton are mocked.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,8 +10,6 @@ import { fetchPools, FetchPoolsParams } from "../server/pools";
 import { __resetServerEnv } from "../../config/server-env.schema";
 import { validPoolsPage } from "./fixtures";
 
-// Configure a deterministic env for the suite. We rebuild the cache by
-// resetting the singleton before each test, after touching process.env.
 const TEST_API_BASE_URL = "http://api.test";
 const TEST_API_TIMEOUT_MS = "5000";
 
@@ -31,11 +24,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ─────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────
-
-/** Build a `Response`-like object that vitest can return from fetch. */
 function jsonResponse(body: unknown, status: number = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -43,10 +31,6 @@ function jsonResponse(body: unknown, status: number = 200): Response {
   });
 }
 
-
-// ─────────────────────────────────────────────────────────────────────
-// Happy path
-// ─────────────────────────────────────────────────────────────────────
 
 describe("fetchPools — happy path", () => {
   it("calls yog-api with the default limit and parses the response", async () => {
@@ -58,7 +42,6 @@ describe("fetchPools — happy path", () => {
     expect(page.items).toHaveLength(1);
     expect(page.nextCursor).toBeNull();
 
-    // Verify the URL composition is correct: base + path + default limit.
     expect(fetchSpy).toHaveBeenCalledOnce();
     const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
     expect(calledUrl).toBe(`${TEST_API_BASE_URL}/api/pools?limit=50`);
@@ -172,10 +155,6 @@ describe("fetchPools — bidirectional pagination params", () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────
-// Fee-tier filter
-// ─────────────────────────────────────────────────────────────────────
-
 describe("fetchPools — fee filter", () => {
   it("forwards feeBps as the fee_bps query param", async () => {
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(validPoolsPage()));
@@ -208,10 +187,6 @@ describe("fetchPools — fee filter", () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────
-// Input validation (RangeError, not ApiClientError)
-// ─────────────────────────────────────────────────────────────────────
-
 describe("fetchPools — input validation", () => {
   it("rejects limit = 0", async () => {
     await expect(fetchPools({ limit: 0 })).rejects.toThrow(RangeError);
@@ -225,10 +200,6 @@ describe("fetchPools — input validation", () => {
     await expect(fetchPools({ limit: 25.5 })).rejects.toThrow(RangeError);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────
-// ApiClientError variants
-// ─────────────────────────────────────────────────────────────────────
 
 describe("fetchPools — HTTP failures", () => {
   it("maps a 400 with a typed body to ApiClientError(http)", async () => {
@@ -310,8 +281,7 @@ describe("fetchPools — schema failures", () => {
 
 describe("fetchPools — transport failures", () => {
   it("maps an AbortSignal TimeoutError to ApiClientError(timeout)", async () => {
-    // Simulate what `AbortSignal.timeout` rejects with: a DOMException
-    // whose name is "TimeoutError".
+    // What `AbortSignal.timeout` rejects with.
     vi.stubGlobal(
       "fetch",
       vi.fn().mockRejectedValue(new DOMException("aborted", "TimeoutError")),

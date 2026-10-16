@@ -1,22 +1,6 @@
 /**
- * Overview page — top pools, ranked by volume or TVL.
- *
- * Self-contained async Server Component: fetches `GET /api/pools/top` itself
- * and degrades to a `BlockError` on failure so a ranking hiccup never takes
- * down the KPI strip above it. Layout (spacing, the side-by-side grid with
- * the latest-signals block) belongs to the page — this renders content only.
- *
- * A compact ranked table — rank · pair · Volume 24h · TVL — each row linking
- * to the pool detail. The two numeric headers are clickable: they re-rank the
- * strip by flow (`volume_24h`, default) or depth (`tvl`) via a `?rank=` URL
- * param resolved by the page. This is the *only* metric-ranked view of pools:
- * the `/pools` list can only sort by first/last-seen (keyset on timestamps).
- *
- * USD cells render `—` when null (the format helper owns the null check). A
- * volume that covers only part of the hours it traded carries a coverage mark;
- * the block's ⓘ says the rest — that a pool with no valuable hour at all is
- * missing from the ranking entirely, which is the half a per-row mark cannot
- * express.
+ * The top pools by volume or TVL (`?rank=`), degrading to a `BlockError` on failure — the only
+ * metric-ranked view of pools, since `/pools` sorts on timestamps.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -42,9 +26,7 @@ const HEAD = "px-4 py-3 text-[12px] font-semibold tracking-[0.2em] text-slate-50
 const HEAD_NUM = `${HEAD} justify-end`;
 
 type OverviewTopPoolsProps = {
-  /** Active ranking metric, resolved from the URL by the page. */
   metric: PoolRankMetric;
-  /** Current search params — forwarded to the clickable rank headers. */
   searchParams: Record<string, string | string[] | undefined>;
 };
 
@@ -67,10 +49,7 @@ export async function OverviewTopPools({
 
   return (
     <div>
-      {/* The ⓘ carries what no row can: this ranking OMITS the pools it cannot
-          value — they are absent, not last. The two metrics exclude on
-          different grounds (an unvaluable hour vs. an unpriced reserve), so the
-          text follows the active one, like the empty state below. */}
+      {/* ⚠️ The ⓘ says what no row can: unvaluable pools are absent, not last. */}
       <div className="mb-4 flex items-center gap-2">
         <h2 className="text-[13px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
           {t("title")}

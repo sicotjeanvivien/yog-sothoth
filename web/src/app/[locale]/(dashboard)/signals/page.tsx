@@ -1,13 +1,6 @@
 /**
- * Signals page (`/[locale]/(dashboard)/signals`).
- *
- * Server Component. Fetches the first page of the feed (`GET
- * /api/signals`) for the initial render, then hands over to the
- * `SignalFeed` Client Component, which keeps the list live over SSE.
- *
- * Two display states:
- *   - error → `PageError` (driven by `ApiClientError.details.kind`)
- *   - ok    → header + live feed (which owns its empty state)
+ * The signals page, a Server Component: the feed's first page, handed to the `SignalFeed`
+ * client, which keeps it live over SSE.
  */
 
 import type { Metadata } from "next";

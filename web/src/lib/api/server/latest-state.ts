@@ -1,17 +1,6 @@
 /**
- * High-level fetcher for `GET /api/pools/{address}/latest-state`.
- *
- * Returns the projected current state of the pool: latest reserves, and the
- * last sqrt_price observed from a swap. Throws `ApiClientError` with
- * `status: 404` when no swap or liquidity event has been observed for this
- * pool yet — a liquidity event creates the row and refreshes the reserves,
- * it just contributes no price.
- *
- * The 404 condition does NOT imply the pool is unknown: a pool may
- * exist in `GET /api/pools/{address}` (because a ClaimPositionFee or
- * ClaimReward event touched it) without having a row in the
- * pool_current_state projection. See the CQRS design note in
- * `crates/core/src/domain/pool_current_state.rs`.
+ * `GET /api/pools/{address}/latest-state`. ⚠️ A 404 does not mean an unknown pool: a pool seen
+ * only through claim events has no current state.
  */
 
 import { apiGet } from "../client/server";
@@ -22,13 +11,8 @@ import {
 } from "../schema/zod.gen";
 
 /**
- * Fetch the latest projected state of a pool.
- *
  * @throws TypeError if `address` is syntactically invalid.
  * @throws ApiClientError on any transport, HTTP, or schema failure.
- *         A 404 from yog-api surfaces as `kind: "http", status: 404`
- *         and means "no swap or liquidity event observed yet" — see
- *         the file-level note.
  */
 export async function fetchPoolLatestState(
   address: string,

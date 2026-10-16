@@ -1,23 +1,9 @@
-/**
- * Force dynamic execution — the response depends on live data from
- * yog-api, never cache the route itself. Caching strategy lives in
- * `apiGet` (currently `no-store` for every upstream call).
- */
+/** Live data: the route itself is never cached. */
 export const dynamic = "force-dynamic";
 
 /**
- * Layout for the dashboard route group `(dashboard)`.
- *
- * Delegates the whole responsive chrome — sidebar, mobile drawer,
- * header, overlay — to `DashboardShell`. The route group does not
- * appear in the URL, so pages keep their natural paths
- * (`/[locale]/overview`, `/[locale]/pools`, …) while sharing this
- * chrome.
- *
- * This Server Component only prepares what the first paint needs: the
- * sidebar-collapse cookie (no width flash), the announcement to show,
- * and the dashboard's fonts. All interactivity and layout mechanics
- * live in `DashboardShell`.
+ * The `(dashboard)` layout: the chrome is `DashboardShell`'s; this prepares only what the first
+ * paint needs — the collapse cookie, the announcement, the fonts.
  */
 
 import { cookies } from "next/headers";
@@ -47,11 +33,7 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-/**
- * Best-effort read of the active announcements: a broken announcement
- * channel (API down, schema drift) must never take the dashboard down,
- * so any failure degrades to "no banner".
- */
+/** Any failure is no banner: announcements must never take the dashboard down. */
 async function safeActiveAnnouncements(): Promise<AnnouncementResponse[]> {
   try {
     return await fetchActiveAnnouncements();

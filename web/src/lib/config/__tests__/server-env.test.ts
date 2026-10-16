@@ -1,21 +1,11 @@
 /**
- * Tests for the server-only environment parser.
- *
- * Imports from `../server-env.schema` (not `../server-env`) on purpose:
- * the `.schema` module is bundler-neutral and runs fine under vitest.
- * The `.ts` facade has a `"server-only"` directive that would crash
- * the test runner (which has no Next.js bundler boundary to enforce).
- *
- * The unit under test is `parseServerEnv` because it takes its source
- * as an argument: this keeps the suite independent of `process.env`
- * and lets each case describe its own input explicitly.
+ * `parseServerEnv`, from its argument rather than `process.env`. ⚠️ Imported from
+ * `server-env.schema`: the `server-env` facade's `"server-only"` would crash vitest.
  */
 
 import { describe, expect, it } from "vitest";
 import { parseServerEnv } from "../server-env.schema";
 
-// Build a valid base input that each test mutates as needed. Keeps
-// individual cases short and focused on the field they exercise.
 function validInput(): Record<string, string | undefined> {
   return {
     YOG_API_INTERNAL_URL: "http://127.0.0.1:3001",

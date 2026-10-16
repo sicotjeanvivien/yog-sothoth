@@ -1,27 +1,12 @@
 /**
- * Browser-visible environment variables.
- *
- * Symmetric to `server-env.schema.ts` but for the `NEXT_PUBLIC_*`
- * vars that Next.js inlines into the client bundle. These are the
- * only values the browser is allowed to see — anything secret must
- * stay in the server env schema.
- *
- * Validation runs at load time (first call to `loadClientEnv`)
- * rather than at module import: this avoids module-graph issues
- * when Next.js does its build-time analysis.
+ * The browser-visible `NEXT_PUBLIC_*` environment: never a secret. Validated on the first
+ * `loadClientEnv`, not at import, which Next.js's build-time analysis would trip on.
  */
 
 import * as z from "zod";
 
 const ClientEnvSchema = z.object({
-  /**
-   * Public URL of yog-api, used by Client Components to reach the
-   * Rust API directly through the gateway. Must not end with a
-   * trailing slash so `${url}${path}` stays well-formed.
-   *
-   * In production: `https://api.yog-scope.xyz`.
-   * In local dev: `http://localhost:5000` (or `http://127.0.0.1:5000`).
-   */
+  /** yog-api's public URL, without a trailing slash, so `${url}${path}` stays well-formed. */
   NEXT_PUBLIC_YOG_API_URL: z
     .string()
     .url()
@@ -29,12 +14,7 @@ const ClientEnvSchema = z.object({
       message: "must not end with a trailing slash",
     }),
 
-  /**
-   * Timeout in milliseconds for browser-side calls to yog-api. The
-   * client aborts and surfaces an `ApiClientError.timeout` after
-   * this. Set higher than the server-side default if the public
-   * gateway adds noticeable latency.
-   */
+  /** Timeout of browser-side yog-api calls, in ms. */
   NEXT_PUBLIC_YOG_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 });
 
@@ -42,14 +22,7 @@ export type ClientEnv = z.infer<typeof ClientEnvSchema>;
 
 let cached: ClientEnv | null = null;
 
-/**
- * Validate and return the browser-visible environment.
- *
- * IMPORTANT: only `NEXT_PUBLIC_*` keys are inlined by Next.js into
- * the client bundle. Reading from `process.env` here works at build
- * time on the server and at runtime on the client (Next.js replaces
- * each access with its literal value during the build).
- */
+/** ⚠️ Literal reads: Next.js replaces each with its value at build. */
 export function loadClientEnv(): ClientEnv {
   if (cached !== null) return cached;
 

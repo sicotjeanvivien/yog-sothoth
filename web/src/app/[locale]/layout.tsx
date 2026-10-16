@@ -13,16 +13,13 @@ const cinzel = Cinzel({
   display: "swap",
 });
 
-// Tells Next.js to statically render every supported locale at build time.
-// Avoids the dynamic-rendering opt-in that next-intl would otherwise
-// trigger as soon as a Server Component reads translations.
+// Every locale rendered statically, or next-intl's translations opt into dynamic rendering.
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
 }
 
 type LocaleLayoutProps = {
   children: React.ReactNode;
-  // In Next.js 15, `params` is a Promise and must be awaited before use.
   params: Promise<{ locale: string }>;
 };
 
@@ -32,14 +29,12 @@ export default async function LocaleLayout({
 }: LocaleLayoutProps) {
   const { locale } = await params;
 
-  // Defensive validation — the middleware should already have rejected
-  // unknown locales, but a direct request to /xx/... could still land here.
+  // The proxy rejects unknown locales, but a direct request can still land here.
   if (!hasLocale(routing.locales, locale)) {
     notFound();
   }
 
-  // Required by next-intl to enable static rendering of pages that
-  // consume translations from Server Components.
+  // next-intl needs it for static rendering of translated Server Components.
   setRequestLocale(locale);
 
   return (

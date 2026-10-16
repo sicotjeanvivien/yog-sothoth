@@ -1,16 +1,6 @@
 /**
- * Pool detail page — "Fees" block.
- *
- * Two time-series charts over the pool's hourly history
- * (`GET /api/pools/{address}/history`):
- *
- *   - Fee revenue (USD)   — realized trading fee per hour (area)
- *   - Effective fee rate  — fees / volume in bps per hour (line)
- *
- * Server Component: maps the history into serializable `{ t, value }` point
- * arrays and hands each to the `TimeSeriesChart` client island. A chart is
- * dropped when its series is empty (no priced activity of that kind in the
- * window); the whole block collapses to an empty state when neither has data.
+ * The pool detail's fee charts — revenue and effective rate per hour — from the history. A
+ * series with no priced activity drops its chart; with neither, the block is an empty state.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -31,7 +21,7 @@ const SECTION_TITLE_CLASS =
 const CHART_TITLE_CLASS =
   "mb-2 text-[12px] font-semibold tracking-[0.15em] text-slate-400 uppercase";
 
-// Chart colours (passed as plain strings — Client Component boundary).
+// Plain strings: they cross the client boundary.
 const FEE_COLOR = "#5eead4"; // teal
 const RATE_COLOR = "#a78bfa"; // violet
 

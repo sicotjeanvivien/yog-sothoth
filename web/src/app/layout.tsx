@@ -1,7 +1,5 @@
-// Root layout — intentionally minimal. The real `<html>` and `<body>`
-// tags live in `app/[locale]/layout.tsx` so that the `lang` attribute
-// can be set from the active locale. Next.js still requires a root
-// layout file at the top of the app directory.
+// ⚠️ `<html>` and `<body>` live in `app/[locale]/layout.tsx`, which sets `lang`; Next.js
+// still requires this root layout.
 export default function RootLayout({
   children,
 }: {

@@ -1,20 +1,6 @@
 /**
- * One row in the pool table — shared by `/pools` (server-rendered) and
- * `/watchlist` (client-rendered).
- *
- * Prop-driven and free of server-only imports, so it renders in either tree:
- * the parent resolves `signalLabels` (server via `getTranslations`, client via
- * `useTranslations`) and passes them, plus `locale`, as plain values.
- *
- * Nine cells: pair · signal indicator · protocol · fee · TVL · 24h volume ·
- * first seen · last seen · actions. The eight data cells are individual
- * `<Link>`s to the pool detail; the trailing actions cell is a sibling (never
- * nested in a link) so its copy/Solscan/watchlist controls stay valid and
- * clickable. Widths come from the shared `GRID_COLS`.
- *
- * USD values render `—` when null (missing prices / no recent swaps); the
- * format helper owns the null check. The 24h volume carries a coverage mark
- * when the window was only partly valuable — see `VolumeCoverageMark`.
+ * One pool row, for `/pools` (server) and `/watchlist` (client): labels and `locale` come as
+ * plain values. ⚠️ The actions cell is never nested in a `<Link>`: a control in an `<a>` is invalid.
  */
 
 import { Link } from "@/i18n/navigation";
@@ -53,9 +39,7 @@ export function PoolsTableRow({
   coverageLabel: CoverageLabel;
 }) {
   const worst = worstSeverity(pool.signals24h);
-  // Marks the 24h volume when the window was not fully valued — including when
-  // NOTHING could be valued, where the cell shows `—`: that dash otherwise
-  // reads as "did not trade", which is a different fact.
+  // Also when nothing was valued: the `—` would otherwise read as "did not trade".
   const coverage = volumeCoverage(pool);
   const href = `/pools/${pool.poolAddress}`;
 
@@ -68,8 +52,7 @@ export function PoolsTableRow({
         <PoolPairCell tokenA={pool.tokenA} tokenB={pool.tokenB} />
       </Link>
 
-      {/* Signal indicator — empty cell (grid alignment) when the pool emitted
-          nothing in the window. Not a Link: it carries its own alerts link. */}
+      {/* Not a Link: the cell carries its own alerts link. */}
       <div role="cell" className={CELL_CLASS}>
         {worst !== null && (
           <PoolSignalsCell
@@ -99,8 +82,7 @@ export function PoolsTableRow({
         <VolumeCoverageMark coverage={coverage} labelFor={coverageLabel} />
       </Link>
 
-      {/* suppressHydrationWarning: relative to now, so the SSR text can
-          legitimately lag the client by a minute boundary. */}
+      {/* Relative to now: the SSR text may lag the client by a minute. */}
       <Link role="cell" href={href} className={CELL_CLASS}>
         <time
           dateTime={pool.firstSeenAt}

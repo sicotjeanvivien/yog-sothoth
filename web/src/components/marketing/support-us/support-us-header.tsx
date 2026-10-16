@@ -1,11 +1,4 @@
-/**
- * Support us — header section.
- *
- * Sober introductory block: eyebrow, title, lead. Mirrors the
- * header pattern used on Privacy, Legal notice, and Terms for
- * visual consistency. No "last updated" date — this isn't a legal
- * document.
- */
+/** The support page's header, without a last-updated date: not a legal document. */
 
 import { getTranslations } from "next-intl/server";
 

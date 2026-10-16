@@ -1,9 +1,6 @@
 /**
- * Unit tests for the LocalStorage watchlist store.
- *
- * The vitest env is plain Node (no `window`), so we install a minimal
- * `window.localStorage` stub and re-import the module fresh per test
- * (`vi.resetModules`) to reset its module-level snapshot cache.
+ * The LocalStorage watchlist store. ⚠️ Plain Node has no `window`: a stub is installed, and the
+ * module re-imported per test to reset its snapshot cache.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

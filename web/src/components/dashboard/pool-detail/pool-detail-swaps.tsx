@@ -1,26 +1,6 @@
 /**
- * Pool detail page — "Recent swaps" block.
- *
- * Renders the most recent page of swap events for the pool as a
- * CSS-grid table with ARIA roles (same pattern as `/pools` — see
- * `pools-table.tsx` for the rationale). Six columns:
- *
- *   Time     — relative ("2 min ago")
- *   Direction — "SOL → USDC" from `tradeDirection`
- *   Amount in — what the trader sent, in human units + symbol
- *   Amount out — what the trader received
- *   Fee       — the claiming (LP) fee, in the fee token (`feeTokenIsA`)
- *   Action    — copy the signature / open the tx on Solscan
- *
- * No pagination in this commit: only the first page is shown.
- * Interactive pagination (Load more) lives in a separate change.
- *
- * Rows are NOT clickable — swap events don't have their own page;
- * the only useful affordances are the per-row actions (copy
- * signature, open on Solscan) in the last column.
- *
- * The empty state replaces the table when no swaps have been
- * observed yet for the pool.
+ * The pool detail's swaps, as an ARIA grid like `/pools`. Rows are not clickable: a swap has
+ * no page, only the copy and Solscan actions.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -36,8 +16,6 @@ import { CopyButton } from "@/components/shared/copy-button";
 
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
-
-// ── Tailwind class fragments ─────────────────────────────────────────
 
 const SECTION_CLASS = "px-6 lg:px-10";
 
@@ -65,8 +43,6 @@ const CELL_MONO_CLASS = `${CELL_CLASS} font-mono`;
 
 const ACTION_LINK_CLASS =
   "inline-flex h-6 w-6 items-center justify-center rounded-[3px] text-slate-400 transition-colors hover:bg-sothoth-500/15 hover:text-sothoth-300";
-
-// ── Component ─────────────────────────────────────────────────────────
 
 export async function PoolDetailSwaps({
   pool,
@@ -135,8 +111,6 @@ export async function PoolDetailSwaps({
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────
-
 function SwapRow({
   swap,
   tokenA,
@@ -152,9 +126,6 @@ function SwapRow({
   copyLabel: string;
   solscanLabel: string;
 }) {
-  // trade_direction tells us which side was sent (in) vs received (out).
-  //   a_to_b → trader sent amount_a (token A in), received amount_b (token B out)
-  //   b_to_a → trader sent amount_b (token B in), received amount_a (token A out)
   const aToB = swap.tradeDirection === "a_to_b";
 
   const inToken = aToB ? tokenA : tokenB;
@@ -162,8 +133,6 @@ function SwapRow({
   const inAmount = aToB ? swap.amountA : swap.amountB;
   const outAmount = aToB ? swap.amountB : swap.amountA;
 
-  // The claiming (LP) fee is taken in a single token — `feeTokenIsA`
-  // says which — so it's valued in that token's decimals/symbol.
   const feeToken = swap.feeTokenIsA ? tokenA : tokenB;
 
   const solscanUrl = `https://solscan.io/tx/${swap.signature}`;
@@ -174,8 +143,7 @@ function SwapRow({
       className={`grid ${GRID_COLS} border-b border-sothoth-500/10 last:border-b-0`}
     >
       <div role="cell" className={CELL_CLASS}>
-        {/* suppressHydrationWarning: relative to now, so the SSR text can
-            legitimately lag the client by a minute boundary. */}
+        {/* Relative to now: the SSR text may lag the client by a minute. */}
         <time
           dateTime={swap.timestamp}
           className="text-slate-400"

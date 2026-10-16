@@ -1,21 +1,9 @@
 "use client";
 
 /**
- * Live tail of the signal feed over SSE.
- *
- * Owns one `EventSource` on `GET /api/signals/stream` (direct to the
- * public gateway — no proxy) for the lifetime of the component, and a
- * signal list seeded by the server-rendered first page.
- *
- * # Contract with the stream
- *
- * The stream only carries signals born after it (re)opened — never
- * history. So on every reopen *after a drop*, the hook refills the gap
- * from `GET /api/signals` and reconciles by `id` (`mergeSignals`); the
- * browser's `EventSource` handles the reconnection itself.
- *
- * A malformed event is logged and skipped — a drifting wire contract
- * must not crash the page (the zod issue pinpoints the drift).
+ * The live tail of the signal feed: one `EventSource` on `/api/signals/stream`, over a list
+ * seeded by the server-rendered page. ⚠️ The stream carries no history: after a drop, the gap
+ * is refilled from `GET /api/signals` and merged by `id`. A malformed event is logged, skipped.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -25,15 +13,13 @@ import { loadClientEnv } from "@/lib/config/client-env.schema";
 import { zSignalResponse, type SignalResponse } from "@/lib/api/schema/zod.gen";
 import { mergeSignals } from "@/lib/signals/merge-signals";
 
-/** Connection state surfaced to the UI. */
 export type StreamStatus = "connecting" | "live" | "reconnecting";
 
 export function useSignalStream(initial: readonly SignalResponse[]) {
   const [signals, setSignals] = useState<readonly SignalResponse[]>(initial);
   const [status, setStatus] = useState<StreamStatus>("connecting");
 
-  // Set on error, consumed on the next open: distinguishes a reopen
-  // (gap to refill) from the very first open (the SSR page is fresh).
+  // Tells a reopen, with a gap to refill, from the first open, whose SSR page is fresh.
   const droppedRef = useRef(false);
 
   useEffect(() => {
@@ -46,22 +32,19 @@ export function useSignalStream(initial: readonly SignalResponse[]) {
       setStatus("live");
       if (droppedRef.current) {
         droppedRef.current = false;
-        // Refill whatever was born during the outage; ids dedup the
-        // overlap with what the stream already delivered.
         fetchSignalsBrowser()
           .then((page) => {
             setSignals((current) => mergeSignals(current, page.items));
           })
           .catch((err) => {
-            // The stream is live again — the gap stays until the next
-            // reconnect, which is better than tearing the page down.
+            // The gap stays until the next reconnect, rather than tearing the page down.
             console.warn("signal feed refill failed", err);
           });
       }
     };
 
     source.onerror = () => {
-      // EventSource reconnects on its own; just reflect the state.
+      // EventSource reconnects on its own.
       setStatus("reconnecting");
       droppedRef.current = true;
     };

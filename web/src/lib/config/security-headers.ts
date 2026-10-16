@@ -1,32 +1,13 @@
 /**
- * The security headers every dashboard response carries, applied by
- * `headers()` in `next.config.ts`.
- *
- * Only the headers that cost a read-only application nothing. The dashboard
- * has no account, no form and no action; what these close is framing,
- * MIME sniffing, the full URL leaking to other sites, and plugin content.
- *
- * What the CSP leaves out, on purpose:
- * - **no `script-src` / `default-src`.** Next.js inlines its own bootstrap
- *   scripts, so a script policy that holds needs a per-request nonce — which
- *   means rendering every page through `src/proxy.ts` and giving up the cache
- *   of pre-rendered pages. That trade is still open.
- * - **no `img-src`.** Token logos come from whatever host each token registry
- *   names (`pool-pair-cell.tsx` renders `logoUri` in a native `<img>`).
- *   Restricting it would break the logos without closing the IP leak to those
- *   hosts, which is a privacy question, not a CSP one.
- *
- * HSTS is not here: it belongs to the TLS edge, `docker/Caddyfile`.
+ * The security headers of every dashboard response (`next.config.ts`). The CSP leaves out
+ * `script-src`, which would need a per-request nonce and lose the pre-rendered cache, and
+ * `img-src`, since token logos come from any host. HSTS belongs to `docker/Caddyfile`.
  */
 
 export type SecurityHeader = { key: string; value: string };
 
-/**
- * The headers for a dashboard whose browser code calls the API at `apiUrl`
- * (`NEXT_PUBLIC_YOG_API_URL`). The browser reaches the API directly — `fetch`
- * and the signal feed's `EventSource` — so its origin is the one
- * `connect-src` admits besides the dashboard's own.
- */
+/** `apiUrl` is the one origin `connect-src` admits besides the dashboard's: the browser's
+ *  `fetch` and `EventSource` reach the API directly. */
 export function securityHeaders(apiUrl: string): SecurityHeader[] {
   const csp = [
     "frame-ancestors 'none'",

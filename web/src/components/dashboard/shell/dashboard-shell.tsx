@@ -1,35 +1,8 @@
 "use client";
 
 /**
- * DashboardShell — responsive chrome orchestrator.
- *
- * Owns the one piece of state the sidebar layout needs: whether the
- * mobile drawer is open. Everything that depends on that state lives
- * here so the `Sidebar` component itself stays a near-pure rail.
- *
- * # Two modes, one breakpoint (lg = 1024px)
- *
- *   >= lg : the sidebar is a permanent fixed rail; no header, no
- *           overlay, the drawer state is irrelevant.
- *   <  lg : the sidebar becomes a drawer — off-canvas by default,
- *           slid in over an overlay when `isOpen`. A compact header
- *           with a hamburger button is shown at the top.
- *
- * The mode switch is purely CSS (Tailwind `lg:` variants). React only
- * tracks `isOpen`; it never measures the viewport to decide the mode.
- *
- * # Behaviours wired here
- *
- *   - open / close via the hamburger and the overlay;
- *   - close on navigation (passed to the sidebar as `onNavigate`) so
- *     tapping a link doesn't leave the drawer open on the new page;
- *   - close on Escape;
- *   - body scroll-lock while the drawer is open;
- *   - reset to closed when the viewport grows to >= lg, so the state
- *     can't get stuck inconsistent after a resize.
- *
- * Focus trapping inside the open drawer is intentionally NOT done in
- * this iteration — it is a separate accessibility pass.
+ * The dashboard chrome: below `lg` the sidebar is a drawer behind a hamburger, above it a
+ * fixed rail. The switch is CSS; React only tracks `isOpen`. No focus trap in the drawer.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -42,8 +15,7 @@ import {
 } from "@/components/dashboard/sidebar/sidebar-state";
 import { HamburgerIcon } from "@/components/shared/icon";
 
-// The drawer/fixed switch happens at this width. Kept as a constant
-// for the resize listener; the CSS side uses Tailwind's `lg:`.
+// ⚠️ Tailwind's `lg:`, repeated for the resize listener.
 const LG_BREAKPOINT_PX = 1024;
 
 export function DashboardShell({
@@ -52,10 +24,7 @@ export function DashboardShell({
   fontVariables,
 }: {
   children: React.ReactNode;
-  /**
-   * Collapse state read from the cookie by the (server) layout, so
-   * the first paint already has the user's preferred rail width.
-   */
+  /** Read from the cookie by the server layout, so the first paint has the right width. */
   initialCollapsed?: boolean;
   /** next/font classes declaring `--font-geist` and `--font-geist-mono`. */
   fontVariables: string;
@@ -67,9 +36,7 @@ export function DashboardShell({
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
 
-  // Toggle the lg+ rail width and persist the preference — a cookie,
-  // not localStorage, so the server layout can render the right
-  // initial state (no expanded→collapsed flash on load).
+  // A cookie, not localStorage: the server layout renders the right width, with no flash.
   const toggleCollapsed = useCallback(() => {
     setCollapsed((value) => {
       const next = !value;
@@ -78,7 +45,6 @@ export function DashboardShell({
     });
   }, []);
 
-  // ── Close on Escape ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -88,7 +54,6 @@ export function DashboardShell({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, close]);
 
-  // ── Body scroll-lock while the drawer is open ───────────────────────
   useEffect(() => {
     if (!isOpen) return;
     const previous = document.body.style.overflow;
@@ -98,11 +63,7 @@ export function DashboardShell({
     };
   }, [isOpen]);
 
-  // ── Reset to closed once the viewport reaches the fixed-rail mode ───
-  // Without this, opening the drawer on mobile then widening the
-  // window to >= lg would leave `isOpen` true — harmless visually
-  // (the drawer CSS is overridden by `lg:`), but the scroll-lock and
-  // overlay would linger. Clearing the state keeps things coherent.
+  // Reset to closed at `lg`, or the scroll-lock and overlay linger after a resize.
   useEffect(() => {
     const query = window.matchMedia(`(min-width: ${LG_BREAKPOINT_PX}px)`);
     function onChange(event: MediaQueryListEvent) {
@@ -116,19 +77,10 @@ export function DashboardShell({
     // Solid background over the cosmic one of `body` — behind the pages
     // that left the menu too.
     <div className={`${fontVariables} flex min-h-screen items-start bg-dash-bg`}>
-      {/*
-       * Mobile header — only shown below lg. Carries the hamburger.
-       * On lg+ it collapses to nothing (`lg:hidden`).
-       */}
       <MobileHeader onOpen={open} menuLabel={t("openMenu")} />
 
-      {/*
-       * Overlay — the dark scrim behind the open drawer. Only
-       * rendered when open, and only visible below lg.
-       */}
       {isOpen && <Overlay onClick={close} label={t("closeMenu")} />}
 
-      {/* The sidebar itself — fixed rail on lg+, drawer below. */}
       <Sidebar
         isOpen={isOpen}
         onNavigate={close}
@@ -136,21 +88,12 @@ export function DashboardShell({
         onToggleCollapsed={toggleCollapsed}
       />
 
-      {/*
-       * Main content. `pt-14` below lg leaves room for the fixed
-       * mobile header; on lg+ the header is gone so no padding.
-       */}
+      {/* `pt-14` below `lg` makes room for the fixed mobile header. */}
       <main className="min-w-0 flex-1 pt-14 lg:pt-0">{children}</main>
     </div>
   );
 }
 
-// ── Sub-components (private) ──────────────────────────────────────────
-
-/**
- * Compact top bar shown below lg. Fixed to the viewport top, holds
- * the hamburger button that opens the drawer. Hidden on lg+.
- */
 function MobileHeader({
   onOpen,
   menuLabel,
@@ -172,11 +115,6 @@ function MobileHeader({
   );
 }
 
-/**
- * Dark scrim behind the open drawer. Clicking it closes the drawer.
- * Visible only below lg — on lg+ the drawer never opens, but the
- * `lg:hidden` guard keeps it out of the way regardless.
- */
 function Overlay({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
