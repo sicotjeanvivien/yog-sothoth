@@ -43,7 +43,7 @@ fn connection_keyword_is_classified() {
 
 // ── the version ceiling ─────────────────────────────────────────────
 
-/// The refusal as the provider wrote it, for `2yyZaQ3w…`, now `swap_v1.json`.
+/// The refusal as the provider wrote it, for `swap_v1.json`'s transaction.
 const VERSION_REFUSAL: &str = "RPC response error -32015: Transaction version (1) is not \
      supported by the requesting client. Please try the request again with the following \
      configuration parameter: \"maxSupportedTransactionVersion\": 1";

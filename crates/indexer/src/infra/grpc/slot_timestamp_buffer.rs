@@ -23,8 +23,7 @@ pub(crate) const MAX_PENDING_SLOTS: u64 = 256;
 /// ⚠️ A count, not bytes: at ~5–20 KB per update, the bound is ~40–160 MB resident.
 pub(crate) const MAX_PENDING_PAYLOADS: usize = 8_192;
 
-/// How many settled slots are remembered, for payloads that arrive **after**
-/// their block-meta — see `KnownTimes` for why this table needs a bound too.
+/// How many settled slots are remembered, for payloads that arrive **after** their block-meta.
 pub(crate) const MAX_KNOWN_SLOTS: usize = 256;
 
 /// A payload and the block time that was found for it.

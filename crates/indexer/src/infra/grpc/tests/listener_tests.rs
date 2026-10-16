@@ -81,8 +81,8 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 
 // ── the retry rules, against a scripted server ──────────────────────
 //
-// ⚠️ Each rule has one owning test, which names it as its mutation. One entanglement stays: a mark
-// given up or kept needs one first, so breaking the errored stream's mark reddens four tests.
+// ⚠️ One entanglement: a mark given up or kept needs one first, so breaking the errored stream's
+// mark reddens four tests.
 
 use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
@@ -121,7 +121,7 @@ async fn listener_with_stall(
 }
 
 /// A transaction of `slot`, carrying the filter name that makes it routable.
-/// ⚠️ Any other name drops it before the buffer, and the resumption tests assert nothing.
+/// ⚠️ A name that is no protocol drops it before the buffer, and the resumption tests assert nothing.
 fn routable(slot: u64) -> Action {
     Action::send(transaction(slot, &[PROTOCOL.as_str()]))
 }

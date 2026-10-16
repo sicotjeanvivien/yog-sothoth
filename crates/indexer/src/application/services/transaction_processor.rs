@@ -109,7 +109,7 @@ fn failure_kind(f: &ExtractionFailure) -> &'static str {
     }
 }
 
-/// RAII guard that records the outcome and duration of `index_transaction`: extract and persist,
+/// RAII guard that records the outcome and duration of `process_transaction`: extract and persist,
 /// the same measurement on both acquisition paths.
 struct ExitGuard {
     protocol: Protocol,

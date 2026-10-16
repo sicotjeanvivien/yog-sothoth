@@ -146,7 +146,7 @@ impl Geyser for ScriptedGeyser {
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 
-    // ⚠️ The listener calls one RPC of ten: a stub reached means it does something this file
+    // ⚠️ The listener calls one RPC of the schema: a stub reached means it does something this file
     // knows nothing about, and a panic stops the test rather than a plausible default.
 
     type SubscribeDeshredStream = ReceiverStream<Result<SubscribeUpdateDeshred, Status>>;

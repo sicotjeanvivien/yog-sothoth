@@ -56,7 +56,7 @@ pub(super) async fn init_db(database_url: &SecretUrl) -> anyhow::Result<Database
 }
 
 /// Build the transaction source the configuration selects: the only place in the crate that
-/// names a concrete source, and reads `INGEST_SOURCE`.
+/// names a concrete source.
 pub(super) fn init_source(config: &Config) -> anyhow::Result<Arc<dyn TransactionSource>> {
     match &config.transaction_arrival {
         TransactionArrival::Fetched { from } => init_rpc_source(config, from),

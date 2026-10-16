@@ -153,7 +153,7 @@ fn the_reference_transaction_is_what_this_adapter_produces() {
 
     yog_core::application::extraction::conformance::assert_matches_reference(
         &on_chain_tx,
-        // `getTransaction` leaves `transaction_index` out.
+        // The provider in use leaves `transaction_index` out.
         None,
     );
 }

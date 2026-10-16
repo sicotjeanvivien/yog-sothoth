@@ -99,7 +99,7 @@ fn watched_pools_are_grouped_by_protocol() {
 }
 
 /// ⚠️ Nothing watched is a refusal: an empty subscription connects and goes quiet, reading as a
-/// network fault. This refusal is the only one left.
+/// network fault.
 #[test]
 fn nothing_watched_is_refused_rather_than_subscribed_empty() {
     assert!(matches!(

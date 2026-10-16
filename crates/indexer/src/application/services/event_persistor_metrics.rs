@@ -58,7 +58,8 @@ impl EventPersistorMetrics {
     }
 
     /// An insert that conflicted and wrote nothing, counted beside `record_indexed`: rows written
-    /// are `indexed − skipped`. Non-zero on a live stream: the unique key collapses distinct events.
+    /// are `indexed − skipped`. Non-zero outside a replay or a reconnect's rewind: the unique key
+    /// collapses distinct events.
     pub(crate) fn record_insert_skipped(protocol: &Protocol, event_kind: &'static str) {
         counter!(
             INSERT_SKIPPED,

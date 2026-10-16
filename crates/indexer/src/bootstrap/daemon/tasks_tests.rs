@@ -2,7 +2,7 @@ use super::*;
 
 // ── index_concurrency ──────────────────────────────────────────────────
 //
-// ⚠️ No configuration reaches the guard today (`Database::connect` fixes the pool at ten),
+// ⚠️ No configuration reaches the guard (`Database::connect`'s pool is fixed),
 // which is why it is tested: a refusal nothing reaches is one nobody notices broken.
 
 #[test]

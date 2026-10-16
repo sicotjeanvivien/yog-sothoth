@@ -53,7 +53,7 @@ pub(super) enum Verdict {
 
 impl Ending {
     /// What this ending is worth.
-    /// ⚠️ A stall is no verdict: one that delivered nothing is silence, not a refusal, and keeps the mark.
+    /// ⚠️ A stall is no refusal: one that delivered nothing is silence, and keeps the mark.
     pub(super) fn verdict(self) -> Verdict {
         match self {
             Ending::ShutdownRequested => Verdict::ShutdownRequested,
