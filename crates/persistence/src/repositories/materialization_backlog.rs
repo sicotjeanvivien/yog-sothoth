@@ -1,8 +1,5 @@
-//! Postgres implementation of [`MaterializationBacklogRepository`].
-//!
-//! One call to `yog_cagg_materialization_backlog()` (migration 013), which
-//! walks TimescaleDB's catalog: which aggregates exist, and which raw table
-//! each summarises, is the database's knowledge, not a list kept here.
+//! Postgres implementation of [`MaterializationBacklogRepository`]: one call to
+//! `yog_cagg_materialization_backlog()`, which reads the aggregates from TimescaleDB's catalog.
 //!
 //! [`MaterializationBacklogRepository`]: yog_core::domain::MaterializationBacklogRepository
 
@@ -17,14 +14,12 @@ use yog_core::{
     domain::{MaterializationBacklog, MaterializationBacklogRepository},
 };
 
-/// Postgres-backed materialisation backlog repository.
 #[derive(Clone)]
 pub struct PgMaterializationBacklogRepository {
     pool: PgPool,
 }
 
 impl PgMaterializationBacklogRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -33,9 +28,8 @@ impl PgMaterializationBacklogRepository {
 #[async_trait]
 impl MaterializationBacklogRepository for PgMaterializationBacklogRepository {
     async fn backlogs(&self) -> RepositoryResult<Vec<MaterializationBacklog>> {
-        // A set-returning function's columns all read as nullable to sqlx:
-        // `aggregate` is never NULL (a view name), the two timestamps are
-        // NULL by design.
+        // sqlx reads every column of a set-returning function as nullable: only
+        // `aggregate` is never NULL.
         let rows = sqlx::query_as!(
             MaterializationBacklogRow,
             r#"

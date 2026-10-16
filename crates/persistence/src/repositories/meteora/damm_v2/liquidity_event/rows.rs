@@ -10,10 +10,8 @@ use yog_core::{
     domain::{MeteoraDammV2LiquidityEvent, MeteoraDammV2LiquidityEventValued},
 };
 
-/// Row shape returned by SELECTs on the `meteora_damm_v2_liquidity_events_valued`
-/// VIEW: every column of the underlying event table, plus the read-time
-/// `value_usd` (NULL when not computable). Used by `find_by_pool_paginated` in
-/// both traversal modes.
+/// Row shape of the `meteora_damm_v2_liquidity_events_valued` VIEW: the event
+/// table's columns plus the read-time `value_usd`.
 #[derive(sqlx::FromRow)]
 pub(super) struct MeteoraDammV2LiquidityEventRow {
     pub(super) pool_address: String,

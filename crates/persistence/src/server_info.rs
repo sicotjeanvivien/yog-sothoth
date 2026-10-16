@@ -1,22 +1,11 @@
 //! Facts about the server itself, as opposed to the data it holds.
-//!
-//! Not a repository behind a trait in `yog-core`, for the reason
-//! [`PgHealthChecker`](crate::PgHealthChecker) gives: no domain aggregate is
-//! involved, and no service composes these facts with anything else. Kept out
-//! of `database.rs`, which opens and closes connections and runs no query of
-//! its own.
 
 use sqlx::PgPool;
 
 use yog_core::RepositoryError;
 
-/// The two versions a dump depends on.
-///
-/// A dump restores only into the same TimescaleDB version, and `pg_dump`
-/// refuses a server of a newer Postgres major than itself (see the README,
-/// *Backup and restore*). `yog-archive` reads both before every dump: the
-/// TimescaleDB version travels with the dump, and the Postgres major is
-/// compared with `pg_dump`'s by [`PgTools::ensure_matches`](crate::PgTools::ensure_matches).
+/// The two versions a dump depends on: it restores only into the same TimescaleDB,
+/// and `pg_dump` refuses a server of a newer major ([`PgTools::ensure_matches`](crate::PgTools::ensure_matches)).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerVersions {
     /// `server_version_num / 10000`: 16 for 16.14.
@@ -37,11 +26,8 @@ impl PgServerInfo {
         Self { pool }
     }
 
-    /// Read the Postgres major and the installed TimescaleDB version.
-    ///
-    /// A database without the extension is an error, not an empty version:
-    /// every database of this project has it, and a dump labelled with no
-    /// version could not be matched to an image that restores it.
+    /// Reads the Postgres major and the installed TimescaleDB version. A database
+    /// without the extension is an error: an unlabelled dump matches no image.
     pub async fn server_versions(&self) -> Result<ServerVersions, RepositoryError> {
         let row = sqlx::query!(
             r#"

@@ -1,6 +1,5 @@
 //! Update-pool-fees events repository.
-//!
-//! Write-only — the indexer is the sole consumer today. The fee parameters
+//! The fee parameters
 //! are persisted as a raw, undecoded borsh blob (`params_raw`).
 
 use async_trait::async_trait;

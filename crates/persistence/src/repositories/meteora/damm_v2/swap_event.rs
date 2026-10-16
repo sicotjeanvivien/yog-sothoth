@@ -1,10 +1,5 @@
-//! DAMM v2 swap events repository: inserts new events and paginates
-//! existing ones by pool.
-//!
-//! Both reads are static SQL (one query per traversal mode); the row
-//! shape and the mapping to domain are shared. No dynamic SQL here,
-//! so the layout stays single-file: `MeteoraDammV2SwapEventRow` and its
-//! `TryFrom` to domain live in the sibling `rows.rs` module.
+//! DAMM v2 swap events repository: inserts new events and paginates them by
+//! pool, with one static query per traversal mode.
 
 mod rows;
 
@@ -24,9 +19,7 @@ use yog_core::{
     },
 };
 
-/// Maximum number of rows returned in a single page, regardless of the
-/// caller's `limit`. Backstop against an oversized query if the
-/// API-layer validation is bypassed.
+/// Page size cap, whatever the caller's `limit`.
 const MAX_PAGE_SIZE: i64 = 200;
 
 pub struct PgMeteoraDammV2SwapEventRepository {
@@ -92,21 +85,8 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
 
 #[async_trait]
 impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
-    /// Paginate DAMM v2 swap events for a pool with bidirectional navigation.
-    ///
-    /// Natural display order is `timestamp DESC, signature ASC` (newest
-    /// first, deterministic tie-break on signature).
-    ///
-    /// - `cursor` + `direction` cooperate: traverse forward (older events)
-    ///   or backward (newer events) from the cursor position.
-    /// - `position` jumps to a list boundary (`First` = newest events,
-    ///   `Last` = oldest events), ignoring any cursor.
-    /// - Peek N+1 detects whether more rows exist on the queried side in
-    ///   a single query.
-    ///
-    /// Backward queries (Prev / Last) reverse the SQL ORDER BY and the
-    /// resulting vector before returning, so the caller always observes
-    /// the page in display order.
+    /// Newest first (`timestamp DESC, signature ASC`). A backward query reverses the
+    /// ORDER BY, then the vector, to return the page in display order.
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,

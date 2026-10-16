@@ -1,8 +1,4 @@
-//! Unit tests for `TryFrom<AnnouncementRow> for Announcement`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid ones
-//! map every field, and that a TEXT tag outside the CHECK-constrained
-//! sets (schema/code drift) surfaces as `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<AnnouncementRow> for Announcement`.
 
 use chrono::Utc;
 use yog_core::{
@@ -24,8 +20,6 @@ fn valid_row() -> AnnouncementRow {
     }
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[test]
 fn try_from_valid_row_maps_all_fields() {
     let row = valid_row();
@@ -41,8 +35,6 @@ fn try_from_valid_row_maps_all_fields() {
     assert_eq!(announcement.starts_at, starts_at);
     assert_eq!(announcement.ends_at, None);
 }
-
-// ── Tag drift → Integrity ────────────────────────────────────────────
 
 #[test]
 fn try_from_unknown_kind_returns_integrity_with_value() {

@@ -9,12 +9,8 @@ use tokio::{
 use super::read_tail;
 use crate::error::BackupError;
 
-/// A `pg_restore` reading the archive as `pg_dump` writes it. Dropping it
-/// kills `pg_restore`.
-///
-/// Its exit status is the verdict. Should it stop reading early, the broken
-/// pipe that follows is not a failure of its own: feeding stops, and the exit
-/// status says why it stopped.
+/// A `pg_restore` reading the archive as `pg_dump` writes it; dropping it kills it.
+/// Its exit status is the verdict: a broken pipe after it stops reading is no failure of its own.
 pub struct ReadabilityCheck {
     child: Child,
     stdin: Option<ChildStdin>,

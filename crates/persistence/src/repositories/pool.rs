@@ -28,12 +28,8 @@ impl PgPoolRepository {
     }
 
     /// How many pools matching the same filters were touched after the
-    /// traversal's fence — see `PoolPage::touched_since`.
-    ///
-    /// Skipped, and reported as `0`, in the two cases where it is knowably
-    /// nothing: an unfenced sort, and the first page of a traversal (the fence
-    /// was minted an instant ago, so nothing can be above it — running the
-    /// query there would be a round-trip to be told zero).
+    /// traversal's fence — see `PoolPage::touched_since`. `0` without a query
+    /// when it is knowably nothing: an unfenced sort, or a first page.
     async fn touched_since(
         &self,
         as_of: Option<DateTime<Utc>>,
@@ -61,48 +57,22 @@ impl PgPoolRepository {
 const MAX_PAGE_SIZE: i64 = 200;
 
 /// How stale a cursor's snapshot fence may be before the traversal re-anchors.
-///
-/// A listing is read in minutes; an hour is already far past any live
-/// traversal. Beyond it the cursor is not a reader mid-scroll, it is a
-/// bookmarked or shared URL, and replaying its anchor serves a snapshot of the
-/// past while `touched_since` counts most of the table. Re-anchoring costs that
-/// one hop its guarantee — exactly what a cursor minted before the fence
-/// existed already costs — and buys back a page that means something.
+/// Beyond it the cursor is a bookmark, not a reader mid-scroll: replaying it
+/// serves a past snapshot while `touched_since` counts most of the table.
 const MAX_FENCE_AGE: chrono::Duration = chrono::Duration::hours(1);
 
 /// The anchor a traversal runs under, once the cursor's claim has been vetted.
 struct ResolvedFence {
     as_of: DateTime<Utc>,
     /// Whether the cursor that made the claim may still anchor the keyset.
-    ///
-    /// `false` means the claim was refused, and then the cursor goes with it:
-    /// a fresh anchor over a stale `sort_value` is not a repair, it is the
-    /// original bug for one hop — under `LastSeenAsc` a pool already shown and
-    /// touched since satisfies both `> sort_value` and `<= now`, and is served
-    /// a second time. Restarting at the head of the listing is the only answer
-    /// that stays consistent, and `Page::is_first` tells the client it happened.
+    /// ⚠️ A refused claim takes the cursor with it: a fresh anchor over a stale
+    /// `sort_value` serves again a pool already shown and touched since.
     keeps_cursor: bool,
 }
 
-/// Resolve the fence a traversal runs under, from the one the cursor claims.
-///
-/// A cursor is base64 JSON handed back by the client: unsigned, editable, and
-/// replayable at any later date. Every other field it carries is validated, and
-/// this one bounds the query, so it is validated too:
-///
-/// - **above `now`** — an `as_of` in the future makes `last_seen_at <= as_of`
-///   match everything. The traversal is silently unanchored, which is the
-///   original bug back in full, and `touched_since` reports `0`, so the client
-///   states that nothing moved. Refusing it stops a hand-edited cursor from
-///   turning the fix off while claiming it is on.
-/// - **older than [`MAX_FENCE_AGE`]** — no longer a reader mid-scroll, and its
-///   ancient `as_of` also drains the selectivity of the `touched_since` range
-///   predicate, degrading it toward a full scan on caller-controlled input.
-///
-/// A cursor claiming **nothing** is the one case that keeps its place: that is
-/// a cursor minted before this field existed, held by a reader who was walking
-/// the listing when the change shipped. Rejecting those would break every
-/// in-flight URL at deploy time to fix one hop of one traversal.
+/// Vets the fence a cursor claims — unsigned, editable client input. Refused in
+/// the future (`last_seen_at <= as_of` would match everything) and past
+/// [`MAX_FENCE_AGE`]. A cursor claiming nothing predates the field and keeps its place.
 fn resolve_fence(claimed: Option<DateTime<Utc>>, now: DateTime<Utc>) -> ResolvedFence {
     match claimed {
         Some(as_of) if as_of <= now && now - as_of <= MAX_FENCE_AGE => ResolvedFence {
@@ -114,7 +84,6 @@ fn resolve_fence(claimed: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Resolved
             as_of: now,
             keeps_cursor: true,
         },
-        // Claimed and refused — the cursor is refused with it.
         Some(_) => ResolvedFence {
             as_of: now,
             keeps_cursor: false,
@@ -122,14 +91,12 @@ fn resolve_fence(claimed: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Resolved
     }
 }
 
-/// How many fee tiers the filter offers. The dozen-or-so real tiers hold the
-/// vast majority of pools; capping at the most common keeps the dropdown short
-/// and drops the long tail of one-off dynamic-fee/launch values.
+/// How many fee tiers the filter offers, the most common ones: the long tail
+/// of one-off dynamic-fee and launch values is dropped.
 const FEE_TIER_LIMIT: i64 = 8;
 
-/// Convert a domain `fee_bps` ([`rust_decimal::Decimal`]) to the `BigDecimal`
-/// that NUMERIC binds to at the persistence boundary. Round-trips through the
-/// exact decimal string — never lossy for the small fee values we store.
+/// Converts a domain `fee_bps` to the `BigDecimal` NUMERIC binds to, through
+/// its exact decimal string.
 pub(super) fn fee_bps_to_numeric(
     fee_bps: rust_decimal::Decimal,
 ) -> RepositoryResult<sqlx::types::BigDecimal> {
@@ -139,31 +106,9 @@ pub(super) fn fee_bps_to_numeric(
 
 #[async_trait]
 impl PoolRepository for PgPoolRepository {
-    /// # The rule that makes `last_seen_at` usable as a sort key
-    ///
-    /// **Clamp both candidates to the database clock, then keep the later.**
-    /// Two halves, and dropping either one breaks a different thing.
-    ///
-    /// *Keep the later* is what the pool listing's snapshot fence (`PoolPage`)
-    /// rests on: the column only ever growing is what turns "a touched row
-    /// moves across the cursor" into "a touched row leaves the result set". A
-    /// plain `SET last_seen_at = EXCLUDED.last_seen_at` did not guarantee it —
-    /// the value here is the *indexer process* clock captured before the round
-    /// trip, [`Self::touch_last_seen`] writes Postgres' `NOW()`, and events are
-    /// persisted concurrently, so a touch committing after an older upsert
-    /// walked the column backwards. A row moving *down* re-enters a traversal
-    /// below a cursor already passed and is served twice; the fence bounds from
-    /// above only and cannot catch that.
-    ///
-    /// *Clamp to the database clock* is what keeps the first half from becoming
-    /// a trap. `GREATEST` alone makes a value that is **ahead** of real time
-    /// permanent — one NTP correction or a suspended VM on the indexer host and
-    /// the row is stuck in the future, where nothing can lower it again. That
-    /// pool then fails `last_seen_at <= as_of` on every page of every listing
-    /// while satisfying `last_seen_at > as_of` in the `touched_since` count:
-    /// invisible forever, and reported forever as having just moved. The
-    /// clamp also *repairs* such a row on its next write rather than only
-    /// declining to create a new one.
+    /// Keeps the later of the stored and incoming `last_seen_at`, both clamped to `NOW()`.
+    /// ⚠️ The listing's fence rests on the column never decreasing; without the clamp, a value
+    /// ahead of the database clock would stay forever and hide the pool from every fenced page.
     async fn upsert(&self, pool: &Pool) -> RepositoryResult<()> {
         sqlx::query!(
             r#"
@@ -189,15 +134,8 @@ impl PoolRepository for PgPoolRepository {
         Ok(())
     }
 
-    /// Same rule as [`Self::upsert`] — clamp both candidates to the database
-    /// clock, keep the later — collapsed by the fact that the incoming value
-    /// *is* that clock. `GREATEST(LEAST(last_seen_at, NOW()), NOW())` is
-    /// `NOW()` for every input, so that is what is written.
-    ///
-    /// Which is what the plain `NOW()` here always was; the bug was never on
-    /// this side. Spelled out because the bare statement now reads like the
-    /// guard is missing at one write site out of two — it is not, it is the
-    /// same guard with nothing left to compare.
+    /// Same rule as [`Self::upsert`], collapsed: with `NOW()` as the incoming
+    /// value, `GREATEST(LEAST(last_seen_at, NOW()), NOW())` is `NOW()`.
     async fn touch_last_seen(&self, pool_address: &Pubkey) -> RepositoryResult<()> {
         sqlx::query!(
             r#"UPDATE pools SET last_seen_at = NOW() WHERE pool_address = $1"#,
@@ -328,18 +266,8 @@ impl PoolCatalog for PgPoolRepository {
 
         let sort_column = sort.column();
 
-        // The snapshot fence is minted HERE, not by the caller: this is the
-        // only place that builds this SQL, so the invariant cannot be
-        // forgotten by a future caller. It is carried forward by the cursor,
-        // and re-minted whenever there is none.
-        //
-        // Taken from the application clock, while the write path bounds
-        // `last_seen_at` by Postgres' `NOW()`. Same host today, so the two
-        // agree. A drift either way is bounded by NTP and costs at most the
-        // pools touched inside that window; reading `NOW()` from the database
-        // would close it at the price of a round-trip on every listing, which
-        // is not a trade worth making here — but it is the trade, written down
-        // rather than re-derived.
+        // Minted here, where the SQL is built, then carried by the cursor. ⚠️ From the
+        // application clock, while writes use `NOW()`: a drift misses the pools touched within it.
         let fence = match sort_column {
             PoolSortColumn::LastSeen => Some(resolve_fence(
                 cursor.as_ref().and_then(|c| c.as_of),
@@ -349,9 +277,7 @@ impl PoolCatalog for PgPoolRepository {
             PoolSortColumn::FirstSeen => None,
         };
 
-        // A refused fence takes its cursor with it — see `ResolvedFence`. Done
-        // before `resolve_query_mode` so the restarted listing is a forward
-        // walk from the head, not a backward one from nowhere.
+        // Before `resolve_query_mode`, so the restarted listing walks forward from the head.
         let cursor = match &fence {
             Some(f) if !f.keeps_cursor => None,
             _ => cursor,
@@ -364,14 +290,8 @@ impl PoolCatalog for PgPoolRepository {
 
         let as_of = fence.as_ref().map(|f| f.as_of);
 
-        // The fence bounds the PAGE only once there is a cursor to protect.
-        // Without one there is no keyset assumption in play: an unanchored
-        // first page just wants the head of the list, and bounding it could
-        // only *hide* rows — those whose stored instant runs ahead of this
-        // process's clock — on the most-visited page of the product, with
-        // `touched_since` short-circuited to 0 so nothing would report the
-        // loss. The anchor is still minted and stamped into the outgoing
-        // cursors, so every page after this one is fenced.
+        // ⚠️ A first page is not fenced: it could only hide rows stamped ahead of this clock,
+        // with `touched_since` at 0. Its outgoing cursors still carry the anchor.
         let page_fence = as_of.filter(|_| had_cursor);
 
         let (cursor_sort_value, cursor_pool_address) = match active_cursor {
@@ -379,13 +299,8 @@ impl PoolCatalog for PgPoolRepository {
             None => (None, None),
         };
 
-        // NUMERIC binds to BigDecimal at the persistence boundary — same
-        // lossless string round-trip as the write path.
         let fee_bps = fee_bps.map(fee_bps_to_numeric).transpose()?;
 
-        // Build the dynamic query (ORDER BY + keyset + fence + search + fee)
-        // and run it. Mapping goes through PoolRow (FromRow) then
-        // Pool::try_from.
         let mut qb = build(PaginatedPoolsQuery {
             mode,
             sort,
@@ -434,10 +349,7 @@ impl PoolCatalog for PgPoolRepository {
     }
 
     async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
-        // Rank tiers by pool count and keep the top N (the observed fee
-        // distribution is long-tailed — a few real tiers plus a long tail of
-        // one-off dynamic-fee/launch values), then re-order the survivors
-        // ascending by fee for natural display. The count tie-breaks by fee
+        // The most common tiers, re-sorted by fee for display. Ties break on fee,
         // so the cut is deterministic.
         let rows = sqlx::query!(
             r#"
@@ -477,9 +389,7 @@ mod tests {
         Utc.timestamp_opt(1_800_000_000, 0).unwrap()
     }
 
-    /// A live traversal keeps its anchor, and its cursor. Re-minting on every
-    /// page would undo the whole point: the fence has to be the *same* instant
-    /// across the walk.
+    /// Mutation: re-minting on every page — the fence must be the same instant across the walk.
     #[test]
     fn a_recent_fence_is_honoured() {
         let claimed = now() - Duration::minutes(3);
@@ -488,10 +398,7 @@ mod tests {
         assert!(resolved.keeps_cursor);
     }
 
-    /// A cursor claiming nothing was minted before the field existed, and is
-    /// held by a reader who was mid-listing when this shipped. It gets a fresh
-    /// anchor and **keeps its place**: refusing it would break every in-flight
-    /// URL at deploy time to fix one hop of one traversal.
+    /// Mutation: refusing a cursor that predates the field, which would break every in-flight URL.
     #[test]
     fn an_absent_claim_is_minted_without_losing_the_cursor() {
         let resolved = resolve_fence(None, now());
@@ -499,11 +406,8 @@ mod tests {
         assert!(resolved.keeps_cursor);
     }
 
-    /// A cursor is unsigned base64 the client hands back, so a fence in the
-    /// future is reachable by hand-editing one. Honouring it would make
-    /// `last_seen_at <= as_of` match everything: the traversal unanchored, the
-    /// original skip/duplicate bug back, and `touched_since` reporting 0 —
-    /// the fix switched off while the response claims it is on.
+    /// A hand-edited future fence would make `last_seen_at <= as_of` match
+    /// everything while `touched_since` reports 0.
     #[test]
     fn a_fence_in_the_future_is_refused() {
         let resolved = resolve_fence(Some(now() + Duration::hours(6)), now());
@@ -511,9 +415,6 @@ mod tests {
         assert!(!resolved.keeps_cursor);
     }
 
-    /// Past the cutoff the cursor is a bookmark, not a reader mid-scroll:
-    /// replaying it serves a stale snapshot and leaves the `touched_since`
-    /// range predicate selecting most of the table.
     #[test]
     fn a_stale_fence_is_refused() {
         let resolved = resolve_fence(Some(now() - MAX_FENCE_AGE - Duration::seconds(1)), now());
@@ -521,8 +422,7 @@ mod tests {
         assert!(!resolved.keeps_cursor);
     }
 
-    /// Exactly at the cutoff is still honoured — the bound is inclusive, and
-    /// saying so pins which side of `<=` the code is on.
+    /// Mutation: `<=` turned into `<` on the age bound.
     #[test]
     fn the_staleness_bound_is_inclusive() {
         let claimed = now() - MAX_FENCE_AGE;
@@ -531,11 +431,8 @@ mod tests {
         assert!(resolved.keeps_cursor);
     }
 
-    /// The pairing that matters, stated on its own: a refused claim never
-    /// leaves a fresh anchor sitting over a stale `sort_value`. That
-    /// combination is the original bug for one hop — under `LastSeenAsc` a
-    /// pool already shown and touched since would satisfy both halves of the
-    /// predicate and be served a second time.
+    /// A fresh anchor over a stale `sort_value` would serve again a pool
+    /// already shown and touched since.
     #[test]
     fn a_refused_fence_never_keeps_its_cursor() {
         for claimed in [

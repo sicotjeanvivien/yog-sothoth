@@ -11,9 +11,6 @@ pub(super) struct MaterializationBacklogRow {
     pub(super) oldest_pending_at: Option<DateTime<Utc>>,
 }
 
-/// `From`, not `TryFrom`: every column already has its domain type — a view
-/// name and two timestamps — so there is nothing to parse and nothing to
-/// refuse.
 impl From<MaterializationBacklogRow> for MaterializationBacklog {
     fn from(row: MaterializationBacklogRow) -> Self {
         MaterializationBacklog {

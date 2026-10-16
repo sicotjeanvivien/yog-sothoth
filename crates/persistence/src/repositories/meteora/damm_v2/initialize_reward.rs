@@ -1,6 +1,4 @@
 //! Initialize-reward events repository: inserts newly opened farm reward slots.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

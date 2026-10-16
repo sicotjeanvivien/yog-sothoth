@@ -1,6 +1,4 @@
 //! Update-reward-duration events repository: inserts farm slot re-pacings.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

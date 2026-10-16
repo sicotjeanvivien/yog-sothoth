@@ -1,7 +1,5 @@
-//! Postgres implementation of `EventFreshnessRepository`.
-//!
-//! A single query: the greatest `timestamp` across `swap_events` and
-//! `liquidity_events`.
+//! Postgres implementation of `EventFreshnessRepository`: the greatest `timestamp`
+//! across `swap_events` and `liquidity_events`.
 
 use crate::repositories::helper::map_sqlx_error;
 use async_trait::async_trait;
@@ -9,14 +7,12 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use yog_core::{RepositoryResult, domain::EventFreshnessRepository};
 
-/// Postgres-backed event freshness repository.
 #[derive(Clone)]
 pub struct PgEventFreshnessRepository {
     pool: PgPool,
 }
 
 impl PgEventFreshnessRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -25,10 +21,7 @@ impl PgEventFreshnessRepository {
 #[async_trait]
 impl EventFreshnessRepository for PgEventFreshnessRepository {
     async fn last_event_at(&self) -> RepositoryResult<Option<DateTime<Utc>>> {
-        // GREATEST over the two per-table maxima. Each MAX is NULL on
-        // an empty table; GREATEST ignores NULLs unless every argument
-        // is NULL, in which case the whole expression is NULL — hence
-        // the `?` annotation forcing the column to nullable.
+        // NULL when both tables are empty — hence the `?`.
         let last_event_at = sqlx::query_scalar!(
             r#"
             SELECT GREATEST(

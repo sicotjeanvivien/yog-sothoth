@@ -1,8 +1,4 @@
-//! Unit tests for `TryFrom<NetworkStatusRow> for NetworkStatus`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right status, and that the i64 → u64 / i32 → u32
-//! narrowings surface negative values as `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<NetworkStatusRow> for NetworkStatus`.
 
 use chrono::Utc;
 use yog_core::{RepositoryError, domain::NetworkStatus};
@@ -17,8 +13,6 @@ fn valid_row() -> NetworkStatusRow {
     }
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[test]
 fn try_from_valid_row_returns_status_with_all_fields_mapped() {
     let row = valid_row();
@@ -30,8 +24,6 @@ fn try_from_valid_row_returns_status_with_all_fields_mapped() {
     assert_eq!(status.rpc_latency_ms, 250);
     assert_eq!(status.observed_at, observed_at);
 }
-
-// ── Bounds: i64 → u64 (slot) ─────────────────────────────────────────
 
 #[test]
 fn try_from_negative_slot_returns_integrity() {
@@ -45,8 +37,6 @@ fn try_from_negative_slot_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── Bounds: i32 → u32 (rpc_latency_ms) ───────────────────────────────
 
 #[test]
 fn try_from_negative_rpc_latency_ms_returns_integrity_with_value() {

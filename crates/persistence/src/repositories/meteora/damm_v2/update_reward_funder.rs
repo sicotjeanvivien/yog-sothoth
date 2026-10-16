@@ -1,6 +1,4 @@
 //! Update-reward-funder events repository: inserts farm funding-right transfers.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

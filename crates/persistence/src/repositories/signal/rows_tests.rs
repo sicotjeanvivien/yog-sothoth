@@ -1,10 +1,4 @@
-//! Unit tests for `TryFrom<SignalRow> for SignalRecord`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid ones
-//! produce the right record, that each fallible field has its own
-//! validation path, and that errors surface as `RepositoryError::Integrity`.
-//! (The read against the real table is covered by the DB-backed
-//! integration test in `tests/signal_list.rs`.)
+//! DB-free tests of `TryFrom<SignalRow> for SignalRecord`.
 
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -31,8 +25,6 @@ fn valid_row() -> SignalRow {
         triggered_at: Utc::now(),
     }
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn try_from_valid_row_returns_record_with_all_fields_mapped() {
@@ -68,8 +60,6 @@ fn try_from_none_optionals_stay_none() {
     assert_eq!(record.signal.threshold, None);
     assert_eq!(record.signal.message, None);
 }
-
-// ── Validation paths ─────────────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {

@@ -1,11 +1,5 @@
-//! Postgres implementation of `TokenMetadataRepository`.
-//!
-//! Backed by the `token_metadata` table (baseline §6).
-//!
-//! The domain types mints as `Pubkey`; the column is `TEXT`. The
-//! conversion happens here, at the persistence boundary:
-//! `Pubkey::to_string()` on write, `convert_string_to_pubkey` on
-//! read.
+//! Postgres implementation of `TokenMetadataRepository`, over `token_metadata` (baseline §6).
+
 mod rows;
 
 use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
@@ -18,14 +12,12 @@ use yog_core::{
     domain::{TokenMetadata, TokenMetadataLookup, TokenMetadataRepository},
 };
 
-/// Postgres-backed token metadata repository.
 #[derive(Clone)]
 pub struct PgTokenMetadataRepository {
     pool: PgPool,
 }
 
 impl PgTokenMetadataRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -80,28 +72,8 @@ impl TokenMetadataRepository for PgTokenMetadataRepository {
     }
 
     async fn list_missing_mints(&self) -> RepositoryResult<Vec<Pubkey>> {
-        // `IS NOT NULL` is load-bearing, and its absence used to break every
-        // freshly bootstrapped database.
-        //
-        // `pools.token_a_mint` / `token_b_mint` are nullable — a pool is
-        // discovered from the event stream before yog-context resolves its
-        // mints from the on-chain account. One might expect
-        // `NOT IN (SELECT mint FROM token_metadata)` to discard those NULLs on
-        // its own, since `NULL NOT IN (…)` is NULL and a NULL predicate filters
-        // the row out. It does — **unless the subquery is empty**, where SQL
-        // defines `x NOT IN ()` as TRUE for any x, NULL included.
-        //
-        // So on a database whose `token_metadata` is still empty, an unresolved
-        // pool sent a NULL through, the `!` below asserted non-null, and the
-        // whole call failed with "unexpected null". The worker is skip-and-log,
-        // so it warned and did nothing — and since it is itself what fills
-        // `token_metadata`, nothing could break the cycle except the pool
-        // account worker happening to resolve every pool first. Observed on a
-        // fresh stack on 5 August 2026.
-        //
-        // `AS "mint!: String"` then keeps its meaning: with the NULLs excluded
-        // by the WHERE, the column really is non-null, and sqlx's inference
-        // through the UNION is too conservative to see it.
+        // ⚠️ `IS NOT NULL` is load-bearing: `x NOT IN ()` is TRUE even for a NULL x, so on an empty
+        // `token_metadata` an unresolved pool's NULL mint would fail the `!` and stall the worker.
         let mints = sqlx::query_scalar!(
             r#"
             SELECT mint AS "mint!: String" FROM (

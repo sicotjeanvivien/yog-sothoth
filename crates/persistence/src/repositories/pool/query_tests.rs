@@ -3,23 +3,7 @@ use crate::repositories::helper::QueryMode;
 use chrono::TimeZone;
 use yog_core::PoolSort;
 
-// The reference truth table, transcribed from the validated spec.
-// Each row: (sort, mode) => (primary_order, tiebreak_order,
-//                            primary_keyset_op, tiebreak_keyset_op).
-//
-// This table IS the specification. The tests assert the code
-// matches it; they do not read behaviour back from the code. A
-// wrong "fix" to effective_order / keyset_operators breaks these.
-//
-// | Sort           | Mode     | ord_pri | ord_tie | ks_pri | ks_tie |
-// | FirstSeenDesc  | Forward  | DESC    | ASC     | <      | >      |
-// | FirstSeenDesc  | Backward | ASC     | DESC    | >      | <      |
-// | FirstSeenAsc   | Forward  | ASC     | ASC     | >      | >      |
-// | FirstSeenAsc   | Backward | DESC    | DESC    | <      | <      |
-// | LastSeenDesc   | Forward  | DESC    | ASC     | <      | >      |
-// | LastSeenDesc   | Backward | ASC     | DESC    | >      | <      |
-// | LastSeenAsc    | Forward  | ASC     | ASC     | >      | >      |
-// | LastSeenAsc    | Backward | DESC    | DESC    | <      | <      |
+// `reference` is the spec, written out by hand: the tests never read it back from the code.
 
 struct Expected {
     ord_pri: &'static str,
@@ -94,8 +78,6 @@ const ALL_CASES: &[(PoolSort, QueryMode)] = &[
     (PoolSort::LastSeenAsc, QueryMode::Backward),
 ];
 
-// ── effective_order: full matrix ──────────────────────────────
-
 #[test]
 fn effective_order_matches_reference_for_all_cases() {
     for &(sort, mode) in ALL_CASES {
@@ -111,8 +93,6 @@ fn effective_order_matches_reference_for_all_cases() {
         );
     }
 }
-
-// ── keyset_operators: full matrix ─────────────────────────────
 
 #[test]
 fn keyset_operators_match_reference_for_all_cases() {
@@ -130,16 +110,6 @@ fn keyset_operators_match_reference_for_all_cases() {
     }
 }
 
-// ── Cross-cutting invariants ──────────────────────────────────
-//
-// These don't re-check the table cell by cell; they assert
-// structural properties that must hold no matter the table's
-// exact contents. If both the table and these agree, confidence
-// is high that the logic is internally consistent.
-
-/// Forward and Backward of the same sort must produce opposite
-/// primary orders — that's the definition of reversing the
-/// traversal.
 #[test]
 fn forward_and_backward_have_opposite_primary_order() {
     for sort in [
@@ -155,8 +125,6 @@ fn forward_and_backward_have_opposite_primary_order() {
     }
 }
 
-/// Forward and Backward of the same sort must produce opposite
-/// keyset operators on both columns.
 #[test]
 fn forward_and_backward_have_opposite_keyset_operators() {
     for sort in [
@@ -172,10 +140,7 @@ fn forward_and_backward_have_opposite_keyset_operators() {
     }
 }
 
-/// In Forward mode, the primary keyset operator must agree with
-/// the primary order: DESC pairs with '<' (we walk toward smaller
-/// values), ASC pairs with '>'. This is the property that, if
-/// violated, makes "next page" skip or repeat rows.
+/// Mutation: a keyset operator that disagrees with the order — the next page skips or repeats rows.
 #[test]
 fn forward_keyset_op_agrees_with_order() {
     for sort in [
@@ -194,9 +159,6 @@ fn forward_keyset_op_agrees_with_order() {
     }
 }
 
-/// Same agreement in Backward mode (the query runs in reversed
-/// physical order, so the same pairing rule applies to the
-/// reversed order).
 #[test]
 fn backward_keyset_op_agrees_with_order() {
     for sort in [
@@ -215,10 +177,7 @@ fn backward_keyset_op_agrees_with_order() {
     }
 }
 
-/// The sort column is independent of first/last: FirstSeen* and
-/// LastSeen* with the same direction must yield identical
-/// operators and orders. Guards against a copy-paste that special-
-/// cases one column.
+/// Mutation: one sort column special-cased.
 #[test]
 fn first_and_last_seen_are_symmetric() {
     for (fs, ls) in [
@@ -240,14 +199,8 @@ fn first_and_last_seen_are_symmetric() {
     }
 }
 
-// ── Search filter: single term vs token pair ──────────────────
-//
-// The built SQL is inspected structurally (bind *values* are `$n`
-// placeholders, not literals, so only the shape is asserted). The
-// actual filtering behaviour is covered by the DB-backed integration
-// test in `pool/tests`.
-
-/// Build the query for a given search term and return its SQL text.
+// Binds are `$n` placeholders, so only the SQL shape is asserted: the filtering
+// itself is the DB-backed tests' job.
 fn sql_for_search(search: Option<&str>) -> String {
     build(PaginatedPoolsQuery {
         mode: QueryMode::Forward,
@@ -264,8 +217,6 @@ fn sql_for_search(search: Option<&str>) -> String {
     .to_owned()
 }
 
-/// The single-token form matches the address or either token, via one
-/// `EXISTS` over both mints — and never touches the pair branch.
 #[test]
 fn single_term_uses_address_or_either_token() {
     let sql = sql_for_search(Some("SOL"));
@@ -279,9 +230,6 @@ fn single_term_uses_address_or_either_token() {
     );
 }
 
-/// A `X/Y` term becomes a pair filter: one token per side, on the two
-/// distinct mint columns, both orderings accepted — and it drops the
-/// address / either-token single-term shape entirely.
 #[test]
 fn pair_term_requires_one_token_per_side() {
     let sql = sql_for_search(Some("SOL/USDC"));
@@ -310,8 +258,6 @@ fn pair_term_requires_one_token_per_side() {
     );
 }
 
-/// A blank side ("SOL/") collapses to the single-term search on the
-/// non-empty side, not a pair.
 #[test]
 fn pair_with_blank_side_falls_back_to_single() {
     let sql = sql_for_search(Some("SOL/"));
@@ -325,7 +271,6 @@ fn pair_with_blank_side_falls_back_to_single() {
     );
 }
 
-/// No search term → no token filtering at all.
 #[test]
 fn no_search_term_adds_no_token_filter() {
     let sql = sql_for_search(None);
@@ -335,14 +280,8 @@ fn no_search_term_adds_no_token_filter() {
     );
 }
 
-// ── Snapshot fence ────────────────────────────────────────────
-//
-// The fence is what makes a keyset cursor legal over `last_seen_at`, a
-// column rewritten on every event. These assert its *presence in the
-// SQL*; that it actually holds the traversal together is the DB-backed
-// `pool_pagination` tests' job.
-
-/// Build the listing SQL for a sort and an optional fence.
+// The fence's presence in the SQL only; that it holds a traversal together is
+// the `pool_pagination` integration tests' job.
 fn sql_for_fence(sort: PoolSort, as_of: Option<DateTime<Utc>>) -> String {
     build(PaginatedPoolsQuery {
         mode: QueryMode::Forward,
@@ -363,8 +302,6 @@ fn instant() -> DateTime<Utc> {
     Utc.timestamp_opt(1_800_000_000, 0).unwrap()
 }
 
-/// A fenced traversal reads only rows at or below its anchor — the upper
-/// bound is what turns a mutable sort key into a shrink-only result set.
 #[test]
 fn fence_bounds_last_seen_when_set() {
     for sort in [PoolSort::LastSeenDesc, PoolSort::LastSeenAsc] {
@@ -376,9 +313,7 @@ fn fence_bounds_last_seen_when_set() {
     }
 }
 
-/// No fence, no bound. The repository omits it on an immutable sort
-/// column, and the builder must not invent one — fencing `first_seen_at`
-/// would hide freshly discovered pools for no reason.
+/// Mutation: the builder inventing a bound, which would hide freshly discovered pools.
 #[test]
 fn no_fence_leaves_the_listing_unbounded() {
     let sql = sql_for_fence(PoolSort::FirstSeenDesc, None);
@@ -388,8 +323,6 @@ fn no_fence_leaves_the_listing_unbounded() {
     );
 }
 
-/// The count is the mirror of the listing bound: same filters, opposite
-/// side of the same instant.
 #[test]
 fn touched_since_count_reads_above_the_fence() {
     let sql = build_touched_since_count(TouchedSinceQuery {
@@ -407,9 +340,7 @@ fn touched_since_count_reads_above_the_fence() {
     );
 }
 
-/// The count answers "how many of the pools *you are looking at* have
-/// left", so it must carry the listing's filters. A bare `COUNT(*)` over
-/// the whole table would report pools the reader filtered out.
+/// Mutation: a bare `COUNT(*)`, which would report pools the reader filtered out.
 #[test]
 fn touched_since_count_applies_the_same_filters() {
     let sql = build_touched_since_count(TouchedSinceQuery {

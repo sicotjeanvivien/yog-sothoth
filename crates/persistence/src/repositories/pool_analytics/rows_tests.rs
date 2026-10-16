@@ -1,8 +1,4 @@
-//! Unit tests for `TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics)`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right (key, value) pair, and that errors surface
-//! as `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics)`.
 
 use std::str::FromStr;
 
@@ -20,10 +16,8 @@ fn valid_row() -> PoolAnalyticsRow {
         pool_address: VALID_POOL.into(),
         tvl_usd: Some(BigDecimal::from_str("1234.56").unwrap()),
         volume_24h_usd: Some(BigDecimal::from_str("789.01").unwrap()),
-        // The three shares sum back to `fees_24h_usd` exactly, as the view
-        // guarantees — 2.46 + 0.10 + 9.78 = 12.34. The happy-path test asserts
-        // that identity, so a fixture edited to a non-additive triple fails
-        // here rather than quietly weakening the other cases.
+        // ⚠️ The three shares sum to `fees_24h_usd` (2.46 + 0.10 + 9.78): the happy path
+        // asserts it, so a non-additive edit fails there.
         fees_24h_usd: Some(BigDecimal::from_str("12.34").unwrap()),
         protocol_fees_24h_usd: Some(BigDecimal::from_str("2.46").unwrap()),
         referral_fees_24h_usd: Some(BigDecimal::from_str("0.10").unwrap()),
@@ -32,8 +26,6 @@ fn valid_row() -> PoolAnalyticsRow {
         swap_buckets_priced_24h: 24,
     }
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn try_from_valid_row_returns_pair_with_all_fields_mapped() {
@@ -65,9 +57,7 @@ fn try_from_valid_row_returns_pair_with_all_fields_mapped() {
         analytics.lp_fees_24h_usd,
         Some(Decimal::from_str("9.78").unwrap())
     );
-    // The conversion must not disturb the additivity the view produces. This
-    // asserts the mapping, not the SQL — `fee_split.rs` is where the split
-    // itself is proved.
+    // The mapping only; the split itself is proved in `fee_split.rs`.
     assert_eq!(
         analytics.lp_fees_24h_usd.unwrap()
             + analytics.protocol_fees_24h_usd.unwrap()
@@ -81,8 +71,6 @@ fn try_from_valid_row_returns_pair_with_all_fields_mapped() {
 
 #[test]
 fn try_from_with_none_metrics_returns_pair_with_none_analytics() {
-    // No TVL data, no recent swap activity. Maps to PoolAnalytics with
-    // both fields None — never partial.
     let row = PoolAnalyticsRow {
         tvl_usd: None,
         volume_24h_usd: None,
@@ -101,9 +89,7 @@ fn try_from_with_none_metrics_returns_pair_with_none_analytics() {
 
 #[test]
 fn try_from_partial_coverage_carries_both_counters() {
-    // The case the counters exist for: a window that traded for 24 hours but
-    // could only be valued for 14 of them. The sum is a sub-total — the pair
-    // of counters is the only thing that says so.
+    // Traded 24 hours, valued 14: the counters are what says the sum is a sub-total.
     let row = PoolAnalyticsRow {
         swap_buckets_24h: 24,
         swap_buckets_priced_24h: 14,
@@ -122,7 +108,6 @@ fn try_from_partial_coverage_carries_both_counters() {
 
 #[test]
 fn try_from_with_only_tvl_returns_pair_with_only_tvl() {
-    // TVL known but no swap in the last 24h.
     let row = PoolAnalyticsRow {
         volume_24h_usd: None,
         ..valid_row()
@@ -133,8 +118,6 @@ fn try_from_with_only_tvl_returns_pair_with_only_tvl() {
     assert!(analytics.tvl_usd.is_some());
     assert_eq!(analytics.volume_24h_usd, None);
 }
-
-// ── Pubkey validation ────────────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {
@@ -148,8 +131,6 @@ fn try_from_invalid_pool_address_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── BigDecimal → Decimal overflow ────────────────────────────────────
 
 #[test]
 fn try_from_tvl_overflowing_decimal_returns_integrity_with_field() {

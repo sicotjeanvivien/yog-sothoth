@@ -5,17 +5,8 @@ use crate::repositories::helper::{
     convert_string_to_pubkey,
 };
 
-/// Row shape returned by SELECTs on `meteora_dlmm_pool_properties`
-/// (baseline §9). Mirrors every column of the table.
-///
-/// Every column is nullable, and they are NULL **together**: all six come from
-/// one read of one `LbPair` account, so a row is either fully resolved or a
-/// placeholder for a pool the enrichment queue has not reached. Unlike cp-amm's
-/// satellite there is no field with an independent failure mode.
-///
-/// The signed widths are one step up from the on-chain types — INTEGER for a
-/// `u16`, BIGINT for a `u32` — because Postgres has no unsigned integers. See
-/// baseline §9.
+/// Row shape of `meteora_dlmm_pool_properties` (baseline §9). The columns are NULL
+/// together, and each is one signed width above its on-chain type.
 pub(super) struct MeteoraDlmmPoolPropertiesRow {
     pub(super) pool_address: String,
     pub(super) bin_step: Option<i32>,
@@ -26,9 +17,7 @@ pub(super) struct MeteoraDlmmPoolPropertiesRow {
     pub(super) protocol_share: Option<i32>,
 }
 
-/// Every column is nullable, so each read goes through `convert_optional`: the
-/// narrowing guard stays in `helper::parser`, and a corrupt row surfaces as
-/// `Integrity` rather than being silently truncated.
+/// A value outside its on-chain type surfaces as `Integrity`, not truncated.
 impl TryFrom<MeteoraDlmmPoolPropertiesRow> for MeteoraDlmmPoolProperties {
     type Error = RepositoryError;
 

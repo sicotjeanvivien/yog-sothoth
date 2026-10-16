@@ -1,39 +1,8 @@
-//! DAMM v2 pool-properties satellite repository (baseline §8).
-//!
-//! Holds the pool properties that only exist for cp-amm, kept out of the
-//! cross-protocol `pools` registry so no protocol carries NULL columns for
-//! another protocol's concepts.
-//!
-//! One `Pg` type, two **generic** traits, one per consumer:
-//!
-//! - [`PoolAccountResolver`] — yog-context's enrichment queue and its write.
-//!   Generic trait, per-protocol implementation: the queue below filters on this
-//!   protocol, the write accepts only this protocol's variant.
-//! - [`PoolPropertiesLookup`] — the api's read for the pool detail sheet. Also
-//!   generic, so the reading service holds `Vec<Arc<dyn PoolPropertiesLookup>>`
-//!   and names no protocol.
-//!
-//! # One table, one writer
-//!
-//! This repository writes **this satellite and nothing else**. It used to also
-//! write `pools`' neutral columns, in a transaction, because one decoded account
-//! carried both — which made the cp-amm satellite a co-owner of the
-//! cross-protocol registry. The decode now yields the two halves separately and
-//! the caller writes each through its own repository.
-//!
-//! The transaction went with it. It was the only one in this crate, and it
-//! protected nothing observable: the pool-detail read issues two separate
-//! queries (so it can already see a torn state, which its `Option`-everywhere
-//! DTO expects), and `list_unresolved` reads one snapshot and simply re-proposes
-//! a half-written pool, which converges on the next tick.
-//!
-//! # No write trait of its own
-//!
-//! The indexer used to write the fee shape here from the genesis blob, through a
-//! `MeteoraDammV2PoolPropertiesRepository` trait. That is gone: the indexer no
-//! longer writes property values at all, it raises `pools.needs_refresh` and
-//! yog-context re-reads the account. Both traits left are protocol-agnostic —
-//! nothing in this crate's public surface names cp-amm any more.
+//! DAMM v2 pool-properties satellite (baseline §8): the cp-amm-only properties,
+//! kept out of the cross-protocol `pools` registry. Read by the api through
+//! [`PoolPropertiesLookup`], resolved by yog-context through [`PoolAccountResolver`].
+//! It writes this satellite and nothing else: the registry columns of the same
+//! account go through `PoolRepository`, without a transaction.
 
 mod rows;
 
@@ -67,9 +36,8 @@ impl PoolPropertiesLookup for PgMeteoraDammV2PoolPropertiesRepository {
         Protocol::MeteoraDammV2
     }
 
-    /// No protocol predicate needed here, unlike
-    /// [`PoolAccountResolver::list_unresolved`]: this reads the satellite by
-    /// primary key, and a pool of another protocol simply has no row in it.
+    /// No protocol predicate, unlike [`PoolAccountResolver::list_unresolved`]:
+    /// a pool of another protocol has no row in this satellite.
     async fn find_by_pool(
         &self,
         pool_address: &Pubkey,
@@ -102,40 +70,11 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
         Protocol::MeteoraDammV2
     }
 
-    /// The protocol predicate is **required**, not decorative — see the trait
-    /// doc. Joining this satellite does not scope the query on its own: "no
-    /// satellite row yet" is one of the conditions that makes a pool a
-    /// candidate, and that is true of every pool of every other protocol,
-    /// forever. Only `p.protocol` excludes them.
-    ///
-    /// # Two reasons a pool is proposed
-    ///
-    /// **Never resolved** — a NULL column, the original case. And **stale**:
-    /// `p.needs_refresh`, raised by the indexer when an event changed a property
-    /// it no longer writes itself. The second is what lets a one-shot back-fill
-    /// track values that move, without polling every pool on a timer.
-    ///
-    /// The flag is cleared by the *registry* write, which the caller issues
-    /// last — so a pool re-enters the queue until the whole refresh has landed.
-    ///
-    /// # Why `base_fee_kind` is not in the predicate
-    ///
-    /// It is the one account-derived property that can legitimately stay NULL
-    /// after a *successful* resolution: cp-amm may gain a `BaseFeeMode` this
-    /// build cannot map. Testing it here would put every such pool back in the
-    /// queue on every cycle, forever — and with `ORDER BY first_seen_at` and a
-    /// capped batch, those pools would pile up at the head and starve the ones
-    /// behind, which is precisely the failure this query's protocol filter
-    /// exists to prevent.
-    ///
-    /// `has_dynamic_fee` stands in for the pair instead. It is written by the
-    /// same call and is **always** decodable (a flag byte at a fixed offset), so
-    /// it is NULL exactly when the fee shape has never been resolved, and never
-    /// merely because a value was undecodable. A pool whose mode we cannot map
-    /// therefore leaves the queue with the shape it could get — and is not
-    /// re-proposed by a later build that learns the mode, which is the accepted
-    /// cost of not starving the queue.
+    /// Pools never resolved (a NULL column) or flagged `needs_refresh`, oldest first.
+    /// The flag is lowered by the registry write, which the caller issues last.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
+        // ⚠️ Not `base_fee_kind`: NULL for a mode this build cannot map, it would requeue the
+        // pool every cycle and starve the batch. `has_dynamic_fee` always decodes.
         let rows = sqlx::query!(
             r#"
             SELECT p.pool_address
@@ -153,6 +92,7 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             LIMIT $1
             "#,
             limit,
+            // ⚠️ Required: a pool of another protocol has no satellite row, forever.
             Protocol::MeteoraDammV2.as_str(),
         )
         .fetch_all(&self.pool)
@@ -164,34 +104,9 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             .collect()
     }
 
-    /// One write, to this satellite only.
-    ///
-    /// The neutral columns of the same account read go through
-    /// [`yog_core::domain::PoolRepository::set_registry_properties`] — one table, one
-    /// writer. The caller sequences the two: **this first, the registry last**,
-    /// because the registry write is what lowers `pools.needs_refresh`. A failure
-    /// here therefore leaves the flag raised and the pool queued, rather than
-    /// stranding a half-refreshed pool.
-    ///
-    /// An upsert, not an `UPDATE`: the satellite row is not created with the
-    /// pool, so an `UPDATE` would silently do nothing on first resolution.
-    ///
-    /// Rejects a payload of another protocol rather than silently doing nothing:
-    /// the worker routes by [`PoolAccountProperties::protocol`], so a mismatch
-    /// here is a wiring bug, not a runtime condition.
-    ///
-    /// It is not the only guard, and it is not the last one. It answers "is this
-    /// payload mine?"; the worker screens "is this *pool* mine" upstream
-    /// (`context/src/application/workers/pool_account.rs` skips a pool whose
-    /// decoded account disagrees with the queue's protocol); and since
-    /// migration 040 the schema backs both — a generated `protocol` column and
-    /// a composite foreign key onto `pools (pool_address, protocol)`.
-    ///
-    /// So a cp-amm payload aimed at a DLMM pool is unreachable through the
-    /// worker *and* refused by the database. The constraint is there for what
-    /// the guards cannot cover: a refactor, a second writer, or a hand-run
-    /// repair. It surfaces as [`yog_core::RepositoryError::Conflict`], so any
-    /// such caller inherits skip-and-log rather than a silent success.
+    /// Upserts this satellite only: its row is not created with the pool. Written before
+    /// the registry, whose write lowers `needs_refresh`. A payload of another protocol is
+    /// refused here, and a cp-amm row on another protocol's pool by the composite foreign key.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
@@ -204,32 +119,14 @@ impl PoolAccountResolver for PgMeteoraDammV2PoolPropertiesRepository {
             )));
         };
 
-        // u8 → i16 (SMALLINT) is always lossless.
         let (protocol_pct, referral_pct) = (
             i16::from(properties.protocol_fee_percent),
             i16::from(properties.referral_fee_percent),
         );
         let base_fee_kind = properties.base_fee_kind.map(|kind| kind.as_str());
 
-        // The decay curve, or six NULLs — converted as a unit, and **dropped as
-        // a unit** rather than propagated with `?`.
-        //
-        // ⚠️ `?` here would sacrifice the whole satellite write for one optional
-        // field: the percents, the fee shape and the dynamic-fee flag would all
-        // fail to land because a curve did not fit. Worse, the pool would then
-        // never resolve at all — the worker returns before
-        // `set_registry_properties`, so `needs_refresh` stays raised and
-        // `props.pool_address IS NULL` stays true, and the pool occupies a slot
-        // of every batch forever while logging a warning. That is the exact
-        // starvation `list_unresolved` is built to avoid, and the same rule the
-        // decoder states one layer up: **an optional field must cost only
-        // itself**.
-        //
-        // Not hypothetical: cp-amm's `validate` bounds `cliff_fee_numerator`
-        // (max fee), `reduction_factor` (min/max fee) and `activation_point`
-        // (a timestamp), but bounds `period_frequency` by nothing beyond
-        // `!= 0` — and pool creation is permissionless, so a `u64` past
-        // `i64::MAX` is a value someone can write on chain today.
+        // ⚠️ Dropped as a unit, not `?`: a curve that does not fit (cp-amm bounds `period_frequency`
+        // by `!= 0` only) must not sink the whole write and keep the pool queued forever.
         let scheduler = properties.fee_scheduler.and_then(|s| {
             Some((
                 convert_u64_to_i64(s.cliff_fee_numerator, "cliff_fee_numerator").ok()?,

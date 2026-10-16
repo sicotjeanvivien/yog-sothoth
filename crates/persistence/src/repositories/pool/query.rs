@@ -1,19 +1,8 @@
-//! SQL construction for the paginated pool listing.
+//! SQL of the paginated pool listing: dynamic `ORDER BY`, keyset predicate,
+//! snapshot fence and filters.
 //!
-//! Isolated from the repository so `pool.rs` stays an orchestrator
-//! (build → execute → map → assemble Page) rather than a wall of
-//! inline SQL. This module owns the dynamic `ORDER BY`, the keyset
-//! cursor predicate, and the optional search filter. The row type
-//! produced by this query lives in `rows.rs`; the repository binds
-//! the two together.
-//!
-//! Trade-off: dynamic ORDER BY rules out `sqlx::query!`, so these
-//! queries are NOT verified at compile time against the schema.
-//! Safety against injection is preserved because the column and
-//! direction come from closed enums (never user strings); only the
-//! cursor/search VALUES are user-supplied, and they go through
-//! `push_bind`. Correctness against the schema is covered by
-//! integration tests rather than the macro.
+//! ⚠️ Runtime SQL, not checked by the sqlx macros: only the integration tests
+//! guard it against the schema. Columns and directions come from closed enums; values are bound.
 
 use chrono::{DateTime, Utc};
 use sqlx::types::BigDecimal;
@@ -29,15 +18,10 @@ pub(super) struct PaginatedPoolsQuery {
     pub(super) cursor_sort_value: Option<DateTime<Utc>>,
     pub(super) cursor_pool_address: Option<String>,
     pub(super) search: Option<String>,
-    /// Exact base-fee tier filter (basis points), already converted to the
-    /// `NUMERIC`-compatible `BigDecimal` by the repository. `None` leaves the
-    /// fee dimension unfiltered.
+    /// Exact base-fee tier, in basis points. `None` leaves the fee unfiltered.
     pub(super) fee_bps: Option<BigDecimal>,
-    /// Snapshot fence of the traversal, minted by the repository. When set,
-    /// the listing reads only `last_seen_at <= as_of`, which keeps a mutable
-    /// sort key from moving rows across the cursor mid-traversal — see
-    /// [`yog_core::domain::PoolPage`]. `None` on a sort over an immutable
-    /// column, which needs no fence.
+    /// When set, the listing reads only `last_seen_at <= as_of` — see
+    /// [`yog_core::domain::PoolPage`].
     pub(super) as_of: Option<DateTime<Utc>>,
     pub(super) fetch_limit: i64,
 }
@@ -50,9 +34,8 @@ pub(super) struct TouchedSinceQuery {
     pub(super) fee_bps: Option<BigDecimal>,
 }
 
-/// The physical column name for a sort column. Returned as a static
-/// str (never user input) so it is safe to interpolate directly into
-/// the SQL text.
+/// The physical column of a sort column: a static str, never user input, so it
+/// is interpolated into the SQL text.
 fn column_sql(col: PoolSortColumn) -> &'static str {
     match col {
         PoolSortColumn::FirstSeen => "first_seen_at",
@@ -60,27 +43,16 @@ fn column_sql(col: PoolSortColumn) -> &'static str {
     }
 }
 
-/// Resolve the effective SQL ordering for the (sort, mode) pair.
-///
-/// The displayed order is defined by `sort`. A `Backward` traversal
-/// runs the query in the opposite physical order (so the keyset
-/// predicate selects the rows just before the cursor); the repository
-/// reverses the result afterwards to restore display order.
-///
-/// Returns `(primary_dir, tiebreak_dir)` as SQL keywords for the sort
-/// column and the `pool_address` tiebreaker respectively.
+/// `(primary_dir, tiebreak_dir)` for the sort column and the `pool_address`
+/// tiebreak. ⚠️ `Backward` runs the opposite physical order; the repository
+/// reverses the result to restore display order.
 fn effective_order(sort: PoolSort, mode: QueryMode) -> (&'static str, &'static str) {
-    // Natural (forward) directions per sort.
     let (asc_primary, asc_tiebreak) = if sort.is_ascending() {
-        // sort value ASC → tiebreak by address ASC for determinism
         (true, true)
     } else {
-        // sort value DESC → tiebreak by address ASC (matches the
-        // historical first_seen_at DESC, pool_address ASC ordering)
         (false, true)
     };
 
-    // Backward traversal flips both.
     let (primary_asc, tiebreak_asc) = match mode {
         QueryMode::Forward => (asc_primary, asc_tiebreak),
         QueryMode::Backward => (!asc_primary, !asc_tiebreak),
@@ -92,13 +64,8 @@ fn effective_order(sort: PoolSort, mode: QueryMode) -> (&'static str, &'static s
     )
 }
 
-/// The keyset comparison operator for the primary column, given the
-/// natural sort direction and traversal mode.
-///
-/// Forward over an ASC sort wants rows with value strictly greater
-/// than the cursor; forward over DESC wants strictly lesser. Backward
-/// flips it. The tiebreak comparison on `pool_address` follows the
-/// tiebreak direction.
+/// The keyset comparison operators for the sort column and the `pool_address`
+/// tiebreak, both strict.
 fn keyset_operators(sort: PoolSort, mode: QueryMode) -> (&'static str, &'static str) {
     let primary_gt = match (sort.is_ascending(), mode) {
         (true, QueryMode::Forward) => true,
@@ -106,8 +73,6 @@ fn keyset_operators(sort: PoolSort, mode: QueryMode) -> (&'static str, &'static 
         (false, QueryMode::Forward) => false,
         (false, QueryMode::Backward) => true,
     };
-    // Tiebreak direction mirrors the effective tiebreak order: ASC
-    // tiebreak → '>' , DESC tiebreak → '<'.
     let (_, tiebreak_dir) = effective_order(sort, mode);
     let tiebreak_gt = tiebreak_dir == "ASC";
 
@@ -146,11 +111,9 @@ fn parse_search(raw: &str) -> ParsedSearch {
     }
 }
 
-/// Push an `EXISTS` predicate: the token at the pool's `mint_col`
-/// column has a symbol or name matching `term` (case-insensitive
-/// substring). `mint_col` is a caller-supplied static column name
-/// (never user input), so it is interpolated directly; `term` is
-/// bound.
+/// Pushes an `EXISTS`: the token at `mint_col` has a symbol or name containing
+/// `term`, case-insensitive. `mint_col` is a static column name, interpolated;
+/// `term` is bound.
 fn push_side_match(qb: &mut QueryBuilder<Postgres>, mint_col: &str, term: &str) {
     qb.push("EXISTS (SELECT 1 FROM token_metadata tm WHERE tm.mint = pools.");
     qb.push(mint_col);
@@ -161,30 +124,18 @@ fn push_side_match(qb: &mut QueryBuilder<Postgres>, mint_col: &str, term: &str) 
     qb.push(" || '%')))");
 }
 
-/// Push the row filters — free-text search and fee tier — shared by the
-/// listing and by the `touched_since` count.
-///
-/// Shared on purpose, and not by copy: the count answers "how many pools the
-/// reader is looking at have left the traversal", so it must see **exactly**
-/// the population the listing sees. A count that ignored these filters would
-/// report pools the reader filtered out.
+/// Pushes the search and fee-tier filters.
+/// ⚠️ Shared by the listing and the `touched_since` count, not copied: the count
+/// must see exactly the population the listing sees.
 fn push_filters(
     qb: &mut QueryBuilder<Postgres>,
     search: Option<String>,
     fee_bps: Option<BigDecimal>,
 ) {
-    // ── Search filter ────────────────────────────────────────────
-    // A term containing `/` ("SOL/USDC") is a *pair* filter: the pool
-    // must hold one token matching each side, on the two distinct
-    // sides. Otherwise the term is a single free-text match on the
-    // address or either token's symbol/name. Parsing the `/` here (not
-    // upstream) keeps every search-semantics decision in one place —
-    // this module already owns the address-vs-symbol interpretation.
     match search.as_deref().map(parse_search) {
         Some(ParsedSearch::Pair(left, right)) => {
-            // (a matches X AND b matches Y) OR (a matches Y AND b matches X).
-            // Reading each side off a distinct mint column enforces that
-            // the two matched tokens are different by construction.
+            // Each side read off a distinct mint column: the two matched tokens
+            // are different by construction.
             qb.push(" AND ((");
             push_side_match(qb, "token_a_mint", &left);
             qb.push(" AND ");
@@ -213,22 +164,14 @@ fn push_filters(
         None => {}
     }
 
-    // ── Fee-tier filter ──────────────────────────────────────────
-    // Exact match on the base fee. The value is a closed set (a tier
-    // returned by `list_fee_tiers`), but it is still user-supplied, so
-    // it goes through `push_bind` like every other value.
     if let Some(fee) = fee_bps {
         qb.push(" AND fee_bps = ");
         qb.push_bind(fee);
     }
 }
 
-/// Count the pools that left the traversal by being touched after its fence.
-///
-/// The mirror image of the listing's `last_seen_at <= as_of`: same filters,
-/// opposite side of the same instant. Under a descending sort these are the
-/// rows that moved to the head of the list, past a reader who has already been
-/// there — counting them is what keeps their absence from being silent.
+/// Counts the pools that left the traversal by being touched after its fence:
+/// same filters, opposite side of the listing's `last_seen_at <= as_of`.
 pub(super) fn build_touched_since_count(q: TouchedSinceQuery) -> QueryBuilder<Postgres> {
     let mut qb: QueryBuilder<Postgres> =
         QueryBuilder::new("SELECT COUNT(*) FROM pools WHERE last_seen_at > ");
@@ -243,15 +186,11 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<Postgres> {
     let (primary_order, tiebreak_order) = effective_order(q.sort, q.mode);
 
     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-        // NOTE: runtime SQL — NOT checked by the sqlx macros. The column list
-        // must stay in lockstep with `PoolRow` by hand; the DB-backed
-        // integration tests are the only guard. The cp-amm fee properties left
-        // this list with migration 036 (satellite table).
+        // ⚠️ Kept in step with `PoolRow` by hand: no macro checks this list.
         "SELECT pool_address, protocol, token_a_mint, token_b_mint, \
          fee_bps, first_seen_at, last_seen_at FROM pools WHERE 1=1",
     );
 
-    // ── Keyset cursor predicate ──────────────────────────────────
     if let (Some(value), Some(addr)) = (q.cursor_sort_value, q.cursor_pool_address.clone()) {
         let (primary_op, tiebreak_op) = keyset_operators(q.sort, q.mode);
         qb.push(" AND (");
@@ -267,12 +206,8 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<Postgres> {
         qb.push("))");
     }
 
-    // ── Snapshot fence ───────────────────────────────────────────
-    // Pins the traversal to the instant it started. `last_seen_at` only
-    // grows, so this upper bound makes the result set shrink-only: a pool
-    // touched mid-traversal cannot move across the cursor, it leaves. Only
-    // ever set for a sort over `last_seen_at` — an immutable sort column
-    // needs no fence, and fencing it would hide rows for nothing.
+    // `last_seen_at` only grows, so this bound makes the result set shrink-only:
+    // a pool touched mid-traversal leaves it instead of crossing the cursor.
     if let Some(as_of) = q.as_of {
         qb.push(" AND last_seen_at <= ");
         qb.push_bind(as_of);
@@ -280,7 +215,6 @@ pub(super) fn build(q: PaginatedPoolsQuery) -> QueryBuilder<Postgres> {
 
     push_filters(&mut qb, q.search, q.fee_bps);
 
-    // ── Order + limit ────────────────────────────────────────────
     qb.push(" ORDER BY ");
     qb.push(sort_col);
     qb.push(format!(

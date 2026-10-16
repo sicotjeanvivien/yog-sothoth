@@ -11,9 +11,7 @@ use crate::repositories::helper::{
     convert_optional, convert_string_to_pubkey, convert_string_to_signature,
 };
 
-/// Row shape returned by SELECTs on `swap_events`. Mirrors every
-/// column of the table; used by `find_by_pool_paginated` in both
-/// traversal modes.
+/// Row shape of the swap events table.
 #[derive(sqlx::FromRow)]
 pub(super) struct MeteoraDammV2SwapEventRow {
     pub(super) pool_address: String,

@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<PoolSwapFlowRow> for PoolSwapFlow`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid ones
-//! map each direction to its own field and that errors surface as
-//! `RepositoryError::Integrity`. (The happy path against the real view is
-//! covered by the DB-backed integration test in `tests/swap_flow.rs`.)
+//! DB-free tests of `TryFrom<PoolSwapFlowRow> for PoolSwapFlow`.
 
 use rust_decimal::Decimal;
 use yog_core::{RepositoryError, domain::PoolSwapFlow};
@@ -15,8 +10,7 @@ const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
 fn valid_row() -> PoolSwapFlowRow {
     PoolSwapFlowRow {
         pool_address: VALID_POOL.into(),
-        // Two distinct values — a direction swap in the TryFrom would
-        // surface as a mismatched assert.
+        // Mutation: the two directions swapped in the TryFrom.
         volume_a_to_b_usd: Some("1234.5".parse().unwrap()),
         volume_b_to_a_usd: Some("678.9".parse().unwrap()),
     }
@@ -33,10 +27,7 @@ fn try_from_valid_row_maps_each_direction_to_its_field() {
 
 #[test]
 fn try_from_null_volumes_maps_to_none_rather_than_zero() {
-    // The query returns NULL for a window that was not entirely valuable. It
-    // must survive the conversion AS an absence: mapping it to `Decimal::ZERO`
-    // here would re-introduce, one layer lower, the exact collapse the
-    // repository stopped doing (migration 006).
+    // Mutation: a NULL (window not entirely valuable) mapped to `Decimal::ZERO`.
     let row = PoolSwapFlowRow {
         pool_address: VALID_POOL.into(),
         volume_a_to_b_usd: None,

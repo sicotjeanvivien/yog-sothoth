@@ -4,11 +4,8 @@ use crate::repositories::helper::{
 use bigdecimal::BigDecimal;
 use yog_core::{RepositoryError, domain::PoolLiquidityFlow};
 
-/// Row shape for the liquidity-flow query. All three `NUMERIC` columns are
-/// nullable, for the same reason and with the same meaning: the flow sums are
-/// NULL for a window that was not entirely valuable, `tvl_usd` is NULL for a
-/// pool the TVL view cannot value. Every one of them must reach the detector
-/// as "unvaluable" rather than as a zero it cannot tell from a real one.
+/// Row shape of the liquidity-flow query. A NULL sum (window not entirely valuable)
+/// or `tvl_usd` (pool not valued) must reach the detector as unvaluable, not as zero.
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolLiquidityFlowRow {
     pub(super) pool_address: String,

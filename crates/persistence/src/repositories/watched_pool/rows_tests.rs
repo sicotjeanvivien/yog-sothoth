@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<WatchedPoolRow> for WatchedPool`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right entry, that each fallible field has its
-//! own validation path, and that errors surface as
-//! `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<WatchedPoolRow> for WatchedPool`.
 
 use chrono::Utc;
 use yog_core::{
@@ -25,8 +20,6 @@ fn valid_row() -> WatchedPoolRow {
     }
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[test]
 fn try_from_valid_row_returns_watched_pool_with_all_fields_mapped() {
     let row = valid_row();
@@ -43,9 +36,7 @@ fn try_from_valid_row_returns_watched_pool_with_all_fields_mapped() {
 
 #[test]
 fn try_from_inactive_with_none_note_returns_corresponding_fields() {
-    // Pin the two passthrough fields that don't go through
-    // validation: the active boolean (catches accidental hardcode)
-    // and the note Option (catches Some/None inversion).
+    // Mutation: `active` hardcoded, or `note` inverted between Some and None.
     let row = WatchedPoolRow {
         active: false,
         note: None,
@@ -57,8 +48,6 @@ fn try_from_inactive_with_none_note_returns_corresponding_fields() {
     assert!(!watched.active);
     assert!(watched.note.is_none());
 }
-
-// ── Pubkey validation ────────────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {
@@ -72,8 +61,6 @@ fn try_from_invalid_pool_address_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── Enum validation ──────────────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_protocol_returns_integrity_with_message() {

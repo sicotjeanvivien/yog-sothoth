@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<GlobalAnalyticsRow> for GlobalAnalytics`.
-//!
-//! Pure parser tests, no DB. Build rows by hand and assert that valid
-//! ones map field-for-field, that absent USD aggregates stay `None`
-//! (partial-coverage contract), and that a BigDecimal beyond `Decimal`
-//! range surfaces as `RepositoryError::Integrity` naming the field.
+//! DB-free tests of `TryFrom<GlobalAnalyticsRow> for GlobalAnalytics`.
 
 use std::str::FromStr;
 
@@ -23,8 +18,6 @@ fn valid_row() -> GlobalAnalyticsRow {
         swap_buckets_priced_24h: 1246,
     }
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn try_from_valid_row_maps_all_fields() {
@@ -49,9 +42,7 @@ fn try_from_valid_row_maps_all_fields() {
 
 #[test]
 fn try_from_partial_coverage_carries_both_counters() {
-    // The measured shape of the defect this pair was added for: 1246 buckets
-    // with swaps, 767 of them valuable. The sum is a sub-total, and only these
-    // two counters say so.
+    // Only the two counters say the sum is a sub-total.
     let row = GlobalAnalyticsRow {
         swap_buckets_24h: 1246,
         swap_buckets_priced_24h: 767,
@@ -65,12 +56,9 @@ fn try_from_partial_coverage_carries_both_counters() {
     assert_eq!(analytics.swap_buckets_priced_24h, 767);
 }
 
-// ── Empty universe / partial coverage ────────────────────────────────
-
 #[test]
 fn try_from_all_usd_none_keeps_none_and_count() {
-    // No priceable pool and no recent activity: every SUM is NULL, but the
-    // count is a non-null BIGINT (here 0). USD fields stay None, never 0.
+    // Every SUM is NULL, the count a non-null 0: USD fields stay None, never 0.
     let row = GlobalAnalyticsRow {
         total_tvl_usd: None,
         pools_priced: 0,
@@ -90,7 +78,6 @@ fn try_from_all_usd_none_keeps_none_and_count() {
 
 #[test]
 fn try_from_tvl_present_volume_absent() {
-    // Pools priced (TVL known) but no swap in the last 24h.
     let row = GlobalAnalyticsRow {
         volume_24h_usd: None,
         fees_24h_usd: None,
@@ -104,8 +91,6 @@ fn try_from_tvl_present_volume_absent() {
     assert_eq!(analytics.volume_24h_usd, None);
     assert_eq!(analytics.fees_24h_usd, None);
 }
-
-// ── BigDecimal → Decimal overflow ────────────────────────────────────
 
 #[test]
 fn try_from_overflowing_volume_returns_integrity_with_field() {

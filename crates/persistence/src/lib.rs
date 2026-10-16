@@ -1,14 +1,5 @@
-//! Postgres persistence layer for yog-sothoth.
-//!
-//! This crate provides concrete implementations of the repository traits
-//! defined in `yog-core`. It is consumed by both the indexer (write-heavy,
-//! event ingestion) and the api (read-heavy, dashboard queries).
-//!
-//! Each consumer process instantiates its own connection pool with its own
-//! database role. The crate itself does NOT own the pool — it is passed in
-//! at construction time. This allows different processes to operate under
-//! different Postgres roles (least privilege), while sharing the same SQL
-//! and schema definitions.
+//! Postgres implementations of the `yog-core` repository traits. ⚠️ The crate owns
+//! no pool: each process passes its own, opened under its own least-privilege role.
 
 mod backup;
 mod database;
@@ -42,6 +33,5 @@ pub use repositories::{
 };
 pub use server_info::{PgServerInfo, ServerVersions};
 
-/// Re-export [`sqlx::PgPool`] so consumers don't need to depend on sqlx directly
-/// just to type their dependency-injection wiring.
+/// Re-exported so a consumer types its wiring without depending on sqlx.
 pub use sqlx::PgPool;

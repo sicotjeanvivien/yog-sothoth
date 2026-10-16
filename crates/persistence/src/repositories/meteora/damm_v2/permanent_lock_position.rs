@@ -1,6 +1,4 @@
 //! Permanent-lock-position events repository: inserts permanent liquidity locks.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

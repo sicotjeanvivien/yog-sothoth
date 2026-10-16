@@ -1,12 +1,5 @@
-//! Postgres implementation of [`SignalRepository`] and
-//! [`SignalFeed`] — one struct, two consumer lenses.
-//!
-//! Backed by the `signals` hypertable (baseline §11). The engine's
-//! contract is append-only: a plain multi-row INSERT (signals are
-//! immutable conclusions, no `ON CONFLICT` / UPSERT path) plus the dedup
-//! read. The api's feed contract paginates with the same bidirectional
-//! keyset machinery as the swap/liquidity event repositories (static
-//! SQL, one query per traversal mode).
+//! Postgres implementation of [`SignalRepository`] (append-only INSERT and the
+//! dedup read) and [`SignalFeed`] (keyset pagination, one static query per mode).
 //!
 //! [`SignalRepository`]: yog_core::domain::SignalRepository
 //! [`SignalFeed`]: yog_core::domain::SignalFeed
@@ -29,19 +22,15 @@ use yog_core::{
     domain::{Severity, Signal, SignalCursor, SignalFeed, SignalRecord, SignalRepository},
 };
 
-/// Maximum number of rows returned in a single page, regardless of the
-/// caller's `limit`. Backstop against an oversized query if the
-/// API-layer validation is bypassed.
+/// Page size cap, whatever the caller's `limit`.
 const MAX_PAGE_SIZE: i64 = 200;
 
-/// Postgres-backed signal repository.
 #[derive(Clone)]
 pub struct PgSignalRepository {
     pool: PgPool,
 }
 
 impl PgSignalRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -54,9 +43,7 @@ impl SignalRepository for PgSignalRepository {
             return Ok(());
         }
 
-        // Variable-arity bulk insert: QueryBuilder, since the `query!` macros
-        // cannot generate a runtime-sized VALUES list (same reasoning as the
-        // token_prices batch insert).
+        // QueryBuilder: the `query!` macros cannot build a runtime-sized VALUES list.
         let mut builder = QueryBuilder::new(
             "INSERT INTO signals \
              (detector, protocol, pool_address, severity, value, threshold, message, triggered_at) ",
@@ -87,9 +74,8 @@ impl SignalRepository for PgSignalRepository {
         detector: &str,
         since: DateTime<Utc>,
     ) -> RepositoryResult<HashMap<Pubkey, Severity>> {
-        // DISTINCT ON keeps the most recent row per pool. Because the engine's
-        // dedup only ever emits an escalating severity within a window, the
-        // most recent severity is also the max — the current suppression state.
+        // The most recent row per pool: dedup only escalates within a window, so
+        // its severity is also the max.
         let rows = sqlx::query!(
             r#"
             SELECT DISTINCT ON (pool_address)
@@ -120,25 +106,9 @@ impl SignalRepository for PgSignalRepository {
 
 #[async_trait]
 impl SignalFeed for PgSignalRepository {
-    /// Paginate the signal feed with bidirectional navigation.
-    ///
-    /// Natural display order is `triggered_at DESC, id DESC` (newest
-    /// first, deterministic tie-break on the storage id).
-    ///
-    /// - `severity` and `pool` are optional exact filters, folded into
-    ///   the static SQL as `$n IS NULL OR <col> = $n` — optional
-    ///   equalities are not a dynamic query shape, so the `query_as!`
-    ///   compile check is kept.
-    /// - `cursor` + `direction` cooperate: traverse forward (older
-    ///   signals) or backward (newer signals) from the cursor position.
-    /// - `position` jumps to a list boundary (`First` = newest, `Last` =
-    ///   oldest), ignoring any cursor.
-    /// - Peek N+1 detects whether more rows exist on the queried side in
-    ///   a single query.
-    ///
-    /// Backward queries (Prev / Last) reverse the SQL ORDER BY and the
-    /// resulting vector before returning, so the caller always observes
-    /// the page in display order.
+    /// Newest first (`triggered_at DESC, id DESC`). The optional filters stay static SQL
+    /// (`$n IS NULL OR <col> = $n`), so `query_as!` still checks them. A backward query
+    /// reverses the ORDER BY, then the vector, to return the page in display order.
     async fn list(
         &self,
         severity: Option<Severity>,
@@ -259,8 +229,7 @@ impl SignalFeed for PgSignalRepository {
     ) -> RepositoryResult<Vec<SignalRecord>> {
         let capped = limit.clamp(1, MAX_PAGE_SIZE);
 
-        // Strictly-after keyset, ASC: the delivery order of a stream is
-        // chronological, unlike the feed's DESC display order.
+        // ASC: a stream delivers chronologically, unlike the feed's DESC display.
         let rows: Vec<SignalRow> = sqlx::query_as!(
             SignalRow,
             r#"
@@ -297,11 +266,8 @@ impl SignalFeed for PgSignalRepository {
         let addresses: Vec<String> = pools.iter().map(|p| p.to_string()).collect();
         let capped = per_pool_limit.clamp(1, MAX_PAGE_SIZE);
 
-        // ROW_NUMBER caps the rows *per pool* in SQL, so one noisy pool
-        // cannot bloat the whole page's payload. The (pool_address,
-        // triggered_at DESC) index (baseline §11) drives the window scan.
-        // Columns come through a subquery, so sqlx sees them as nullable —
-        // the `!` markers restore the base table's constraints.
+        // ROW_NUMBER caps the rows per pool, so one noisy pool cannot bloat the page.
+        // Through a subquery sqlx sees every column nullable: `!` restores the constraints.
         let rows: Vec<SignalRow> = sqlx::query_as!(
             SignalRow,
             r#"
@@ -333,8 +299,7 @@ impl SignalFeed for PgSignalRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        // Rows arrive newest-first globally; pushing in order keeps each
-        // pool's vector newest-first too.
+        // Pushed in arrival order, each pool's vector stays newest-first.
         let mut out: HashMap<Pubkey, Vec<SignalRecord>> = HashMap::new();
         for row in rows {
             let record = SignalRecord::try_from(row)?;

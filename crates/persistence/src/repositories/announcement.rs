@@ -1,8 +1,5 @@
-//! Postgres implementation of `AnnouncementLookup`.
-//!
-//! Backed by the `announcements` operator table (baseline §10). Read
-//! path only — publication is an operator INSERT via psql (the api
-//! connects as the read-only `yog_api` role).
+//! Postgres implementation of `AnnouncementLookup`, read-only: an announcement
+//! is published by an operator INSERT.
 
 mod rows;
 
@@ -17,19 +14,15 @@ use yog_core::{
 
 use crate::repositories::helper::map_sqlx_error;
 
-/// Safety bound on the active-window read. The table is operator-curated
-/// (a handful of rows); the limit only guards against a runaway INSERT
-/// script, it is not pagination.
+/// Bound against a runaway INSERT script, not pagination.
 const ACTIVE_LIMIT: i64 = 10;
 
-/// Postgres-backed announcement read repository.
 #[derive(Clone)]
 pub struct PgAnnouncementRepository {
     pool: PgPool,
 }
 
 impl PgAnnouncementRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -38,8 +31,7 @@ impl PgAnnouncementRepository {
 #[async_trait]
 impl AnnouncementLookup for PgAnnouncementRepository {
     async fn list_active(&self, now: DateTime<Utc>) -> RepositoryResult<Vec<Announcement>> {
-        // Most severe first (the CASE mirrors the enum's escalation
-        // order — TEXT would sort alphabetically), then most recent.
+        // Most severe first — a CASE, since TEXT sorts alphabetically — then most recent.
         let rows = sqlx::query_as!(
             AnnouncementRow,
             r#"

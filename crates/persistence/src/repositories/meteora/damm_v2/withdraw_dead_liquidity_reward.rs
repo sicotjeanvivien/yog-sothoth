@@ -1,7 +1,5 @@
 //! Withdraw-dead-liquidity-reward events repository: inserts the reward share of
 //! permanently locked liquidity returned to the funder.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

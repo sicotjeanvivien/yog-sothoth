@@ -1,9 +1,5 @@
-//! Unit tests for
+//! DB-free tests of
 //! `TryFrom<MeteoraDammV2PoolPropertiesRow> for MeteoraDammV2PoolProperties`.
-//!
-//! Pure parser tests, no DB. The percent tests here were previously in
-//! `pool/rows_tests.rs` and moved with the columns in migration 036 — the guard
-//! against a corrupt SMALLINT keeps its coverage.
 
 use yog_core::{RepositoryError, domain::MeteoraDammV2PoolProperties};
 
@@ -54,8 +50,6 @@ fn try_from_null_fee_percents_maps_to_none() {
     assert!(props.referral_fee_percent.is_none());
 }
 
-/// The two column groups are written by different processes and either may land
-/// first, so a row with only the fee shape — no percents — is a normal state.
 #[test]
 fn try_from_fee_shape_without_percents_converts() {
     let row = MeteoraDammV2PoolPropertiesRow {
@@ -77,9 +71,6 @@ fn try_from_fee_shape_without_percents_converts() {
     assert_eq!(props.has_dynamic_fee, Some(true));
 }
 
-/// …and the reverse: percents resolved by yog-context before the genesis event
-/// was ever seen, which is the common case (a pool's creation is only observable
-/// if we were already watching).
 #[test]
 fn try_from_percents_without_fee_shape_converts() {
     let row = MeteoraDammV2PoolPropertiesRow {
@@ -121,8 +112,6 @@ fn try_from_invalid_pool_address_returns_integrity() {
     );
 }
 
-// ── The decay curve, rebuilt from six columns ────────────────────────
-
 fn scheduler_row() -> MeteoraDammV2PoolPropertiesRow {
     MeteoraDammV2PoolPropertiesRow {
         base_fee_kind: Some("scheduler_linear".to_string()),
@@ -148,12 +137,7 @@ fn a_complete_scheduler_row_rebuilds_its_curve() {
     assert_eq!(s.kind, BaseFeeKind::SchedulerLinear);
 }
 
-/// **All or nothing.** The six columns are written by one account read, so a row
-/// with some set and others NULL is not a partly-usable curve — it is a corrupt
-/// one. Evaluating a decay without its period length or its origin would yield a
-/// confident wrong fee, which is the very defect this work removes; `None` is
-/// the only honest answer, and every consumer already treats it as "no current
-/// fee available".
+/// Mutation: a curve built from some of its six columns, which would give a confident wrong fee.
 #[test]
 fn a_partial_scheduler_row_yields_no_curve_rather_than_half_of_one() {
     for (label, row) in [
@@ -208,9 +192,7 @@ fn a_partial_scheduler_row_yields_no_curve_rather_than_half_of_one() {
     }
 }
 
-/// The kind gate, restated on the read side because this one reads columns
-/// rather than bytes: only the two time schedulers have a time curve, whatever
-/// the other five columns happen to hold.
+/// Mutation: the kind gate dropped on the read side, which reads columns, not bytes.
 #[test]
 fn a_non_time_scheduler_kind_carries_no_curve() {
     for kind in [

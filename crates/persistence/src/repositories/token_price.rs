@@ -14,14 +14,12 @@ use yog_core::{
     domain::{TokenPrice, TokenPriceLookup, TokenPriceRepository},
 };
 
-/// Postgres-backed token price repository.
 #[derive(Clone)]
 pub struct PgTokenPriceRepository {
     pool: PgPool,
 }
 
 impl PgTokenPriceRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -34,12 +32,8 @@ impl TokenPriceRepository for PgTokenPriceRepository {
             return Ok(());
         }
 
-        // The trait states the contract; this makes breaking it loud in dev.
-        // Not a validation — filtering here would put the rule in `persistence`,
-        // and it already lives in `TokenPrice::is_storable` and in the schema.
-        // What this catches is a *new caller* that forgot to apply it, which in
-        // production would not fail visibly: it would abort the whole batch and
-        // leave a permanent hole in the price history.
+        // Not a filter: the rule lives in `TokenPrice::is_storable`. This catches in dev a caller
+        // that forgot it; in production the schema would abort the batch and leave a hole.
         debug_assert!(
             prices.iter().all(TokenPrice::is_storable),
             "insert_batch received a price the column cannot hold — the caller \
@@ -47,9 +41,7 @@ impl TokenPriceRepository for PgTokenPriceRepository {
              and every other mint in it is lost for good"
         );
 
-        // Variable-arity bulk insert: QueryBuilder is the right tool
-        // here, the `query!` macros can't generate VALUES tuples at
-        // a runtime-determined arity.
+        // QueryBuilder: the `query!` macros cannot build a runtime-sized VALUES list.
         let mut builder = QueryBuilder::new(
             "WITH kept AS (\
              INSERT INTO token_prices (mint, price_usd, price_provider, confidence, fetched_at) ",
