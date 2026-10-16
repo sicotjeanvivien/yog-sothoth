@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<TokenPriceRow> for TokenPrice`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right price, that each fallible field has its
-//! own validation path (mint Pubkey, price_provider enum), and that
-//! errors surface as `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<TokenPriceRow> for TokenPrice`.
 
 use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
@@ -25,8 +20,6 @@ fn valid_row() -> TokenPriceRow {
         fetched_at: Utc::now(),
     }
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn try_from_valid_row_returns_price_with_all_fields_mapped() {
@@ -56,8 +49,7 @@ fn try_from_with_none_confidence_returns_price_with_none() {
 
 #[test]
 fn try_from_preserves_distinct_price_and_timestamp() {
-    // Non-trivial Decimal value + distinct timestamp to verify the
-    // passthrough doesn't drop or swap anything.
+    // Mutation: the passthrough dropping or swapping a field.
     let price_usd = Decimal::new(987654321, 5); // 9876.54321
     let fetched_at = Utc::now() + Duration::seconds(123);
     let row = TokenPriceRow {
@@ -72,8 +64,6 @@ fn try_from_preserves_distinct_price_and_timestamp() {
     assert_eq!(price.fetched_at, fetched_at);
 }
 
-// ── Pubkey validation ────────────────────────────────────────────────
-
 #[test]
 fn try_from_invalid_mint_returns_integrity() {
     let row = TokenPriceRow {
@@ -86,8 +76,6 @@ fn try_from_invalid_mint_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── PriceProvider enum mapping ─────────────────────────────────────────
 
 #[test]
 fn try_from_maps_all_known_price_providers() {

@@ -1,10 +1,5 @@
-//! `PoolSettings::statement_timeout`: Postgres itself cancels a statement that
-//! outruns it, with SQLSTATE `57014`.
-//!
-//! The limit is the one bound a caller cannot enforce from the client side —
-//! dropping a query's future stops the wait, not the server. Proven here by
-//! the statement that fails, and by the same statement passing without the
-//! setting, so the failure is pinned on the setting and on nothing else.
+//! `PoolSettings::statement_timeout`: Postgres itself cancels a statement that outruns it,
+//! with SQLSTATE `57014` — and the same statement passes without the setting.
 
 use std::time::Duration;
 
@@ -13,14 +8,13 @@ use yog_persistence::{Database, PoolSettings};
 
 use super::helpers::sqlstate;
 
-/// `57014` — query_canceled, what a statement stopped by `statement_timeout`
-/// fails with.
+/// `57014` — query_canceled.
 const QUERY_CANCELED: &str = "57014";
 
 /// Longer than the limit below, by a margin that no scheduling jitter covers.
 const SLEEP: &str = "SELECT pg_sleep(0.5)";
 
-/// Open a second pool on the test's own database, with `settings`.
+/// A second pool on the test's own database, with `settings`.
 async fn reconnect(pool: &PgPool, settings: PoolSettings) -> Database {
     let url = pool.connect_options().to_url_lossy();
     Database::connect_with(url.as_str(), settings)

@@ -159,14 +159,8 @@ fn convert_bigdecimal_to_u128_should_fail_for_invalid_value() {
 
 #[test]
 fn convert_bigdecimal_to_decimal_keeps_the_exponent_of_small_values() {
-    // Found in review of PR #106. `BigDecimal::to_string()` renders this as
-    // `6.283855409573290776726186454503737E-12`, and `Decimal::from_str` on
-    // that form fills its 28-digit scale with the mantissa, DROPS the exponent
-    // and returns `Ok` — 6.28e-12 became 6.28, a factor of 10^12, silently.
-    //
-    // A 6.28e-12 USD fee published as 6.28 USD is exactly the defect the
-    // coverage counters exist to prevent, one layer up: a number that is not
-    // what it claims to be, with nothing saying so.
+    // Mutation: `to_string()`, whose scientific form makes `Decimal::from_str`
+    // drop the exponent and return 6.28.
     let tiny = BigDecimal::from_str("0.000000000006283855409573290776726186454503737").unwrap();
 
     let converted = convert_bigdecimal_to_decimal(tiny, "fees_usd").expect("must convert");
@@ -184,9 +178,7 @@ fn convert_bigdecimal_to_decimal_keeps_the_exponent_of_small_values() {
 
 #[test]
 fn convert_bigdecimal_to_decimal_survives_a_short_mantissa_in_scientific_form() {
-    // The case that always worked, kept as the boundary of the one above: a
-    // short mantissa leaves room for the exponent, so `to_string()` parsed
-    // fine. That is why the defect stayed dormant for so long.
+    // The boundary of the case above: a short mantissa parses even through `to_string()`.
     let tiny = BigDecimal::from_str("0.000000000001").unwrap();
 
     let converted = convert_bigdecimal_to_decimal(tiny, "fees_usd").expect("must convert");
@@ -196,9 +188,6 @@ fn convert_bigdecimal_to_decimal_survives_a_short_mantissa_in_scientific_form() 
 
 #[test]
 fn convert_bigdecimal_to_decimal_rejects_what_it_cannot_hold() {
-    // The other half of the fix: `to_plain_string` never hides an exponent, so
-    // an out-of-range value now fails loudly instead of being truncated into a
-    // plausible wrong number.
     let huge = BigDecimal::from_str("1000000000000000000000000000000").unwrap();
 
     let err = convert_bigdecimal_to_decimal(huge, "tvl_usd")

@@ -9,10 +9,8 @@ use yog_core::{
     domain::{PoolAnalytics, PoolHistoryBucket},
 };
 
-/// Row shape for the analytics query. Unlike the other repos this
-/// `TryFrom` targets a `(Pubkey, PoolAnalytics)` pair rather than a
-/// single domain type — the row carries both the map key and value
-/// needed by the caller.
+/// Row shape of the analytics query; its `TryFrom` yields the `(Pubkey, PoolAnalytics)`
+/// pair the caller maps.
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolAnalyticsRow {
     pub(super) pool_address: String,
@@ -22,9 +20,8 @@ pub(super) struct PoolAnalyticsRow {
     pub(super) protocol_fees_24h_usd: Option<BigDecimal>,
     pub(super) referral_fees_24h_usd: Option<BigDecimal>,
     pub(super) lp_fees_24h_usd: Option<BigDecimal>,
-    /// Coverage of the five swap-derived sums above (not `tvl_usd`),
-    /// COALESCEd to 0 by the query — a missing pool means "no buckets",
-    /// never "unknown".
+    /// Coverage of the five swap-derived sums above, not of `tvl_usd`. COALESCEd
+    /// to 0: a missing pool means no buckets, never unknown.
     pub(super) swap_buckets_24h: i64,
     pub(super) swap_buckets_priced_24h: i64,
 }
@@ -49,9 +46,8 @@ impl TryFrom<PoolAnalyticsRow> for (Pubkey, PoolAnalytics) {
     }
 }
 
-/// Row shape for one hourly bucket of the pool history query. USD metrics are
-/// `NUMERIC` (→ `BigDecimal`); `swap_count` is `BIGINT`. All but `bucket` are
-/// nullable (a bucket may have one source of activity but not another).
+/// Row shape of one hourly bucket of the pool history. All but `bucket` are
+/// nullable: a bucket may have one source of activity but not another.
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolHistoryRow {
     pub(super) bucket: DateTime<Utc>,

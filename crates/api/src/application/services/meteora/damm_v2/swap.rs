@@ -12,10 +12,6 @@ use yog_core::{
     domain::{MeteoraDammV2SwapEvent, MeteoraDammV2SwapEventCursor, MeteoraDammV2SwapEventFeed},
 };
 
-// ---------------------------------------------------------------------------
-// Params
-// ---------------------------------------------------------------------------
-
 /// Input to [`MeteoraDammV2SwapService::list_swaps_for_pool`].
 pub(crate) struct MeteoraDammV2SwapListParams {
     pub pool_address: Pubkey,
@@ -24,10 +20,6 @@ pub(crate) struct MeteoraDammV2SwapListParams {
     pub position: Option<PagePosition>,
     pub limit: i64,
 }
-
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
 
 /// Application service for swap event queries.
 pub(crate) struct MeteoraDammV2SwapService {

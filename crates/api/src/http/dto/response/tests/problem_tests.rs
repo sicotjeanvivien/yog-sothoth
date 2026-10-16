@@ -1,9 +1,4 @@
-//! Unit tests for the RFC 9457 ProblemDetailsResponse wire shape.
-//!
-//! The DTO carries the public error format. These tests pin the
-//! exact field names and the discriminator value (`about:blank`)
-//! so they fail at `cargo test` time if a refactor accidentally
-//! changes the contract.
+//! The RFC 9457 wire shape: field names and the `about:blank` discriminator.
 
 use super::ProblemDetailsResponse;
 
@@ -21,8 +16,7 @@ fn serialises_all_four_required_fields() {
 
 #[test]
 fn type_field_uses_rfc_name_not_rust_name() {
-    // The Rust struct field is `type_uri` to avoid the keyword
-    // collision; the wire field must still be `type`.
+    // Mutation: the wire field named after the Rust `type_uri`.
     let p = ProblemDetailsResponse::generic("Bad Request", 400, "x".to_string());
     let json = serde_json::to_value(&p).unwrap();
 
@@ -32,10 +26,6 @@ fn type_field_uses_rfc_name_not_rust_name() {
 
 #[test]
 fn generic_constructor_sets_type_to_about_blank() {
-    // Public contract: `generic(...)` always emits `"about:blank"`.
-    // When specific URIs are introduced later, they will live in a
-    // new constructor (`with_type(...)`); this one must remain the
-    // safe default for unclassified errors.
     let p = ProblemDetailsResponse::generic("Bad Request", 400, "x".to_string());
     let json = serde_json::to_value(&p).unwrap();
 
@@ -66,10 +56,7 @@ fn detail_carries_per_occurrence_message() {
 
 #[test]
 fn title_is_stable_per_problem_type() {
-    // Two errors of the same kind must produce the same `title`,
-    // even when their `detail` differs. This is what clients can
-    // branch on for type-based discrimination at the `about:blank`
-    // stage.
+    // Same kind, same `title` whatever the `detail`: clients branch on it.
     let p1 = ProblemDetailsResponse::generic("Bad Request", 400, "msg one".to_string());
     let p2 = ProblemDetailsResponse::generic("Bad Request", 400, "msg two".to_string());
 

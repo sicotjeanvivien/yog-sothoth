@@ -1,14 +1,5 @@
-//! Response DTO for `GET /api/stats`.
-//!
-//! Protocol-wide aggregate statistics. Kept separate from the domain types
-//! like every other `*Response` — the domain model never leaks into the wire
-//! shape. Decimals serialize the same way as `PoolResponse` (rust_decimal's
-//! native representation).
-//!
-//! The endpoint is intentionally client-agnostic: it ships raw counters
-//! (`poolsPriced` + `poolsObserved`) rather than a formatted "N / M priced"
-//! coverage string — the presentation layer derives that. Same for the LP fee
-//! share or effective rate: not the API's job here.
+//! Response DTO for `GET /api/stats`. Client-agnostic: raw counters, not a formatted coverage
+//! string; the presentation layer derives the rest.
 
 use rust_decimal::Decimal;
 use serde::Serialize;

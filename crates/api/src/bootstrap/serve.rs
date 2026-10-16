@@ -12,18 +12,9 @@ use crate::http::{CappedListener, IDLE_TIMEOUT, MAX_CONNECTIONS};
 const HTTP_SERVER: &str = "http server";
 const SIGNAL_POLLER: &str = "signal stream poller";
 
-/// Serve `router` on `listener` and run the signal poller, until `shutdown` is
-/// cancelled — then stop both, within [`yog_bootstrap::SHUTDOWN_GRACE`].
-///
-/// The same shape as the daemons' `run`: the first task to end, or the stop,
-/// wins the `select!`; the other is told; [`Stop`] waits for both on one
-/// deadline and names whichever outlives it.
-///
-/// ⚠️ **The server stops gracefully, and that alone would not stop it.**
-/// `with_graceful_shutdown` stops accepting, then waits for every open
-/// connection to finish — and an SSE connection never does on its own. It ends
-/// because its stream reads the same token (`signal_sse`). The grace is what
-/// still bounds the stop if some other response ever hangs.
+/// Serves `router` and runs the poller until `shutdown`, then stops both within
+/// [`yog_bootstrap::SHUTDOWN_GRACE`]. ⚠️ Graceful shutdown waits for every connection, and an SSE
+/// one never ends alone: it ends because its stream reads the same token (`signal_sse`).
 pub(crate) async fn serve(
     listener: TcpListener,
     router: Router,

@@ -15,8 +15,6 @@ use yog_core::{
     domain::{MeteoraDammV2LiquidityEventCursor, MeteoraDammV2SwapEventCursor, PoolCursor},
 };
 
-// ── Fixtures ────────────────────────────────────────────────────────
-
 fn ts(secs: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, 0).unwrap()
 }
@@ -38,9 +36,7 @@ fn pool_cursor() -> PoolCursor {
     }
 }
 
-/// A cursor over the mutable sort column, which carries the traversal's
-/// snapshot fence. The `FirstSeen` one above deliberately does not — the
-/// round-trip has to preserve both cases.
+/// A cursor over the mutable sort column, carrying the fence — unlike the `FirstSeen` one.
 fn fenced_pool_cursor() -> PoolCursor {
     PoolCursor {
         sort_column: yog_core::PoolSortColumn::LastSeen,
@@ -66,15 +62,12 @@ fn liquidity_cursor() -> MeteoraDammV2LiquidityEventCursor {
     }
 }
 
-// Helper to assert a result is a BadRequest, regardless of message.
 fn assert_bad_request<T: std::fmt::Debug>(result: Result<T, ApiError>) {
     match result {
         Err(ApiError::BadRequest(_)) => {}
         other => panic!("expected BadRequest, got {other:?}"),
     }
 }
-
-// ── Round-trips ─────────────────────────────────────────────────────
 
 #[test]
 fn pool_cursor_round_trip() {
@@ -84,8 +77,7 @@ fn pool_cursor_round_trip() {
     assert_eq!(decoded, original);
 }
 
-/// Losing the fence on the wire would silently un-anchor the traversal: the
-/// next page would mint a fresh one and the ordering would move again.
+/// Mutation: the fence lost on the wire, which un-anchors the traversal.
 #[test]
 fn pool_cursor_round_trip_preserves_the_snapshot_fence() {
     let original = fenced_pool_cursor();
@@ -95,10 +87,7 @@ fn pool_cursor_round_trip_preserves_the_snapshot_fence() {
     assert_eq!(decoded.as_of, original.as_of);
 }
 
-/// A cursor minted before the fence existed must still decode — a reader
-/// mid-traversal at deploy time keeps navigating, and the repository re-anchors
-/// them from the next page on. Rejecting it would 400 a URL that was valid when
-/// it was issued.
+/// A cursor minted before the fence existed must still decode, not 400.
 #[test]
 fn pool_cursor_without_as_of_decodes_as_unfenced() {
     let blob = URL_SAFE_NO_PAD_ENCODE(
@@ -109,8 +98,7 @@ fn pool_cursor_without_as_of_decodes_as_unfenced() {
     assert_eq!(decoded.as_of, None);
 }
 
-/// The fence goes through the same total decoding as every other field: a
-/// tampered value is a 400, never a panic and never a silently dropped anchor.
+/// A tampered fence is a 400, never a panic nor a silently dropped anchor.
 #[test]
 fn rejects_malformed_as_of() {
     let blob = URL_SAFE_NO_PAD_ENCODE(
@@ -127,8 +115,7 @@ fn swap_cursor_round_trip() {
     let decoded = decode_swap_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
     assert_eq!(decoded.signature, original.signature);
-    // Dropping this on the wire would resume a page at the wrong hop of a
-    // routed transaction — the third key is what makes the order total.
+    // The third key makes the order total across the hops of a routed transaction.
     assert_eq!(decoded.event_index, original.event_index);
 }
 
@@ -144,8 +131,6 @@ fn liquidity_cursor_round_trip() {
 
 #[test]
 fn timestamp_survives_round_trip_to_the_second() {
-    // RFC3339 carries sub-second precision; verify nothing is lost
-    // for a timestamp with a non-zero offset from a round number.
     let original = MeteoraDammV2SwapEventCursor {
         timestamp: Utc.timestamp_opt(1_700_000_123, 0).unwrap(),
         signature: sig(1),
@@ -155,8 +140,6 @@ fn timestamp_survives_round_trip_to_the_second() {
     let decoded = decode_swap_cursor(&encoded).unwrap();
     assert_eq!(decoded.timestamp, original.timestamp);
 }
-
-// ── encode_cursor_opt ───────────────────────────────────────────────
 
 #[test]
 fn encode_cursor_opt_none_yields_none() {
@@ -171,12 +154,9 @@ fn encode_cursor_opt_some_yields_some() {
     assert!(result.is_some());
 }
 
-// ── Output format ───────────────────────────────────────────────────
-
 #[test]
 fn encoded_cursor_is_url_safe_base64() {
-    // No '+', '/', or '=' padding — safe to drop straight into a query
-    // string without percent-encoding.
+    // No '+', '/' or '=': safe in a query string without percent-encoding.
     let encoded = encode_cursor(&Cursor::Pool(pool_cursor())).unwrap();
     assert!(!encoded.contains('+'));
     assert!(!encoded.contains('/'));
@@ -188,12 +168,7 @@ fn encoded_cursor_is_url_safe_base64() {
     );
 }
 
-// ── Cross-variant safety ────────────────────────────────────────────
-//
-// The wire format is self-describing: a SwapCursor blob carries
-// `timestamp`/`signature`, a PoolCursor blob carries
-// `first_seen_at`/`pool_address`. Decoding one as the other must fail
-// on the missing fields rather than silently producing garbage.
+// Decoding one cursor variant as another must fail on the missing fields.
 
 #[test]
 fn pool_blob_does_not_decode_as_swap() {
@@ -209,23 +184,14 @@ fn swap_blob_does_not_decode_as_pool() {
     assert_bad_request(decode_pool_cursor(&encoded));
 }
 
-// Note: a Swap blob and a Liquidity blob share the same wire shape
-// (EventCursorWire), so they are intentionally interchangeable at the
-// decode level. The handler picks the right decoder per endpoint;
-// there's no field-level discriminator between them, and that's by
-// design. We therefore do NOT assert that a swap blob fails to decode
-// as a liquidity cursor — it succeeds, and that's expected.
+// A swap blob and a liquidity blob share `EventCursorWire`: they decode as each other by design.
 
 #[test]
 fn swap_blob_decodes_as_liquidity_by_shape() {
-    // Documents the intentional shape-sharing rather than guarding
-    // against it: both event cursors use EventCursorWire.
     let encoded = encode_cursor(&Cursor::MeteoraDammV2SwapEvent(swap_cursor())).unwrap();
     let decoded = decode_liquidity_cursor(&encoded).unwrap();
     assert_eq!(decoded.signature, swap_cursor().signature);
 }
-
-// ── Malformed input ─────────────────────────────────────────────────
 
 #[test]
 fn rejects_non_base64() {
@@ -252,12 +218,7 @@ fn rejects_json_with_wrong_shape() {
 
 #[test]
 fn rejects_malformed_timestamp() {
-    // Correct shape, but `sort_value` is not RFC3339.
-    //
-    // The blob must carry the *real* wire field names: an earlier version used
-    // `first_seen_at`, which serde rejects as a missing field before the
-    // timestamp is ever parsed — the test passed without exercising the line it
-    // names.
+    // ⚠️ The real wire field names, or serde rejects a missing field before the timestamp parses.
     let blob = URL_SAFE_NO_PAD_ENCODE(
         r#"{"sort_column":"first_seen","sort_value":"yesterday",
             "pool_address":"11111111111111111111111111111111"}"#,
@@ -281,8 +242,6 @@ fn rejects_empty_string() {
     assert_bad_request(decode_pool_cursor(""));
 }
 
-// Small helper so the malformed-input tests can build blobs without
-// importing the base64 engine at every call site.
 #[allow(nonstandard_style)]
 fn URL_SAFE_NO_PAD_ENCODE(s: &str) -> String {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

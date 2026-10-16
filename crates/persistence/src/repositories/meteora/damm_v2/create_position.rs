@@ -1,7 +1,4 @@
 //! Create-position events repository: inserts new positions.
-//!
-//! Write-only — the indexer is the sole consumer today. No read-side
-//! (no SELECT, no row mapping) until an API endpoint needs it.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

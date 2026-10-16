@@ -33,9 +33,6 @@ pub(crate) struct SignalResponse {
     token_a: EmbeddedTokenResponse,
     token_b: EmbeddedTokenResponse,
     severity: SeverityResponse,
-    // Exact decimals are emitted as strings, like every other decimal
-    // quantity of the API (a JSON-number consumer would go through
-    // lossy f64).
     #[schema(value_type = SignedDecimal)]
     value: String,
     #[schema(value_type = Option<UnsignedDecimal>)]

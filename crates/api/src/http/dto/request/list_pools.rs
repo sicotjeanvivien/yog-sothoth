@@ -1,10 +1,4 @@
-//! Request DTO for `GET /api/pools`.
-//!
-//! Aggregates every validation rule for the pool list endpoint:
-//! pagination bounds, cursor + position mutual exclusivity, search
-//! length, cursor ↔ sort consistency. By the time a
-//! `ListPoolsRequest` is constructed, every field is guaranteed
-//! valid; the handler can hand it straight to the service.
+//! Request DTO for `GET /api/pools`: every validation rule of the endpoint, run once.
 
 use rust_decimal::Decimal;
 use yog_core::domain::{PoolCursor, PoolListQuery};
@@ -44,7 +38,6 @@ impl ListPoolsRequest {
         };
         let sort: PoolSort = query.sort.into();
 
-        // Option B payoff: reject a cursor built for a different sort.
         validate_cursor_sort_consistency(cursor.as_ref(), sort)?;
 
         Ok(Self {
@@ -58,8 +51,7 @@ impl ListPoolsRequest {
         })
     }
 
-    /// Project into the domain query. Consumes self because the request
-    /// DTO has no use past this point.
+    /// Projects into the domain query.
     pub(crate) fn into_query(self) -> PoolListQuery {
         PoolListQuery {
             cursor: self.cursor,

@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<PoolRow> for Pool`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right `Pool`, that each individual field has its
-//! own validation path, and that errors surface as
-//! `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<PoolRow> for Pool`.
 
 use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
@@ -14,9 +9,7 @@ use yog_core::{
 
 use super::PoolRow;
 
-// Three distinct, valid base58-encoded Solana pubkeys. Using distinct
-// values for pool / token_a / token_b is intentional: it catches any
-// future field swap in the `TryFrom` impl.
+// Distinct pubkeys, so a field swap in the `TryFrom` fails the happy path.
 const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
 const VALID_TOKEN_A: &str = "So11111111111111111111111111111111111111112";
 const VALID_TOKEN_B: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -45,10 +38,6 @@ fn try_from_valid_row_returns_pool_with_all_fields_mapped() {
     assert_eq!(pool.fee_bps, Some(Decimal::new(25, 0)));
 }
 
-// NOTE: the fee-split percent tests (null mapping, out-of-range guard) moved to
-// `meteora/damm_v2/pool_properties_tests.rs` with migration 036, along with the
-// columns and `percent_to_u8` itself.
-
 #[test]
 fn try_from_null_mints_maps_to_none() {
     let row = PoolRow {
@@ -73,7 +62,7 @@ fn try_from_null_fee_bps_maps_to_none() {
 
 #[test]
 fn try_from_preserves_timestamps_in_correct_fields() {
-    // Two distinct timestamps so a field swap would be caught.
+    // Mutation: the two timestamps swapped in the TryFrom.
     let first = Utc::now();
     let last = first + Duration::seconds(42);
     let row = PoolRow {

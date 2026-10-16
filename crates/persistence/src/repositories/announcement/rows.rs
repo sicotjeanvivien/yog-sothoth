@@ -4,12 +4,8 @@ use yog_core::{
     domain::{Announcement, AnnouncementKind, AnnouncementSeverity},
 };
 
-/// Row shape for reading `announcements`.
-///
-/// A thin sqlx-facing struct kept separate from the domain model: it
-/// holds the raw TEXT tags, parsed back into their enums in the
-/// `TryFrom` impl below. A tag outside the CHECK-constrained sets can
-/// only mean schema/code drift — surfaced as an integrity error.
+/// Row shape of `announcements`. A tag outside the CHECK-constrained sets is an
+/// integrity error.
 pub(super) struct AnnouncementRow {
     pub(super) id: i64,
     pub(super) kind: String,

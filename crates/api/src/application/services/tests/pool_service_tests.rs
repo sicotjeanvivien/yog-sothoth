@@ -25,8 +25,6 @@ fn service(
     analytics: MockAnalyticsRepo,
     metadata: MockMetadataRepo,
 ) -> PoolService {
-    // Most scenarios don't care about the signal indicator: a quiet
-    // window (empty map) is the neutral default.
     service_with_signals(
         pool_repo,
         pool_current_state_repo,
@@ -56,13 +54,8 @@ fn service_with_signals(
     })
 }
 
-/// A `PoolPropertiesLookup` for one protocol, recording whether it was consulted.
-///
-/// The satellite is not what most of these tests exercise — they cover the
-/// enrichment pipeline (tokens, analytics, signals) — so the default answers
-/// `None`, which is the realistic case anyway: most pools have no row until
-/// yog-context or a genesis event fills one. The call counter exists for the
-/// routing tests, which assert on *who was asked*, not just on what came back.
+/// A `PoolPropertiesLookup` for one protocol, counting the calls: the routing tests assert
+/// who was asked.
 struct MockPropertiesLookup {
     protocol: Protocol,
     answer: Option<PoolProperties>,
@@ -286,9 +279,6 @@ async fn get_pool_enriches_found_pool() {
     );
 }
 
-/// The pool's own protocol picks the lookup, and its answer reaches the detail
-/// sheet as-is. Registering the lookup is the whole wiring — the service names
-/// no protocol.
 #[tokio::test]
 async fn get_pool_detail_routes_to_the_matching_protocol_lookup() {
     let addr = pk(1);
@@ -317,13 +307,7 @@ async fn get_pool_detail_routes_to_the_matching_protocol_lookup() {
     assert_eq!(detail.properties, Some(damm_v2_properties(addr)));
 }
 
-/// A pool of a protocol with no registered lookup yields no properties **and no
-/// round-trip**: the registered lookup is never consulted.
-///
-/// This is the regression guard for the coupling this module used to have. With
-/// a hard-wired DAMM v2 repository, a DLMM pool either queried the cp-amm
-/// satellite for nothing or relied on a `match` arm someone had to remember to
-/// write; neither is possible now.
+/// A protocol with no registered lookup yields no properties and no round-trip.
 #[tokio::test]
 async fn get_pool_detail_skips_a_protocol_with_no_lookup() {
     let addr = pk(2);
@@ -441,16 +425,9 @@ async fn recent_signals_are_attached_to_the_right_pool() {
     assert!(page.items[1].recent_signals.is_empty());
 }
 
-// ---------------------------------------------------------------------------
-// get_latest_state
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn get_latest_state_returns_none_when_no_state() {
-    // A pool may exist via Claim* events without ever appearing in the
-    // current-state projection. The service must surface this as None,
-    // not an error — the handler maps None to a 404 with a specific
-    // message distinct from "pool not found".
+    // A pool seen only through Claim* events has no current state: None, not an error.
     let svc = service(
         PoolRepoOnce::with_pool(None),
         MockPoolCurrentStateRepo::not_found(),
@@ -481,9 +458,7 @@ async fn get_latest_state_returns_state_when_present() {
         .expect("should be Some");
 
     assert_eq!(result.state.pool_address, state.pool_address);
-    // The pool's mints/metadata are unresolved here (with_pool(None),
-    // empty metadata), so the spot price cannot be rescaled → None,
-    // never a fabricated value.
+    // Mints unresolved: no spot price, never a fabricated one.
     assert!(result.spot_price_a_in_b.is_none());
 }
 
@@ -524,8 +499,6 @@ async fn get_latest_state_derives_spot_price_when_resolvable() {
         PoolRepoOnce::with_pool(Some(make_pool(addr, mint_a, mint_b))),
         MockPoolCurrentStateRepo::found(state),
         MockAnalyticsRepo::empty(),
-        // Both sides resolved (make_metadata → 9 decimals), so the
-        // sqrt_price can be decoded to a human spot price.
         MockMetadataRepo::with(vec![
             (mint_a, make_metadata(mint_a, "AAA")),
             (mint_b, make_metadata(mint_b, "BBB")),
@@ -592,15 +565,9 @@ async fn get_pool_attaches_analytics_correctly() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// top_pools
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn top_pools_emits_in_rank_order() {
-    // The ranking puts a1 first, a2 second. The batch `find_by_addresses`
-    // returns them in the *opposite* order on purpose — the service must
-    // re-impose the rank, not echo the DB's arbitrary order.
+    // `find_by_addresses` returns them reversed: the service must re-impose the rank.
     let a1 = pk(1);
     let a2 = pk(2);
     let pool1 = make_pool(a1, pk(10), pk(11));
@@ -624,10 +591,7 @@ async fn top_pools_emits_in_rank_order() {
     assert_eq!(top[1].pool.pool_address, a2);
 }
 
-/// The shared ranking is keyed on the metric alone: requests with different
-/// `limit`s are cut from **one** computation — `PoolRepoOnce` panics on a
-/// second `find_by_addresses`. Keyed on `limit` too, a client cycling
-/// 1..=20 over the two metrics would start forty rankings at once.
+/// Mutation: the ranking keyed on `limit` too — `PoolRepoOnce` panics on a second computation.
 #[tokio::test]
 async fn top_pools_cuts_every_limit_from_one_ranking() {
     let (a1, a2, a3) = (pk(1), pk(2), pk(3));
@@ -658,8 +622,6 @@ async fn top_pools_cuts_every_limit_from_one_ranking() {
 
 #[tokio::test]
 async fn top_pools_empty_when_no_ranking() {
-    // No ranked addresses → short-circuit to an empty list, no pool/analytics
-    // reads attempted.
     let svc = service(
         PoolRepoOnce::with_pools(vec![]),
         MockPoolCurrentStateRepo::not_found(),
@@ -683,12 +645,8 @@ async fn top_pools_ranking_error_propagates() {
     assert!(svc.top_pools(PoolRankMetric::Volume24h, 10).await.is_err());
 }
 
-/// The cached ranking takes one of the shared work slots while it computes:
-/// with every slot held by the slow routes, it waits, then gives up with a
-/// `Timeout` (a 503 on the wire) instead of taking one more connection than
-/// the slots allow.
-///
-/// Mutation: compute without taking a slot, and the ranking goes through.
+/// Mutation: computing without taking a slot. With every slot held, the ranking must give up
+/// with a `Timeout`.
 #[tokio::test]
 async fn the_cached_ranking_waits_for_a_work_slot() {
     let slots = crate::application::WorkSlots::new(1, std::time::Duration::from_millis(50));

@@ -1,26 +1,7 @@
-//! Integration tests for migration 011 — the price series is compressed past
-//! seven days, and compressing it changes nothing a reader can see.
-//!
-//! Gated behind `integration-tests`. Three things are asserted, and none of
-//! them covers another:
-//!
-//!   1. the **policy as declared**, read out of the TimescaleDB catalog — it is
-//!      what fails if a later migration re-declares the delay, the segmenting
-//!      column, or puts back the default index this one drops;
-//!   2. the **behaviour it has to preserve**: both shapes of price lookup
-//!      return the identical value once the chunk they read is compressed.
-//!      Baseline §7 refused compression precisely because of those lookups, so
-//!      that refusal is what this test replaces;
-//!   3. the **write path against a compressed chunk** — the repository's own
-//!      batch, carrying one row already there and one new, then a duplicate
-//!      written without its `ON CONFLICT` guard.
-//!
-//! ⚠️ **`compress_chunk` is called by hand here, and that is not a shortcut.**
-//! The local Postgres runs with `timescaledb.max_background_workers = 0`, so
-//! the policy this migration declares never fires — a test that only declared
-//! it would pass on an uncompressed table and prove nothing. That is why test 2
-//! asserts `is_compressed` before re-reading: remove the compression step and
-//! it must go red there, not silently keep passing.
+//! The price series is compressed past seven days, and compressing it changes nothing a
+//! reader sees: the catalog's policy, both lookup shapes over compressed chunks, and writes
+//! into one. ⚠️ `compress_chunk` is called by hand: the local Postgres has no background
+//! workers, so the policy never fires and a test relying on it would read uncompressed rows.
 
 use super::helpers::{UNIQUE_VIOLATION, pk, price_mint_since, record_prices, sqlstate};
 use std::str::FromStr;
@@ -32,19 +13,12 @@ use sqlx::{PgPool, Row};
 use yog_core::domain::{PriceProvider, TokenPrice, TokenPriceLookup, TokenPriceRepository};
 use yog_persistence::PgTokenPriceRepository;
 
-/// Days of hourly price observations seeded by the behaviour tests. The
-/// hypertable's chunks span 7 days, so 30 days is several chunks plus the open
-/// one — compressing all of them is what puts a compressed chunk under the
-/// *latest* lookup, which has no time bound and would otherwise only ever read
-/// the hot chunk.
+/// Days of hourly prices seeded: several 7-day chunks, so the unbounded latest lookup
+/// reads a compressed one.
 const SEEDED_DAYS: i64 = 30;
 
-// ── 1. The policy, as the catalog holds it ───────────────────────────────────
-
-/// One row of `timescaledb_information.compression_settings`: a column, and the
-/// place it takes in the compression layout. A column is either a segment key
-/// or part of the order inside a segment, so exactly one of the two indexes is
-/// set on each row — which is why both are `Option`.
+/// One row of `timescaledb_information.compression_settings`: a column is a segment key or
+/// part of the order inside a segment, so exactly one index is set.
 #[derive(Debug, PartialEq, Eq)]
 struct CompressionSetting {
     column: String,
@@ -56,12 +30,7 @@ struct CompressionSetting {
 
 #[sqlx::test]
 async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
-    // The delay is compared as an INTERVAL, not as the text the catalog stores:
-    // that text is `interval_out` under whatever `IntervalStyle` was in effect
-    // when the policy was created, and it is frozen in the job's jsonb. Under
-    // `postgres_verbose` the very same 7 days read `@ 7 days`. Postgres is the
-    // one that knows how to compare intervals — same pattern as
-    // `cagg_retention.rs`.
+    // ⚠️ Compared as an INTERVAL: the catalog's text follows the `IntervalStyle` of creation.
     let policies: Vec<(bool, String)> = sqlx::query(
         "SELECT (config->>'compress_after')::interval = INTERVAL '7 days' AS is_house_delay,
                 (config->>'compress_after')                               AS declared
@@ -89,10 +58,7 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
         policies[0].1
     );
 
-    // The other half of baseline §7 still stands, and its absence is a decision:
-    // migration 005 established that an as-of gap never heals (the worker only
-    // inserts at now(), nothing backfills), so dropping price rows would blank
-    // the valuation of every bucket they cover, for ever.
+    // No retention, on purpose: an as-of gap never heals, nothing backfills prices.
     let retention: i64 = sqlx::query_scalar(
         "SELECT count(*)::BIGINT
            FROM timescaledb_information.jobs
@@ -128,10 +94,6 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
     })
     .collect();
 
-    // `(mint, fetched_at)` is also the primary key, which is what keeps this
-    // table free of the `column … should be used for segmenting or ordering`
-    // warnings the event tables raise: uniqueness can be checked against
-    // compressed rows without decompressing the segment.
     assert_eq!(
         settings,
         vec![
@@ -173,31 +135,18 @@ async fn the_compression_policy_is_declared_as_intended(pool: PgPool) {
     );
 }
 
-// ── 2. The behaviour compression must not change ─────────────────────────────
-
-/// What the two shapes of price lookup return, side by side.
-///
-/// NUMERIC values are compared as their textual rendering: the point is that
-/// compression returns the *identical* value, and a text comparison says so
-/// without going through a decimal type that could round both sides the same
-/// way.
+/// What the two lookup shapes return. NUMERIC is compared as text: a decimal type could
+/// round both sides alike.
 #[derive(Debug, PartialEq, Eq)]
 struct Readings {
-    /// `meteora_damm_v2_pool_hourly_activity` — the *as-of* shape, bounded to
-    /// one hour before each bucket.
+    /// The as-of shape, bounded to one hour before each bucket.
     buckets: i64,
     volume_usd: Option<String>,
-    /// `find_latest_by_mint`, the read path the API uses — and the one that
-    /// carries **no** time bound at all, so it is the one that really can land
-    /// on a compressed chunk in production, for a mint last priced over seven
-    /// days ago.
+    /// `find_latest_by_mint`, unbounded in time: the one that lands on a compressed chunk.
     latest_price: Option<String>,
     latest_fetched_at: Option<DateTime<Utc>>,
     latest_confidence: Option<String>,
-    /// Every `confidence` in the table, in key order. It is the only nullable
-    /// column and the only `REAL` one, so it is the only one compression stores
-    /// down a codec path the other columns never take — and a comparison over
-    /// the columns that are always populated would never notice.
+    /// Every `confidence`, in key order: the only nullable `REAL` column, on its own codec path.
     confidence_digest: Option<String>,
 }
 
@@ -236,8 +185,7 @@ async fn read_both_shapes(pool: &PgPool, pool_addr: &str) -> Readings {
     }
 }
 
-/// A pool with resolved mints and `SEEDED_DAYS` of hourly prices and swaps — enough for both lookup shapes to return a number, over several
-/// chunks.
+/// A pool with resolved mints and `SEEDED_DAYS` of hourly prices and swaps.
 async fn seed(pool: &PgPool) -> String {
     let pool_addr = pk(1).to_string();
     let mint_a = pk(2).to_string();
@@ -268,13 +216,8 @@ async fn seed(pool: &PgPool) -> String {
         .unwrap();
     }
 
-    // One observation per hour per mint. A price moving from hour to hour is
-    // what makes the comparison meaningful: a constant series would read the
-    // same whichever row the lookup picked.
-    //
-    // `confidence` is populated on the first mint and left NULL on the second,
-    // on purpose: it is the table's only nullable column, and both states have
-    // to survive a round trip through the compressed form.
+    // ⚠️ A moving price, or the comparison cannot tell rows apart; `confidence` set on one
+    // mint and NULL on the other, so both states survive the compressed form.
     for (mint, base, confidence) in [(pk(2), "1.5", Some(0.75_f32)), (pk(3), "100.0", None)] {
         let series: Vec<TokenPrice> = (0..=SEEDED_DAYS * 24)
             .map(|h| TokenPrice {
@@ -307,11 +250,8 @@ async fn seed(pool: &PgPool) -> String {
     pool_addr
 }
 
-/// Compress every chunk, the open one included, and assert that they really are
-/// compressed.
-///
-/// The hot chunk is compressed on purpose although the policy will never touch
-/// it: that is what puts `find_latest_by_mint` on top of compressed rows here.
+/// Compresses every chunk, the open one included — the policy never would — so the latest
+/// lookup reads compressed rows. Asserts they are.
 async fn compress_every_chunk(pool: &PgPool) {
     sqlx::query("SELECT compress_chunk(c) FROM show_chunks('token_prices') c")
         .execute(pool)
@@ -365,8 +305,6 @@ async fn a_compressed_chunk_serves_the_same_prices(pool: PgPool) {
     );
 }
 
-// ── 3. Writing against a compressed chunk ────────────────────────────────────
-
 async fn count_prices(pool: &PgPool, mint: &str) -> i64 {
     sqlx::query_scalar("SELECT count(*)::BIGINT FROM token_prices WHERE mint = $1")
         .bind(mint)
@@ -382,8 +320,6 @@ async fn writing_against_a_compressed_chunk_still_behaves(pool: PgPool) {
 
     price_mint_since(&pool, &mint, "1.5", SEEDED_DAYS * 24).await;
 
-    // The row this test then writes against, taken from the seeded series so it
-    // sits inside a chunk that is about to be compressed.
     let existing: DateTime<Utc> = sqlx::query_scalar(
         "SELECT fetched_at FROM token_prices
           WHERE mint = $1 AND fetched_at <= $2
@@ -399,11 +335,7 @@ async fn writing_against_a_compressed_chunk_still_behaves(pool: PgPool) {
 
     let before = count_prices(&pool, &mint).await;
 
-    // The real writer, not a copy of its SQL: `insert_batch` is a multi-row
-    // `QueryBuilder` INSERT carrying `ON CONFLICT (mint, fetched_at) DO
-    // NOTHING`, and the batch is the shape that matters — TimescaleDB
-    // decompresses per candidate segment to check uniqueness. One row already
-    // there, one not: the first must be dropped and the second stored, both
+    // The real batch writer: one row already there is dropped, one new is stored, both
     // inside a compressed chunk.
     let price_at = |at: DateTime<Utc>| TokenPrice {
         mint: pk(2),
@@ -426,11 +358,7 @@ async fn writing_against_a_compressed_chunk_still_behaves(pool: PgPool) {
          written out of the two offered"
     );
 
-    // And without that guard, uniqueness is still ENFORCED there. The warning
-    // TimescaleDB raises on the event tables is about cost, not correctness —
-    // and this table raises none at all, its key being the segmentby/orderby
-    // pair. Written as raw SQL because no repository ever inserts without the
-    // conflict clause: what is under test here is the constraint, not a caller.
+    // Raw SQL without `ON CONFLICT`: what is under test is the constraint, still enforced.
     let err = sqlx::query(
         "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
          VALUES ($1, 9.0, 'jupiter', $2)",

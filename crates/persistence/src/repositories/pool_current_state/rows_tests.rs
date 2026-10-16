@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<PoolCurrentStateRow> for PoolCurrentState`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right state, that each fallible field has its
-//! own validation path, and that errors surface as
-//! `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<PoolCurrentStateRow> for PoolCurrentState`.
 
 use chrono::{Duration, Utc};
 use solana_signature::Signature;
@@ -38,12 +33,9 @@ fn sig(seed: u8) -> Signature {
     Signature::from([seed; 64])
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[test]
 fn try_from_valid_row_returns_state_with_all_fields_mapped() {
     let row = valid_row();
-    // Snapshot timestamp values before consuming the row.
     let last_event_at = row.last_event_at;
     let last_swap_at = row.last_swap_at;
     let updated_at = row.updated_at;
@@ -64,11 +56,7 @@ fn try_from_valid_row_returns_state_with_all_fields_mapped() {
 
 #[test]
 fn try_from_with_none_optionals_returns_state_with_none() {
-    // The two Option fields take different routes: `last_sqrt_price` goes
-    // through `convert_optional`, `last_swap_at` is a plain move. Pin that both
-    // turn a None input into a None output — the one worth guarding is the
-    // converted one, where a misplaced `unwrap_or_default` would yield
-    // `Some(0)`, i.e. a sqrt_price of zero passed off as an observed value.
+    // Mutation: an `unwrap_or_default` on `last_sqrt_price`, a zero passed off as observed.
     let row = PoolCurrentStateRow {
         last_sqrt_price: None,
         last_swap_at: None,
@@ -83,8 +71,7 @@ fn try_from_with_none_optionals_returns_state_with_none() {
 
 #[test]
 fn try_from_preserves_distinct_timestamps_in_correct_fields() {
-    // Three distinct timestamp values — a field swap in the TryFrom
-    // would surface as a mismatched assert below.
+    // Mutation: two timestamp fields swapped in the TryFrom.
     let last_event_at = Utc::now();
     let last_swap_at = last_event_at + Duration::seconds(10);
     let updated_at = last_event_at + Duration::seconds(30);
@@ -102,8 +89,6 @@ fn try_from_preserves_distinct_timestamps_in_correct_fields() {
     assert_eq!(state.updated_at, updated_at);
 }
 
-// ── Enum validation ──────────────────────────────────────────────────
-
 #[test]
 fn try_from_invalid_last_event_kind_returns_integrity_with_value_in_message() {
     let row = PoolCurrentStateRow {
@@ -120,8 +105,6 @@ fn try_from_invalid_last_event_kind_returns_integrity_with_value_in_message() {
         "expected message to mention both the field and the bad value, got: {msg}"
     );
 }
-
-// ── Numeric conversion: i64 → u64 ────────────────────────────────────
 
 #[test]
 fn try_from_negative_reserve_a_returns_integrity() {
@@ -148,8 +131,6 @@ fn try_from_negative_reserve_b_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── BigDecimal → u128 (only when Some) ───────────────────────────────
 
 #[test]
 fn try_from_negative_last_sqrt_price_returns_integrity() {

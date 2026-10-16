@@ -22,8 +22,7 @@ fn new_migrations_name_their_indexes() {
         "migrations/README.md → “Name every index”:\n\n{}\n",
         failures.join("\n\n")
     );
-    // Not an assertion about coverage — a note, so a green run never reads
-    // as "the rule was checked" when there is nothing yet to check.
+    // So a green run never reads as "checked" when there was nothing to check.
     println!("checked {} migration(s): {guarded:?}", guarded.len());
 }
 
@@ -95,8 +94,7 @@ fn prose_mentioning_an_index_is_not_a_violation() {
     }
 }
 
-/// The frozen migrations break the rule 70 times over — which is why the
-/// guard starts at 010, and why that boundary is worth asserting.
+/// The baseline predates the rule; its exact count catches a detector that misses a form.
 #[test]
 fn the_frozen_migrations_are_out_of_scope() {
     let baseline = migrations_dir().join("001_baseline.sql");

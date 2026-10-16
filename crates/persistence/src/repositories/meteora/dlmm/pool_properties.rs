@@ -1,24 +1,8 @@
-//! DLMM pool-properties satellite repository (baseline §9).
-//!
-//! Holds the pool properties that only exist for the Liquidity Book product,
-//! kept out of the cross-protocol `pools` registry so no protocol carries NULL
-//! columns for another protocol's concepts.
-//!
-//! One `Pg` type, two **generic** traits, one per consumer — the shape cp-amm's
-//! equivalent converged on after #82/#83:
-//!
-//! - [`PoolAccountResolver`] — yog-context's enrichment queue and its write.
-//! - [`PoolPropertiesLookup`] — the api's read for the pool detail sheet.
-//!
-//! Neither names this protocol in its signature: the queue below filters on it,
-//! and the write accepts only this protocol's variant.
-//!
-//! # One table, one writer
-//!
-//! This repository writes **this satellite and nothing else**. The neutral half
-//! of the same account read — the mints and `fee_bps` — goes through
-//! [`yog_core::domain::PoolRepository::set_registry_properties`], so adding this
-//! second satellite adds no writer to `pools`.
+//! DLMM pool-properties satellite (baseline §9): the Liquidity Book-only
+//! properties, kept out of the cross-protocol `pools` registry. Read by the api
+//! through [`PoolPropertiesLookup`], resolved by yog-context through [`PoolAccountResolver`].
+//! It writes this satellite and nothing else: the mints and `fee_bps` of the same
+//! account go through [`yog_core::domain::PoolRepository::set_registry_properties`].
 
 mod rows;
 
@@ -52,9 +36,8 @@ impl PoolPropertiesLookup for PgMeteoraDlmmPoolPropertiesRepository {
         Protocol::MeteoraDlmm
     }
 
-    /// No protocol predicate needed here, unlike
-    /// [`PoolAccountResolver::list_unresolved`]: this reads the satellite by
-    /// primary key, and a pool of another protocol simply has no row in it.
+    /// No protocol predicate, unlike [`PoolAccountResolver::list_unresolved`]:
+    /// a pool of another protocol has no row in this satellite.
     async fn find_by_pool(
         &self,
         pool_address: &Pubkey,
@@ -85,30 +68,9 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
         Protocol::MeteoraDlmm
     }
 
-    /// The protocol predicate is **required**, not decorative — see the trait
-    /// doc. Joining this satellite does not scope the query on its own: "no
-    /// satellite row yet" is one of the conditions that makes a pool a
-    /// candidate, and that is true of every cp-amm pool, forever. Without
-    /// `p.protocol` this queue would propose the entire cp-amm catalogue, whose
-    /// accounts this resolver cannot store — so they would never resolve, never
-    /// leave the queue, and starve every DLMM pool behind them.
-    ///
-    /// # Two reasons a pool is proposed
-    ///
-    /// **Never resolved** — a NULL column. And **stale**: `p.needs_refresh`,
-    /// raised by the indexer when an event changed a property it does not write
-    /// itself. The flag is cleared by the *registry* write, which the caller
-    /// issues last, so a pool re-enters the queue until the whole refresh lands.
-    ///
-    /// # Why `bin_step` alone stands for the satellite
-    ///
-    /// cp-amm needs care here: its `base_fee_kind` can be legitimately NULL on a
-    /// successfully resolved row, so testing it would re-propose those pools
-    /// forever. DLMM has no such field — every column comes from one read of
-    /// fixed-offset integers with no open enum to recognise, so they are NULL
-    /// together or not at all. `bin_step IS NULL` is therefore an exact test for
-    /// "never resolved", and listing the other five would be redundant rather
-    /// than safer.
+    /// Pools never resolved (a NULL column) or flagged `needs_refresh`, oldest first.
+    /// `bin_step` stands for the satellite: its columns come from one read, NULL together
+    /// or not at all. The flag is lowered by the registry write, which the caller issues last.
     async fn list_unresolved(&self, limit: i64) -> RepositoryResult<Vec<Pubkey>> {
         let rows = sqlx::query!(
             r#"
@@ -125,6 +87,7 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
             LIMIT $1
             "#,
             limit,
+            // ⚠️ Required: a pool of another protocol has no satellite row, forever.
             Protocol::MeteoraDlmm.as_str(),
         )
         .fetch_all(&self.pool)
@@ -136,37 +99,9 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
             .collect()
     }
 
-    /// One write, to this satellite only.
-    ///
-    /// The caller sequences this **first, the registry last**, because the
-    /// registry write is what lowers `pools.needs_refresh`. A failure here
-    /// therefore leaves the flag raised and the pool queued, rather than
-    /// stranding a half-refreshed pool.
-    ///
-    /// An upsert, not an `UPDATE`: the satellite row is not created with the
-    /// pool, so an `UPDATE` would silently do nothing on first resolution.
-    ///
-    /// Plain `EXCLUDED` on every column, with no `COALESCE` anywhere — cp-amm
-    /// needs one to stop an unmappable fee mode erasing a known value, but a
-    /// successful `LbPair` decode always carries all six fields, so there is
-    /// never a NULL to guard against.
-    ///
-    /// Rejects a payload of another protocol rather than silently doing nothing:
-    /// the worker routes by [`PoolAccountProperties::protocol`], so a mismatch
-    /// here is a wiring bug, not a runtime condition.
-    ///
-    /// It is not the only guard, and it is not the last one. It answers "is this
-    /// payload mine?"; the worker screens "is this *pool* mine" upstream
-    /// (`context/src/application/workers/pool_account.rs` skips a pool whose
-    /// decoded account disagrees with the queue's protocol); and since
-    /// migration 040 the schema backs both — a generated `protocol` column and
-    /// a composite foreign key onto `pools (pool_address, protocol)`.
-    ///
-    /// So a DLMM payload aimed at a cp-amm pool is unreachable through the
-    /// worker *and* refused by the database. The constraint is there for what
-    /// the guards cannot cover: a refactor, a second writer, or a hand-run
-    /// repair. It surfaces as [`yog_core::RepositoryError::Conflict`], so any
-    /// such caller inherits skip-and-log rather than a silent success.
+    /// Upserts this satellite only: its row is not created with the pool. Written before
+    /// the registry, whose write lowers `needs_refresh`. A payload of another protocol is
+    /// refused here, and a DLMM row on another protocol's pool by the composite foreign key.
     async fn set_pool_account(
         &self,
         pool_address: &Pubkey,
@@ -179,8 +114,6 @@ impl PoolAccountResolver for PgMeteoraDlmmPoolPropertiesRepository {
             )));
         };
 
-        // Widening to the signed SQL types is always lossless: u16 -> INTEGER,
-        // u8 -> SMALLINT, u32 -> BIGINT. Baseline §9 explains the widths.
         sqlx::query!(
             r#"
             INSERT INTO meteora_dlmm_pool_properties

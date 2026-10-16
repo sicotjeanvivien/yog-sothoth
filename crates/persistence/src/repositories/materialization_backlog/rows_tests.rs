@@ -1,9 +1,5 @@
-//! Unit tests for `From<MaterializationBacklogRow> for MaterializationBacklog`.
-//!
-//! Pure, no DB. The two timestamps share a type, so a swap between them would
-//! compile — each test gives them distinct values to make one visible. (The
-//! function itself is covered against a real database by
-//! `tests/cagg_materialization.rs`.)
+//! DB-free tests of `From<MaterializationBacklogRow> for MaterializationBacklog`.
+//! ⚠️ The two timestamps share a type: each test gives them distinct values, so a swap shows.
 
 use chrono::{DateTime, TimeZone, Utc};
 use yog_core::domain::MaterializationBacklog;

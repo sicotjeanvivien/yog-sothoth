@@ -1,36 +1,15 @@
-//! Integration tests for the relation between the four retention policies and
-//! the four continuous-aggregate refresh policies (migration 008).
-//!
-//! Gated behind `integration-tests`. The defect they guard (re-diagnosed on
-//! 10 August 2026): a refresh whose window reaches further
-//! back than the retention **deletes** materialized buckets.
-//!
-//! `drop_chunks` logs an invalidation over the range it removes. A refresh is
-//! invalidation-driven, so a window containing that invalidation recomputes the
-//! range from raw rows that are gone and writes the result — nothing. Measured
-//! on a throwaway database: 288 materialized buckets, retention drop, ONE
-//! refresh over `[now-31d, now-1h]`, 130 left.
-//!
-//! The rule is therefore `start_offset < drop_after`, and it takes three tests,
-//! because no one of them says the whole thing:
-//!
-//!   1. the rule itself, read out of the TimescaleDB catalog for all four pairs
-//!      — this is what fails when a migration re-declares the wrong offset;
-//!   2. the behaviour it exists for, reproduced at the instant the daily
-//!      retention cuts — the rule alone would not say *why* it is the right one;
-//!   3. and ☠️ the destruction that survives the rule: the policy is
-//!      constrained, a refresh someone types is not. That one asserts a LOSS on
-//!      purpose.
+//! The four retention policies against the four cagg refresh policies. ⚠️ `drop_chunks`
+//! logs an invalidation, so a refresh reaching back past the retention recomputes a dropped
+//! range from nothing and deletes its buckets: `start_offset < drop_after`. Asserted in the
+//! catalog, reproduced at the instant the daily retention cuts, and — ☠️ on purpose — shown
+//! destroying data through a full-range refresh the policy cannot constrain.
 
 use super::helpers::pk;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use sqlx::Row;
 
-/// The four aggregates, in the order the catalog returns them (view name
-/// ascending). Written out rather than derived, so that adding a fifth cagg —
-/// or losing one of these — fails here instead of silently shrinking the set
-/// the rule is checked over.
+/// The four aggregates, by view name. Written out, so a fifth or a lost one fails here.
 const EXPECTED_CAGGS: [&str; 4] = [
     "meteora_damm_v2_claim_position_fee_events_hourly",
     "meteora_damm_v2_claim_reward_events_hourly",
@@ -38,26 +17,9 @@ const EXPECTED_CAGGS: [&str; 4] = [
     "meteora_damm_v2_swap_events_hourly",
 ];
 
-/// Pairs each aggregate's refresh policy with the retention policy of the raw
-/// hypertable it reads. The pairing comes from
-/// `timescaledb_information.continuous_aggregates`, not from a naming
-/// convention: `view_name` → `hypertable_name` is the catalog's own link.
-///
-/// The interval comparison itself is left to Postgres — it is the one that
-/// knows how to order `INTERVAL`s — and comes back as a boolean next to the two
-/// values in their readable form.
-///
-/// ⚠️ The retention side is **LEFT** joined, on purpose. A source hypertable
-/// without a retention policy is not a violation: nothing ever clears its rows,
-/// so no `start_offset` can reach a cleared range and the rule holds vacuously.
-/// `signals` is the standing precedent — `001_baseline.sql:702`, *"No
-/// add_retention_policy: signals are sparse and are the product output"*. An
-/// INNER join here would demand a retention policy the schema deliberately
-/// refuses, and push whoever hit it toward adding one.
-///
-/// The refresh side stays INNER, and the count is checked separately below:
-/// there, a missing policy IS the defect — the aggregate would never
-/// materialize anything.
+/// Each aggregate's refresh policy with its source hypertable's retention, linked by the catalog.
+/// ⚠️ Retention LEFT joined: a source without one (`signals`) never loses rows, so the rule holds.
+/// The refresh side stays INNER: there, a missing policy is the defect.
 const POLICY_PAIRS_SQL: &str = "
     SELECT ca.view_name::TEXT                        AS cagg,
            ca.hypertable_name::TEXT                  AS raw_table,
@@ -81,20 +43,8 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
         .await
         .expect("the policy pairs must be readable from the catalog");
 
-    // ⚠️ Counted independently of the query above, because the two assertions
-    // catch different things and neither covers the other:
-    //
-    //   * `found == EXPECTED_CAGGS` catches an aggregate that exists and has no
-    //     refresh policy — that side of the join is INNER, so it drops out of
-    //     `rows` and the list no longer matches;
-    //   * this count catches the case the list cannot see — a fifth aggregate
-    //     that someone added to `EXPECTED_CAGGS` and to the schema, but whose
-    //     policy was never declared, would make both sets agree at four only if
-    //     the constant were also left alone. Counting the catalog directly is
-    //     what makes "this test knows about every cagg" checkable.
-    //
-    // (The retention side is a LEFT join and is deliberately allowed to be
-    // absent — see the note on POLICY_PAIRS_SQL.)
+    // ⚠️ Counted apart from the join: a cagg without a refresh policy drops out of the INNER
+    // side, and only a direct count of the catalog sees it.
     let declared: i64 = sqlx::query_scalar(
         "SELECT count(*)::BIGINT FROM timescaledb_information.continuous_aggregates",
     )
@@ -124,8 +74,6 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
         let stays_inside: Option<bool> = row.get("refresh_stays_inside");
 
         let Some(drop_after) = drop_after else {
-            // No retention on the source: nothing ever clears its rows, so the
-            // rule holds with nothing to check. See the note on POLICY_PAIRS_SQL.
             continue;
         };
 
@@ -140,35 +88,9 @@ async fn every_refresh_window_stays_inside_its_retention(pool: PgPool) {
     }
 }
 
-// ── The behaviour the rule exists for ────────────────────────────────────────
-
-/// The instant the daily retention job would first drop a chunk, and the
-/// refresh window the policy would use at that instant.
-///
-/// ## Why this is anchored on a chunk boundary and not on `now()`
-///
-/// A first version of this test seeded 40 days, called `drop_chunks(older_than
-/// => '30 days')` and refreshed over `[now-31d, now-1h]` — and it stayed green
-/// with `start_offset` back at 31 days, which is exactly the regression it was
-/// written to catch. The reason is chunk geometry: the swap chunks then spanned
-/// 7 days, and a chunk is dropped only once **entirely** older than
-/// `drop_after`, so a single manual drop cleared data 30 to 37 days old
-/// depending on alignment. Measured on that fixture, the youngest dropped row
-/// was 32 days old — a 31-day window never reached it, and nothing was
-/// destroyed.
-///
-/// In production the alignment is not a lottery, because retention runs
-/// **daily**: a chunk is dropped at the first run after its end crosses
-/// `drop_after`, so at that moment its newest data is between `drop_after` and
-/// `drop_after + 1 day` old — inside a window that reaches one day further
-/// back. The loss is therefore not occasional, it is one per chunk.
-///
-/// This helper reproduces that instant instead of waiting for it: it takes a
-/// real chunk boundary `B`, treats `B + drop_after` as "now", and returns the
-/// window the policy would then compute. Measured on a probe with the 7-day
-/// chunks the swaps then had: overshooting the cut by a day erased **24
-/// buckets — exactly one day**; stopping a day short of it erased none
-/// ("already up-to-date").
+/// The instant the daily retention first drops a chunk, and the window the policy refreshes
+/// then. ⚠️ Anchored on a real chunk boundary, not `now()`: a chunk drops only once entirely
+/// older than `drop_after`, so a `now()`-based fixture can miss the regression and stay green.
 struct RetentionMoment {
     /// The cut: chunks ending at or before this are dropped.
     boundary: DateTime<Utc>,
@@ -212,10 +134,8 @@ async fn retention_moment(pool: &PgPool, cagg: &str, raw_table: &str) -> Retenti
     }
 }
 
-/// Buckets currently **materialized** — not what a read returns, which unions
-/// them with a live query over the raw rows (`materialized_only = false`). The
-/// flag is flipped for the duration of the count and put back; the database is
-/// this test's own, created and dropped by `sqlx::test`.
+/// Buckets currently materialized — not what a read returns, which adds the raw rows. The
+/// `materialized_only` flag is flipped for the count and put back.
 async fn materialized_buckets(pool: &PgPool) -> (i64, Option<DateTime<Utc>>) {
     sqlx::query(
         "ALTER MATERIALIZED VIEW meteora_damm_v2_swap_events_hourly
@@ -258,8 +178,6 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
     .await
     .unwrap();
 
-    // 90 days, one swap an hour — enough to span several chunks on both sides
-    // of the retention cut.
     sqlx::query(
         "INSERT INTO meteora_damm_v2_swap_events
            (pool_address, signature, trade_direction,
@@ -275,9 +193,7 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
     .await
     .unwrap();
 
-    // `refresh_continuous_aggregate` cannot run inside a transaction, which is
-    // why the migrations declare a policy instead of calling it (baseline §13).
-    // `sqlx::test` hands out a pool, not a transaction, so it runs here.
+    // `refresh_continuous_aggregate` cannot run inside a transaction; `sqlx::test` hands out a pool.
     sqlx::query(
         "CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_hourly', NULL, NULL)",
     )
@@ -326,7 +242,6 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
          point of a cagg, and it held even before migration 008"
     );
 
-    // The refresh the policy itself would run at that instant.
     sqlx::query("CALL refresh_continuous_aggregate('meteora_damm_v2_swap_events_hourly', $1, $2)")
         .bind(moment.window_start)
         .bind(moment.window_end)
@@ -351,22 +266,8 @@ async fn the_policy_refresh_cannot_erase_what_retention_dropped(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_full_range_refresh_still_destroys_the_history(pool: PgPool) {
-    // ☠️ This test asserts a DESTRUCTION, on purpose.
-    //
-    // Migration 008 constrains the scheduled policy. It cannot constrain a
-    // refresh someone types, and the invalidations the policy now carefully
-    // never reaches do not expire — they accumulate for ever. So
-    // `refresh_continuous_aggregate(cagg, NULL, NULL)` processes all of them at
-    // once and deletes every materialized bucket whose raw rows are gone.
-    //
-    // That matters operationally: `migrations/README.md` says the next cagg
-    // rebuild will need a backfill, and a full-range refresh is the obvious way
-    // to run one. It is the wrong way. Measured on a database with 008 applied
-    // and the policy refresh already clean: 2160 buckets → 779.
-    //
-    // Pinning it here keeps the warning falsifiable. If TimescaleDB ever stops
-    // recomputing over dropped ranges, this test fails — and that is the signal
-    // to delete the warning, not to delete the test quietly.
+    // ☠️ Asserts a destruction on purpose: a full-range refresh processes every accumulated
+    // invalidation. If TimescaleDB stops doing so, this fails — then delete the warning, not the test.
     let addr = pk(1).to_string();
     sqlx::query(
         "INSERT INTO pools (pool_address, protocol, token_a_mint, token_b_mint)

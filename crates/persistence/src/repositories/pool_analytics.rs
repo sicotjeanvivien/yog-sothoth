@@ -1,6 +1,4 @@
 //! PostgreSQL implementation of [`PoolAnalyticsRepository`].
-//!
-//! [keep the existing module-level doc as-is]
 mod rows;
 
 use crate::repositories::helper::{convert_string_to_pubkey, map_sqlx_error};
@@ -34,10 +32,8 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
             return Ok(HashMap::new());
         }
 
-        // sqlx needs string-typed addresses to bind a `TEXT[]` array.
         let addresses: Vec<String> = pool_addresses.iter().map(|p| p.to_string()).collect();
 
-        // [keep the existing CTE doc-comment block]
         let rows = sqlx::query_as!(
             PoolAnalyticsRow,
             r#"
@@ -120,23 +116,8 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
     ) -> RepositoryResult<Vec<PoolHistoryBucket>> {
         let address = pool_address.to_string();
 
-        // The per-(pool, hour) USD valuation of the four CAs lives in the
-        // `meteora_damm_v2_pool_hourly_activity` VIEW (baseline §15) — this
-        // query just slices it to one pool and window. The macro still verifies
-        // these columns against the view.
-        //
-        // Behaviour change in migration 002: a pool whose mints are not
-        // resolved yet used to yield an EMPTY series (the view INNER-joined
-        // `token_metadata`, so its buckets did not exist). It now yields its
-        // swap buckets with a non-null `swap_count` and null USD columns —
-        // "it traded, we could not price it" instead of "nothing happened".
-        // Every USD field was already nullable, so the wire shape is unchanged.
-        //
-        // Migration 010 made the same change on the reward side: an hour whose
-        // only activity is a claim on a mint `yog-context` has not resolved now
-        // yields a bucket with EVERY column null (`swap_count` included — it
-        // was not a swap). So a bucket that looks empty is not a bug; it is one
-        // of those two cases.
+        // A bucket may hold a `swap_count` with null USD columns (mints not resolved yet),
+        // or only nulls (an hour whose only activity is a claim on an unresolved mint).
         let rows = sqlx::query_as!(
             PoolHistoryRow,
             r#"
@@ -172,10 +153,8 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
         metric: PoolRankMetric,
         limit: i64,
     ) -> RepositoryResult<Vec<Pubkey>> {
-        // One static, compile-checked query per metric — no dynamic SQL. Each
-        // ranks over the priced analytics and drops pools with a NULL metric
-        // value (unpriceable, or no activity in the window) rather than
-        // sorting them last.
+        // One static query per metric. A pool whose metric is NULL (unpriceable, or idle
+        // in the window) is dropped, not sorted last.
         let addresses: Vec<String> = match metric {
             PoolRankMetric::Volume24h => sqlx::query_scalar!(
                 r#"
@@ -192,9 +171,6 @@ impl PoolAnalyticsRepository for PgPoolAnalyticsRepository {
             .fetch_all(&self.pool)
             .await
             .map_err(map_sqlx_error)?,
-            // TVL is one row per pool in the `pool_current_tvl` VIEW (no
-            // window/aggregate), so no GROUP BY — just filter out the
-            // unpriceable pools and order by depth.
             PoolRankMetric::Tvl => sqlx::query_scalar!(
                 r#"
                 SELECT pool_address AS "pool_address!"

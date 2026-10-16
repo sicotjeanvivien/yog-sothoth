@@ -1,10 +1,5 @@
-//! Unit tests for `TryFrom<MeteoraDammV2LiquidityEventRow> for
-//! MeteoraDammV2LiquidityEventValued`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right event + `value_usd`, that each fallible field
-//! has its own validation path, and that errors surface as
-//! `RepositoryError::Integrity`.
+//! DB-free tests of
+//! `TryFrom<MeteoraDammV2LiquidityEventRow> for MeteoraDammV2LiquidityEventValued`.
 
 use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
@@ -17,8 +12,7 @@ use yog_core::{
 
 use super::MeteoraDammV2LiquidityEventRow;
 
-// Distinct valid base58-encoded Pubkeys so any field swap in the
-// `TryFrom` impl shows up immediately in the happy path test.
+// Distinct pubkeys, so a field swap in the `TryFrom` fails the happy path.
 const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
 const VALID_POSITION: &str = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 const VALID_OWNER: &str = "11111111111111111111111111111111";
@@ -46,8 +40,6 @@ fn valid_row() -> MeteoraDammV2LiquidityEventRow {
 fn sig(seed: u8) -> Signature {
     Signature::from([seed; 64])
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn try_from_valid_row_returns_event_with_all_fields_mapped() {
@@ -98,8 +90,6 @@ fn try_from_preserves_signature_and_timestamp() {
     assert_eq!(valued.event.timestamp, timestamp);
 }
 
-// ── Pubkey validation ────────────────────────────────────────────────
-
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {
     let row = MeteoraDammV2LiquidityEventRow {
@@ -142,8 +132,6 @@ fn try_from_invalid_owner_returns_integrity() {
     );
 }
 
-// ── Enum validation ──────────────────────────────────────────────────
-
 #[test]
 fn try_from_invalid_liquidity_event_kind_returns_integrity() {
     let row = MeteoraDammV2LiquidityEventRow {
@@ -157,8 +145,6 @@ fn try_from_invalid_liquidity_event_kind_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── Numeric conversion (i64 → u64, BigDecimal → u128) ────────────────
 
 #[test]
 fn try_from_negative_amount_a_returns_integrity() {

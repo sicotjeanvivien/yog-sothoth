@@ -9,11 +9,8 @@ use tokio::{
 use super::read_tail;
 use crate::error::BackupError;
 
-/// A dump being produced by `pg_dump`, read chunk by chunk.
-///
-/// **Dropping it kills `pg_dump`.** That is the whole of how a caller gives
-/// up on a dump — a stop, a bucket that refuses a part, a check that fails —
-/// and so the only way it can leave none running behind it.
+/// A dump being produced by `pg_dump`, read chunk by chunk. Dropping it kills
+/// `pg_dump`: that is how a caller gives up on a dump.
 pub struct DumpStream {
     child: Child,
     stdout: ChildStdout,

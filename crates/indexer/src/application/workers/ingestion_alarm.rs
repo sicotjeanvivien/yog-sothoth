@@ -54,7 +54,6 @@ impl IngestionAlarm {
     /// ⚠️ The whole check races the stop, `biased`: a stop held by a slow endpoint ends in SIGKILL.
     pub(crate) async fn run(self, shutdown: CancellationToken) -> Result<(), Infallible> {
         let mut ticker = tokio::time::interval(CHECK_INTERVAL);
-        // A slow check delays the next one instead of firing the missed ones back to back.
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
         self.log_start();
 

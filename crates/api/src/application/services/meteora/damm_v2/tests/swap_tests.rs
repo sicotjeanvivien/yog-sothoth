@@ -17,8 +17,6 @@ fn default_params(pool: solana_pubkey::Pubkey) -> MeteoraDammV2SwapListParams {
     }
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[tokio::test]
 async fn returns_page_items_from_repo() {
     let addr = pk(1);
@@ -79,9 +77,6 @@ async fn last_page_has_no_next_cursor() {
 
 #[tokio::test]
 async fn prev_position_is_threaded_to_repo() {
-    // The service must pass `position=Some(Last)` to the repo without
-    // swallowing it. We verify indirectly: the mock is consumed once,
-    // so if the call reaches it, the param was not dropped.
     let addr = pk(1);
     let svc = MeteoraDammV2SwapService::new(Arc::new(MockSwapEventRepo::empty()));
 
@@ -93,11 +88,8 @@ async fn prev_position_is_threaded_to_repo() {
         limit: 10,
     };
 
-    // Just asserting it doesn't panic / the mock is consumed cleanly.
     svc.list_swaps_for_pool(params).await.unwrap();
 }
-
-// ── Error propagation ────────────────────────────────────────────────
 
 #[tokio::test]
 async fn repo_error_propagates() {

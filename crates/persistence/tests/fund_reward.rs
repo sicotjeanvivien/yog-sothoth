@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2FundRewardEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── fund_reward: persists, idempotent, u128 Q64.64 rates survive ─────
-
 #[sqlx::test]
 async fn fund_reward_preserves_q64_rates(pool: PgPool) {
     let repo = PgMeteoraDammV2FundRewardEventRepository::new(pool.clone());
@@ -33,7 +31,7 @@ async fn fund_reward_preserves_q64_rates(pool: PgPool) {
     };
 
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
-    // Same (signature, reward_index, timestamp) again — ON CONFLICT DO NOTHING.
+    // A replay: ON CONFLICT DO NOTHING.
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM meteora_damm_v2_fund_reward_events")
@@ -45,9 +43,8 @@ async fn fund_reward_preserves_q64_rates(pool: PgPool) {
         "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // A second slot funded by the same transaction is a distinct event — a
-    // second `emit_cpi!`, hence a second `event_index`. Since migration 041 that
-    // is what the key looks at, not `reward_index`.
+    // A second slot funded by the same transaction: a second `emit_cpi!`, so a second
+    // `event_index`, which the key reads.
     assert_eq!(
         repo.insert(&MeteoraDammV2FundRewardEvent {
             reward_index: 1,
@@ -64,8 +61,7 @@ async fn fund_reward_preserves_q64_rates(pool: PgPool) {
         .unwrap();
     assert_eq!(count, 2, "a second slot in the same tx must insert");
 
-    // The Q64.64 rate is a 25-digit u128: NUMERIC(39,0) must return it to the
-    // last digit. Any silent narrowing to f64/i64 would corrupt it here.
+    // A 25-digit u128 rate, returned to the last digit: a narrowing to f64 or i64 fails here.
     let (pre, post, end): (String, String, i64) = sqlx::query_as(
         "SELECT pre_reward_rate::TEXT, post_reward_rate::TEXT, reward_duration_end \
          FROM meteora_damm_v2_fund_reward_events WHERE reward_index = 0",

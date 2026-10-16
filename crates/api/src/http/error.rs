@@ -6,20 +6,8 @@ use tracing::{error, warn};
 
 use crate::http::dto::response::{PROBLEM_CONTENT_TYPE, ProblemDetailsResponse};
 
-/// API-level errors surfaced by handlers.
-///
-/// Four variants cover everything we need at this layer:
-/// - `BadRequest`: client supplied invalid input (bad cursor, out-of-range limit).
-/// - `NotFound`: resource does not exist.
-/// - `Unavailable`: the API is over capacity or out of time — a slot, a
-///   connection or a statement's budget ran out. Nothing is broken, and the
-///   same request may succeed shortly: `503` with `Retry-After`, not `500`.
-/// - `Internal`: unexpected failure — DB error, encoding bug, anything not the
-///   client's fault. The detailed message is logged, never sent to the client.
-///
-/// Responses are serialised as RFC 9457 Problem Details with
-/// `Content-Type: application/problem+json`. See
-/// [`crate::http::dto::response::problem`] for the format rationale.
+/// API-level errors, served as RFC 9457 Problem Details. `Unavailable` is capacity or time
+/// running out — `503` with `Retry-After`, not `500`; `Internal` is logged, never detailed.
 #[derive(Debug)]
 pub(crate) enum ApiError {
     BadRequest(String),
@@ -29,9 +17,7 @@ pub(crate) enum ApiError {
     Internal(String),
 }
 
-/// What `Retry-After` tells a refused client, in seconds: about the time a
-/// slot takes to free up, the slow routes answering in 2–4 s (measured
-/// 25 September 2026).
+/// What `Retry-After` tells a refused client, in seconds: about the time a slot takes to free.
 const RETRY_AFTER_SECS: &str = "5";
 
 impl IntoResponse for ApiError {
@@ -50,9 +36,7 @@ impl IntoResponse for ApiError {
                 )
             }
             ApiError::Internal(msg) => {
-                // Log internal errors with full context but never expose
-                // implementation details (DB connection strings, query
-                // shapes, etc.) to the client.
+                // Logged in full, never sent.
                 error!(error = %msg, "internal API error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -64,8 +48,7 @@ impl IntoResponse for ApiError {
 
         let problem = ProblemDetailsResponse::generic(title, status.as_u16(), detail);
 
-        // Hand-roll the response rather than using `axum::Json`, because
-        // we need the RFC 9457 content type, not `application/json`.
+        // Not `axum::Json`: RFC 9457 needs its own content type.
         let body = serde_json::to_vec(&problem).expect("ProblemDetailsResponse always serialises");
 
         let mut response = (
@@ -87,15 +70,8 @@ impl IntoResponse for ApiError {
     }
 }
 
-/// Convert a `RepositoryError` into an `ApiError`. Used pervasively in
-/// handlers via the `?` operator on repository calls.
-///
-/// The mapping is intentionally coarse: every repository error becomes
-/// `Internal`, except a timeout — the pool had no connection to give, or
-/// Postgres cancelled a statement past its `statement_timeout` — which is the
-/// API out of capacity, not broken: `Unavailable`. Application services are
-/// responsible for translating `Ok(None)` into `ApiError::NotFound` — the
-/// repository layer never propagates a not-found as an error.
+/// Every repository error is `Internal` but a timeout — no connection, or a statement past its
+/// `statement_timeout` — which is `Unavailable`. A not-found is the services' `Ok(None)`.
 impl From<yog_core::RepositoryError> for ApiError {
     fn from(err: yog_core::RepositoryError) -> Self {
         match err {

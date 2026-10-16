@@ -449,7 +449,7 @@ One client must not be able to take the API down for everyone. Measured on
 answer `500` after 5 s; ~500 signal streams got the process OOM-killed under
 its production `mem_limit` of 32 MiB.
 
-Each bound is named once, with its measurement, in
+Each bound is named once in
 `src/http/middleware/capacity.rs`:
 
 | Bound | Value | Why |

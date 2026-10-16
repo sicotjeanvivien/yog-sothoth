@@ -1,8 +1,4 @@
-//! Integration tests for the claim continuous aggregates (baseline §13).
-//!
-//! Gated behind `integration-tests`. History-only rollups with no Rust read
-//! path yet, so the tests assert the CA aggregates directly. Real-time
-//! aggregation makes the just-inserted rows visible without a manual refresh.
+//! The claim continuous aggregates, asserted directly: no Rust read path consumes them yet.
 
 use super::helpers::{claim_reward, pk};
 use chrono::{DateTime, Duration, Utc};

@@ -1,10 +1,4 @@
-//! Serialisation tests for `StatsResponse`.
-//!
-//! Found missing in review: `PoolResponse` gained a wire test with the coverage
-//! counters, `/api/stats` did not. Its shape was pinned only by a hand-written
-//! zod fixture on the web side, which can drift from the API without anything
-//! going red — and a coverage figure that silently stops being emitted is worse
-//! than one that was never added.
+//! The wire shape of `StatsResponse`, coverage counters included.
 
 use super::StatsResponse;
 use crate::application::StatsAggregate;
@@ -35,16 +29,13 @@ fn stats_response_serialises_the_coverage_counters_in_camel_case() {
 
     assert_eq!(json["swapBuckets24h"], 1246);
     assert_eq!(json["swapBucketsPriced24h"], 767);
-    // The TVL pair it is modelled on must still be there — the two coverages
-    // are read side by side on the Overview.
     assert_eq!(json["poolsPriced"], 348);
     assert_eq!(json["poolsObserved"], 359);
 }
 
 #[test]
 fn a_partial_volume_coverage_survives_the_wire_next_to_its_value() {
-    // The payload the pair exists for: a non-null protocol-wide volume covering
-    // 767 of the 1246 pool-hours that traded. Nothing in the value says so.
+    // A non-null volume covering part of the window: only the pair says so.
     let json = serde_json::to_value(StatsResponse::from(aggregate(1246, 767))).unwrap();
 
     assert_eq!(json["volume24hUsd"], serde_json::json!("508193"));

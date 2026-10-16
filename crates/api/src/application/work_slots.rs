@@ -1,15 +1,6 @@
-//! Slots for the expensive database work, shared by everything that does it.
-//!
-//! The API's pool has 10 connections. The slow routes (1.8–3.7 s each, measured
-//! 25 September 2026) and the shared-result computations behind
-//! `/api/pools/top` and `/api/stats` all take one slot here, so together they
-//! can never hold more than the slots — the light routes and the signal
-//! poller keep the rest of the pool.
-//!
-//! A slot is taken by whoever **does** the work: a route while it runs, a
-//! cached computation while it computes — never a caller waiting for a cached
-//! value. Waiters holding slots is what turned 30 `/top` requests on a cold
-//! cache into 24 × `503` for a single computation.
+//! Slots for the expensive database work: the slow routes and the cached computations
+//! together never hold more than the slots, so the light routes and the poller keep the rest
+//! of the pool. ⚠️ Taken by whoever does the work, never by a caller waiting for a cached value.
 
 use std::sync::Arc;
 use std::time::Duration;

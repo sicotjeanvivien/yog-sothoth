@@ -1,59 +1,7 @@
-//! `yog-migrate` — one-shot binary that provisions and migrates the database.
-//!
-//! Lives inside the `yog-persistence` crate (as a `src/bin/` target)
-//! because the migrations themselves are owned by this crate, and
-//! sqlx as an engine choice must not leak elsewhere.
-//!
-//! # Subcommands
-//!
-//! ```text
-//! yog-migrate                     apply pending migrations  (default)
-//! yog-migrate migrate             same, spelled out
-//! yog-migrate setup-roles         create the roles + structural privileges
-//! yog-migrate seed-watched-pools  seed the startup allowlist
-//! yog-migrate bootstrap           the three above, in order
-//! yog-migrate help                this list
-//! ```
-//!
-//! **The no-argument form must keep applying migrations**: it is what the
-//! `yog-migrate` compose service and every deploy script invoke.
-//!
-//! # Roles, and why they differ per subcommand
-//!
-//! - `setup-roles` and `seed-watched-pools` read **`DATABASE_URL_ADMIN`**.
-//!   Creating roles needs an admin, and the allowlist is *configuration*, not
-//!   runtime data — the house convention keeps configuration writes under the
-//!   admin role.
-//! - `migrate` reads **`DATABASE_URL_MIGRATE`**, which must carry the
-//!   `yog_migrate` role: the five runtime roles intentionally cannot alter the
-//!   schema.
-//!
-//! `bootstrap` therefore needs both, and says so before doing anything rather
-//! than failing halfway.
-//!
-//! # What it does not do
-//!
-//! It never creates the *database*. Every URL above already names one, so the
-//! database must exist first (`createdb yog_sothoth`, or the compose volume).
-//!
-//! # Idempotency
-//!
-//! Every subcommand is safe to re-run: migrations skip what is applied,
-//! `setup_roles.sql` guards its `CREATE ROLE`s, and the seed is
-//! `ON CONFLICT DO NOTHING`.
-//!
-//! # Where the scripts live
-//!
-//! `src/bin/scripts/`, next to this file, because `include_str!` compiles them
-//! *into* this binary — they ship with it and have no life of their own, unlike
-//! `migrations/`, which sqlx reads as a versioned directory. Cargo ignores the
-//! subdirectory (no `main.rs`, so no target is inferred from it); `cargo
-//! metadata` still lists exactly one bin.
-//!
-//! ⚠️ Being embedded, editing a script does **not** invalidate an already-built
-//! binary on its own. Same caveat as the migrations: force a rebuild (`touch`
-//! this file) when a script changes, or you will run the previous version and
-//! believe otherwise.
+//! `yog-migrate`: provisions and migrates the database (subcommands in `USAGE`).
+//! `setup-roles` and `seed-watched-pools` connect with `DATABASE_URL_ADMIN`, `migrate` with
+//! `DATABASE_URL_MIGRATE`. ⚠️ The no-argument form must keep migrating: compose and every
+//! deploy script invoke it. It never creates the database.
 
 use anyhow::{Context, Result, bail};
 
@@ -87,16 +35,11 @@ Every subcommand is idempotent and safe to re-run.";
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Standard env + tracing init via the shared bootstrap crate,
-    // same shape as the other binaries — keeps logs uniform across
-    // services and avoids re-implementing rustls/dotenv plumbing.
     yog_bootstrap::init_rustls();
     dotenvy::dotenv().ok();
     yog_bootstrap::init_tracing();
 
-    // Hand-rolled rather than clap: four subcommands, no flags, no values to
-    // parse. The workspace has no argument-parsing dependency and this is not
-    // enough of a reason to add one.
+    // Hand-rolled: a few subcommands and no flags do not justify an argument-parsing dependency.
     let command = std::env::args().nth(1);
     match command.as_deref() {
         None | Some("migrate") => migrate().await,
@@ -152,11 +95,8 @@ async fn seed_watched_pools() -> Result<()> {
         .await
         .context("failed to seed watched_pools")?;
 
-    // The script ends with a SELECT of the active allowlist, but `run_script`
-    // goes through `execute()`, which discards rows — so under the binary that
-    // SELECT shows nothing, and telling the operator to "review the selection"
-    // without showing it is an instruction they cannot follow. Read it back
-    // through the repository rather than re-writing the SQL here.
+    // ⚠️ `run_script` discards the rows of the script's closing SELECT: the
+    // allowlist is read back so the operator sees what to review.
     let repository = PgWatchedPoolRepository::new(database.pool_owned());
     let active: Vec<_> = repository
         .find_all()
@@ -175,10 +115,7 @@ async fn seed_watched_pools() -> Result<()> {
             "  will be subscribed at indexer start"
         );
     }
-    // INFO, not WARN. This fires on every seed, with no condition detected —
-    // and the pool shipped by default is SOL-USDC, the one pick whose rationale
-    // does not decay, so it would cry loudest where the risk is lowest. An
-    // unconditional WARN is noise, and noise is how a real one gets ignored.
+    // INFO, not WARN: it fires on every seed, with nothing detected.
     tracing::info!(
         "review the selection before starting the indexer: a pool that has gone \
          quiet subscribes fine, logs nothing abnormal, and collects nothing"
@@ -188,9 +125,8 @@ async fn seed_watched_pools() -> Result<()> {
 
 /// The whole provisioning sequence on an existing, empty database.
 async fn bootstrap() -> Result<()> {
-    // Both variables are checked up front: failing on a missing
-    // DATABASE_URL_MIGRATE *after* having created five cluster-wide roles
-    // leaves a half-provisioned cluster and a confusing error.
+    // Both checked up front: failing after the cluster-wide roles exist leaves
+    // a half-provisioned cluster.
     require_env("DATABASE_URL_ADMIN", "an admin role")?;
     require_env("DATABASE_URL_MIGRATE", "the yog_migrate role")?;
 
@@ -207,26 +143,16 @@ async fn bootstrap() -> Result<()> {
     Ok(())
 }
 
-/// Read a connection URL from the environment, naming the role it must carry.
-///
-/// Goes through [`yog_bootstrap::required_secret_url`] rather than [`std::env::var`] so the
-/// URL inherits the two rules every other variable in the workspace obeys: a
-/// blank value counts as missing, and surrounding whitespace is trimmed. The
-/// second is not cosmetic here — this repository's `.env` is CRLF, and the
-/// native workflow sources it into the shell, so a trailing `\r` would ride
-/// inside the connection string and come back as an opaque network error.
+/// Reads a connection URL, naming the role it must carry. Through
+/// [`yog_bootstrap::required_secret_url`], not [`std::env::var`]: a blank value is
+/// missing, and the trailing `\r` of a CRLF `.env` is trimmed.
 fn require_env(var: &str, role: &str) -> Result<SecretUrl> {
     yog_bootstrap::required_secret_url(var)
         .with_context(|| format!("{var} must be set (credentials for {role})"))
 }
 
-/// Connect using the URL held by `var`, which must carry `role`.
-///
-/// The URL stays a [`SecretUrl`] until the connection call itself. The comment
-/// that used to say "log the variable, not its value" described a discipline;
-/// the type now makes it a fact — an `anyhow` chain that formats this value
-/// prints the password as `***REDACTED***` and keeps the host and the role,
-/// which is exactly what a failed provisioning run needs to say.
+/// Connects with the URL held by `var`, which must carry `role`. The URL stays a
+/// [`SecretUrl`] until the connection call, so an error chain prints it redacted.
 async fn connect(var: &str, role: &str) -> Result<Database> {
     let url = require_env(var, role)?;
 

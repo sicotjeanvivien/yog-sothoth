@@ -1,6 +1,4 @@
 //! Fund-reward events repository: inserts farm fundings and their emission rate.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

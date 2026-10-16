@@ -6,66 +6,40 @@ use sqlx::types::BigDecimal;
 use std::str::FromStr;
 use yog_core::{RepositoryError, RepositoryResult, domain::MeteoraDammV2LiquidityEventKind};
 
-/// Convert a string read from the database into a `Pubkey`.
-///
-/// Returns `RepositoryError::Integrity` if the value cannot be parsed —
-/// this means the row contains a malformed pubkey, which is a data
-/// integrity issue (manual edit, schema drift, or upstream write bug).
+/// Parses a stored pubkey; a malformed one is `RepositoryError::Integrity`.
 pub(crate) fn convert_string_to_pubkey(key: String, field: &str) -> RepositoryResult<Pubkey> {
     Pubkey::from_str(&key)
         .map_err(|e| RepositoryError::Integrity(format!("invalid {field} pubkey: {e}")))
 }
 
-/// Convert a `u64` (typically a domain value) into the `i64` Postgres
-/// column type. Fails on overflow — values close to `u64::MAX` cannot
-/// round-trip through Postgres `BIGINT`.
+/// Converts a `u64` for a `BIGINT` column; fails past `i64::MAX`.
 pub(crate) fn convert_u64_to_i64(v: u64, field: &str) -> RepositoryResult<i64> {
     i64::try_from(v).map_err(|e| RepositoryError::Integrity(format!("invalid {field}: {e}")))
 }
 
-/// Convert a `BIGINT` read from Postgres into a `u64`. Fails on negative
-/// values — they should never appear if the schema is correct.
+/// Converts a `BIGINT` into a `u64`; fails on a negative value.
 pub(crate) fn convert_i64_to_u64(v: i64, field: &str) -> RepositoryResult<u64> {
     u64::try_from(v).map_err(|e| RepositoryError::Integrity(format!("invalid {field}: {e}")))
 }
 
-/// Narrow a `SMALLINT` read from Postgres into a `u8` (token decimals).
-/// Fails on negative or >255 values — they would mean the row was written
-/// by a non-conforming source.
+/// Narrows a `SMALLINT` into a `u8`; fails outside `0..=255`.
 pub(crate) fn convert_i16_to_u8(v: i16, field: &str) -> RepositoryResult<u8> {
     u8::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
-/// Narrow an `INTEGER` read from Postgres into a `u16`.
-///
-/// The width is deliberate: a `u16` does not fit SMALLINT (32 767 < 65 535), so
-/// columns holding one are INTEGER and half their range is unreachable by
-/// design. This guard catches a value written outside that convention rather
-/// than truncating it.
+/// Narrows an `INTEGER` into a `u16`, which does not fit `SMALLINT`; fails
+/// rather than truncates outside its range.
 pub(crate) fn convert_i32_to_u16(v: i32, field: &str) -> RepositoryResult<u16> {
     u16::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
-/// Narrow a `BIGINT` read from Postgres into a `u32`. Same reasoning as
-/// [`convert_i32_to_u16`]: a `u32` does not fit INTEGER.
+/// Narrows a `BIGINT` into a `u32`, which does not fit `INTEGER`.
 pub(crate) fn convert_i64_to_u32(v: i64, field: &str) -> RepositoryResult<u32> {
     u32::try_from(v).map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {v}")))
 }
 
-/// Lift any of the guards above over `Option`, for a nullable column.
-///
-/// Every `TryFrom<Row>` in this crate hits the same shape — a nullable column,
-/// one scalar converter, one field name — and each was writing its own two-line
-/// wrapper (`percent`, `u16_column`, …). The conversion rules stay in the
-/// converters; this only carries the absence through.
-///
-/// ```text
-/// bin_step: convert_optional(row.bin_step, "bin_step", convert_i32_to_u16)?,
-/// ```
-///
-/// Fenced as `text`, not `ignore`: the crate's integration run passes
-/// `-- --include-ignored`, which un-ignores doctests too and would try to
-/// compile this fragment out of context.
+/// Lifts any converter above over `Option`, for a nullable column:
+/// `convert_optional(row.bin_step, "bin_step", convert_i32_to_u16)?`.
 pub(crate) fn convert_optional<T, U>(
     value: Option<T>,
     field: &str,
@@ -74,8 +48,7 @@ pub(crate) fn convert_optional<T, U>(
     value.map(|v| convert(v, field)).transpose()
 }
 
-/// Convert a Postgres `NUMERIC` (mapped to `BigDecimal`) into a `u128`.
-/// Used for fields like `price_q64` that exceed `i64` range.
+/// Converts a `NUMERIC` into a `u128`, for values past `i64` such as `price_q64`.
 pub(crate) fn convert_bigdecimal_to_u128(
     bigdecimal: BigDecimal,
     field: &str,
@@ -86,7 +59,6 @@ pub(crate) fn convert_bigdecimal_to_u128(
         .map_err(|e| RepositoryError::Integrity(format!("{field} parse error: {e}")))
 }
 
-/// Parse a string column into a `MeteoraDammV2LiquidityEventKind` enum value.
 pub(crate) fn parse_string_to_liquidity_event_kind(
     liquidity_event_kind: String,
     field: &str,
@@ -96,10 +68,8 @@ pub(crate) fn parse_string_to_liquidity_event_kind(
         .map_err(|_| RepositoryError::Integrity(format!("invalid {field}: {liquidity_event_kind}")))
 }
 
-/// Map a [`sqlx::Error`] to its semantic `RepositoryError` counterpart.
-///
-/// The mapping is intentionally coarse — refine variants only when a
-/// caller actually needs to distinguish specific cases.
+/// Maps a [`sqlx::Error`] to its `RepositoryError`, coarsely: refine a variant
+/// only when a caller needs to tell it apart.
 pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
     match &err {
         SqlxError::RowNotFound => RepositoryError::NotFound(err.to_string()),
@@ -113,8 +83,7 @@ pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
 
         SqlxError::PoolTimedOut => RepositoryError::Timeout(err.to_string()),
 
-        // `statement_timeout` expired: Postgres cancelled the statement itself.
-        // A time budget exceeded, like the pool's — not a backend fault.
+        // `statement_timeout` expired: a time budget, like the pool's, not a backend fault.
         SqlxError::Database(db_err) if db_err.code().as_deref() == Some(QUERY_CANCELED) => {
             RepositoryError::Timeout(err.to_string())
         }
@@ -123,14 +92,11 @@ pub(crate) fn map_sqlx_error(err: SqlxError) -> RepositoryError {
     }
 }
 
-/// SQLSTATE `57014` — `query_canceled`, what a statement cut short by
-/// `statement_timeout` fails with.
+/// SQLSTATE `57014` (`query_canceled`), what `statement_timeout` raises.
 const QUERY_CANCELED: &str = "57014";
 
-/// Convert a `u128` into a `BigDecimal`, lossless. Used when binding u128
-/// values to PostgreSQL `NUMERIC(39, 0)` columns.
+/// Converts a `u128` for a `NUMERIC(39, 0)` column, lossless.
 pub(crate) fn convert_u128_to_bigdecimal(v: u128, _field: &str) -> BigDecimal {
-    // u128::to_string is always parseable into BigDecimal — infallible in practice.
     BigDecimal::from_str(&v.to_string()).expect("u128 string is always valid BigDecimal")
 }
 
@@ -139,24 +105,9 @@ pub(crate) fn convert_string_to_signature(key: String, field: &str) -> Repositor
         .map_err(|e| RepositoryError::Integrity(format!("invalid {field} signature: {e}")))
 }
 
-/// Convert a `NUMERIC` read from Postgres into a `Decimal`.
-///
-/// ⚠️ **`to_plain_string()`, never `to_string()`.** `BigDecimal`'s `Display`
-/// switches to scientific notation for small magnitudes, and
-/// `Decimal::from_str` mishandles that form once the mantissa reaches its
-/// 28-digit scale: it fills the scale with the mantissa, **drops the exponent,
-/// and returns `Ok`**. Measured — `6.283855409573290776726186454503737E-12`
-/// parses as `6.2838554095732907767261864545`, a factor of 10¹², silently.
-///
-/// Short mantissas survive (`1E-12` parses correctly), which is why this went
-/// unnoticed: valuation from *observed* prices is terminating arithmetic and
-/// rarely reaches 28 significant digits. The implied-price division of
-/// migration 002 produces 34-38 of them as a matter of course, turning a
-/// dormant defect into a reachable one.
-///
-/// `to_plain_string()` never uses an exponent, so the parse is exact — and a
-/// value genuinely too large for `Decimal` now fails loudly instead of being
-/// truncated into a plausible wrong number.
+/// Converts a `NUMERIC` into a `Decimal`; one too large fails instead of truncating.
+/// ⚠️ `to_plain_string()`, never `to_string()`: `Decimal::from_str` drops the exponent of a
+/// long scientific-notation mantissa and returns `Ok`, off by a power of ten.
 pub(crate) fn convert_bigdecimal_to_decimal(
     value: BigDecimal,
     field: &str,

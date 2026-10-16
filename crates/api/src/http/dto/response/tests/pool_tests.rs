@@ -39,20 +39,12 @@ fn pool_signal_response_carries_severity_detector_and_time() {
 
     let resp = PoolSignalResponse::from(record);
 
-    // Severity crosses the wire as its snake_case tag, like the feed's
-    // SignalResponse.
     assert_eq!(serde_json::to_value(&resp).unwrap()["severity"], "warning");
     assert_eq!(resp.detector, "flow_imbalance");
     assert_eq!(resp.triggered_at, expected_at);
 }
 
-// ── The coverage counters must reach the wire ────────────────────────────────
-
-/// Found in self-review: nothing asserted that the two coverage counters
-/// survive serialisation. Every service test builds analytics with
-/// `..PoolAnalytics::empty()`, so the fields were always 0 and never inspected
-/// in a JSON body — a rename or a missed wiring in `PoolResponse::new` would
-/// have shipped silently, and the whole point of this pair is to be *visible*.
+/// Mutation: a coverage counter renamed or left unwired in `PoolResponse::new`.
 #[test]
 fn pool_response_serialises_the_coverage_counters_in_camel_case() {
     let analytics = PoolAnalytics {
@@ -77,22 +69,11 @@ fn pool_response_serialises_the_coverage_counters_in_camel_case() {
 
     assert_eq!(json["swapBuckets24h"], 24);
     assert_eq!(json["swapBucketsPriced24h"], 14);
-    // The value it qualifies is a sub-total, and stays present: the pair is what
-    // says so, not the absence of a number. Pinned as a STRING — rust_decimal
-    // serialises decimals that way by default, which is what the web's
-    // `BigDecimal` zod type expects and what preserves the trailing digits the
-    // SQL produces. (The struct doc claimed "JSON numbers"; it was wrong.)
+    // The sub-total stays present, as a string — what the web's `BigDecimal` zod type expects.
     assert_eq!(json["volume24hUsd"], serde_json::json!("1400000"));
 }
 
-// ── The fee split reaches the wire, and is not recomputed ────────────────────
-
-/// `lpFees24hUsd` was derived here as `fees - protocol`, which credits the
-/// referral to the LPs (corrected by migration 007). It is now read from the
-/// analytics, where the split is computed once in SQL.
-///
-/// The fixture makes the two answers differ — `3500 - 700 = 2800` against a
-/// true LP share of `2660` — so this fails if the subtraction ever comes back.
+/// Mutation: `lpFees24hUsd` recomputed as `fees - protocol` (2800) instead of read (2660).
 #[test]
 fn pool_response_carries_the_three_fee_shares_without_recomputing_them() {
     let analytics = PoolAnalytics {
@@ -125,9 +106,7 @@ fn pool_response_carries_the_three_fee_shares_without_recomputing_them() {
     );
 }
 
-/// A window covered end to end must be distinguishable from a quiet pool: the
-/// first reports `n / n`, the second `0 / 0`. Collapsing both to "no hint" is
-/// how a missing figure gets read as a complete one.
+/// A window covered end to end reads `n / n`, a quiet pool `0 / 0`: both must reach the wire.
 #[test]
 fn a_quiet_pool_reports_zero_buckets_not_full_coverage() {
     let resp = PoolResponse::new(

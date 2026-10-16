@@ -4,10 +4,8 @@ use crate::repositories::helper::{
 use bigdecimal::BigDecimal;
 use yog_core::{RepositoryError, domain::PoolSwapFlow};
 
-/// Row shape for the directional-flow query. Both USD sums are `NUMERIC`
-/// (→ `BigDecimal`) and **nullable**: the query returns NULL for a window that
-/// was not entirely valuable, so "unknown" reaches the detector as itself
-/// instead of as a zero it cannot tell from a real one.
+/// Row shape of the directional-flow query. A NULL sum (window not entirely valuable)
+/// must reach the detector as unknown, not as zero.
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolSwapFlowRow {
     pub(super) pool_address: String,

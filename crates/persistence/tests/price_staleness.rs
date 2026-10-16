@@ -1,26 +1,6 @@
-//! Integration tests for migration 005 — a price observation has a validity
-//! window, and outside it there is no price.
-//!
-//! Gated behind `integration-tests`. Three things are asserted here, and the
-//! third is the one that keeps the other two honest over time:
-//!
-//!   1. the **as-of** bound (`yog_price_max_age_asof()`, one hour) — a price
-//!      fetched too far before the valued bucket or event no longer values it;
-//!   2. the **latest** bound (`yog_price_max_age_latest()`, 15 minutes) — a
-//!      current-price lookup that only finds a stale observation yields NULL,
-//!      which is what makes a `yog-context` outage visible instead of publishing
-//!      yesterday's TVL as today's;
-//!   3. **every view that reads `token_prices` applies one of the two.** The
-//!      policy previously existed at one site out of seventeen; a test that
-//!      enumerates the views from the catalog is the constraint that stops the
-//!      eighteenth from forgetting it. The two assertions above cover one view
-//!      each — this one covers the ones nobody thought to write a test for.
-//!
-//! Both bounded lookups are exercised through the VIEW rather than through a
-//! repository, so that what is asserted is what the view itself publishes,
-//! independently of how the flow repositories then aggregate it (`bool_and` +
-//! `SUM`, migration 006 — the `COALESCE` that used to flatten a NULL into a
-//! real-looking zero is gone).
+//! A price observation has a validity window, and outside it there is no price: the as-of
+//! bound (one hour) and the latest bound (15 minutes), asserted through the views
+//! themselves. And every view that reads prices applies one, enumerated from the catalog.
 
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, DurationRound, Utc};
@@ -48,7 +28,6 @@ async fn seed_pool(pool: &PgPool) -> (String, String, String) {
     .await
     .unwrap();
 
-    // Metadata carries no staleness policy — it is a scale, not a quote.
     for (mint, decimals) in [(&mint_a, 6i16), (&mint_b, 9i16)] {
         sqlx::query(
             "INSERT INTO token_metadata (mint, decimals, fetched_at, last_refresh_at)
@@ -92,23 +71,18 @@ async fn flow_a_to_b(pool: &PgPool) -> Option<f64> {
     .unwrap()
 }
 
-/// The start of a settled bucket, three hours back — far enough that `now`
-/// cannot drift into it while the test runs.
+/// A settled bucket three hours back, which `now` cannot drift into during the test.
 fn settled_bucket() -> DateTime<Utc> {
     (Utc::now() - Duration::hours(3))
         .duration_trunc(Duration::hours(1))
         .unwrap()
 }
 
-// ── 1. The as-of bound, on the detector path (view 023) ─────────────────────
-
 #[sqlx::test]
 async fn as_of_price_inside_the_window_values_the_bucket(pool: PgPool) {
     let (pool_addr, mint_a, _) = seed_pool(&pool).await;
     let bucket = settled_bucket();
 
-    // Ten minutes before the bucket opened: comfortably inside the hour the
-    // policy allows.
     price_at(&pool, &mint_a, "2.0", bucket - Duration::minutes(10)).await;
     insert_swap(&pool, &pool_addr, bucket + Duration::minutes(30)).await;
 
@@ -126,8 +100,7 @@ async fn as_of_price_older_than_the_window_does_not_value_the_bucket(pool: PgPoo
     let (pool_addr, mint_a, _) = seed_pool(&pool).await;
     let bucket = settled_bucket();
 
-    // Ninety minutes before the bucket opened. The only difference with the test
-    // above — and it must be the difference between a figure and no figure.
+    // The only difference with the test above: ninety minutes instead of ten.
     price_at(&pool, &mint_a, "2.0", bucket - Duration::minutes(90)).await;
     insert_swap(&pool, &pool_addr, bucket + Duration::minutes(30)).await;
 
@@ -139,15 +112,11 @@ async fn as_of_price_older_than_the_window_does_not_value_the_bucket(pool: PgPoo
     );
 }
 
-// ── 2. The as-of bound, on the API path (view 021) ──────────────────────────
-
 #[sqlx::test]
 async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
     let (pool_addr, mint_a, mint_b) = seed_pool(&pool).await;
     let event_at = Utc::now() - Duration::hours(2);
 
-    // The API feed is bound by the same rule as the detectors: both legs priced,
-    // but too long before the event to describe it.
     price_at(&pool, &mint_a, "2.0", event_at - Duration::minutes(90)).await;
     price_at(&pool, &mint_b, "100.0", event_at - Duration::minutes(90)).await;
 
@@ -179,10 +148,7 @@ async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
          frontend renders a dash rather than a stale $102"
     );
 
-    // Positive control, in the same test rather than in another file: without
-    // it this would stay green if view 021 were changed to NULL `value_usd`
-    // unconditionally. A guard that only ever asserts absence proves nothing
-    // about the bound.
+    // Positive control: without it, a view returning NULL unconditionally stays green.
     price_at(&pool, &mint_a, "2.0", event_at - Duration::minutes(20)).await;
     price_at(&pool, &mint_b, "100.0", event_at - Duration::minutes(20)).await;
 
@@ -202,8 +168,6 @@ async fn liquidity_event_value_follows_the_same_as_of_bound(pool: PgPool) {
         "expected $102 once a price lands inside the window, got {value}"
     );
 }
-
-// ── 3. The latest bound (view 020), the outage this migration makes visible ──
 
 async fn seed_current_state(pool: &PgPool, pool_addr: &str) {
     sqlx::query(
@@ -247,7 +211,7 @@ async fn current_tvl_goes_absent_when_the_price_stops_being_refreshed(pool: PgPo
     let (pool_addr, mint_a, mint_b) = seed_pool(&pool).await;
     seed_current_state(&pool, &pool_addr).await;
 
-    // yog-context died 30 minutes ago. Reserves are current; the prices are not.
+    // Prices 30 minutes old, reserves current: yog-context died.
     let now = Utc::now();
     price_at(&pool, &mint_a, "2.0", now - Duration::minutes(30)).await;
     price_at(&pool, &mint_b, "100.0", now - Duration::minutes(30)).await;
@@ -291,38 +255,13 @@ async fn a_side_value_goes_absent_on_its_own_stale_price(pool: PgPool) {
     );
 }
 
-// ── 4. The constraint: no view reads prices without a bound ─────────────────
-
-/// `pool_price_snapshot` is the one deliberate exemption: it publishes raw
-/// inputs WITH their `fetched_at` so that `price_oracle_deviation` can gate in
-/// Rust, paired with its `max_spot_age` guard on `last_swap_at`. The policy
-/// binds valuation, not comparison — see migration 005's header.
+/// The one exemption: it publishes raw inputs with their `fetched_at`, gated in Rust by
+/// `price_oracle_deviation`. The policy binds valuation, not comparison.
 const EXEMPT: &str = "pool_price_snapshot";
 
-/// The guard's verdict on one view definition: `Some((bounds, lookups))` when it
-/// reads prices without bounding every read.
-///
-/// ⚠️ Counted per LOOKUP, not per view. `meteora_damm_v2_pool_hourly_activity`
-/// holds five independent price LATERALs (`liq_v` ×2, `pos_fee_v` ×2, `reward_v`
-/// ×1); a `contains("yog_price_max_age")` stays green with four of the five
-/// unbounded — reproducing, inside the very guard against it, the "rule applied
-/// at one site out of seventeen" this policy exists to fix.
-///
-/// The invariant is one bound per lookup, exactly: 2/2 five times over, 5/5 for
-/// the activity view. `!=` rather than `<` so that a count drifting either way
-/// is reported — though note what substring counting cannot see: two bounds on
-/// ONE lookup and none on its sibling still totals 2/2 and passes. Catching
-/// that would need parsing, not counting; the guard is a tripwire for the
-/// forgotten site, not a proof of correctness.
-///
-/// ⚠️ `lookups == 0` is a FAILURE, not a pass. `FROM token_prices` only appears
-/// when the read is a LATERAL subquery; a plain `JOIN token_prices tp ON …` —
-/// the more natural shape for someone adding a simple price read — deparses
-/// without it, and a `bounds < lookups` counter then reads 0/0 and waves it
-/// through. Callers establish that the view reads the table before asking, so
-/// counting no lookup means the guard cannot reason about it and must say so
-/// rather than stay silent. `catches_a_price_read_that_is_not_a_lateral` below
-/// is the proof this branch bites.
+/// `Some((bounds, lookups))` when a view reads prices without one bound per lookup — counted
+/// per lookup, since one view holds several. ⚠️ `lookups == 0` fails: a plain JOIN on the
+/// table has no `FROM token_prices` to count, and 0/0 would wave it through.
 fn unbounded_lookups(definition: &str) -> Option<(usize, usize)> {
     let lookups = definition.matches("FROM token_prices").count()
         + definition.matches("JOIN token_last_price").count()
@@ -354,12 +293,7 @@ async fn price_reading_views(pool: &PgPool) -> Vec<(String, String)> {
 async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
     let views = price_reading_views(&pool).await;
 
-    // Six since migration 006. `meteora_damm_v2_pool_hourly_flow` used to be
-    // the seventh: it now reads `meteora_damm_v2_swap_events_hourly_priced`
-    // instead of `token_prices` directly, so it leaves this enumeration while
-    // KEEPING the bound — it inherits it from the priced view. A view that
-    // stops reading prices is allowed to leave; one that still reads them is
-    // not, and that is what the per-lookup count below enforces.
+    // A view that stops reading prices may leave this list; one that still reads them may not.
     assert!(
         views.len() >= 6,
         "expected the six known price-reading views, found {} — if a view was \
@@ -395,10 +329,7 @@ async fn every_view_reading_a_price_bounds_its_age(pool: PgPool) {
 
 #[sqlx::test]
 async fn the_guard_catches_a_price_read_that_is_not_a_lateral(pool: PgPool) {
-    // A guard nobody has seen fail is a guard nobody has tested. The view above
-    // asserts compliance, which stays green whether or not the predicate works;
-    // this one asserts the predicate itself bites on the shape most likely to be
-    // written next — a plain join, with no `FROM token_prices` to count.
+    // The guard must bite on the likeliest next shape: a plain join, no `FROM token_prices`.
     sqlx::query(
         "CREATE VIEW _guard_probe_plain_join AS
            SELECT p.pool_address, tp.price_usd

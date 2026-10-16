@@ -1,10 +1,4 @@
-//! Unit tests for `TryFrom<PoolPriceSnapshotRow> for PoolPriceSnapshot`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid ones
-//! produce the right snapshot, that each fallible field has its own
-//! validation path, and that errors surface as `RepositoryError::Integrity`.
-//! (The happy path against the real view is covered by the DB-backed
-//! integration test in `tests/pool_price_snapshot.rs`.)
+//! DB-free tests of `TryFrom<PoolPriceSnapshotRow> for PoolPriceSnapshot`.
 
 use bigdecimal::BigDecimal;
 use chrono::{Duration, Utc};
@@ -36,13 +30,10 @@ fn valid_row() -> PoolPriceSnapshotRow {
     }
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[test]
 fn try_from_valid_row_returns_snapshot_with_all_fields_mapped() {
     let row = valid_row();
-    // Three distinct timestamps — a field swap in the TryFrom would
-    // surface as a mismatched assert below.
+    // Mutation: two timestamp fields swapped in the TryFrom.
     let last_swap_at = row.last_swap_at;
     let price_a_fetched_at = row.price_a_fetched_at;
     let price_b_fetched_at = row.price_b_fetched_at;
@@ -60,8 +51,6 @@ fn try_from_valid_row_returns_snapshot_with_all_fields_mapped() {
     assert_eq!(snapshot.price_b_usd, Decimal::from(100));
     assert_eq!(snapshot.price_b_fetched_at, price_b_fetched_at);
 }
-
-// ── Pubkey / enum validation ─────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {
@@ -93,8 +82,6 @@ fn try_from_unknown_protocol_returns_integrity() {
     );
 }
 
-// ── BigDecimal → u128 ────────────────────────────────────────────────
-
 #[test]
 fn try_from_negative_sqrt_price_returns_integrity() {
     let row = PoolPriceSnapshotRow {
@@ -108,8 +95,6 @@ fn try_from_negative_sqrt_price_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── SMALLINT → u8 narrowing ──────────────────────────────────────────
 
 #[test]
 fn try_from_negative_decimals_a_returns_integrity_with_field_in_message() {
@@ -140,8 +125,6 @@ fn try_from_out_of_range_decimals_b_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── BigDecimal → Decimal (price magnitude) ───────────────────────────
 
 #[test]
 fn try_from_price_beyond_decimal_range_returns_integrity() {

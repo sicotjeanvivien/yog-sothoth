@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2LockPositionEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── lock_position: u128 NUMERIC precision at the u128::MAX boundary ──
-
 #[sqlx::test]
 async fn lock_position_preserves_u128_and_u16(pool: PgPool) {
     let repo = PgMeteoraDammV2LockPositionEventRepository::new(pool.clone());

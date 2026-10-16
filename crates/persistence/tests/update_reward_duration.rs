@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2UpdateRewardDurationEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── update_reward_duration: persists, idempotent per slot ───────────
-
 #[sqlx::test]
 async fn update_reward_duration_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2UpdateRewardDurationEventRepository::new(pool.clone());
@@ -39,10 +37,7 @@ async fn update_reward_duration_inserts_and_is_idempotent(pool: PgPool) {
         "duplicate (signature, event_index, timestamp) must not insert twice"
     );
 
-    // Second slot re-paced by the same transaction: a distinct emission, so a
-    // distinct `event_index`. `reward_index` still says *which* slot, but it no
-    // longer carries the key — `event_index` separates any two events of one
-    // transaction, whatever their kind (baseline §12).
+    // A second slot re-paced by the same transaction: a distinct `event_index`.
     assert_eq!(
         repo.insert(&MeteoraDammV2UpdateRewardDurationEvent {
             reward_index: 1,

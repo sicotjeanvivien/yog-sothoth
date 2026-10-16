@@ -1,7 +1,5 @@
-//! Postgres implementation of `NetworkStatusRepository`.
-//!
-//! Backed by the singleton `network_status` table (see migration
-//! 003). Both operations target the single row `id = 1`.
+//! Postgres implementation of `NetworkStatusRepository`, over the singleton row
+//! `id = 1` of `network_status`.
 mod rows;
 
 use crate::repositories::helper::{convert_u64_to_i64, map_sqlx_error};
@@ -13,14 +11,12 @@ use yog_core::{
     domain::{NetworkStatus, NetworkStatusLookup, NetworkStatusRepository},
 };
 
-/// Postgres-backed network status repository.
 #[derive(Clone)]
 pub struct PgNetworkStatusRepository {
     pool: PgPool,
 }
 
 impl PgNetworkStatusRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -29,15 +25,11 @@ impl PgNetworkStatusRepository {
 #[async_trait]
 impl NetworkStatusRepository for PgNetworkStatusRepository {
     async fn upsert(&self, status: &NetworkStatus) -> RepositoryResult<()> {
-        // Postgres has no unsigned integers; check the casts rather
-        // than `as`-ing them silently.
         let slot = convert_u64_to_i64(status.slot, "slot")?;
         let latency = i32::try_from(status.rpc_latency_ms).map_err(|_| {
             RepositoryError::Integrity(format!("invalid rpc_latency_ms: {}", status.rpc_latency_ms))
         })?;
 
-        // Singleton upsert: the row id is always 1. ON CONFLICT keeps
-        // it a single row no matter how often the indexer ticks.
         sqlx::query!(
             r#"
             INSERT INTO network_status (id, slot, rpc_latency_ms, observed_at)
@@ -62,8 +54,7 @@ impl NetworkStatusRepository for PgNetworkStatusRepository {
 #[async_trait]
 impl NetworkStatusLookup for PgNetworkStatusRepository {
     async fn get(&self) -> RepositoryResult<Option<NetworkStatus>> {
-        // The singleton row is seeded by the migration, so this
-        // normally returns Some. None means the seed row is missing.
+        // The migration seeds the row: None means the seed is missing.
         let row = sqlx::query_as!(
             NetworkStatusRow,
             r#"

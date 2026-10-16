@@ -1,8 +1,5 @@
-//! A stop through the real `serve`, on a real socket, without a database.
-//!
-//! The client is a bare `TcpStream` writing HTTP/1.1 by hand: what is under
-//! test is what the server does to an open connection, and a client library
-//! would add its own idea of when a response is over.
+//! A stop through the real `serve`, on a real socket, without a database. The client writes
+//! HTTP/1.1 by hand: a client library would add its own idea of when a response is over.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -126,15 +123,9 @@ async fn an_open_signal_stream_does_not_hold_the_stop() {
         .unwrap();
 }
 
-/// `serve` returns only once the response in flight is written.
-///
-/// That order is the whole property: once `serve` returns, `main` returns and
-/// the runtime is dropped, taking every connection task with it. A response
-/// still being written at that point is cut, whatever axum was doing.
-///
-/// Mutation: stop the server by dropping it on cancellation instead of
-/// `with_graceful_shutdown` — `serve` then returns while the handler is still
-/// asleep, and the flag below is still down.
+/// `serve` returns only once the response in flight is written: `main` then drops the runtime
+/// and every connection task. Mutation: drop the server on cancellation instead of
+/// `with_graceful_shutdown`.
 #[tokio::test]
 async fn a_request_in_flight_is_answered_before_serve_returns() {
     let shutdown = CancellationToken::new();

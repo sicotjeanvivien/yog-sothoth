@@ -1,14 +1,6 @@
-//! Integration tests for migration 014 — the raw swaps are chunked by the day,
-//! compressed a day after their chunk closes, and kept 7 days.
-//!
-//! Gated behind `integration-tests`. Both tests read the TimescaleDB catalog
-//! (`timescaledb_information.dimensions` and `.jobs`), which is where a later
-//! migration re-declaring one of these settings lands. Intervals are read as
-//! seconds: the text a job's config holds depends on the `IntervalStyle` in
-//! effect when the policy was created.
-//!
-//! ⚠️ The policies never fire here (`max_background_workers = 0`): these tests
-//! say what is declared, not what a running scheduler does with it.
+//! The raw swaps are chunked by the day, compressed a day after their chunk closes, and kept
+//! 7 days — read from the TimescaleDB catalog, in seconds (a job's text follows `IntervalStyle`).
+//! ⚠️ The policies never fire here: this is what is declared, not what a scheduler does.
 
 use sqlx::{PgPool, Row};
 
@@ -152,10 +144,8 @@ async fn settings(pool: &PgPool, sql: &'static str, excluded: &str) -> Vec<(Stri
         .expect("the catalog must be readable")
 }
 
-/// Fails on every table whose setting is not `house(table)`.
-///
-/// ⚠️ Also fails when the liquidity events are not among the rows: a filter
-/// that matched nothing would otherwise pass with nothing checked.
+/// Fails on every table whose setting is not `house(table)`. ⚠️ Also when the liquidity events
+/// are missing: a filter matching nothing would pass with nothing checked.
 fn assert_house(setting: &str, rows: &[(String, i64)], house: impl Fn(&str) -> i64) {
     assert!(
         rows.iter()

@@ -1,18 +1,7 @@
-//! Integration tests for `yog-persistence`, DB-backed and gated on the
-//! `integration-tests` feature by the `#![cfg(...)]` below — **not** `#[ignore]`d,
-//! so `--include-ignored` does nothing here and the runs report `0 ignored`.
-//! They need a live Postgres, reached with an admin `DATABASE_URL` (see
-//! CLAUDE.md for that and the `timescaledb.max_background_workers = 0`
-//! requirement).
-//!
-//! **One file per subject, one single test binary.** Cargo auto-discovers every
-//! `.rs` directly under `tests/` as its own target, which would mean one link
-//! of the whole crate per file. `autotests = false` in Cargo.toml turns that
-//! off and declares this file as the only target; everything else is a plain
-//! module. Measured before choosing: 13 separate binaries cost ~6 s of relink
-//! on a lib touch, and a file-per-event split would have taken that past 27.
-//!
-//! Add a test file: create `tests/<subject>.rs` and declare it below.
+//! Integration tests for `yog-persistence`, gated on `integration-tests` by the `#![cfg]`
+//! below — not `#[ignore]`d. They need a live Postgres reached as admin (see CLAUDE.md).
+//! ⚠️ One test binary: `autotests = false` makes this the only target, so a new
+//! `tests/<subject>.rs` must be declared below.
 #![cfg(feature = "integration-tests")]
 
 mod helpers;

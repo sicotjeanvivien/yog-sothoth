@@ -8,12 +8,7 @@ use yog_core::{
 
 use crate::repositories::helper::{convert_i16_to_u8, convert_string_to_pubkey};
 
-/// Row shape for reading `token_metadata`.
-///
-/// A thin sqlx-facing struct kept separate from the domain model so
-/// the `mint` TEXT -> Pubkey conversion (fallible) can be expressed
-/// via `TryFrom`, and the `decimals` SMALLINT -> u8 narrowing stays
-/// out of the query function.
+/// Row shape of `token_metadata`.
 #[derive(sqlx::FromRow)]
 pub(super) struct TokenMetadataRow {
     pub(super) mint: String,

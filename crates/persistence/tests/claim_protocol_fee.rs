@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2ClaimProtocolFeeEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── claim_protocol_fee: persists, idempotent, u64→BIGINT round-trip ──
-
 #[sqlx::test]
 async fn claim_protocol_fee_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2ClaimProtocolFeeEventRepository::new(pool.clone());
@@ -26,7 +24,7 @@ async fn claim_protocol_fee_inserts_and_is_idempotent(pool: PgPool) {
     };
 
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
-    // Same (signature, timestamp) again — ON CONFLICT DO NOTHING.
+    // A replay: ON CONFLICT DO NOTHING.
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 =

@@ -1,29 +1,18 @@
 /// Failure of a migration run, or of a provisioning script.
-///
-/// Mirrors the sqlx error types but keeps them out of the public API
-/// of `yog-persistence` — callers (like the yog-migrate binary) see a
-/// thin `thiserror` enum, not the underlying engine.
 #[derive(Debug, thiserror::Error)]
 pub enum MigrationError {
     /// Anything sqlx raised while applying migrations.
     #[error("migration failed: {0}")]
     SqlxMigrate(#[from] sqlx::migrate::MigrateError),
 
-    /// Anything sqlx raised while running a provisioning script
-    /// (`setup_roles.sql`, `setup_watched_pools.sql`). Distinct from
-    /// `SqlxMigrate` because these are not versioned, not tracked in
-    /// `_sqlx_migrations`, and run under a different role.
+    /// Anything sqlx raised while running a provisioning script: unversioned,
+    /// and run under another role than the migrations.
     #[error("script failed: {0}")]
     Script(#[from] sqlx::Error),
 }
 
-/// Failure of a backup step: running `pg_dump`, or checking what it produced
-/// with `pg_restore`.
-///
-/// Which variant a step can return is part of that step's contract, and the
-/// caller decides what each one means for its run. The messages never quote
-/// the connection string: [`BackupError::InvalidUrl`] names the problem
-/// without the value.
+/// Failure of a backup step: `pg_dump`, or the `pg_restore` check. No message quotes the
+/// connection string.
 #[derive(Debug, thiserror::Error)]
 pub enum BackupError {
     /// The connection string does not parse. The value is not quoted: it

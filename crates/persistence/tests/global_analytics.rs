@@ -50,12 +50,8 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
         .unwrap();
     }
 
-    // Only ever token B: token A stays the unlisted side, so a priced pool is
-    // valued through the implied rate.
-    //
-    // Sampled hourly rather than once at `long_ago`: since migration 005 the
-    // as-of lookup reaches back at most `yog_price_max_age_asof()` from the
-    // bucket's start, so a single 48-hour-old row prices no bucket at all.
+    // Only token B: a priced pool is valued through the implied rate. ⚠️ Hourly: one row
+    // prices one bucket.
     if let Some(price) = price_b {
         price_mint(pool, &mint_b, price).await;
     }
@@ -63,15 +59,8 @@ async fn setup_pool(pool: &PgPool, seed: u8, price_b: Option<&str>) -> String {
     pool_addr
 }
 
-/// Two swaps in one bucket: 1 000 A in against 0.5 B out, then 1.0 B in
-/// against 2 000 A out — 3 000 A against 1.5 B over the hour.
-///
-/// ⚠️ Both legs follow `collect_fee_mode = 0` (BothToken): the fee is charged on
-/// the OUT token, so `a_to_b` pays in B and `b_to_a` pays in A, and neither fee
-/// is zero. Neither detail is decoration — `a_to_b` with the fee on A exists in
-/// no mode (0 of 662 real swaps) and no real swap carries a zero fee, and
-/// `valuation_complete` reads `fee_in_a` / `fee_in_b`. A fixture that cannot
-/// occur is a test that cannot fail for the right reason.
+/// Two swaps in one bucket, 3 000 A against 1.5 B. ⚠️ Each fee on the OUT token and non-zero:
+/// `valuation_complete` reads the fee sides, and an impossible fixture fails for the wrong reason.
 async fn insert_bucket(pool: &PgPool, pool_addr: &str, tag: &str, hours_ago: i64) {
     let at = Utc::now() - Duration::hours(hours_ago);
     for (sig, dir, a, b, fee, fee_is_a) in [

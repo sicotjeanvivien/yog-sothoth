@@ -1,10 +1,5 @@
-//! Integration test for the `meteora_damm_v2_liquidity_events_valued` VIEW
-//! (baseline §15) — the per-event trade-time USD valuation behind the
-//! pool-detail liquidity table's "Value (USD)" column.
-//!
-//! Gated behind `integration-tests`. Asserts two things on real SQL: the value
-//! uses the price *as-of the event* (not a later price), and it is NULL when a
-//! leg has no price as-of the event (rather than fabricating a partial value).
+//! The `meteora_damm_v2_liquidity_events_valued` VIEW: a liquidity event is valued at the
+//! price as of the event, not a later one, and is NULL when a leg has none.
 
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, Utc};
@@ -86,14 +81,8 @@ async fn values_both_legs_at_the_as_of_price(pool: PgPool) {
     insert_metadata(&pool, &mint_a, 9, event_at - Duration::days(1)).await;
     insert_metadata(&pool, &mint_b, 6, event_at - Duration::days(1)).await;
 
-    // Price as-of the event: A = $71.5, B = $1.0. A LATER price for A ($999)
-    // must be ignored — the valuation is trade-time, not current.
-    //
-    // The as-of observations sit 30 minutes before the event, not two hours:
-    // migration 005 bounds how far back the lookup may reach
-    // (`yog_price_max_age_asof()`, one hour), and view 021 measures that against
-    // the event's own timestamp. At -2h both legs went unpriced and `value_usd`
-    // came back NULL.
+    // As of the event, A = $71.5 and B = $1.0; a later $999 for A must be ignored. ⚠️ 30 minutes
+    // back, not two hours: the lookup reaches one hour before the event.
     price_at(&pool, &mint_a, "71.5", event_at - Duration::minutes(30)).await;
     price_at(&pool, &mint_a, "999.0", event_at + Duration::hours(2)).await;
     price_at(&pool, &mint_b, "1.0", event_at - Duration::minutes(30)).await;

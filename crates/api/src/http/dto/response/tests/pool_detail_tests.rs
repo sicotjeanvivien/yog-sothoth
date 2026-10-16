@@ -9,13 +9,7 @@ use crate::http::dto::PoolResponse;
 use crate::http::dto::response::token::EmbeddedTokenResponse;
 use crate::testing::{make_pool, pk};
 
-// ---------------------------------------------------------------------------
-// PoolDetailResponse wire shape (baseline §8)
-// ---------------------------------------------------------------------------
-//
-// The detail payload is the only place the cp-amm fee properties still cross
-// the wire, and `#[serde(flatten)]` is easy to get subtly wrong. These lock the
-// contract the web client parses.
+// ⚠️ `#[serde(flatten)]` is easy to get subtly wrong: these lock the contract the web parses.
 
 fn pool_response() -> PoolResponse {
     PoolResponse::new(
@@ -55,8 +49,7 @@ fn dlmm_detail_response(properties: Option<MeteoraDlmmPropertiesResponse>) -> se
     .expect("detail response should serialize")
 }
 
-/// The values read from `HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR` on
-/// mainnet — the same anchor the decoder's fixtures use.
+/// The values read from `HTvjzsfX3yU6BUodCjZ5vZkUrAxMDTrBs3CJaq43ashR` on mainnet.
 fn dlmm_properties() -> MeteoraDlmmPropertiesResponse {
     MeteoraDlmmPropertiesResponse {
         bin_step: Some(1),
@@ -72,8 +65,7 @@ fn dlmm_properties() -> MeteoraDlmmPropertiesResponse {
 fn pool_detail_keeps_shared_fields_at_top_level() {
     let json = detail_response(None);
 
-    // Flattened: a client holding the *list* schema can still parse a detail
-    // payload. If this regresses, every consumer of the list schema breaks.
+    // Flattened: a client holding the list schema still parses a detail payload.
     assert!(json.get("poolAddress").is_some());
     assert!(json.get("protocol").is_some());
     assert!(json.get("tokenA").is_some());
@@ -84,8 +76,7 @@ fn pool_detail_keeps_shared_fields_at_top_level() {
 fn pool_detail_omits_protocol_block_when_absent() {
     let json = detail_response(None);
 
-    // `skip_serializing_if` — absent, not `null`. A DLMM pool (or a DAMM v2 pool
-    // with no satellite row yet) simply has no block.
+    // Absent, not `null`.
     assert!(json.get("meteoraDammV2").is_none());
 }
 
@@ -107,7 +98,6 @@ fn pool_detail_nests_damm_v2_properties_under_their_protocol() {
     assert_eq!(block.get("baseFeeKind").unwrap(), "constant");
     assert_eq!(block.get("hasDynamicFee").unwrap(), false);
 
-    // …and NOT at the top level: that is the whole point of the split.
     assert!(json.get("protocolFeePercent").is_none());
     assert!(json.get("baseFeeKind").is_none());
 }
@@ -124,15 +114,12 @@ fn pool_detail_nests_dlmm_properties_under_their_protocol() {
     assert_eq!(block.get("variableFeeControl").unwrap(), 2_000_000);
     assert_eq!(block.get("protocolShare").unwrap(), 1_000);
 
-    // Nothing leaks to the top level, and the sibling protocol's key is absent
-    // rather than null — the two blocks are mutually exclusive on the wire.
+    // Nothing at the top level, and the sibling block absent rather than null.
     assert!(json.get("binStep").is_none());
     assert!(json.get("meteoraDammV2").is_none());
 }
 
-/// The two protocol blocks are siblings, so a DAMM v2 payload must be parseable
-/// by a client that only knows about DLMM and vice versa: neither key is ever
-/// present for the wrong protocol.
+/// Neither protocol's key is ever present for the other protocol.
 #[test]
 fn the_two_protocol_blocks_are_mutually_exclusive() {
     let damm = detail_response(Some(MeteoraDammV2PropertiesResponse {
@@ -151,11 +138,8 @@ fn the_two_protocol_blocks_are_mutually_exclusive() {
     assert!(dlmm.get("meteoraDammV2").is_none());
 }
 
-/// An unresolved DLMM pool: the block is present but every field is `null`.
-///
-/// Distinct from "no block at all", which means no satellite row. The
-/// difference matters to a client deciding between "not indexed yet" and "this
-/// protocol has no such properties".
+/// An unresolved DLMM pool: the block present, every field `null` — unlike no block at all,
+/// which means no satellite row.
 #[test]
 fn pool_detail_serializes_an_unresolved_dlmm_block_with_null_fields() {
     let json = dlmm_detail_response(Some(MeteoraDlmmPropertiesResponse {
@@ -172,9 +156,8 @@ fn pool_detail_serializes_an_unresolved_dlmm_block_with_null_fields() {
     assert!(block.get("baseFactor").unwrap().is_null());
 }
 
-/// The routing itself: a domain `PoolProperties` must land in its own field and
-/// nowhere else. This goes through the `From<EnrichedPoolDetail>` impl — the
-/// exhaustive match that adding a protocol forces someone to extend.
+/// A domain `PoolProperties` lands in its own field and nowhere else, through the exhaustive
+/// match of `From<EnrichedPoolDetail>`.
 #[test]
 fn the_from_impl_routes_each_protocol_to_its_own_block() {
     let dlmm = PoolDetailResponse::from(EnrichedPoolDetail {
@@ -213,10 +196,7 @@ fn the_from_impl_routes_each_protocol_to_its_own_block() {
     assert!(none.meteora_damm_v2.is_none());
 }
 
-// ── The current fee of a scheduler pool ──────────────────────────────
-
-/// `28BDU1…`'s real curve, from the account fixtures: cliff 5000 bps decaying
-/// linearly to 400 over 144 periods of 600 s, activated 2026-07-27.
+/// `28BDU1…`'s real curve: cliff 5000 bps decaying linearly to 400 over 144 periods of 600 s.
 fn scheduler_properties() -> MeteoraDammV2PoolProperties {
     MeteoraDammV2PoolProperties {
         pool_address: pk(1),
@@ -240,20 +220,14 @@ fn at(secs: i64) -> chrono::DateTime<chrono::Utc> {
     chrono::TimeZone::timestamp_opt(&chrono::Utc, secs, 0).unwrap()
 }
 
-/// The measurement that exposed the frozen `fee_bps`, reproduced end to end.
-///
-/// This pool's scheduler expired on 2026-07-28. A trader pays the 400 bps floor;
-/// `feeBps` still publishes the 5000 bps genesis tier, a factor of 12.5. The
-/// response must carry both — the tier for the contract `feeBps` has always had,
-/// and the fee actually in force next to it.
+/// An expired scheduler: `feeBps` keeps the 5000 bps tier, `currentFeeBps` carries the 400 bps
+/// floor a trader pays.
 #[test]
 fn an_expired_scheduler_reports_its_floor_beside_the_genesis_tier() {
     let expired = at(1_785_180_416 + 144 * 600 + 86_400);
     let r = MeteoraDammV2PropertiesResponse::build(scheduler_properties(), expired);
 
-    // 500_000_000 − 144 × 3_194_444 = 40_000_064 → 400.00064 bps. Asserted to
-    // the digit rather than rounded: the point of computing the curve instead of
-    // approximating it is that the last digits are the chain's, not ours.
+    // 500_000_000 − 144 × 3_194_444 = 40_000_064 → 400.00064 bps, to the digit.
     assert_eq!(
         r.current_fee_bps,
         Some(Decimal::new(40_000_064, 5)),
@@ -275,11 +249,7 @@ fn a_live_scheduler_reports_a_fee_between_its_cliff_and_its_floor() {
     assert_eq!(r.fee_scheduler_expired, Some(false));
 }
 
-/// A slot-activated curve is not evaluated — `network_status` holds a slot but
-/// this service does not read it, and no captured mainnet account uses slot
-/// activation. `None` says "not established"; it must never fall back to the
-/// cliff, which is the number this whole change exists to stop presenting as
-/// current.
+/// A slot-activated curve is not evaluated: `None`, never a fall back to the cliff.
 #[test]
 fn a_slot_activated_scheduler_reports_no_current_fee_rather_than_its_cliff() {
     let mut props = scheduler_properties();
@@ -293,8 +263,6 @@ fn a_slot_activated_scheduler_reports_no_current_fee_rather_than_its_cliff() {
     assert_eq!(r.fee_scheduler_expired, None);
 }
 
-/// A constant fee has no curve, so there is nothing to report — `feeBps` alone
-/// already tells the whole truth about it.
 #[test]
 fn a_constant_fee_reports_no_current_fee() {
     let mut props = scheduler_properties();
@@ -306,22 +274,8 @@ fn a_constant_fee_reports_no_current_fee() {
     assert_eq!(r.fee_scheduler_expired, None);
 }
 
-/// The two fields never disagree.
-///
-/// They document the same preconditions ("`None` under the same conditions"),
-/// so an evaluation the chain itself would refuse must silence **both**. The
-/// first shape of this code derived `expired` independently and reported
-/// `{currentFeeBps: null, feeSchedulerExpired: true}` — telling a consumer the
-/// decay is over and that there is no fee, about one pool, in one payload.
-///
-/// The reachable case is a linear curve whose total decay exceeds its cliff:
-/// `cliff.checked_sub(periods × reduction_factor)` yields `None`, exactly as
-/// cp-amm's `safe_sub` would error. The decoder gates on the *mode*, not on the
-/// curve's contents, so such an account is stored with a curve it cannot
-/// evaluate.
-///
-/// (A zero `period_frequency` is *not* this case — cp-amm short-circuits it to
-/// the cliff, and so do we.)
+/// Mutation: `expired` derived apart from the evaluation — a linear curve decaying past its
+/// cliff must silence both fields, as cp-amm's `safe_sub` errors.
 #[test]
 fn a_curve_that_cannot_be_evaluated_silences_both_fields() {
     let mut props = scheduler_properties();

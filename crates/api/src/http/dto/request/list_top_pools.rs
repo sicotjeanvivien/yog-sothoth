@@ -1,9 +1,4 @@
-//! Request DTO for `GET /api/pools/top`.
-//!
-//! Validates the top-N ranking inputs: the metric is enforced by serde at
-//! deserialization (unknown value → 400 before this runs), so only the `limit`
-//! range needs checking here. By the time a `ListTopPoolsRequest` exists, both
-//! fields are valid and ready for the service.
+//! Request DTO for `GET /api/pools/top`: serde validates the metric, only `limit` is checked here.
 
 use yog_core::domain::PoolRankMetric;
 

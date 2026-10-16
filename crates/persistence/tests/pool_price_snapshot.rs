@@ -75,8 +75,7 @@ async fn seed_swapped_pool(pool: &PgPool, swap_at: DateTime<Utc>) -> (String, St
 
 #[sqlx::test]
 async fn snapshot_joins_state_decimals_and_latest_prices(pool: PgPool) {
-    // TIMESTAMPTZ is microsecond-precision; truncate so the round-trip
-    // compares exactly.
+    // Truncated to TIMESTAMPTZ's microseconds, so the round trip compares exactly.
     let now = Utc::now().trunc_subsecs(6);
     let swap_at = now - Duration::minutes(5);
 

@@ -1,16 +1,6 @@
-//! Test support: fixtures and configurable repository mocks.
-//!
-//! Compiled only under `#[cfg(test)]`. Lives at the crate root so
-//! every service test (PoolService today, others later) can share the
-//! same mocks instead of redefining them per module.
-//!
-//! The mocks implement the read lenses the services actually consume
-//! (`PoolCatalog`, `TokenPriceLookup`, `SignalFeed`, ...), so there are
-//! no write-side stubs to drag along; a lens method a given test never
-//! exercises is still `unreachable!()`. Each "once" mock yields
-//! its preset value a single time (via `Mutex<Option<...>>`) because
-//! `RepositoryResult` is not necessarily `Clone`. A second call panics
-//! loudly rather than returning a misleading value.
+//! Test support: fixtures and repository mocks shared by every service test. The mocks
+//! implement only the read lenses the services consume; a "once" mock yields its value a
+//! single time, and a second call panics.
 
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
@@ -33,8 +23,6 @@ use yog_core::{
         TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup,
     },
 };
-
-// ── Fixtures ───────────────────────────────────────────────────────
 
 /// Deterministic pubkey from a single byte, for readable tests.
 pub(crate) fn pk(seed: u8) -> Pubkey {
@@ -68,8 +56,6 @@ pub(crate) fn make_pool(addr: Pubkey, token_a: Pubkey, token_b: Pubkey) -> Pool 
     }
 }
 
-// NOTE: adapt the field set of TokenMetadata / TokenPrice to your real
-// domain structs — only the Option-ness matters to the assertions.
 pub(crate) fn make_metadata(mint: Pubkey, symbol: &str) -> TokenMetadata {
     TokenMetadata {
         mint,
@@ -86,7 +72,6 @@ pub(crate) fn make_metadata(mint: Pubkey, symbol: &str) -> TokenMetadata {
 pub(crate) fn make_price(mint: Pubkey) -> TokenPrice {
     TokenPrice {
         mint,
-        // adapt: rust_decimal::Decimal, source, fetched_at, etc.
         price_usd: rust_decimal::Decimal::new(100, 0),
         price_provider: yog_core::domain::PriceProvider::Helius,
         fetched_at: ts(1_500),
@@ -94,10 +79,8 @@ pub(crate) fn make_price(mint: Pubkey) -> TokenPrice {
     }
 }
 
-/// A `PoolPage` over `pools`. Sorted on `FirstSeen`, the immutable column, so
-/// the traversal needs no snapshot fence — hence `as_of: None` and
-/// `touched_since: 0`. The fence's own behaviour is covered where it lives, by
-/// the DB-backed tests of `yog-persistence`.
+/// A `PoolPage` over `pools`, sorted on the immutable `FirstSeen`: no fence, so `as_of: None`
+/// and `touched_since: 0`.
 pub(crate) fn make_page(pools: Vec<Pool>, is_first: bool, is_last: bool) -> PoolPage {
     let prev = if is_first {
         None
@@ -143,8 +126,6 @@ fn take<T>(slot: &Mutex<Option<RepositoryResult<T>>>) -> RepositoryResult<T> {
         .expect("mock method called more than once")
 }
 
-// ── Mock: PoolCatalog ────────────────────────────────────────────
-
 pub(crate) struct PoolRepoOnce {
     paginated: Mutex<Option<RepositoryResult<PoolPage>>>,
     by_address: Mutex<Option<RepositoryResult<Option<Pool>>>>,
@@ -173,8 +154,7 @@ impl PoolRepoOnce {
             by_addresses: Mutex::new(Some(Ok(Vec::new()))),
         }
     }
-    /// Seed the batch `find_by_addresses` lookup — given intentionally
-    /// unordered, so a top-N test can assert the service re-imposes the rank.
+    /// Seeds `find_by_addresses` — unordered, so a top-N test sees the service re-impose the rank.
     pub(crate) fn with_pools(pools: Vec<Pool>) -> Self {
         Self {
             paginated: Mutex::new(Some(Ok(make_page(vec![], true, true)))),
@@ -203,8 +183,6 @@ impl PoolCatalog for PoolRepoOnce {
     }
 }
 
-// ── Mock: GlobalAnalyticsRepository ─────────────────────────────────
-
 pub(crate) struct MockGlobalAnalyticsRepo {
     result: Mutex<Option<RepositoryResult<GlobalAnalytics>>>,
 }
@@ -231,10 +209,7 @@ impl GlobalAnalyticsRepository for MockGlobalAnalyticsRepo {
     }
 }
 
-// ── Mock: PoolCatalog yielding only counts ───────────────────────
-
-/// Minimal `PoolCatalog` mock for `StatsService`: only `counts()` is
-/// exercised; every other method panics if reached.
+/// A `PoolCatalog` for `StatsService`: only `counts()` answers.
 pub(crate) struct PoolCountsRepo {
     counts: Mutex<Option<RepositoryResult<PoolCounts>>>,
 }
@@ -270,8 +245,6 @@ impl PoolCatalog for PoolCountsRepo {
         unreachable!("list_fee_tiers not used by StatsService")
     }
 }
-
-// ── Mock: PoolAnalyticsRepository ───────────────────────────────────
 
 pub(crate) struct MockAnalyticsRepo {
     map: HashMap<Pubkey, PoolAnalytics>,
@@ -355,8 +328,6 @@ impl PoolAnalyticsRepository for MockAnalyticsRepo {
     }
 }
 
-// ── Mock: TokenMetadataLookup ───────────────────────────────────
-
 pub(crate) struct MockMetadataRepo {
     by_mint: HashMap<Pubkey, TokenMetadata>,
     fail: bool,
@@ -393,8 +364,6 @@ impl TokenMetadataLookup for MockMetadataRepo {
     }
 }
 
-// ── Mock: TokenPriceLookup ──────────────────────────────────────
-
 pub(crate) struct MockPriceRepo {
     by_mint: HashMap<Pubkey, TokenPrice>,
     fail: bool,
@@ -430,8 +399,6 @@ impl TokenPriceLookup for MockPriceRepo {
         Ok(self.by_mint.get(mint).cloned())
     }
 }
-
-// ── Mock: PoolCurrentStateLookup ───────────────────────────────
 
 pub(crate) struct MockPoolCurrentStateRepo {
     by_address: Mutex<Option<RepositoryResult<Option<PoolCurrentState>>>>,
@@ -480,8 +447,6 @@ impl PoolCurrentStateLookup for MockPoolCurrentStateRepo {
     }
 }
 
-// ── Mock: SwapEventRepository ────────────────────────────────────────
-
 pub(crate) struct MockSwapEventRepo {
     find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2SwapEvent>>>>,
 }
@@ -521,8 +486,6 @@ impl MeteoraDammV2SwapEventFeed for MockSwapEventRepo {
         take(&self.find_paginated)
     }
 }
-
-// ── Mock: LiquidityEventRepository ──────────────────────────────────
 
 pub(crate) struct MockLiquidityEventRepo {
     find_paginated: Mutex<Option<RepositoryResult<Page<MeteoraDammV2LiquidityEventValued>>>>,
@@ -564,8 +527,6 @@ impl MeteoraDammV2LiquidityEventFeed for MockLiquidityEventRepo {
     }
 }
 
-// ── Mock: AnnouncementLookup ────────────────────────────────────────
-
 pub(crate) struct MockAnnouncementRepo {
     list_active: Mutex<Option<RepositoryResult<Vec<Announcement>>>>,
 }
@@ -591,8 +552,6 @@ impl AnnouncementLookup for MockAnnouncementRepo {
         take(&self.list_active)
     }
 }
-
-// ── Mock: NetworkStatusLookup ───────────────────────────────────
 
 pub(crate) struct MockNetworkStatusRepo {
     get: Mutex<Option<RepositoryResult<Option<NetworkStatus>>>>,
@@ -623,8 +582,6 @@ impl NetworkStatusLookup for MockNetworkStatusRepo {
     }
 }
 
-// ── Mock: EventFreshnessRepository ──────────────────────────────────
-
 pub(crate) struct MockEventFreshnessRepo {
     last_event_at: Mutex<Option<RepositoryResult<Option<DateTime<Utc>>>>>,
 }
@@ -653,8 +610,6 @@ impl EventFreshnessRepository for MockEventFreshnessRepo {
         take(&self.last_event_at)
     }
 }
-
-// ── Additional fixtures ──────────────────────────────────────────────
 
 pub(crate) fn make_swap_event(pool_address: Pubkey) -> MeteoraDammV2SwapEvent {
     use yog_core::domain::TradeDirection;
@@ -788,8 +743,6 @@ pub(crate) fn make_liquidity_page(
             })
         })
     };
-    // The read path returns events wrapped with their USD value; the fixture
-    // leaves it None (the service tests assert pagination, not valuation).
     let items = events
         .into_iter()
         .map(|event| MeteoraDammV2LiquidityEventValued {
@@ -821,22 +774,13 @@ pub(crate) fn make_pool_current_state(pool_address: Pubkey) -> PoolCurrentState 
     }
 }
 
-/// Build a deterministic, valid `Signature` for fixtures. The first 32
-/// bytes come from the pool's pubkey so distinct pools get distinct
-/// signatures; the last byte is a tag to distinguish event kinds for
-/// the same pool (e.g. swap vs liquidity).
+/// A deterministic `Signature`: the pool's pubkey, then `tag` to tell kinds apart.
 pub(crate) fn sig_for_pool(pool_address: Pubkey, tag: u8) -> Signature {
     let mut bytes = [0u8; 64];
     bytes[..32].copy_from_slice(&pool_address.to_bytes());
     bytes[63] = tag;
     Signature::from(bytes)
 }
-
-// ── Mock: SignalFeed ──────────────────────────────────────
-//
-// The api only ever sees the feed lens; the engine-side contract
-// (insert_batch / latest_severity_by_pool) never reaches this crate,
-// so the mock has nothing to stub out.
 
 /// What `recent_by_pools` yields: each pool's recent signals.
 pub(crate) type RecentSignalsByPool = HashMap<Pubkey, Vec<SignalRecord>>;

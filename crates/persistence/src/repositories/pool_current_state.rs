@@ -1,25 +1,7 @@
-//! Postgres implementation of [`PoolCurrentStateRepository`].
-//!
-//! Implementation notes:
-//!
-//! * Ordering is enforced in SQL via a `WHERE` clause on the `ON CONFLICT DO
-//!   UPDATE` branch, comparing `(slot, transaction_index, event_index)` as a
-//!   tuple — out-of-order events leave the existing row untouched without
-//!   raising an error. It used to compare `last_event_at`, whose second
-//!   granularity rejected a third of all updates (baseline §4).
-//! * `last_sqrt_price` / `last_swap_at` are preserved on liquidity events by
-//!   `COALESCE(EXCLUDED.x, pool_current_state.x)`. That pair is the only
-//!   kind-specific state left: a `liquidity` / `last_liquidity_at` pair was
-//!   preserved symmetrically until migration 003 dropped it (it held a
-//!   position's unsigned delta under a name claiming the pool's L).
-//! * `updated_at` is bumped to `NOW()` on every accepted write.
-//!
-//! Column type mapping (matches the migration and the upstream event tables):
-//!   * `reserve_a` / `reserve_b`                  BIGINT          ↔ u64
-//!   * `last_sqrt_price`                          NUMERIC(39, 0)  ↔ u128
-//!
-//! Conversions go through the shared helpers in `repository_utils` to keep
-//! error mapping consistent across the crate.
+//! Postgres implementation of [`PoolCurrentStateRepository`]. An event applies only if
+//! `(slot, transaction_index, event_index)` is strictly after the stored one; a liquidity
+//! event keeps `last_sqrt_price` and `last_swap_at` through `COALESCE`.
+
 mod rows;
 
 use crate::repositories::helper::{
@@ -39,7 +21,6 @@ use yog_core::{
     },
 };
 
-/// sqlx-backed implementation of [`PoolCurrentStateRepository`].
 pub struct PgPoolCurrentStateRepository {
     pool: PgPool,
 }
@@ -52,42 +33,9 @@ impl PgPoolCurrentStateRepository {
 
 #[async_trait]
 impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
-    /// Upsert guarded by the event's position in the chain.
-    ///
-    /// The `ON CONFLICT DO UPDATE … WHERE` clause makes this a no-op when the
-    /// incoming `(slot, transaction_index, event_index)` is not strictly after
-    /// the stored one, without raising.
-    ///
-    /// ## Why the statement is a CTE and not a bare INSERT
-    ///
-    /// A guarded `ON CONFLICT` returns **no row** when the guard fails, so the
-    /// old form could only ever answer "applied or not". Telling apart a
-    /// healthy rejection from the one case the key cannot rank — two
-    /// transactions of the same slot, `transaction_index` being empty on this
-    /// ingestion path — needs the state as it was *before* the write.
-    ///
-    /// `previous` supplies it in the same statement: a non-modifying CTE reads
-    /// the snapshot taken before the statement ran, so it sees the pre-update
-    /// row even though `upserted` overwrites it. One round-trip, and the guard
-    /// itself stays atomic inside the `ON CONFLICT`.
-    ///
-    /// ## ⚠️ The ambiguity report is a lower bound under concurrency
-    ///
-    /// The guard and the report do **not** read the same row version. The
-    /// `ON CONFLICT DO UPDATE … WHERE` clause is re-evaluated by Postgres
-    /// against the latest committed version (EvalPlanQual); `previous` reads
-    /// the statement snapshot. Under concurrent writers on one pool — the
-    /// indexer persists several transactions at once, bounded by this pool's
-    /// own size (`bootstrap::daemon::tasks::index_concurrency`) — a
-    /// task can be rejected by a row another task has just committed while its
-    /// own snapshot never saw that slot, and it then reports
-    /// `same_slot_ambiguity: false`.
-    ///
-    /// So the counter **undercounts, in the direction that flatters the
-    /// assumption it exists to test**. Taking the previous row under
-    /// `SELECT … FOR UPDATE` would close it, at the price of serialising every
-    /// projection write per pool; for a metric, that trade is not worth it —
-    /// but the bound must be stated rather than discovered later.
+    /// Upserts only when the event is after the stored position, without raising. A CTE,
+    /// not a bare INSERT: `previous` reads the row before the write, which a guarded
+    /// `ON CONFLICT` that rejects returns nothing of.
     async fn upsert(
         &self,
         upsert: &PoolCurrentStateUpsert,
@@ -98,9 +46,6 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
             .sqrt_price
             .map(|v| convert_u128_to_bigdecimal(v, "sqrt_price"));
 
-        // `last_swap_at` is set only for swap events. The COALESCE in the UPDATE
-        // branch keeps the previous value when the current event is a liquidity
-        // one, which doesn't touch it.
         let event_at = upsert.event_position.timestamp;
         let last_swap_at = match upsert.event_kind {
             LastEventKind::Swap => Some(event_at),
@@ -199,9 +144,8 @@ impl PoolCurrentStateRepository for PgPoolCurrentStateRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        // Same slot, different signature: two transactions of one block met on
-        // this pool, and `(slot, _, event_index)` cannot say which came first.
-        // Flagged whether or not the write applied — see the outcome's doc.
+        // Same slot, other signature: the key cannot rank them; flagged even when not applied.
+        // ⚠️ A lower bound under concurrency: the guard sees the latest commit, `previous` the snapshot.
         let same_slot_ambiguity = row.previous_slot == Some(slot)
             && row.previous_signature.as_deref() != Some(signature.as_str());
 

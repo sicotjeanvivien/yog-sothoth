@@ -1,11 +1,5 @@
-//! Postgres implementation of [`LiquidityFlowRepository`].
-//!
-//! Reads the `meteora_damm_v2_pool_hourly_liquidity_flow` view (migration
-//! 025), which encapsulates the per-(pool, hour) directional USD valuation
-//! of liquidity events, joined with `pool_current_tvl` (baseline §15) for
-//! the current-TVL side of the drain ratio. This query just windows, sums
-//! and joins — a slim `SELECT` the sqlx macro still verifies against the
-//! views' columns.
+//! Postgres implementation of [`LiquidityFlowRepository`]: windows and sums the
+//! `meteora_damm_v2_pool_hourly_liquidity_flow` view, joined with `pool_current_tvl`.
 //!
 //! [`LiquidityFlowRepository`]: yog_core::domain::LiquidityFlowRepository
 
@@ -21,13 +15,11 @@ use yog_core::{
     domain::{LiquidityFlowRepository, PoolLiquidityFlow},
 };
 
-/// Postgres-backed liquidity flow repository.
 pub struct PgLiquidityFlowRepository {
     pool: PgPool,
 }
 
 impl PgLiquidityFlowRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -39,20 +31,8 @@ impl LiquidityFlowRepository for PgLiquidityFlowRepository {
         &self,
         since: DateTime<Utc>,
     ) -> RepositoryResult<Vec<PoolLiquidityFlow>> {
-        // Postgres pushes the `bucket > $1` predicate down into the
-        // liquidity CA, so this only touches recent buckets. `tvl_usd` stays
-        // nullable on purpose (LEFT JOIN — a pool with no valued current
-        // state must surface as unvaluable, not vanish, so the detector can
-        // count what it skips).
-        //
-        // ⚠️ No COALESCE, and `bool_and` for the same reasons as the swap
-        // flow — written identically on purpose. The view already propagates
-        // NULL across both token legs of a direction, which is the behaviour
-        // migration 006 settled on; the defect was here, one level up, where
-        // `SUM` skipped the unvaluable buckets and the COALESCE dressed the
-        // remainder as a total. That sub-total slipped past `tvl_drain`'s
-        // `tvl_usd` guard whenever the window was only PARTLY unpriced, and it
-        // under-estimated the drain — a missed signal, silently.
+        // LEFT JOIN: a pool with no valued current state surfaces with a NULL `tvl_usd`, not vanishes.
+        // ⚠️ No COALESCE and `bool_and`, as in the swap flow: a sub-total would under-estimate the drain.
         let rows = sqlx::query_as!(
             PoolLiquidityFlowRow,
             r#"

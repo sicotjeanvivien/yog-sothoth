@@ -23,10 +23,6 @@ use crate::http::{
     query::SignalsQuery,
 };
 
-// ===========================================================================
-// GET /api/signals
-// ===========================================================================
-
 #[utoipa::path(
     get,
     path = "/api/signals",
@@ -60,10 +56,6 @@ pub(crate) async fn list_signals(
     }))
 }
 
-// ===========================================================================
-// GET /api/signals/stream
-// ===========================================================================
-
 /// Live tail of the signal feed as Server-Sent Events: new signals only, each a
 /// `SignalResponse` with its id as the event id. History comes from
 /// `GET /api/signals`, re-fetched on (re)connect.
@@ -90,8 +82,7 @@ pub(crate) async fn stream_signals(State(state): State<AppState>) -> Response {
     )
 }
 
-/// Open a stream if a slot is free, or refuse with `503` — apart from the
-/// state, so that a test can drive the cap without a database.
+/// Opens a stream if a slot is free, or refuses with `503`; without `AppState`, so a test drives the cap.
 pub(crate) fn open_signal_stream(
     slots: Arc<Semaphore>,
     receiver: broadcast::Receiver<Arc<EnrichedSignal>>,
@@ -105,20 +96,9 @@ pub(crate) fn open_signal_stream(
     signal_sse(receiver, slot, shutdown).into_response()
 }
 
-/// The SSE response itself, apart from the state it is read from — so that a
-/// test can mount it without a database.
-///
-/// ⚠️ **The stream ends when the process is asked to stop, and it has to.** A
-/// graceful shutdown waits for every open connection to finish, and this one
-/// never finishes on its own: the `unfold` below has no end, and the keep-alive
-/// keeps the connection busy. Without `take_until`, one open dashboard tab
-/// would hold the stop until the grace expires. Ending the stream closes the
-/// response cleanly, and the browser's EventSource reconnects on its own — to
-/// the next instance, once it is up. No terminal event is sent: the client
-/// has nothing to do with it that reconnecting does not already do.
-///
-/// `slot` travels in the stream's state and is released when the stream is
-/// dropped — the client leaving, lagging, or the process stopping.
+/// The SSE response, without `AppState` so a test can mount it. ⚠️ It ends on the stop (`take_until`):
+/// graceful shutdown waits for every connection, and this one never ends on its own. `slot`
+/// is released when the stream is dropped.
 pub(crate) fn signal_sse(
     receiver: broadcast::Receiver<Arc<EnrichedSignal>>,
     slot: OwnedSemaphorePermit,
@@ -127,20 +107,16 @@ pub(crate) fn signal_sse(
     let stream =
         futures_util::stream::unfold((receiver, slot), |(mut receiver, slot)| async move {
             match receiver.recv().await {
-                // Enriched once by the poller, shared by every stream: no
-                // database work happens here.
+                // Enriched once by the poller: no database work here.
                 Ok(signal) => Some((make_event(&signal), (receiver, slot))),
-                // Lagged (client too slow) or Closed (poller gone): end the
-                // stream and let the client reconnect.
+                // Lagged or Closed: end the stream and let the client reconnect.
                 Err(_) => None,
             }
         })
         .take_until(shutdown.cancelled_owned());
 
     Sse::new(stream).keep_alive(
-        // Comment ping through proxies that would otherwise reap an
-        // idle connection — the feed can legitimately stay quiet for
-        // long stretches.
+        // A comment ping, or proxies reap a connection the feed may leave quiet for long.
         KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("ping"),

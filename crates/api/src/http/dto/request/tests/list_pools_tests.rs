@@ -1,17 +1,11 @@
-//! Unit tests for `ListPoolsRequest::parse`.
-//!
-//! These tests verify the orchestration of the validation pipeline
-//! and the wire → domain conversion. The individual validation rules
-//! have their own dedicated tests in `http/query` and `http/cursor`
-//! and are not retested here.
+//! `ListPoolsRequest::parse`: the pipeline's orchestration and the wire → domain conversion;
+//! each rule has its own tests in `http/query` and `http/cursor`.
 
 use crate::http::dto::request::ListPoolsRequest;
 use crate::http::dto::request::test_common::valid_page_query;
 use crate::http::error::ApiError;
 use crate::http::query::{PageDirectionParam, PagePositionParam};
 use yog_core::{PageDirection, PoolSort};
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn parses_valid_baseline_query() {
@@ -60,13 +54,8 @@ fn preserves_limit_within_bounds() {
 fn preserves_default_sort() {
     let q = valid_page_query();
     let params = ListPoolsRequest::parse(q).unwrap().into_query();
-    // The default sort is whatever the wire default maps to.
-    // We only check it's a stable enum variant — concrete value tested
-    // in query.rs unit tests.
     let _: PoolSort = params.sort;
 }
-
-// ── Search normalisation ─────────────────────────────────────────────
 
 #[test]
 fn empty_search_normalises_to_none() {
@@ -91,8 +80,6 @@ fn meaningful_search_is_preserved() {
     let params = ListPoolsRequest::parse(q).unwrap().into_query();
     assert_eq!(params.search.as_deref(), Some("SOL"));
 }
-
-// ── Validation errors ────────────────────────────────────────────────
 
 #[test]
 fn limit_below_minimum_rejected() {
@@ -127,12 +114,9 @@ fn malformed_cursor_rejected() {
     assert!(matches!(err, ApiError::BadRequest(_)));
 }
 
-// ── Cursor edge cases ────────────────────────────────────────────────
-
 #[test]
 fn empty_cursor_string_is_treated_as_none() {
-    // ?cursor= (empty value) is common in URL composers — treat it
-    // as cursor absent, not as a malformed cursor.
+    // `?cursor=` is absent, not malformed.
     let mut q = valid_page_query();
     q.cursor = Some(String::new());
     let params = ListPoolsRequest::parse(q).unwrap().into_query();

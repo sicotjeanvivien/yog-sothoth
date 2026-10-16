@@ -1,11 +1,5 @@
-//! Integration test for `PgPoolAnalyticsRepository::top_pool_addresses` —
-//! specifically the TVL ranking arm, which reads the `pool_current_tvl` VIEW.
-//!
-//! Gated behind `integration-tests`. Seeds a handful of pools with known TVLs
-//! (reserves valued at $1 per unit, 0 decimals, so `tvl = reserve_a`) plus one
-//! unpriceable pool (a token with metadata but no price → NULL TVL), and
-//! asserts the ranking is by TVL descending, capped by `limit`, with the
-//! NULL-TVL pool excluded rather than sorted last.
+//! The TVL ranking of `top_pool_addresses`: by TVL descending, capped by `limit`, an
+//! unpriceable pool excluded rather than sorted last. Tokens are $1 with 0 decimals.
 
 use super::helpers::{pk, price_at};
 use chrono::Utc;
@@ -15,8 +9,7 @@ use sqlx::PgPool;
 use yog_core::domain::{PoolAnalyticsRepository, PoolRankMetric};
 use yog_persistence::PgPoolAnalyticsRepository;
 
-/// Register a token with metadata (0 decimals) and, optionally, a $1 price.
-/// Omitting the price is how we build an unpriceable pool.
+/// A 0-decimal token, optionally priced at $1.
 async fn seed_token(pool: &PgPool, mint: &str, priced: bool) {
     sqlx::query(
         "INSERT INTO token_metadata (mint, decimals, fetched_at, last_refresh_at)
@@ -33,9 +26,7 @@ async fn seed_token(pool: &PgPool, mint: &str, priced: bool) {
     }
 }
 
-/// Seed a pool holding `reserve_a` units of token A and nothing of token B.
-/// With $1 / 0-decimal tokens, TVL = `reserve_a` (or NULL if a side is
-/// unpriced).
+/// A pool holding `reserve_a` units of A and no B: its TVL is `reserve_a`, or NULL if unpriced.
 async fn seed_pool(pool: &PgPool, addr: Pubkey, mint_a: &str, mint_b: &str, reserve_a: i64) {
     let addr = addr.to_string();
     sqlx::query(

@@ -1,19 +1,6 @@
-//! Application services — the choreography layer between the HTTP handlers and
-//! the `yog-core` repository traits.
-//!
-//! Split by *reach*, mirroring [`yog_core::domain`]:
-//!
-//! - at the root, the **cross-protocol** services. They serve every protocol's
-//!   data and name none: `PoolService` reaches a pool's per-protocol properties
-//!   through `PoolPropertiesLookup` and learns nothing about which protocol
-//!   answered.
-//! - under [`meteora`], the **per-protocol** services, one module per product.
-//!   A service belongs there when its repository, params and result are
-//!   irreducibly that product's.
-//!
-//! The distinction used to live in file names (`meteora_damm_v2_swap_service.rs`
-//! next to `pool_service.rs`), which made it invisible in a directory listing and
-//! easy to erode. It is a path now.
+//! Application services, between the HTTP handlers and the `yog-core` repository traits. At
+//! the root the cross-protocol ones, which name no protocol; under [`meteora`] the services
+//! whose repository, params and result are irreducibly one product's.
 
 mod announcement_service;
 mod ingestion_service;

@@ -7,10 +7,8 @@ use tokio_util::sync::CancellationToken;
 use super::open_signal_stream;
 use crate::application::EnrichedSignal;
 
-/// Two slots: two streams open, the third is refused — `503`, `Retry-After`,
-/// Problem Details — and closing one stream lets the next client in.
-///
-/// Mutation: open without taking a slot, and the third stream opens.
+/// Mutation: opening without taking a slot — of two slots, the third stream opens. Closing
+/// one lets the next client in.
 #[tokio::test]
 async fn streams_past_the_cap_are_refused_until_one_closes() {
     let slots = Arc::new(Semaphore::new(2));

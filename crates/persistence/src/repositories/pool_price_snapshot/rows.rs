@@ -11,9 +11,7 @@ use yog_core::{
     domain::{PoolPriceSnapshot, Protocol},
 };
 
-/// Row shape for the snapshot query. Everything is non-null (the view's
-/// INNER joins and `IS NOT NULL` predicates guarantee it, asserted by the
-/// `!` overrides in the query), so no `Option` fields.
+/// Row shape of the snapshot query, non-null throughout.
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolPriceSnapshotRow {
     pub(super) pool_address: String,

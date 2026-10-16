@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<TokenMetadataRow> for TokenMetadata`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right metadata, that each fallible field has
-//! its own validation path (mint Pubkey, decimals i16 → u8), and
-//! that errors surface as `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<TokenMetadataRow> for TokenMetadata`.
 
 use chrono::{Duration, Utc};
 use yog_core::{
@@ -29,8 +24,6 @@ fn valid_row() -> TokenMetadataRow {
     }
 }
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[test]
 fn try_from_valid_row_returns_metadata_with_all_fields_mapped() {
     let row = valid_row();
@@ -54,9 +47,7 @@ fn try_from_valid_row_returns_metadata_with_all_fields_mapped() {
 
 #[test]
 fn try_from_with_none_optionals_returns_metadata_with_none() {
-    // The three Option<String> fields go through direct passthrough;
-    // pin that None inputs produce None outputs (not, say, Some("")
-    // from a misplaced unwrap_or_default).
+    // Mutation: an `unwrap_or_default` turning a None into `Some("")`.
     let row = TokenMetadataRow {
         symbol: None,
         name: None,
@@ -73,8 +64,7 @@ fn try_from_with_none_optionals_returns_metadata_with_none() {
 
 #[test]
 fn try_from_preserves_distinct_timestamps_in_correct_fields() {
-    // Distinct fetched_at and last_refresh_at — a field swap in
-    // the TryFrom would surface here.
+    // Mutation: `fetched_at` and `last_refresh_at` swapped in the TryFrom.
     let fetched_at = Utc::now();
     let last_refresh_at = fetched_at + Duration::seconds(123);
     let row = TokenMetadataRow {
@@ -89,8 +79,6 @@ fn try_from_preserves_distinct_timestamps_in_correct_fields() {
     assert_eq!(metadata.last_refresh_at, last_refresh_at);
 }
 
-// ── Pubkey validation ────────────────────────────────────────────────
-
 #[test]
 fn try_from_invalid_mint_returns_integrity() {
     let row = TokenMetadataRow {
@@ -103,8 +91,6 @@ fn try_from_invalid_mint_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── decimals bounds (i16 → u8) ───────────────────────────────────────
 
 #[test]
 fn try_from_negative_decimals_returns_integrity_with_value() {

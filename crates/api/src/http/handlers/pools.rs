@@ -19,10 +19,6 @@ use crate::http::{
     query::{EventPageQuery, HistoryQuery, PageQuery, TopPoolsQuery},
 };
 
-// ===========================================================================
-// GET /api/pools
-// ===========================================================================
-
 #[utoipa::path(
     get,
     path = "/api/pools",
@@ -57,10 +53,6 @@ pub(crate) async fn list_pools(
     }))
 }
 
-// ===========================================================================
-// GET /api/pools/fee-tiers
-// ===========================================================================
-
 /// The most common base-fee tiers, ascending, with their pool counts: the
 /// option list of the pools fee filter.
 #[utoipa::path(
@@ -79,10 +71,6 @@ pub(crate) async fn list_fee_tiers(
     let items: Vec<FeeTierResponse> = tiers.into_iter().map(FeeTierResponse::from).collect();
     Ok(Json(items))
 }
-
-// ===========================================================================
-// GET /api/pools/top
-// ===========================================================================
 
 #[utoipa::path(
     get,
@@ -108,10 +96,6 @@ pub(crate) async fn list_top_pools(
     Ok(Json(items))
 }
 
-// ===========================================================================
-// GET /api/pools/{address}
-// ===========================================================================
-
 #[utoipa::path(
     get,
     path = "/api/pools/{address}",
@@ -135,10 +119,6 @@ pub(crate) async fn get_pool(
 
     Ok(Json(PoolDetailResponse::from(detail)))
 }
-
-// ===========================================================================
-// GET /api/pools/{address}/latest-state
-// ===========================================================================
 
 #[utoipa::path(
     get,
@@ -169,10 +149,6 @@ pub(crate) async fn get_pool_latest_state(
     Ok(Json(PoolCurrentStateResponse::from(state_row)))
 }
 
-// ===========================================================================
-// GET /api/pools/{address}/history
-// ===========================================================================
-
 #[utoipa::path(
     get,
     path = "/api/pools/{address}/history",
@@ -202,10 +178,6 @@ pub(crate) async fn get_pool_history(
 
     Ok(Json(items))
 }
-
-// ===========================================================================
-// GET /api/pools/{address}/swaps
-// ===========================================================================
 
 #[utoipa::path(
     get,
@@ -244,10 +216,6 @@ pub(crate) async fn list_pool_swaps(
         is_last: page.is_last,
     }))
 }
-
-// ===========================================================================
-// GET /api/pools/{address}/liquidity-events
-// ===========================================================================
 
 #[utoipa::path(
     get,

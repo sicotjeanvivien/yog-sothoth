@@ -1,13 +1,5 @@
-//! HTTP layer powered by axum.
-//!
-//! Routes are mounted by `build_router`; the application state is
-//! shared via axum's `State` extractor. Handlers live in `handlers/`,
-//! middleware in `middleware/`, the unified error type in `error.rs`.
-//!
-//! Probe endpoints (`/healthz`, `/readyz`) are mounted on a separate
-//! sub-router that bypasses the tracing and request-id layers. Their
-//! sole purpose is to answer load-balancer polling — quietly and
-//! often — and routing them through tracing would flood the logs.
+//! HTTP layer powered by axum: `build_router` mounts the routes. ⚠️ The probes (`/healthz`,
+//! `/readyz`) bypass the tracing and request-id layers: load-balancer polling would flood the logs.
 
 #[cfg(test)]
 #[path = "http/tests/contract.rs"]
@@ -63,14 +55,8 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     let (api, _contract) = api_routes(state.work_slots.clone()).split_for_parts();
 
     let app = api
-        // ── Deadline (innermost: the tracing span records its 503) ───────
+        // Innermost, so the tracing span records its 503.
         .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
-        // ── Tracing and request id (applied only here) ───────────────────
-        // Inner-to-outer:
-        //   1. PropagateRequestIdLayer echoes the id on the response.
-        //   2. TraceLayer creates the per-request span.
-        //   3. SetRequestIdLayer ensures the id is on the request
-        //      before TraceLayer reads it.
         .layer(PropagateRequestIdLayer::new(
             axum::http::HeaderName::from_static(REQUEST_ID_HEADER),
         ))
@@ -81,6 +67,7 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
                 .on_response(on_response)
                 .on_failure(on_failure),
         )
+        // ⚠️ Outermost: the id must be on the request before TraceLayer reads it.
         .layer(SetRequestIdLayer::new(
             axum::http::HeaderName::from_static(REQUEST_ID_HEADER),
             GenerateRequestId,
@@ -91,7 +78,6 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
         .merge(app)
         .with_state(state)
         // Security headers and CORS apply to everything, probes included.
-        // No log noise concern — these layers don't emit logs.
         .layer(middleware::security_headers_layer())
         .layer(middleware::frame_options_layer())
         .layer(middleware::cors_layer(cors_allowed_origins))
@@ -104,40 +90,30 @@ fn api_routes(work_slots: WorkSlots) -> OpenApiRouter<AppState> {
     // ⚠️ `/api/pools/top` and `/api/stats` are slow too, but stay out: their
     // computation takes a slot inside the cache, so its waiters hold none.
     let slotted = OpenApiRouter::new()
-        // ── Pool collection ─────────────────────────────────────────────
         .routes(routes!(handlers::pools::list_pools))
-        // ── Single-pool resources ───────────────────────────────────────
         .routes(routes!(handlers::pools::get_pool))
         .routes(routes!(handlers::pools::get_pool_history))
-        // ── Signal feed (paginated) ─────────────────────────────────────
         .routes(routes!(handlers::signals::list_signals))
         .route_layer(from_fn_with_state(work_slots, work_slot_limit));
 
     OpenApiRouter::new()
-        // ── Operator announcements (non-paginated, active window) ───────
         .routes(routes!(handlers::announcements::list_active_announcements))
-        // ── Shared results (cached, see the note on `slotted` above) ──────
         .routes(routes!(handlers::pools::list_top_pools))
         .routes(routes!(handlers::stats::get_stats))
-        // ── Fee-tier option list (non-paginated) — powers the fee filter ──
         .routes(routes!(handlers::pools::list_fee_tiers))
-        // ── Single-pool resources ───────────────────────────────────────
         .routes(routes!(handlers::pools::get_pool_latest_state))
         .routes(routes!(handlers::pools::list_pool_swaps))
         .routes(routes!(handlers::pools::list_pool_liquidity_events))
         .routes(routes!(handlers::network::get_network))
         .routes(routes!(handlers::ingestion::get_ingestion))
-        // ── Signal feed (live) — capped by its own slots, see the handler ──
+        // The live feed is capped by its own slots, in the handler.
         .routes(routes!(handlers::signals::stream_signals))
         .routes(routes!(handlers::token::get_token))
         .merge(slotted)
 }
 
-/// Bind the listener the server will accept on.
-///
-/// Kept apart from serving so that the address is taken, or refused, before
-/// anything is spawned: a port already in use is a startup error, not a task
-/// that dies later.
+/// Binds the listener before anything is spawned: a port in use is a startup error, not a
+/// task that dies later.
 pub(crate) async fn bind(bind_addr: SocketAddr) -> anyhow::Result<tokio::net::TcpListener> {
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await

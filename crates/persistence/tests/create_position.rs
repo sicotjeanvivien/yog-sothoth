@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2CreatePositionEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── create_position: round trip + idempotency ───────────────────────
-
 #[sqlx::test]
 async fn create_position_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2CreatePositionEventRepository::new(pool.clone());
@@ -25,7 +23,7 @@ async fn create_position_inserts_and_is_idempotent(pool: PgPool) {
     };
 
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
-    // Same (signature, timestamp) again — ON CONFLICT DO NOTHING.
+    // A replay: ON CONFLICT DO NOTHING.
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 =

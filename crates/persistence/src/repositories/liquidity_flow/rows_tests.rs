@@ -1,10 +1,4 @@
-//! Unit tests for `TryFrom<PoolLiquidityFlowRow> for PoolLiquidityFlow`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid ones
-//! map each direction to its own field, that a NULL TVL stays `None`, and
-//! that errors surface as `RepositoryError::Integrity`. (The happy path
-//! against the real views is covered by the DB-backed integration test in
-//! `tests/liquidity_flow.rs`.)
+//! DB-free tests of `TryFrom<PoolLiquidityFlowRow> for PoolLiquidityFlow`.
 
 use rust_decimal::Decimal;
 use yog_core::{RepositoryError, domain::PoolLiquidityFlow};
@@ -16,8 +10,7 @@ const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
 fn valid_row() -> PoolLiquidityFlowRow {
     PoolLiquidityFlowRow {
         pool_address: VALID_POOL.into(),
-        // Three distinct values — a swapped pair in the TryFrom would
-        // surface as a mismatched assert.
+        // Mutation: two fields swapped in the TryFrom.
         added_usd: Some("1234.5".parse().unwrap()),
         removed_usd: Some("678.9".parse().unwrap()),
         tvl_usd: Some("42000.25".parse().unwrap()),
@@ -46,10 +39,8 @@ fn try_from_null_tvl_stays_none() {
 
 #[test]
 fn try_from_null_flows_map_to_none_rather_than_zero() {
-    // NULL means the window was not entirely valuable. Turning it into
-    // `Decimal::ZERO` here would re-create, one layer lower, the collapse the
-    // repository stopped doing — and a zero net flow reads as "healthy pool",
-    // which is the reassuring answer rather than the true one.
+    // Mutation: a NULL (window not entirely valuable) mapped to `Decimal::ZERO`,
+    // which reads as a healthy pool.
     let row = PoolLiquidityFlowRow {
         added_usd: None,
         removed_usd: None,

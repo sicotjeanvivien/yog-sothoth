@@ -14,10 +14,6 @@ use yog_core::{
     },
 };
 
-// ---------------------------------------------------------------------------
-// Params
-// ---------------------------------------------------------------------------
-
 /// Input to [`MeteoraDammV2LiquidityService::list_liquidity_for_pool`].
 pub(crate) struct MeteoraDammV2LiquidityListParams {
     pub pool_address: Pubkey,
@@ -26,10 +22,6 @@ pub(crate) struct MeteoraDammV2LiquidityListParams {
     pub position: Option<PagePosition>,
     pub limit: i64,
 }
-
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
 
 /// Application service for liquidity event queries.
 pub(crate) struct MeteoraDammV2LiquidityService {

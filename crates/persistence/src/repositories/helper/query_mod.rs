@@ -1,11 +1,7 @@
 use yog_core::{PageDirection, PagePosition};
 
-/// Internal traversal mode resolved from `(cursor, direction, position)`.
-///
-/// `Forward` walks the list from newer to older events (natural
-/// display order); `Backward` walks the opposite way and the
-/// repository reverses the result before returning so the caller
-/// always sees rows in display order.
+/// Traversal mode resolved from `(cursor, direction, position)`. `Backward` walks
+/// against the display order, and the repository reverses its result.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum QueryMode {
     Forward,

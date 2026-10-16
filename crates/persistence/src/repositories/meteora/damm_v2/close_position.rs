@@ -1,6 +1,4 @@
 //! Close-position events repository: inserts position closures.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

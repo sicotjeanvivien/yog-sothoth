@@ -1,9 +1,5 @@
-//! Postgres implementation of [`SwapFlowRepository`].
-//!
-//! Reads the `meteora_damm_v2_pool_hourly_flow` view (baseline §15), which
-//! encapsulates the per-(pool, hour) directional USD valuation. This query
-//! just windows and sums it per pool — a slim `SELECT` the sqlx macro still
-//! verifies against the view's columns.
+//! Postgres implementation of [`SwapFlowRepository`]: windows and sums the
+//! `meteora_damm_v2_pool_hourly_flow` view (baseline §15) per pool.
 //!
 //! [`SwapFlowRepository`]: yog_core::domain::SwapFlowRepository
 
@@ -19,13 +15,11 @@ use yog_core::{
     domain::{PoolSwapFlow, SwapFlowRepository},
 };
 
-/// Postgres-backed directional swap flow repository.
 pub struct PgSwapFlowRepository {
     pool: PgPool,
 }
 
 impl PgSwapFlowRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -37,22 +31,8 @@ impl SwapFlowRepository for PgSwapFlowRepository {
         &self,
         since: DateTime<Utc>,
     ) -> RepositoryResult<Vec<PoolSwapFlow>> {
-        // Postgres pushes the `bucket > $1` predicate down into the swap CA,
-        // so this only touches recent buckets (no materialization).
-        //
-        // ⚠️ No COALESCE. It used to keep a direction with no priced volume at
-        // 0 rather than NULL, which made "unknown" indistinguishable from a
-        // real zero — and since the two directions were coalesced
-        // INDEPENDENTLY, one unpriced side yielded `(0 − X)/X = −1.0` exactly:
-        // a guaranteed maximum-magnitude Critical from `flow_imbalance` on a
-        // possibly balanced pool.
-        //
-        // `bool_and` is the other half, and it is not redundant: `SUM` skips
-        // NULLs on its own, so dropping the COALESCE alone would still publish
-        // a **sub-total** for a partially valuable window, silently. Requiring
-        // the whole window makes the sub-total unrepresentable — either every
-        // bucket was valuable and the sum is a true total, or the caller gets
-        // NULL and the detector skips the pool.
+        // ⚠️ No COALESCE: one unpriced side read as 0 gives `flow_imbalance` a −1.0. And `bool_and`
+        // too: `SUM` skips NULLs, so a partly priced window would publish a sub-total as a total.
         let rows = sqlx::query_as!(
             PoolSwapFlowRow,
             r#"

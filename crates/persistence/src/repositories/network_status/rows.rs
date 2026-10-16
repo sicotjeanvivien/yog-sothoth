@@ -2,12 +2,7 @@ use crate::repositories::helper::convert_i64_to_u64;
 use chrono::{DateTime, Utc};
 use yog_core::{RepositoryError, domain::NetworkStatus};
 
-/// Row shape for reading `network_status`.
-///
-/// A thin sqlx-facing struct kept separate from the domain model:
-/// it holds the raw `i64` slot and `i32` latency, converted back to
-/// `u64` / `u32` in the `TryFrom` impl below with explicit bounds
-/// checking.
+/// Row shape of `network_status`.
 #[derive(sqlx::FromRow)]
 pub(super) struct NetworkStatusRow {
     pub(super) slot: i64,

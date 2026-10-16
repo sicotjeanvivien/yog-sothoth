@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2WithdrawIneligibleRewardEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── withdraw_ineligible_reward: persists, idempotent, zero amount ────
-
 #[sqlx::test]
 async fn withdraw_ineligible_reward_inserts_and_is_idempotent(pool: PgPool) {
     let repo = PgMeteoraDammV2WithdrawIneligibleRewardEventRepository::new(pool.clone());
@@ -26,7 +24,7 @@ async fn withdraw_ineligible_reward_inserts_and_is_idempotent(pool: PgPool) {
     };
 
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Inserted);
-    // Same (signature, timestamp) again — ON CONFLICT DO NOTHING.
+    // A replay: ON CONFLICT DO NOTHING.
     assert_eq!(repo.insert(&event).await.unwrap(), InsertOutcome::Skipped);
 
     let count: i64 = sqlx::query_scalar(

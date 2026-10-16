@@ -1,7 +1,5 @@
 //! Initialize-pool (genesis) events repository.
-//!
-//! Write-only — the indexer is the sole consumer today. The fee parameters
-//! are persisted as a raw borsh blob (`pool_fees_raw`), undecoded.
+//! The fee parameters are persisted as a raw borsh blob (`pool_fees_raw`), undecoded.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

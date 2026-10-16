@@ -1,19 +1,5 @@
-//! Response DTOs for the public API.
-//!
-//! These types are the contract with the BFF and ultimately the browser.
-//! They are deliberately decoupled from the domain types: a change to a
-//! domain struct never silently breaks the wire format.
-//!
-//! # Conventions
-//!
-//! * `Pubkey` is rendered as its base58 string.
-//! * `DateTime<Utc>` is rendered as an RFC 3339 / ISO 8601 string.
-//! * `u64` is rendered as a JSON number — safe up to 2^53, which covers
-//!   every SPL amount that can fit in 53 bits (about 9 PB of atomic units).
-//! * `u128` is rendered as a JSON string ("BigInt safety") because JavaScript's
-//!   `number` cannot represent values above 2^53 without precision loss.
-//!   Frontends should use `BigInt(value)` to consume these fields.
-//! * Optional fields are rendered as `null` when absent (`serde` default).
+//! Swap event DTOs, decoupled from the domain types. ⚠️ A `u64` or `u128` quantity crosses the
+//! wire as a string: JS numbers lose precision past 2^53.
 
 mod trade_direction_response;
 
@@ -26,10 +12,6 @@ use super::pool::ProtocolResponse;
 use crate::http::dto::schema::U128String;
 
 use trade_direction_response::TradeDirectionResponse;
-
-// ---------------------------------------------------------------------------
-// Swap event
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -46,9 +28,6 @@ pub(crate) struct SwapEventResponse {
     timestamp: DateTime<Utc>,
 
     trade_direction: TradeDirectionResponse,
-    // All `u64` token quantities (amounts, reserves, fees) are emitted as
-    // strings: an atomic-unit value can exceed 2^53, which a JSON-number
-    // consumer (JS) silently truncates. Same rationale as `next_sqrt_price`.
     #[schema(value_type = U128String)]
     amount_a: String,
     #[schema(value_type = U128String)]

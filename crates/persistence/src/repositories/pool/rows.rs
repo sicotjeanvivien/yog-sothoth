@@ -7,13 +7,8 @@ use yog_core::{
     domain::{Pool, Protocol},
 };
 
-/// Row shape returned by SELECTs on `pools`. Mirrors every column of
-/// the table. Used by `find_by_address` and `find_paginated`.
-///
-/// The cp-amm fee properties are deliberately absent: they moved to
-/// `meteora_damm_v2_pool_properties` in migration 036 and are read through
-/// [`PgMeteoraDammV2PoolPropertiesRepository`](crate::PgMeteoraDammV2PoolPropertiesRepository),
-/// not here.
+/// Row shape of `pools`. Per-protocol properties are read from their satellites,
+/// such as [`PgMeteoraDammV2PoolPropertiesRepository`](crate::PgMeteoraDammV2PoolPropertiesRepository).
 #[derive(sqlx::FromRow)]
 pub(super) struct PoolRow {
     pub(super) pool_address: String,

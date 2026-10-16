@@ -1,56 +1,20 @@
-//! The rules `yog-migrate` imposes on the migrations it applies, checked as
-//! ordinary DB-free unit tests of this binary.
-//!
-//! They live here rather than in the crate's library because `migrations/` is
-//! this binary's subject: `yog-persistence` binds the processes to the database,
-//! `yog-migrate` owns how the schema changes. They stay *tests* rather than a
-//! runtime check because a migration that breaks a naming convention is badly
-//! written, not dangerous to apply — the proportionate sanction is a red pull
-//! request, not a blocked deployment.
-//!
-//! # Index names have to be written down
-//!
-//! `CREATE INDEX ON t (a, b);` leaves the name to the server, and the server has
-//! only 63 bytes for it. Our table names run to 53 characters, so the generated
-//! name is truncated — and when two truncate onto the same name, Postgres
-//! appends `1`, `2`, … **in creation order**. Two tables already do:
-//!
-//! ```text
-//! meteora_damm_v2_update_reward_duration_events  → …_signature_event_index_timesta_idx
-//! meteora_damm_v2_update_reward_funder_events    → …_signature_event_index_timest_idx1
-//! ```
-//!
-//! The `1` sits on `funder` only because `duration` is declared first. Add a
-//! third table that truncates onto the same name and the suffix moves, so a
-//! freshly migrated database no longer matches production — with no error
-//! raised, because nothing here is illegal.
-//!
-//! The fix is not to predict what Postgres would name things. It is to stop
-//! asking it: **name every index**. Then there is nothing to predict, and this
-//! module only has to check that the rule was followed.
-//!
-//! `create_hypertable()` names one too — a default index on the time dimension,
-//! on the root table, in `public` — so a new hypertable passes
-//! `create_default_indexes => FALSE` and writes that index out like any other.
-//!
-//! # Scope
-//!
-//! Only migrations from [`FIRST_GUARDED_VERSION`] on. `001`–`009` are frozen
-//! history (forward-only); the 70 auto-named indexes they created keep their
-//! names, and renaming them is a separate job that needs its own migration.
+//! The rules `yog-migrate` imposes on the migrations it applies, as DB-free unit
+//! tests: a broken convention deserves a red pull request, not a blocked deploy.
+//! ⚠️ Every index is named, `create_hypertable()`'s too (`create_default_indexes => FALSE`):
+//! past 63 bytes Postgres truncates, then suffixes colliding names in creation order,
+//! so a freshly migrated database drifts from production without an error.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Longest identifier Postgres keeps; anything longer is silently truncated,
-/// which is how names start colliding in the first place.
+/// Longest identifier Postgres keeps; anything longer is silently truncated.
 const MAX_IDENTIFIER_LEN: usize = 63;
 
 /// Beyond this length a table's `<table>_pkey` truncates too, and that one
 /// cannot be named explicitly.
 const MAX_TABLE_NAME_LEN: usize = MAX_IDENTIFIER_LEN - "_pkey".len();
 
-/// The rule binds migrations written from here on. Everything before is frozen.
+/// The rule binds migrations from this version on: the earlier ones are frozen.
 const FIRST_GUARDED_VERSION: u64 = 10;
 
 fn migrations_dir() -> PathBuf {
@@ -85,12 +49,8 @@ fn file_name(path: &Path) -> String {
         .to_string()
 }
 
-/// The SQL statements of `sql`, each with the 1-based line it starts on,
-/// whitespace collapsed.
-///
-/// Comments and quoted text become a space rather than disappearing: a comment
-/// mentioning `CREATE INDEX` must not be read as one, and `INDEX/**/ON` must not
-/// weld into a token that no longer looks like an index at all.
+/// The statements of `sql`, each with its 1-based first line, whitespace collapsed. ⚠️ Comments
+/// and quoted text become a space: mentioning `CREATE INDEX` is not one, `INDEX/**/ON` stays two tokens.
 fn statements(sql: &str) -> Vec<(usize, String)> {
     let chars: Vec<char> = sql.chars().collect();
     let (mut out, mut current) = (Vec::new(), String::new());

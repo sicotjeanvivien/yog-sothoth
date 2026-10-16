@@ -1,9 +1,4 @@
-//! Unit tests for `TryFrom<MeteoraDammV2SwapEventRow> for SwapEvent`.
-//!
-//! Pure parser tests, no DB. Build rows by hand, assert that valid
-//! ones produce the right `SwapEvent`, that each fallible field has
-//! its own validation path, and that errors surface as
-//! `RepositoryError::Integrity`.
+//! DB-free tests of `TryFrom<MeteoraDammV2SwapEventRow> for SwapEvent`.
 
 use chrono::{Duration, Utc};
 use solana_signature::Signature;
@@ -15,8 +10,7 @@ use yog_core::{
 
 use super::MeteoraDammV2SwapEventRow;
 
-// Distinct valid base58-encoded Pubkeys so any field swap in the
-// `TryFrom` impl shows up immediately in the happy path test.
+// Distinct pubkeys, so a field swap in the `TryFrom` fails the happy path.
 const VALID_POOL: &str = "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1";
 
 fn valid_row() -> MeteoraDammV2SwapEventRow {
@@ -44,8 +38,6 @@ fn valid_row() -> MeteoraDammV2SwapEventRow {
 fn sig(seed: u8) -> Signature {
     Signature::from([seed; 64])
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[test]
 fn try_from_valid_row_returns_event_with_all_fields_mapped() {
@@ -83,8 +75,7 @@ fn try_from_preserves_signature_and_timestamp() {
 
 #[test]
 fn try_from_preserves_fee_token_is_a_false() {
-    // Happy path pins `true`; also pin `false` to catch an accidental
-    // hardcode in the TryFrom impl.
+    // Mutation: a hardcoded `true` in the TryFrom.
     let row = MeteoraDammV2SwapEventRow {
         fee_token_is_a: false,
         ..valid_row()
@@ -94,8 +85,6 @@ fn try_from_preserves_fee_token_is_a_false() {
 
     assert!(!event.fee_token_is_a);
 }
-
-// ── Pubkey validation ────────────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_pool_address_returns_integrity() {
@@ -109,8 +98,6 @@ fn try_from_invalid_pool_address_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── Enum validation ──────────────────────────────────────────────────
 
 #[test]
 fn try_from_invalid_trade_direction_returns_integrity_with_value_in_message() {
@@ -129,8 +116,6 @@ fn try_from_invalid_trade_direction_returns_integrity_with_value_in_message() {
         "expected message to mention both the field and the bad value, got: {msg}"
     );
 }
-
-// ── Numeric conversion: i64 → u64 (one test per field) ───────────────
 
 #[test]
 fn try_from_negative_amount_a_returns_integrity() {
@@ -243,8 +228,6 @@ fn try_from_negative_referral_fee_returns_integrity() {
         "expected Integrity, got {err:?}"
     );
 }
-
-// ── Numeric conversion: BigDecimal → u128 ────────────────────────────
 
 #[test]
 fn try_from_negative_next_sqrt_price_returns_integrity() {

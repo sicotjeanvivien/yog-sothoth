@@ -1,10 +1,6 @@
-//! Liquidity events repository: inserts new events and paginates
-//! existing ones by pool.
-//!
-//! Both reads are static SQL (one query per traversal mode); the row
-//! shape and the mapping to domain are shared. No dynamic SQL here,
-//! so the layout stays single-file: `LiquidityEventRow` and its
-//! `TryFrom` to domain live at the bottom of this module.
+//! Liquidity events repository: inserts new events and paginates them by
+//! pool, with one static query per traversal mode.
+
 mod rows;
 
 use crate::repositories::helper::{
@@ -24,9 +20,7 @@ use yog_core::{
     },
 };
 
-/// Maximum number of rows returned in a single page, regardless of the
-/// caller's `limit`. Backstop against an oversized query if the
-/// API-layer validation is bypassed.
+/// Page size cap, whatever the caller's `limit`.
 const MAX_PAGE_SIZE: i64 = 200;
 
 pub struct PgMeteoraDammV2LiquidityEventRepository {
@@ -87,11 +81,7 @@ impl MeteoraDammV2LiquidityEventRepository for PgMeteoraDammV2LiquidityEventRepo
 
 #[async_trait]
 impl MeteoraDammV2LiquidityEventFeed for PgMeteoraDammV2LiquidityEventRepository {
-    /// Paginate liquidity events for a pool with bidirectional navigation.
-    ///
-    /// See `PgSwapEventRepository::find_by_pool_paginated` for the full
-    /// design notes — the implementation is structurally identical, only
-    /// the row mapping differs.
+    /// Same shape as the swap events' `find_by_pool_paginated`; only the row mapping differs.
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,
@@ -116,9 +106,6 @@ impl MeteoraDammV2LiquidityEventFeed for PgMeteoraDammV2LiquidityEventRepository
             None => (None, None, None),
         };
 
-        // Two static SQL paths — one per traversal mode. Both produce
-        // Vec<LiquidityEventRow>; the mapping to domain runs once after
-        // the match, no duplication.
         let rows: Vec<MeteoraDammV2LiquidityEventRow> = match mode {
             QueryMode::Forward => sqlx::query_as!(
                 MeteoraDammV2LiquidityEventRow,

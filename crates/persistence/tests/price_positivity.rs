@@ -1,25 +1,7 @@
-//! Integration tests for migration 009 — a price of zero is not a price.
-//!
-//! Four things are asserted here, and the last two are what keep the first two
-//! from being decoration:
-//!
-//!   1. the constraint refuses a zero, with the **precise** SQLSTATE;
-//!   2. it refuses `4e-19` too — a *positive* value, which only becomes zero
-//!      when coerced to `NUMERIC(38, 18)`. This is the assertion that states
-//!      the real rule: the bound is the column's scale, not the sign;
-//!   3. **the guard is put to the sword**: with the constraint dropped, the
-//!      very same insert succeeds. Without this, a green here is also produced
-//!      by a constraint that does not exist, or by the value never reaching the
-//!      column at all;
-//!   4. the constraint is **validated**, not `NOT VALID` — the difference does
-//!      not show up in any insert, only in `pg_constraint`, so nothing else
-//!      would notice it silently shipping in the weaker form.
-//!
-//! And one that binds the two halves of the rule together: `agreement_…` checks
-//! that `TokenPrice::is_storable` (the writer-side filter in `yog-context`)
-//! accepts exactly what Postgres accepts. The rule is necessarily stated twice —
-//! once in Rust so a batch is never aborted, once in SQL so the guarantee lives
-//! in the schema — and this is what stops the two statements from drifting.
+//! A price of zero is not a price. The constraint refuses `4e-19`, which only becomes zero
+//! in `NUMERIC(38, 18)`, with the precise SQLSTATE; dropping it lets the same insert land;
+//! it is validated, not `NOT VALID`. And `TokenPrice::is_storable` accepts exactly what
+//! Postgres accepts, so the rule's two statements cannot drift.
 
 use super::helpers::{CHECK_VIOLATION, NUMERIC_OVERFLOW, pk, sqlstate};
 use chrono::Utc;
@@ -34,8 +16,7 @@ fn dec(s: &str) -> Decimal {
     Decimal::from_str(s).expect("test literal must parse as Decimal")
 }
 
-/// Insert one price the way `insert_batch` does — a bound `Decimal`, not a SQL
-/// literal, so the coercion under test is the one production performs.
+/// Inserts one price as `insert_batch` does — a bound `Decimal`, so the coercion is production's.
 async fn insert_price(pool: &PgPool, mint: &str, price: Decimal) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO token_prices (mint, price_usd, price_provider, fetched_at)
@@ -69,9 +50,7 @@ async fn negative_is_refused(pool: PgPool) {
 
 #[sqlx::test]
 async fn a_positive_price_below_the_column_scale_is_refused(pool: PgPool) {
-    // 4e-19 is positive everywhere until it reaches the column, where it rounds
-    // to 0.000000000000000000. A `price_usd > 0` filter in the writer would let
-    // this through and the row would land as a zero — which is the entire bug.
+    // Positive until the column rounds it to zero: a writer's `> 0` filter lets it through.
     let err = insert_price(&pool, "MintDust", dec("0.0000000000000000004"))
         .await
         .expect_err("a price that rounds to zero must not be storable");
@@ -81,9 +60,7 @@ async fn a_positive_price_below_the_column_scale_is_refused(pool: PgPool) {
 
 #[sqlx::test]
 async fn the_midpoint_rounds_up_and_is_accepted(pool: PgPool) {
-    // 5e-19 rounds AWAY from zero under Postgres's NUMERIC rules and lands on
-    // 1e-18. The constraint must not be over-eager: this is a real price the
-    // column can hold, and refusing it would lose data the schema can carry.
+    // Rounds away from zero, to 1e-18: a price the column holds, which must not be refused.
     insert_price(&pool, "MintMidpoint", dec("0.0000000000000000005"))
         .await
         .expect("5e-19 rounds to 1e-18 and must be accepted");
@@ -99,13 +76,8 @@ async fn the_midpoint_rounds_up_and_is_accepted(pool: PgPool) {
 
 #[sqlx::test]
 async fn dropping_the_constraint_lets_the_zero_through(pool: PgPool) {
-    // The mutation. Everything above is satisfied by a database that refuses
-    // the insert for some *other* reason; this is what pins the refusal on the
-    // constraint of migration 009, by removing it and watching the same value
-    // land — as a zero, non-NULL, exactly the state the migration exists to
-    // prevent.
-    // `AssertSqlSafe`: a DDL identifier cannot be a bind parameter, and the
-    // only thing interpolated is the `CONSTRAINT` constant above.
+    // The mutation: without the constraint, the same value lands as a zero.
+    // `AssertSqlSafe`: a DDL identifier cannot be bound; only the constant is interpolated.
     sqlx::query(AssertSqlSafe(format!(
         "ALTER TABLE token_prices DROP CONSTRAINT {CONSTRAINT}"
     )))
@@ -127,8 +99,7 @@ async fn dropping_the_constraint_lets_the_zero_through(pool: PgPool) {
     .unwrap();
 
     assert_eq!(stored, Decimal::ZERO);
-    // The pair that names the defect: it reads as a number, not as an absence,
-    // so every `price_usd IS NULL` guard downstream waves it through.
+    // A number, not an absence: every `IS NULL` guard downstream waves it through.
     assert!(is_zero, "the stored value is zero");
     assert!(
         !is_null,
@@ -138,11 +109,7 @@ async fn dropping_the_constraint_lets_the_zero_through(pool: PgPool) {
 
 #[sqlx::test]
 async fn an_overflowing_price_is_refused_by_the_type_not_the_constraint(pool: PgPool) {
-    // The ceiling is not enforced by 009 and cannot be: `NUMERIC(38, 18)`
-    // rejects the value while coercing it, before any CHECK is consulted. The
-    // SQLSTATE is what proves which layer fired — asserting merely "it failed"
-    // would let someone believe the constraint covers this end too, and write a
-    // one-sided filter on that belief.
+    // The type refuses this one before any CHECK: the SQLSTATE proves which layer fired.
     let err = insert_price(&pool, "MintHuge", dec("100000000000000000000"))
         .await
         .expect_err("1e20 does not fit NUMERIC(38, 18)");
@@ -156,10 +123,7 @@ async fn an_overflowing_price_is_refused_by_the_type_not_the_constraint(pool: Pg
 
 #[sqlx::test]
 async fn the_constraint_is_validated_not_merely_declared(pool: PgPool) {
-    // `NOT VALID` would pass every test above: it refuses new rows just the
-    // same. What it would not do is prove anything about the rows already
-    // stored, and the whole argument for the validating form was that there
-    // were none to fear. This is the only place that difference is visible.
+    // `NOT VALID` passes every insert above: only the catalog shows the difference.
     let (validated, definition): (bool, String) = sqlx::query_as(
         "SELECT convalidated, pg_get_constraintdef(oid)
          FROM pg_constraint WHERE conname = $1 AND conrelid = 'token_prices'::regclass",
@@ -179,11 +143,8 @@ async fn the_constraint_is_validated_not_merely_declared(pool: PgPool) {
     );
 }
 
-/// The contract on `TokenPriceRepository::insert_batch` is enforced by a
-/// `debug_assert`, so a caller that forgets to filter fails here rather than
-/// silently dropping a whole tick in production. Gated on `debug_assertions`
-/// because that is exactly when the assertion exists — a `--release` run must
-/// not report a failure for a guard that was compiled out.
+/// The `debug_assert` on `insert_batch` fails a caller that forgets to filter. Gated on
+/// `debug_assertions`: a release build compiles the guard out.
 #[cfg(debug_assertions)]
 #[sqlx::test]
 #[should_panic(expected = "the caller must filter")]
@@ -205,16 +166,8 @@ async fn insert_batch_refuses_an_unfiltered_batch_in_debug(pool: PgPool) {
 
 #[sqlx::test]
 async fn agreement_between_the_rust_filter_and_the_constraint(pool: PgPool) {
-    // The rule is stated twice on purpose — `TokenPrice::is_storable` so that a
-    // batch insert is never aborted, and the CHECK so the guarantee lives in
-    // the schema. Two statements of one rule drift; this is the test that does
-    // not let them.
-    //
-    // Every value straddling the boundary, plus ordinary ones for shape.
-    // Both ends: the CHECK guards the low one, the column TYPE guards the high
-    // one (`22003`, before any constraint runs). `is_storable` has to agree with
-    // whichever of the two refuses, because the writer cannot tell them apart —
-    // both abort the batch identically.
+    // Both ends of the boundary: the CHECK refuses the low one, the type (`22003`) the high one,
+    // and `is_storable` must agree with either — both abort a batch alike.
     let cases = [
         "1.25",
         "0.000001381771567258", // the smallest price actually observed in dev

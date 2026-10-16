@@ -22,10 +22,7 @@ async fn counted(calls: Arc<AtomicUsize>) -> Result<u32, RepositoryError> {
     Ok(42)
 }
 
-/// Fifty concurrent callers on a cold key: one computation, fifty answers.
-/// This is the burst that took the pool down.
-///
-/// Mutation: compute without the cache, and the count is fifty.
+/// Mutation: computing without the cache — fifty concurrent callers, fifty computations.
 #[tokio::test]
 async fn concurrent_callers_of_a_cold_key_share_one_computation() {
     let cache = Arc::new(SharedCache::<(), u32>::new(policy(
@@ -80,9 +77,8 @@ async fn a_failed_computation_reaches_its_waiters_and_is_not_kept() {
     assert_eq!(next.unwrap(), 7, "the failure was not kept");
 }
 
-/// Past its time to live, a value is computed again. `moka` keeps time with
-/// `std::time::Instant`, which `tokio::time::pause` does not move: a real,
-/// short time to live, and a real wait.
+/// Past its time to live, a value is computed again. ⚠️ A real wait: `moka` keeps time with
+/// `std::time::Instant`, which `tokio::time::pause` does not move.
 #[tokio::test]
 async fn an_expired_value_is_computed_again() {
     let cache = SharedCache::<(), u32>::new(policy(Duration::from_millis(100), 1));
@@ -117,10 +113,7 @@ async fn each_key_has_its_own_value() {
     assert_eq!((one, two), (10, 20));
 }
 
-/// The capacity holds: ten keys into a cache of three leave three. This is
-/// what makes the cache safe on keys that are not a fixed set.
-///
-/// Mutation: build without `max_capacity`, and ten are kept.
+/// Mutation: building without `max_capacity` — ten keys into a cache of three keep ten.
 #[tokio::test]
 async fn the_capacity_holds() {
     let cache = SharedCache::<u8, u32>::new(policy(Duration::from_secs(30), 3));

@@ -267,10 +267,8 @@ pub(crate) fn validate_search(q: Option<&str>) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// Reject a cursor whose embedded sort column disagrees with the
-/// active `sort` param. This catches a tampered or stale URL where a
-/// cursor built under one sort is replayed under another — which
-/// would otherwise produce a silently wrong page.
+/// Rejects a cursor built under another `sort` than the active one, which would
+/// otherwise give a silently wrong page.
 pub(crate) fn validate_cursor_sort_consistency(
     cursor: Option<&PoolCursor>,
     sort: PoolSort,
@@ -286,20 +284,14 @@ pub(crate) fn validate_cursor_sort_consistency(
     Ok(())
 }
 
-/// Normalize a raw search term into a clean optional value: trim
-/// surrounding whitespace, collapse blank to `None`. The repository
-/// must never receive a blank string (it would match everything via
-/// `%%`).
+/// Trims a search term and collapses a blank one to `None`. ⚠️ A blank string would
+/// match everything through `%%`.
 pub(crate) fn normalize_search(raw: Option<String>) -> Option<String> {
     raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-/// Parse the optional `fee_bps` filter into a domain `Decimal`.
-///
-/// A blank value collapses to `None` (no filter) — same tolerance as the
-/// search term, so an empty `?fee_bps=` from the UI clearing the selection
-/// is a valid "unfiltered" request, not a 400. A non-numeric or negative
-/// value is a client bug worth surfacing (a fee tier is never negative).
+/// Parses the optional `fee_bps` filter. A blank value is no filter — the UI clearing its
+/// selection — and a non-numeric or negative one a 400.
 pub(crate) fn parse_fee_bps(raw: Option<String>) -> Result<Option<Decimal>, ApiError> {
     let Some(trimmed) = raw.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) else {
         return Ok(None);
@@ -317,22 +309,13 @@ pub(crate) fn parse_fee_bps(raw: Option<String>) -> Result<Option<Decimal>, ApiE
     Ok(Some(value))
 }
 
-/// Parse a base58 pool address from the path, or return a 400.
-///
-/// Centralised here because three endpoints share the same path
-/// shape (`GET /api/pools/{address}`, `…/latest-state`, `…/swaps`,
-/// `…/liquidity-events`). Keeping a single source of the error
-/// message guarantees clients see a uniform string across all of
-/// them.
+/// Parses a base58 pool address from the path, or returns a 400 — one message for every
+/// pool route.
 pub(crate) fn parse_pool_address(raw: &str) -> Result<Pubkey, ApiError> {
     Pubkey::from_str(raw).map_err(|_| ApiError::BadRequest(format!("invalid pool address: {raw}")))
 }
 
-/// Parse a base58 SPL mint address from the path, or return a 400.
-///
-/// Mirrors `parse_pool_address` for the `/api/tokens/{mint}` route —
-/// kept separate because the error message names the right concept
-/// (mint vs pool address) which matters for client debugging.
+/// Parses a base58 mint address from the path, or returns a 400 naming a mint.
 pub(crate) fn parse_token_mint(raw: &str) -> Result<Pubkey, ApiError> {
     Pubkey::from_str(raw).map_err(|_| ApiError::BadRequest(format!("invalid mint address: {raw}")))
 }

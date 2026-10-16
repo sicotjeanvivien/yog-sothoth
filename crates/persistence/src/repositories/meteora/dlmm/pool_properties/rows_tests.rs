@@ -1,9 +1,5 @@
-//! Unit tests for
+//! DB-free tests of
 //! `TryFrom<MeteoraDlmmPoolPropertiesRow> for MeteoraDlmmPoolProperties`.
-//!
-//! Pure parser tests, no DB. The focus is the narrowing guards: every column is
-//! one signed width above its on-chain type, so the top half of each range is
-//! reachable in the domain and unreachable in a correct row.
 
 use yog_core::{RepositoryError, domain::MeteoraDlmmPoolProperties};
 
@@ -37,9 +33,6 @@ fn try_from_valid_row_maps_every_field() {
     assert_eq!(props.protocol_share, Some(1_000));
 }
 
-/// A pool discovered but not yet enriched: all six columns NULL together, which
-/// is the only partial state this satellite has. Unlike cp-amm's, no single
-/// field can be NULL on an otherwise-resolved row.
 #[test]
 fn try_from_an_unresolved_row_maps_every_field_to_none() {
     let row = MeteoraDlmmPoolPropertiesRow {
@@ -58,9 +51,7 @@ fn try_from_an_unresolved_row_maps_every_field_to_none() {
     assert!(props.variable_fee_control.is_none());
 }
 
-/// The reason `bin_step` is INTEGER and not SMALLINT, and
-/// `variable_fee_control` BIGINT and not INTEGER: the top of each unsigned range
-/// must survive the round trip.
+/// Mutation: a guard that rejects the top of an unsigned range.
 #[test]
 fn try_from_accepts_the_top_of_each_unsigned_range() {
     let row = MeteoraDlmmPoolPropertiesRow {
@@ -74,7 +65,6 @@ fn try_from_accepts_the_top_of_each_unsigned_range() {
     };
     let props = MeteoraDlmmPoolProperties::try_from(row).expect("full range should convert");
 
-    // Every column, not a sample: each one is what justifies its own width.
     assert_eq!(props.bin_step, Some(u16::MAX));
     assert_eq!(props.base_factor, Some(u16::MAX));
     assert_eq!(props.base_fee_power_factor, Some(u8::MAX));
@@ -83,8 +73,7 @@ fn try_from_accepts_the_top_of_each_unsigned_range() {
     assert_eq!(props.protocol_share, Some(u16::MAX));
 }
 
-/// A zero base factor is a real mainnet value (a zero-fee pool), not a missing
-/// one — so it must not be conflated with NULL.
+/// Mutation: a zero read as NULL — a zero base factor is a real mainnet value.
 #[test]
 fn try_from_distinguishes_a_zero_base_factor_from_a_missing_one() {
     let row = MeteoraDlmmPoolPropertiesRow {

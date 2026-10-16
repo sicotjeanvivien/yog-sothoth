@@ -14,13 +14,11 @@ use yog_core::{
     domain::{PoolPriceSnapshot, PoolPriceSnapshotRepository},
 };
 
-/// Postgres-backed pool price snapshot repository.
 pub struct PgPoolPriceSnapshotRepository {
     pool: PgPool,
 }
 
 impl PgPoolPriceSnapshotRepository {
-    /// Build the repository over a shared connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
@@ -29,9 +27,8 @@ impl PgPoolPriceSnapshotRepository {
 #[async_trait]
 impl PoolPriceSnapshotRepository for PgPoolPriceSnapshotRepository {
     async fn latest(&self) -> RepositoryResult<Vec<PoolPriceSnapshot>> {
-        // Every column is forced non-null by the view's INNER joins and its
-        // `IS NOT NULL` predicates; the `!` overrides tell sqlx so, since it
-        // cannot infer nullability through a view.
+        // sqlx cannot infer nullability through a view: `!` states what its INNER
+        // joins and `IS NOT NULL` predicates guarantee.
         let rows = sqlx::query_as!(
             PoolPriceSnapshotRow,
             r#"

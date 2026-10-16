@@ -22,13 +22,8 @@ pub(crate) struct ListSignalsRequest {
 }
 
 impl ListSignalsRequest {
-    /// Validate the query into a single request value.
-    ///
-    /// Sort is intentionally not exposed by this endpoint — the feed is
-    /// ordered by `(triggered_at DESC, id DESC)` by contract. `severity`
-    /// arrives pre-validated: an unknown value already failed serde.
-    /// `pool` must parse as a base58 pubkey (400 otherwise, same rule
-    /// and message as the pool path params).
+    /// Validates the query. No sort: the order is fixed. `severity` is validated by serde,
+    /// `pool` parsed as the pool path params are.
     pub(crate) fn parse(query: SignalsQuery) -> Result<Self, ApiError> {
         validate_limit(query.limit)?;
         validate_cursor_position_exclusive(query.cursor.is_some(), query.position.is_some())?;

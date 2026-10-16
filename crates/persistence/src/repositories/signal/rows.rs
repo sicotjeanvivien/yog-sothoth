@@ -10,9 +10,7 @@ use yog_core::{
     domain::{Protocol, Severity, Signal, SignalRecord},
 };
 
-/// Row shape for the signal feed query — one `signals` row, including
-/// the storage-assigned `id` the domain's write-side [`Signal`] does
-/// not carry.
+/// One `signals` row, with the storage `id` the write-side [`Signal`] does not carry.
 ///
 /// [`Signal`]: yog_core::domain::Signal
 #[derive(sqlx::FromRow)]

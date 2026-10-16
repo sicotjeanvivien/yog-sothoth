@@ -1,15 +1,4 @@
-// ===========================================================================
-// Cursor wire format
-// ===========================================================================
-//
-// Each cursor variant has its own wire shape so the encoded blob is
-// self-describing — a SwapCursor can't be mis-decoded as a PoolCursor
-// because the JSON structure won't match. The encoded blob is
-// base64(url-safe, no-pad) over a JSON object.
-//
-// Decoding is variant-specific (the handler knows which kind it expects
-// for its endpoint); encoding goes through a single `encode_cursor`
-// dispatch on the Cursor enum.
+// The blob is URL-safe unpadded base64 over a JSON object.
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
@@ -27,10 +16,8 @@ struct PoolCursorWire {
     sort_column: String,
     sort_value: String,
     pool_address: String,
-    /// The traversal's snapshot fence, RFC 3339. Absent on a sort over an
-    /// immutable column, and on cursors minted before this field existed —
-    /// which decode to `None` and make the repository mint a fresh fence,
-    /// re-anchoring the traversal rather than rejecting the URL.
+    /// The traversal's snapshot fence, RFC 3339. Absent on an immutable sort column and on a
+    /// cursor minted before the field: the repository then mints a fresh fence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     as_of: Option<String>,
 }
@@ -39,8 +26,7 @@ struct PoolCursorWire {
 struct EventCursorWire {
     timestamp: String,
     signature: String,
-    /// Added with migration 041. Cursors minted before it decode with 0,
-    /// which is the right default: the first hop of its transaction.
+    /// A cursor minted before the field decodes with 0: the first hop of its transaction.
     #[serde(default)]
     event_index: u16,
 }

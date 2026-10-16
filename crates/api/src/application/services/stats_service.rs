@@ -1,10 +1,5 @@
-//! Application service for protocol-wide statistics (`GET /api/stats`).
-//!
-//! Composes two reads — the USD aggregate analytics ([`GlobalAnalytics`]) and
-//! the pool inventory counts ([`PoolCounts`]) — into a single aggregate. The
-//! two concerns live on different repositories by design: counts are a `pools`
-//! concern, USD valuation an analytics concern. This service only orchestrates;
-//! no business logic, no SQL.
+//! Protocol-wide statistics (`GET /api/stats`): the USD analytics and the pool counts, two
+//! repositories composed into one aggregate.
 
 use std::sync::Arc;
 
@@ -16,10 +11,6 @@ use yog_core::{
     domain::{GlobalAnalytics, GlobalAnalyticsRepository, PoolCatalog, PoolCounts},
 };
 
-// ---------------------------------------------------------------------------
-// Aggregate
-// ---------------------------------------------------------------------------
-
 /// The assembled protocol-wide statistics: USD analytics + pool counts.
 /// `Clone`: one computation is shared by every caller of the cache.
 #[derive(Debug, Clone)]
@@ -28,16 +19,10 @@ pub(crate) struct StatsAggregate {
     pub counts: PoolCounts,
 }
 
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
-
-/// Application service for the global stats query.
 pub(crate) struct StatsService {
     global_analytics_repo: Arc<dyn GlobalAnalyticsRepository>,
     pool_repo: Arc<dyn PoolCatalog>,
-    /// `/api/stats` is the same for every visitor: computed once per
-    /// time to live ([`STATS`]), however many requests arrive together.
+    /// `/api/stats`, computed once per [`STATS`] time to live for every visitor.
     cache: SharedCache<(), StatsAggregate>,
     /// Taken while the stats compute, never by a caller waiting for them.
     work_slots: WorkSlots,
@@ -57,7 +42,6 @@ impl StatsService {
         }
     }
 
-    /// Assemble the current protocol-wide statistics.
     pub(crate) async fn get_stats(&self) -> Result<StatsAggregate, RepositoryError> {
         self.cache
             .get_or_compute((), async {

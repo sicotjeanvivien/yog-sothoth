@@ -1,6 +1,4 @@
 //! Set-pool-status events repository.
-//!
-//! Write-only — the indexer is the sole consumer today.
 
 use async_trait::async_trait;
 use sqlx::PgPool;

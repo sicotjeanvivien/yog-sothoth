@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2UpdatePoolFeesEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── update_pool_fees: BYTEA params blob ─────────────────────────────
-
 #[sqlx::test]
 async fn update_pool_fees_preserves_bytea(pool: PgPool) {
     let repo = PgMeteoraDammV2UpdatePoolFeesEventRepository::new(pool.clone());

@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2SetPoolStatusEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── set_pool_status: SMALLINT ───────────────────────────────────────
-
 #[sqlx::test]
 async fn set_pool_status_inserts(pool: PgPool) {
     let repo = PgMeteoraDammV2SetPoolStatusEventRepository::new(pool.clone());
