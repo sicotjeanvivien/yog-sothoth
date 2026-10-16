@@ -1,31 +1,6 @@
-//! Metadata worker — discovers new mints and enriches them.
-//!
-//! Every `metadata_poll_interval` (10s by default):
-//!   1. read the set of mints present in `pools` but absent from
-//!      `token_metadata` (`list_missing_mints`);
-//!   2. fetch their identity from Helius DAS in chunks of at most
-//!      `DAS_BATCH_MAX`;
-//!   3. upsert each successfully-fetched row.
-//!
-//! # Resilience
-//!
-//! `yog-context` is a comfort daemon: nothing it does is critical to
-//! ingestion. A failure of a single tick must not bring down the
-//! daemon, because a stopped enrichment daemon means the dashboard
-//! gradually loses its token names — much worse than missing one
-//! poll cycle.
-//!
-//! The loop therefore absorbs:
-//!   - HTTP errors against Helius (`SourceError::Http`);
-//!   - response-decoding errors (`SourceError::Decode`);
-//!   - persistence errors when upserting an individual row.
-//!
-//! Each is logged and the tick continues (for upsert errors) or is
-//! skipped (for source-level errors). The `run` return type stays
-//! `Result<(), WorkerError>` so the worker still plugs into
-//! `handle_task_result` — only a truly anomalous, non-recoverable
-//! situation would return `Err`, but in practice this implementation
-//! does not.
+//! Metadata worker: every poll, lists the mints in `pools` missing from `token_metadata`, fetches
+//! their identity from Helius DAS and upserts each row.
+//! A failed tick or row is logged and stepped over: a stopped enrichment would lose token names.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -70,15 +45,8 @@ impl MetadataWorker {
 
         loop {
             tokio::select! {
-            // ⚠️ **`biased`: the stop must win a tie, and ties happen.** The
-            // ticker keeps tokio's default `MissedTickBehavior::Burst`, so a
-            // cycle that outruns the cadence leaves `tick()` **already ready**
-            // when the loop comes back round. An unbiased `select!` then picks
-            // pseudo-randomly between a tick and a stop that has already been
-            // asked for — about one stop in two would start a whole new cycle,
-            // burn the shutdown grace and be destroyed mid-write, which is the
-            // outcome joining these workers exists to prevent. Same reason the
-            // indexer's own loops are biased.
+            // ⚠️ `biased`: with the default `Burst`, a cycle that outruns the cadence leaves `tick()`
+            // ready, and an unbiased pick would start a new cycle after a stop was asked for.
             biased;
 
                 _ = shutdown.cancelled() => {
@@ -112,13 +80,11 @@ impl MetadataWorker {
 
         debug!(count = missing.len(), "metadata worker: enriching mints");
 
-        // Single call — the source handles chunking and partial failures
-        // internally.
+        // One call: the source chunks and absorbs partial failures.
         let fetched = match self.source.fetch_metadata(&missing).await {
             Ok(fetched) => fetched,
             Err(e) => {
-                // Reserved for hard failures (misconfiguration etc.).
-                // Best-effort partial results don't go through this path.
+                // Hard failures only (misconfiguration); partial results do not come here.
                 warn!(error = %e, "metadata worker: source returned a hard error");
                 MetadataWorkerMetrics::record_tick(
                     "source_hard_error",
@@ -132,8 +98,7 @@ impl MetadataWorker {
         MetadataWorkerMetrics::record_tick("ok", start.elapsed().as_secs_f64());
     }
 
-    /// Upsert every fetched metadata row, logging individual failures
-    /// without aborting the rest of the batch.
+    /// Upsert every fetched row, logging individual failures without aborting the batch.
     async fn upsert_all(&self, fetched: Vec<FetchedMetadata>) {
         let now = Utc::now();
 

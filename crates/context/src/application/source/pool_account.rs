@@ -3,17 +3,8 @@ use solana_pubkey::Pubkey;
 
 use crate::error::SourceError;
 
-/// A raw on-chain pool account, as fetched — not interpreted.
-///
-/// `program_id` is the account's on-chain *owner*, which for a program-owned
-/// account **is** the program that owns it — here, the protocol's program. It is
-/// what [`yog_core::application::decode_pool_account`] routes on to pick a
-/// layout. Named `program_id` rather than `owner` on purpose: `owner` is the
-/// RPC's vocabulary and stays on the wire struct, this is ours and matches
-/// [`yog_core::domain::Protocol::program_id`].
-///
-/// `data` is already base64-decoded — base64 is the RPC's encoding, not the
-/// chain's, so it stops at this boundary and never reaches `core`.
+/// A raw on-chain pool account, as fetched: `program_id` is its owner, what
+/// [`yog_core::application::decode_pool_account`] routes on; `data` is already base64-decoded.
 #[derive(Debug, Clone)]
 pub(crate) struct RawAccount {
     pub(crate) pool_address: Pubkey,
@@ -21,22 +12,12 @@ pub(crate) struct RawAccount {
     pub(crate) data: Vec<u8>,
 }
 
-/// Abstraction over a source of raw on-chain accounts.
-///
-/// Implemented by `SolanaAccountClient`. Behind a trait so the resolver worker
-/// can be unit-tested against a fake source.
-///
-/// **Protocol-agnostic on purpose.** It used to return decoded cp-amm
-/// properties, which made every consumer cp-amm-specific by construction — the
-/// worker included. It now returns bytes: one client serves every protocol, and
-/// the layouts live in `core`.
+/// Abstraction over a source of raw on-chain accounts; it returns bytes, so one client serves
+/// every protocol and the layouts stay in `core`.
 #[async_trait]
 pub trait PoolAccountSource: Send + Sync {
-    /// Fetch the accounts for a batch of pool addresses.
-    ///
-    /// Pools the source cannot fetch (the account does not exist, the entry is
-    /// malformed) are silently absent from the result — they'll be retried on
-    /// the next poll cycle. Only a hard transport failure is an error.
+    /// Fetch the accounts for a batch of pool addresses; one that cannot be fetched is absent and
+    /// retried next cycle. Only a hard transport failure is an error.
     async fn fetch_accounts(
         &self,
         pool_addresses: &[Pubkey],

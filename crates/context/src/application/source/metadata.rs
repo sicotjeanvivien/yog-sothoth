@@ -4,12 +4,7 @@ use yog_core::domain::MetadataProvider;
 
 use crate::error::SourceError;
 
-/// A successfully fetched piece of metadata, ready to be turned into
-/// the domain `TokenMetadata` by the worker.
-///
-/// This is the source-layer view: it carries the bits the worker
-/// needs, but does NOT carry timestamps or the `metadata_source` tag
-/// — those are added by the worker when building the domain object.
+/// A fetched piece of metadata; the worker adds the timestamps and the `metadata_source` tag.
 #[derive(Debug, Clone)]
 pub(crate) struct FetchedMetadata {
     pub(crate) mint: Pubkey,
@@ -20,18 +15,10 @@ pub(crate) struct FetchedMetadata {
     pub(crate) metadata_provider: MetadataProvider,
 }
 
-/// Abstraction over a source of token metadata.
-///
-/// Currently implemented by `HeliusDasClient`. Behind a trait so the
-/// `MetadataWorker` can be unit-tested against a fake source.
+/// Abstraction over a source of token metadata, implemented by `HeliusDasClient`.
 #[async_trait]
 pub trait MetadataSource: Send + Sync {
-    /// Fetch metadata for a batch of mints.
-    ///
-    /// Implementations must respect their own batch limit (the worker
-    /// chunks the queue before calling). The returned `Vec` contains
-    /// only the mints the source successfully resolved — mints
-    /// unknown to the source, or lacking enough data to be projected
-    /// to `FetchedMetadata`, are silently dropped.
+    /// Fetch metadata for a batch of mints, within the source's own batch limit; a mint unknown
+    /// or lacking data is dropped from the result.
     async fn fetch_metadata(&self, mints: &[Pubkey]) -> Result<Vec<FetchedMetadata>, SourceError>;
 }

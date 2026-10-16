@@ -1,12 +1,6 @@
-//! Price worker. Every `price_interval` (30 s by default), or back to back when
-//! a tick outlasts it, it:
-//!   1. lists the known mints and keeps those worth asking (`UnpricedMints`);
-//!   2. asks the source for their USD price;
-//!   3. drops the prices the column cannot hold and those that repeat the last
-//!      row kept (`KeptPrices`), and inserts the rest in one statement.
-//!
-//! Errors are absorbed and logged: a failed tick is one missing sample, never a
-//! stopped worker.
+//! Price worker: every `price_interval`, or back to back when a tick outlasts it, lists the mints
+//! worth asking (`UnpricedMints`), fetches their USD price, drops the unstorable and the repeated
+//! (`KeptPrices`) and inserts the rest in one statement. A failed tick is one missing sample.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -29,18 +23,15 @@ mod tick_outcome;
 pub(crate) use metrics::PriceWorkerMetrics;
 use tick_outcome::TickOutcome;
 
-/// Worker that records a USD price for the known mints worth asking, on a
-/// fixed interval.
+/// Worker that records a USD price for the known mints worth asking, on a fixed interval.
 pub struct PriceWorker {
     metadata_repository: Arc<dyn TokenMetadataRepository>,
     price_repository: Arc<dyn TokenPriceRepository>,
     source: Arc<dyn PriceSource>,
     interval: std::time::Duration,
-    /// The tail of the written series, per mint — what makes a tick able to
-    /// tell a price that moved from one that merely came round again.
+    /// The tail of the written series, per mint: what tells a moved price from a repeated one.
     kept: KeptPrices,
-    /// The mints the source last answered without a price, and when each is
-    /// worth asking again.
+    /// The mints the source last answered without a price, and when each is worth asking again.
     unpriced: UnpricedMints,
 }
 
@@ -61,8 +52,7 @@ impl PriceWorker {
         }
     }
 
-    /// Run the interval loop until the shutdown token is triggered. The first
-    /// tick fires at once.
+    /// Run the interval loop until shutdown; the first tick fires at once.
     pub async fn run(mut self, shutdown: CancellationToken) -> Result<(), WorkerError> {
         log::started(self.interval, &self.kept, &self.unpriced);
 
@@ -86,8 +76,7 @@ impl PriceWorker {
         }
     }
 
-    /// One pricing cycle: time it, and let the ending say what it was — and
-    /// whether the stop came before it ended.
+    /// One pricing cycle, timed; its ending says what it was and whether the stop came first.
     async fn run_one_cycle(&mut self, shutdown: &CancellationToken) {
         let start = Instant::now();
 
@@ -95,10 +84,9 @@ impl PriceWorker {
         outcome.record(start, shutdown.is_cancelled());
     }
 
-    /// The cycle itself: it decides how it ended, and [`TickOutcome`] says so.
-    ///
-    /// ⚠️ A stop cuts the fetch short, not the cycle: what came back goes
-    /// through the same filters and the same single insert.
+    /// The cycle itself, its ending told by [`TickOutcome`].
+    /// ⚠️ A stop cuts the fetch short, not the cycle: what came back goes through the same filters
+    /// and the same single insert.
     async fn price_once(&mut self, shutdown: &CancellationToken) -> TickOutcome {
         let known = match self.metadata_repository.list_known_mints().await {
             Ok(mints) => mints,
@@ -155,9 +143,8 @@ impl PriceWorker {
             )
             .collect();
 
-        // ⚠️ Dropped here, not left to the database: the tick is ONE statement,
-        // and a price the column refuses (`23514`, `22003`) would abort it for
-        // every other mint, every tick. See `TokenPrice::is_storable`.
+        // ⚠️ Dropped here: the tick is ONE statement, and a price the column refuses (`23514`,
+        // `22003`) would abort it for every mint. See `TokenPrice::is_storable`.
         let (mut to_insert, rejected): (Vec<TokenPrice>, Vec<TokenPrice>) =
             priced.into_iter().partition(TokenPrice::is_storable);
 
@@ -166,9 +153,8 @@ impl PriceWorker {
             log::unstorable(&rejected);
         }
 
-        // ⚠️ Coverage sits between the two filters: an unstorable price values
-        // nothing downstream, an unchanged one still does, through the row
-        // already kept. Below the next filter, it would read as a collapse.
+        // ⚠️ Coverage sits between the filters: an unstorable price values nothing, an unchanged one
+        // still does through the row kept; below the next filter it would read as a collapse.
         PriceWorkerMetrics::set_priced_mints(to_insert.len());
 
         if to_insert.is_empty() {

@@ -74,9 +74,8 @@ impl PriceWorkerMetrics {
              stopped rounding to the price column's scale — see KeptPrices::worth_keeping"
         );
 
-        // ⚠️ Published at zero: the exporter emits nothing for a counter never
-        // incremented, so "flat at 0" would read as absent, and the README's
-        // ratios would return no data on a fresh deployment.
+        // ⚠️ Published at zero: a counter never incremented is not exported, and "flat at 0" would
+        // read as absent.
         counter!(REJECTED_TOTAL).absolute(0);
         counter!(UNCHANGED_TOTAL).absolute(0);
         counter!(INSERTED_TOTAL).absolute(0);

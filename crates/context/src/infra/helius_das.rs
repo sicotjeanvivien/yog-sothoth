@@ -1,17 +1,6 @@
-//! Helius DAS API client — token metadata source.
-//!
-//! Calls the `getAssetBatch` JSON-RPC method to fetch identity for a
-//! list of SPL mints. Returns the subset that yielded usable
-//! metadata: a mint that DAS does not know about, or that lacks
-//! `token_info.decimals`, is silently skipped — it will be retried on
-//! the next poll cycle. Errors are returned typed; the caller (the
-//! metadata worker) decides whether to swallow them or propagate.
-//!
-//! # Why getAssetBatch
-//!
-//! One HTTP round-trip per poll cycle, no matter how many mints are
-//! missing — much friendlier on Helius rate limits than `getAsset`
-//! per mint.
+//! Helius DAS client, the token metadata source: one `getAssetBatch` call per chunk rather than a
+//! `getAsset` per mint. A mint DAS does not know, or without `token_info.decimals`, is skipped and
+//! retried next cycle; errors are returned typed.
 
 use super::metrics::ProviderMetrics;
 use async_trait::async_trait;
@@ -28,14 +17,9 @@ use crate::{
     error::SourceError,
 };
 
-/// Maximum number of IDs accepted by `getAssetBatch` in a single
-/// call. Helius documents this as 1000. Currently a small allowlist
-/// means a single chunk always suffices, but the worker still chunks
-/// just in case the allowlist is later lifted.
+/// Maximum number of IDs `getAssetBatch` accepts in one call, as Helius documents it.
 const DAS_BATCH_MAX: usize = 1000;
 const PROVIDER_LABEL: &str = "helius_das";
-
-// ── Wire types ────────────────────────────────────────────────────────
 
 /// JSON-RPC request body for `getAssetBatch`.
 #[derive(Debug, Serialize)]
@@ -54,26 +38,21 @@ struct DasParams<'a> {
 /// JSON-RPC envelope returned by Helius.
 #[derive(Debug, Deserialize)]
 struct DasResponse {
-    /// Each entry corresponds (positionally) to an input id. May be
-    /// `null` when the mint is unknown to DAS — hence `Option`.
+    /// One entry per input id, in order; `null` when DAS does not know the mint.
     result: Vec<Option<DasAsset>>,
 }
 
-/// One asset entry. Only the fields the metadata worker needs are
-/// deserialised — DAS returns a much larger object, the rest is
-/// ignored.
+/// One asset entry, reduced to the fields the metadata worker needs.
 #[derive(Debug, Deserialize)]
 struct DasAsset {
-    /// Mint address (base58). Returned as `id` by DAS.
+    /// Mint address (base58), returned as `id`.
     id: String,
 
-    /// Display info. Often present even when `token_info` is, but
-    /// kept optional defensively.
+    /// Display info, kept optional defensively.
     content: Option<DasContent>,
 
-    /// Token-specific info — the **only** place `decimals` is
-    /// reported. Absent for non-fungible or oddball assets, which is
-    /// the signal to skip the mint (no usable decimals).
+    /// Token-specific info, the only place `decimals` is reported; absent for a non-fungible
+    /// asset, which is then skipped.
     token_info: Option<DasTokenInfo>,
 }
 
@@ -83,8 +62,7 @@ struct DasContent {
     /// Logo URI; may be an `ipfs://` URI. Stored verbatim.
     #[serde(default)]
     files: Vec<DasFile>,
-    /// Some assets report the logo at `content.links.image`. Kept
-    /// optional — the worker falls back to `files[0]` if absent.
+    /// Some assets report the logo here; the worker falls back to `files[0]` when absent.
     links: Option<DasLinks>,
 }
 
@@ -106,18 +84,14 @@ struct DasLinks {
 
 #[derive(Debug, Deserialize)]
 struct DasTokenInfo {
-    /// Decimal precision of the mint. The only mandatory field for
-    /// us: a missing value means the asset is not a fungible SPL
-    /// token in any useful sense, and we skip it.
+    /// Decimal precision of the mint, the one mandatory field: without it the asset is skipped.
     decimals: Option<u8>,
 }
 
 #[derive(Clone)]
 pub struct HeliusDasClient {
     http: reqwest::Client,
-    /// Stays wrapped for the client's whole life — the provider key sits in
-    /// this URL's query string, and a `String` here would put it back within
-    /// reach of any `Debug` this struct ever gains.
+    /// ⚠️ Stays wrapped for the client's whole life: the provider key sits in this URL's query string.
     rpc_url: SecretUrl,
 }
 
@@ -150,9 +124,7 @@ impl HeliusDasClient {
         result
     }
 
-    /// Inner method that does the actual HTTP work. Kept separate so the
-    /// outer `fetch_chunk` can wrap it with metrics without duplicating
-    /// the `?`/error mapping logic.
+    /// The HTTP work itself, kept apart so `fetch_chunk` wraps it with metrics.
     async fn fetch_chunk_inner(
         &self,
         mints: &[Pubkey],
@@ -186,10 +158,8 @@ impl HeliusDasClient {
 
 #[async_trait]
 impl MetadataSource for HeliusDasClient {
-    /// Fetches metadata for an arbitrary number of mints, chunking
-    /// internally to respect Helius' `getAssetBatch` 1000-id limit.
-    /// Chunk-level failures are logged and skipped — the call returns
-    /// whatever was successfully fetched.
+    /// Fetches metadata for any number of mints, chunked under `DAS_BATCH_MAX`; a failed chunk is
+    /// logged and skipped, the call returning whatever was fetched.
     async fn fetch_metadata(&self, mints: &[Pubkey]) -> Result<Vec<FetchedMetadata>, SourceError> {
         let mut all = Vec::with_capacity(mints.len());
         for chunk in mints.chunks(DAS_BATCH_MAX) {
@@ -208,13 +178,8 @@ impl MetadataSource for HeliusDasClient {
     }
 }
 
-/// Project a `DasAsset` into the worker's view, or drop it.
-///
-/// Drops the asset when:
-///   - the mint string cannot be parsed back into a Pubkey
-///     (extremely unlikely — DAS would have returned a malformed id);
-///   - `token_info.decimals` is missing — the unique blocking
-///     condition (the domain requires it).
+/// Project a `DasAsset` into the worker's view, or drop it: an unparseable mint, or no
+/// `token_info.decimals`.
 fn into_fetched_metadata(asset: DasAsset) -> Option<FetchedMetadata> {
     let mint = Pubkey::try_from(asset.id.as_str()).ok()?;
     let decimals = asset.token_info.as_ref().and_then(|ti| ti.decimals)?;

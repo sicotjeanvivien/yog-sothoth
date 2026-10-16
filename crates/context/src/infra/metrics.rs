@@ -1,10 +1,5 @@
-//! Metrics shared across `yog-context` providers (Helius DAS, Jupiter,
-//! Solana RPC).
-//!
-//! Every chunk-level HTTP call records one `call_total` increment and
-//! one `call_duration_seconds` observation, labelled by provider and
-//! outcome. This gives back the per-chunk visibility that was lost when
-//! chunking moved from the worker into the provider.
+//! Metrics shared by the `yog-context` providers: every chunk-level HTTP call records one
+//! `call_total` and one `call_duration_seconds`, labelled by provider and outcome.
 
 use metrics::{counter, describe_counter, describe_histogram, histogram};
 

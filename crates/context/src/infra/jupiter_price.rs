@@ -40,28 +40,19 @@ const RATE_LIMIT_MAX_BACKOFF: Duration = Duration::from_secs(10);
 /// so the client sends ten requests where the limit allows eleven.
 const SPACING_PER_REQUEST_ALLOWED: Duration = Duration::from_secs(66);
 
-// ── Wire types ────────────────────────────────────────────────────────
-
 /// One price entry from Jupiter's V3 response, reduced to `usdPrice`.
-///
-/// ⚠️ `Option` **and** `#[serde(default)]`: Jupiter sends `null` or omits the
-/// field for a mint it cannot price, and without `default` the omission would
-/// fail to deserialise.
+/// ⚠️ `#[serde(default)]` too: Jupiter sends `null` or omits the field for a mint it cannot price.
 #[derive(Debug, Deserialize)]
 struct JupiterPriceEntry {
     #[serde(rename = "usdPrice", default)]
     usd_price: Option<Decimal>,
 }
 
-// ── Client ────────────────────────────────────────────────────────────
-
-/// Client for the Jupiter Price API V3, authenticated by the `x-api-key`
-/// header.
+/// Client for the Jupiter Price API V3, authenticated by the `x-api-key` header.
 #[derive(Clone)]
 pub struct JupiterPriceClient {
     http: reqwest::Client,
-    /// Base URL (e.g. `https://api.jup.ag`). No secret in it — the key goes in
-    /// a header — hence a plain `String`.
+    /// Base URL (e.g. `https://api.jup.ag`); the key goes in a header, hence a plain `String`.
     base_url: String,
     /// Stays a [`SecretKey`] until the header is built.
     api_key: SecretKey,
@@ -149,11 +140,8 @@ impl JupiterPriceClient {
 }
 
 impl JupiterPriceClient {
-    /// One chunk with bounded 429 retries, then given up. Other errors are not
-    /// retried: they are not pacing problems.
-    ///
-    /// ⚠️ Every attempt, a retry included, moves `next_start` on: Jupiter
-    /// counts a retry like any other request.
+    /// One chunk with bounded 429 retries, then given up; other errors are no pacing problem.
+    /// ⚠️ Every attempt, a retry included, moves `next_start` on: Jupiter counts it like any request.
     async fn fetch_chunk_with_retry(
         &self,
         mints: &[Pubkey],
@@ -181,12 +169,9 @@ impl JupiterPriceClient {
 }
 
 impl JupiterPriceClient {
-    /// One chunk in its slot, raced against the stop: `None` if the stop came
-    /// first.
-    ///
-    /// ⚠️ The race covers the whole chunk — its slot, its request, its retries:
-    /// a request in flight is dropped, so a slow Jupiter or a long
-    /// `Retry-After` cannot hold the stop past its grace.
+    /// One chunk in its slot, raced against the stop: `None` if the stop came first.
+    /// ⚠️ The race covers slot, request and retries, so a slow Jupiter or a long `Retry-After`
+    /// cannot hold the stop past its grace.
     async fn fetch_chunk_unless_stopped(
         &self,
         chunk: &[Pubkey],
@@ -207,8 +192,7 @@ impl JupiterPriceClient {
 
 #[async_trait]
 impl PriceSource for JupiterPriceClient {
-    /// Fetches the prices chunk by chunk, one every `request_spacing`, until
-    /// the stop.
+    /// Fetches the prices chunk by chunk, one every `request_spacing`, until the stop.
     async fn fetch_prices(
         &self,
         mints: &[Pubkey],
@@ -246,13 +230,9 @@ fn add_chunk(
     }
 }
 
-/// The answer to one chunk: every mint asked that did not come back with a
-/// price is unpriced (a missing entry included).
-///
-/// ⚠️ `None` when not one came back with a price: Jupiter answers for the mints
-/// it cannot price too, and a chunk mixes live and dead mints, so `{}`, an
-/// error body or all-null entries are a degraded answer. Read as a verdict,
-/// they would hold back every live mint of the chunk.
+/// The answer to one chunk: every mint asked that did not come back with a price is unpriced.
+/// ⚠️ `None` when none came back priced: a chunk mixes live and dead mints, so `{}`, an error
+/// body or all-null entries are a degraded answer, not a verdict on its live mints.
 fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnswer> {
     let with_price: HashSet<Pubkey> = priced.iter().map(|price| price.mint).collect();
     if !asked.iter().any(|mint| with_price.contains(mint)) {
@@ -269,9 +249,7 @@ fn chunk_answer(asked: &[Pubkey], priced: Vec<FetchedPrice>) -> Option<PriceAnsw
 }
 
 /// The least time between the starts of two chunks, under `rate_limit`.
-///
-/// ⚠️ Under, not at: Jupiter counts over a sliding minute, on arrival, and
-/// two requests can arrive closer than they left.
+/// ⚠️ Under, not at: Jupiter counts on arrival over a sliding minute, and requests bunch in transit.
 fn spacing_under(rate_limit: NonZeroU32) -> Duration {
     SPACING_PER_REQUEST_ALLOWED / rate_limit.get()
 }

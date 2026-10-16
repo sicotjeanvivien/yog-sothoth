@@ -1,9 +1,5 @@
-//! Daemon configuration, read once from the environment by `Config::load`.
-//!
-//! Every external address is a `<FUNCTION>_URL` / `<FUNCTION>_KEY` pair named
-//! after what it serves, never after its protocol. Jupiter
-//! is the exception: it authenticates by header, so its key never enters its
-//! URL.
+//! Daemon configuration, read once from the environment by `Config::load`. Every address is a
+//! `<FUNCTION>_URL`/`_KEY` pair named after what it serves; Jupiter's key goes in a header instead.
 
 use std::num::NonZeroU32;
 use std::time::Duration;
@@ -29,28 +25,21 @@ pub(crate) struct Config {
     /// Postgres connection string.
     pub(crate) database_url: SecretUrl,
 
-    /// Where token metadata is read from: the DAS API, Helius' own, not
-    /// Solana RPC.
-    ///
-    /// ⚠️ Its own variable, apart from `pool_account`: the two can live at two
-    /// providers.
+    /// Where token metadata is read from: Helius' DAS API, not Solana RPC.
+    /// ⚠️ Its own variable, apart from `pool_account`: the two can live at two providers.
     pub(crate) token_metadata: Endpoint,
 
-    /// Where pool accounts are read from — `getMultipleAccounts`, standard
-    /// Solana JSON-RPC, which any provider serves.
+    /// Where pool accounts are read from: `getMultipleAccounts`, which any provider serves.
     pub(crate) pool_account: Endpoint,
 
-    /// Jupiter API base URL (e.g. `https://api.jup.ag`); the client appends
-    /// `/price/v3`. A plain `String`: Jupiter authenticates by header, so the
-    /// URL hides nothing.
+    /// Jupiter API base URL (e.g. `https://api.jup.ag`), `/price/v3` appended; a plain `String`,
+    /// the key going in a header.
     pub(crate) jupiter_url: String,
 
-    /// Jupiter API key, sent as `x-api-key`. A [`SecretKey`], masked whole:
-    /// a bare key has no carrier worth showing.
+    /// Jupiter API key, sent as `x-api-key`; a [`SecretKey`], masked whole.
     pub(crate) jupiter_api_key: SecretKey,
 
-    /// The requests per minute the Jupiter key's tier allows, as Jupiter
-    /// documents it. The client stays under it (`request_spacing`).
+    /// The requests per minute the Jupiter key's tier allows; the client stays under it.
     pub(crate) jupiter_rate_limit: NonZeroU32,
 
     /// How often the price worker fetches from Jupiter.
@@ -82,21 +71,15 @@ impl Config {
     }
 }
 
-/// Read `CONTEXT_PRICE_INTERVAL_SECS`, refusing at startup the two cadences
-/// the daemon cannot honour: zero, which panics `tokio::time::interval` in the
-/// spawned worker after startup succeeded, and anything at or past
-/// [`PRICE_MAX_AGE_LATEST`], which leaves every price stale before the next
-/// tick fires and every `pool_current_tvl` NULL.
-///
-/// ⚠️ It bounds the cadence, not the age of the newest price: a tick's own
-/// length — about `request_spacing` per chunk — adds to it.
+/// Read `CONTEXT_PRICE_INTERVAL_SECS`, refusing zero (it panics `tokio::time::interval` in the
+/// worker) and anything at or past [`PRICE_MAX_AGE_LATEST`] (every price stale before the next tick).
+/// ⚠️ It bounds the cadence, not the newest price's age: a tick's own length adds to it.
 fn price_interval() -> Result<Duration, ConfigError> {
     let seconds = duration_var("CONTEXT_PRICE_INTERVAL_SECS", DEFAULT_PRICE_INTERVAL_SECS)?;
     price_interval_that_keeps_prices_current(seconds)
 }
 
-/// The rule of [`price_interval`], apart from the variable it reads, so that
-/// it is tested without touching the process-global environment.
+/// The rule of [`price_interval`] apart from the variable it reads, testable without the environment.
 fn price_interval_that_keeps_prices_current(seconds: u64) -> Result<Duration, ConfigError> {
     const KEY: &str = "CONTEXT_PRICE_INTERVAL_SECS";
     let bound = PRICE_MAX_AGE_LATEST.num_seconds();
