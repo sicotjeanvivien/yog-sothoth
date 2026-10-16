@@ -18,7 +18,7 @@ use yog_bootstrap::SHUTDOWN_GRACE;
 use super::serve;
 use crate::application::{SignalService, SignalStreamPoller};
 use crate::http::signal_sse;
-use crate::testing::{MockMetadataRepo, MockPriceRepo, MockSignalRepo, PoolRepoOnce};
+use crate::testing::{MockMetadataRepo, MockSignalRepo, PoolRepoOnce};
 
 /// A poller that reads the feed at most once: its first tick fires at once,
 /// usually before any client is connected, and the next one is an hour away.
@@ -39,7 +39,6 @@ fn unused_signal_service() -> Arc<SignalService> {
         Arc::new(MockSignalRepo::empty()),
         Arc::new(PoolRepoOnce::with_pool(None)),
         Arc::new(MockMetadataRepo::empty()),
-        Arc::new(MockPriceRepo::empty()),
     ))
 }
 

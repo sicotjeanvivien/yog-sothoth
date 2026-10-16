@@ -15,7 +15,6 @@ function signal(id: number, triggeredAt: string): SignalResponse {
       name: "Wrapped SOL",
       decimals: 9,
       logoUri: null,
-      price: null,
     },
     tokenB: {
       mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -23,7 +22,6 @@ function signal(id: number, triggeredAt: string): SignalResponse {
       name: "USD Coin",
       decimals: 6,
       logoUri: null,
-      price: null,
     },
     severity: "warning",
     value: "0.75",

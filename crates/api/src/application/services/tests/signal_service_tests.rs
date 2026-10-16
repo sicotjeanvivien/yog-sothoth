@@ -6,8 +6,8 @@ use yog_core::{PageDirection, RepositoryError};
 
 use super::super::{SignalListParams, SignalService};
 use crate::testing::{
-    MockMetadataRepo, MockPriceRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool,
-    make_signal_page, make_signal_record, pk,
+    MockMetadataRepo, MockSignalRepo, PoolRepoOnce, make_metadata, make_pool, make_signal_page,
+    make_signal_record, pk,
 };
 
 fn default_params() -> SignalListParams {
@@ -29,12 +29,7 @@ fn service(
     pools: PoolRepoOnce,
     metadata: MockMetadataRepo,
 ) -> SignalService {
-    SignalService::new(
-        Arc::new(signals),
-        Arc::new(pools),
-        Arc::new(metadata),
-        Arc::new(MockPriceRepo::empty()),
-    )
+    SignalService::new(Arc::new(signals), Arc::new(pools), Arc::new(metadata))
 }
 
 // ── Happy path ───────────────────────────────────────────────────────

@@ -10,19 +10,17 @@
 //!     metadata (when the row was first fetched, when it was last
 //!     refreshed).
 //!   - `EmbeddedTokenResponse` is the "in-context" view, embedded
-//!     in `PoolResponse`. It carries only what is needed to display
-//!     the token in the parent resource's UI: symbol, name, logo,
-//!     decimals, current price.
+//!     in `PoolResponse`. It carries the token's identity only: symbol,
+//!     name, logo, decimals — never its price.
 //!
 //! Re-use this DTO wherever a token needs to appear inside another
 //! resource (e.g. later, in `SwapEventResponse` to show
 //! "1.2 SOL → 240 USDC").
 use serde::Serialize;
 use utoipa::ToSchema;
-use yog_core::domain::{TokenMetadata, TokenPrice};
+use yog_core::domain::TokenMetadata;
 
 use super::logo_uri;
-use super::price_response::TokenPriceResponse;
 use crate::application::EnrichedToken;
 
 /// A token, embedded in another resource's response.
@@ -46,20 +44,14 @@ pub(in crate::http::dto::response) struct EmbeddedTokenResponse {
     /// Logo URL as returned by DAS. `null` unless it is `http` or `https`.
     #[schema(format = "uri")]
     logo_uri: Option<String>,
-
-    /// Latest known price observation, or `null` when the token has
-    /// never been priced.
-    price: Option<TokenPriceResponse>,
 }
 
 impl EmbeddedTokenResponse {
-    /// Build the embedded view from the two sources. Both are `Option`:
-    /// without metadata the response falls back to a minimal view keyed
+    /// Without metadata the response falls back to a minimal view keyed
     /// only by `mint`.
     pub(in crate::http::dto::response) fn from_sources(
         mint: Option<solana_pubkey::Pubkey>,
         metadata: Option<TokenMetadata>,
-        price: Option<TokenPrice>,
     ) -> Self {
         // If metadata is present, use it; otherwise fall back to
         // showing just the mint with nulls — the dashboard can
@@ -75,13 +67,12 @@ impl EmbeddedTokenResponse {
             name,
             decimals,
             logo_uri,
-            price: price.map(TokenPriceResponse::from),
         }
     }
 }
 
 impl From<EnrichedToken> for EmbeddedTokenResponse {
     fn from(t: EnrichedToken) -> Self {
-        EmbeddedTokenResponse::from_sources(t.mint, t.metadata, t.price)
+        EmbeddedTokenResponse::from_sources(t.mint, t.metadata)
     }
 }

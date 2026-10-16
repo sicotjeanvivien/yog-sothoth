@@ -11,7 +11,7 @@
  *   1. token pair (→ pool; short address while unresolved) ·
  *      protocol · the metric value, large and severity-colored
  *   2. human summary phrased from the structured value (not the
- *      detector's raw English `message`) · current USD prices
+ *      detector's raw English `message`)
  *   3. relative time · raw detector tag · crossed threshold
  *
  * A detector this component doesn't know yet falls back to the raw
@@ -20,7 +20,7 @@
  *
  * `compact` (the Overview's control-tower density) keeps the severity
  * column and line 1 only — pair with the relative time beneath it,
- * value on the right; summary, prices and threshold stay on the full
+ * value on the right; summary and threshold stay on the full
  * card. Same component, same visual language, two densities.
  *
  * Self-sufficient on i18n/locale (own `useTranslations`/`useLocale`)
@@ -31,12 +31,11 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { Link } from "@/i18n/navigation";
-import type { EmbeddedTokenResponse, SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
+import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen";
 import {
   formatPercent,
   formatSignedPercent,
 } from "@/lib/format/format-percent";
-import { formatPrice } from "@/lib/format/pool-price";
 import { formatProtocolLabel } from "@/lib/format/format-protocol";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatShortAddress } from "@/lib/format/format-short-address";
@@ -103,24 +102,6 @@ function detectorSummary(
   }
 }
 
-/**
- * "birry $0.000007758 · USDC $1.00" — the *current* USD price of each
- * resolved side (latest oracle fetch, not the price at trigger time).
- * Sides without a symbol or a price are skipped; `null` when neither
- * side qualifies, and the card omits the block.
- */
-function tokenPriceLine(signal: SignalResponse): string | null {
-  const side = (token: EmbeddedTokenResponse): string | null =>
-    token.symbol && token.price
-      ? `${token.symbol} $${formatPrice(Number(token.price.usd))}`
-      : null;
-
-  const parts = [side(signal.tokenA), side(signal.tokenB)].filter(
-    (p): p is string => p !== null,
-  );
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
 export function SignalCard({
   signal,
   compact = false,
@@ -145,7 +126,6 @@ export function SignalCard({
       : known
         ? formatPercent(signal.threshold, locale)
         : signal.threshold;
-  const prices = tokenPriceLine(signal);
   const severityLabel = t(`severity.${signal.severity}`);
   const SeverityIcon = SEVERITY_ICON[signal.severity];
 
@@ -215,16 +195,11 @@ export function SignalCard({
           {valueFigure}
         </div>
 
-        {/* Line 2 — summary · prices */}
+        {/* Line 2 — summary */}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[14px]">
           <span className="min-w-0 flex-1 leading-[1.5] text-slate-300">
             {detectorSummary(signal, t, locale)}
           </span>
-          {prices && (
-            <span className="whitespace-nowrap text-[13px] text-slate-500">
-              {prices}
-            </span>
-          )}
         </div>
 
         {/* Line 3 — time · detector tag · threshold */}

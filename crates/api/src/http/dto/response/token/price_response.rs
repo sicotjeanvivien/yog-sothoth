@@ -7,7 +7,7 @@ use yog_core::domain::TokenPrice;
 use super::price_provider_response::PriceProviderResponse;
 use crate::http::dto::schema::UnsignedDecimal;
 
-/// A token's latest price, in `TokenResponse` and in `EmbeddedTokenResponse`.
+/// A token's latest price, in `TokenResponse`.
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct TokenPriceResponse {

@@ -9,6 +9,7 @@
 //! database row live in `crates/persistence/src/repositories/pool_current_state.rs`.
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use solana_pubkey::Pubkey;
 use solana_signature::Signature;
 
@@ -99,6 +100,14 @@ pub struct PoolCurrentState {
     pub last_swap_at: Option<DateTime<Utc>>,
 
     pub updated_at: DateTime<Utc>,
+}
+
+/// The USD value of each side of a pool's reserves, under the price bound of its
+/// TVL: a side whose price is missing or stale is `None`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PoolSideValues {
+    pub value_a_usd: Option<Decimal>,
+    pub value_b_usd: Option<Decimal>,
 }
 
 /// Payload describing a state change to apply via

@@ -5,10 +5,13 @@
 //! sqlx/Postgres.
 
 use async_trait::async_trait;
+use solana_pubkey::Pubkey;
 
 use crate::{
     RepositoryResult,
-    domain::{PoolCurrentState, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome},
+    domain::{
+        PoolCurrentState, PoolCurrentStateUpsert, PoolCurrentStateUpsertOutcome, PoolSideValues,
+    },
 };
 
 /// Write access to the pool-current-state projection — the indexer's lens.
@@ -62,6 +65,10 @@ pub trait PoolCurrentStateLookup: Send + Sync {
         &self,
         pool_address: &str,
     ) -> RepositoryResult<Option<PoolCurrentState>>;
+
+    /// The USD value of each side of a pool's reserves. Both `None` when the pool
+    /// has no state yet or a token's metadata is unresolved.
+    async fn side_values_usd(&self, pool_address: &Pubkey) -> RepositoryResult<PoolSideValues>;
 
     /// List pools sorted by most-recent activity first.
     ///

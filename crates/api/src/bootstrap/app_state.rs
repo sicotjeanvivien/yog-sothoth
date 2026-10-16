@@ -85,7 +85,6 @@ pub(crate) async fn build_app_state(
         signal_repo.clone(),
         pool_repo.clone(),
         token_metadata_repo.clone(),
-        token_price_repo.clone(),
     ));
 
     // ── Signal stream (poller → enrich once → broadcast → SSE) ─────
@@ -108,7 +107,6 @@ pub(crate) async fn build_app_state(
             pool_current_state_repository: pool_current_state_repo,
             pool_analytics_repository: pool_analytics_repo,
             token_metadata_repository: token_metadata_repo.clone(),
-            token_price_repository: token_price_repo.clone(),
             signal_feed: signal_repo.clone(),
             pool_properties_lookups,
             work_slots: work_slots.clone(),

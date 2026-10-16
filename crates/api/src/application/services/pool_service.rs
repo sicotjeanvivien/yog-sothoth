@@ -2,8 +2,7 @@
 //!
 //! Owns the multi-repository choreography that used to live in the
 //! HTTP handler: paginate pools, batch-compute their analytics, fetch
-//! each side's token metadata and latest price, and assemble the
-//! `EnrichedPool` aggregates.
+//! each side's token metadata, and assemble the `EnrichedPool` aggregates.
 //!
 //! Domain-only boundary: this service depends on `yog-core` repository
 //! traits and domain types exclusively. It knows nothing of axum,
@@ -22,7 +21,7 @@ use yog_core::{
     domain::{
         FeeTier, Pool, PoolAnalytics, PoolAnalyticsRepository, PoolCatalog, PoolCurrentState,
         PoolCurrentStateLookup, PoolHistoryBucket, PoolListQuery, PoolPage, PoolPropertiesLookup,
-        PoolRankMetric, SignalFeed, SignalRecord, TokenMetadataLookup, TokenPriceLookup,
+        PoolRankMetric, PoolSideValues, SignalFeed, SignalRecord, TokenMetadataLookup,
     },
 };
 
@@ -55,16 +54,12 @@ pub(crate) struct EnrichedPoolPage {
     pub(crate) as_of: Option<DateTime<Utc>>,
     pub(crate) touched_since: i64,
 }
-/// A pool's latest observed state plus its derived spot price.
-///
-/// `spot_price_a_in_b` is the on-chain `last_sqrt_price` decoded to a human
-/// price (units of token B per 1 token A) via
-/// [`yog_core::amm::damm_v2::sqrt_price_to_price_a_in_b`]. `None` when there is
-/// no `sqrt_price` yet, or the token decimals needed to rescale it are not
-/// resolved — derived in the service so the HTTP layer only formats.
+/// A pool's latest observed state, its spot price (token B per token A, `None`
+/// without a `sqrt_price` or resolved decimals) and the USD value of each side.
 pub(crate) struct PoolCurrentStateView {
     pub(crate) state: PoolCurrentState,
     pub(crate) spot_price_a_in_b: Option<Decimal>,
+    pub(crate) side_values: PoolSideValues,
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +75,6 @@ pub(crate) struct PoolService {
     pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
     pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
     token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-    token_price_repository: Arc<dyn TokenPriceLookup>,
     signal_feed: Arc<dyn SignalFeed>,
     /// One per protocol that stores pool properties. The service names none of
     /// them: it pairs a pool with the lookup whose
@@ -105,7 +99,6 @@ pub(crate) struct PoolServiceDeps {
     pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
     pub(crate) pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
     pub(crate) token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-    pub(crate) token_price_repository: Arc<dyn TokenPriceLookup>,
     pub(crate) signal_feed: Arc<dyn SignalFeed>,
     pub(crate) pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
     pub(crate) work_slots: WorkSlots,
@@ -119,7 +112,6 @@ impl PoolService {
             pool_current_state_repository: deps.pool_current_state_repository,
             pool_analytics_repository: deps.pool_analytics_repository,
             token_metadata_repository: deps.token_metadata_repository,
-            token_price_repository: deps.token_price_repository,
             signal_feed: deps.signal_feed,
             top_pools_cache: SharedCache::new(TOP_POOLS),
             work_slots: deps.work_slots,
@@ -339,10 +331,15 @@ impl PoolService {
             }
             None => None,
         };
+        let side_values = self
+            .pool_current_state_repository
+            .side_values_usd(&state.pool_address)
+            .await?;
 
         Ok(Some(PoolCurrentStateView {
             state,
             spot_price_a_in_b,
+            side_values,
         }))
     }
 
@@ -412,12 +409,7 @@ impl PoolService {
         &self,
         mint: Option<solana_pubkey::Pubkey>,
     ) -> RepositoryResult<EnrichedToken> {
-        EnrichedToken::resolve(
-            mint,
-            self.token_metadata_repository.as_ref(),
-            self.token_price_repository.as_ref(),
-        )
-        .await
+        EnrichedToken::resolve(mint, self.token_metadata_repository.as_ref()).await
     }
 }
 

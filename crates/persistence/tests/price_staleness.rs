@@ -24,7 +24,12 @@
 
 use super::helpers::{pk, price_at};
 use chrono::{DateTime, Duration, DurationRound, Utc};
+use rust_decimal::Decimal;
+use solana_pubkey::Pubkey;
 use sqlx::PgPool;
+use std::str::FromStr;
+use yog_core::domain::PoolCurrentStateLookup;
+use yog_persistence::PgPoolCurrentStateRepository;
 
 /// The pool and its two tokens: A with 6 decimals, B with 9.
 async fn seed_pool(pool: &PgPool) -> (String, String, String) {
@@ -262,6 +267,28 @@ async fn current_tvl_is_absent_for_a_token_never_priced(pool: PgPool) {
     price_at(&pool, &mint_b, "100.0", Utc::now() - Duration::minutes(5)).await;
 
     assert!(current_tvl(&pool).await.is_none());
+}
+
+#[sqlx::test]
+async fn a_side_value_goes_absent_on_its_own_stale_price(pool: PgPool) {
+    let (pool_addr, mint_a, mint_b) = seed_pool(&pool).await;
+    seed_current_state(&pool, &pool_addr).await;
+
+    let now = Utc::now();
+    price_at(&pool, &mint_a, "2.0", now - Duration::minutes(5)).await;
+    price_at(&pool, &mint_b, "100.0", now - Duration::minutes(30)).await;
+
+    let values = PgPoolCurrentStateRepository::new(pool.clone())
+        .side_values_usd(&Pubkey::from_str(&pool_addr).unwrap())
+        .await
+        .unwrap();
+
+    // Mutation: the bound dropped from B's price join in the view.
+    assert_eq!(values.value_a_usd, Some(Decimal::from(20)));
+    assert_eq!(
+        values.value_b_usd, None,
+        "a side priced more than 15 minutes ago must not be valued"
+    );
 }
 
 // ── 4. The constraint: no view reads prices without a bound ─────────────────

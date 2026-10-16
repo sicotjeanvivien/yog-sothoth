@@ -16,7 +16,6 @@ use yog_core::{
     Page, PageDirection, PagePosition, RepositoryError, RepositoryResult,
     domain::{
         Pool, PoolCatalog, Severity, SignalCursor, SignalFeed, SignalRecord, TokenMetadataLookup,
-        TokenPriceLookup,
     },
 };
 
@@ -44,12 +43,11 @@ pub(crate) struct SignalListParams {
 ///
 /// Depends on the feed lens ([`SignalFeed`]) for the signals themselves
 /// — the engine's write/dedup contract never reaches the api process —
-/// plus the three read lenses needed to embed the pool's token pair.
+/// plus the two read lenses needed to embed the pool's token pair.
 pub(crate) struct SignalService {
     repo: Arc<dyn SignalFeed>,
     pool_catalog: Arc<dyn PoolCatalog>,
     token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-    token_price_repository: Arc<dyn TokenPriceLookup>,
 }
 
 impl SignalService {
@@ -57,13 +55,11 @@ impl SignalService {
         repo: Arc<dyn SignalFeed>,
         pool_catalog: Arc<dyn PoolCatalog>,
         token_metadata_repository: Arc<dyn TokenMetadataLookup>,
-        token_price_repository: Arc<dyn TokenPriceLookup>,
     ) -> Self {
         Self {
             repo,
             pool_catalog,
             token_metadata_repository,
-            token_price_repository,
         }
     }
 
@@ -178,19 +174,10 @@ impl SignalService {
             Some(pool) => (pool.token_a_mint, pool.token_b_mint),
             None => (None, None),
         };
+        let metadata = self.token_metadata_repository.as_ref();
         Ok((
-            EnrichedToken::resolve(
-                mint_a,
-                self.token_metadata_repository.as_ref(),
-                self.token_price_repository.as_ref(),
-            )
-            .await?,
-            EnrichedToken::resolve(
-                mint_b,
-                self.token_metadata_repository.as_ref(),
-                self.token_price_repository.as_ref(),
-            )
-            .await?,
+            EnrichedToken::resolve(mint_a, metadata).await?,
+            EnrichedToken::resolve(mint_b, metadata).await?,
         ))
     }
 }
