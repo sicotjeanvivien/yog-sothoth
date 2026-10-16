@@ -1,6 +1,6 @@
 /**
  * The homepage's four feature pillars, a Server Component. ⚠️ `id="features"` is the target
- * of the hero's "See features" (`/#features`).
+ * of the hero's "See features".
  */
 
 import { useTranslations } from "next-intl";

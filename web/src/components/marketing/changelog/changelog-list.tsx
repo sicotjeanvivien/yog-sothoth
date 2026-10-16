@@ -1,6 +1,6 @@
 /**
- * One card per release, newest first. ⚠️ Each card's id is its version — an announcement's
- * `link_url` target — with `scroll-mt` so the fragment lands below the fixed navbar.
+ * One card per release, newest first. ⚠️ Each card's id is its version, an announcement's
+ * `link_url` target.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";

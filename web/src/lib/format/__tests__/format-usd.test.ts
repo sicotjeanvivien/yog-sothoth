@@ -39,7 +39,7 @@ describe("formatUsdShares", () => {
   });
 
   it("breaks a tie on the declared order, so the output is stable", () => {
-    // Mutation: a non-deterministic tie-break between two exact halves.
+    // Mutation: the tie between two exact halves broken the other way.
     expect(formatUsdShares("0.01", ["0.005", "0.005"])).toEqual([
       "$0.01",
       "$0.00",
