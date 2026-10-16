@@ -1,23 +1,11 @@
-//! Unit tests for the Helius DAS client.
-//!
-//! Two surfaces are covered:
-//!   - `into_fetched_metadata` — projection from the wire shape
-//!     (`DasAsset`) to the worker view (`FetchedMetadata`), including
-//!     every optional / fallback path.
-//!   - `DasResponse` deserialization — locks down what we expect
-//!     Helius to send, including the positional `null` entries and
-//!     forward compatibility with unknown fields.
-//!
-//! The HTTP call itself (`fetch_asset_batch`) is not exercised here:
-//! it is a thin reqwest pipeline whose only non-trivial step is the
-//! decoding tested above.
+//! Unit tests for the Helius DAS client: the projection to `FetchedMetadata` with its fallbacks,
+//! and `DasResponse` deserialization (positional `null`s, unknown fields).
 
 use solana_pubkey::Pubkey;
 
 use super::*;
 
-/// Deterministic Pubkey for tests, matching the convention used
-/// elsewhere in the workspace.
+/// Deterministic Pubkey for tests.
 fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
@@ -46,8 +34,7 @@ fn happy_path_yields_all_fields_with_links_image_priority() {
 
     let result = into_fetched_metadata(asset).expect("expected Some");
 
-    // Distinct values per field — catches any accidental field swap
-    // in the projection.
+    // Distinct values per field: catches a field swap in the projection.
     assert_eq!(result.mint, mint);
     assert_eq!(result.symbol.as_deref(), Some("ABC"));
     assert_eq!(result.name.as_deref(), Some("Alpha Token"));
@@ -166,8 +153,7 @@ fn falls_back_to_files_when_links_image_absent() {
 
 #[test]
 fn empty_links_image_falls_back_to_files_and_never_yields_empty() {
-    // DAS sometimes reports `image: ""`. It must not shadow a valid
-    // files[].uri, and an empty string must never surface as the logo.
+    // DAS sometimes reports `image: ""`: it must not shadow a valid files[].uri, nor be the logo.
     let mint = pk(9);
     let asset = DasAsset {
         id: mint.to_string(),
@@ -299,9 +285,7 @@ fn das_response_deserializes_mixed_results_with_nulls() {
     );
     assert!(response.result[1].is_none(), "middle entry must be null");
 
-    // Apply the full projection chain to assert end-to-end behaviour
-    // of the deserialization + projection pipeline that lives inside
-    // `fetch_asset_batch`.
+    // The whole deserialization + projection chain `fetch_asset_batch` runs.
     let projected: Vec<FetchedMetadata> = response
         .result
         .into_iter()

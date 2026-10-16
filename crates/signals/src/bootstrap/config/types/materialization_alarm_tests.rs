@@ -1,7 +1,6 @@
 use super::*;
 
-/// Each refusal names its own variable — two variables share this file, and a
-/// refusal quoting the wrong one sends the operator to the wrong line.
+/// Each refusal names its own variable: one quoting the wrong one sends the operator to the wrong line.
 fn key_of(result: Result<impl std::fmt::Debug, ConfigError>) -> String {
     match result {
         Err(ConfigError::InvalidValue { key, .. }) => key,
@@ -18,8 +17,7 @@ fn the_interval_is_refused_at_zero_and_kept_otherwise() {
     );
 }
 
-/// A day is kept, a second more is not: past what an `Instant` can hold, the
-/// ticker would panic on its next tick and take the daemon down with it.
+/// A day is kept, a second more is not: past what an `Instant` holds, the ticker would panic.
 #[test]
 fn the_interval_is_refused_past_one_day() {
     assert_eq!(

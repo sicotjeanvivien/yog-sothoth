@@ -1,5 +1,5 @@
-//! Unit tests for the TVL-drain math, guards, threshold ladder and floor.
-//! DB-free: a hand-written mock `LiquidityFlowRepository` feeds fixed flows.
+//! Unit tests for the TVL-drain math, guards, threshold ladder and floor, against a mock
+//! `LiquidityFlowRepository`.
 
 use super::*;
 use chrono::Utc;
@@ -37,10 +37,7 @@ fn flow(seed: u8, added: i64, removed: i64, tvl: Option<i64>) -> PoolLiquidityFl
     }
 }
 
-/// A pool with a perfectly valued TVL whose *window* could not be fully
-/// valued. This is the mixed case found on 6 August 2026: it
-/// clears the `tvl_usd` guard, so before the fix it went through with a
-/// sub-total and under-estimated the drain.
+/// A pool with a valued TVL whose window could not be fully valued: it clears the `tvl_usd` guard.
 fn unvaluable_flow(seed: u8, tvl: i64) -> PoolLiquidityFlow {
     PoolLiquidityFlow {
         pool_address: pk(seed),
@@ -50,9 +47,8 @@ fn unvaluable_flow(seed: u8, tvl: i64) -> PoolLiquidityFlow {
     }
 }
 
-/// Build a detector over the mock: floor $10k starting TVL, Warning 0.5,
-/// Critical 0.8. (Cooldown is engine-level, so it doesn't affect
-/// `evaluate`.)
+/// Build a detector over the mock: floor $10k starting TVL, Warning 0.5, Critical 0.8; the cooldown
+/// is engine-level and does not affect `evaluate`.
 fn detector(flows: Vec<PoolLiquidityFlow>) -> TvlDrainDetector {
     TvlDrainDetector::new(
         Arc::new(MockFlowRepo(flows)),
@@ -120,8 +116,7 @@ async fn net_inflow_is_silent() {
 
 #[tokio::test]
 async fn unvaluable_tvl_is_skipped() {
-    // A drain-looking flow, but the pool cannot be valued: no signal
-    // beats a fake one.
+    // A drain-looking flow on a pool that cannot be valued: no signal beats a fake one.
     let det = detector(vec![flow(1, 0, 60_000, None)]);
     assert!(run(&det).await.is_empty());
 }
@@ -135,9 +130,8 @@ async fn dust_pool_stays_below_the_floor() {
 
 #[tokio::test]
 async fn floor_measures_the_starting_tvl_not_the_remainder() {
-    // $11k net removed, $1k left: the REMAINING TVL is dust but the
-    // starting TVL ($12k) clears the floor — the drain itself must not
-    // hide the pool. Drain 11/12 ≈ 0.917 → Critical.
+    // $11k net removed, $1k left: the remaining TVL is dust but the starting $12k clears the floor.
+    // Drain 11/12 ≈ 0.917 → Critical.
     let det = detector(vec![flow(1, 0, 11_000, Some(1_000))]);
     let signals = run(&det).await;
 
@@ -172,17 +166,12 @@ async fn each_pool_is_judged_independently() {
     assert_eq!(signals[1].severity, Severity::Critical);
 }
 
-// ── The silent half of the defect migration 006 fixes ──────────────
+// ── a partly valued window ─────────────────────────────────────────────
 
 #[tokio::test]
 async fn a_partly_unvaluable_window_is_skipped_rather_than_under_reported() {
-    // The case found on 6 August 2026, and the one that had no
-    // coverage at all. `SUM` skips unvaluable buckets, so a window only PARTLY
-    // priced used to arrive as a sub-total — small enough to look like calm,
-    // large enough to clear every guard. The TVL guard does not catch it: the
-    // TVL here is perfectly known.
-    //
-    // A drain that cannot be measured must be absent, not small.
+    // ⚠️ `SUM` skips unvaluable buckets: a partly priced window is a sub-total that clears every
+    // guard and looks calm. A drain that cannot be measured must be absent, not small.
     let signals = run(&detector(vec![unvaluable_flow(1, 100_000)])).await;
     assert!(
         signals.is_empty(),
@@ -201,13 +190,10 @@ async fn an_unvaluable_pool_does_not_suppress_its_valuable_neighbours() {
     assert_eq!(signals[0].pool_address, pk(2));
 }
 
-// ── The two skip reasons are distinguished, and both are counted ─────────────
+// ── the two skip reasons are distinguished, and both are counted ─────────────
 //
-// `tvl_drain` is the only detector with two causes of skipping on the same
-// pool population, and they mean different things to whoever reads the
-// dashboard: `no_tvl` says the pool's *current state* cannot be valued,
-// `unpriced` says its *window* could not. Collapsing them would leave an
-// operator unable to tell a dead `yog-context` from a token nobody prices.
+// `no_tvl`: the pool's current state cannot be valued; `unpriced`: its window could not. Apart, they
+// tell a dead `yog-context` from a token nobody prices.
 
 use crate::application::metrics_probe::{Snapshot, counter, snapshot};
 
@@ -257,8 +243,7 @@ fn each_skip_reason_is_counted_under_its_own_label() {
 
 #[test]
 fn a_healthy_pool_is_considered_but_never_skipped() {
-    // Net inflow: evaluated, judged healthy. That is not a skip, and counting
-    // it as one would make `skipped/considered` climb on a thriving pool.
+    // Net inflow: evaluated and judged healthy, not a skip.
     let snap = snapshot_one_evaluation(detector(vec![flow(1, 80_000, 20_000, Some(100_000))]));
 
     assert_eq!(

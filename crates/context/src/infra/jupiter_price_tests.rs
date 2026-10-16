@@ -357,9 +357,8 @@ async fn every_mint_of_an_answered_chunk_is_priced_or_unpriced() {
 
 #[tokio::test]
 async fn an_answer_without_a_single_price_says_nothing() {
-    // Four degraded 200s, none a verdict on the mints asked: an empty map,
-    // all-null entries, an error body (it deserialises, keyed `error`), and a
-    // price for a mint not asked.
+    // Four degraded 200s, none a verdict: an empty map, all-null entries, an error body (it
+    // deserialises, keyed `error`), and a price for a mint not asked.
     let (a, b) = (pk(40), pk(41));
     let all_null = format!(r#"{{ "{a}": {{ "usdPrice": null }}, "{b}": {{}} }}"#);
     let stray = format!(r#"{{ "{}": {{ "usdPrice": 1.0 }} }}"#, pk(42));
@@ -624,9 +623,8 @@ fn full_response_handles_empty_object() {
 
 // ── Redaction: the two error kinds a live server can produce ────────
 
-/// A non-2xx status and an undecodable body, through a URL carrying a secret.
-/// Here because the only local server is here; the connect failure is in
-/// `infra/source_error_tests.rs`.
+/// A non-2xx status and an undecodable body, through a URL carrying a secret; the connect failure
+/// is in `infra/source_error_tests.rs`.
 #[tokio::test]
 async fn a_status_and_a_decode_failure_are_classified_without_leaking_the_secret() {
     const SECRET: &str = "SECRET-DE-TEST-a1b2c3d4";

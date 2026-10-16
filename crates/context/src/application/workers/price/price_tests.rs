@@ -737,9 +737,7 @@ async fn a_stop_during_a_tick_writes_what_was_received() {
 
 // ── Coverage metrics ──────────────────────────────────────────────────
 //
-// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
-// current thread only, so the future runs on a current-thread runtime inside
-// it.
+// Not `#[tokio::test]`: `with_local_recorder` binds the current thread.
 
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 
@@ -1018,10 +1016,8 @@ fn every_counter_of_the_readme_ratios_is_published_before_any_tick() {
 
 #[test]
 fn a_tick_that_asks_nothing_says_why_and_zeroes_its_gauges() {
-    // The second tick finds only `dead`, waiting its turn: no call, no
-    // `no_prices`, and the first tick's coverage does not stand. The known list
-    // shrinks between the ticks — `token_metadata` never does — because that is
-    // the only way to observe this defensive reset.
+    // The second tick finds only `dead`, waiting its turn: no call, and the first tick's coverage
+    // does not stand. The known list shrinks between ticks, the only way to observe this reset.
     let (live, dead) = (pk(1), pk(2));
     let metadata_repo = Arc::new(FakeMetadataRepository::with_known_per_call(vec![
         vec![live, dead],

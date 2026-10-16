@@ -1,7 +1,5 @@
-//! The alarm against a scripted repository and a heartbeat that records what
-//! it is told. Every case asserts the **exact** signal — the reason included —
-//! because a check that went to `/fail` for the wrong reason, or to success
-//! with an aggregate late, reads as green anywhere else.
+//! The alarm against a scripted repository and a recording heartbeat; every case asserts the
+//! exact signal, reason included: a wrong reason reads as green anywhere else.
 
 use std::sync::Mutex;
 
@@ -87,9 +85,8 @@ async fn a_late_aggregate_fails_the_check_by_name() {
     );
 }
 
-/// An aggregate that never materialised a bucket says so — not a date, which
-/// would send the operator looking for a refresh that stopped rather than one
-/// that never ran.
+/// An aggregate that never materialised says so, not a date, which would send the operator after
+/// a refresh that stopped rather than one that never ran.
 #[tokio::test]
 async fn a_late_aggregate_never_materialised_says_so() {
     let never = MaterializationBacklog {
@@ -106,8 +103,7 @@ async fn a_late_aggregate_never_materialised_says_so() {
     );
 }
 
-/// A database that refuses is not a quiet tick: the check fails, and says
-/// what the database said.
+/// A database that refuses fails the check, saying what the database said.
 #[tokio::test]
 async fn unreadable_backlogs_fail_the_check_with_the_error() {
     let (alarm, heartbeat) = alarm(Err(RepositoryError::Backend(
@@ -123,8 +119,7 @@ async fn unreadable_backlogs_fail_the_check_with_the_error() {
     );
 }
 
-/// Without a check to report to — development — the verdict is still reached;
-/// only the signal is skipped.
+/// Without a check to report to, the verdict is still reached; only the signal is skipped.
 #[tokio::test]
 async fn without_a_heartbeat_the_verdict_is_still_reached() {
     let alarm = MaterializationAlarm::new(
@@ -144,8 +139,7 @@ async fn without_a_heartbeat_the_verdict_is_still_reached() {
     assert_eq!(verdict.label(), "late");
 }
 
-/// A stop asked for before the first tick ends the loop without a check —
-/// nothing is read, nothing is signalled.
+/// A stop asked for before the first tick ends the loop with nothing read or signalled.
 #[tokio::test]
 async fn a_stop_ends_the_loop_without_a_check() {
     let (alarm, heartbeat) = alarm(Ok(vec![aggregate("swaps_hourly", None)]));
@@ -169,8 +163,7 @@ impl MaterializationBacklogRepository for HangingRepository {
     }
 }
 
-/// A read that hangs ends the check in `/fail`, with the reason — not in a
-/// silence the check would read as a stopped daemon.
+/// A read that hangs ends the check in `/fail` with the reason, not in silence.
 #[tokio::test(start_paused = true)]
 async fn a_read_that_never_answers_fails_the_check() {
     let heartbeat = Arc::new(RecordingHeartbeat::default());
@@ -192,8 +185,7 @@ async fn a_read_that_never_answers_fails_the_check() {
     );
 }
 
-/// An empty answer means the function no longer finds the aggregates — not
-/// that they are all on time. Success here would be a check watching nothing.
+/// An empty answer means the aggregates are no longer found, not that all are on time.
 #[tokio::test]
 async fn no_aggregate_reported_fails_the_check() {
     let (alarm, heartbeat) = alarm(Ok(Vec::new()));
@@ -207,10 +199,8 @@ async fn no_aggregate_reported_fails_the_check() {
     );
 }
 
-/// A stop that arrives while a check is under way ends the loop at once — the
-/// check races the stop, it does not hold it. Here the read hangs: were the
-/// check awaited outside the race, the stop would wait out `READ_TIMEOUT`,
-/// then a ping, well past Docker's ten seconds.
+/// ⚠️ The check races the stop: awaited outside the race, the stop would wait out `READ_TIMEOUT`
+/// and a ping, past Docker's ten seconds.
 #[tokio::test(start_paused = true)]
 async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
     let heartbeat = Arc::new(RecordingHeartbeat::default());
@@ -261,7 +251,6 @@ fn a_waiting_row_sets_the_gauge_to_its_wait() {
 fn an_aggregate_with_nothing_waiting_brings_the_gauge_back_to_zero() {
     let gauge = pending_gauge(aggregate("claims_hourly", None));
 
-    // `Some(0)`, not `None`: a gauge left unset would keep its last reading,
-    // and an aggregate that caught up would still read late on `/metrics`.
+    // `Some(0)`, not `None`: an unset gauge would keep reading late after the aggregate caught up.
     assert_eq!(gauge, Some(0.0));
 }

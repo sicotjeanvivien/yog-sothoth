@@ -1,14 +1,6 @@
-//! One run of the archiver against fake `pg_dump` / `pg_restore` scripts, an
-//! in-memory bucket and a heartbeat that remembers what it was told.
-//!
-//! Each failure case asserts the outcome **and** its reason, that the bucket
-//! is left empty, that an upload it had opened was **aborted**, and that
-//! exactly one failure signal was sent with that reason — a run that fails in
-//! silence is the defect this crate exists to prevent.
-//!
-//! The abort is counted, not inferred from an empty bucket: an in-memory
-//! upload that is neither completed nor aborted never shows up in a listing
-//! either, so "the bucket is empty" stayed green with every `abort` removed.
+//! One run of the archiver against fake `pg_dump` / `pg_restore` scripts, an in-memory bucket and
+//! a recording heartbeat. Each failure asserts the outcome and reason, an empty bucket, an aborted
+//! upload and one failure signal. ⚠️ The abort is counted: an unaborted upload is not listed either.
 
 use std::{
     fs,
@@ -64,9 +56,7 @@ struct Ledger {
     pg_dump_alive_at_abort: std::sync::Mutex<Option<bool>>,
 }
 
-/// Whether `pid` still runs. A killed child stays a zombie until it is
-/// reaped, and a zombie still answers `kill -0`: running means present in
-/// `/proc` and not in state `Z`.
+/// Whether `pid` still runs: present in `/proc` and not a zombie, which still answers `kill -0`.
 fn is_running(pid: &str) -> bool {
     fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
         stat.rsplit_once(')')
@@ -121,9 +111,8 @@ impl MultipartUpload for RecordingUpload {
             .as_ref()
             .and_then(|f| fs::read_to_string(f).ok())
         {
-            // A SIGKILL is sent, not awaited: give the kill a moment to land.
-            // Killed first, pg_dump is gone in a few milliseconds; killed after
-            // the abort, it is still running for the whole of this wait.
+            // A SIGKILL is sent, not awaited: killed first, pg_dump is gone within this wait;
+            // killed after the abort, it is still running.
             let pid = pid.trim();
             let mut alive = is_running(pid);
             for _ in 0..25 {
@@ -202,17 +191,10 @@ impl ObjectStore for TestStore {
 }
 
 /// Serialises the tests that write scripts and run them.
-///
-/// Writing an executable and exec-ing it while another thread forks is the
-/// classic `ETXTBSY` ("Text file busy") race: the forked child briefly holds
-/// the file open for writing, and the exec fails. One test failed once in
-/// about 80 runs, right after a rebuild, and could not be reproduced in 72
-/// more — the race is the likely cause, not a confirmed one. Running these
-/// tests one at a time removes the whole class for ~0.3 s.
+/// ⚠️ Writing an executable while another thread forks races into `ETXTBSY` ("Text file busy").
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// A directory of fake client programs, and what the fake `pg_dump` saw.
-/// Holds [`SERIAL`] for as long as the test lives.
+/// A directory of fake client programs and what the fake `pg_dump` saw; holds [`SERIAL`].
 struct Fakes {
     dir: TempDir,
     _serial: std::sync::MutexGuard<'static, ()>,
@@ -243,8 +225,8 @@ impl Fakes {
         path
     }
 
-    /// A `pg_dump` answering `--version` with `version`, and otherwise
-    /// recording its arguments and password before running `dump`.
+    /// A `pg_dump` answering `--version` with `version`, else recording its arguments and password
+    /// before running `dump`.
     fn pg_dump(&self, version: &str, dump: &str) -> PathBuf {
         self.script(
             "pg_dump",
@@ -261,8 +243,7 @@ printf '%s' "$PGPASSWORD" > "$DIR/password"
         self.pg_dump(VERSION_16, &format!("printf '{ARCHIVE}'"))
     }
 
-    /// A `pg_restore` that reads the whole archive, records how it was
-    /// asked to, and accepts it.
+    /// A `pg_restore` that reads the whole archive, records how it was asked, and accepts it.
     fn good_pg_restore(&self) -> PathBuf {
         self.script(
             "pg_restore",
@@ -369,9 +350,8 @@ async fn objects(store: &Arc<dyn ObjectStore>) -> Vec<String> {
         .await
 }
 
-/// The run failed with `label`, its reason contains `reason`, nothing is in
-/// the bucket, the upload was aborted `aborted` times and never completed,
-/// and exactly one failure signal carried the label and the reason.
+/// The run failed with `label` and `reason`, the bucket is empty, the upload aborted `aborted` times
+/// and never completed, and exactly one failure signal carried both.
 async fn assert_failed(run: &Run, label: &str, reason: &str, aborted: usize) {
     assert_eq!(run.outcome.label(), label, "{:?}", run.outcome);
     let text = format!("{:?}", run.outcome);
@@ -414,9 +394,8 @@ async fn a_dump_is_archived_under_its_version_and_signalled_once() {
         Some("2.27.1".to_string())
     );
 
-    // What pg_restore checked is the very archive stored, and it was asked
-    // to write it out — which reads every data block — not merely to list
-    // its table of contents, which passes a truncated dump.
+    // pg_restore checked the very archive stored, asked to write it out, which reads every block;
+    // listing its table of contents would pass a truncated dump.
     assert_eq!(fakes.read("restore-input").as_deref(), Some(ARCHIVE));
     assert_eq!(
         fakes.read("restore-args").as_deref(),
@@ -575,8 +554,7 @@ async fn a_stop_mid_dump_kills_pg_dump_keeps_nothing_and_signals_nothing() {
 
 #[tokio::test]
 async fn an_archive_larger_than_any_head_is_checked_whole() {
-    // 6 MiB: past the 4 MiB head the first version checked, which the table
-    // of contents would have outgrown as chunks accumulate.
+    // 6 MiB, past a 4 MiB head, which the table of contents would outgrow as chunks accumulate.
     const SIZE: usize = 6 * 1024 * 1024;
     let fakes = Fakes::new();
     let pg_dump = fakes.pg_dump(VERSION_16, &format!("head -c {SIZE} /dev/zero"));
@@ -600,9 +578,8 @@ async fn a_pg_restore_that_stops_reading_early_is_judged_by_its_exit_status() {
     assert_eq!(run.outcome.label(), "archived", "{:?}", run.outcome);
 }
 
-/// In production this URL fails the versions read first, with the same value;
-/// here the versions are fixed, so the dump is where it is caught — after the
-/// upload opened, which is why that upload is aborted.
+/// The versions are fixed here, so a bad URL is caught at the dump, after the upload opened, which
+/// is therefore aborted; in production the versions read fails first.
 #[tokio::test]
 async fn a_database_url_pg_dump_cannot_use_fails_the_dump_and_is_signalled() {
     let fakes = Fakes::new();

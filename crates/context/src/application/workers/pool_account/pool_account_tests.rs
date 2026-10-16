@@ -1,8 +1,5 @@
-//! Unit tests for `PoolAccountWorker::run_one_cycle` against fakes.
-//!
-//! The fake source now yields **raw accounts**, so these run through the real
-//! `core` decoder rather than around it — which is the point of the refactor:
-//! the worker no longer knows any layout, so its tests exercise the seam.
+//! Unit tests for `PoolAccountWorker::run_one_cycle` against fakes yielding raw accounts, so they
+//! run through the real `core` decoder.
 
 use super::*;
 use async_trait::async_trait;
@@ -24,9 +21,7 @@ fn pk(seed: u8) -> Pubkey {
     Pubkey::new_from_array([seed; 32])
 }
 
-/// A cp-amm `Pool` account buffer. Offsets mirror
-/// `core::application::decoder::meteora::damm_v2` — if they ever drift,
-/// these fail alongside the decoder's own tests.
+/// A cp-amm `Pool` account buffer; offsets mirror `core`'s DAMM v2 decoder, and drift fails both.
 fn cp_amm_account(token_a: Pubkey, token_b: Pubkey) -> Vec<u8> {
     let mut bytes = vec![0u8; 1112];
     bytes[..8].copy_from_slice(&[0xf1, 0x9a, 0x6d, 0x04, 0x11, 0xb1, 0x6d, 0xbc]);
@@ -48,8 +43,7 @@ fn expected_properties() -> PoolAccountProperties {
         referral_fee_percent: 20,
         base_fee_kind: Some(BaseFeeKind::Constant),
         has_dynamic_fee: true,
-        // A constant fee has no decay curve to carry — the synthetic account
-        // this mirrors is built with `number_of_period == 0`.
+        // A constant fee: no decay curve, `number_of_period == 0`.
         fee_scheduler: None,
     })
 }
@@ -62,8 +56,7 @@ fn expected_core(token_a: Pubkey, token_b: Pubkey) -> PoolRegistryProperties {
     }
 }
 
-/// Every write both fakes receive, in order, so a test can assert on the
-/// *sequence* and not merely on the contents.
+/// Every write both fakes receive, in order, so a test asserts on the sequence.
 type Journal = Arc<Mutex<Vec<Write>>>;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -76,8 +69,7 @@ enum Write {
 struct FakeRepo {
     unresolved: Vec<Pubkey>,
     journal: Journal,
-    /// When true, the satellite write fails — the case that must stop the
-    /// registry write from lowering the refresh flag.
+    /// When true, the satellite write fails, which must stop the registry write.
     fail: bool,
 }
 
@@ -105,8 +97,7 @@ impl PoolAccountResolver for FakeRepo {
     }
 }
 
-/// The neutral registry. Shares the journal with the resolver, so the ordering
-/// between the two writes is observable.
+/// The neutral registry, sharing the journal with the resolver so the order is observable.
 #[derive(Default)]
 struct FakePoolRepo {
     journal: Journal,
@@ -179,13 +170,8 @@ fn fakes(unresolved: Vec<Pubkey>, fail: bool) -> (Arc<FakeRepo>, Arc<FakePoolRep
     )
 }
 
-/// The two halves of one account read reach **two different repositories**, and
-/// in a fixed order: the protocol's satellite first, the neutral registry last.
-///
-/// The order is not cosmetic. The registry write is what lowers
-/// `pools.needs_refresh`, so it must be the last thing to succeed — otherwise a
-/// satellite failure would leave a pool marked fresh while half of its
-/// properties are stale.
+/// Satellite first, registry last: the registry write lowers `needs_refresh`, so a satellite
+/// failure must not leave a pool marked fresh with stale properties.
 #[tokio::test]
 async fn writes_both_halves_satellite_first() {
     let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
@@ -208,11 +194,8 @@ async fn writes_both_halves_satellite_first() {
     );
 }
 
-/// A failed satellite write must **not** be followed by the registry write.
-///
-/// This is the guard for the invariant above: letting the registry write run
-/// anyway would clear the refresh flag, and the pool would leave the queue with
-/// stale satellite properties and nothing to bring it back.
+/// A failed satellite write is not followed by the registry write, or the pool would leave the
+/// queue with stale satellite properties.
 #[tokio::test]
 async fn a_failed_satellite_write_does_not_clear_the_flag() {
     let (repo, pool_repo, journal) = fakes(vec![pk(1)], true);
@@ -244,8 +227,7 @@ async fn no_unresolved_pools_writes_nothing() {
     assert!(journal.lock().unwrap().is_empty());
 }
 
-/// An account the decoder does not recognize is skipped — not written, not
-/// fatal. The pool simply stays in the queue for the next cycle.
+/// An account the decoder does not recognize is skipped, neither written nor fatal; it stays queued.
 #[tokio::test]
 async fn an_undecodable_account_is_skipped() {
     let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
@@ -262,9 +244,7 @@ async fn an_undecodable_account_is_skipped() {
     assert!(journal.lock().unwrap().is_empty());
 }
 
-/// The guard that makes the dispatch safe: an account belonging to another
-/// protocol is never handed to this resolver, so a resolver is never asked to
-/// store a payload it does not own.
+/// An account of another protocol is never handed to this resolver.
 #[tokio::test]
 async fn an_account_of_another_protocol_is_not_written() {
     let (repo, pool_repo, journal) = fakes(vec![pk(1)], false);
