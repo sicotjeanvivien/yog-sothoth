@@ -767,8 +767,8 @@ runs (the `yog-archive` image carries them).
 The public surface shows no process. A dump is a `DumpStream` read chunk by chunk;
 **dropping it kills `pg_dump`**, which is how a caller gives up on one and why
 no path can leave one running (`dropping_a_dump_kills_pg_dump`, seen failing
-with `kill_on_drop` removed). Every step documents the `BackupError` variants
-it can return; what each means for a run is the caller's decision.
+with `kill_on_drop` removed). What each `BackupError` means for a run is the
+caller's decision.
 
 ### What a dump does not carry
 
