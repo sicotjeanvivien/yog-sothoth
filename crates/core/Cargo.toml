@@ -12,7 +12,6 @@ default = ["solana"]
 # compile (75 errors, measured). Making it truly optional is a separate job —
 # gating every domain type — and nothing needs it until a wasm build does.
 solana = ["dep:solana-pubkey"]
-wasm = []
 # Exposes `application::extraction::conformance` — the shared expectation every
 # source adapter must satisfy, plus the reference transaction it is proven on.
 # Enabled by the dev-dependencies of the crates that host those adapters and

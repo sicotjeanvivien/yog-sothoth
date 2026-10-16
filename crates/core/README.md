@@ -1,6 +1,6 @@
 # yog-core
 
-Pure logic and domain types. No I/O, no runtime, no database — wasm-compatible by construction.
+Pure logic and domain types. No I/O, no runtime, no database.
 
 Every other crate depends on this one: it declares the domain entities, the repository traits that define every persistence contract, the event-extraction use case, and the AMM math. For the workspace-level picture (dependency graph, conventions, database roles, the add-a-protocol recipe), see [`crates/README.md`](../README.md).
 
@@ -78,7 +78,7 @@ File trees here are kept coarse on purpose — the module structure is the contr
 
 - **AMM formulas on the dormant path** (`amm/common.rs`, plus `damm_v2::fee_adjusted_amount` / `net_price_impact`) — reserve-ratio spot price, price impact, imbalance and fee-adjusted input. **No caller outside the group, on purpose**: they call each other, nothing else calls them. They model a constant-product AMM over vault totals, which DAMM v2 is not — and the resulting error has **no fixed sign**. In range, a concentrated position acts like a deeper pool than its real reserves suggest, so x·y=k *overstates* impact (17 % against a true 0.9 % on a plausible pool); out of range, vault reserves that back no trade inflate the depth and it *understates*. Which dominates is the pool's liquidity distribution, which these formulas do not have — so the output is neither a floor nor a ceiling. The correct formulation (`ΔA = L(1/√P − 1/√P_max)`) and the full trap are written up under *Détecteur Price impact creep* in the project tracker; each function also carries the warning at its own definition.
 
-⚠️ Same definition, **different upper bound**. `dlmm::max_variable_fee_bps` computes how far a DLMM pool's volatility fee can climb above its floor, from parameters the satellite already stores. On real captured accounts that ceiling runs from ×1 to **×7 the floor**, so two pools at the same `fee_bps` are not interchangeable. The function exists so that claim is asserted against decoded accounts (`tests/pool_account_fixtures.rs`) rather than left as prose. Kept here because these formulas will eventually run in the browser via WASM. The borsh fee-blob decoders that used to sit here (`decode_base_fee_bps`, `decode_fee_config`, `decode_updated_base_fee_bps`, `decode_updated_dynamic_fee`) are **gone**: nothing reads a fee blob any more. Pool properties come from the on-chain account, decoded in `application/decoder/`, which is where layout decoding belongs.
+⚠️ Same definition, **different upper bound**. `dlmm::max_variable_fee_bps` computes how far a DLMM pool's volatility fee can climb above its floor, from parameters the satellite already stores. On real captured accounts that ceiling runs from ×1 to **×7 the floor**, so two pools at the same `fee_bps` are not interchangeable. The function exists so that claim is asserted against decoded accounts (`tests/pool_account_fixtures.rs`) rather than left as prose. The borsh fee-blob decoders that used to sit here (`decode_base_fee_bps`, `decode_fee_config`, `decode_updated_base_fee_bps`, `decode_updated_dynamic_fee`) are **gone**: nothing reads a fee blob any more. Pool properties come from the on-chain account, decoded in `application/decoder/`, which is where layout decoding belongs.
 
   What stayed is `base_fee_kind_from`, which is *meant* to be here: it maps a `BaseFeeMode` discriminant and a period count to a `BaseFeeKind` — a rule, not a layout. A scheduler mode with zero periods is a constant fee, and mode 2 (rate limiter) must not consult the period count at all, because its variant reuses those bytes.
 - **Pagination** (`tools/pagination.rs`) — `Page<T>` envelope and the discriminated `Cursor` enum used by every paginated repository method. A keyset cursor is only sound over an **immutable** sort key, and one listing sorts on a mutable one: `pools.last_seen_at`, rewritten on every event. That traversal is therefore anchored to a snapshot instant carried by the cursor (`PoolCursor::as_of`), which turns "the row moved across the cursor" into "the row left the result set" — the contract, and what it does *not* recover, is documented on `domain::PoolPage`. Adding a sort column means answering "is it immutable?", not "is it materialized?".
@@ -341,8 +341,3 @@ with no live user rather than a padding byte read by mistake; the arithmetic is
 unit-tested on non-zero values, only the *offset* is unproven. A test asserts the
 gap still exists, so capturing a pool with a non-zero power factor turns it red
 and prompts a direct assertion instead.
-
-## Compilation targets
-
-- `cargo build` → native library, linked into every binary ✅
-- `wasm-pack build` → WASM module for the browser 🚧 deferred — reassessed once user accounts exist (see [`crates/README.md`](../README.md#wasm-yog-wasm))

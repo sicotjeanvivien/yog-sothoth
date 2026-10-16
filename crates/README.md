@@ -37,32 +37,29 @@ crates/
 ├── context/       ← binary: token/pool enrichment (Helius DAS, Jupiter, cp-amm accounts)
 ├── signals/       ← binary: batch detector engine emitting typed signals
 ├── analytic/      ← binary: the swaps valued once per pool and hour, frozen once closed
-├── archive/       ← binary: pg_dump every 6 h, streamed to an S3 bucket
-└── wasm/          ← WASM build target (scaffold — deferred)
+└── archive/       ← binary: pg_dump every 6 h, streamed to an S3 bucket
 ```
 
 The dependency graph is strict and one-directional:
 
 ```
                        ┌──────────┐
-                       │   core   │  no I/O, wasm-compatible
+                       │   core   │  no I/O
                        └────▲─────┘
                             │
-              ┌─────────────┼─────────────┬───────────────────────────────────┐
-              │             │             │                                   │
-        ┌─────┴─────┐ ┌─────┴─────┐  ┌────┴────┐                              │
-        │persistence│ │ bootstrap │  │  wasm   │                              │
-        └─────▲─────┘ └─────▲─────┘  └─────────┘                              │
+              ┌─────────────┼─────────────────────────────────────────────────┐
+              │             │                                                 │
+        ┌─────┴─────┐ ┌─────┴─────┐                                           │
+        │persistence│ │ bootstrap │                                           │
+        └─────▲─────┘ └─────▲─────┘                                           │
               │             │                                                 │
               └──────┬──────┘                                                 │
                      │                                                        │
-      ┌──────────┬───┴──────┬───────────┬───────────┬────────────┐            │
-      │          │          │           │           │            │            │
- ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐ ┌────┴─────┐ ┌────┴────┐       │
- │ indexer │ │  api  │ │ context │ │ signals │ │ analytic │ │ archive │       │
- └─────────┘ └───────┘ └─────────┘ └─────────┘ └──────────┘ └─────────┘       │
-                                                                              │
-                                                    (no binary depends on wasm)
+      ┌──────────┬───┴──────┬───────────┬───────────┬────────────┬────────────┘
+      │          │          │           │           │            │
+ ┌────┴────┐ ┌───┴───┐ ┌────┴────┐ ┌────┴────┐ ┌────┴─────┐ ┌────┴────┐
+ │ indexer │ │  api  │ │ context │ │ signals │ │ analytic │ │ archive │
+ └─────────┘ └───────┘ └─────────┘ └─────────┘ └──────────┘ └─────────┘
 ```
 
 `core` knows nothing about Postgres, axum, or HTTP clients. It declares traits; the adapters and binaries implement and consume them. Each binary depends only on `core` (types + traits), `persistence` (concrete repos), and `bootstrap` (startup helpers).
@@ -80,7 +77,6 @@ The dependency graph is strict and one-directional:
 - **[`archive` (`yog-archive`)](./archive/README.md)** — the backup daemon. Every six hours, `pg_dump` under the read-only `yog_archive` role, streamed to an S3-compatible bucket, checked by a `pg_restore` that reads every block, and signalled to a dead man's switch. It never restores: the proven procedure is in [`persistence/README.md`](./persistence/README.md#backup-and-restore).
 - **[`signals` (`yog-signals`)](./signals/README.md)** — the signal engine. Batch detectors at per-detector cadence, stateless between ticks, cooldown-based dedup with severity escalation; three detectors today: swap-flow imbalance, spot-vs-oracle price deviation, TVL drain. Beside them, the materialisation alarm: a Healthchecks.io check fails when a continuous aggregate stops being materialised.
 - **[`analytic` (`yog-analytic`)](./analytic/README.md)** — the analytic writer. Every five minutes, one transaction: the DAMM v2 swaps of the open hours valued into a fact table per pool and hour, the protocol aggregate summed from those facts, the protocol TVL measured; each hour frozen ten minutes after its close and never written again. `/api/stats` reads the aggregate and the TVL.
-- **`wasm` (`yog-wasm`)** <a name="wasm-yog-wasm"></a> — WebAssembly target for the browser. **Currently a scaffold** — the default `cargo new --lib` template, not wired to `yog-core`. Making it functional requires a `wasm` feature on `yog-core`, conditional compilation on Solana-only modules, and abstracting `Pubkey` behind a neutral alias. Deferred; reassessed once user accounts exist.
 
 ---
 
@@ -175,7 +171,6 @@ cargo build
 cargo fmt --all
 cargo test --workspace --all-features
 
-# Native crates only — yog-wasm is excluded (deferred scaffold)
 cargo clippy -p yog-analytic -p yog-api -p yog-archive -p yog-bootstrap -p yog-core -p yog-context \
     -p yog-indexer -p yog-persistence -p yog-signals \
     --all-targets --all-features -- -D warnings
