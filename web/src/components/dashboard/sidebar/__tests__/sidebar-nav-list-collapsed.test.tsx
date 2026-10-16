@@ -16,8 +16,7 @@ vi.mock("@/i18n/navigation", async () => {
   };
 });
 
-// Today no group holds an open entry; this menu does, as the first
-// protocol page will — next to a group that holds only closed ones.
+// A group holding an open entry, next to one holding only closed ones.
 vi.mock("../sidebar-nav", () => ({
   SIDEBAR_NAV: [
     { kind: "open", key: "overview", href: "/overview", labelKey: "overview" },
@@ -39,11 +38,7 @@ vi.mock("../sidebar-nav", () => ({
 
 type Node = { tag: string; attrs: string; hidden: boolean; hasLink: boolean };
 
-/**
- * Walks the static markup and reports, for every link, closed entry
- * and group list, whether the collapsed rail hides it (an `lg:hidden`
- * on it or on an ancestor).
- */
+/** For every link, closed entry and group, whether an `lg:hidden` on it or an ancestor hides it. */
 function walk(html: string) {
   const links: { attrs: string; hidden: boolean }[] = [];
   const closed: boolean[] = [];

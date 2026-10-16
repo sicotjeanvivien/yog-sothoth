@@ -29,11 +29,7 @@ describe("parseStrictBoolean", () => {
 });
 
 describe("isFeatureEnabled (default registry values)", () => {
-  // These tests verify the build-time defaults baked into the
-  // registry. They do not exercise the env-var override path because
-  // RAW_VALUES is captured at module import time and cannot be
-  // mutated after the fact. Override behavior is tested separately
-  // with module re-imports below.
+  // ⚠️ `RAW_VALUES` is captured at import: overrides are tested below by re-importing.
   it("returns true for flags declared as defaultEnabled = true", () => {
     expect(isFeatureEnabled("poolsList")).toBe(true);
     expect(isFeatureEnabled("poolDetail")).toBe(true);
@@ -69,8 +65,6 @@ describe("FEATURE_REGISTRY shape", () => {
   });
 
   it("disables every flag whose status is not v0.1-ready", () => {
-    // Sanity check on the registry: anything not marked as
-    // available/degraded for v0.1 should default to off.
     const v0_1Ready = new Set(["available-v0.1", "degraded-v0.1"]);
 
     for (const [name, entry] of Object.entries(FEATURE_REGISTRY)) {
@@ -84,8 +78,6 @@ describe("FEATURE_REGISTRY shape", () => {
 });
 
 describe("isFeatureEnabled (env-var override)", () => {
-  // These tests reload the module after mutating process.env so the
-  // module-level RAW_VALUES map captures the patched values.
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
@@ -147,8 +139,6 @@ describe("isFeatureEnabled (env-var override)", () => {
 
 describe("FeatureName exhaustiveness", () => {
   it("covers every key of FEATURE_REGISTRY", () => {
-    // Compile-time check: this object must declare an entry for every
-    // FeatureName, otherwise the test file fails to type-check.
     const seen: Record<FeatureName, true> = {
       poolsList: true,
       poolDetail: true,

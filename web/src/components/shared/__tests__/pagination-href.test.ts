@@ -1,38 +1,13 @@
 /**
- * Tests for `buildHref` — the URL composer behind the <Pagination />
- * component.
- *
- * `buildHref` carries the entire correctness burden of the
- * navigation: it owns the namespacing (so two paginations on the
- * same page don't fight over `cursor`), the preservation of
- * unrelated params (filters, search, the other pagination), and
- * the mutual exclusivity between `cursor`/`dir` and `position` at
- * the output level.
- *
- * The tests below are organised by what could realistically break:
- *
- *   1. Single pagination — namespace "", baseline behaviour.
- *   2. Namespaced pagination — prefix "swaps", core invariants.
- *   3. Coexistence — multiple paginations sharing search params,
- *      verifying isolation.
- *   4. Edge cases — empty search params, array-valued params,
- *      undefined entries.
+ * `buildHref`, which carries the pagination's correctness: namespacing, preservation of
+ * unrelated params, and `cursor`/`dir` exclusive of `position`.
  */
 
 import { describe, expect, it } from "vitest";
 
 import { buildHref } from "../pagination-href";
 
-// ─────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Parse the query string out of a href returned by buildHref so
- * assertions can be made on params without caring about their
- * ordering (which URLSearchParams doesn't guarantee). Returns the
- * pathname separately so callers can also check that.
- */
+/** The pathname and the params of a href, order-free. */
 function parse(href: string): {
   pathname: string;
   params: Record<string, string[]>;
@@ -45,10 +20,6 @@ function parse(href: string): {
   }
   return { pathname: pathname ?? "", params };
 }
-
-// ─────────────────────────────────────────────────────────────────────
-// 1. Single pagination, no prefix
-// ─────────────────────────────────────────────────────────────────────
 
 describe("buildHref — single pagination (no prefix)", () => {
   it("returns the base path when no target params are set", () => {
@@ -111,10 +82,6 @@ describe("buildHref — single pagination (no prefix)", () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────
-// 2. Namespaced pagination
-// ─────────────────────────────────────────────────────────────────────
-
 describe("buildHref — namespaced pagination", () => {
   it("camelCases the prefix into the param keys", () => {
     const href = buildHref("/pools/X", {}, "swaps", {
@@ -163,9 +130,6 @@ describe("buildHref — namespaced pagination", () => {
   });
 
   it("does not clear the unprefixed `cursor` when prefixed", () => {
-    // Edge case: an unprefixed `cursor` from a different (broken or
-    // legacy) consumer should be preserved when navigating a
-    // namespaced pagination.
     const href = buildHref(
       "/pools/X",
       { cursor: "global-cursor" },
@@ -177,10 +141,6 @@ describe("buildHref — namespaced pagination", () => {
     expect(params['swapsCursor']).toEqual(["swaps-cursor"]);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────
-// 3. Coexistence and unrelated params
-// ─────────────────────────────────────────────────────────────────────
 
 describe("buildHref — preservation of unrelated params", () => {
   it("preserves arbitrary unrelated string params", () => {
@@ -197,8 +157,6 @@ describe("buildHref — preservation of unrelated params", () => {
   });
 
   it("preserves all paginations not owned by the current prefix", () => {
-    // The full picture of a pool detail page: two paginations
-    // active, navigating one must leave the other entirely intact.
     const before = {
       swapsCursor: "S",
       swapsDir: "next",
@@ -228,10 +186,6 @@ describe("buildHref — preservation of unrelated params", () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────
-// 4. Edge cases
-// ─────────────────────────────────────────────────────────────────────
-
 describe("buildHref — edge cases", () => {
   it("returns the base path when search params are all undefined", () => {
     const href = buildHref(
@@ -244,8 +198,7 @@ describe("buildHref — edge cases", () => {
   });
 
   it("skips undefined entries in incoming search params", () => {
-    // Next.js can hand us undefined values for absent keys; they
-    // must not become "key=undefined" in the output.
+    // Mutation: an undefined value written as "key=undefined".
     const href = buildHref(
       "/pools",
       { q: undefined, sort: "tvl_desc" },

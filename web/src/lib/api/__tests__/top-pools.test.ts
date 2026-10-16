@@ -1,10 +1,6 @@
 /**
- * Integration tests for `fetchTopPools`.
- *
- * Covers the metric → query-param mapping: the `volume_24h` default is sent
- * implicitly (param omitted, so the URL stays bare), and `tvl` is forwarded
- * as `metric=tvl`. The full chain (URL build from env → fetch → schema parse)
- * runs for real; only `globalThis.fetch` and the env singleton are stubbed.
+ * `fetchTopPools`' metric param: `volume_24h` by omitting it, `tvl` as `metric=tvl`. Only
+ * `fetch` and the env singleton are stubbed.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

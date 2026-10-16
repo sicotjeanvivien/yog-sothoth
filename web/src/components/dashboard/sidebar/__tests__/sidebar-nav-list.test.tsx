@@ -18,9 +18,7 @@ vi.mock("@/i18n/navigation", async () => {
   };
 });
 
-// The entries the menu shows without a page, written out rather than
-// read from `SIDEBAR_NAV`: turning one into a link must not shrink the
-// list this test checks.
+// ⚠️ Written out, not read from `SIDEBAR_NAV`: opening an entry must not shrink this list.
 const CLOSED_LABELS = [
   "Meteora DAMM v2",
   "Meteora DLMM",

@@ -12,9 +12,7 @@ describe("formatSignedPercent", () => {
   });
 
   it("localizes for fr", () => {
-    // fr-FR: comma decimal, and a non-breaking space before % \u2014 its
-    // exact codepoint (U+00A0 vs U+202F) varies with the ICU build, so
-    // the assertion stays loose on that character.
+    // ⚠️ Loose on the space before %: U+00A0 or U+202F depending on the ICU build.
     expect(formatSignedPercent("0.0523", "fr")).toMatch(/^\+5,2\s%$/u);
   });
 

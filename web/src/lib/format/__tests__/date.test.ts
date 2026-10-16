@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatAbsolute, formatRelative } from "../date";
 
-// Reference "now" used across the suite — picks a Monday afternoon
-// UTC so the daylight-saving edge does not surprise anyone reading
-// the expectations.
+// Away from any daylight-saving edge.
 const NOW = new Date("2026-05-12T15:00:00Z");
 
 describe("formatRelative", () => {

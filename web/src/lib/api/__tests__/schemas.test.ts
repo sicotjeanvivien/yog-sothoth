@@ -18,8 +18,6 @@ import {
 import { validPoolsPage, validPoolHistoryBucket } from "./fixtures";
 
 
-// A representative valid pool payload, copied from a real yog-api
-// response shape. Tests mutate this base to exercise each failure mode.
 function validPool() {
   return {
     "poolAddress": "8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie",
@@ -60,7 +58,6 @@ function validPool() {
   };
 }
 
-// A representative valid announcement payload (yog-api DTO shape).
 function validAnnouncement() {
   return {
     id: 1,
@@ -85,8 +82,7 @@ describe("zAnnouncementResponse", () => {
       zAnnouncementResponse.parse({ ...validAnnouncement(), linkUrl: null })
         .linkUrl,
     ).toBeNull();
-    // Relative in-app paths are the main use case — must not require
-    // an absolute URL.
+    // Mutation: a link required to be absolute — in-app paths are the main use.
     expect(
       zAnnouncementResponse.parse({ ...validAnnouncement(), linkUrl: "/changelog" })
         .linkUrl,
@@ -376,8 +372,6 @@ describe("zProblemDetailsResponse", () => {
   });
 
   it("accepts a future type URI", () => {
-    // Forward compat: when yog-api moves off `about:blank`, the schema
-    // must still parse.
     const parsed = zProblemDetailsResponse.parse({
       ...validProblem(),
       type: "https://api.yog-sothoth.fr/errors/invalid-cursor",
@@ -430,9 +424,7 @@ describe("zStatsResponse", () => {
   });
 
   it("keeps the volume coverage counters apart from the value", () => {
-    // The payload the counters exist for: a non-null volume that covers only
-    // 767 of the 1246 hours that traded. Nothing about the value itself says
-    // so — the pair does.
+    // A non-null volume covering part of the window: only the counters say so.
     const parsed = zStatsResponse.parse(validStats());
     expect(parsed.volume24hUsd).toBe("508193.05");
     expect(parsed.swapBuckets24h).toBe(1246);
@@ -460,8 +452,7 @@ describe("zStatsResponse", () => {
     expect(() => zStatsResponse.parse(rest)).toThrow();
   });
 });
-// A representative valid signal payload, copied from a real yog-api
-// response (both the list items and the SSE events carry this shape).
+// The shape of both the list items and the SSE events.
 function validSignal() {
   return {
     id: 739,
