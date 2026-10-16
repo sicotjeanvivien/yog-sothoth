@@ -1,6 +1,6 @@
 //! The shared-result cache: concurrent callers of a cold key share one computation, and its
 //! result serves everyone until it expires. A failed computation reaches every waiter and is
-//! not kept. ⚠️ Take the work slot inside the computation, never around the call. ⚠️ A waiter
+//! not kept. ⚠️ A waiter
 //! that sees 200 computations dropped in a row panics (`moka`'s retry bound); tokio contains
 //! it in that request's task.
 

@@ -431,8 +431,7 @@ mod tests {
         assert!(resolved.keeps_cursor);
     }
 
-    /// A fresh anchor over a stale `sort_value` would serve again a pool
-    /// already shown and touched since.
+    /// Mutation: a refused fence keeping its cursor.
     #[test]
     fn a_refused_fence_never_keeps_its_cursor() {
         for claimed in [

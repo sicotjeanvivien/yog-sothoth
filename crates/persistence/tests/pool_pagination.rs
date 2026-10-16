@@ -666,8 +666,7 @@ async fn an_unanchored_first_page_hides_nothing(pool: PgPool) {
     );
 }
 
-/// Mutation: a refused anchor keeping its cursor — a fresh anchor over a stale
-/// `sort_value` serves again a pool already read and touched since.
+/// Mutation: a refused anchor keeping its cursor.
 #[sqlx::test]
 async fn a_stale_cursor_restarts_at_the_head(pool: PgPool) {
     seed_three(&pool).await;

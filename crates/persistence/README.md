@@ -641,7 +641,7 @@ already agree with the registry — the resolvers reject a foreign payload, the
 queue's protocol, and the indexer hands `discover_pool` and the state upsert the
 same `Self::PROTOCOL`. What the constraint adds is survival: those guards sit in
 loops and call sequences no compiler protects, and hold only for today's
-callers. See `tests/pool_properties.rs`, section *The pool↔protocol invariant*.
+callers. See `tests/pool_properties.rs`.
 
 ## `setup_roles.sql`
 

@@ -82,7 +82,7 @@ pub(crate) async fn stream_signals(State(state): State<AppState>) -> Response {
     )
 }
 
-/// Opens a stream if a slot is free, or refuses with `503`; stateless, so a test drives the cap.
+/// Opens a stream if a slot is free, or refuses with `503`; without `AppState`, so a test drives the cap.
 pub(crate) fn open_signal_stream(
     slots: Arc<Semaphore>,
     receiver: broadcast::Receiver<Arc<EnrichedSignal>>,
@@ -96,7 +96,7 @@ pub(crate) fn open_signal_stream(
     signal_sse(receiver, slot, shutdown).into_response()
 }
 
-/// The SSE response, stateless so a test can mount it. ⚠️ It ends on the stop (`take_until`):
+/// The SSE response, without `AppState` so a test can mount it. ⚠️ It ends on the stop (`take_until`):
 /// graceful shutdown waits for every connection, and this one never ends on its own. `slot`
 /// is released when the stream is dropped.
 pub(crate) fn signal_sse(

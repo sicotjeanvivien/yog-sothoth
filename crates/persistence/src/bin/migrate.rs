@@ -1,8 +1,7 @@
 //! `yog-migrate`: provisions and migrates the database (subcommands in `USAGE`).
 //! `setup-roles` and `seed-watched-pools` connect with `DATABASE_URL_ADMIN`, `migrate` with
 //! `DATABASE_URL_MIGRATE`. ⚠️ The no-argument form must keep migrating: compose and every
-//! deploy script invoke it. ⚠️ The scripts are embedded by `include_str!`: editing one needs a
-//! rebuild (`touch` this file). It never creates the database.
+//! deploy script invoke it. It never creates the database.
 
 use anyhow::{Context, Result, bail};
 

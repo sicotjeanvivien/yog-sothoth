@@ -1,4 +1,4 @@
--- Seeds the watched-pools allowlist (`yog-migrate -- seed-watched-pools`): idempotent, never
+-- Seeds the watched-pools allowlist (`yog-migrate seed-watched-pools`): idempotent, never
 -- deactivates a row. ⚠️ One pool only, SOL-USDC, whose rationale does not decay: a committed
 -- "hot" list goes quiet and still looks healthy. Pick the rest fresh — see *Choosing pools
 -- to watch* in the persistence README.

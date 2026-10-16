@@ -85,7 +85,7 @@ impl MeteoraDammV2SwapEventRepository for PgMeteoraDammV2SwapEventRepository {
 
 #[async_trait]
 impl MeteoraDammV2SwapEventFeed for PgMeteoraDammV2SwapEventRepository {
-    /// Newest first (`timestamp DESC, signature ASC`). A backward query reverses the
+    /// Newest first. A backward query reverses the
     /// ORDER BY, then the vector, to return the page in display order.
     async fn find_by_pool_paginated(
         &self,

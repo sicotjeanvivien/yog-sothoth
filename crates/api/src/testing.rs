@@ -1,6 +1,6 @@
 //! Test support: fixtures and repository mocks shared by every service test. The mocks
 //! implement only the read lenses the services consume; a "once" mock yields its value a
-//! single time (`RepositoryResult` is not `Clone`), and a second call panics.
+//! single time, and a second call panics.
 
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};

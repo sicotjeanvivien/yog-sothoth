@@ -1,5 +1,5 @@
 -- Postgres roles and structural privileges, run as admin before any migration
--- (`yog-migrate -- setup-roles`). Roles are cluster-wide, the rest per database; idempotent.
+-- (`yog-migrate setup-roles`). Roles are cluster-wide, the rest per database; idempotent.
 -- ⚠️ A rerun never resets an existing role's password: replace the `CHANGE_ME_…` placeholders
 -- before the first run, and change a password with `ALTER ROLE`. Every runtime role reads
 -- `public`; what each writes is granted per table in the migrations.

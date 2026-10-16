@@ -1,4 +1,3 @@
-// Each cursor variant has its own wire shape, so a blob decoded as the wrong variant fails.
 // The blob is URL-safe unpadded base64 over a JSON object.
 use crate::http::error::ApiError;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

@@ -172,7 +172,7 @@ impl PoolService {
         Ok(ranked.into_iter().take(keep).collect())
     }
 
-    /// The ranking itself, four round-trips. Only [`Self::top_pools`] calls it, through the cache.
+    /// The ranking itself. Only [`Self::top_pools`] calls it, through the cache.
     async fn compute_top_pools(
         &self,
         metric: PoolRankMetric,

@@ -57,7 +57,6 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
     let app = api
         // Innermost, so the tracing span records its 503.
         .layer(from_fn_with_state(REQUEST_TIMEOUT, request_deadline))
-        // ⚠️ SetRequestIdLayer outermost: the id must be on the request before TraceLayer reads it.
         .layer(PropagateRequestIdLayer::new(
             axum::http::HeaderName::from_static(REQUEST_ID_HEADER),
         ))
@@ -68,6 +67,7 @@ pub(crate) fn build_router(state: AppState, cors_allowed_origins: Vec<HeaderValu
                 .on_response(on_response)
                 .on_failure(on_failure),
         )
+        // ⚠️ Outermost: the id must be on the request before TraceLayer reads it.
         .layer(SetRequestIdLayer::new(
             axum::http::HeaderName::from_static(REQUEST_ID_HEADER),
             GenerateRequestId,

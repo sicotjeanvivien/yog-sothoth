@@ -189,8 +189,7 @@ async fn list_unresolved_drops_a_pool_once_its_account_is_resolved(pool: PgPool)
     );
 }
 
-/// Mutation: the predicate keyed off `base_fee_kind` instead of `has_dynamic_fee`,
-/// which is always decodable — a pool without a fee shape must come back.
+/// Mutation: the fee-shape condition dropped from the predicate.
 #[sqlx::test]
 async fn a_pool_resolved_without_a_fee_shape_is_proposed_again(pool: PgPool) {
     seed_pool(&pool, pk(1), Protocol::MeteoraDammV2, 1).await;

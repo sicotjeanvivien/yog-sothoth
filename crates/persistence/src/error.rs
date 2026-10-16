@@ -11,8 +11,8 @@ pub enum MigrationError {
     Script(#[from] sqlx::Error),
 }
 
-/// Failure of a backup step: `pg_dump`, or the `pg_restore` check. Each step documents
-/// which variants it returns. No message quotes the connection string.
+/// Failure of a backup step: `pg_dump`, or the `pg_restore` check. No message quotes the
+/// connection string.
 #[derive(Debug, thiserror::Error)]
 pub enum BackupError {
     /// The connection string does not parse. The value is not quoted: it
