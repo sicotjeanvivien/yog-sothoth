@@ -1,7 +1,7 @@
 //! Decoding of on-chain **pool accounts** into the properties events never carry.
 //!
-//! ⚠️ Each decoder checks the owner (by dispatch) **and** the discriminator: read
-//! at cp-amm's offsets, a DLMM `LbPair` yields valid vault `Pubkey`s as mints.
+//! ⚠️ Each decoder checks the owner (by dispatch) **and** the discriminator: any
+//! 32 bytes parse as a `Pubkey`, so a foreign account decodes without an error.
 
 mod meteora;
 

@@ -1,5 +1,5 @@
 //! Borsh mirrors of the Anchor events of Meteora DAMM v2 (`cp-amm`,
-//! `programs/cp-amm/src/event.rs`); a program upgrade changes them in lockstep.
+//! `programs/cp-amm/src/event.rs`): a program upgrade must update them in lockstep.
 //!
 //! ⚠️ `EvtSwap2` is not emitted by `emit_cpi!`: swap runs on pinocchio, and
 //! `p_emit_cpi` rebuilds the same bytes by hand. A grep for `emit_cpi!` misses it.
@@ -95,13 +95,13 @@ pub enum DammV2WireEvent {
     UpdateRewardDuration(EvtUpdateRewardDuration),
     UpdateRewardFunder(EvtUpdateRewardFunder),
     WithdrawDeadLiquidityReward(EvtWithdrawDeadLiquidityReward),
-    /// Boxed: its payload dwarfs every other variant.
+    /// Boxed: a large payload.
     SplitPosition3(Box<EvtSplitPosition3>),
     CreatePosition(EvtCreatePosition),
     ClosePosition(EvtClosePosition),
     LockPosition(EvtLockPosition),
     PermanentLockPosition(EvtPermanentLockPosition),
-    /// Boxed: the genesis payload dwarfs every other variant.
+    /// Boxed: a large payload.
     InitializePool(Box<EvtInitializePool>),
     SetPoolStatus(EvtSetPoolStatus),
     UpdatePoolFees(EvtUpdatePoolFees),

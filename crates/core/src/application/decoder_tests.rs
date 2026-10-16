@@ -280,12 +280,11 @@ fn a_short_account_is_rejected_as_truncated_with_its_sizes() {
     }
 }
 
-/// A DLMM `LbPair` holds valid `Pubkey`s at cp-amm's mint offsets.
+/// Any 32 bytes parse as a `Pubkey`: an `LbPair` read at cp-amm's offsets fails nothing.
 /// Mutation: dropping either guard, the owner dispatch or the discriminator.
 #[test]
 fn foreign_account_is_not_decoded_at_our_offsets() {
     let mut lb_pair = lb_pair_account(1, 10_000, 0);
-    // The two reserve accounts, where cp-amm would look for mints.
     lb_pair[152..184].copy_from_slice(pk(77).as_ref()); // reserve_x
     lb_pair[184..216].copy_from_slice(pk(88).as_ref()); // reserve_y
 

@@ -15,8 +15,8 @@ use crate::{
 /// `(slot, transaction_index, event_index)`: never by `event_at`, a shared second.
 #[async_trait]
 pub trait PoolCurrentStateRepository: Send + Sync {
-    /// Apply an event-derived update; a liquidity payload keeps `last_sqrt_price`
-    /// and `last_swap_at`, and a same-slot ambiguity is reported.
+    /// Apply an event-derived update, refreshing `updated_at`; a liquidity payload
+    /// keeps `last_sqrt_price` and `last_swap_at`; a same-slot ambiguity is reported.
     async fn upsert(
         &self,
         upsert: &PoolCurrentStateUpsert,

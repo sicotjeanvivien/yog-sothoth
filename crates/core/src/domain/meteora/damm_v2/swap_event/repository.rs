@@ -27,7 +27,8 @@ pub trait MeteoraDammV2SwapEventRepository: Send + Sync {
 /// The per-pool swap-event feed, the api's lens.
 #[async_trait]
 pub trait MeteoraDammV2SwapEventFeed: Send + Sync {
-    /// A page of the pool's events, `(timestamp DESC, signature ASC, event_index ASC)`.
+    /// A page of the pool's events, `(timestamp DESC, signature ASC, event_index ASC)`;
+    /// the returned cursors chain the pages, `limit` may be capped.
     async fn find_by_pool_paginated(
         &self,
         pool_address: &Pubkey,

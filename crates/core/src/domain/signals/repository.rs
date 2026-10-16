@@ -37,7 +37,8 @@ pub trait SignalRepository: Send + Sync {
 /// Read contract for the signal feed, the api's lens.
 #[async_trait]
 pub trait SignalFeed: Send + Sync {
-    /// Paginate the feed, newest first; `severity` and `pool` filters combine with AND.
+    /// Paginate the feed, newest first; `severity` and `pool` combine with AND.
+    /// The returned cursors chain the pages; `limit` may be capped.
     async fn list(
         &self,
         severity: Option<Severity>,

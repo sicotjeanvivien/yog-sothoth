@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
-/// USD metrics of one pool.
+/// USD metrics of one pool; volume and fees sum the valued hours (see the counters).
 /// ⚠️ The fee split is read, never derived: cp-amm takes the referral from the
 /// protocol share, so `lp` is not `fees - protocol` (`split_fees`).
 #[derive(Debug, Clone, PartialEq, Eq)]

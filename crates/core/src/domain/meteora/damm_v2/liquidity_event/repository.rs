@@ -29,7 +29,8 @@ pub trait MeteoraDammV2LiquidityEventRepository: Send + Sync {
 /// The per-pool liquidity-event feed, the api's lens.
 #[async_trait]
 pub trait MeteoraDammV2LiquidityEventFeed: Send + Sync {
-    /// A page of the pool's events, `(timestamp DESC, signature ASC, event_index ASC)`.
+    /// A page of the pool's events, `(timestamp DESC, signature ASC, event_index ASC)`;
+    /// the returned cursors chain the pages, `limit` may be capped.
     /// Each carries its USD value at event time, see [`MeteoraDammV2LiquidityEventValued`].
     async fn find_by_pool_paginated(
         &self,

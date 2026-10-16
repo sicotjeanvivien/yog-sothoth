@@ -4,7 +4,8 @@ use solana_pubkey::Pubkey;
 use crate::amm::damm_v2::{BaseFeeKind, FeeSchedulerParams};
 
 /// DAMM v2-only pool properties, the satellite of [`crate::domain::Pool`].
-/// The fields are `None` together until yog-context resolves the account.
+/// Every field is `None` until yog-context resolves the account; after it,
+/// `base_fee_kind` and `fee_scheduler` can still be `None` (see each).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MeteoraDammV2PoolProperties {
     /// The pool these properties describe.
@@ -17,7 +18,8 @@ pub struct MeteoraDammV2PoolProperties {
     /// only when a swap carries a referral account.
     pub referral_fee_percent: Option<u8>,
 
-    /// How the base fee behaves over time: a `BaseFeeKind::as_str`.
+    /// How the base fee behaves over time: a `BaseFeeKind::as_str`, `None` for a
+    /// mode this build cannot map.
     pub base_fee_kind: Option<String>,
 
     /// Whether a volatility-based dynamic fee sits on top of the base fee; a pool

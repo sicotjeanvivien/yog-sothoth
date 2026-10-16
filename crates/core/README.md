@@ -325,12 +325,12 @@ gap `partner_fee_percent` lived in for months.
 
 The expectations are in the test file, not in the fixtures — the fixtures hold
 bytes and provenance only, so reviewing the test means reviewing what we claim
-the bytes mean. How each was established (a realized fee rate computed from swap
-events, mints resolving to USDC/SOL) is documented in the module.
+the bytes mean. Each was established outside the decoder: a realized fee rate
+computed from swap events, and mints resolving to USDC/SOL.
 
-Recapturing is one `getMultipleAccounts` call, spelled out in that module doc. A
-fixture is a snapshot: a program upgrade that moves a field turns these red, and
-that is the intended channel for learning about it.
+Recapturing is one `getMultipleAccounts` call (`{"encoding":"base64"}`) against
+`$POOL_ACCOUNT_URL`. A fixture is a snapshot: a program upgrade that moves a
+field turns these red, and that is the intended channel for learning about it.
 
 **One gap is stated rather than hidden.** DLMM's `base_fee_power_factor` is 0 on
 every account reachable from our fixtures, so its offset is *consistent with* the

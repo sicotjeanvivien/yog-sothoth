@@ -17,7 +17,7 @@ const VARIABLE_FEE_SCALE: u128 = 100_000_000_000; // 1e11
 const VARIABLE_FEE_SATURATION_NUMERATOR: u128 = 100_000_000 * VARIABLE_FEE_SCALE; // 1e19
 
 /// A DLMM pool's **base** fee in bps: `base_factor × bin_step × 10^power / 10_000`.
-/// The floor, as for cp-amm; unlike cp-amm, the variable part can exceed it several times.
+/// The floor, as for cp-amm; the variable part on top can exceed it several times.
 /// ⚠️ Saturates at [`MAX_FEE_BPS`]: an `Err` would stall the resolver queue.
 pub fn base_fee_bps(base_factor: u16, bin_step: u16, base_fee_power_factor: u8) -> Decimal {
     // A u32 product of two u16s — cannot overflow. Only the power factor can.
