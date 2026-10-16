@@ -9,7 +9,6 @@ fn ends_with<E: std::error::Error + Send + Sync + 'static>(
 // ── TaskEnd ──────────────────────────────────────────────────────────────────
 // Some callers join without `handle_task_result`: the classification is tested alone.
 
-/// One case per reason.
 /// ⚠️ Each fixture is checked with `tokio`'s predicate first, so it cannot produce the other kind.
 #[tokio::test]
 async fn an_aborted_task_reads_as_cancelled() {
@@ -66,7 +65,6 @@ async fn a_cancelled_task_is_not_reported_as_a_panic() {
     );
 }
 
-/// A task whose future panicked is a failure.
 #[tokio::test]
 async fn a_panicking_task_is_still_an_error() {
     let handle = tokio::spawn(async { panic!("boom") });
@@ -118,7 +116,6 @@ async fn the_stage_the_select_already_collected_is_not_joined_again() {
     );
 }
 
-/// `settle` comes back from a task that never ends, and names it.
 /// Mutation: `timeout_at` → a bare `handle.await`, which makes this test **hang**.
 #[tokio::test(start_paused = true)]
 async fn a_task_that_outlives_the_grace_is_named() {
@@ -133,7 +130,6 @@ async fn a_task_that_outlives_the_grace_is_named() {
     assert_eq!(stop.still_running, vec!["test task"]);
 }
 
-/// Two stages that never end cost one grace in total, and both are named.
 /// Mutation: a deadline recomputed inside `settle`. ⚠️ Asserted by equality: the clock is paused.
 #[tokio::test(start_paused = true)]
 async fn two_stages_that_never_end_share_one_grace() {
@@ -156,7 +152,6 @@ async fn two_stages_that_never_end_share_one_grace() {
     );
 }
 
-/// An error reported during the drain, after the cancellation arm's `Ok`, is the verdict.
 /// Mutation: keeping the `select!`'s `Ok`, which exits 0 on a dead ingestion.
 #[tokio::test]
 async fn an_error_reported_after_the_verdict_becomes_the_verdict() {

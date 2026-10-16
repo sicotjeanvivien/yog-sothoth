@@ -27,8 +27,6 @@ fn required_fails_when_empty() {
     assert!(matches!(err, ConfigError::MissingVariable(_)));
 }
 
-/// The `.env` is CRLF; the trim lives in `required`, so every helper built on
-/// it inherits it.
 #[test]
 fn required_trims_surrounding_whitespace() {
     // SAFETY: unique keys, isolated from other tests
@@ -197,8 +195,6 @@ fn parse_optional_falls_back_to_the_default_when_absent_or_blank() {
     assert_eq!(read("YOG_TEST_PARSE_OPTIONAL_ABSENT").unwrap(), 60);
 }
 
-/// The type carries the rule: `NonZeroU32` refuses zero, and the refusal names
-/// the key, the value and what was expected.
 #[test]
 fn parse_optional_refuses_what_the_type_refuses() {
     // SAFETY: unique key, isolated from other tests
@@ -219,7 +215,6 @@ fn parse_optional_refuses_what_the_type_refuses() {
     );
 }
 
-/// Absent and blank both read as "not configured".
 #[test]
 fn optional_secret_url_reads_blank_and_absent_as_none() {
     // SAFETY: unique key, isolated from other tests
@@ -230,7 +225,6 @@ fn optional_secret_url_reads_blank_and_absent_as_none() {
     assert!(optional_secret_url("YOG_TEST_OPTIONAL_SECRET_URL_ABSENT").is_none());
 }
 
-/// Present, it is wrapped: the check's secret prints as redacted.
 #[test]
 fn optional_secret_url_wraps_a_present_value() {
     // SAFETY: unique key, isolated from other tests

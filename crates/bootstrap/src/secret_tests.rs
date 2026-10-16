@@ -29,7 +29,6 @@ fn expose_returns_raw_url() {
     assert_eq!(url.expose(), raw);
 }
 
-/// A URL that carries no secret at all is left alone.
 /// ⚠️ For a URL only: a bare key passed through is a leak, hence [`SecretKey`].
 #[test]
 fn url_carrying_no_secret_is_unchanged() {
@@ -41,7 +40,6 @@ fn url_carrying_no_secret_is_unchanged() {
 // SecretUrl — the password in the userinfo
 // ---------------------------------------------------------------------------
 
-/// The password of a Postgres URL, which has no `?`, is redacted.
 #[test]
 fn display_redacts_postgres_password() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -51,7 +49,6 @@ fn display_redacts_postgres_password() {
     );
 }
 
-/// Role, host, port and database survive the redaction.
 #[test]
 fn postgres_redaction_keeps_the_diagnostic() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -86,7 +83,6 @@ fn password_containing_at_sign_is_fully_redacted() {
     assert!(!shown.contains("p@ss"), "password leaked: {shown}");
 }
 
-/// Both secrets in one URL, both gone.
 #[test]
 fn password_and_query_are_both_redacted() {
     let url = SecretUrl::new("postgresql://yog:hunter2@localhost:5433/db?sslmode=require");
@@ -96,7 +92,6 @@ fn password_and_query_are_both_redacted() {
     );
 }
 
-/// A username with no password is not a secret, and stays legible.
 #[test]
 fn userinfo_without_password_is_unchanged() {
     let url = SecretUrl::new("postgresql://yog@localhost:5433/yog_sothoth");
@@ -106,7 +101,6 @@ fn userinfo_without_password_is_unchanged() {
     );
 }
 
-/// No scheme separator: nothing can be located, and nothing is invented.
 #[test]
 fn value_without_scheme_is_left_alone_by_the_password_rule() {
     let url = SecretUrl::new("localhost:5433/yog_sothoth");
@@ -117,8 +111,6 @@ fn value_without_scheme_is_left_alone_by_the_password_rule() {
 // SecretUrl — the ambiguous cases, where the rule fails closed
 // ---------------------------------------------------------------------------
 
-/// An unencoded delimiter in the password pushes the `@` past the authority:
-/// only the scheme is kept, whichever delimiter it is.
 #[test]
 fn ambiguous_userinfo_is_redacted_whole() {
     let cases = [
@@ -139,14 +131,12 @@ fn ambiguous_userinfo_is_redacted_whole() {
     }
 }
 
-/// The cost of failing closed: a port and an `@` in the path lose the host too.
 #[test]
 fn failing_closed_can_cost_a_host_that_hid_nothing() {
     let url = SecretUrl::new("https://host:8080/pa@th");
     assert_eq!(format!("{url}"), "https://***REDACTED***");
 }
 
-/// Without a `:` in the authority, an `@` in the path keeps the host.
 #[test]
 fn an_at_in_the_path_alone_does_not_trigger_the_fallback() {
     let url = SecretUrl::new("https://api.jup.ag/price/v3@latest");
@@ -161,7 +151,6 @@ fn an_at_in_the_path_alone_does_not_trigger_the_fallback() {
 // SecretUrl — the credential in the path
 // ---------------------------------------------------------------------------
 
-/// A key in a path segment (Alchemy, QuickNode) is redacted.
 #[test]
 fn credential_in_the_path_is_redacted() {
     for raw in [
@@ -181,7 +170,6 @@ fn credential_in_the_path_is_redacted() {
     }
 }
 
-/// The host names the provider, and that is the diagnostic worth keeping.
 #[test]
 fn path_redaction_keeps_scheme_and_host() {
     let url = SecretUrl::new("https://solana-mainnet.g.alchemy.com/v2/SUPERSECRETKEY");
@@ -191,7 +179,6 @@ fn path_redaction_keeps_scheme_and_host() {
     );
 }
 
-/// A path made only of separators is kept.
 #[test]
 fn empty_path_is_left_alone() {
     let url = SecretUrl::new("https://mainnet.helius-rpc.com/?api-key=abc123");
@@ -201,7 +188,6 @@ fn empty_path_is_left_alone() {
     );
 }
 
-/// Postgres is the one scheme whose path, the database, survives.
 #[test]
 fn postgres_path_is_the_database_name_and_survives() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -213,7 +199,6 @@ fn postgres_path_is_the_database_name_and_survives() {
     assert!(!shown.contains("hunter2"), "password leaked: {shown}");
 }
 
-/// An unknown scheme gets its path hidden: the rule fails closed.
 #[test]
 fn unknown_scheme_has_its_path_redacted() {
     let url = SecretUrl::new("grpc://some-new-provider.example/CREDENTIAL");
@@ -244,7 +229,6 @@ fn secret_key_expose_returns_raw() {
     assert_eq!(key.expose(), raw);
 }
 
-/// A bare key, with neither `?` nor `@`, is masked whole.
 #[test]
 fn secret_key_masks_values_of_every_shape() {
     for raw in [
@@ -265,7 +249,6 @@ fn secret_key_masks_values_of_every_shape() {
 // SecretUrl — the fragment, and a userinfo that is itself the credential
 // ---------------------------------------------------------------------------
 
-/// A credential in the fragment is redacted.
 #[test]
 fn fragment_is_redacted() {
     for raw in [
@@ -281,14 +264,12 @@ fn fragment_is_redacted() {
     }
 }
 
-/// Query and fragment together: the query rule truncates first.
 #[test]
 fn query_and_fragment_together_leave_nothing() {
     let url = SecretUrl::new("https://host/?api-key=abc123#SECRET");
     assert_eq!(format!("{url}"), "https://host/?***REDACTED***");
 }
 
-/// A userinfo with no password outside Postgres may be a token: it goes, the host stays.
 #[test]
 fn bare_userinfo_is_a_secret_outside_postgres() {
     let url = SecretUrl::new("https://SECRETTOKEN@rpc.example.com/");
@@ -300,7 +281,6 @@ fn bare_userinfo_is_a_secret_outside_postgres() {
     );
 }
 
-/// A Postgres userinfo without a password is a role name, and stays.
 #[test]
 fn bare_userinfo_in_postgres_is_a_role_name_and_survives() {
     let url = SecretUrl::new("postgresql://yog@localhost:5433/yog_sothoth");
@@ -333,7 +313,6 @@ fn scrub_removes_a_credential_from_a_third_party_error() {
     );
 }
 
-/// The whole URL is replaced by its redacted form, so the host survives.
 #[test]
 fn scrub_keeps_the_sentence_and_the_carrier() {
     let url = SecretUrl::new("postgresql://yog_indexer:hunter2@localhost:5433/yog_sothoth");
@@ -398,7 +377,6 @@ fn scrub_still_removes_the_secret_from_a_reformatted_url() {
     );
 }
 
-/// A message that never mentions the URL comes back untouched.
 #[test]
 fn scrub_leaves_an_unrelated_message_alone() {
     let url = SecretUrl::new("https://rpc.example.com/?api-key=abc123");
@@ -406,7 +384,6 @@ fn scrub_leaves_an_unrelated_message_alone() {
     assert_eq!(url.scrub(msg), msg);
 }
 
-/// An ambiguous userinfo makes the whole value the secret, inherited from `redact`.
 #[test]
 fn scrub_of_an_ambiguous_url_leaves_nothing_of_it() {
     let url = SecretUrl::new("postgresql://yog:pa/ss@localhost:5433/yog_sothoth");

@@ -50,7 +50,7 @@ const SHUTDOWN_TARGET: &str = "yog_bootstrap";
 
 /// Add `yog_bootstrap=info` to a `RUST_LOG` that neither sets a bare level nor
 /// names `yog_bootstrap`: per-target directives alone print nothing else.
-/// ⚠️ Without it a torn stop reads exactly like a clean one; naming the target silences it.
+/// ⚠️ Without it a torn stop reads like a clean one; naming the target, at any level, is respected.
 fn keep_shutdown_audible(raw: &str) -> String {
     let already_covered = raw
         .split(',')

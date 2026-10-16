@@ -1,6 +1,6 @@
 //! An external endpoint: `<FUNCTION>_URL`, `<FUNCTION>_KEY` and an optional
-//! `<FUNCTION>_HEADER`; the key is substituted for `{key}` wherever the operator
-//! wrote it, so the code knows no provider's convention.
+//! `<FUNCTION>_HEADER_NAME` / `_HEADER_VALUE`; the key replaces `{key}` wherever
+//! the operator wrote it, so the code knows no provider's convention.
 //! ⚠️ A credential in a header has no counterpart to [`SecretUrl::scrub`]: a client
 //! echoing request metadata in its errors would print it.
 
@@ -14,7 +14,7 @@ use crate::secret::{
 pub(crate) const KEY_PLACEHOLDER: &str = "{key}";
 
 /// An endpoint's address, and the credential it substitutes into it.
-/// ⚠️ Built only by [`crate::required_endpoint`], like [`SecretUrl`].
+/// ⚠️ Built only by this crate's readers, like [`SecretUrl`].
 #[derive(Clone)]
 pub struct Endpoint {
     /// The URL as written, `{key}` included and the credential absent.
@@ -68,8 +68,8 @@ impl Endpoint {
         })
     }
 
-    /// What [`fmt::Display`] prints: with `{key}`, the template minus userinfo and
-    /// fragment; without, [`redact`], since it may hold an inlined key.
+    /// What [`fmt::Display`] prints: with `{key}`, the template minus its password
+    /// and fragment; without, [`redact`], since it may hold an inlined key.
     /// ⚠️ A second credential inlined beside `{key}`, in the path or query, is printed.
     fn displayed(&self) -> String {
         if self.template.contains(KEY_PLACEHOLDER) {

@@ -148,7 +148,7 @@ fn workspace_root() -> &'static Path {
 }
 
 /// Count the `.expose()` calls in one file, ignoring line comments.
-/// ⚠️ One in a block comment or a string literal would count; none exists.
+/// ⚠️ Whole-line comments only: one in a trailing comment, a block comment or a string counts.
 fn count_exposures(source: &str) -> usize {
     source
         .lines()

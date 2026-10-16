@@ -16,7 +16,7 @@ pub fn required(key: &str) -> Result<String, ConfigError> {
     }
 }
 
-/// Read a required environment variable as a [`SecretUrl`], the only way out of this crate.
+/// Read a required environment variable as a [`SecretUrl`].
 /// ⚠️ Never a check reporting through [`ConfigError::InvalidValue`]: its `value`
 /// would print the secret. The same binds every secret reader here.
 pub fn required_secret_url(key: &str) -> Result<SecretUrl, ConfigError> {
@@ -46,8 +46,8 @@ pub fn optional(key: &str) -> Option<String> {
     }
 }
 
-/// Read the optional `<PREFIX>_HEADER_NAME` / `_VALUE` pair, refusing one half alone,
-/// a name with whitespace, `:` or `{key}`, and a pair the consumer would not send.
+/// Read the optional `<PREFIX>_HEADER_NAME` / `_VALUE` pair, refusing either half on
+/// a consumer that would not send it, one half alone, and a name with whitespace, `:` or `{key}`.
 /// ⚠️ The value is the credential: no error ever repeats it.
 fn read_header(
     name_var: &str,

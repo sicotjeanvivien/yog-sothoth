@@ -26,7 +26,6 @@ fn with_header(template: &str, header: (&str, &str), key: Option<&str>) -> Endpo
 
 // ── assembly ────────────────────────────────────────────────────────
 
-/// The substitution happens where the operator wrote it, query or path alike.
 #[test]
 fn the_key_is_substituted_at_the_placeholder() {
     let query = endpoint("https://host/?api-key={key}", Some("abc123"));
@@ -36,7 +35,6 @@ fn the_key_is_substituted_at_the_placeholder() {
     assert_eq!(path.url().expose(), "https://host/v2/abc123");
 }
 
-/// A public endpoint is called exactly as written.
 #[test]
 fn a_url_without_a_placeholder_is_used_verbatim() {
     let public = endpoint("https://api.mainnet-beta.solana.com", None);
@@ -73,7 +71,6 @@ fn a_blank_key_is_refused_like_an_absent_one() {
     }
 }
 
-/// A key with no `{key}` to receive it is refused, naming both variables.
 #[test]
 fn a_key_with_nowhere_to_go_is_refused_naming_both() {
     // SAFETY: unique keys, isolated from other tests
@@ -103,7 +100,6 @@ fn an_absent_url_is_refused_by_name() {
     }
 }
 
-/// The `_URL` and `_KEY` names are derived from the prefix.
 #[test]
 fn both_variables_are_derived_from_the_prefix() {
     // SAFETY: unique keys, isolated from other tests
@@ -115,7 +111,6 @@ fn both_variables_are_derived_from_the_prefix() {
     assert_eq!(endpoint.url().expose(), "https://host/v2/abc123");
 }
 
-/// Both halves inherit `required`'s trim, against a CRLF `.env`.
 #[test]
 fn both_halves_are_trimmed() {
     // SAFETY: unique keys, isolated from other tests
@@ -129,7 +124,6 @@ fn both_halves_are_trimmed() {
 
 // ── what it prints ──────────────────────────────────────────────────
 
-/// An address with `{key}` prints in full.
 #[test]
 fn a_template_is_printed_whole() {
     let endpoint = endpoint(
@@ -201,7 +195,6 @@ fn the_placeholder_and_its_carrier_stay_legible() {
 
 // ── the four shapes, one test each ──────────────────────────────────
 
-/// Shape 1: the credential rides in a header, the URL carries none.
 #[test]
 fn a_credential_in_a_header_is_substituted_there() {
     let endpoint = with_header(
@@ -220,7 +213,6 @@ fn a_credential_in_a_header_is_substituted_there() {
     assert_eq!(value.expose(), "s3cret");
 }
 
-/// Shape 2: the credential rides in the URL.
 #[test]
 fn a_credential_in_the_url_still_works_with_no_header() {
     let basic = endpoint("https://token_user:{key}@host:443", Some("s3cret"));
@@ -232,7 +224,6 @@ fn a_credential_in_the_url_still_works_with_no_header() {
     );
 }
 
-/// Shape 3: no credential at all.
 #[test]
 fn an_endpoint_with_no_credential_has_neither_key_nor_header() {
     let public = endpoint("https://api.mainnet-beta.solana.com", None);
@@ -241,7 +232,6 @@ fn an_endpoint_with_no_credential_has_neither_key_nor_header() {
     assert!(public.header().is_none());
 }
 
-/// Shape 4: another header name and scheme.
 /// Mutation: anything in this crate knowing the string `x-token`.
 #[test]
 fn the_header_name_is_whatever_the_operator_wrote() {
@@ -262,7 +252,6 @@ fn the_header_name_is_whatever_the_operator_wrote() {
 
 // ── the truth table, read on two carriers ───────────────────────────
 
-/// A `{key}` only in the header receives the `_KEY`.
 /// Mutation: looking for the placeholder in the URL only.
 #[test]
 fn a_placeholder_in_the_header_alone_accepts_its_key() {
@@ -287,7 +276,6 @@ fn a_placeholder_in_the_header_alone_accepts_its_key() {
     }
 }
 
-/// No `{key}` in either carrier: the key is refused, naming both carriers.
 #[test]
 fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
     unsafe {
@@ -317,7 +305,6 @@ fn a_key_with_no_placeholder_in_either_carrier_is_refused() {
     }
 }
 
-/// Half a pair is refused, naming both variables.
 /// Mutation: an error quoting the value, which carries the credential.
 #[test]
 fn half_a_header_pair_is_refused_naming_both_variables() {
@@ -367,8 +354,6 @@ fn half_a_header_pair_is_refused_naming_both_variables() {
     }
 }
 
-/// With no header configured, the two doors produce the same endpoint: the door
-/// decides what is refused, never what a header-less endpoint yields.
 #[test]
 fn without_a_header_the_two_doors_produce_the_same_endpoint() {
     // A credentialed endpoint, key in the URL.
@@ -405,7 +390,6 @@ fn without_a_header_the_two_doors_produce_the_same_endpoint() {
     }
 }
 
-/// A blank half is an absent half, by `optional`'s rule.
 #[test]
 fn a_blank_half_counts_as_absent_not_as_present() {
     unsafe {
@@ -429,7 +413,6 @@ fn a_blank_half_counts_as_absent_not_as_present() {
 
 // ── what the header prints ──────────────────────────────────────────
 
-/// A header value with `{key}` prints whole; without, it is masked.
 #[test]
 fn a_header_value_is_printed_only_when_its_key_is_outside_it() {
     let templated = with_header("https://host", ("x-token", "{key}"), Some("s3cret"));
@@ -447,7 +430,6 @@ fn a_header_value_is_printed_only_when_its_key_is_outside_it() {
     );
 }
 
-/// An endpoint with no header prints no header part.
 #[test]
 fn an_endpoint_without_a_header_prints_as_it_always_did() {
     let plain = endpoint("https://mainnet.helius-rpc.com/?api-key={key}", Some("k"));
@@ -460,8 +442,6 @@ fn an_endpoint_without_a_header_prints_as_it_always_did() {
 
 // ── the header only counts where somebody sends it ──────────────────
 
-/// A header pair on a url-only consumer is refused: nothing would send it, and
-/// the process would connect anonymously.
 #[test]
 fn a_header_on_a_url_only_consumer_is_refused() {
     unsafe {
@@ -496,7 +476,6 @@ fn a_header_on_a_url_only_consumer_is_refused() {
     }
 }
 
-/// The url-only door accepts every endpoint without a header pair.
 #[test]
 fn a_url_only_endpoint_is_unaffected_by_the_feature() {
     unsafe {
@@ -546,7 +525,6 @@ fn a_refusal_never_advises_what_the_next_refusal_forbids() {
     }
 }
 
-/// A header name with a space or a `:` is refused.
 /// ⚠️ `x-token: <secret>` pasted into the name would print in the clear.
 #[test]
 fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
@@ -586,7 +564,6 @@ fn a_header_name_carrying_a_space_or_a_colon_is_refused() {
     }
 }
 
-/// A name with surrounding whitespace is trimmed and accepted.
 #[test]
 fn a_header_name_is_trimmed_not_refused() {
     unsafe {
@@ -609,7 +586,6 @@ fn a_header_name_is_trimmed_not_refused() {
     }
 }
 
-/// Three refusals can fire on one input, and which fires first is the message.
 /// Mutation: moving the `header_is_read` or the shape refusal after the pairing.
 #[test]
 fn the_first_refusal_is_the_one_that_ends_the_matter() {
@@ -660,7 +636,6 @@ fn the_first_refusal_is_the_one_that_ends_the_matter() {
     }
 }
 
-/// A `{key}` in the header name is refused, with or without one in the URL.
 #[test]
 fn a_placeholder_in_the_header_name_is_refused_even_when_the_url_has_one() {
     unsafe {

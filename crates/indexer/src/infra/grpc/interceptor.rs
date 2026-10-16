@@ -17,9 +17,7 @@
 //!
 //! Whether there is one at all is the operator's, through
 //! `INGEST_STREAM_HEADER_NAME` / `_HEADER_VALUE`, and
-//! [`yog_bootstrap::Endpoint`] is what assembles the two with the key — see its
-//! module docs for the four authentication shapes measured across providers,
-//! and why the header's **name** is a provider convention too. This module
+//! [`yog_bootstrap::Endpoint`] is what assembles the two with the key. This module
 //! takes what `Endpoint::header()` hands over, or nothing at all, and puts it
 //! on the wire.
 //!

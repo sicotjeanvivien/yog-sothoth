@@ -1,8 +1,8 @@
 //! The two shapes a secret takes: [`SecretKey`] (nothing worth showing) and
 //! [`SecretUrl`] (a carrier worth keeping). The secret part is never printable.
 //!
-//! ⚠️ `new` is crate-private: a downstream `Config` gets a secret only through
-//! [`crate::required_secret_url`] or [`crate::required_secret_key`].
+//! ⚠️ `new` is crate-private: a downstream `Config` gets a secret only from this
+//! crate's readers (`required_secret_*`, `optional_secret_url`, an `Endpoint`).
 
 use std::fmt;
 
@@ -57,8 +57,8 @@ impl fmt::Debug for SecretKey {
     }
 }
 
-/// A URL carrying a secret: `Display` and `Debug` keep scheme, host and port, and
-/// redact userinfo, path, query and fragment, except a Postgres role and database.
+/// A URL carrying a secret: `Display` and `Debug` keep scheme, user, host and port,
+/// and redact the password, path, query and fragment (Postgres keeps its database).
 /// ⚠️ A bare key has no carrier and would pass through unchanged: use [`SecretKey`].
 #[derive(Clone)]
 pub struct SecretUrl(String);
@@ -160,8 +160,8 @@ impl fmt::Debug for SecretUrl {
     }
 }
 
-/// Redact userinfo, path, query and fragment, in that order, keeping scheme,
-/// host and port.
+/// Redact the password, path, query and fragment, in that order; a userinfo
+/// without a password goes too, unless Postgres.
 /// ⚠️ The path goes for every scheme but Postgres: an unknown provider is covered by default.
 pub(crate) fn redact(url: &str) -> String {
     redact_fragment(&redact_query(&redact_path(&redact_password(url))))

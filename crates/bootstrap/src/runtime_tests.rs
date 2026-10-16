@@ -28,7 +28,6 @@ fn absent_blank_and_unparseable_all_fall_back_to_info() {
 
 // ── The stop stays audible ───────────────────────────────────────────────────
 
-/// Per-crate directives with no bare level gain `yog_bootstrap=info`.
 /// Mutation: no guard, and the stop's lines are silenced.
 #[test]
 fn a_directive_only_filter_cannot_silence_the_stop() {
@@ -44,7 +43,6 @@ fn a_directive_only_filter_cannot_silence_the_stop() {
     );
 }
 
-/// A bare target (TRACE for it alone) and a trailing comma's empty segment are no level.
 /// Mutation: testing "has no `=`" instead of parsing a `LevelFilter`.
 #[test]
 fn neither_a_bare_target_nor_an_empty_segment_counts_as_a_global_level() {
@@ -57,7 +55,6 @@ fn neither_a_bare_target_nor_an_empty_segment_counts_as_a_global_level() {
     }
 }
 
-/// A bare `yog_bootstrap` target does cover the target, at TRACE.
 #[test]
 fn a_bare_shutdown_target_covers_itself() {
     let filter = build_filter(Some("yog_bootstrap,yog_api=debug")).to_string();
@@ -69,7 +66,6 @@ fn a_bare_shutdown_target_covers_itself() {
     assert!(filter.contains("yog_bootstrap=trace"), "{filter}");
 }
 
-/// A bare level anywhere, or naming `yog_bootstrap`, adds nothing.
 #[test]
 fn a_filter_that_already_covers_the_target_is_left_alone() {
     // ⚠️ Compared to the re-parsed value: `EnvFilter`'s `Display` reorders directives.
