@@ -1,21 +1,6 @@
-//! Throwaway spike — dumps raw WebSocket logs from the DAMM v2 program.
-//!
-//! Purpose: determine whether the pool address is extractable from the
-//! `logsNotification` messages alone, without fetching the full transaction
-//! via `getTransaction`. This is the prerequisite for `WatchedPoolFilter`
-//! to filter BEFORE the HTTP fetch (Option 1) rather than after parsing
-//! (Option 2).
-//!
-//! Output is one YAML-like block per notification on stdout. Redirect to
-//! a file to inspect at leisure:
-//!
-//!     cargo run --bin inspect_logs > log/damm_v2_raw_logs.txt
-//!
-//! Stop with Ctrl-C after collecting enough samples (50-100 is plenty).
-//! Then grep the captured file for pool addresses (known from fixtures
-//! or from the watched_pools table) to see if and where they appear.
-//!
-//! Delete this file once the question is answered.
+//! Spike: dumps the raw `logsNotification`s of the DAMM v2 program to stdout, to tell whether a
+//! pool address can be read off the logs alone, without `getTransaction`.
+//! `cargo run --bin inspect_logs > log/damm_v2_raw_logs.txt`, then Ctrl-C after 50-100 samples.
 
 use dotenvy::dotenv;
 use std::time::Duration;
@@ -30,31 +15,15 @@ use tokio_tungstenite::tungstenite::Message;
 /// DAMM v2 program ID on Solana mainnet.
 const DAMM_V2_PROGRAM_ID: &str = "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG";
 
-/// Max notifications to dump before exiting. Adjust as needed.
+/// Max notifications to dump before exiting.
 const MAX_NOTIFICATIONS: usize = 100;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     yog_bootstrap::init_rustls();
     dotenv().ok();
-    // Read the stream endpoint from env — same pair, and same type, as the
-    // main indexer.
-    // The wrapper says which endpoint, never which variable: the three ways
-    // this call fails each name their own — a missing URL, a `{key}` without
-    // its key, a key without its `{key}` — and asserting one of them here
-    // would put a wrong variable name above the right one.
-    //
-    // ⚠️ But **not the same door**, and that is a limitation worth naming
-    // rather than a choice. The indexer reads this endpoint through
-    // `required_endpoint_allowing_header`, because both of its listeners send the
-    // header it may carry (`infra::endpoint::credential`). This helper cannot reach that
-    // module — a `src/bin/*.rs` is its own crate root — and copying its ten
-    // lines here would be the second definition of a rule the workspace keeps
-    // in one place. So it stays on `required_endpoint`, which **refuses** a
-    // header pair: with one configured, this binary will not start while the
-    // indexer runs fine. In practice that pair means a gRPC endpoint, which
-    // `logsSubscribe` could not have talked to anyway, and the refusal names
-    // the variables rather than connecting without the credential.
+    // ⚠️ `required_endpoint`, not the indexer's `required_endpoint_allowing_header`: a bin cannot
+    // reach `infra::endpoint::credential`, so a configured header pair refuses to start here.
     let stream = yog_bootstrap::required_endpoint("INGEST_STREAM")
         .context("the INGEST_STREAM endpoint is misconfigured — see .env.example")?;
 
@@ -64,8 +33,7 @@ async fn main() -> Result<()> {
         .context("failed to connect to RPC WebSocket")?;
     eprintln!("# Connected.");
 
-    // Subscribe to every log where the DAMM v2 program is mentioned.
-    // `commitment: confirmed` matches the main indexer — same selection criteria.
+    // Every log mentioning the DAMM v2 program, at the indexer's `confirmed` commitment.
     let subscribe = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -137,8 +105,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Print one notification as a human-readable block. stdout only —
-/// easy to redirect to a file for later inspection.
+/// Print one notification as a human-readable block on stdout.
 fn dump_notification(index: usize, value: &Value) {
     let signature = value
         .get("signature")

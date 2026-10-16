@@ -1,15 +1,7 @@
 use thiserror::Error;
 
-/// What can be wrong with a configured header, on either ingestion path.
-///
-/// One type for both because it is one rule: the header is validated the same
-/// way whoever sends it, and a rule written twice is a rule that holds at one
-/// site out of two.
-///
-/// ⚠️ **No variant carries the value**, and the second one is a word away from
-/// doing so: what is wrong with it is the value, and quoting it is the natural
-/// way to say that. The name is quoted instead — it is what tells an operator
-/// which line of the `.env` to look at, and it is not a secret.
+/// What can be wrong with a configured header, on either ingestion path: one rule, one type.
+/// ⚠️ No variant carries the value, only the header's name, which tells the operator the `.env` line.
 #[derive(Debug, Error)]
 pub(crate) enum CredentialError {
     #[error(

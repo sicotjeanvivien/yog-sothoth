@@ -1,8 +1,5 @@
-//! What a task of the daemon is, and how many transactions one may persist at
-//! once.
-//!
-//! What a task's *result* means once it has ended is not here: that rule is
-//! shared with every other daemon and lives in `yog_bootstrap::shutdown`.
+//! The daemon's tasks, and how many transactions one may persist at once; what a task's result
+//! means is `yog_bootstrap::shutdown`'s.
 
 use crate::{
     application::{
@@ -16,7 +13,7 @@ use std::{convert::Infallible, sync::Arc};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-/// Spawn the ingestion task — whatever shape the source's own graph has.
+/// Spawn the ingestion task, whatever shape the source's own graph has.
 pub(super) fn spawn_source_task(
     source: Arc<dyn TransactionSource>,
     tx: mpsc::Sender<IngestedTransaction>,
@@ -25,55 +22,14 @@ pub(super) fn spawn_source_task(
     tokio::spawn(async move { source.run(tx, shutdown).await })
 }
 
-/// How many connections the pool's *other* in-process users may need while the
-/// indexer worker is running.
-///
-/// One today: [`NetworkStatusReporter`] upserts a snapshot on every tick.
-/// `WatchedPoolService` is not counted — it restores subscriptions once, before
-/// the worker is spawned, and never touches the pool again.
+/// Connections the pool's other in-process users need while the indexer worker runs: the
+/// [`NetworkStatusReporter`]'s tick. `WatchedPoolService` runs once, before the worker.
 const CONNECTIONS_RESERVED: u32 = 1;
 
-/// How many transactions may be persisted concurrently.
-///
-/// # ⚠️ The mechanism, stated correctly
-///
-/// A task does **not** hold a connection for its lifetime. Every repository
-/// call executes against `&PgPool`, so sqlx takes a connection per *statement*
-/// and returns it — nothing in `crates/persistence` opens a transaction or
-/// calls `acquire`. What makes a task-count bound a connection bound is
-/// something else: **an index task issues one statement at a time**. Its
-/// events are persisted in a sequential loop, so *n* tasks put at most *n*
-/// statements in flight, and capping tasks at `pool − 1` leaves the pool one
-/// slot for the reporter.
-///
-/// ⚠️ **And that invariant is not enforced anywhere.** The first sub-persistor
-/// that runs two repository calls under `tokio::join!` doubles a task's
-/// concurrent statements and silently reinstates the starvation this bound
-/// exists to prevent. What that starvation costs has changed: until 11
-/// September 2026 the reporter propagated its tick errors, so one
-/// `acquire_timeout` stopped the process by way of its health probe. A failed
-/// tick is now counted and skipped, so the reporter only goes quiet — its
-/// `network_status.observed_at` freezes and
-/// `yog_indexer_network_status_tick_failures_total{reason="persistence"}`
-/// climbs — while the index tasks queue on the same pool, and *their*
-/// `acquire_timeout`s are what lose rows. Whoever parallelises a persist owes
-/// this line a second look.
-///
-/// Read from the pool that was opened, not from
-/// [`yog_persistence::Database::DEFAULT_MAX_CONNECTIONS`], so that sizing the
-/// pool differently resizes this too instead of silently parting ways with it.
-/// It takes the number rather than the `Database` so the boundary is a plain
-/// unit test.
-///
-/// # Errors
-///
-/// ⚠️ **Refuses a pool too small to reserve from, rather than clamping to one.**
-/// An earlier version returned `.max(1)`, which defeated the reservation in the
-/// exact case this function exists to prevent: a pool of one hands its only
-/// connection to an index task. Clamping cannot be right here —
-/// `Semaphore::new(0)` would deadlock instead — so the only honest answers are
-/// "refuse" or "open a bigger pool", and a configuration that cannot work
-/// should say so at startup rather than five seconds into a busy minute.
+/// How many transactions may be persisted concurrently: the opened pool minus what is reserved.
+/// Refuses a pool too small to reserve from: clamping would hand its only connection to a task.
+/// ⚠️ Sound only while an index task issues one statement at a time: a `tokio::join!` of two
+/// repository calls in a sub-persistor would double it and starve the pool.
 pub(super) fn index_concurrency(max_connections: u32) -> anyhow::Result<usize> {
     anyhow::ensure!(
         max_connections > CONNECTIONS_RESERVED,
@@ -84,11 +40,7 @@ pub(super) fn index_concurrency(max_connections: u32) -> anyhow::Result<usize> {
     Ok((max_connections - CONNECTIONS_RESERVED) as usize)
 }
 
-/// Spawn the indexer worker task.
-///
-/// Per-transaction failures stay inside the worker (logged, counted, not
-/// propagated). Only loop-level failures reach the returned `JoinHandle`
-/// and bubble up to `Daemon::run`.
+/// Spawn the indexer worker task; only loop-level failures reach the returned handle.
 pub(super) fn spawn_indexer_task(
     processor: Arc<TransactionProcessor>,
     rx: mpsc::Receiver<IngestedTransaction>,
@@ -99,11 +51,7 @@ pub(super) fn spawn_indexer_task(
     tokio::spawn(async move { worker.run(rx, shutdown).await })
 }
 
-/// Spawn the network status reporter task.
-///
-/// It cannot return an error — a failed tick is counted and skipped inside —
-/// so the only way this handle ends the daemon from `run`'s `select!` is a
-/// panic, which is a bug and should stop things.
+/// Spawn the network status reporter task; it cannot return an error, so only a panic ends the daemon here.
 pub(super) fn spawn_network_status_reporter_task(
     reporter: NetworkStatusReporter,
     shutdown: CancellationToken,
@@ -111,11 +59,7 @@ pub(super) fn spawn_network_status_reporter_task(
     tokio::spawn(async move { reporter.run(shutdown).await })
 }
 
-/// Spawn the ingestion alarm task.
-///
-/// Like the reporter's, it cannot return an error — a failed check is the
-/// check's `/fail`, not the daemon's — so only a panic ends the daemon from
-/// here.
+/// Spawn the ingestion alarm task; a failed check is the check's `/fail`, so only a panic ends the daemon here.
 pub(super) fn spawn_ingestion_alarm_task(
     alarm: IngestionAlarm,
     shutdown: CancellationToken,

@@ -1,60 +1,11 @@
-//! # yog-sothoth — Indexer entry point
-//!
-//! Entry point for the `indexer` binary.
-//!
-//! Single responsibility: install process-level invariants (TLS crypto
-//! provider, logging, metrics), load configuration, and delegate
-//! orchestration to [`Daemon`].
-//!
-//! ## Startup sequence
-//!
-//! ```text
-//! main()
-//!  ├─ init_rustls()       → install rustls crypto provider (TLS prerequisite)
-//!  ├─ dotenv()            → load .env file into the process environment
-//!  ├─ init_tracing()      → structured logging (JSON prod / text dev)
-//!  ├─ init_metrics()      → Prometheus exporter on :9000/metrics
-//!  ├─ Config::load()      → explicit validation, no credentials in logs
-//!  ├─ Daemon::new(config) → wires the dependency graph
-//!  └─ Daemon::run(token)  → drives the indexer loop until shutdown signal
-//! ```
-//!
-//! Order matters: `init_rustls` must run before any TLS connection is
-//! attempted, `dotenv` before any environment variable is read, and
-//! `init_tracing` before any log line is emitted.
-//!
-//! ## Error handling
-//!
-//! Every fatal startup error is logged via `tracing::error!` before the
-//! process exits, so each crash leaves a structured entry visible in the
-//! log collector.
-//!
-//! ## Graceful shutdown
-//!
-//! The process listens for SIGTERM (production) and SIGINT / Ctrl-C
-//! (dev). On signal reception, a [`CancellationToken`] is triggered:
-//! the daemon observes it, stops accepting new work, and waits for
-//! in-flight tasks (listener, dispatcher, indexer) to finish before
-//! returning — but for no longer than the grace every daemon here holds
-//! ([`yog_bootstrap::SHUTDOWN_GRACE`]).
-//!
-//! ⚠️ **Returning from `main` is what destroys the work.** `#[tokio::main]`
-//! drops the runtime here, and a dropped runtime cancels every task still
-//! alive wherever it stands — mid-`logsUnsubscribe`, mid-`INSERT`. So the wait
-//! above is not politeness, it is the only thing between an orderly stop and a
-//! torn one; a stage that outlives the grace is named in the logs and then
-//! torn anyway.
+//! Entry point for the `indexer` binary: installs the process-level invariants (TLS provider,
+//! logging, metrics), loads the configuration, and hands over to [`Daemon`].
+//! ⚠️ Returning from `main` drops the runtime, cancelling every task wherever it stands: the
+//! daemon's wait, bounded by [`yog_bootstrap::SHUTDOWN_GRACE`], is what keeps a stop orderly.
 
-// `application` — core business logic for the indexer.
 mod application;
-
-// `bootstrap` — daemon initialization, configuration loading, dependency wiring.
 mod bootstrap;
-
-// `error` — typed error enums for fatal startup and runtime failures.
 mod error;
-
-// `infra` — infrastructure utilities (RPC client, dispatcher, listener…).
 mod infra;
 
 use metrics_exporter_prometheus::PrometheusBuilder;
@@ -63,25 +14,8 @@ use tracing::error;
 
 use bootstrap::{Config, Daemon};
 
-// ── Metrics ──────────────────────────────────────────────────────────────────
-
-/// Install the Prometheus exporter as the global `metrics` recorder.
-///
-/// Exposes `http://0.0.0.0:9000/metrics` in Prometheus text format.
-/// All `counter!()` / `histogram!()` calls elsewhere in the process are
-/// silent no-ops until this runs — must be called before any metric is
-/// emitted (notably before `Daemon::new`, which registers metric
-/// descriptions).
-///
-/// Local to the indexer: the api will expose its own metrics on its
-/// HTTP server when needed, so this isn't worth promoting to
-/// `yog-bootstrap`.
-///
-/// # Errors
-///
-/// Returns an error if the listener address is already in use or if the
-/// recorder has already been installed (both indicate a misconfiguration
-/// and should stop the process).
+/// Install the Prometheus exporter on `:9000/metrics` as the global `metrics` recorder.
+/// ⚠️ Every `counter!()` is a silent no-op until then, so it runs before `Daemon::new`.
 fn init_metrics() -> anyhow::Result<()> {
     PrometheusBuilder::new()
         .with_http_listener(([0, 0, 0, 0], 9000))
@@ -89,64 +23,31 @@ fn init_metrics() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("failed to install Prometheus exporter: {e}"))
 }
 
-// ── Entry point ──────────────────────────────────────────────────────────────
-
-/// Entry point for the `indexer` binary.
-///
-/// Starts the multi-threaded Tokio runtime (default), suited for the
-/// I/O-bound workload: Solana RPC WebSocket, TimescaleDB writes, RPC
-/// HTTP fetches.
-///
-/// # Errors
-///
-/// Returns an error (and logs it) if:
-/// - the Prometheus exporter cannot bind its listener
-/// - the configuration is invalid or fails explicit validation
-/// - TimescaleDB is unreachable at startup
-/// - the Solana RPC connection is refused
-/// - the indexing loop encounters an unrecoverable error
+/// Entry point for the `indexer` binary; every fatal error is logged before the process exits.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // ── Process-level invariants ──────────────────────────────────────────────
-    // These three calls install global state that the rest of the process
-    // depends on. Order matters and is enforced by the runtime, not the
-    // type system — be careful when reordering.
+    // ⚠️ Order matters, enforced by the runtime, not the type system: TLS provider before any
+    // connection, `.env` before any variable is read, tracing before any log line.
 
-    // rustls 0.23 requires an explicit crypto provider; without this,
-    // the first TLS handshake panics. Must run before any TLS connection.
+    // rustls 0.23 needs an explicit provider, or the first TLS handshake panics.
     yog_bootstrap::init_rustls();
 
-    // Load `.env` into `std::env`. Silently ignored if the file is missing
-    // — `Config::load()` will raise an explicit error per missing variable.
+    // A missing `.env` is ignored: `Config::load` names each missing variable.
     dotenvy::dotenv().ok();
 
-    // Install the global tracing subscriber. Reads `LOG_FORMAT` (json|text)
-    // and `RUST_LOG` from the environment.
+    // Reads `LOG_FORMAT` and `RUST_LOG`.
     yog_bootstrap::init_tracing();
 
-    // Install the Prometheus exporter. Must run before any metric is emitted.
     init_metrics().inspect_err(|e| error!(error = %e, "failed to install metrics exporter"))?;
 
-    // ── Configuration ─────────────────────────────────────────────────────────
-    // `Config::load()` performs explicit validation of all required
-    // variables (RPC URLs, DB connection string, retry budget, …) and
-    // wraps secrets in `SecretUrl` so they never reach the log collector
-    // through `Display` / `Debug`.
     let config =
         Config::load().inspect_err(|e| error!(error = %e, "failed to load configuration"))?;
 
-    // ── Bootstrap ─────────────────────────────────────────────────────────────
-    // `Daemon::new` wires the dependency graph: DB pool, RPC client,
-    // watched-pool registry, metric descriptions. Validates live
-    // connections before returning, so any failure here means the
-    // process cannot run.
     let daemon = Daemon::new(config)
         .await
         .inspect_err(|e| error!(error = %e, "failed to initialize daemon"))?;
 
-    // ── Graceful shutdown ─────────────────────────────────────────────────────
-    // Spawn a task that waits for SIGTERM / Ctrl-C, then cancels the
-    // shared token. `Daemon::run` observes the token and stops cleanly.
+    // SIGTERM or Ctrl-C cancels the shared token, which `Daemon::run` observes.
     let token = CancellationToken::new();
     let shutdown_token = token.clone();
     tokio::spawn(async move {
@@ -154,8 +55,6 @@ async fn main() -> anyhow::Result<()> {
         shutdown_token.cancel();
     });
 
-    // Drive the indexer loop. Returns when the token is cancelled or
-    // when an unrecoverable error occurs in one of the spawned tasks.
     daemon
         .run(token)
         .await
