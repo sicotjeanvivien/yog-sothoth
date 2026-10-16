@@ -105,7 +105,7 @@ fn set_pool_status_maps_every_field() {
     assert_eq!(d.event_index, 3);
 }
 
-// ── ring-1 fee-side logic ───────────────────────────────────────────
+// ── fee-side logic ──────────────────────────────────────────────────
 
 /// Every `collect_fee_mode` × direction, and the unknown-mode error.
 /// Mutation: any wrong branch, which mislabels the fee's token.

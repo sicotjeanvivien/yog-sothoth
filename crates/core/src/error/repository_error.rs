@@ -1,42 +1,27 @@
-//! Repository-layer error type, returned by all repository traits.
-//!
-//! This error is intentionally agnostic of the persistence backend
-//! (Postgres, in-memory, mock). Concrete implementations map their
-//! native errors (e.g. `sqlx::Error`) onto these variants. Callers in
-//! the application layer convert `RepositoryError` into their own
-//! domain-specific error type via `From`.
+//! The error of every repository trait, agnostic of the backend.
 
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
 pub enum RepositoryError {
-    /// The underlying storage backend failed (DB unreachable, connection
-    /// dropped, query execution error). Caller should generally retry or
-    /// surface as an infrastructure failure.
+    /// The storage backend failed: unreachable, connection dropped, query error.
     #[error("repository backend failure: {0}")]
     Backend(String),
 
-    /// Data already in the store violates an expected invariant
-    /// (corrupted row, malformed enum value, unparseable address).
-    /// Indicates a bug, a manual DB edit, or a schema/code mismatch —
-    /// not a transient failure.
+    /// Stored data violates an invariant (malformed enum, unparseable address):
+    /// a bug or a schema/code mismatch, not a transient failure.
     #[error("repository data integrity issue: {0}")]
     Integrity(String),
 
-    /// The requested entity was not found. Use this only when absence
-    /// is exceptional (e.g. an explicit `find_by_id` that was expected
-    /// to succeed). Methods that legitimately return optional results
-    /// should return `Option<T>`, not this variant.
+    /// An entity expected to exist was not found; a legitimate absence is an `Option`.
     #[error("not found: {0}")]
     NotFound(String),
 
-    /// A unique constraint or business invariant was violated by the
-    /// write (duplicate key, foreign key violation when relevant).
+    /// The write violated a unique constraint or an invariant.
     #[error("conflict: {0}")]
     Conflict(String),
 
-    /// The operation exceeded its time budget. Distinct from `Backend`
-    /// because timeouts are often retryable with different semantics.
+    /// The operation exceeded its time budget.
     #[error("timeout: {0}")]
     Timeout(String),
 

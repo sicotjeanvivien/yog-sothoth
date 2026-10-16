@@ -67,10 +67,7 @@ pub(super) fn compute_fee_token_is_a(
     collect_fee_mode: u8,
     trade_direction: TradeDirection,
 ) -> Result<bool, u8> {
-    // CollectFeeMode mapping (mirrors cp-amm enum):
-    //   0 = BothToken    — fee on the OUT token
-    //   1 = OnlyB        — fee always on token B
-    //   2 = Compounding  — fee always on token B
+    // 0 BothToken: fee on the output token; 1 OnlyB and 2 Compounding: always on B.
     let fee_token_is_a = match (collect_fee_mode, trade_direction) {
         (0, TradeDirection::AtoB) => false, // out is B, fee on B
         (0, TradeDirection::BtoA) => true,  // out is A, fee on A

@@ -1,26 +1,9 @@
-//! Pagination primitives shared across domains.
-//!
-//! Repositories return `Page<T>` objects carrying the items of the
-//! current page along with cursors and boundary flags used to drive
-//! Previous / Next / First / Last navigation. Cursors themselves are
-//! domain-specific (each domain knows what its ordering key looks
-//! like) and live next to their repository trait.
+//! `Page<T>`, shared by every paginated repository; each cursor lives beside its
+//! repository trait.
 
-/// A page of results with bidirectional navigation hints.
-///
-/// `prev_cursor` is the key of the FIRST item of the current page
-/// (used to navigate backward); `next_cursor` is the key of the LAST
-/// item (used to navigate forward). Either may be `None` when the
-/// page sits at the corresponding boundary of the list.
-///
-/// `is_first` / `is_last` are explicit flags rather than inferred
-/// from cursor nullity: a single-page result set has both cursors
-/// `None` AND both flags `true`, which the client needs to
-/// distinguish from "we're on one boundary but the other end exists".
-///
-/// All four hints are expected to be computed by the repository in a
-/// single query (typically via a "peek N+1" trick): no follow-up
-/// round-trip is required to render the navigation.
+/// A page and its navigation: `prev_cursor` is the first item's key,
+/// `next_cursor` the last's, each `None` at its boundary.
+/// ⚠️ `is_first`/`is_last` are explicit: cursor nullity cannot tell a single page apart.
 #[derive(Debug, Clone)]
 pub struct Page<T> {
     pub items: Vec<T>,
@@ -30,16 +13,7 @@ pub struct Page<T> {
     pub is_last: bool,
 }
 
-/// Discriminated cursor type.
-///
-/// Each domain that supports pagination defines its own variant here.
-/// This keeps the cursor strongly typed across the trait boundary
-/// (no opaque `Vec<u8>` blob to misinterpret) while still allowing
-/// repositories to share the same `Page<T>` shape.
-///
-/// Serialization to/from a wire-format string (e.g. base64-encoded JSON
-/// for HTTP query parameters) is the responsibility of the calling
-/// layer, not of this module.
+/// A cursor, one variant per paginated domain; the wire encoding is the caller's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cursor {
     Pool(crate::domain::PoolCursor),
@@ -49,12 +23,7 @@ pub enum Cursor {
 }
 
 impl<T> Page<T> {
-    /// Convenience constructor for the empty terminal page.
-    ///
-    /// An empty page sits at both boundaries simultaneously, hence
-    /// `is_first = is_last = true` and both cursors `None`. This is
-    /// the natural state when a cursor points past the end of the
-    /// list, or when the underlying table is empty.
+    /// The empty page, at both boundaries at once.
     pub fn empty() -> Self {
         Self {
             items: Vec::new(),
@@ -66,12 +35,7 @@ impl<T> Page<T> {
     }
 }
 
-/// Direction of traversal relative to a cursor.
-///
-/// `Next` moves further into the list (older items if the natural
-/// order is `first_seen_at DESC`); `Prev` moves back toward more
-/// recent items. A cursor is required for both — without one, see
-/// `PagePosition` instead.
+/// Direction of traversal from a cursor: `Next` further into the list, `Prev` back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PageDirection {
     #[default]
@@ -79,31 +43,16 @@ pub enum PageDirection {
     Prev,
 }
 
-/// Absolute jump to a boundary of the list, ignoring any cursor.
-///
-/// Mutually exclusive with `cursor` + `PageDirection` at the request
-/// level — the handler is responsible for enforcing that invariant.
+/// Jump to a boundary of the list; the handler refuses it alongside a cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PagePosition {
     First,
     Last,
 }
 
-/// Column on which the pool listing can be sorted.
-///
-/// Restricted to materialized columns of the `pools` table — values that
-/// exist at rest. Derived metrics (TVL, 24h volume) are computed at read
-/// time and cannot be sorted on until they are materialized into a
-/// dedicated analytics table; they are deliberately absent here.
-///
-/// # Materialized is not enough — a keyset cursor needs *immutable*
-///
-/// `LastSeen` is materialized and is rewritten on every event touching the
-/// pool, which is precisely what a keyset cursor cannot tolerate: a row whose
-/// sort value moves changes side relative to the cursor. Adding a column here
-/// therefore means answering "is it immutable?", not "does it exist at rest?"
-/// — and if it is not, the listing owes it the snapshot fence documented on
-/// [`crate::domain::PoolPage`], which is what makes `LastSeen` safe today.
+/// Column the pool listing can be sorted on: columns of `pools` only.
+/// ⚠️ A keyset cursor needs an *immutable* key: a mutable one, like `LastSeen`,
+/// owes the listing the snapshot fence of [`crate::domain::PoolPage`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolSortColumn {
     FirstSeen,
@@ -111,12 +60,7 @@ pub enum PoolSortColumn {
 }
 
 /// Sort order for the pool listing: a column plus a direction.
-///
-/// Deliberately **not** `Default`: the default ordering is a wire-contract
-/// decision and it is declared once, on the HTTP query param
-/// (`api::http::query::PoolSortParam`). A `Default` here was dead code that
-/// named a *different* variant than the one the API actually serves, i.e. a
-/// second answer to a question that admits one.
+/// ⚠️ No `Default`: the default order is declared once, on the HTTP query param.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolSort {
     FirstSeenAsc,
@@ -126,8 +70,7 @@ pub enum PoolSort {
 }
 
 impl PoolSort {
-    /// The column this sort operates on. Used to stamp the cursor so
-    /// it can be validated against the active sort on the next page.
+    /// The column this sort operates on, stamped on the cursor.
     pub fn column(self) -> PoolSortColumn {
         match self {
             PoolSort::FirstSeenAsc | PoolSort::FirstSeenDesc => PoolSortColumn::FirstSeen,
