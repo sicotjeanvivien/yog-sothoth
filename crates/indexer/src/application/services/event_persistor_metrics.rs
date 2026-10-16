@@ -47,7 +47,7 @@ impl EventPersistorMetrics {
     }
 
     /// `kind` is the persist target: an event kind, or a pool-side operation (`pool_upsert`,
-    /// `pool_touch`, `pool_current_state_applied`, `pool_current_state_rejected`).
+    /// `pool_touch`, `pool_mark_needs_refresh`, `pool_current_state_applied`, `pool_current_state_rejected`).
     pub(crate) fn record_persist_duration(protocol: &Protocol, kind: &'static str, seconds: f64) {
         histogram!(
             PERSIST_DURATION,
@@ -58,8 +58,7 @@ impl EventPersistorMetrics {
     }
 
     /// An insert that conflicted and wrote nothing, counted beside `record_indexed`: rows written
-    /// are `indexed − skipped`. Non-zero outside a replay or a reconnect's rewind: the unique key
-    /// collapses distinct events.
+    /// are `indexed − skipped`.
     pub(crate) fn record_insert_skipped(protocol: &Protocol, event_kind: &'static str) {
         counter!(
             INSERT_SKIPPED,

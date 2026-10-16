@@ -82,7 +82,7 @@ async fn a_protocol_is_watched_through_its_program_id_and_a_pool_as_itself() {
 // ── the retry rules, against a scripted server ──────────────────────
 //
 // ⚠️ One entanglement: a mark given up or kept needs one first, so breaking the errored stream's
-// mark reddens four tests.
+// mark reddens more tests than its owner.
 
 use tokio::{net::TcpListener, time::timeout};
 use tonic::Status;
@@ -300,7 +300,7 @@ async fn an_error_mid_block_resumes_from_the_slot_that_was_cut() {
     );
 }
 
-/// ⚠️ A GOAWAY, a drained node and an idle timeout all end as `Ok(None)`: churn, like the error arm.
+/// ⚠️ A drained node and an idle timeout end as `Ok(None)`: churn, like the error arm.
 /// Mutation this is written against: `Ending::verdict` classing `StreamClosed { delivered: true }`
 /// as `Unanswered` instead of `Delivered`.
 #[tokio::test]

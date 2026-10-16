@@ -26,8 +26,8 @@ impl TransactionArrival {
         })
     }
 
-    /// Where the transaction is fetched back from, when it is; read by the start-up line only,
-    /// `init_rpc_source` gets the endpoint from the match arm.
+    /// Where the transaction is fetched back from, when it is; `init_rpc_source` gets the endpoint
+    /// from the match arm.
     pub(crate) const fn fetched_from(&self) -> Option<&Endpoint> {
         match self {
             Self::Fetched { from } => Some(from),

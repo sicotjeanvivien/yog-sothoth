@@ -72,8 +72,7 @@ const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 const PING_REPLIES_UNSENT: &str = "yog_indexer_grpc_ping_replies_unsent_total";
 
 /// Attempts ended because the server said nothing for the stall timeout, by [`StallSite`].
-/// ⚠️ The only trace of a stall, which raises no error: each increment is a reconnection, and a
-/// billed replay when there is a mark.
+/// ⚠️ A stall retried with a mark is a billed replay.
 const STALLS: &str = "yog_indexer_grpc_stalls_total";
 
 /// What an update was, for [`UPDATES_RECEIVED`].
