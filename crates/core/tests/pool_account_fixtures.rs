@@ -1,64 +1,7 @@
-//! The pool-account decoder, against **real mainnet accounts**.
-//!
-//! # Why real bytes are not optional here
-//!
-//! The decoder's unit tests build synthetic 1112-byte buffers using the very
-//! constants they then verify. A wrong offset is invisible to them: the test
-//! writes the field where the code will read it, so the two agree on a lie.
-//!
-//! That is not hypothetical. `partner_fee_percent` read byte 49 — cp-amm's
-//! `padding_0` — for months. The neighbouring offsets (48, 50) were correct, so
-//! two of three percents decoded fine, and the third came back 0 on all 971
-//! pools: exactly what a plausible partner cut looks like. Only real bytes
-//! settle that kind of question.
-//!
-//! # What these fixtures are
-//!
-//! One JSON file per pool under `fixtures/<protocol>/accounts/`, holding the raw
-//! account as base64 plus its owner and capture date — **nothing decoded**. The
-//! expectations live in `EXPECTED` / `EXPECTED_DLMM` below, in this file, so that
-//! reviewing the test means reviewing what we claim the bytes mean.
-//!
-//! The eleven cp-amm pools cover every `BaseFeeMode` it defines and both values
-//! of `has_dynamic_fee`. The rare ones were picked first because they are rare:
-//! when this set was captured, mainnet held exactly **one** `rate_limiter` pool
-//! and two market-cap linear ones among the 971 we had seen.
-//!
-//! The nine DLMM pools span `bin_step` 1..=400 and `base_factor` 0..=40 000,
-//! including a zero-fee pool and pools with and without a dynamic fee. They were
-//! found by resolving every account key in `fixtures/dlmm/*.json` and keeping
-//! those owned by lb_clmm at 904 bytes — pools we have actually seen, not a
-//! hand-picked list.
-//!
-//! # How the expectations were established
-//!
-//! Not by running our decoder and writing down what it said — that would restate
-//! the bug we are guarding against. Three independent anchors:
-//!
-//! 1. **The realized fee rate, computed from swap-event amounts.** A completely
-//!    separate data path: token amounts in event payloads, never account bytes.
-//!    For `8Pm2kZ…` — constant fee, no dynamic fee — the fee decoded from byte 8
-//!    is 4 bps and the rate realized over **49 639 swaps** is 4.0 bps. Two other
-//!    constant pools agreed to within 0.3 bps.
-//! 2. **The mints decode to known addresses.** `EPjFWdd5…` is USDC,
-//!    `So1111…112` is wrapped SOL. A wrong offset yields arbitrary bytes, not a
-//!    token anyone can name.
-//! 3. **Consistency across eleven accounts.** A wrong `base_fee_mode` offset
-//!    would have to land on a byte in `0..=4` eleven times, while the fee and
-//!    both percents stayed plausible.
-//!
-//! # Recapturing
-//!
-//! ```text
-//! curl -s -X POST "$POOL_ACCOUNT_URL" -H 'Content-Type: application/json' \
-//!   -d '{"jsonrpc":"2.0","id":1,"method":"getMultipleAccounts",
-//!        "params":[["<pool>", …], {"encoding":"base64"}]}'
-//! ```
-//!
-//! A fixture is a **snapshot**. A program upgrade that moves a field will make
-//! these fail, and that is the point: `PoolAccountRejection::Truncated` and the
-//! discriminator check exist to surface exactly that, and a red test is the
-//! right channel for it.
+//! The pool-account decoders against real mainnet accounts (`fixtures/<protocol>/accounts/`).
+//! ⚠️ Synthetic buffers are built from the very offsets they verify, so a wrong
+//! offset passes them. The expectations below were anchored outside the decoder:
+//! realized fee rates from swap amounts, and mints that name known tokens.
 
 use std::path::PathBuf;
 
@@ -72,9 +15,7 @@ use yog_core::{
     domain::{PoolAccountProperties, Protocol},
 };
 
-/// What we claim one real account decodes to. `fee_bps` is a string so the
-/// expected value reads as written (`"2.5"`, `"9900"`) rather than as a
-/// `Decimal` construction.
+/// What we claim one real account decodes to; `fee_bps` reads as written.
 struct Expected {
     pool: &'static str,
     kind: BaseFeeKind,
@@ -84,16 +25,8 @@ struct Expected {
     referral_pct: u8,
     mint_a: &'static str,
     mint_b: &'static str,
-    /// The time-scheduler curve, as `(period_frequency, reduction_factor,
-    /// activation_point)` — `None` for every fee shape that has no such curve.
-    ///
-    /// ⚠️ These three are the reason this expectation matters more than most.
-    /// `BaseFeeInfo` is 32 bytes the modes reinterpret, so bytes 24 and 32 only
-    /// mean "period frequency" and "reduction factor" for modes 0 and 1. Read
-    /// unconditionally they are nonsense — and the nonsense is *plausible*
-    /// enough to ship: mode 4 yields a period frequency of
-    /// 13 722 280 043 814 587 382, mode 2 one of 42 520 176 273 600. `None`
-    /// below is therefore an assertion in its own right, not an absence.
+    /// `(period_frequency, reduction_factor, activation_point)` of a time scheduler.
+    /// ⚠️ `None` is an assertion: read under other modes these bytes look plausible.
     scheduler: Option<(u64, u64, u64)>,
 }
 
@@ -121,8 +54,7 @@ struct ExpectedDlmm {
     bin_step: u16,
     base_factor: u16,
     base_fee_power_factor: u8,
-    /// `base_factor × bin_step × 10^power / 10_000`, as a string for the same
-    /// reason as [`Expected::fee_bps`].
+    /// `base_factor × bin_step × 10^power / 10_000`, as written.
     fee_bps: &'static str,
     variable_fee_control: u32,
     max_volatility_accumulator: u32,
@@ -145,14 +77,9 @@ const EXPECTED_DLMM: &[ExpectedDlmm] = &[
 ];
 
 /// A captured account: raw bytes and provenance, nothing interpreted.
-///
-/// `captured_at` lives in the JSON but not here — it is provenance for whoever
-/// reads the file, and serde ignores what the struct does not name.
 #[derive(serde::Deserialize)]
 struct AccountFixture {
-    /// Restated inside the file so a mismatch with the file name is caught —
-    /// a fixture copied from another pool and renamed would otherwise assert
-    /// one pool's expectations against another's bytes.
+    /// ⚠️ Checked against the file name: a renamed copy would test another pool's bytes.
     pool_address: String,
     owner: String,
     data_base64: String,
@@ -169,8 +96,7 @@ fn load(protocol_dir: &str, pool: &str) -> AccountFixture {
         .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()))
 }
 
-/// Minimal base64 decode — the RPC's encoding, not the chain's, so `core` has no
-/// dependency for it and neither does this test.
+/// Minimal base64 decode, without a dependency for it.
 fn base64_decode(s: &str) -> Vec<u8> {
     const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let (mut out, mut acc, mut bits) = (Vec::new(), 0u32, 0u8);
@@ -186,11 +112,7 @@ fn base64_decode(s: &str) -> Vec<u8> {
     out
 }
 
-/// Every field, on every captured account.
-///
-/// One test rather than eleven: a layout drift breaks all of them at once, and
-/// the pool address in each assertion is enough to place a genuinely
-/// pool-specific failure.
+/// Every field, on every captured account; each assertion names its pool.
 #[test]
 fn decodes_real_mainnet_accounts() {
     for e in EXPECTED {
@@ -247,10 +169,7 @@ fn decodes_real_mainnet_accounts() {
         );
         assert_eq!(props.has_dynamic_fee, e.dynamic, "{}: dynamic fee", e.pool);
 
-        // The decay curve, and — just as load-bearing — its absence. Only the
-        // two time-scheduler modes may carry one; every other mode reading a
-        // `Some` here would mean the decoder took bytes 24/32 at face value on a
-        // layout that puts other fields there.
+        // The decay curve, and its absence: only the two time schedulers carry one.
         let scheduler = props
             .fee_scheduler
             .map(|s| (s.period_frequency, s.reduction_factor, s.activation_point));
@@ -284,17 +203,8 @@ fn decodes_real_mainnet_accounts() {
 
 // ── DLMM `LbPair` ───────────────────────────────────────────────────
 
-/// Every field, on every captured `LbPair`.
-///
-/// The synthetic unit tests in `decoder_tests.rs` cannot settle the DLMM offsets
-/// either — same circularity, same remedy. Two of the three anchors described at
-/// the top of this file carry over directly:
-///
-/// - **The mints decode to nameable tokens.** USDC, wrapped SOL, JupUSD and
-///   pump.fun mints across nine accounts. A wrong offset yields arbitrary bytes.
-/// - **The fees land on real tiers.** 0, 1, 5, 25, 50, 100 and 200 bps — the
-///   values Meteora publishes. A wrong `base_factor` or `bin_step` offset would
-///   have to produce a plausible fee tier nine times running.
+/// Every field, on every captured `LbPair`: the mints name known tokens and the
+/// fees land on Meteora's published tiers.
 #[test]
 fn decodes_real_mainnet_lb_pairs() {
     for e in EXPECTED_DLMM {
@@ -368,16 +278,8 @@ fn decodes_real_mainnet_lb_pairs() {
     }
 }
 
-/// **What `fee_bps` does not say.** The base fee is the floor; each pool caps
-/// its own volatility-driven part, and on these very accounts that ceiling runs
-/// from ×1 to ×7 the floor.
-///
-/// Asserted here rather than only documented, because the claim is quantitative
-/// and made in three places (`amm::dlmm`, the api README, the PR). The inputs
-/// come from the decoder, so a layout drift breaks this too.
-///
-/// The worst case is `min(base + variable, 1000)` — the chain caps the sum, so
-/// the two bounds do not simply add.
+/// What `fee_bps` does not say: each pool's variable-fee ceiling over its floor,
+/// and the worst case `min(base + variable, 1000)`.
 #[test]
 fn the_fee_floor_understates_what_a_dlmm_pool_can_charge() {
     // pool → (max variable bps, worst case bps). Both derived, never hand-typed.
@@ -423,10 +325,8 @@ fn the_fee_floor_understates_what_a_dlmm_pool_can_charge() {
     }
 }
 
-/// The point of the test above, stated as an invariant rather than a table: at
-/// least one captured pool charges several times its advertised tier, and at
-/// least one charges exactly it. A capture that lost either end would leave the
-/// "not interchangeable" claim untested in one direction.
+/// Mutation: a recapture that loses either the pool charging exactly its tier
+/// or the one charging several times it.
 #[test]
 fn the_fixtures_span_both_ends_of_the_fee_gap() {
     let ratios: Vec<Decimal> = EXPECTED_DLMM
@@ -453,13 +353,8 @@ fn the_fixtures_span_both_ends_of_the_fee_gap() {
     );
 }
 
-/// The captured set spans the fee inputs widely enough that an offset landing on
-/// a neighbouring field could not survive it.
-///
-/// `bin_step` runs 1..=400 and `base_factor` 0..=40 000, so neither can be a
-/// constant the decoder happens to read from the wrong place — and both extremes
-/// of the dynamic-fee magnitude are present (`variable_fee_control = 0`, which is
-/// how DLMM expresses "no dynamic fee", and a live 2 000 000).
+/// Mutation: a recapture too narrow for a neighbouring-field offset to show;
+/// the fee inputs and both dynamic-fee extremes must stay spread.
 #[test]
 fn the_lb_pair_fixtures_span_the_fee_inputs() {
     let bin_steps: Vec<u16> = EXPECTED_DLMM.iter().map(|e| e.bin_step).collect();
@@ -484,22 +379,8 @@ fn the_lb_pair_fixtures_span_the_fee_inputs() {
     );
 }
 
-/// **A gap this suite cannot close, stated rather than hidden.**
-///
-/// `base_fee_power_factor` is 0 on all nine captured pools — and on all 42
-/// `LbPair` accounts reachable from the DLMM transaction fixtures. So the byte
-/// at offset 34 is *consistent with* being the power factor, but no real account
-/// exercises it: every fixture would decode identically if the field were
-/// ignored entirely.
-///
-/// That is exactly the shape of the `partner_fee_percent` bug — a field always 0
-/// in the wild. The difference is that lb_clmm names this one and Meteora's
-/// formula documents it, so it is a real field with no live user, not a padding
-/// byte read by mistake. [`yog_core::amm::dlmm::base_fee_bps`] is unit-tested on
-/// non-zero values; only the *offset* is unwitnessed.
-///
-/// Capture a pool with a non-zero power factor if one ever appears, and this
-/// test becomes redundant.
+/// ⚠️ `base_fee_power_factor` is 0 on every captured account: its offset is
+/// unwitnessed. Capture a pool with a non-zero one and this test can go.
 #[test]
 fn the_power_factor_offset_is_not_witnessed_by_any_fixture() {
     assert!(
@@ -509,12 +390,7 @@ fn the_power_factor_offset_is_not_witnessed_by_any_fixture() {
     );
 }
 
-/// Byte 49 is `padding_0`, and every real account confirms it: zero on all
-/// eleven, which is what padding looks like and what a partner cut would only
-/// coincidentally look like.
-///
-/// The decoder must have no constant for it — this asserts the observation that
-/// made migration 037's case, on the data that settles it.
+/// Byte 49 is `padding_0`: zero on every real account.
 #[test]
 fn byte_49_is_padding_on_every_real_account() {
     for e in EXPECTED {
@@ -527,12 +403,8 @@ fn byte_49_is_padding_on_every_real_account() {
     }
 }
 
-/// The captured set covers every `BaseFeeMode` cp-amm defines, and both values
-/// of the dynamic-fee flag.
-///
-/// Asserted rather than trusted: the rare modes are one pool each on mainnet, so
-/// a future recapture that quietly drops one would leave the market-cap
-/// schedulers — added without any real data ever showing them — untested again.
+/// Mutation: a recapture that drops a `BaseFeeMode` or a dynamic-fee value;
+/// the rare modes are one pool each on mainnet.
 #[test]
 fn the_fixtures_cover_every_fee_mode() {
     for kind in [
@@ -558,14 +430,8 @@ fn the_fixtures_cover_every_fee_mode() {
     );
 }
 
-/// A truncated account must still yield its mints and fee tier.
-///
-/// The scheduler reads sit at 472/480, far past the mints at 168/200. Widening
-/// the hard `MIN_LEN` to cover them — the first shape of this change — turned a
-/// partially-readable account into a rejected one, which is the failure mode
-/// `base_fee_kind` is explicitly designed to avoid: a pool that never resolves
-/// never leaves `list_unresolved`, so it sits at the head of the queue forever
-/// and starves every pool behind it. An optional field must cost only itself.
+/// A truncated account still yields its mints and fee tier.
+/// Mutation: widening `MIN_LEN` to the scheduler reads, which strands the pool.
 #[test]
 fn an_account_too_short_for_the_scheduler_still_yields_its_mints() {
     let fixture = load(CP_AMM_DIR, EXPECTED[0].pool);
