@@ -215,7 +215,8 @@ fn wire_field_names_are_camel_case() {
 #[test]
 fn logo_uri_keeps_only_an_http_url() {
     // Mutations: back to the empty-string filter alone, no scheme check
-    // (`ipfs://@`, which `z.url()` refuses), and a `trim()` before parsing (U+0085).
+    // (`ipfs://@`, which `z.url()` refuses), a `trim()` before parsing (U+0085),
+    // and an `http(s)://` prefix check in place of the parse (port 65536).
     for refused in [
         "d",
         "token-image.png",
@@ -227,6 +228,7 @@ fn logo_uri_keeps_only_an_http_url() {
         "ipfs://bafybeihi7twfp4lljqegiyg6xlojwrrs7r6qrpdz24g7t63zn37qovumyu",
         "blob:https://x.com/5d74a49d-97ac-4c85-8f2c-27a1447c2c13",
         "\u{85}https://example.test/logo.png",
+        "https://example.test:65536/logo.png",
     ] {
         assert_eq!(logo_uri(Some(refused.to_string())), None, "{refused:?}");
     }
