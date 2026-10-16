@@ -8,6 +8,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { isValidPoolAddress } from "@/lib/api/pool-address";
 import { fetchPool } from "@/lib/api/server/pool";
 import { fetchPoolLatestState } from "@/lib/api/server/latest-state";
 import { fetchPoolSwapEvents } from "@/lib/api/server/swap-events";
@@ -85,6 +86,11 @@ export default async function PoolDetailPage({
 }: PoolDetailPageProps) {
   const { locale, address } = await params;
   setRequestLocale(locale);
+
+  // ⚠️ Before any fetch: their `TypeError` on a malformed address escapes the safe wrappers as a 500.
+  if (!isValidPoolAddress(address)) {
+    notFound();
+  }
 
   // The pool first: the other calls would be wasted on a pool that does not exist.
   const poolOutcome = await safeFetchOrNotFound(() => fetchPool(address));
