@@ -23,18 +23,9 @@ impl PingAnswer {
         Self { outbound }
     }
 
-    /// Answer a server ping with a request that carries **only** `ping` — a
-    /// provider may close a client that does not answer.
-    ///
-    /// ⚠️ Nothing else may ride along. The reference server returns the pong
-    /// before it reads anything else off the request
-    /// (`yellowstone-grpc-geyser/src/grpc.rs`, `get_pong_msg` then
-    /// `continue`), so a bare ping never touches the subscription; a
-    /// `from_slot` or a filter on it would re-issue or replace it.
-    ///
-    /// `try_send`, never `send().await`: `handle` runs in the body of the
-    /// listener's `select!`, so waiting here would deafen it to shutdown. An
-    /// answer that cannot leave is counted and dropped; the next ping retries.
+    /// Answer a server ping with a request carrying **only** `ping`; a provider may close a client that does not answer.
+    /// ⚠️ A `from_slot` or a filter riding along would re-issue or replace the subscription.
+    /// ⚠️ `try_send`, never `send().await`: waiting in `select!`'s body would deafen it to shutdown.
     pub(super) fn answer(&self) {
         let answer = SubscribeRequest {
             ping: Some(SubscribeRequestPing { id: PING_REPLY_ID }),

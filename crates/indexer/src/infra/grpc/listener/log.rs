@@ -1,8 +1,4 @@
 //! The lines the gRPC listener writes, one function each.
-//!
-//! The listener's files decide; this one says what they decided. Same shape as
-//! `bootstrap/daemon/config_log.rs`: a call site names the event, and the
-//! wording and fields live here, once.
 
 use tracing::{info, warn};
 use yellowstone_grpc_proto::prelude::SubscribeRequest;

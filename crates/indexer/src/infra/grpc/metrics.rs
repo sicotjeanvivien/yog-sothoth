@@ -1,59 +1,23 @@
-//! Counters for the gRPC ingestion path — two families, one per owner: the
-//! slot/time buffer, and the listener that drives it.
-//!
-//! Same shape as `infra/rpc/dispatcher/metrics.rs`: names declared as
-//! constants, descriptions registered once at startup, increments behind named
-//! methods so a call site never spells a metric name.
+//! Counters for the gRPC ingestion path: the slot/time buffer's, and the listener's.
 
 use metrics::{counter, describe_counter};
 
-/// Payloads dropped because their slot never received a block time.
-///
-/// ⚠️ **This is the number a real-stream measurement looks for.** The buffer's
-/// bounds are ceilings picked without a measurement — see
-/// `slot_timestamp_buffer`'s module docs — so this counter staying at zero is
-/// what says the guess was generous, and any movement is what says it was not.
-/// The first measurement against a real stream replaces the guess by reading
-/// it.
-///
-/// ⚠️ **The unit is a transaction, not an `InnerInstructionPayload`** — hence
-/// the name. This crate already uses "payload" for what `transaction_adapter`
-/// produces, and the README states that one mainnet transaction yields 2 of
-/// those through one adapter and 14 through the other. The buffer holds whole
-/// transactions, so a reading of 100 here is 100 transactions and some larger
-/// number of adapter payloads. Named for the unit after review pointed out that
-/// whoever measures the stream had no way to tell which one they were holding.
+/// Transactions dropped because their slot never received a block time.
+/// ⚠️ Counts transactions, not adapter payloads; staying at zero is what says the buffer's
+/// unmeasured bounds are generous.
 const TRANSACTIONS_EVICTED: &str = "yog_indexer_grpc_untimestamped_transactions_total";
 
 /// Which bound forced the eviction, on every increment of [`TRANSACTIONS_EVICTED`].
-///
-/// ⚠️ **Not decoration — without it the counter misleads whoever reads it.**
-/// Three very different evictions share this metric: a slot the stream
-/// left more than `MAX_PENDING_SLOTS` behind, a burst that hit
-/// `MAX_PENDING_PAYLOADS` while the slot may have been one message from
-/// resolving, and a slot whose block-meta came empty. The first two cross at
-/// **32 payloads per slot** (8 192 / 256), so above that rate the payload bound
-/// is the binding one: at ~100 payloads per slot it fires ~81 slots behind the
-/// head, not the 256 the docs advertise as the wait window. An unlabelled
-/// counter would be read as "the slot ceiling was too small", and raising it
-/// would change nothing. Found in review, 8 September 2026.
+/// ⚠️ Unlabelled, a payload-bound eviction would read as "the slot ceiling is too small", and
+/// raising it would change nothing.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum EvictionReason {
-    /// The stream moved on without it: this slot is more than
-    /// `MAX_PENDING_SLOTS` behind the head, so its block-meta is not late, it
-    /// is not coming.
+    /// More than `MAX_PENDING_SLOTS` behind the head: its block-meta is not late, it is not coming.
     SlotBound,
     /// Too many payloads held across all pending slots.
     PayloadBound,
-    /// The slot's block-meta arrived and carried **no** `block_time`, or the
-    /// slot was abandoned by a fork: nothing will ever resolve it.
-    ///
-    /// ⚠️ **Distinct from [`Self::SlotBound`] for the same reason that one is
-    /// distinct from [`Self::PayloadBound`]**, and it is the more misleading
-    /// confusion of the two. Without this label such a slot waits out the whole
-    /// window and then leaves counted `slot_bound` — so a measurement would
-    /// read "the wait window is too small" and raise `MAX_PENDING_SLOTS`, which
-    /// changes nothing at all: the meta already came, empty.
+    /// The block-meta came with **no** `block_time`, or a fork abandoned the slot: nothing will resolve it.
+    /// ⚠️ Counted `slot_bound`, it would ask for a wider window, which changes nothing.
     Unresolvable,
 }
 
@@ -70,13 +34,8 @@ impl EvictionReason {
 pub struct GrpcBufferMetrics;
 
 impl GrpcBufferMetrics {
-    /// Call once at startup to register the descriptions with the Prometheus
-    /// exporter — `bootstrap/daemon/init.rs::register_metric_descriptions`,
-    /// beside the crate's other families.
-    ///
-    /// Without that call the counter still works and exports with no HELP
-    /// text, which is unreadable to anyone without the source — that is,
-    /// exactly its reader.
+    /// Call once at startup to register the descriptions with the Prometheus exporter; without it
+    /// the counters export with no HELP text.
     pub(crate) fn register_descriptions() {
         describe_counter!(
             TRANSACTIONS_EVICTED,
@@ -90,46 +49,22 @@ impl GrpcBufferMetrics {
     }
 }
 
-// ── The listener's own family ───────────────────────────────────────────────
-
 /// Updates taken off the stream, by what they were.
-///
-/// ⚠️ **This one is read to check a subscription filter, not a pipeline.** The
-/// request sets `vote: Some(false)` and `failed: Some(false)`, and a provider
-/// that ignores either would show up here as a `transaction` rate an order of
-/// magnitude above the pool activity — the "counted skip-and-log failures that
-/// read as a broken pipeline" the adapter's module docs warn about. Nothing
-/// else in the process can tell a filter that was honoured from one that was
-/// not.
+/// ⚠️ Read to check the subscription filters: a provider ignoring `vote` or `failed` shows here as
+/// a `transaction` rate far above the pool activity, and nowhere else.
 const UPDATES_RECEIVED: &str = "yog_indexer_grpc_updates_total";
 
-/// Transactions dropped before reaching the pipeline, by reason.
-///
-/// Skip-and-log, per transaction: the stream keeps running.
-///
-/// ⚠️ **Named for what it holds and not for its first reason**, which it was
-/// not: it started as `adapter_failures_total` and then took a second, quite
-/// different reason — a transaction whose update matched no protocol filter,
-/// where nothing is malformed and the *subscription* and the reader disagree.
-/// One asks "is the translation wrong", the other "is the request wrong", and
-/// they are fixed in different files. Under the old name the second was
-/// invisible: a reader would have gone looking at `from_grpc`. Same defect the
-/// buffer's `EvictionReason` was given a label to avoid.
+/// Transactions dropped before reaching the pipeline, by reason; the stream keeps running.
+/// ⚠️ Two different faults share it: an untranslatable update (`from_grpc`) and an unroutable one
+/// (the request); the label tells them apart.
 const DROPPED_TRANSACTIONS: &str = "yog_indexer_grpc_dropped_transactions_total";
 
 /// Transactions handed downstream, timestamped.
 const TRANSACTIONS_EMITTED: &str = "yog_indexer_grpc_transactions_emitted_total";
 
 /// Times the downstream channel was full when a transaction was ready.
-///
-/// ⚠️ **This is a back-pressure counter, not a loss counter** — and that is the
-/// difference with `infra/rpc/dispatcher`'s `downstream_saturated`, which
-/// counts *drops*. On the RPC path a dropped signature can be asked for again;
-/// here the transaction arrived once, over a stream billed by bandwidth, and
-/// asking again means a `getTransaction` — the very call this path exists to
-/// remove. So the listener waits instead of dropping, and what this counts is
-/// the wait: the consumer is not keeping up, and the stream is being slowed to
-/// its speed.
+/// ⚠️ A back-pressure counter, not a loss counter, unlike the dispatcher's `downstream_saturated`:
+/// the listener waits instead of dropping.
 const DOWNSTREAM_FULL: &str = "yog_indexer_grpc_downstream_full_total";
 
 /// Server pings this client could not answer, by reason. A provider may close
@@ -148,15 +83,12 @@ const STALLS: &str = "yog_indexer_grpc_stalls_total";
 pub(crate) enum UpdateKind {
     Transaction,
     BlockMeta,
-    /// A server keep-alive. Counted, and answered with a ping-only request —
-    /// see `PingAnswer::answer`.
+    /// A server keep-alive, counted and answered with a ping-only request.
     Ping,
-    /// The server's answer to one of ours. ⚠️ Read against `ping`: the two rise
-    /// together while answers get through, and [`PING_REPLIES_UNSENT`] says why
-    /// when they do not.
+    /// The server's answer to one of ours. ⚠️ Rises with `ping` while answers get through;
+    /// [`PING_REPLIES_UNSENT`] says why when they do not.
     Pong,
-    /// Anything the subscription did not ask for. Non-zero here means the
-    /// request and the reader disagree about what was subscribed to.
+    /// Anything the subscription did not ask for: non-zero means the request and the reader disagree.
     Other,
 }
 
@@ -175,18 +107,13 @@ impl UpdateKind {
 /// Why a transaction was dropped, for [`DROPPED_TRANSACTIONS`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DropReason {
-    /// The protobuf did not carry something the neutral shape requires — the
-    /// two `CoreError` kinds `from_grpc` returns, kept separate because one is
-    /// an absent field and the other a value that will not parse.
+    /// The two `CoreError` kinds `from_grpc` returns: an absent field, a value that will not parse.
     MissingField,
     ParseError,
-    /// A `from_grpc` failure of a kind its doc-comment does not list. Zero
-    /// today; a label rather than an `unreachable!` so a future variant stays
-    /// countable instead of fatal.
+    /// A `from_grpc` failure of another kind: a label, not `unreachable!`, so a future one stays countable.
     OtherMalformation,
-    /// The update matched no protocol filter, so there is no per-protocol
-    /// pipeline to send it down. Nothing is malformed: the request and this
-    /// reader disagree, which is fixed in `subscription`, not in the adapter.
+    /// The update matched no protocol filter: the request and this reader disagree, which is
+    /// fixed in `subscription`, not in the adapter.
     Unroutable,
 }
 

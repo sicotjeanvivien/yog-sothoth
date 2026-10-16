@@ -4,25 +4,13 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-/// How long the listener waits for an answer to `subscribe`, or for a
-/// block-meta on the stream, before ending the attempt as stalled.
-///
-/// ⚠️ A server can stop delivering and keep the connection open — HTTP/2
-/// keep-alive and Yellowstone pings both carry on, the pings coming from a
-/// task of their own (`rpcpool/yellowstone-grpc` #25, #175). Without this
-/// bound the listener would wait for ever.
-///
-/// The block-meta is the signal because one comes every slot (~400 ms)
-/// whatever the market does. 30 s is Alchemy's alerting threshold; not
-/// measured — the largest block-meta gap on a real stream should replace it.
+/// How long the listener waits for an answer to `subscribe`, or for a block-meta (one per ~400 ms
+/// slot), before ending the attempt as stalled.
+/// ⚠️ A server can stop delivering and keep pinging (`rpcpool/yellowstone-grpc` #25, #175).
 pub(crate) const STALL_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The silence of the server, measured in time spent **waiting on it**.
-///
-/// ⚠️ Not wall-clock time: between two waits the listener may sit in
-/// `StreamSession::handle`, parked on a full consumer, and a slow database is
-/// not a silent server. Only the span from [`Self::wait_started`] to
-/// [`Self::wait_ended`] counts, and only a block-meta resets it.
+/// The server's silence, in time spent **waiting on it**; only a block-meta resets it.
+/// ⚠️ Not wall-clock time: a listener parked on a full consumer is not a silent server.
 pub(super) struct StallClock {
     timeout: Duration,
     silent: Duration,

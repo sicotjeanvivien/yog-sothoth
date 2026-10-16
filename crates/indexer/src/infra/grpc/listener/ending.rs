@@ -1,12 +1,8 @@
 //! How one connection ended, what that ending is worth, and what it does to the
 //! resume mark.
 
-/// How one connection ended.
-///
-/// The stream endings carry two facts: `resume_from`, where to pick up (see
-/// `StreamSession::resume_from`), and `delivered`, whether any data came off
-/// the stream. [`Ending::Unreachable`] carries neither: nothing reached the
-/// service. What an ending is *worth* is [`Ending::verdict`]'s alone.
+/// How one connection ended. Stream endings carry `resume_from` and `delivered` (whether data
+/// came off the stream); what an ending is worth is [`Ending::verdict`]'s alone.
 pub(super) enum Ending {
     ShutdownRequested,
     DownstreamClosed,
@@ -25,10 +21,8 @@ pub(super) enum Ending {
         delivered: bool,
         resume_from: Option<u64>,
     },
-    /// The server said nothing for [`STALL_TIMEOUT`], and this listener ended
-    /// the attempt.
-    ///
-    /// [`STALL_TIMEOUT`]: super::stall_clock::STALL_TIMEOUT
+    /// The server said nothing for [`STALL_TIMEOUT`](super::stall_clock::STALL_TIMEOUT), and this
+    /// listener ended the attempt.
     Stalled {
         error: String,
         delivered: bool,
@@ -59,11 +53,7 @@ pub(super) enum Verdict {
 
 impl Ending {
     /// What this ending is worth.
-    ///
-    /// ⚠️ **A stall is no verdict.** A `Failed` that delivered nothing is a
-    /// refusal — the server had our `from_slot` — but a stall that delivered
-    /// nothing is silence, and the decision to stop waiting is ours: it keeps
-    /// the mark.
+    /// ⚠️ A stall is no verdict: one that delivered nothing is silence, not a refusal, and keeps the mark.
     pub(super) fn verdict(self) -> Verdict {
         match self {
             Ending::ShutdownRequested => Verdict::ShutdownRequested,
@@ -115,25 +105,14 @@ impl Ending {
 }
 
 impl Verdict {
-    /// Where the next attempt resumes from, given the mark the loop already
-    /// `held`.
-    ///
-    /// ⚠️ **An absent mark is not a mark at zero.** A session can deliver and
-    /// have nothing to resume from (an unroutable transaction is dropped before
-    /// the buffer), so a delivered mark *completes* the one held and never
-    /// replaces it with nothing.
-    ///
-    /// ⚠️ **A mark is given up only to the server that refused it.** A slot
-    /// past its retention, say, is not asked for twice: the next attempt starts
-    /// from the live edge.
-    ///
-    /// ⚠️ **No floor under the mark.** A replay that breaks before the buffer
-    /// drains resumes `REWIND_SLOTS` earlier each round, and the churn resets
-    /// the budget, so a provider that breaks after one transaction walks
-    /// `from_slot` backwards without bound.
+    /// Where the next attempt resumes from, given the mark the loop already `held`.
+    /// ⚠️ No floor: a replay breaking before the buffer drains rewinds `REWIND_SLOTS` each round and
+    /// the churn resets the budget, so `from_slot` can walk back without bound.
     pub(super) fn next_resume_from(&self, held: Option<u64>) -> Option<u64> {
         match self {
+            // ⚠️ An absent mark is not zero (an unroutable transaction never enters the buffer).
             Verdict::Delivered { mark, .. } => mark.or(held),
+            // A mark is given up only to the server that refused it; the next attempt starts live.
             Verdict::Refused { .. } => None,
             Verdict::Unanswered { .. } | Verdict::ShutdownRequested | Verdict::ConsumerGone => held,
         }

@@ -1,8 +1,5 @@
-//! Whether to try again after an attempt, and how long to wait first.
-//!
-//! The other half of the retry rule — the resume mark — is
-//! [`Verdict::next_resume_from`]'s. Both read the same [`Verdict`], decided
-//! once by `Ending::verdict`.
+//! Whether to try again after an attempt, and how long to wait first; the resume mark is
+//! [`Verdict::next_resume_from`]'s, read from the same [`Verdict`].
 
 use std::time::Duration;
 
@@ -10,9 +7,8 @@ use crate::error::GrpcListenerError;
 
 use super::{ending::Verdict, log};
 
-/// Retry budget shape, the same as `SubscriptionWorker`'s — the same provider
-/// is on the other end, and an operator reading two different backoffs would
-/// have to learn two. ⚠️ A copy, not a shared definition: change both.
+/// The same backoff as `SubscriptionWorker`: the same provider is on the other end.
+/// ⚠️ A copy, not a shared definition: change both.
 const INITIAL_BACKOFF_SECS: u64 = 1;
 const MAX_BACKOFF_SECS: u64 = 60;
 
@@ -42,16 +38,9 @@ impl RetryBudget {
         }
     }
 
-    /// Count one attempt and decide what follows its `verdict`. `resume_from`
-    /// is the mark the next attempt will ask for, already decided — it is only
-    /// logged here.
-    ///
-    /// ⚠️ A stream that delivered is **churn**, whatever ended it: a GOAWAY or
-    /// a provider restart is how a long-lived stream ordinarily breaks, and
-    /// charging it would stop the indexer on the tenth restart having lost
-    /// nothing. Everything that delivered nothing is **charged**: an exhausted
-    /// quota or a token refused at stream level looks exactly like a server that
-    /// closes at once, and resetting on it redials a billed provider for ever.
+    /// Count one attempt and decide what follows its `verdict`; `resume_from` is only logged.
+    /// ⚠️ A stream that delivered is churn whatever ended it, a GOAWAY being ordinary; one that
+    /// delivered nothing is charged, or an exhausted quota would redial a billed provider for ever.
     pub(super) fn settle(&mut self, verdict: Verdict, resume_from: Option<u64>) -> Next {
         self.attempt += 1;
 
