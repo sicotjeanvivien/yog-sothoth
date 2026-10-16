@@ -43,8 +43,7 @@ fn connection_keyword_is_classified() {
 
 // ── the version ceiling ─────────────────────────────────────────────
 
-/// The refusal exactly as the provider wrote it on 15 September 2026, for the
-/// signature `2yyZaQ3w…` that is now `swap_v1.json`.
+/// The refusal as the provider wrote it, for `2yyZaQ3w…`, now `swap_v1.json`.
 const VERSION_REFUSAL: &str = "RPC response error -32015: Transaction version (1) is not \
      supported by the requesting client. Please try the request again with the following \
      configuration parameter: \"maxSupportedTransactionVersion\": 1";
@@ -78,12 +77,8 @@ fn every_other_failure_is_retried() {
     }
 }
 
-/// ⚠️ **The ceiling equals the highest version the corpus proves the adapter
-/// reads — not less, not more.** Below it, `getTransaction` refuses a
-/// transaction the adapter could have read, and that transaction is lost.
-/// Above it, the RPC hands over a format no fixture has shown the adapter
-/// reads correctly, and a wrong reading is silent. Both directions are
-/// defects, so the test is an equality.
+/// ⚠️ The ceiling equals the highest version the corpus proves the adapter reads: below, a readable
+/// transaction is refused and lost; above, a wrong reading is silent.
 #[test]
 fn the_declared_ceiling_is_the_highest_fixture_version() {
     let dir =

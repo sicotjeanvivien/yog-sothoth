@@ -1,17 +1,5 @@
-//! Live integration tests for the DAMM v2 wire event extractor.
-//!
-//! Each test loads a real Solana transaction (saved as JSON in
-//! `yog-core`'s fixture directory) and asserts that the extractor produces
-//! the expected wire events.
-//!
-//! Fixtures are dumped via `solana confirm -v <signature> --output json`
-//! against mainnet — they capture the exact shape the RPC returns, so
-//! these tests double as regression guards if the JSON schema ever drifts.
-//!
-//! The fixtures stay in `yog-core` and are read from here by path: their whole
-//! value is being the verbatim RPC response, and a second copy would drift from
-//! the one the other suites assert against. They are data, and data does not
-//! follow the code that happens to read it.
+//! The DAMM v2 extraction pipeline on real mainnet transactions (`solana confirm -v <sig>
+//! --output json`), read by path from `yog-core`'s fixtures: one verbatim copy, no drift.
 
 use solana_pubkey::{Pubkey, pubkey};
 use solana_transaction_status_client_types::EncodedConfirmedTransactionWithStatusMeta;
@@ -32,13 +20,8 @@ use super::from_rpc;
 
 const CP_AMM_PROGRAM_ID: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
 
-/// Load a fixture file by name and hand it to the pipeline in the shape the
-/// pipeline actually reads: the transport-neutral [`OnChainTransaction`],
-/// filled by the JSON-RPC adapter.
-///
-/// Panics on any error — fixtures are part of the test contract, missing or
-/// malformed ones should fail the test loudly rather than producing confusing
-/// assertion errors later.
+/// Load a fixture and hand it to the pipeline as the JSON-RPC adapter fills it; panics on any
+/// error, a fixture being part of the test contract.
 fn load_fixture(name: &str) -> OnChainTransaction {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../core/tests/fixtures");
@@ -53,9 +36,8 @@ fn load_fixture(name: &str) -> OnChainTransaction {
     from_rpc(&tx).unwrap_or_else(|e| panic!("failed to adapt fixture {}: {e}", path.display()))
 }
 
-/// The reference transaction `2qJrr...` contains two `swap` (legacy)
-/// instructions invoking cp-amm on the same pool, in opposite directions.
-/// The extractor must surface both as `DammV2WireEvent::Swap2`.
+/// The reference transaction `2qJrr...`: two legacy `swap`s on one pool, opposite directions,
+/// both surfaced as `DammV2WireEvent::Swap2`.
 #[test]
 fn extracts_both_swaps_from_double_swap_tx() {
     let tx = load_fixture("damm_v2/swap_double.json");
@@ -89,15 +71,9 @@ fn extracts_both_swaps_from_double_swap_tx() {
     }
 }
 
-/// Decoded values must form a coherent AMM trajectory:
-/// the two swaps mutate the pool's reserves in opposite directions, and
-/// the transfer amounts match what the user sent / received on-chain.
-///
-/// Note: `reserve_a_amount` / `reserve_b_amount` in the event reflect the
-/// pool's *accounting* reserves (`pool.token_a_amount` / `token_b_amount`),
-/// **not** the raw vault balances. The vault balance also includes accrued
-/// protocol fees and other components that are tracked separately in the
-/// pool state. So we don't compare event reserves to `post_token_balances`.
+/// The two swaps form a coherent trajectory, and the transfer amounts match the chain.
+/// ⚠️ Event reserves are the pool's accounting reserves, not vault balances (which hold accrued
+/// fees too): never compared to `post_token_balances`.
 #[test]
 fn decoded_swap_values_match_onchain_reality() {
     let tx = load_fixture("damm_v2/swap_double.json");
@@ -161,13 +137,8 @@ fn decoded_swap_values_match_onchain_reality() {
     );
 }
 
-/// `EvtLiquidityChange` — fixtures existed but had no decode test. Validate an
-/// add-liquidity tx end-to-end: clean decode, `Add` kind, non-zero
-/// amounts/reserves/liquidity_delta, translation preserved.
-///
-/// (It used to claim it validated "canonical sorted mints". A liquidity event
-/// carries no mint at all, so there was nothing there to assert — and no sort
-/// anywhere to assert it against.)
+/// An add-liquidity transaction end to end: clean decode, `Add` kind, non-zero amounts, reserves
+/// and liquidity delta, translation preserved.
 #[test]
 fn decodes_liquidity_add_fixtures() {
     for fixture in ["damm_v2/liquidity_add.json", "damm_v2/liquidity_add_2.json"] {
@@ -215,15 +186,8 @@ fn decodes_liquidity_add_fixtures() {
     }
 }
 
-/// A **version 1** transaction reads like any other.
-///
-/// Solana activated the v1 format on mainnet on 15 September 2026, and until
-/// the fetcher declared it, every v1 was refused by the RPC and lost. Raising
-/// the ceiling is only safe if the adapter reads the format: this fixture is
-/// the refused transaction itself (`2yyZaQ3w…`, a Jupiter route), and it must
-/// come through the same path as a legacy one — its `transactionConfig`
-/// ignored, its one `EvtSwap2` extracted, its pool the one the swap instruction
-/// names as its second account.
+/// A version 1 transaction (`2yyZaQ3w…`, a Jupiter route) reads like a legacy one: its
+/// `transactionConfig` ignored, its `EvtSwap2` extracted, its pool the swap's second account.
 #[test]
 fn a_v1_transaction_yields_its_swap() {
     let tx = load_fixture("damm_v2/swap_v1.json");
@@ -257,21 +221,8 @@ fn a_v1_transaction_yields_its_swap() {
 
 #[test]
 fn extracts_swap_via_router_correctly() {
-    // Fixture: real mainnet transaction where cp-amm is invoked via a router
-    // (joeHSutRWndCtp1EPx5tz5zHyaPBZUZ5JsxDEVB1RPZ — Photon-style aggregator).
-    //
-    // Structure highlight:
-    //   - The cp-amm Swap2 outer instruction is itself an inner instruction
-    //     of the router (stackHeight 2).
-    //   - Both the outer Swap2 and the Anchor event_cpi self-CPI share the
-    //     same programId (cp-amm), so distinguishing them by programId alone
-    //     is not sufficient — the EVENT_IX_TAG prefix on the self-CPI's data
-    //     is what disambiguates.
-    //
-    // Expected: exactly one EvtSwap2 extracted and successfully translated
-    // into a SwapEvent. (Mints are not on the event at all any more — they are
-    // a pool property resolved from the account by yog-context — so there is
-    // nothing mint-related to assert; see the note further down.)
+    // A router (`joeHSut…`) invokes cp-amm, so the outer Swap2 is itself inner (stackHeight 2) and
+    // shares the self-CPI's programId: only the `EVENT_IX_TAG` prefix tells them apart.
 
     let tx = load_fixture("damm_v2/swap_via_router.json");
 
@@ -306,23 +257,15 @@ fn extracts_swap_via_router_correctly() {
         pubkey!("8Pm2kZpnxD3hoMmt4bjStX2Pw2Z9abpbHzZxMPqxPmie"),
     );
 
-    // Mints are no longer carried on the event (they're a pool property
-    // resolved by yog-context), so there's nothing mint-related to assert here.
-
-    // The amounts come from the EvtSwap2 wire fields, mapped via trade_direction.
-    // We don't hard-code them here — the EvtSwap2 borsh payload is what drives
-    // the values. We just sanity-check they're nonzero.
+    // The amounts come from the EvtSwap2 payload; only checked non-zero.
     assert!(swap.amount_a > 0, "amount_a should be nonzero");
     assert!(swap.amount_b > 0, "amount_b should be nonzero");
     assert!(swap.reserve_a_after > 0);
     assert!(swap.reserve_b_after > 0);
 }
 
-/// Both `initialize_pool` fixtures must decode cleanly. This is the guard for
-/// the `EvtInitializePool` borsh layout — in particular the nested
-/// `PoolFeeParameters` (opaque 27-byte base fee + `Option<DynamicFeeParameters>`):
-/// if its layout were wrong, every field after it would be garbage and the
-/// borsh deserialize would land in `failures`.
+/// Both `initialize_pool` fixtures decode cleanly: the guard for `EvtInitializePool`'s layout,
+/// whose nested `PoolFeeParameters` would leave every later field garbage if wrong.
 #[test]
 fn decodes_initialize_pool_fixtures() {
     for fixture in [
@@ -387,27 +330,12 @@ fn decodes_initialize_pool_fixtures() {
             "{fixture}: activation_type out of range: {}",
             init.activation_type
         );
-        // NOTE: cp-amm does NOT emit mints sorted by raw bytes — the event
-        // preserves the program's native token_a/token_b designation, and
-        // `initialize_pool_events` stores that order as-is.
-        //
-        // Nothing re-sorts it downstream either. An earlier version of this
-        // note claimed the pool *registry* upsert normalised the pair to a
-        // canonical order; it never did, and that is the more dangerous half
-        // of the claim, because it invites a reader to trust a step that does
-        // not exist. `persist_initialize_pool` calls `discover_pool`, which
-        // writes NULL mints; yog-context later fills them from the account, in
-        // the program's order. Roughly a third of `pools` rows therefore have
-        // `token_a_mint > token_b_mint` — see the conventions section on
-        // `MeteoraDammV2SwapEvent` for what that order does and does not
-        // guarantee.
+        // ⚠️ cp-amm keeps its own token_a/token_b order, unsorted, and nothing downstream sorts
+        // it: yog-context fills `pools`' mints from the account in that same order.
     }
 }
 
-/// The claim-protocol-fee fixture must decode cleanly to an
-/// `EvtClaimProtocolFee` — the operator withdrawing Meteora's accrued protocol
-/// fee share (the `emit_cpi!` variant, `ix_claim_protocol_fee`). Guards the
-/// wire layout on real data.
+/// The claim-protocol-fee fixture decodes to an `EvtClaimProtocolFee`, the `emit_cpi!` variant.
 #[test]
 fn decodes_claim_protocol_fee_fixture() {
     let tx = load_fixture("damm_v2/claim_protocol_fee.json");
@@ -440,15 +368,8 @@ fn decodes_claim_protocol_fee_fixture() {
     );
 }
 
-/// The initialize-reward fixture must decode cleanly to an
-/// `EvtInitializeReward` — an admin opening a farming reward slot on a pool.
-///
-/// This fixture is a real "farm launch" transaction: it opens slot 0 with a
-/// 7-day window and funds it in the same transaction, so it also carries an
-/// `EvtFundReward` (asserted separately). Every field is pinned to its
-/// on-chain value: `funder` and `creator` are the same wallet here, so this
-/// fixture cannot by itself discriminate their order in the borsh layout —
-/// that comes from the cp-amm source.
+/// The initialize-reward fixture decodes to an `EvtInitializeReward`, every field pinned; it also
+/// funds the slot. ⚠️ `funder` and `creator` are one wallet here: their order comes from cp-amm.
 #[test]
 fn decodes_initialize_reward_fixture() {
     let tx = load_fixture("damm_v2/initialize_reward.json");
@@ -490,15 +411,8 @@ fn decodes_initialize_reward_fixture() {
     assert_eq!(ir.reward_duration, 604_800);
 }
 
-/// The fund-reward fixtures must decode cleanly to an `EvtFundReward` — a
-/// funder depositing rewards and (re)setting the slot's emission rate.
-///
-/// Two fixtures covering both regimes:
-/// - `damm_v2/initialize_reward.json`: slot funded for the *first* time
-///   (`pre_reward_rate == 0`), in the same transaction that opened it.
-/// - `damm_v2/fund_reward.json`: a *re-fund* of a live slot
-///   (`pre_reward_rate > 0`), where the undistributed remainder is carried
-///   forward into the new window.
+/// The fund-reward fixtures decode to an `EvtFundReward`: a first funding (`initialize_reward.json`)
+/// and a re-fund of a live slot that carries the remainder forward (`fund_reward.json`).
 #[test]
 fn decodes_fund_reward_fixtures() {
     // Fresh slot: opened and funded in one transaction.
@@ -540,10 +454,8 @@ fn decodes_fund_reward_fixtures() {
     // First funding of the slot — nothing was emitting before.
     assert_eq!(fr.pre_reward_rate, 0);
 
-    // The load-bearing assertion of this whole event: the rate is Q64.64.
-    // On a fresh slot there is no carry-forward, so the program's rate must
-    // equal (amount << 64) / duration exactly. A wrong scale assumption (or a
-    // u128 field misread) breaks this; a mere non-zero check would not.
+    // The rate is Q64.64: on a fresh slot it must equal (amount << 64) / duration exactly, which
+    // a wrong scale or a misread u128 breaks and a non-zero check would not.
     let duration: u128 = 604_800;
     assert_eq!(
         fr.post_reward_rate,
@@ -591,9 +503,7 @@ fn decodes_fund_reward_fixtures() {
         fr.post_reward_rate > fr.pre_reward_rate,
         "funding a slot must not lower its emission rate"
     );
-    // Carry-forward: the new window distributes far more than this deposit
-    // alone, because the remainder of the previous window was folded in.
-    // total = post_rate * duration >> 64.
+    // Carry-forward: the new window distributes more than this deposit; total = rate * duration >> 64.
     let total = (fr.post_reward_rate * duration) >> 64;
     assert!(
         total > u128::from(fr.amount),
@@ -602,13 +512,8 @@ fn decodes_fund_reward_fixtures() {
     );
 }
 
-/// The withdraw-ineligible-reward fixture must decode cleanly to an
-/// `EvtWithdrawIneligibleReward` — the funder reclaiming rewards that accrued
-/// while the pool had no eligible liquidity, so nobody could ever claim them.
-///
-/// Caveat on this fixture's strength: its `amount` is legitimately **zero**
-/// (the instruction runs and emits even when there is nothing to reclaim), so
-/// the amount field is pinned but not discriminating. The two pubkeys are.
+/// The withdraw-ineligible-reward fixture decodes to an `EvtWithdrawIneligibleReward`.
+/// ⚠️ Its `amount` is legitimately zero: pinned but not discriminating; the two pubkeys are.
 #[test]
 fn decodes_withdraw_ineligible_reward_fixture() {
     let tx = load_fixture("damm_v2/withdraw_ineligible_reward.json");
@@ -637,42 +542,13 @@ fn decodes_withdraw_ineligible_reward_fixture() {
         wir.reward_mint,
         pubkey!("venum8bXEakzg6eSQWikT51EoeuAsR51Wxn7JfQc4QX")
     );
-    // Nothing was reclaimable in this transaction. Pinned rather than asserted
-    // non-zero: a >0 check here would be a false guarantee.
+    // Pinned, not asserted non-zero: nothing was reclaimable.
     assert_eq!(wir.amount, 0);
 }
 
-/// A `zap_protocol_fee` transaction must yield **exactly one** event — and not
-/// the one you might expect.
-///
-/// `zap_protocol_fee` is the operator-only instruction that harvests a pool's
-/// accrued protocol fees in a long-tail token and immediately sells them toward
-/// SOL/USDC. It is the documented blind spot of our indexing: it mutates pool
-/// state through `pool.claim_protocol_fee()` but emits **no event at all**, so
-/// the harvest itself is invisible to an `event_cpi` pipeline by construction.
-/// This fixture turns that claim from a source-code reading into a fact checked
-/// against real bytes.
-///
-/// The transaction's shape is what makes it interesting — two unrelated
-/// top-level instructions that are easy to conflate:
-///
-/// ```text
-/// [3] cp-amm  zap_protocol_fee   -> inner: one SPL transfer, ZERO event
-/// [4] zapvX9M…  zap_out          -> Jupiter route
-///                                     -> cp-amm swap (legacy v1)  => EvtSwap2
-///                                     -> Whirlpool x2             (not ours)
-/// ```
-///
-/// So the single `EvtSwap2` here belongs to instruction `[4]`: Jupiter routed
-/// part of the sale through an *unrelated* cp-amm pool. Its pool key is
-/// deliberately asserted below to be a different pool from the ones
-/// `zap_protocol_fee` touches — seeing an event in this transaction does not
-/// mean the fee harvest was captured.
-///
-/// Two decoder behaviours are pinned by the `unknown` / `failures` assertions:
-/// the top-level `zap_protocol_fee` call and the nested legacy `swap` call are
-/// both cp-amm instructions that are *not* `event_cpi` payloads, and must be
-/// skipped silently rather than counted as unknown discriminators or failures.
+/// A `zap_protocol_fee` transaction yields exactly one event, and not the harvest: that emits
+/// none. Its `EvtSwap2` is a Jupiter route through an unrelated cp-amm pool, asserted different.
+/// ⚠️ The two non-`event_cpi` cp-amm calls must be skipped, neither unknown nor failures.
 #[test]
 fn zap_protocol_fee_emits_no_event_of_its_own() {
     let tx = load_fixture("damm_v2/zap_protocol_fee.json");
@@ -698,8 +574,7 @@ fn zap_protocol_fee_emits_no_event_of_its_own() {
     let DammV2WireEvent::Swap2(swap) = &extracted.events[0].event else {
         panic!("the only event must be a Swap2: {:?}", extracted.events[0]);
     };
-    // The pool Jupiter routed through while selling the harvested token — NOT a
-    // pool that `zap_protocol_fee` harvested from.
+    // The pool Jupiter routed through, not one `zap_protocol_fee` harvested from.
     assert_eq!(
         swap.pool,
         pubkey!("4C47JJgDHztupNHeU9da7MroH676eXbPoUhEvx3FpfR3")
@@ -710,18 +585,8 @@ fn zap_protocol_fee_emits_no_event_of_its_own() {
     assert!(swap.reserve_a_amount > 0 && swap.reserve_b_amount > 0);
 }
 
-/// The split-position fixtures must decode to `EvtSplitPosition3`, and the
-/// deprecated `EvtSplitPosition2` that cp-amm emits alongside it must be
-/// **dropped silently** — not counted as an unknown discriminator.
-///
-/// This is the double-counting guard. cp-amm emits both events unconditionally
-/// on every split (the `#[allow(deprecated)]` block around the v2 emission is an
-/// attribute scope, not a condition), and they describe the *same* split. v3 is
-/// a strict superset, so v2 is recognised and discarded at extraction.
-///
-/// `damm_v2/split_position2.json` additionally carries an `EvtCreatePosition`:
-/// a split needs a second position to split into, so the same transaction
-/// creates it first. That event is indexed normally.
+/// The split fixtures decode to `EvtSplitPosition3`, the deprecated `EvtSplitPosition2` emitted
+/// beside it dropped silently: the double-counting guard. `split_position2.json` also creates a position.
 #[test]
 fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
     for fixture in [
@@ -736,9 +601,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
             "{fixture}: {:?}",
             extracted.failures
         );
-        // The whole point: EvtSplitPosition2 is emitted by every split. If it
-        // ever shows up here, our deliberate drop stopped working and the
-        // "unknown" metric is being polluted once per split.
+        // `EvtSplitPosition2` comes with every split: here, the drop stopped working.
         assert!(
             extracted.unknown.is_empty(),
             "{fixture}: the deprecated EvtSplitPosition2 must be dropped, not \
@@ -771,9 +634,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
             sp.current_sqrt_price > 0,
             "{fixture}: sqrt_price should be non-zero"
         );
-        // Numerators are fractions over SPLIT_POSITION_DENOMINATOR = 1e9 and are
-        // validated on-chain to stay within it. Garbage from a layout drift in
-        // the trailing parameters struct would blow past this.
+        // Numerators are fractions over SPLIT_POSITION_DENOMINATOR = 1e9, validated on-chain.
         const DENOMINATOR: u32 = 1_000_000_000;
         let n = &sp.split_position_parameters;
         for (label, value) in [
@@ -820,10 +681,7 @@ fn decodes_split_position_fixtures_and_drops_the_deprecated_v2() {
     );
 }
 
-/// `EvtCreatePosition` rides along in the genesis transactions (a pool is
-/// created and its first position opened together), so the initialize_pool
-/// fixtures double as real-data validation for it: clean decode, sane fields,
-/// and a full translation into the domain event.
+/// `EvtCreatePosition` rides along in the genesis transactions: decoded, sane, translated.
 #[test]
 fn decodes_create_position_from_genesis_fixtures() {
     for fixture in [
@@ -887,8 +745,7 @@ fn decodes_create_position_from_genesis_fixtures() {
     }
 }
 
-/// `EvtClosePosition` — same 4-pubkey shape as create. Validate against a real
-/// close transaction: clean decode, sane distinct fields, translation preserved.
+/// `EvtClosePosition`, the same 4-pubkey shape as create: decoded, distinct fields, translated.
 #[test]
 fn decodes_close_position_fixture() {
     let tx = load_fixture("damm_v2/close_position.json");
@@ -931,9 +788,7 @@ fn decodes_close_position_fixture() {
     assert_eq!(domain.position_nft_mint, nft);
 }
 
-/// `EvtLockPosition` — non-trivial layout (4 pubkeys + u64×2 + u128×2 + u16).
-/// A layout drift would scramble the pubkeys or fail borsh; the vesting
-/// numerics are checked for coherence and round-tripped through the domain.
+/// `EvtLockPosition` (4 pubkeys, u64×2, u128×2, u16): vesting numerics checked and round-tripped.
 #[test]
 fn decodes_lock_position_fixture() {
     let tx = load_fixture("damm_v2/lock_position.json");
@@ -957,9 +812,7 @@ fn decodes_lock_position_fixture() {
     ] {
         assert_ne!(p, Pubkey::default(), "{name} is all-zero — layout drift");
     }
-    // A lock must immobilise some liquidity, either fully at the cliff
-    // (number_of_period == 0, a valid cliff-only lock) or spread over periods.
-    // Garbage from a misaligned u128 region would not satisfy this.
+    // Some liquidity is locked, at the cliff or over periods; a misaligned u128 fails this.
     assert!(
         lock.cliff_unlock_liquidity > 0 || lock.liquidity_per_period > 0,
         "no liquidity locked across cliff or periods"
@@ -1001,17 +854,13 @@ fn decodes_lock_position_fixture() {
     );
 }
 
-/// `EvtPermanentLockPosition` — pubkey×2 + u128×2. The running total must be
-/// at least the amount locked by this action: a structural invariant that a
-/// scrambled layout would almost certainly violate.
+/// `EvtPermanentLockPosition`: the running total is at least this action's amount.
 #[test]
 fn decodes_permanent_lock_position_fixture() {
     let tx = load_fixture("damm_v2/permanent_lock_position.json");
     let extracted = extract_wire_events(&tx, &CP_AMM_PROGRAM_ID);
-    // This tx also contains an 8-byte tag-only cp-amm self-CPI that trips the
-    // anchor decoder (a benign, pre-existing skip-and-log case). Tolerate that
-    // AnchorDecode failure, but a Borsh failure would mean a *recognized* event
-    // decoded wrong — that must not happen.
+    // A tag-only self-CPI here trips the anchor decoder, a known skip; a Borsh failure would mean
+    // a recognised event decoded wrong.
     assert!(
         !extracted
             .failures
@@ -1066,8 +915,7 @@ fn decodes_permanent_lock_position_fixture() {
     );
 }
 
-/// `EvtClaimPositionFee` — validate against a real claim: clean decode, sane
-/// pubkeys, and a full wire→domain translation preserving every field.
+/// `EvtClaimPositionFee` on a real claim: decoded, field-preserving translation.
 #[test]
 fn decodes_claim_position_fee_fixture() {
     let tx = load_fixture("damm_v2/claim_position_fee.json");
@@ -1109,8 +957,7 @@ fn decodes_claim_position_fee_fixture() {
     assert_eq!(d.fee_b_claimed, claim.fee_b_claimed);
 }
 
-/// `EvtClaimReward` — same shape of guard: decode + field-preserving translation
-/// on a real reward claim. `reward_index` disambiguates the reward stream.
+/// `EvtClaimReward` on a real claim; `reward_index` disambiguates the reward stream.
 #[test]
 fn decodes_claim_reward_fixture() {
     let tx = load_fixture("damm_v2/claim_reward.json");
@@ -1154,11 +1001,8 @@ fn decodes_claim_reward_fixture() {
     assert_eq!(d.total_reward, claim.total_reward);
 }
 
-/// Guard for the `EvtUpdatePoolFees` decode. Its `BorshDeserialize` is custom:
-/// it reads the two leading pubkeys (pool, operator) and captures the trailing
-/// `UpdatePoolFeesParameters` bytes verbatim into `params_raw` ("voie C"). A
-/// clean decode here proves the discriminator matches and the prefix layout
-/// (pool, operator) is correct on a real on-chain transaction.
+/// `EvtUpdatePoolFees`, whose custom `BorshDeserialize` reads pool and operator, then captures the
+/// trailing parameters verbatim into `params_raw`.
 #[test]
 fn decodes_update_pool_fees_fixture() {
     let tx = load_fixture("damm_v2/update_pool_fees.json");
@@ -1189,15 +1033,13 @@ fn decodes_update_pool_fees_fixture() {
         Pubkey::default(),
         "operator is all-zero — prefix layout drift"
     );
-    // The trailing params blob is captured verbatim; a real fee update carries
-    // a non-empty UpdatePoolFeesParameters.
+    // The trailing params blob, captured verbatim, is non-empty.
     assert!(
         !update.params_raw.is_empty(),
         "params_raw should be non-empty"
     );
 
-    // End-to-end: the full extractor must translate it into the domain event,
-    // preserving pool / operator / the raw params blob.
+    // End to end: pool, operator and the raw params blob are preserved.
     let (wire_pool, wire_operator, wire_params) =
         (update.pool, update.operator, update.params_raw.clone());
 
@@ -1220,28 +1062,12 @@ fn decodes_update_pool_fees_fixture() {
     assert_eq!(domain.params_raw, wire_params);
 }
 
-/// `event_index` numbers the transaction's self-CPI payloads, **not** the
-/// events we recognise — the property the unique key
-/// `(signature, event_index, timestamp)` rests on.
-///
-/// The split fixtures prove it on real data rather than by construction:
-/// cp-amm emits the deprecated `EvtSplitPosition2` alongside
-/// `EvtSplitPosition3` on every split, and the extractor drops the v2
-/// (`Dispatch::Ignored`). If indices were assigned over the *kept* events,
-/// the surviving v3 would land at 0 and the dropped payload would leave no
-/// trace. Numbering the payloads instead, it keeps the index it actually
-/// occupied on chain.
-///
-/// Why this matters beyond tidiness: implement one more discriminator
-/// tomorrow and a "kept events" numbering would renumber every event already
-/// stored, so re-ingesting a transaction would insert duplicates instead of
-/// conflicting. Stored indices must depend only on what the chain emitted.
+/// `event_index` numbers the self-CPI payloads, not the recognised events: implementing one more
+/// discriminator must not renumber stored events. The dropped `EvtSplitPosition2` leaves its hole.
 #[test]
 fn event_index_counts_dropped_payloads_too() {
-    // `split_position.json`: one payload dropped, then the split — the kept
-    // event sits at 1, not 0.
-    // `split_position2.json`: two splits with a dropped payload *between*
-    // them — the indices are 0 and 2, and the hole is the proof.
+    // `split_position.json`: one payload dropped, then the split at 1, not 0.
+    // `split_position2.json`: two splits around a dropped payload, at 0 and 2.
     for (fixture, expected) in [
         ("damm_v2/split_position.json", vec![1u16]),
         ("damm_v2/split_position2.json", vec![0u16, 2u16]),

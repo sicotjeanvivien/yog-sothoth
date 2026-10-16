@@ -1,13 +1,9 @@
-//! Tests for the credential both ingestion paths carry.
-//!
-//! Worth more than most of this crate's tests, because none of them depends on
-//! what a provider sends: a header either goes out or it does not, and a
-//! `{:?}` either prints a secret or it does not.
+//! Tests for the credential both ingestion paths carry: a header goes out or not, a `{:?}`
+//! prints a secret or not, whatever a provider sends.
 
 use super::*;
 
-/// The token every test looks for afterwards. Distinctive on purpose: a
-/// substring search for it must not match anything a redaction leaves behind.
+/// The token every test looks for; distinctive, so no redaction leftover matches it.
 const TOKEN: &str = "s3cret-token-value";
 
 const URL: &str = "wss://example.invalid/stream";
@@ -22,11 +18,8 @@ fn url() -> SecretUrl {
 
 // ── the header reaches the WebSocket handshake ──────────────────────
 
-/// ⚠️ **The point of this whole module, and the answer to a review objection:**
-/// what decides whether there is a header is the operator's configuration, not
-/// the transport. Until 10 September 2026 `INGEST_SOURCE` decided, on the
-/// belief that the WebSocket client could not carry one — it can, and this is
-/// the test that says so.
+/// ⚠️ Whether there is a header is the operator's configuration, not the transport's: the
+/// WebSocket client carries one too.
 #[test]
 fn the_websocket_handshake_carries_the_configured_header() {
     let request = credential("x-token")
@@ -43,8 +36,7 @@ fn the_websocket_handshake_carries_the_configured_header() {
     );
 }
 
-/// And the handshake stays a handshake: adding a header must not cost the
-/// fields `tungstenite` refuses a request without.
+/// The handshake stays a handshake: the header costs none of the fields `tungstenite` requires.
 #[test]
 fn the_handshake_keeps_the_fields_the_protocol_requires() {
     let request = credential("x-token").ws_request(&url()).expect("valid");
@@ -65,8 +57,7 @@ fn the_handshake_keeps_the_fields_the_protocol_requires() {
     assert_eq!(request.uri().to_string(), URL);
 }
 
-/// An endpoint with no header is a first-class case: a self-hosted Yellowstone
-/// takes no credential, and a provider may want it inside the URL.
+/// An endpoint with no header is first-class: a self-hosted Yellowstone, or a key in the URL.
 #[test]
 fn an_endpoint_without_a_header_adds_none() {
     let credential = Credential::new(None).expect("no header is valid");
@@ -77,8 +68,7 @@ fn an_endpoint_without_a_header_adds_none() {
     assert_eq!(credential.name(), None);
 }
 
-/// The name is the operator's, not ours — `authorization: Bearer {key}` is as
-/// legitimate a shape as `x-token`, and the code knows neither provider.
+/// The name is the operator's: `authorization: Bearer {key}` is as legitimate as `x-token`.
 #[test]
 fn any_header_name_the_operator_writes_is_used() {
     let request = credential("authorization")
@@ -94,15 +84,8 @@ fn any_header_name_the_operator_writes_is_used() {
 
 // ── the token is printed by nothing ─────────────────────────────────
 
-/// ⚠️ **The whole point of the credential split, in the one form a test can
-/// carry it.**
-///
-/// ⚠️ What turns it red is **both** guards going: measured by mutation on
-/// 9 September 2026, replacing the hand-written `Debug` by a derive keeps it
-/// green on its own, because `set_sensitive` makes `HeaderValue`'s own `Debug`
-/// print `Sensitive`. Written down because the natural reading — "it pins the
-/// manual impl" — is wrong, and a test believed to guard something it does not
-/// is worse than no test.
+/// ⚠️ Red only when both guards go: a derived `Debug` alone stays green, `set_sensitive` making
+/// `HeaderValue`'s `Debug` print `Sensitive`. It does not pin the manual impl.
 #[test]
 fn debug_never_prints_the_token() {
     let printed = format!("{:?}", credential("x-token"));
@@ -118,8 +101,7 @@ fn debug_never_prints_the_token() {
     );
 }
 
-/// The guard that covers code this repository does not write: the layers that
-/// dump request headers honour the sensitive flag.
+/// The guard for code this repository does not write: header dumps honour the sensitive flag.
 #[test]
 fn the_header_value_is_marked_sensitive() {
     let credential = credential("x-token");
@@ -131,8 +113,7 @@ fn the_header_value_is_marked_sensitive() {
     );
 }
 
-/// ⚠️ And a request built from it keeps the flag — the property only pays off
-/// where the value actually travels.
+/// ⚠️ A request built from it keeps the flag, where the value actually travels.
 #[test]
 fn the_flag_survives_into_the_handshake_request() {
     let request = credential("x-token").ws_request(&url()).expect("valid");
@@ -148,8 +129,7 @@ fn the_flag_survives_into_the_handshake_request() {
 
 // ── refusals name the line to fix, never the secret ─────────────────
 
-/// A malformed name is a startup failure, not a per-attempt one: the
-/// configuration will not fix itself between two connections.
+/// A malformed name is a start-up failure: the configuration will not fix itself.
 #[test]
 fn a_header_name_that_is_not_a_token_is_refused_at_construction() {
     let error = Credential::new(Some(("x token", SecretKey::for_tests(TOKEN))))
@@ -165,13 +145,10 @@ fn a_header_name_that_is_not_a_token_is_refused_at_construction() {
     );
 }
 
-/// ⚠️ And the refusal about the **value** must not quote the value either —
-/// which is the one an error message would most naturally do, since that is
-/// what is wrong with it.
+/// ⚠️ The refusal about the value must not quote it, the most natural thing for it to do.
 #[test]
 fn a_refused_header_value_is_never_quoted_back() {
-    // A newline cannot appear in a header value; it is also what a credential
-    // pasted with its line ending looks like.
+    // A newline cannot appear in a header value; it is what a credential pasted with its line ending looks like.
     let broken = format!("{TOKEN}\n");
     let error = Credential::new(Some(("x-token", SecretKey::for_tests(&broken))))
         .expect_err("a newline is not allowed in a header value");
@@ -191,22 +168,17 @@ fn a_refused_header_value_is_never_quoted_back() {
     );
 }
 
-/// A URL that is not a WebSocket endpoint fails **before** any connection, and
-/// its message is scrubbed: the error quotes the URL, which carries the key
-/// whenever the operator put it there rather than in a header.
+/// A URL that is no WebSocket endpoint fails before any connection, its message scrubbed of the key.
 #[test]
 fn a_url_that_is_not_a_websocket_endpoint_is_refused_scrubbed() {
     let url = SecretUrl::for_tests("wss://example.invalid/?api-key=s3cret-in-the-url");
     let credential = Credential::new(None).expect("no header");
 
-    // ⚠️ Not a wrong *scheme*: `into_client_request` accepts `ftp://` and lets
-    // the connection refuse it later, which this test asserted until it was
-    // run. What it does refuse is a string that is not a URI at all.
+    // ⚠️ Not a wrong scheme, which `into_client_request` accepts: a string that is no URI at all.
     let broken = SecretUrl::for_tests("not a uri at all");
     assert!(credential.ws_request(&broken).is_err());
 
-    // And the sound one still carries its query untouched — the request is what
-    // the operator wrote, key included, since that is where they put it.
+    // The sound one keeps its query, key included: the request is what the operator wrote.
     let request = credential.ws_request(&url).expect("valid");
     assert!(request.uri().to_string().contains("api-key="));
 }

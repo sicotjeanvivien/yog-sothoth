@@ -1,10 +1,5 @@
-//! What each path accepts, and what each refusal says.
-//!
-//! One test per transport and per reason: a test that only proved "refused"
-//! would stay green while the message named the wrong source. Whether each
-//! listener actually *calls* the check is a separate statement, tested beside
-//! it. Case and the RFC 3986 shape of a scheme are [`SecretUrl::scheme`]'s, and
-//! tested in `yog-bootstrap`.
+//! What each path accepts, and what each refusal says: one test per transport and per reason, a
+//! bare "refused" staying green while the message named the wrong source.
 
 use super::*;
 

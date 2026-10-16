@@ -122,10 +122,8 @@ insert_only_mock!(
     "insert:split_position"
 );
 
-// Ring-1 repos: record `insert`; their read methods are never hit by
-// `persist()`, so they stub out.
-/// Carries the outcome it should report, so a test can drive the
-/// `Skipped` branch of `persist()` — the one the correction added.
+// Ring-1 repos: record `insert`; `persist()` never reads, so the rest is stubbed.
+/// Carries the outcome it should report, so a test can drive `persist()`'s `Skipped` branch.
 struct MockSwap(Calls, InsertOutcome);
 #[async_trait]
 impl MeteoraDammV2SwapEventRepository for MockSwap {
@@ -162,8 +160,8 @@ impl MeteoraDammV2ClaimRewardEventRepository for MockClaimReward {
     }
 }
 
-// PoolMaintenance's two underlying repos. `pool:upsert` ⇒ upsert_pool_full,
-// `pool:touch` ⇒ touch_pool, `pcs:upsert` ⇒ current-state projection.
+// PoolMaintenance's two repos: `pool:upsert` is upsert_pool_full, `pool:touch` touch_pool,
+// `pcs:upsert` the current-state projection.
 struct MockPoolRepo(Calls);
 #[async_trait]
 impl PoolRepository for MockPoolRepo {
@@ -179,8 +177,7 @@ impl PoolRepository for MockPoolRepo {
         rec(&self.0, "pool:mark_needs_refresh");
         Ok(())
     }
-    /// Never called from this crate: the registry's account-derived columns are
-    /// written by yog-context alone. Present only to satisfy the trait.
+    /// Never called: the registry's account-derived columns are yog-context's alone.
     async fn set_registry_properties(
         &self,
         _: &Pubkey,
@@ -190,9 +187,7 @@ impl PoolRepository for MockPoolRepo {
     }
 }
 
-/// Carries the outcome it should report, so a test can drive the
-/// `same_slot_ambiguity` branch — the residual case the ordering key
-/// cannot rank.
+/// Carries the outcome it should report, so a test can drive the `same_slot_ambiguity` branch.
 struct MockPcsRepo(Calls, PoolCurrentStateUpsertOutcome);
 #[async_trait]
 impl PoolCurrentStateRepository for MockPcsRepo {
@@ -660,11 +655,7 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
         ["pool:touch", "insert:permanent_lock_position"]
     );
 
-    // initialize_pool: upsert + insert, NO projection and — since this crate
-    // stopped writing pool properties — no fee decoding either. `discover_pool`
-    // leaves the property columns NULL, which already queues the pool for
-    // yog-context, so there is nothing to flag. The blob is still captured
-    // verbatim on the event's own row.
+    // initialize_pool: upsert + insert, no projection and no fee decoding; the blob is stored verbatim.
     // All-zero tail → mode 0, no periods, no dynamic fee → constant fee shape.
     let mut fee_blob = vec![0u8; 31];
     fee_blob[0..8].copy_from_slice(&2_500_000u64.to_le_bytes());
@@ -735,8 +726,7 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
                 transaction_index: None,
                 event_index: 0,
                 operator: pk(12),
-                // The blob is no longer decoded at all: a fee change flags the
-                // pool and yog-context re-reads the account.
+                // Not decoded: a fee change flags the pool, yog-context re-reads the account.
                 params_raw: vec![1, 160, 37, 38, 0, 0, 0, 0, 0],
             })
         )
@@ -749,23 +739,11 @@ async fn persist_routes_each_event_to_its_repo_and_recipe() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// A skipped insert must be counted, not merely tolerated
-// ---------------------------------------------------------------------------
+// ── a skipped insert is counted, not merely tolerated ──────────────────────
 
-/// The whole point of `InsertOutcome` is that a write which wrote nothing stops
-/// passing for a success. That guarantee lives in one branch of `persist()`,
-/// and until this test it was the only part of the correction with no test:
-/// every mock reported `Inserted`, so deleting the branch left the suite green.
-///
-/// Asserts **both** counters, because their relationship is the contract:
-/// `instructions_indexed` keeps meaning "events processed" and rows actually
-/// written are `indexed − skipped`. A future change that stopped counting the
-/// event as indexed would break that arithmetic silently.
-///
-/// Not `#[tokio::test]`: `with_local_recorder` installs the recorder on the
-/// *current thread* for the duration of a closure, so the future has to be
-/// driven inside it — hence the current-thread runtime.
+/// Both counters, their relationship being the contract: rows written are `indexed − skipped`.
+/// Mutation this is written against: deleting `persist()`'s `Skipped` branch, every other mock
+/// reporting `Inserted`. Not `#[tokio::test]`: `with_local_recorder` binds the current thread.
 #[test]
 fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -782,7 +760,7 @@ fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
                 let p = build_with_swap_outcome(calls.clone(), InsertOutcome::Skipped);
                 p.persist(&MeteoraDammV2Event::Swap(swap())).await;
 
-                // The recipe still ran in full — a skip is not a failure.
+                // The recipe still ran in full: a skip is not a failure.
                 assert_eq!(
                     calls.lock().unwrap().clone(),
                     ["pool:upsert", "insert:swap", "pcs:upsert"]
@@ -790,9 +768,7 @@ fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
             });
     });
 
-    // ONE snapshot, queried twice. `Snapshotter::snapshot` is destructive —
-    // it reads counters with `swap(0)` — so a second call returns zeros and a
-    // test written that way "proves" a counter that never fired.
+    // ⚠️ One snapshot, queried twice: `Snapshotter::snapshot` swaps counters to 0.
     let snapshot = snapshotter.snapshot().into_vec();
     let counter = |name: &str| {
         snapshot
@@ -815,19 +791,10 @@ fn a_skipped_insert_is_counted_and_still_counts_as_processed() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// The ambiguity the ordering key cannot resolve must be counted
-// ---------------------------------------------------------------------------
+// ── the ambiguity the ordering key cannot resolve is counted ─────────────────
 
-/// `(slot, transaction_index, event_index)` ranks two transactions of one
-/// block only if `transaction_index` is filled — and `getTransaction` does not
-/// return it. The repository reports that case; this asserts the indexer
-/// actually counts it instead of letting it pass for healthy concurrency, the
-/// mistake the `pool_current_state_stale` label made for months.
-///
-/// The counter is the measurement that decides whether the residual case is as
-/// rare as it was estimated to be. If nothing increments it, the estimate can
-/// never be falsified — which is the failure mode this project keeps hitting.
+/// Without `transaction_index` the order key cannot rank two transactions of one block: the
+/// repository reports it, and this asserts the indexer counts it.
 #[test]
 fn a_same_slot_ambiguity_is_counted_on_the_applied_path() {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder};
@@ -853,8 +820,7 @@ fn a_same_slot_ambiguity_is_counted_on_the_applied_path() {
             });
     });
 
-    // One snapshot: `Snapshotter::snapshot` reads counters with `swap(0)`, so a
-    // second call would return zeros.
+    // One snapshot: `Snapshotter::snapshot` swaps counters to 0.
     let snapshot = snapshotter.snapshot().into_vec();
     let counter = |name: &str| {
         snapshot

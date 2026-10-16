@@ -1,7 +1,5 @@
-//! The alarm against a scripted repository and a heartbeat that records what
-//! it is told. Every case asserts the **exact** signal — the reason included —
-//! because a check that went to `/fail` for the wrong reason, or to success
-//! with the ingestion stopped, reads as green anywhere else.
+//! The alarm against a scripted repository and a recording heartbeat; every case asserts the
+//! exact signal, reason included: a wrong reason reads as green anywhere else.
 
 use std::future::Future;
 use std::sync::Mutex;
@@ -73,7 +71,6 @@ async fn a_recent_event_signals_success() {
 }
 
 /// A lull is not a fault: the dashboard shows it orange, the check stays green.
-/// In production a quiet watched pool produces a few a day.
 #[tokio::test]
 async fn a_delayed_ingestion_still_signals_success() {
     let (alarm, heartbeat) = alarm(Ok(Some(at(11, 50, 0))));
@@ -84,9 +81,8 @@ async fn a_delayed_ingestion_still_signals_success() {
     assert_eq!(signals(&heartbeat), ["success"]);
 }
 
-/// The two sides of the dashboard's fifteen minutes. Together they pin the
-/// alarm to `FreshnessStatus::from_last_event`: a threshold of its own, even
-/// one second off, turns one of them red.
+/// The two sides of the dashboard's fifteen minutes: a threshold of the alarm's own, even one
+/// second off, turns one red.
 #[tokio::test]
 async fn fifteen_minutes_exactly_is_still_delayed() {
     let (alarm, heartbeat) = alarm(Ok(Some(at(11, 45, 0))));
@@ -147,8 +143,7 @@ async fn no_event_ever_indexed_fails_the_check() {
     );
 }
 
-/// A database that refuses is not a quiet tick: the check fails, and says what
-/// the database said.
+/// A database that refuses fails the check, saying what the database said.
 #[tokio::test]
 async fn an_unreadable_last_event_fails_the_check_with_the_error() {
     let (alarm, heartbeat) = alarm(Err(RepositoryError::Backend(
@@ -164,8 +159,7 @@ async fn an_unreadable_last_event_fails_the_check_with_the_error() {
     );
 }
 
-/// A read that hangs ends the check in `/fail`, with the reason — not in a
-/// silence the check would read as a stopped daemon.
+/// A read that hangs ends the check in `/fail` with the reason, not in silence.
 #[tokio::test(start_paused = true)]
 async fn a_read_that_never_answers_fails_the_check() {
     let (alarm, heartbeat) = alarm_over(Arc::new(HangingRepository));
@@ -179,8 +173,7 @@ async fn a_read_that_never_answers_fails_the_check() {
     );
 }
 
-/// Without a check to report to — development — the verdict is still reached;
-/// only the signal is skipped.
+/// Without a check to report to, the verdict is still reached; only the signal is skipped.
 #[tokio::test]
 async fn without_a_heartbeat_the_verdict_is_still_reached() {
     let alarm = IngestionAlarm::new(Arc::new(ScriptedRepository(Mutex::new(Ok(None)))), None);
@@ -190,8 +183,7 @@ async fn without_a_heartbeat_the_verdict_is_still_reached() {
     assert_eq!(verdict.label(), "stale");
 }
 
-/// A stop asked for before the first tick ends the loop without a check —
-/// nothing is read, nothing is signalled.
+/// A stop asked for before the first tick ends the loop with nothing read or signalled.
 #[tokio::test]
 async fn a_stop_ends_the_loop_without_a_check() {
     let (alarm, heartbeat) = alarm(Ok(None));
@@ -206,10 +198,8 @@ async fn a_stop_ends_the_loop_without_a_check() {
     assert!(signals(&heartbeat).is_empty());
 }
 
-/// A stop that arrives while a check is under way ends the loop at once — the
-/// check races the stop, it does not hold it. Here the read hangs: were the
-/// check awaited outside the race, the stop would wait out `READ_TIMEOUT`,
-/// then a ping, well past Docker's ten seconds.
+/// ⚠️ The check races the stop: awaited outside the race, the stop would wait out `READ_TIMEOUT`
+/// and a ping, past Docker's ten seconds.
 #[tokio::test(start_paused = true)]
 async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
     let (alarm, heartbeat) = alarm_over(Arc::new(HangingRepository));
@@ -231,9 +221,7 @@ async fn a_stop_during_a_check_ends_the_loop_without_waiting_for_it() {
     );
 }
 
-/// Drive `body` on a current-thread runtime with a local recorder installed —
-/// the recipe of the reporter's tests: `with_local_recorder` holds for the
-/// current thread only, so the future is driven inside it.
+/// Drive `body` on a current-thread runtime with a local recorder, which binds the current thread.
 fn with_recorder(body: impl Future<Output = ()>) -> Snapshotter {
     let recorder = DebuggingRecorder::new();
     let snapshotter = recorder.snapshotter();
@@ -247,9 +235,7 @@ fn with_recorder(body: impl Future<Output = ()>) -> Snapshotter {
     snapshotter
 }
 
-/// The checks counter, outcome by outcome, read from **one** snapshot: the
-/// debugging recorder drains its counters when it is read, so a second
-/// snapshot would find every one of them back at zero.
+/// The checks counter by outcome, from one snapshot: reading drains the counters.
 fn checks_by_outcome(snapshotter: &Snapshotter) -> Vec<(String, DebugValue)> {
     let mut checks: Vec<(String, DebugValue)> = snapshotter
         .snapshot()

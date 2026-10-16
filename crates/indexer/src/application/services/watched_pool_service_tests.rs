@@ -95,18 +95,8 @@ fn watched(source: &RecordingSource) -> Vec<(Protocol, Pubkey)> {
         .clone()
 }
 
-/// ⚠️ This test carries a spending decision, and it is the half that runs.
-///
-/// `INGEST_SCOPE=pools` is the shipped default, and `watched_pools.protocol` is
-/// plain `TEXT` with no `CHECK` — one hand-written INSERT is enough to name a
-/// protocol whose extractor is a stub. Subscribing to it fetches every
-/// transaction of that pool and hands each to something that returns nothing.
-///
-/// Put in failure before being trusted: deleting the `contains` check in
-/// `restore_subscriptions` turns this red. Its sibling in `yog-core` guards the
-/// `protocols` scope and was mutation-proven the same way; this one was written
-/// afterwards, because a guard on one scope of two is the defect the gRPC work
-/// kept repeating.
+/// ⚠️ `watched_pools.protocol` has no `CHECK`: one INSERT can name a protocol whose extractor is a
+/// stub. Mutation this is written against: deleting the `contains` check in `restore_subscriptions`.
 #[tokio::test]
 async fn a_pool_whose_protocol_has_no_extractor_is_not_subscribed_to() {
     let (service, source) = service(
@@ -129,9 +119,7 @@ async fn a_pool_whose_protocol_has_no_extractor_is_not_subscribed_to() {
     );
 }
 
-/// The other reason a row is skipped, and it must not be confused with the
-/// first: an inactive pool is a deliberate pause, not an unimplemented
-/// protocol. One case per reason.
+/// An inactive pool is skipped for another reason, a deliberate pause; one case per reason.
 #[tokio::test]
 async fn an_inactive_pool_is_not_subscribed_to_either() {
     let (service, source) = service(
@@ -147,9 +135,8 @@ async fn an_inactive_pool_is_not_subscribed_to_either() {
     assert!(watched(&source).is_empty());
 }
 
-/// And the case that must keep working: nothing is filtered when everything is
-/// implemented and active. A guard that refuses everything would pass both
-/// tests above.
+/// Nothing is filtered when everything is implemented and active: a guard refusing everything
+/// would pass both tests above.
 #[tokio::test]
 async fn every_active_pool_of_an_implemented_protocol_is_subscribed_to() {
     let (service, source) = service(
@@ -168,13 +155,8 @@ async fn every_active_pool_of_an_implemented_protocol_is_subscribed_to() {
     assert_eq!(watched(&source).len(), 2);
 }
 
-/// ⚠️ The dead end, which is not the same as an empty allowlist.
-///
-/// Rows exist, all name a protocol nothing can extract, and the source is
-/// handed nothing — so the listener refuses to start with
-/// `NoSubscriptionTargets`, a message about subscriptions that says nothing
-/// about protocols. This asserts the shape that lets the daemon say so while
-/// the cause is still in hand.
+/// ⚠️ Rows exist but none can be extracted: the source gets nothing and the listener refuses with
+/// a message about subscriptions; this asserts the shape that lets the daemon name the cause.
 #[tokio::test]
 async fn an_allowlist_of_only_unimplemented_protocols_subscribes_to_nothing() {
     let (service, source) = service(
