@@ -10,7 +10,6 @@ use yog_core::{
     domain::{NetworkStatus, NetworkStatusLookup},
 };
 
-/// Application service for the network snapshot.
 pub(crate) struct NetworkService {
     network_status_repo: Arc<dyn NetworkStatusLookup>,
 }

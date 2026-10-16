@@ -1,9 +1,4 @@
-//! `GET /api/stats` — protocol-wide aggregate statistics.
-//!
-//! Client-agnostic: powers the dashboard Overview, but ships raw aggregates
-//! (TVL + coverage counters, 24h volume/fees, pool counts) usable by any
-//! client. The handler only orchestrates the read and shapes the response;
-//! the composition (analytics + counts) lives in `StatsService`.
+//! `GET /api/stats`: protocol-wide aggregates, composed by `StatsService`.
 
 use crate::http::{AppState, dto::StatsResponse, error::ApiError};
 use axum::{Json, extract::State};

@@ -18,7 +18,6 @@ pub(crate) struct IngestionAggregate {
     pub last_event_at: Option<DateTime<Utc>>,
 }
 
-/// Application service for ingestion freshness.
 pub(crate) struct IngestionService {
     event_freshness_repo: Arc<dyn EventFreshnessRepository>,
 }

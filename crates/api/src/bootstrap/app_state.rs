@@ -26,10 +26,7 @@ use crate::bootstrap::Config;
 use crate::http::{AppState, SSE_MAX_STREAMS, STATEMENT_TIMEOUT, WORK_SLOT_WAIT, WORK_SLOTS};
 use anyhow::Context;
 
-/// Build the handlers' state and the signal-stream poller that feeds it.
-///
-/// Returned as a pair: the state goes to the router, the poller to
-/// [`serve`](crate::bootstrap::serve()) — the binary owns the runtime wiring.
+/// The handlers' state, and the poller that feeds it — for [`serve`](crate::bootstrap::serve()).
 pub(crate) async fn build_app_state(
     config: Config,
     shutdown: CancellationToken,
@@ -46,12 +43,8 @@ pub(crate) async fn build_app_state(
 
     let db_pool = database.pool().clone();
 
-    // ── Repositories ────────────────────────────────────────────────
     let pool_repo: Arc<dyn PoolCatalog> = Arc::new(PgPoolRepository::new(db_pool.clone()));
-    // The pool-properties registry: one lookup per protocol that stores a
-    // satellite. This list is the single place a protocol is named on the
-    // read path — `PoolService` matches a pool to its lookup by protocol and
-    // never learns which one it got.
+    // One lookup per protocol with a satellite: the only place the read path names a protocol.
     let pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>> = vec![
         Arc::new(PgMeteoraDammV2PoolPropertiesRepository::new(
             db_pool.clone(),
@@ -87,7 +80,6 @@ pub(crate) async fn build_app_state(
         token_metadata_repo.clone(),
     ));
 
-    // ── Signal stream (poller → enrich once → broadcast → SSE) ─────
     let (signal_stream, _) = broadcast::channel(STREAM_CHANNEL_CAPACITY);
     let signal_poller = SignalStreamPoller::new(
         signal_repo.clone(),
@@ -96,11 +88,8 @@ pub(crate) async fn build_app_state(
         config.signal_stream_poll,
     );
 
-    // One set of slots for every expensive read: the slow routes and the
-    // cached computations. See `application/work_slots.rs`.
     let work_slots = WorkSlots::new(WORK_SLOTS, WORK_SLOT_WAIT);
 
-    // ── Services ────────────────────────────────────────────────────
     let state = AppState {
         pool_service: Arc::new(PoolService::new(PoolServiceDeps {
             pool_repository: pool_repo.clone(),

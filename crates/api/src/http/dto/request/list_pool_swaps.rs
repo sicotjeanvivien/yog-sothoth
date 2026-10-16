@@ -23,11 +23,7 @@ pub(crate) struct ListPoolSwapsRequest {
 }
 
 impl ListPoolSwapsRequest {
-    /// Combine path and query extractors into a single validated request.
-    ///
-    /// Search and sort are intentionally not exposed by this endpoint —
-    /// swap events are ordered by `(timestamp DESC, signature ASC)` by
-    /// contract.
+    /// Path and query into one validated request. No sort nor search: the order is fixed.
     pub(crate) fn parse(address: String, query: EventPageQuery) -> Result<Self, ApiError> {
         let pool_address = parse_pool_address(&address)?;
         validate_limit(query.limit)?;

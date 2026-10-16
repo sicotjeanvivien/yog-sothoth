@@ -1,14 +1,5 @@
-//! Application service orchestrating pool listing and enrichment.
-//!
-//! Owns the multi-repository choreography that used to live in the
-//! HTTP handler: paginate pools, batch-compute their analytics, fetch
-//! each side's token metadata, and assemble the `EnrichedPool` aggregates.
-//!
-//! Domain-only boundary: this service depends on `yog-core` repository
-//! traits and domain types exclusively. It knows nothing of axum,
-//! `ApiError`, cursors-as-strings, or wire DTOs. Errors surface as
-//! `RepositoryError` (re-exported through `RepositoryResult`); the HTTP
-//! layer maps them to `ApiError`.
+//! Pool listing and enrichment: paginate, batch the analytics, fetch each side's token
+//! context, assemble `EnrichedPool`. Domain-only: errors surface as `RepositoryError`.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,27 +21,22 @@ use crate::application::cache::{SharedCache, TOP_POOLS};
 use crate::application::work_slots::no_work_slot;
 use crate::application::{EnrichedPool, EnrichedPoolDetail, EnrichedToken};
 
-/// Window of the pools-list signal indicator. Signals are append-only
-/// conclusions with no "resolved" state, so "this pool has signals" is
-/// *defined* by a lookback window — 24h, consistent with the rest of
-/// the list's analytics (volume/fees 24h).
+/// Window of the pools-list signal indicator: signals are never resolved, so "has signals"
+/// is defined by a lookback, 24 h like the list's other analytics.
 const RECENT_SIGNALS_WINDOW_HOURS: i64 = 24;
 
-/// Per-pool cap on the signals returned with a list page. Bounds the
-/// payload against a noisy pool; the hover list has no use for more.
+/// Per-pool cap on the signals returned with a list page, against a noisy pool.
 const RECENT_SIGNALS_PER_POOL: i64 = 20;
 
-/// A page of enriched pools, preserving the pagination metadata from
-/// the underlying `PoolPage`.
+/// A page of enriched pools, with the pagination metadata of the underlying `PoolPage`.
 pub(crate) struct EnrichedPoolPage {
     pub(crate) items: Vec<EnrichedPool>,
     pub(crate) next_cursor: Option<yog_core::Cursor>,
     pub(crate) prev_cursor: Option<yog_core::Cursor>,
     pub(crate) is_first: bool,
     pub(crate) is_last: bool,
-    /// The instant this traversal is anchored to, and how many pools have
-    /// since moved above it. Passed through untouched — see
-    /// [`yog_core::domain::PoolPage`] for what they mean and why they exist.
+    /// The traversal's anchor and how many pools moved above it, passed through —
+    /// see [`yog_core::domain::PoolPage`].
     pub(crate) as_of: Option<DateTime<Utc>>,
     pub(crate) touched_since: i64,
 }
@@ -62,12 +48,8 @@ pub(crate) struct PoolCurrentStateView {
     pub(crate) side_values: PoolSideValues,
 }
 
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
-/// The most pools `/api/pools/top` ranks. The shared ranking is computed at
-/// this size and cut to each request's `limit`; the HTTP layer refuses a
-/// larger one.
+/// The most pools `/api/pools/top` ranks: the shared ranking is computed at this size and
+/// cut to each request's `limit`, and the HTTP layer refuses a larger one.
 pub(crate) const TOP_POOLS_MAX: i64 = 20;
 
 pub(crate) struct PoolService {
@@ -76,24 +58,19 @@ pub(crate) struct PoolService {
     pool_analytics_repository: Arc<dyn PoolAnalyticsRepository>,
     token_metadata_repository: Arc<dyn TokenMetadataLookup>,
     signal_feed: Arc<dyn SignalFeed>,
-    /// One per protocol that stores pool properties. The service names none of
-    /// them: it pairs a pool with the lookup whose
-    /// [`PoolPropertiesLookup::protocol`] matches. A protocol with no satellite
-    /// contributes no entry and costs no round-trip.
+    /// One per protocol with a satellite, paired with a pool by
+    /// [`PoolPropertiesLookup::protocol`]: the service names none of them.
     pool_properties_lookups: Vec<Arc<dyn PoolPropertiesLookup>>,
-    /// `/api/pools/top` is the same for every visitor: computed once per
-    /// metric and time to live ([`TOP_POOLS`]), at [`TOP_POOLS_MAX`], and cut
-    /// to each caller's `limit`. Keyed on the metric alone so that at most two
-    /// rankings are ever computed at once — keyed on `limit` too, a client
-    /// cycling 1..=20 over the two metrics would start forty.
+    /// `/api/pools/top`, computed once per metric and [`TOP_POOLS`] at [`TOP_POOLS_MAX`], cut to
+    /// each `limit`. ⚠️ Keyed on the metric alone: keyed on `limit`, a client cycling limits
+    /// would start a ranking per value.
     top_pools_cache: SharedCache<PoolRankMetric, Vec<EnrichedPool>>,
     /// Taken by a ranking while it computes, never by a caller waiting for
     /// the cached one.
     work_slots: WorkSlots,
 }
 
-/// What a [`PoolService`] reads from, and the slots its computations share —
-/// named fields rather than eight positional arguments.
+/// What a [`PoolService`] reads from, and the slots its computations share.
 pub(crate) struct PoolServiceDeps {
     pub(crate) pool_repository: Arc<dyn PoolCatalog>,
     pub(crate) pool_current_state_repository: Arc<dyn PoolCurrentStateLookup>,
@@ -118,10 +95,8 @@ impl PoolService {
         }
     }
 
-    /// The recent signals of every address in `addresses`, in one
-    /// batched query — see [`RECENT_SIGNALS_WINDOW_HOURS`] /
-    /// [`RECENT_SIGNALS_PER_POOL`]. Shared by every listing path so
-    /// the wire field means the same thing on all pool endpoints.
+    /// The recent signals of every address, in one query. Shared by every listing path, so
+    /// the wire field means the same on all pool endpoints.
     async fn recent_signals_by_pool(
         &self,
         addresses: &[Pubkey],
@@ -132,17 +107,8 @@ impl PoolService {
             .await
     }
 
-    /// Paginate pools and enrich each with token context and analytics.
-    ///
-    /// Choreography:
-    ///   1. `find_paginated` → a `PoolPage`: the items with their navigation
-    ///      metadata, plus the traversal's snapshot fence.
-    ///   2. `batch_compute` → analytics for the whole page in one query.
-    ///   3. per pool, both sides: metadata + latest price lookups.
-    ///
-    /// Pools absent from the analytics map fall back to
-    /// `PoolAnalytics::empty()`. Missing metadata/price are tolerated
-    /// (the enriched token carries `None`).
+    /// Paginates pools and enriches each. A pool absent from the analytics falls back to
+    /// `PoolAnalytics::empty()`; missing metadata or price leaves the token's field `None`.
     pub(crate) async fn list_pools(
         &self,
         query: PoolListQuery,
@@ -183,23 +149,13 @@ impl PoolService {
         })
     }
 
-    /// The most common base-fee tiers (with pool counts) — powers the fee
-    /// filter's option list (`GET /api/pools/fee-tiers`). A thin pass-through:
-    /// no enrichment, just the repository's ranked list.
+    /// The most common base-fee tiers, with pool counts (`GET /api/pools/fee-tiers`).
     pub(crate) async fn list_fee_tiers(&self) -> RepositoryResult<Vec<FeeTier>> {
         self.pool_repository.list_fee_tiers().await
     }
 
-    /// Top-N pools ranked by `metric`, each enriched with token context and
-    /// analytics — powers `GET /api/pools/top`.
-    ///
-    /// Choreography:
-    ///   1. `top_pool_addresses` → the ranked addresses (read-time ranking,
-    ///      highest first, pools with no metric value excluded).
-    ///   2. `find_by_addresses` + `batch_compute` → the pool rows and their
-    ///      analytics in one query each.
-    ///   3. emit in **rank order**, re-imposing it over the unordered batch
-    ///      reads. A ranked address with no pool row is skipped defensively.
+    /// The pools ranked by `metric`, enriched (`GET /api/pools/top`), in rank order over the
+    /// unordered batch reads; a ranked address with no pool row is skipped.
     pub(crate) async fn top_pools(
         &self,
         metric: PoolRankMetric,
@@ -216,8 +172,7 @@ impl PoolService {
         Ok(ranked.into_iter().take(keep).collect())
     }
 
-    /// The ranking itself — four round-trips, 2–4 s on the dev database
-    /// (September 2026). Only [`Self::top_pools`] calls it, through the cache.
+    /// The ranking itself, four round-trips. Only [`Self::top_pools`] calls it, through the cache.
     async fn compute_top_pools(
         &self,
         metric: PoolRankMetric,
@@ -256,21 +211,8 @@ impl PoolService {
         Ok(items)
     }
 
-    /// Fetch a single pool by address and enrich it. Returns `None` if
-    /// the pool has never been observed.
-    /// The pool detail sheet: the enriched pool plus its protocol-specific
-    /// properties.
-    ///
-    /// The satellite is only queried when the pool's protocol has a lookup.
-    /// **Every protocol registered today has one** — DAMM v2 and DLMM both —
-    /// so the detail sheet always pays that extra round-trip; the `None` arm is
-    /// the guard for a protocol wired before its satellite exists, not a case
-    /// that happens now. The list endpoints do not call this at all; they
-    /// neither need the block nor pay for it.
-    ///
-    /// No protocol is named here: the pool's own `protocol` selects the lookup.
-    /// Adding one means registering a lookup at wiring time, not editing this
-    /// method.
+    /// The pool detail sheet: the enriched pool and its protocol-specific properties, `None`
+    /// for a pool never observed. The pool's own `protocol` selects the lookup.
     pub(crate) async fn get_pool_detail(
         &self,
         address: &solana_pubkey::Pubkey,
@@ -321,9 +263,7 @@ impl PoolService {
             return Ok(None);
         };
 
-        // The spot price lives in `last_sqrt_price`, but rescaling it to human
-        // units needs both tokens' decimals (resolved by yog-context) — absent
-        // either input, the price is simply unknown, not faked.
+        // Rescaling needs both tokens' decimals: absent either, the price is unknown, not faked.
         let spot_price_a_in_b = match state.last_sqrt_price {
             Some(sqrt_price) => {
                 self.spot_price_a_in_b(&state.pool_address, sqrt_price)
@@ -343,9 +283,8 @@ impl PoolService {
         }))
     }
 
-    /// Decode a pool's spot price (token B per 1 token A, human units) from its
-    /// `sqrt_price`, resolving the token decimals it needs. `None` when the
-    /// pool's mints or their metadata are not yet resolved.
+    /// A pool's spot price, token B per token A in human units, from its `sqrt_price`.
+    /// `None` until its mints and their metadata are resolved.
     async fn spot_price_a_in_b(
         &self,
         pool_address: &solana_pubkey::Pubkey,
@@ -371,9 +310,7 @@ impl PoolService {
         ))
     }
 
-    /// Hourly activity history (volume, fees, liquidity, claims — all USD) for
-    /// a pool over the last `days` days. A thin pass-through to the analytics
-    /// repository: no enrichment, the series is self-contained.
+    /// A pool's hourly activity in USD over the last `days` days.
     pub(crate) async fn get_history(
         &self,
         address: &solana_pubkey::Pubkey,
@@ -382,10 +319,7 @@ impl PoolService {
         self.pool_analytics_repository.history(address, days).await
     }
 
-    /// Compose a pool with both enriched token sides and its analytics.
-    ///
-    /// Sequential awaits: at single-request latency the four indexed
-    /// lookups are cheap, and readability wins over micro-parallelism.
+    /// A pool with both enriched token sides and its analytics, awaited in sequence.
     async fn enrich(
         &self,
         pool: Pool,

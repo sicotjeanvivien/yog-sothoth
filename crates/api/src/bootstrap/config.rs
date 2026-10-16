@@ -4,19 +4,14 @@ use std::time::Duration;
 use axum::http::HeaderValue;
 use yog_bootstrap::{ConfigError, SecretUrl, duration_var, required, required_secret_url};
 
-/// How often the signal-stream poller checks the feed for new rows, in
-/// seconds. Overridable via `API_SIGNAL_STREAM_POLL_SECS`. Detectors
-/// tick every few minutes, so a few seconds of poll latency is
-/// invisible to a feed reader.
+/// How often the stream poller checks the feed, in seconds (`API_SIGNAL_STREAM_POLL_SECS`).
 const DEFAULT_SIGNAL_STREAM_POLL_SECS: u64 = 3;
 
 #[derive(Clone)]
 pub(crate) struct Config {
     pub(crate) database_url: SecretUrl,
     pub(crate) bind_addr: SocketAddr,
-    /// Browser origins allowed to call the API (CORS). The dashboard
-    /// talks to the API directly from the browser, so its origin must
-    /// be listed here. Server-side (SSR) calls bypass CORS entirely.
+    /// Browser origins allowed to call the API: the dashboard's must be listed.
     pub(crate) cors_allowed_origins: Vec<HeaderValue>,
     /// Cadence of the signal-stream poller feeding `/api/signals/stream`.
     pub(crate) signal_stream_poll: Duration,
@@ -48,16 +43,8 @@ impl Config {
     }
 }
 
-/// Parse the comma-separated `API_CORS_ALLOWED_ORIGINS` value into the
-/// list of origins the CORS layer will allow.
-///
-/// Each entry must be a full origin (`scheme://host[:port]`) — the exact
-/// string a browser sends in the `Origin` header. Surrounding whitespace
-/// is trimmed and empty entries are skipped, so a trailing comma is
-/// harmless. An effectively empty list is rejected: an API reachable
-/// from *no* browser origin is almost certainly a misconfiguration, and
-/// failing loud at boot beats opaque CORS errors surfacing in the
-/// browser later.
+/// Parses `API_CORS_ALLOWED_ORIGINS`: full origins, comma-separated, blanks skipped. An empty
+/// list fails at boot rather than as opaque CORS errors in the browser.
 fn parse_cors_origins(raw: &str) -> Result<Vec<HeaderValue>, ConfigError> {
     let origins = raw
         .split(',')

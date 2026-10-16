@@ -1,12 +1,5 @@
-//! Application service for the signal feed.
-//!
-//! Orchestrates pagination of the signals emitted by the yog-signals daemon
-//! detectors, and composes each signal with the token context of its
-//! pool (same application-level enrichment as `PoolService`: the
-//! signal only stores the pool address; the pair is resolved through
-//! the catalog / metadata / price lenses). Pure domain: no axum, no
-//! DTOs, no HTTP concerns. The handler is responsible for cursor wire
-//! encoding/decoding and DTO mapping.
+//! The signal feed: pagination of the detectors' signals, each composed with its pool's token
+//! pair through the catalog, metadata and price lenses. Pure domain.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,10 +14,6 @@ use yog_core::{
 
 use crate::application::{EnrichedSignal, EnrichedToken};
 
-// ---------------------------------------------------------------------------
-// Params
-// ---------------------------------------------------------------------------
-
 /// Input to [`SignalService::list_signals`].
 pub(crate) struct SignalListParams {
     pub severity: Option<Severity>,
@@ -35,15 +24,7 @@ pub(crate) struct SignalListParams {
     pub limit: i64,
 }
 
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
-
-/// Application service for signal feed queries.
-///
-/// Depends on the feed lens ([`SignalFeed`]) for the signals themselves
-/// — the engine's write/dedup contract never reaches the api process —
-/// plus the two read lenses needed to embed the pool's token pair.
+/// Signal feed queries, over the [`SignalFeed`] lens and the two lenses of the token pair.
 pub(crate) struct SignalService {
     repo: Arc<dyn SignalFeed>,
     pool_catalog: Arc<dyn PoolCatalog>,
@@ -63,14 +44,8 @@ impl SignalService {
         }
     }
 
-    /// Paginate the signal feed, optionally filtered to one severity,
-    /// each signal enriched with its pool's token pair.
-    ///
-    /// Each distinct pool of the page is resolved once (one batch
-    /// lookup, then per-side metadata/price), however many signals
-    /// point at it. A pool the catalog doesn't know — or knows without
-    /// resolved mints — yields unresolved sides, never an error: the
-    /// signal is the payload, the pair is context.
+    /// Paginates the feed, each signal enriched with its pool's pair. An unknown or unresolved
+    /// pool yields unresolved sides, never an error: the signal is the payload.
     pub(crate) async fn list_signals(
         &self,
         params: SignalListParams,
@@ -106,12 +81,8 @@ impl SignalService {
         })
     }
 
-    /// Enrich a batch of signals with their pools' token pairs — the page
-    /// of `list_signals`, and each tick of the SSE poller.
-    ///
-    /// Each distinct pool is resolved once, however many signals point at
-    /// it. The poller calls this **once per tick, before broadcasting**: the
-    /// cost of a signal no longer grows with the number of open streams.
+    /// Enriches a batch of signals, each distinct pool resolved once. ⚠️ The poller calls it
+    /// once per tick, before broadcasting, so a signal's cost does not grow with open streams.
     pub(crate) async fn enrich_batch(
         &self,
         records: Vec<SignalRecord>,
@@ -134,10 +105,8 @@ impl SignalService {
             .collect())
     }
 
-    /// Resolve the token sides of every distinct pool referenced by
-    /// `records`: one `find_by_addresses` batch, then per-side
-    /// resolution. Addresses the catalog omits are absent from the map
-    /// — the caller falls back to unresolved sides.
+    /// The token sides of every distinct pool of `records`, in one batch. An address the
+    /// catalog omits is absent from the map.
     async fn resolve_pools(
         &self,
         records: &[SignalRecord],
@@ -164,8 +133,7 @@ impl SignalService {
         Ok(sides)
     }
 
-    /// Both sides of one pool. `None` (pool unknown to the catalog)
-    /// yields two unresolved sides.
+    /// Both sides of one pool; an unknown pool yields two unresolved sides.
     async fn enrich_sides(
         &self,
         pool: Option<&Pool>,

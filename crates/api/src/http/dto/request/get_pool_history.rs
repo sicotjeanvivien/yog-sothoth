@@ -12,8 +12,7 @@ use crate::http::{
 #[derive(Debug)]
 pub(crate) struct GetPoolHistoryRequest {
     pub(crate) pool_address: Pubkey,
-    /// Window in days, validated to `1..=MAX_HISTORY_DAYS`. `i32` to match the
-    /// repository signature (bound straight into the SQL `make_interval`).
+    /// Window in days, validated to `1..=MAX_HISTORY_DAYS`; `i32` for the SQL `make_interval`.
     pub(crate) days: i32,
 }
 

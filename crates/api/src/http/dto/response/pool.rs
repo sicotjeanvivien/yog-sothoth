@@ -29,10 +29,7 @@ pub(crate) struct PoolResponse {
     /// is unresolved.
     #[schema(value_type = Option<UnsignedDecimal>)]
     fee_bps: Option<Decimal>,
-    // NOTE: the cp-amm fee properties (fee-split percents, fee shape) are NOT
-    // here. They are protocol-specific, and only the pool *detail* sheet shows
-    // them — see `PoolDetailResponse`. Keeping them on the list payload would
-    // put one protocol's vocabulary in every protocol's row.
+    // Protocol-specific properties belong to `PoolDetailResponse`, not to every protocol's row.
     #[schema(value_type = Option<UnsignedDecimal>)]
     tvl_usd: Option<Decimal>,
     #[schema(value_type = Option<UnsignedDecimal>)]
@@ -68,16 +65,8 @@ pub(crate) struct PoolResponse {
     last_seen_at: DateTime<Utc>,
 }
 
-/// Effective realized fee rate in basis points over the window:
-/// `fees / volume * 10_000`. `None` when volume is unknown or zero (no
-/// meaningful rate, and avoids a division by zero).
-///
-/// Shared with [`super::pool_history`], which publishes the same rate per
-/// bucket: it had its own inline copy of this `match` until the two were
-/// merged. Unlike the fee split — which moved into SQL because it is a
-/// property of the data — this one stays in the presentation layer on
-/// purpose: it is a ratio of two published figures, not a fourth share, and
-/// its `None` rule is about division, not about valuability.
+/// Realized fee rate in bps, `fees / volume * 10_000`; `None` when volume is unknown or zero.
+/// Shared with [`super::pool_history`]: a ratio of two published figures, not a share.
 pub(super) fn effective_fee_bps(
     fees_usd: Option<Decimal>,
     volume_usd: Option<Decimal>,
@@ -91,8 +80,6 @@ pub(super) fn effective_fee_bps(
 }
 
 impl PoolResponse {
-    /// Compose the pool with its two enriched token sides and the
-    /// derived analytics.
     pub(super) fn new(
         pool: Pool,
         token_a: EmbeddedTokenResponse,

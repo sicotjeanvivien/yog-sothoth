@@ -15,17 +15,8 @@ use crate::application::{
     TokenService, WorkSlots,
 };
 
-/// Application-level dependencies shared across HTTP handlers.
-///
-/// The services (`Arc<XxxService>`), plus the few runtime handles the router
-/// and the handlers read directly: the signal broadcast, the stream slots, the
-/// work slots (taken by the router's middleware), the health probe and the stop
-/// token. Handlers never access repositories directly — all orchestration lives
-/// in the application layer — with one exception: `readyz` calls the health
-/// probe itself, a concrete persistence type until a trait replaces it.
-///
-/// `Clone` is cheap: `Arc` clones are reference-count bumps.
-/// axum requires `Clone + Send + Sync + 'static` on its `State`.
+/// The services and the runtime handles the router and handlers read. Handlers never reach a
+/// repository, except `readyz`, which calls the health probe itself.
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) pool_service: Arc<PoolService>,
@@ -34,25 +25,19 @@ pub(crate) struct AppState {
     pub(crate) network_service: Arc<NetworkService>,
     pub(crate) ingestion_service: Arc<IngestionService>,
     pub(crate) signal_service: Arc<SignalService>,
-    /// Live end of the signal feed: SSE handlers `subscribe()` here;
-    /// the [`SignalStreamPoller`](crate::application::SignalStreamPoller)
-    /// spawned by the binary is the producer.
-    /// Signals travel enriched, once, behind an `Arc`.
+    /// Live end of the signal feed, fed by the
+    /// [`SignalStreamPoller`](crate::application::SignalStreamPoller); signals travel enriched.
     pub(crate) signal_stream: broadcast::Sender<Arc<EnrichedSignal>>,
     /// One permit per open signal stream,
     /// [`SSE_MAX_STREAMS`](super::SSE_MAX_STREAMS) in all.
     pub(crate) stream_slots: Arc<Semaphore>,
-    /// The slots of every expensive read — the slow routes' middleware takes
-    /// them, and so do the services' cached computations.
+    /// The slots of every expensive read: the slow routes and the cached computations.
     pub(crate) work_slots: WorkSlots,
     pub(crate) stats_service: Arc<StatsService>,
     pub(crate) token_service: Arc<TokenService>,
     pub(crate) announcement_service: Arc<AnnouncementService>,
-    /// Infra probe — exposed directly because no application logic
-    /// surrounds it. See `yog-persistence/health.rs`.
+    /// Infra probe, exposed directly: no application logic surrounds it.
     pub(crate) health_checker: Arc<PgHealthChecker>,
-    /// Cancelled when the process is asked to stop. Only the SSE stream reads
-    /// it: every other response ends on its own, and the graceful shutdown
-    /// waits for those.
+    /// Cancelled on stop. Only the SSE stream reads it: every other response ends on its own.
     pub(crate) shutdown: CancellationToken,
 }

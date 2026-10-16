@@ -11,20 +11,12 @@ use yog_core::{
     domain::{TokenMetadata, TokenMetadataLookup, TokenPrice, TokenPriceLookup},
 };
 
-// ---------------------------------------------------------------------------
-// Aggregate
-// ---------------------------------------------------------------------------
-
 /// Token metadata combined with its optional latest price.
 #[derive(Debug)]
 pub(crate) struct TokenAggregate {
     pub metadata: TokenMetadata,
     pub price: Option<TokenPrice>,
 }
-
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
 
 /// Application service for token queries.
 pub(crate) struct TokenService {
@@ -43,11 +35,7 @@ impl TokenService {
         }
     }
 
-    /// Fetch a token by mint address.
-    ///
-    /// Returns `Ok(None)` when no metadata row exists for this mint.
-    /// Returns `Ok(Some(_))` with `price: None` when metadata exists
-    /// but no price has been fetched yet.
+    /// A token by mint: `None` without a metadata row, `price: None` before its first price.
     pub(crate) async fn get_token(
         &self,
         mint: &Pubkey,

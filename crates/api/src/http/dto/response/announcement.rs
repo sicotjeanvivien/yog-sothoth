@@ -1,7 +1,4 @@
 //! Response DTO for `GET /api/announcements/active`.
-//!
-//! Kept separate from the domain type, like every other `*Response` in
-//! this module — the domain model never leaks into the JSON wire shape.
 
 mod kind_response;
 mod severity_response;

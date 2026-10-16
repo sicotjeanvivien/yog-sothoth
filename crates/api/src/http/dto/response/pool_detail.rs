@@ -27,19 +27,8 @@ pub(crate) struct PoolDetailResponse {
     meteora_dlmm: Option<MeteoraDlmmPropertiesResponse>,
 }
 
-/// The one place a pool's protocol is matched on the read path.
-///
-/// It belongs here and nowhere upstream: each protocol's properties have their
-/// own wire shape under their own key, so the response type is *irreducibly*
-/// per-protocol, while everything before it (`PoolService`, `EnrichedPoolDetail`)
-/// only ever needs "this pool's properties, whatever they are".
-///
-/// The exhaustive `match` is deliberate and load-bearing: adding a protocol
-/// stops compilation right here — the reminder to give it its own response
-/// field. A wildcard arm would instead drop it from the wire in silence. This is
-/// what happened when DLMM landed: the previously irrefutable
-/// `|PoolProperties::MeteoraDammV2(p)|` closure stopped compiling, which is
-/// exactly the intended behaviour.
+/// The one place the read path matches a pool's protocol: each protocol has its own key.
+/// ⚠️ Exhaustive on purpose: a new protocol stops compilation here; a wildcard drops it silently.
 impl From<EnrichedPoolDetail> for PoolDetailResponse {
     fn from(d: EnrichedPoolDetail) -> Self {
         let (meteora_damm_v2, meteora_dlmm) = match d.properties {

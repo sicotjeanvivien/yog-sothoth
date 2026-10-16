@@ -46,48 +46,27 @@ impl EnrichedToken {
     }
 }
 
-/// A pool composed with its two enriched token sides and its
-/// pre-computed analytics. Produced by `PoolService`, consumed by the
-/// HTTP layer for DTO mapping.
-///
-/// `Clone`: the ranked list is computed once and served to every caller of
-/// the top-pools cache.
+/// A pool with its two enriched token sides and its analytics. `Clone`: the ranked list is
+/// served to every caller of the top-pools cache.
 #[derive(Clone)]
 pub(crate) struct EnrichedPool {
     pub(crate) pool: Pool,
     pub(crate) token_a: EnrichedToken,
     pub(crate) token_b: EnrichedToken,
     pub(crate) analytics: PoolAnalytics,
-    /// The pool's signals over the indicator window (newest first,
-    /// per-pool capped) — powers the signal icon on the pools list.
-    /// Empty when the pool emitted nothing in the window.
+    /// The pool's signals over the indicator window, newest first, capped per pool.
     pub(crate) recent_signals: Vec<SignalRecord>,
 }
 
-/// An [`EnrichedPool`] plus the properties specific to its protocol — the
-/// aggregate behind the pool *detail* sheet.
-///
-/// Separate from [`EnrichedPool`] on purpose: the protocol-specific block costs
-/// one extra query per pool, and the list endpoints neither need it nor display
-/// it. Keeping it out of `EnrichedPool` means the paginated listing does not pay
-/// for it.
+/// An [`EnrichedPool`] plus its protocol-specific properties — the detail sheet. Kept apart:
+/// the block costs a query per pool that the list endpoints do not pay.
 pub(crate) struct EnrichedPoolDetail {
     pub(crate) pool: EnrichedPool,
-    /// The pool's protocol-specific properties, still in domain form — the
-    /// variant is the protocol's. `None` for a protocol that stores none, or for
-    /// a pool with no satellite row yet (discovered, but neither enriched nor
-    /// seen at genesis).
-    ///
-    /// Kept as the [`PoolProperties`] enum rather than one protocol's type so
-    /// that nothing between the repository and the wire DTO has to know which
-    /// protocol this is.
+    /// The protocol-specific properties, as the [`PoolProperties`] enum so nothing between the
+    /// repository and the DTO names the protocol. `None` without a satellite row.
     pub(crate) properties: Option<PoolProperties>,
 
-    /// When this read happened, used to place a fee scheduler on its decay
-    /// curve.
-    ///
-    /// Carried rather than taken with `Utc::now()` at serialization time for one
-    /// reason: a DTO that reads the clock cannot be asserted on. The service
-    /// fills it once per request, and a test pins it.
+    /// When this read happened, to place a fee scheduler on its curve. Carried, not read
+    /// at serialization: a DTO that reads the clock cannot be asserted on.
     pub(crate) evaluated_at: DateTime<Utc>,
 }

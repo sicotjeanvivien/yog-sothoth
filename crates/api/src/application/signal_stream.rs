@@ -1,21 +1,7 @@
-//! Background poller feeding the signal SSE stream.
-//!
-//! One shared task per process: it watches the `signals` feed's tip on a
-//! fixed cadence, enriches every new row with its token pair **once**, and
-//! broadcasts it to the connected `/api/signals/stream` clients (each
-//! connection is one `subscribe()`).
-//!
-//! Enriching here rather than in each stream is what keeps a signal's cost
-//! flat: it used to be enriched once per subscriber, so N open streams turned
-//! one signal into N rounds of database lookups on a 10-connection pool.
-//! Chosen over LISTEN/NOTIFY: the table stays the only contract between
-//! processes, nothing is ever lost across restarts (the watermark
-//! re-anchors), and at the detectors' minutes-scale tempo a few seconds
-//! of poll latency is invisible.
-//!
-//! The stream never replays history — a fresh watermark anchors at the
-//! feed's tip, and the page loads its backlog through the paginated
-//! `GET /api/signals` instead.
+//! The background poller feeding the signal SSE stream: one task per process enriches each new
+//! signal once and broadcasts it to every `/api/signals/stream` client. Polling, not
+//! LISTEN/NOTIFY: the table stays the only contract, and the watermark re-anchors after a
+//! restart. ⚠️ The stream never replays history: the page loads it through `GET /api/signals`.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -29,18 +15,14 @@ use yog_core::domain::{SignalCursor, SignalFeed};
 
 use crate::application::{EnrichedSignal, SignalService};
 
-/// Capacity of the broadcast channel between the poller and the SSE
-/// connections. A subscriber lagging further than this behind gets
-/// `Lagged` and its stream is closed — the EventSource reconnects and
-/// the page refetches, rather than silently missing alerts.
+/// Capacity of the broadcast channel. A subscriber lagging further gets `Lagged` and its
+/// stream closes: the page reconnects and refetches rather than silently missing alerts.
 pub(crate) const STREAM_CHANNEL_CAPACITY: usize = 256;
 
-/// Maximum rows fetched per tick. A larger burst is drained over the
-/// following ticks — `newer_than` is watermark-driven, nothing is lost.
+/// Rows fetched per tick; a larger burst drains over the next ticks, nothing lost.
 const POLL_BATCH_LIMIT: i64 = 256;
 
-/// The shared feed poller. Holds the feed lens and the broadcast
-/// sender; [`run`](Self::run) loops until the shutdown token is cancelled.
+/// The shared feed poller.
 pub(crate) struct SignalStreamPoller {
     repo: Arc<dyn SignalFeed>,
     enricher: Arc<SignalService>,
@@ -63,11 +45,8 @@ impl SignalStreamPoller {
         }
     }
 
-    /// Poll until `shutdown` is cancelled.
-    ///
-    /// `Infallible`: a failed tick is skipped and logged, never returned, so
-    /// the only way out is the stop. The `Result` is there for
-    /// [`yog_bootstrap::Stop::settle`], which waits on it like on any stage.
+    /// Polls until `shutdown` is cancelled; a failed tick is logged, never returned. The
+    /// `Result` is for [`yog_bootstrap::Stop::settle`].
     pub(crate) async fn run(self, shutdown: CancellationToken) -> Result<(), Infallible> {
         let mut ticker = tokio::time::interval(self.interval);
         // `None` = the watermark needs (re)anchoring at the feed's tip.
@@ -84,18 +63,14 @@ impl SignalStreamPoller {
                 _ = ticker.tick() => {}
             }
 
-            // Nobody connected: skip the DB entirely, and drop the
-            // watermark so the next active tick re-anchors at the tip
-            // instead of replaying everything born during the idle gap.
+            // Nobody connected: no read, and the watermark dropped so the next tick
+            // re-anchors at the tip instead of replaying the idle gap.
             if self.sender.receiver_count() == 0 {
                 watermark = None;
                 continue;
             }
 
-            // The tick itself answers the stop too. It reads the feed and
-            // enriches the batch — several queries, each allowed
-            // `STATEMENT_TIMEOUT` — and a stop that waited for it could
-            // outlast `SHUTDOWN_GRACE` on a slow database (found in review).
+            // ⚠️ The tick answers the stop too: its queries could outlast `SHUTDOWN_GRACE`.
             watermark = tokio::select! {
                 biased;
 
@@ -107,10 +82,8 @@ impl SignalStreamPoller {
     }
 }
 
-/// One poller tick: anchor the watermark if needed, fetch the delta, enrich
-/// it in one batch, broadcast it, and return the advanced watermark. Every failure is
-/// skipped-and-logged — one missed tick, never a dead loop; `None`
-/// means the anchoring itself failed and must be retried.
+/// One tick: anchor if needed, fetch, enrich in one batch, broadcast, and return the advanced
+/// watermark — `None` when anchoring failed. Every failure is logged and skipped.
 async fn poll_once(
     repo: &dyn SignalFeed,
     enricher: &SignalService,
@@ -147,14 +120,8 @@ async fn poll_once(
         id: record.id,
     });
 
-    // On failure the alerts still go out, without their pairs — delivering
-    // beats decorating, as the per-stream enrichment did before.
-    //
-    // The trade, knowingly: one failed lookup now leaves the whole tick bare,
-    // where the per-signal enrichment lost only the affected alert's pair.
-    // Enriching signal by signal again would bring back the per-signal
-    // queries this batch exists to remove; a tick is a few seconds of
-    // signals, and the paginated feed re-enriches them on the next load.
+    // On failure the alerts still go out, without their pairs: a failed lookup leaves the
+    // whole tick bare, and the paginated feed re-enriches them on the next load.
     let enriched = match enricher.enrich_batch(records.clone()).await {
         Ok(enriched) => enriched,
         Err(e) => {
@@ -164,9 +131,7 @@ async fn poll_once(
     };
 
     for signal in enriched {
-        // A send error only means every receiver disconnected since the
-        // count check — benign; the watermark still advances (no
-        // listeners, no delivery).
+        // An error only means every receiver left since the count check.
         let _ = sender.send(Arc::new(signal));
     }
     Some(next)

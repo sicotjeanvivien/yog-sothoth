@@ -1,9 +1,5 @@
-//! `GET /api/announcements/active` — the dashboard's operator banner.
-//!
-//! No parameters, no pagination: the active window holds a handful of
-//! operator-curated rows at most (hard limit in the repository). The
-//! client picks what to display — the API returns the full active set,
-//! most severe first.
+//! `GET /api/announcements/active`, the dashboard's operator banner: the full active set,
+//! unpaginated.
 
 use crate::http::{AppState, dto::AnnouncementResponse, error::ApiError};
 use axum::{Json, extract::State};

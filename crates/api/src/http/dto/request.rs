@@ -1,18 +1,5 @@
-//! Request DTOs — typed, validated-by-construction inputs to the
-//! HTTP handlers.
-//!
-//! Each request DTO encapsulates the full validation pipeline for one
-//! endpoint:
-//!
-//!   - serde-deserialized extractors (path + query) come in as raw,
-//!   - `XxxRequest::parse(...)` runs every validation rule once,
-//!   - the resulting value is impossible to construct in an invalid
-//!     state; downstream code (services, mappers) can rely on its
-//!     fields unconditionally.
-//!
-//! Validation helpers themselves live in [`http::query`] and
-//! [`http::cursor`]. The request DTOs are their orchestrators, not
-//! their replacement.
+//! Request DTOs: `XxxRequest::parse(...)` runs every validation of one endpoint once, so a
+//! value cannot exist invalid. The helpers live in [`http::query`] and [`http::cursor`].
 //!
 //! [`http::query`]: crate::http::query
 //! [`http::cursor`]: crate::http::cursor

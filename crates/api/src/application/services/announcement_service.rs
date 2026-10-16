@@ -1,10 +1,5 @@
-//! Application service for operator announcements.
-//!
-//! Thin by design: the active-window rule lives in the repository
-//! query (the window is data, not business logic), ordering is part of
-//! the `AnnouncementLookup` contract, and the dismiss logic is a
-//! client concern (cookie). The service's one responsibility is
-//! anchoring the read to the request clock.
+//! Operator announcements. The active window lives in the repository query and the dismiss
+//! in a client cookie: the service only anchors the read to the request clock.
 
 use std::sync::Arc;
 
@@ -14,7 +9,6 @@ use yog_core::{
     domain::{Announcement, AnnouncementLookup},
 };
 
-/// Application service for announcement queries.
 pub(crate) struct AnnouncementService {
     announcement_repo: Arc<dyn AnnouncementLookup>,
 }
@@ -24,8 +18,7 @@ impl AnnouncementService {
         Self { announcement_repo }
     }
 
-    /// List the announcements currently in their display window, most
-    /// severe first then most recent (the repository contract's ordering).
+    /// The announcements in their display window, most severe then most recent.
     pub(crate) async fn list_active(&self) -> Result<Vec<Announcement>, RepositoryError> {
         self.announcement_repo.list_active(Utc::now()).await
     }

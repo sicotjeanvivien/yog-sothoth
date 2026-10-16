@@ -1,16 +1,5 @@
-//! Wire shape for one hourly bucket of a pool's activity history.
-//!
-//! Mirrors [`yog_core::domain::PoolHistoryBucket`], with one
-//! presentation-derived field (`effectiveFeeBps`) computed by the **same
-//! function** as on `PoolResponse` — [`pool::effective_fee_bps`], which this
-//! module used to duplicate inline. Returned as a plain ordered array (oldest →
-//! newest) by `GET /api/pools/{address}/history` — chart-ready, no pagination
-//! (the window is bounded by `days`).
-//!
-//! `lpFeesUsd` used to be derived here too, as `fees - protocol`. It is now
-//! read from the domain type: that formula credited the referral to the LPs,
-//! and it was written twice — here and on `PoolResponse`. The split is defined
-//! once, in `meteora_damm_v2_pool_hourly_activity` (migration 007).
+//! One hourly bucket of a pool's history, oldest to newest, with `effectiveFeeBps` computed by
+//! [`pool::effective_fee_bps`], as on `PoolResponse`.
 //!
 //! [`pool::effective_fee_bps`]: crate::http::dto::response::pool::effective_fee_bps
 

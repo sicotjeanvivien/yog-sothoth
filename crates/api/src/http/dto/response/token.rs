@@ -1,9 +1,5 @@
-//! Response DTO for `GET /api/tokens/{mint}`.
-//!
-//! Combines the token's identity (from `token_metadata`) with its
-//! most recent price (from `token_prices`). The price block is
-//! optional: a mint may have metadata but no price yet (very fresh,
-//! flagged by Jupiter, or no Jupiter call has succeeded for it).
+//! Response DTO for `GET /api/tokens/{mint}`: the token's identity and its latest price,
+//! which a mint may not have yet.
 
 mod embedded_token_response;
 mod price_provider_response;
@@ -51,7 +47,6 @@ pub(crate) struct TokenResponse {
 }
 
 impl TokenResponse {
-    /// Assemble the response from its two sources.
     pub(crate) fn new(metadata: TokenMetadata, price: Option<TokenPrice>) -> Self {
         Self {
             mint: metadata.mint.to_string(),
