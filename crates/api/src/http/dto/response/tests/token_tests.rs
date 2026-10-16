@@ -10,8 +10,6 @@ use super::price_provider_response::PriceProviderResponse;
 use super::{EmbeddedTokenResponse, TokenResponse, logo_uri};
 use crate::testing::wire_tag;
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
 fn mint() -> Pubkey {
     Pubkey::new_from_array([7u8; 32])
 }
@@ -35,14 +33,9 @@ fn full_metadata(m: Pubkey) -> TokenMetadata {
     }
 }
 
-/// Deserialize the DTO to a generic `serde_json::Value` so the test
-/// can inspect the wire field names without coupling to the private
-/// struct shape.
 fn to_json(dto: &EmbeddedTokenResponse) -> serde_json::Value {
     serde_json::to_value(dto).expect("DTO must serialize")
 }
-
-// ── Branch 1: metadata present ───────────────────────────────────────
 
 #[test]
 fn uses_metadata_fields_when_present() {
@@ -58,8 +51,7 @@ fn uses_metadata_fields_when_present() {
 
 #[test]
 fn metadata_with_null_symbol_and_name_is_preserved() {
-    // DAS may return decimals only, with no Metaplex metadata. The
-    // dashboard must see symbol/name as null, NOT default strings.
+    // Decimals only, no Metaplex metadata: symbol and name null, not default strings.
     let mut meta = full_metadata(mint());
     meta.symbol = None;
     meta.name = None;
@@ -76,8 +68,7 @@ fn metadata_with_null_symbol_and_name_is_preserved() {
 
 #[test]
 fn empty_logo_uri_serializes_as_null() {
-    // DAS sometimes reports an empty image string. The API contract is
-    // "URL or null", so an empty logo must surface as null, not "".
+    // An empty image string surfaces as null: the contract is "URL or null".
     let mut meta = full_metadata(mint());
     meta.logo_uri = Some(String::new());
 
@@ -98,12 +89,8 @@ fn embedded_token_filters_its_logo() {
     assert!(to_json(&dto)["logoUri"].is_null());
 }
 
-// ── Branch 2: metadata absent ────────────────────────────────────────
-
 #[test]
 fn falls_back_when_metadata_is_none() {
-    // Fresh pool whose mints have not been enriched by yog-context yet.
-    // The dashboard must still see a usable payload.
     let dto = EmbeddedTokenResponse::from_sources(Some(mint()), None);
     let j = to_json(&dto);
 
@@ -117,23 +104,15 @@ fn falls_back_when_metadata_is_none() {
     assert!(j["logoUri"].is_null());
 }
 
-// ── Mint preservation invariant ──────────────────────────────────────
-
 #[test]
 fn mint_in_response_comes_from_parameter_not_metadata() {
-    // Regression guard: the function takes the mint as a parameter
-    // precisely because metadata may be absent. If a refactor ever
-    // makes it read the mint off the metadata struct, the two paths
-    // become inconsistent. This test pins the parameter as the
-    // source of truth even when metadata is present.
+    // Mutation: the mint read off the metadata instead of the parameter.
     let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(full_metadata(other_mint())));
     let j = to_json(&dto);
 
     assert_eq!(j["mint"], mint().to_string());
     assert_ne!(j["mint"], other_mint().to_string());
 }
-
-// ── Identity only ────────────────────────────────────────────────────
 
 #[test]
 fn the_embedded_token_carries_no_price() {
@@ -143,33 +122,24 @@ fn the_embedded_token_carries_no_price() {
     assert!(to_json(&dto).get("price").is_none());
 }
 
-// ── Wire shape guard ─────────────────────────────────────────────────
-
 #[test]
 fn wire_field_names_are_camel_case() {
-    // A misplaced `#[serde(rename_all = ...)]` would surface here.
-    // The Next.js dashboard parses these payloads with zod and would
-    // fail at runtime — this test catches it at `cargo test` time.
+    // Mutation: a misplaced `#[serde(rename_all = ...)]`, which the web's zod refuses at runtime.
     let dto = EmbeddedTokenResponse::from_sources(Some(mint()), Some(full_metadata(mint())));
     let j = to_json(&dto);
 
-    // Camel case fields that are NOT snake_case in JSON:
     assert!(j.get("logoUri").is_some(), "expected field `logoUri`");
     assert!(j.get("logo_uri").is_none(), "snake_case leaked");
 
-    // Other fields with no case difference but still pinned:
     for k in ["mint", "symbol", "name", "decimals"] {
         assert!(j.get(k).is_some(), "expected field `{k}`");
     }
 }
 
-// ── Logo ─────────────────────────────────────────────────────────────
-
 #[test]
 fn logo_uri_keeps_only_an_http_url() {
-    // Mutations: back to the empty-string filter alone, no scheme check
-    // (`ipfs://@`, which `z.url()` refuses), a `trim()` before parsing (U+0085),
-    // and an `http(s)://` prefix check in place of the parse (port 65536).
+    // Mutations: the empty-string filter alone, no scheme check (`ipfs://@`), a `trim()`
+    // before parsing (U+0085), a prefix check in place of the parse (port 65536).
     for refused in [
         "d",
         "token-image.png",

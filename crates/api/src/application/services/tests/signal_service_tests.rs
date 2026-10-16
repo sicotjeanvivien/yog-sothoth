@@ -21,9 +21,7 @@ fn default_params() -> SignalListParams {
     }
 }
 
-/// Service over a feed page, a pool catalog and metadata entries; the
-/// price lens stays empty (the assertions target the pair, not the
-/// price block).
+/// A service over a feed page, a pool catalog and metadata; no price.
 fn service(
     signals: MockSignalRepo,
     pools: PoolRepoOnce,
@@ -31,8 +29,6 @@ fn service(
 ) -> SignalService {
     SignalService::new(Arc::new(signals), Arc::new(pools), Arc::new(metadata))
 }
-
-// ── Happy path ───────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn returns_page_items_enriched_with_token_pair() {
@@ -79,15 +75,12 @@ async fn empty_page_is_not_an_error() {
     assert!(result.is_last);
 }
 
-// ── Degraded token context ───────────────────────────────────────────
-
 #[tokio::test]
 async fn pool_unknown_to_catalog_yields_unresolved_sides() {
     let record = make_signal_record(7, pk(9));
     let page = make_signal_page(vec![record], true);
 
-    // The catalog batch omits the address — discovered pool the api
-    // hasn't seen yet, or a torn read; the signal still ships.
+    // The catalog omits the address: the signal still ships.
     let svc = service(
         MockSignalRepo::with_page(page),
         PoolRepoOnce::with_pools(vec![]),
@@ -121,11 +114,7 @@ async fn missing_metadata_keeps_mint_without_symbol() {
     assert!(item.token_a.metadata.is_none());
 }
 
-// ── SSE path ─────────────────────────────────────────────────────────
-
-/// The poller's path: one batch lookup for every distinct pool of the tick.
-/// `PoolRepoOnce` answers `find_by_addresses` once — a per-signal lookup
-/// would panic on the second record.
+/// Mutation: a lookup per signal — `PoolRepoOnce` panics on the second.
 #[tokio::test]
 async fn enrich_batch_resolves_every_pair_through_one_lookup() {
     let records = vec![make_signal_record(21, pk(1)), make_signal_record(22, pk(1))];
@@ -149,8 +138,6 @@ async fn enrich_batch_resolves_every_pair_through_one_lookup() {
         assert!(signal.token_b.metadata.is_none());
     }
 }
-
-// ── Error propagation ────────────────────────────────────────────────
 
 #[tokio::test]
 async fn repository_error_bubbles_up() {

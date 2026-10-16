@@ -7,9 +7,7 @@ use yog_core::domain::PoolHistoryBucket;
 
 use crate::http::dto::response::pool_history::PoolHistoryBucketResponse;
 
-/// A bucket whose referral is non-zero, on purpose: it makes
-/// `fees - protocol` (20) differ from the true LP share (19), so the
-/// tests below can tell a pass-through from the old subtraction.
+/// ⚠️ A non-zero referral, so `fees - protocol` (20) differs from the LP share (19).
 fn bucket() -> PoolHistoryBucket {
     PoolHistoryBucket {
         bucket: Utc::now(),
@@ -32,8 +30,7 @@ fn fee_shares_are_carried_through_not_recomputed() {
 
     assert_eq!(resp.protocol_fees_usd, Some(Decimal::new(5, 0)));
     assert_eq!(resp.referral_fees_usd, Some(Decimal::new(1, 0)));
-    // 19, not 20: `fees - protocol` would credit the referral to the LPs.
-    // This is the assertion that fails if the subtraction comes back.
+    // Mutation: `fees - protocol`, which credits the referral to the LPs.
     assert_eq!(resp.lp_fees_usd, Some(Decimal::new(19, 0)));
 }
 
@@ -56,8 +53,7 @@ fn effective_rate_none_when_inputs_missing_or_zero() {
 
 #[test]
 fn absent_fee_shares_stay_absent() {
-    // The view makes the four NULL together; the mapping must not invent a
-    // value for one of them.
+    // NULL together in the view: the mapping must not invent one.
     let resp = PoolHistoryBucketResponse::from(PoolHistoryBucket {
         fees_usd: None,
         protocol_fees_usd: None,

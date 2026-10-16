@@ -1,9 +1,4 @@
-//! Test helpers for request DTO tests.
-//!
-//! Provides a `valid_page_query()` constructor — every test starts
-//! from a known-valid baseline and mutates only the fields it cares
-//! about. Avoids 8-line boilerplate per test and keeps the intent
-//! visible.
+//! Valid baselines each request DTO test starts from, mutating only what it tests.
 
 use crate::http::query::{EventPageQuery, PageDirectionParam, PageQuery, PoolSortParam};
 

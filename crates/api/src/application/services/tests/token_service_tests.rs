@@ -7,8 +7,6 @@ use yog_core::RepositoryError;
 use super::super::TokenService;
 use crate::testing::{MockMetadataRepo, MockPriceRepo, make_metadata, make_price, pk};
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[tokio::test]
 async fn returns_aggregate_with_metadata_and_price() {
     let mint = pk(20);
@@ -61,8 +59,7 @@ async fn returns_none_for_unknown_mint() {
 
 #[tokio::test]
 async fn correct_mint_is_returned_in_aggregate() {
-    // Verify the mint in the aggregate matches the requested one,
-    // not some other mint that could be in the repo.
+    // Mutation: the aggregate carrying another mint of the repository.
     let mint_a = pk(10);
     let mint_b = pk(11);
 
@@ -78,8 +75,6 @@ async fn correct_mint_is_returned_in_aggregate() {
     assert_eq!(agg.metadata.mint, mint_b);
     assert_eq!(agg.metadata.symbol, Some("BBB".to_string()));
 }
-
-// ── Error propagation ────────────────────────────────────────────────
 
 #[tokio::test]
 async fn metadata_repo_error_propagates() {

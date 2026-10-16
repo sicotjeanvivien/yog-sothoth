@@ -24,9 +24,7 @@ async fn call(router: Router, path: &str) -> axum::response::Response {
         .unwrap()
 }
 
-/// Two slots, three simultaneous slow requests: the third waits past its
-/// wait and is refused — 503, `Retry-After`, Problem Details — while the two
-/// holders complete.
+/// Two slots, three slow requests: the third is refused (503, `Retry-After`, Problem Details).
 #[tokio::test]
 async fn a_slow_request_past_the_slots_is_refused_with_a_503() {
     let limit = WorkSlots::new(2, Duration::from_millis(100));
@@ -54,8 +52,6 @@ async fn a_slow_request_past_the_slots_is_refused_with_a_503() {
     );
 }
 
-/// A slot is given back when its request ends: once the holders are done,
-/// the next slow request runs.
 #[tokio::test]
 async fn a_freed_slot_serves_the_next_request() {
     let limit = WorkSlots::new(1, Duration::from_millis(100));
@@ -67,8 +63,6 @@ async fn a_freed_slot_serves_the_next_request() {
     assert_eq!(call(router, "/slow").await.status(), StatusCode::OK);
 }
 
-/// A waiter that gets a slot within its wait is served, not refused: the wait
-/// is what lets a page's own burst through.
 #[tokio::test]
 async fn a_request_that_gets_a_slot_within_its_wait_is_served() {
     let limit = WorkSlots::new(1, Duration::from_secs(2));
@@ -82,8 +76,6 @@ async fn a_request_that_gets_a_slot_within_its_wait_is_served() {
     assert_eq!(b.status(), StatusCode::OK);
 }
 
-/// A handler slower than the deadline answers 503 instead of holding the
-/// connection.
 #[tokio::test]
 async fn a_request_past_its_deadline_is_a_503() {
     let router = Router::new()
@@ -99,9 +91,7 @@ async fn a_request_past_its_deadline_is_a_503() {
     assert!(response.headers().contains_key(header::RETRY_AFTER));
 }
 
-/// The deadline bounds producing the response, not streaming its body — which
-/// is what keeps it from cutting `/api/signals/stream`. A body that takes
-/// four times the deadline arrives whole.
+/// The deadline bounds producing the response, not its body: `/api/signals/stream` lives on it.
 #[tokio::test]
 async fn the_deadline_does_not_cut_a_streaming_body() {
     async fn streaming() -> Body {
@@ -128,12 +118,7 @@ async fn the_deadline_does_not_cut_a_streaming_body() {
     assert_eq!(&body[..], b"0123");
 }
 
-/// Past the cap, a connection is not accepted until one closes: the second
-/// client's handshake completes in the kernel's queue, but the process does
-/// not take it — and takes it as soon as the first one leaves.
-///
-/// Mutation: accept without taking a slot, and the second accept returns at
-/// once.
+/// Mutation: accepting without taking a slot — the second accept returns at once.
 #[tokio::test]
 async fn past_the_connection_cap_a_client_waits_until_one_closes() {
     use axum::serve::Listener;
@@ -162,10 +147,7 @@ async fn past_the_connection_cap_a_client_waits_until_one_closes() {
         .expect("the freed slot takes the waiting client");
 }
 
-/// A connection that sends nothing is closed once idle, and its slot comes
-/// back — otherwise 400 silent sockets would hold the API shut.
-///
-/// Mutation: never check the deadline, and the read stays pending.
+/// Mutation: the deadline never checked — the read of a silent socket stays pending.
 #[tokio::test]
 async fn a_silent_connection_is_closed_once_idle() {
     use axum::serve::Listener;
@@ -194,9 +176,7 @@ async fn a_silent_connection_is_closed_once_idle() {
         .expect("the slot came back");
 }
 
-/// Idle means neither way: a connection the server keeps writing to — an SSE
-/// stream and its keep-alive ping, whose client sends nothing — stays open
-/// well past the deadline.
+/// Idle means neither way: an SSE stream, whose client sends nothing, stays open.
 #[tokio::test]
 async fn a_connection_that_is_written_to_is_not_idle() {
     use axum::serve::Listener;
@@ -223,11 +203,7 @@ async fn a_connection_that_is_written_to_is_not_idle() {
     }
 }
 
-/// A client that stops reading leaves the server's writes pending, and hyper
-/// may never read again while it sends a response. The write side checks the
-/// deadline too, so such a connection ends instead of keeping its slot.
-///
-/// Mutation: drop the check on pending writes, and the write waits forever.
+/// Mutation: no deadline check on pending writes — a client that stops reading keeps its slot.
 #[tokio::test]
 async fn a_client_that_stops_reading_is_closed_once_idle() {
     use axum::serve::Listener;

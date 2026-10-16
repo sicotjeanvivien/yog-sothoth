@@ -1,6 +1,5 @@
-//! Unit tests for the poller's tick logic (`poll_once`). DB-free: the
-//! mock feed lens stands in for the repository; a broadcast subscriber
-//! stands in for an SSE connection.
+//! DB-free tests of the poller's tick: a mock feed for the repository, a broadcast subscriber
+//! for an SSE connection.
 
 use std::sync::Arc;
 
@@ -43,8 +42,7 @@ fn cursor_of(record: &SignalRecord) -> SignalCursor {
 
 #[tokio::test]
 async fn anchors_at_the_tip_and_emits_nothing() {
-    // Fresh watermark on a non-empty feed: anchor at the tip; the delta
-    // past the tip is empty — no replay of history.
+    // A fresh watermark anchors at the tip: no replay of history.
     let tip = SignalCursor {
         triggered_at: ts(1_700),
         id: 9,
@@ -125,8 +123,7 @@ async fn read_failure_keeps_the_watermark() {
 
 #[tokio::test]
 async fn no_receiver_still_advances_the_watermark() {
-    // Receivers vanished between the run-loop's count check and the
-    // send: the send errors, but the tick's outcome is unchanged.
+    // Receivers left between the count check and the send: the tick is unchanged.
     let record = make_signal_record(10, pk(1));
     let expected = cursor_of(&record);
     let repo = MockSignalRepo::feed(Ok(None), Ok(vec![record]));
@@ -171,13 +168,8 @@ async fn the_poller_stops_when_the_token_is_cancelled() {
         .unwrap();
 }
 
-/// The fix for the per-stream enrichment: a tick's signals are enriched in one
-/// batch, **before** the broadcast, and every subscriber receives the same
-/// enriched signals. Three subscribers and two signals cost one catalog
-/// lookup — `PoolRepoOnce` panics on a second.
-///
-/// Mutation: enrich each record on its own inside the send loop, and the
-/// second lookup panics.
+/// Mutation: each record enriched on its own inside the send loop — three subscribers and
+/// two signals must cost one catalog lookup.
 #[tokio::test]
 async fn a_tick_is_enriched_once_whatever_the_number_of_subscribers() {
     let (mint_a, mint_b) = (pk(10), pk(11));
@@ -278,11 +270,7 @@ impl yog_core::domain::SignalFeed for StuckFeed {
     }
 }
 
-/// A stop that arrives mid-tick ends the poller at once: the tick's reads are
-/// cancelled rather than waited for — on a slow database they could outlast
-/// the shutdown grace.
-///
-/// Mutation: await the tick outside the `select!`, and the poller hangs.
+/// Mutation: the tick awaited outside the `select!` — a stop mid-tick hangs the poller.
 #[tokio::test]
 async fn a_stop_mid_tick_does_not_wait_for_the_tick() {
     use std::time::Duration;

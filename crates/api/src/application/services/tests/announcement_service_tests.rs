@@ -7,8 +7,6 @@ use yog_core::RepositoryError;
 use super::super::AnnouncementService;
 use crate::testing::{MockAnnouncementRepo, make_announcement};
 
-// ── Happy path ───────────────────────────────────────────────────────
-
 #[tokio::test]
 async fn returns_repository_order_untouched() {
     let announcements = vec![make_announcement(1), make_announcement(2)];
@@ -30,8 +28,6 @@ async fn empty_active_window_is_not_an_error() {
 
     assert!(result.is_empty());
 }
-
-// ── Errors ───────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn repo_error_propagates() {
