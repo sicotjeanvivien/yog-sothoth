@@ -1,6 +1,6 @@
 /**
  * The server-only environment. ⚠️ No `server-only` directive here, so vitest can import it:
- * the directive lives in `server-env.ts`, which re-exports for production code.
+ * the directive lives in `server-env.ts`.
  */
 
 import * as z from "zod";

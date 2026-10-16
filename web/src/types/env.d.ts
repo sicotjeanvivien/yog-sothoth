@@ -1,5 +1,5 @@
-// Declares every env var on `ProcessEnv`, so the dotted `process.env.X` passes
-// `noPropertyAccessFromIndexSignature`. Kept in step with `RAW_VALUES` and `.env.example`.
+// Declares env vars on `ProcessEnv`, so the dotted `process.env.X` passes
+// `noPropertyAccessFromIndexSignature`. Kept in step with `RAW_VALUES`.
 
 declare global {
   namespace NodeJS {

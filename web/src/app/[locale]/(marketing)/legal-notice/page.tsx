@@ -1,4 +1,4 @@
-/** The legal notice (mentions légales), required by the LCEN, article 6-III. */
+/** The legal notice (mentions légales), required by the LCEN. */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";

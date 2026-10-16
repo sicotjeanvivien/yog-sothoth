@@ -28,7 +28,7 @@ export function PoolsFeeFilter({ tiers }: { tiers: FeeTierResponse[] }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
-  // A tier no longer among the most common matches no row: the button shows "all".
+  // A tier no longer among the most common matches no row.
   const current = searchParams.get("fee_bps") ?? ALL;
   const selectedLabel =
     current !== ALL ? formatFeeBps(current) : t("all");

@@ -1,5 +1,5 @@
 // Feature flags, from `NEXT_PUBLIC_FEATURE_*`: inlined at build time, so flipping one needs a
-// rebuild. Only the literal "true" turns a flag on.
+// rebuild.
 
 /** Why a flag is on or off in v0.1. */
 export type FeatureStatus =

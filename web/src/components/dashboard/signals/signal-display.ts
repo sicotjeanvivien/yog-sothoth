@@ -1,6 +1,6 @@
 /**
- * The signals' display vocabulary. ⚠️ Apart from `signal-feed.tsx`, a `"use client"` module,
- * so Server Components share it without crossing the client boundary.
+ * The signals' display vocabulary. ⚠️ Kept out of the `"use client"` `signal-feed.tsx`, so
+ * Server Components share it.
  */
 
 import type { FC } from "react";

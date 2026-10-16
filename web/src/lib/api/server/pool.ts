@@ -1,6 +1,6 @@
 /**
  * `GET /api/pools/{address}`: a pool never observed is a 404 `ApiClientError`, a malformed
- * address a `TypeError`, a caller bug.
+ * address a `TypeError`.
  */
 
 import { apiGet } from "../client/server";

@@ -43,7 +43,7 @@ export async function generateMetadata({
   };
 }
 
-// The URL is user-editable: an out-of-vocabulary value is dropped, and the API gets a first page.
+// The URL is user-editable: an out-of-vocabulary value is dropped.
 
 function parseDir(raw: string | string[] | undefined): PageDir | undefined {
   if (raw === "next" || raw === "prev") return raw;
