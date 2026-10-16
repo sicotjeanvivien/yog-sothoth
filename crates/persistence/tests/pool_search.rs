@@ -60,11 +60,8 @@ const P_SOL_USDC: u8 = 1; // token_a = SOL,  token_b = USDC
 const P_USDT_SOL: u8 = 2; // token_a = USDT, token_b = SOL  (SOL on side B)
 const P_USDC_WBTC: u8 = 3; // token_a = USDC, token_b = WBTC
 
-/// Three pools + their token metadata:
-///   P1  SOL / USDC
-///   P2  USDT / SOL   (SOL is the *second* mint — pair matching must be
-///                     order-independent to still find "SOL/USDT")
-///   P3  USDC / WBTC
+/// P1 SOL/USDC, P2 USDT/SOL — SOL second, so "SOL/USDT" needs order independence — and
+/// P3 USDC/WBTC, with their token metadata.
 async fn seed_scenario(pool: &PgPool) {
     seed_token(pool, pk(SOL), "SOL", "Solana").await;
     seed_token(pool, pk(USDC), "USDC", "USD Coin").await;

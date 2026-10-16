@@ -19,7 +19,7 @@ impl PgHealthChecker {
         Self { pool }
     }
 
-    /// A `SELECT 1` round-trip within [`PING_TIMEOUT`].
+    /// A `SELECT 1` round-trip within `PING_TIMEOUT`.
     pub async fn ping(&self) -> Result<(), HealthError> {
         let fut = sqlx::query("SELECT 1").execute(&self.pool);
 

@@ -144,10 +144,8 @@ async fn settings(pool: &PgPool, sql: &'static str, excluded: &str) -> Vec<(Stri
         .expect("the catalog must be readable")
 }
 
-/// Fails on every table whose setting is not `house(table)`.
-///
-/// ⚠️ Also fails when the liquidity events are not among the rows: a filter
-/// that matched nothing would otherwise pass with nothing checked.
+/// Fails on every table whose setting is not `house(table)`. ⚠️ Also when the liquidity events
+/// are missing: a filter matching nothing would pass with nothing checked.
 fn assert_house(setting: &str, rows: &[(String, i64)], house: impl Fn(&str) -> i64) {
     assert!(
         rows.iter()

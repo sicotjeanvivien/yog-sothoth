@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2PermanentLockPositionEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── permanent_lock_position: both u128 fields round-trip exactly ────
-
 #[sqlx::test]
 async fn permanent_lock_position_preserves_u128(pool: PgPool) {
     let repo = PgMeteoraDammV2PermanentLockPositionEventRepository::new(pool.clone());

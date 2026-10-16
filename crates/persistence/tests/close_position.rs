@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2ClosePositionEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── close_position: persists ─────────────────────────────────────────
-
 #[sqlx::test]
 async fn close_position_inserts(pool: PgPool) {
     let repo = PgMeteoraDammV2ClosePositionEventRepository::new(pool.clone());

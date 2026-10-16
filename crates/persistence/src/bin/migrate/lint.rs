@@ -49,12 +49,8 @@ fn file_name(path: &Path) -> String {
         .to_string()
 }
 
-/// The SQL statements of `sql`, each with the 1-based line it starts on,
-/// whitespace collapsed.
-///
-/// Comments and quoted text become a space rather than disappearing: a comment
-/// mentioning `CREATE INDEX` must not be read as one, and `INDEX/**/ON` must not
-/// weld into a token that no longer looks like an index at all.
+/// The statements of `sql`, each with its 1-based first line, whitespace collapsed. ⚠️ Comments
+/// and quoted text become a space: mentioning `CREATE INDEX` is not one, `INDEX/**/ON` stays two tokens.
 fn statements(sql: &str) -> Vec<(usize, String)> {
     let chars: Vec<char> = sql.chars().collect();
     let (mut out, mut current) = (Vec::new(), String::new());

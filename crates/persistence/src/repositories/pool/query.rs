@@ -82,10 +82,8 @@ fn keyset_operators(sort: PoolSort, mode: QueryMode) -> (&'static str, &'static 
     )
 }
 
-/// How the free-text search term was interpreted.
-///
-/// A `/` splits the term into a token *pair* ("SOL/USDC"); anything
-/// else (no slash, or one side blank once trimmed) is a single term.
+/// How the search term was read: a `/` splits it into a token pair ("SOL/USDC"), unless a
+/// side is blank once trimmed.
 enum ParsedSearch {
     /// Both sides non-empty: require one token matching each side.
     Pair(String, String),

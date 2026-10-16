@@ -7,8 +7,6 @@ use yog_persistence::PgMeteoraDammV2InitializePoolEventRepository;
 
 use super::helpers::{pk, sg, ts};
 
-// ── initialize_pool: u128 NUMERIC + BYTEA fee blob + SMALLINT ───────
-
 #[sqlx::test]
 async fn initialize_pool_preserves_numeric_bytea_smallint(pool: PgPool) {
     let repo = PgMeteoraDammV2InitializePoolEventRepository::new(pool.clone());
