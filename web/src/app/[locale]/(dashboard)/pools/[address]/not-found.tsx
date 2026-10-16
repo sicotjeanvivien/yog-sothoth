@@ -1,4 +1,4 @@
-/** The pool detail's 404: a well-formed address the indexer has never observed. */
+/** The pool detail's 404: an address that names no observed pool, malformed or unknown. */
 
 import { getTranslations } from "next-intl/server";
 
