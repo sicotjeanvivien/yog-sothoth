@@ -1,32 +1,7 @@
 /**
- * Pool detail page (`/[locale]/(dashboard)/pools/[address]`).
- *
- * Server Component. Orchestrates four parallel API calls, gates the
- * page on the critical one, and degrades gracefully on the rest:
- *
- *   - `fetchPool`             → CRITICAL. 404 → notFound(). Other
- *                                errors → full page error UI.
- *   - `fetchPoolLatestState`  → non-critical, 404 is expected for
- *                                pools observed only through
- *                                Claim* events. null on any error
- *                                or 404, the KPI block adapts.
- *   - `fetchPoolSwapEvents`        → non-critical. Block-level error
- *                                substituted in place of the table.
- *   - `fetchPoolLiquidityEvents` → same as swaps.
- *
- * The block order is Header → KPIs → Info → Swaps → Liquidity,
- * with each block self-contained so the order can change in one
- * place if we ever need to. Swaps and Liquidity blocks already
- * carry their own outer `<section>` with padding, so the page
- * only wraps the error fallback in a matching section to keep
- * layout consistent on failure.
- *
- * Pagination state for the paginated blocks (swaps, liquidity,
- * alerts) lives in the URL behind namespaced params: `swapsCursor` /
- * `swapsDir` / `swapsPosition`, `liqCursor` / `liqDir` / `liqPosition`
- * and `alertsCursor` / `alertsDir` / `alertsPosition`. The paginations
- * are fully independent — paginating swaps preserves the liquidity
- * cursor and vice versa.
+ * The pool detail page. The pool is fetched first and gates the page (404 → `notFound()`);
+ * the latest state and the active tab's data follow, each degrading on its own. Each
+ * paginated block keeps its cursor in its own URL params (`swaps…`, `liq…`, `alerts…`).
  */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
@@ -60,7 +35,6 @@ import { BlockError } from "@/components/dashboard/block-error";
 import { PageError } from "@/components/dashboard/page-error";
 import { Pagination } from "@/components/shared/pagination";
 
-// ── Page metadata ─────────────────────────────────────────────────────
 
 type PoolDetailPageProps = {
   params: Promise<{ locale: string; address: string }>;
@@ -76,10 +50,7 @@ export async function generateMetadata({
     namespace: "Dashboard.PoolDetail.meta",
   });
 
-  // We deliberately don't fetch the pool here to enrich the title
-  // with the pair symbols — that would mean a redundant API call
-  // just for metadata. The short address in the title is enough
-  // to disambiguate tabs.
+  // No pool fetch for the pair symbols: an API call for a title.
   const shortAddress = `${address.slice(0, 4)}...${address.slice(-4)}`;
   return {
     title: `${t("title", { address: shortAddress })} — Yog-Scope`,
@@ -87,12 +58,7 @@ export async function generateMetadata({
   };
 }
 
-// ── Search params parsing ─────────────────────────────────────────────
-//
-// Accept anything and narrow defensively. Out-of-vocabulary values
-// (e.g. `swapsDir=sideways`) are silently dropped rather than
-// rejected — the URL is user-editable and a stale link shouldn't
-// crash the page.
+// The URL is user-editable: an out-of-vocabulary value is dropped, never an error.
 
 function parseDir(raw: string | string[] | undefined): PageDir | undefined {
   if (raw === "next" || raw === "prev") return raw;
@@ -112,11 +78,8 @@ function parseCursor(raw: string | string[] | undefined): string | undefined {
   return raw;
 }
 
-// Look-back window for the Fees charts (hourly buckets). Fixed for now; a
-// user-selectable range can come later.
 const HISTORY_DAYS = 30;
 
-// ── Page ──────────────────────────────────────────────────────────────
 
 export default async function PoolDetailPage({
   params,
@@ -125,10 +88,7 @@ export default async function PoolDetailPage({
   const { locale, address } = await params;
   setRequestLocale(locale);
 
-  // Critical fetch first. Firing the four calls in parallel and
-  // checking the pool outcome afterwards would waste bandwidth on
-  // the secondary calls when the pool doesn't exist — one extra
-  // round-trip of latency in exchange for predictable behaviour.
+  // The pool first: the other calls would be wasted on a pool that does not exist.
   const poolOutcome = await safeFetchOrNotFound(() => fetchPool(address));
 
   if (poolOutcome.kind === "not_found") {
@@ -141,7 +101,6 @@ export default async function PoolDetailPage({
 
   const pool = poolOutcome.data;
 
-  // Pagination params, one namespace per block.
   const sp = await searchParams;
   const swapsPagination = {
     cursor: parseCursor(sp['swapsCursor']),
@@ -188,10 +147,7 @@ export default async function PoolDetailPage({
       : Promise.resolve(null),
   ]);
 
-  // "Latest state" 404 is expected (pool observed via Claim*
-  // events only) — collapse it to null so the KPI block adapts.
-  // Any other error also collapses to null: TVL + 24h volume stay
-  // visible, the composition card simply doesn't render.
+  // Any failure, the expected 404 included, is null: the KPI strip adapts.
   const state = stateOutcome.kind === "ok" ? stateOutcome.data : null;
 
   const tFees = await getTranslations("Dashboard.PoolDetail.fees");

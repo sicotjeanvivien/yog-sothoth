@@ -1,12 +1,6 @@
 /**
- * High-level fetcher for `GET /api/signals` (server runtime).
- *
- * Two consumers, two shapes of read:
- *   - the `/signals` feed and the Overview block read the first page
- *     of the global feed (no cursor — the live tail arrives over SSE
- *     afterwards);
- *   - the pool-detail "Alerts" tab reads the pool-filtered feed
- *     (`pool` param) with full bidirectional pagination.
+ * `GET /api/signals` on the server: the first page of the global feed, the SSE tail following,
+ * or a pool's paginated slice (`pool`).
  */
 
 import { assertInBounds } from "../client/client-core";
@@ -31,8 +25,6 @@ export type FetchSignalsParams = {
 };
 
 /**
- * Fetch a page of the signal feed, newest first.
- *
  * @throws TypeError if `pool` is set but syntactically invalid.
  * @throws RangeError if `limit` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.

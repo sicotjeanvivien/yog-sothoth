@@ -1,20 +1,9 @@
 "use client";
 
 /**
- * The sidebar's menu: renders `SIDEBAR_NAV`.
- *
- * An open entry is a `Link`. A closed entry is a disabled link — a
- * `<span role="link" aria-disabled>`, the pagination's convention — with
- * its lock: no `href`, no `tabindex`, no handler, so it reacts neither
- * to a click nor to the keyboard. `__tests__/sidebar-nav-list.test.tsx`
- * holds that line.
- *
- * On the collapsed lg+ rail only the open entries remain, as their
- * centred icon — wherever they sit, in a group or not; a group shows
- * only if it holds one. A lock without its label says nothing. The
- * mobile drawer ignores `collapsed`, so every collapsed style is
- * `lg:`-scoped; `__tests__/sidebar-nav-list-collapsed.test.tsx` holds
- * those rules.
+ * The sidebar's menu. ⚠️ A closed entry is a `<span role="link" aria-disabled>` with no `href`,
+ * `tabindex` or handler. The collapsed rail keeps only the open entries' icons; every collapsed
+ * style is `lg:`-scoped. The `__tests__` hold both rules.
  */
 
 import { useId, type FC } from "react";
@@ -48,7 +37,7 @@ function rowClass(nested: boolean): string {
 
 type SidebarNavListProps = {
   collapsed: boolean;
-  /** Called when a link is clicked — lets the shell close the drawer. */
+  /** Lets the shell close the drawer on navigation. */
   onNavigate: () => void;
 };
 

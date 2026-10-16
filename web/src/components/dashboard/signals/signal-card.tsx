@@ -1,31 +1,9 @@
 "use client";
 
 /**
- * One signal, as a full-width alert-row card — THE canonical rendering
- * of a signal, shared by the `/signals` feed and the Overview's
- * latest-signals block. Severity is carried by shape *and* color
- * (icon + left accent bar + tinted background + colored value), never
- * by hue alone. The severity icon is a left column spanning the
- * card's height; next to it, three lines:
- *
- *   1. token pair (→ pool; short address while unresolved) ·
- *      protocol · the metric value, large and severity-colored
- *   2. human summary phrased from the structured value (not the
- *      detector's raw English `message`)
- *   3. relative time · raw detector tag · crossed threshold
- *
- * A detector this component doesn't know yet falls back to the raw
- * `message` (or value/threshold pair): the card must render whatever
- * the engine grows next, just less prettily.
- *
- * `compact` (the Overview's control-tower density) keeps the severity
- * column and line 1 only — pair with the relative time beneath it,
- * value on the right; summary and threshold stay on the full
- * card. Same component, same visual language, two densities.
- *
- * Self-sufficient on i18n/locale (own `useTranslations`/`useLocale`)
- * so Server Components can mount it without passing non-serializable
- * props across the client boundary.
+ * The canonical card of a signal, for the `/signals` feed and the Overview (`compact`).
+ * ⚠️ Severity is shape and colour, never hue alone. An unknown detector falls back to its raw
+ * `message`: the card renders whatever the engine grows next.
  */
 
 import { useLocale, useTranslations } from "next-intl";
@@ -47,10 +25,7 @@ import {
   SEVERITY_ICON,
 } from "./signal-display";
 
-// Row tint per severity: left accent bar + border + background, one
-// clear rung apart (critical > warning > info). Info stays close to
-// neutral — when most of the feed is warning/critical, a tinted info
-// row would flatten the scale.
+// Info stays near neutral: in a mostly warning/critical feed, a tinted info row flattens the scale.
 const SEVERITY_CARD: Record<SeverityResponse, string> = {
   info: "border-sothoth-500/15 border-l-sky-400/60 bg-cosmos-700/40",
   warning: "border-amber-400/30 border-l-amber-400 bg-amber-400/[0.06]",
@@ -59,10 +34,7 @@ const SEVERITY_CARD: Record<SeverityResponse, string> = {
 
 type Translate = ReturnType<typeof useTranslations>;
 
-/**
- * Human summary of a card, phrased from the structured `value` rather
- * than the detector's raw English `message`.
- */
+/** The summary, phrased from the structured `value`, not the detector's English `message`. */
 function detectorSummary(
   signal: SignalResponse,
   t: Translate,
@@ -74,8 +46,7 @@ function detectorSummary(
         deviation: formatSignedPercent(signal.value, locale),
       });
     case "flow_imbalance": {
-      // Sign convention: value > 0 = A→B volume dominates, i.e. the
-      // flow pours *into* token B; negative pours into token A.
+      // Positive: A→B dominates, the flow pours into token B.
       const toward = signal.value.startsWith("-")
         ? signal.tokenA.symbol
         : signal.tokenB.symbol;
@@ -113,8 +84,7 @@ export function SignalCard({
   const locale = useLocale();
 
   const known = KNOWN_DETECTORS.has(signal.detector);
-  // The drain ratio is one-sided: a signed "+61%" would read as growth,
-  // so it formats unsigned; the two-sided detectors keep their sign.
+  // The drain ratio is unsigned: "+61%" would read as growth.
   const value = !known
     ? signal.value
     : signal.detector === "tvl_drain"
@@ -130,10 +100,6 @@ export function SignalCard({
   const SeverityIcon = SEVERITY_ICON[signal.severity];
 
   const severityColumn = (
-    /* Severity icon — a full-height left column, the first thing the
-       eye meets when scanning the feed. Below it, a terse category tag
-       so the detector kind reads at a glance without parsing the
-       summary; the color stays with severity, the tag stays neutral. */
     <span
       title={severityLabel}
       className={`flex w-[44px] flex-col items-center gap-1 ${SEVERITY_COLOR[signal.severity]}`}
@@ -164,8 +130,7 @@ export function SignalCard({
         {severityColumn}
         <div className="flex min-w-0 flex-col gap-0.5">
           <PairLink signal={signal} />
-          {/* suppressHydrationWarning: relative to now, so the SSR text can
-              legitimately lag the client by a minute boundary. */}
+          {/* Relative to now: the SSR text may lag the client by a minute. */}
           <time
             dateTime={signal.triggeredAt}
             className="text-[13px] whitespace-nowrap text-slate-500"
@@ -186,7 +151,6 @@ export function SignalCard({
       {severityColumn}
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {/* Line 1 — pair · protocol · value */}
         <div className="flex items-center gap-3">
           <PairLink signal={signal} />
           <span className="whitespace-nowrap text-[13px] text-slate-500">
@@ -195,16 +159,14 @@ export function SignalCard({
           {valueFigure}
         </div>
 
-        {/* Line 2 — summary */}
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[14px]">
           <span className="min-w-0 flex-1 leading-[1.5] text-slate-300">
             {detectorSummary(signal, t, locale)}
           </span>
         </div>
 
-        {/* Line 3 — time · detector tag · threshold */}
         <div className="flex items-center justify-between gap-2 text-[13px] text-slate-400">
-          {/* suppressHydrationWarning: see the <time> in the compact card. */}
+          {/* Relative to now: the SSR text may lag the client by a minute. */}
           <time
             dateTime={signal.triggeredAt}
             className="whitespace-nowrap text-slate-500"
@@ -230,10 +192,7 @@ export function SignalCard({
   );
 }
 
-/**
- * The pool link of a card: the pair when both symbols are resolved,
- * the short pool address while they aren't.
- */
+/** The pair, or the short pool address while a symbol is unresolved. */
 function PairLink({ signal }: { signal: SignalResponse }) {
   const pairResolved =
     signal.tokenA.symbol !== null && signal.tokenB.symbol !== null;

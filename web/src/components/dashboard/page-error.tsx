@@ -1,14 +1,6 @@
 /**
- * Full-page error state.
- *
- * Used when the critical fetch of a dashboard page fails (e.g. the
- * pool record for /pools/[address] couldn't be loaded for a reason
- * other than 404, which is handled by Next.js' notFound()).
- *
- * The visual language is more prominent than `BlockError` — this
- * is the entire page's contents, not a substitution for a single
- * section. No retry button for the same reason as elsewhere; we
- * may add a small Client island later.
+ * The whole page's error state, when its critical fetch fails for another reason than a 404,
+ * which `notFound()` handles. No retry button.
  */
 
 import { getTranslations } from "next-intl/server";

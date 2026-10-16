@@ -1,26 +1,9 @@
 "use client";
 
 /**
- * Live signal feed — the visible end of the Signal Engine loop.
- *
- * Client Component: seeded with the server-rendered first page, then
- * kept live by `useSignalStream` (SSE, direct to the public gateway).
- * New signals prepend in place; the connection state is surfaced as a
- * small status dot so a broken stream is never mistaken for a quiet
- * one.
- *
- * Local filters (severity × detector chips, `SignalFilters`) apply at
- * render time on the merged list — ephemeral UI state, the stream and
- * the 200-item merge are untouched, hidden signals reappear the
- * moment a filter releases them. Two distinct empty states: a quiet
- * feed ("the detectors are watching") vs an over-filtered one (reset
- * button).
- *
- * The rendering of one signal lives in [`SignalCard`] — shared with
- * the Overview's latest-signals block; this component owns the list,
- * the stream state, the filters and the empty states.
- *
- * [`SignalCard`]: ./signal-card.tsx
+ * The live signal feed, seeded by the server page and kept live by `useSignalStream`; the
+ * status dot keeps a broken stream from passing for a quiet one. Filters apply at render
+ * time, leaving the stream and the merge untouched. One signal renders as `SignalCard`.
  */
 
 import { useState } from "react";
@@ -35,7 +18,6 @@ import { STATUS_DOT } from "./signal-display";
 import { SignalFilters } from "./signal-filters";
 import { useSignalStream } from "./use-signal-stream";
 
-/** Toggle one value in an immutable Set (state-update helper). */
 function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
   const next = new Set(set);
   if (next.has(value)) {

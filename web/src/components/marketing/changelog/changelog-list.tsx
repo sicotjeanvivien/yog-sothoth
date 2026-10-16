@@ -1,15 +1,6 @@
 /**
- * Changelog — the release blocks.
- *
- * One card per release (the marketing-card shell of `TermsProse`),
- * newest first, straight from the `RELEASES` data file. Each block's
- * anchor id is the version string — the target of release
- * announcements' `link_url` (`/changelog#v0.1.0`) — with `scroll-mt`
- * so the fragment lands below the fixed navbar.
- *
- * Server Component through and through: static data, no interactivity.
- * Section labels come from i18n; the release copy itself is English
- * data by decision (see `releases.ts`).
+ * One card per release, newest first. ⚠️ Each card's id is its version — an announcement's
+ * `link_url` target — with `scroll-mt` so the fragment lands below the fixed navbar.
  */
 
 import { getLocale, getTranslations } from "next-intl/server";

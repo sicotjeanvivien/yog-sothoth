@@ -1,16 +1,6 @@
 /**
- * Pool detail page — "Alerts" block.
- *
- * The pool-filtered slice of the signal feed (`GET /api/signals?pool=`),
- * newest first, rendered with the canonical `SignalCard` — same visual
- * language as `/signals` and the Overview block. Static history: no SSE
- * here in v1 (the tab is a record, the live tail lives on `/signals`);
- * client-side filtering of the global stream can come later without
- * rework.
- *
- * The page owns the fetch and the pagination (namespaced
- * `alerts*` URL params, like swaps/liquidity); this component owns the
- * section shell, the list and the pool-specific empty state.
+ * The pool detail's alerts: its slice of the signal feed, as `SignalCard`s, with no SSE. The
+ * page owns the fetch and the `alerts…` pagination.
  */
 
 import { getTranslations } from "next-intl/server";

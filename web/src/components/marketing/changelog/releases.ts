@@ -1,18 +1,7 @@
 /**
- * Changelog content — one entry per release.
- *
- * Pure data, no React (the `marketing-footer-links` pattern). This is
- * the file the operator edits at each release; the vitest suite next
- * to it guards the invariants (unique versions, `vX.Y.Z` format,
- * newest first).
- *
- * Entries are written in English only — the v1 language decision shared
- * with operator announcements: the page chrome (title, section labels)
- * is i18n'd, the free release copy is not.
- *
- * `version` doubles as the block's anchor id: a release announcement
- * published in the `announcements` table points at
- * `/changelog#<version>` via its `link_url`.
+ * The changelog, one entry per release, edited at each release; its test guards unique
+ * `vX.Y.Z` versions, newest first. English only. ⚠️ `version` is the anchor id an announcement's
+ * `link_url` points at (`/changelog#<version>`).
  */
 
 export type ReleaseSectionKind = "features" | "fixes";

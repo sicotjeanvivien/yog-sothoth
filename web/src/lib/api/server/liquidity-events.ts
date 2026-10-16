@@ -1,9 +1,4 @@
-/**
- * High-level fetcher for `GET /api/pools/{address}/liquidity-events`.
- *
- * Bidirectional pagination — see `fetchPools` for the full contract.
- * Display order is most-recent first.
- */
+/** `GET /api/pools/{address}/liquidity-events`, newest first, paginated as `fetchPools`. */
 
 import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
@@ -25,8 +20,6 @@ export type FetchPoolLiquidityEventsParams = {
 };
 
 /**
- * Fetch a paginated page of liquidity events for a pool.
- *
  * @throws TypeError if `address` is syntactically invalid.
  * @throws RangeError if `limit` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.

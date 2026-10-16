@@ -1,10 +1,4 @@
-/**
- * Terms — header section.
- *
- * Sober introductory block: eyebrow, title, lead, last-updated date.
- * Mirrors `PrivacyHeader` for visual consistency across the legal
- * pages.
- */
+/** The terms' header, with their last-updated date. */
 
 import { getTranslations } from "next-intl/server";
 

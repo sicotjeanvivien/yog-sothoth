@@ -45,16 +45,8 @@ export function computePoolComposition(
   };
 }
 
-/**
- * Convert a share in [0, 1] to the (x, y) coordinates of a point
- * on a unit circle starting from the top (12 o'clock) and going
- * clockwise.
- *
- * Used by the donut renderer to build SVG arc paths.
- */
+/** A share in [0, 1] as a point on the unit circle, clockwise from 12 o'clock. */
 export function shareToCircleCoords(share: number): { x: number; y: number } {
-  // Top of the circle = -π/2 in standard math notation; going
-  // clockwise means adding share * 2π.
   const angle = -Math.PI / 2 + share * 2 * Math.PI;
   return {
     x: Math.cos(angle),

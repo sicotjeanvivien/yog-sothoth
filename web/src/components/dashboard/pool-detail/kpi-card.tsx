@@ -1,18 +1,6 @@
 /**
- * Generic KPI card — small, two-line block: an uppercase label and
- * a large value.
- *
- * Shows the metric at a glance, as an *order of magnitude* (compact,
- * e.g. "$1.2M"). The exact figure lives in the "Pool analytics" card
- * below — the KPI strip is for scanning, the analytics card for
- * precise reading.
- *
- * Used at the top of the pool detail page for TVL and 24h volume,
- * but designed to be reusable for any future scalar metric on the
- * dashboard. `info` adds an ⓘ popover next to the label — the
- * metric's definition on demand.
- *
- * Stays a Server Component; the popover is the client island.
+ * A KPI card: a label and a compact value, the exact figure being in "Pool analytics". A
+ * Server Component; the ⓘ popover is the client island.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -38,11 +26,7 @@ export async function KpiCard({
 }: {
   label: string;
   valueCompact: string;
-  /**
-   * Optional context line under the value — same slot and styling as the
-   * Overview's `StatCard`, used for the same purpose: honest coverage
-   * ("14 / 24 hours priced"). Cards without one simply omit it.
-   */
+  /** A context line under the value, such as the coverage ("14 / 24 hours priced"). */
   hint?: string | undefined;
   /** Definition of the metric, shown in an ⓘ popover next to the label. */
   info?: string;

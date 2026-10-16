@@ -1,13 +1,6 @@
 /**
- * Sidebar navigation keys.
- *
- * Literal unions, so TypeScript rejects a typo at compile time. Leaf
- * module — it imports nothing.
- *
- * An entry is open (it has a page) or closed (visible, leads nowhere).
- * Opening one moves its key from `ClosedNavKey` to `OpenNavKey`; the
- * sidebar's icon map then refuses to compile until the entry has an
- * icon for the collapsed rail.
+ * The sidebar's keys, as literal unions. Moving a key from `ClosedNavKey` to `OpenNavKey`
+ * makes the icon map refuse to compile until the entry has an icon.
  */
 
 export type OpenNavKey = "overview";

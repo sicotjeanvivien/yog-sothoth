@@ -1,16 +1,4 @@
-/**
- * Terms of service page.
- *
- * The contract between Yog-Scope's editor and any visitor using
- * the site or the API. Eight cards cover the service description,
- * acceptable use, the no-financial-advice disclaimer, service-level
- * limits, intellectual property, and the legal framework.
- *
- * Pre-deployment review checklist:
- *   - confirm last-updated date
- *   - have a French jurist review the text — this base is not a
- *     substitute for legal advice
- */
+/** The terms of service, between Yog-Scope's editor and any visitor of the site or the API. */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";

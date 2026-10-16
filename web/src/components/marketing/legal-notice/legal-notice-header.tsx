@@ -1,10 +1,4 @@
-/**
- * Legal notice — header section.
- *
- * Sober introductory block: eyebrow, title, lead, last-updated
- * date. Mirrors `PrivacyHeader` for visual consistency across the
- * marketing chrome's legal pages.
- */
+/** The legal notice's header, with its last-updated date. */
 
 import { getTranslations } from "next-intl/server";
 

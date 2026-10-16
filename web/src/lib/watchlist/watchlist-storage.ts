@@ -1,27 +1,13 @@
 /**
- * Watchlist persistence — the LocalStorage vocabulary and external store.
- *
- * Plain module (no "use client", no React) so the hook, and any future
- * server-side reconciliation, share the same key and serialization. The
- * watchlist is a set of pool addresses the visitor chose to keep an eye on;
- * it lives entirely in the browser (no account, no backend) until a
- * server-side watchlist replaces this store behind the same hook.
- *
- * Shaped as a `useSyncExternalStore` source: a cached snapshot with a stable
- * reference (so React can bail out of renders), a subscription that also
- * listens for cross-tab `storage` events, and a `getServerSnapshot` that
- * returns a stable empty list (the server can't read LocalStorage, so the
- * first client render must match "empty" then hydrate).
+ * The watchlist in LocalStorage, as a `useSyncExternalStore` source. ⚠️ `getServerSnapshot`
+ * is empty and the cached snapshot keeps a stable reference: a new array per read loops React.
  */
 
 export const WATCHLIST_STORAGE_KEY = "yog_watchlist";
 
-/** Stable empty reference — returned on the server and when storage is empty
- *  or unreadable, so `useSyncExternalStore` never sees a changing snapshot. */
 const EMPTY: readonly string[] = Object.freeze([]);
 
-/** Cached client snapshot. `null` means "not read yet"; otherwise it is the
- *  current value with a reference that only changes when the list changes. */
+/** `null` until read; its reference changes only with the list. */
 let cache: readonly string[] | null = null;
 
 const listeners = new Set<() => void>();
@@ -36,8 +22,7 @@ function readFromStorage(): readonly string[] {
     const cleaned = parsed.filter((x): x is string => typeof x === "string");
     return cleaned.length > 0 ? Object.freeze(cleaned) : EMPTY;
   } catch {
-    // Malformed JSON or a locked/again-unavailable storage — treat as empty
-    // rather than throwing into a render.
+    // Malformed JSON or unavailable storage: empty, not a throw into a render.
     return EMPTY;
   }
 }
@@ -49,15 +34,13 @@ function emit(): void {
 }
 
 function onStorageEvent(event: StorageEvent): void {
-  // Only react to our key (and to a full clear, `key === null`).
+  // `key === null` is a full clear.
   if (event.key !== null && event.key !== WATCHLIST_STORAGE_KEY) return;
   cache = readFromStorage();
   emit();
 }
 
-/** `useSyncExternalStore` subscribe: local listeners + one shared cross-tab
- *  `storage` listener, installed lazily and torn down when the last
- *  subscriber leaves. */
+/** One shared cross-tab `storage` listener, installed lazily, removed with the last subscriber. */
 export function subscribe(listener: () => void): () => void {
   if (listeners.size === 0 && typeof window !== "undefined") {
     window.addEventListener("storage", onStorageEvent);
@@ -72,7 +55,6 @@ export function subscribe(listener: () => void): () => void {
   };
 }
 
-/** Current client snapshot (stable reference between unchanged reads). */
 export function getSnapshot(): readonly string[] {
   if (cache === null) {
     cache = readFromStorage();
@@ -80,21 +62,18 @@ export function getSnapshot(): readonly string[] {
   return cache;
 }
 
-/** Server/first-paint snapshot — always the stable empty list. */
 export function getServerSnapshot(): readonly string[] {
   return EMPTY;
 }
 
-/** Replace the watchlist, persist it, and notify subscribers in this tab
- *  (the `storage` event only reaches *other* tabs). */
+/** ⚠️ Notifies this tab itself: the `storage` event reaches only the others. */
 export function setWatchlist(next: readonly string[]): void {
   cache = next.length > 0 ? Object.freeze([...next]) : EMPTY;
   if (typeof window !== "undefined") {
     try {
       window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(cache));
     } catch {
-      // Storage full or unavailable (private mode): keep the in-memory cache
-      // so the UI stays consistent for this session, just not persisted.
+      // Storage full or unavailable: the in-memory cache keeps the session consistent.
     }
   }
   emit();

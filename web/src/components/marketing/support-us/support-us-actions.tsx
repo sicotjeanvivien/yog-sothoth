@@ -1,20 +1,4 @@
-/**
- * Support us — Feedback / Sponsor grid.
- *
- * Two side-by-side cards forming the second tier of the support
- * page:
- *
- *   - Feedback (left)  → email + GitHub issues. Costs the visitor
- *                        a few minutes. At v0.1 this is the most
- *                        useful kind of contribution after
- *                        visibility.
- *   - Sponsor  (right) → GitHub Sponsors + Solana wallet. Costs
- *                        the visitor money. A short note states
- *                        what the funds are used for, in line with
- *                        the project's transparency stance.
- *
- * On mobile the cards stack vertically.
- */
+/** The support page's feedback and sponsoring cards; the latter says what the funds are for. */
 
 import { getTranslations } from "next-intl/server";
 import type { FC, ReactNode } from "react";
@@ -53,8 +37,6 @@ const CTA_SECONDARY_CLASS =
 const WALLET_CLASS =
   "mt-5 flex items-center justify-between gap-3 rounded-[4px] border border-sothoth-500/15 bg-cosmos-950/60 px-3 py-2 font-mono text-[12px] text-slate-300";
 
-// ── Component ─────────────────────────────────────────────────────────
-
 export async function SupportUsActions() {
 
   return (
@@ -66,8 +48,6 @@ export async function SupportUsActions() {
     </section>
   );
 }
-
-// ── Sub-components ────────────────────────────────────────────────────
 
 async function FeedbackCard() {
   const t = await getTranslations("SupportUs.feedback");
@@ -116,9 +96,6 @@ async function SponsorCard() {
         </a>
       </div>
 
-      {/* Solana wallet — copy-friendly box. `CopyButton` is an
-          isolated Client Component island, so this card itself stays
-          a Server Component. */}
       <div className="mt-6">
         <p className="text-[12px] font-semibold tracking-[0.2em] text-slate-400 uppercase">
           {t("solanaLabel")}
@@ -132,9 +109,6 @@ async function SponsorCard() {
   );
 }
 
-/**
- * Generic card shell shared by Feedback and Sponsor.
- */
 function CardShell({
   Icon,
   title,

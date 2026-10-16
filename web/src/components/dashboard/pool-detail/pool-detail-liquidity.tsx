@@ -1,27 +1,6 @@
 /**
- * Pool detail page — "Recent liquidity events" block.
- *
- * Same CSS-grid + ARIA structure as the swaps block (see
- * `pool-detail-swaps.tsx` for the rationale). Six columns:
- *
- *   Time       — relative ("2 min ago")
- *   Kind       — coloured badge: "Add" (green) / "Remove" (red)
- *   Amount A   — `amountA` in human units + token A symbol
- *   Amount B   — `amountB` in human units + token B symbol
- *   Value (USD)— `valueUsd`, trade-time value of the event ("—" if unknown)
- *   Action     — copy the signature / open the tx on Solscan
- *
- * Unlike a swap (which has an "in" and an "out" side), a liquidity
- * event touches both tokens together: adding 5 SOL + 100 USDC, or
- * removing 2 SOL + 40 USDC. Both amounts are displayed in parallel,
- * with no in/out logic.
- *
- * Only the first page (limit 20) is fetched in this commit; the
- * Load-more pagination lands later, alongside the swaps one.
- *
- * Rows are NOT clickable — liquidity events don't have their own
- * page; the only useful affordances are the per-row actions (copy
- * signature, open on Solscan) in the last column.
+ * The pool detail's liquidity events, as the swaps grid. Both amounts show side by side: an
+ * event moves both tokens together, with no in and out.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -38,8 +17,6 @@ import { CopyButton } from "@/components/shared/copy-button";
 import { formatRelativeTime } from "@/lib/format/format-relative-time";
 import { formatTokenAmount } from "@/lib/format/format-token-amount";
 import { formatUsd } from "@/lib/format/format-usd";
-
-// ── Tailwind class fragments ─────────────────────────────────────────
 
 const SECTION_CLASS = "px-6 lg:px-10";
 
@@ -68,16 +45,11 @@ const CELL_MONO_CLASS = `${CELL_CLASS} font-mono`;
 const ACTION_LINK_CLASS =
   "inline-flex h-6 w-6 items-center justify-center rounded-[3px] text-slate-400 transition-colors hover:bg-sothoth-500/15 hover:text-sothoth-300";
 
-// Badge styles — emerald for add (capital inflow), rose for remove
-// (capital outflow). Translucent backgrounds so the badge sits
-// gently on the dark surface without overpowering the row.
 const BADGE_ADD_CLASS =
   "inline-flex items-center rounded-[3px] border border-emerald-500/30 bg-emerald-500/10 px-2 py-[2px] text-[12px] font-semibold tracking-[0.1em] text-emerald-300 uppercase";
 
 const BADGE_REMOVE_CLASS =
   "inline-flex items-center rounded-[3px] border border-rose-500/30 bg-rose-500/10 px-2 py-[2px] text-[12px] font-semibold tracking-[0.1em] text-rose-300 uppercase";
-
-// ── Component ─────────────────────────────────────────────────────────
 
 export async function PoolDetailLiquidity({
   pool,
@@ -148,8 +120,6 @@ export async function PoolDetailLiquidity({
   );
 }
 
-// ── Sub-components ───────────────────────────────────────────────────
-
 function LiquidityRow({
   event,
   tokenA,
@@ -178,8 +148,7 @@ function LiquidityRow({
       className={`grid ${GRID_COLS} border-b border-sothoth-500/10 last:border-b-0`}
     >
       <div role="cell" className={CELL_CLASS}>
-        {/* suppressHydrationWarning: relative to now, so the SSR text can
-            legitimately lag the client by a minute boundary. */}
+        {/* Relative to now: the SSR text may lag the client by a minute. */}
         <time
           dateTime={event.timestamp}
           className="text-slate-400"

@@ -1,30 +1,11 @@
 /**
- * Shared CTA link.
- *
- * A single button-styled link used across marketing pages. Two
- * variants — `primary` (filled violet) and `secondary` (outlined
- * slate) — match the pair already in use on the homepage hero.
- *
- * Internal vs external is decided by the `external` flag:
- *
- *   - `external: true`  → plain `<a>` with `target="_blank"` and the
- *                         standard `rel` attributes. Used for GitHub,
- *                         awsd.fr, and any off-site target.
- *   - `external: false` (default) → next-intl's `Link`, so the
- *                         locale prefix is added automatically.
- *
- * An optional icon slot renders to the left of the label. Pass a
- * pre-sized icon component (e.g. `<GithubIcon className="h-[18px] w-[18px]" />`).
- *
- * Three sizes — `sm`, `md` (default), `lg` — adjust padding and font
- * size only; the visual identity is the same.
+ * The marketing CTA link, `primary` or `secondary`. `external` gives a plain `<a>` in a new
+ * tab; otherwise next-intl's `Link` adds the locale.
  */
 
 import type { ReactNode } from "react";
 
 import { Link } from "@/i18n/navigation";
-
-// ── Variants & sizes ──────────────────────────────────────────────────
 
 type Variant = "primary" | "secondary";
 type Size = "sm" | "md" | "lg";
@@ -45,23 +26,15 @@ const SIZE_CLASS: Record<Size, string> = {
   lg: "px-5 py-[11px] text-[17px]",
 };
 
-// ── Component ─────────────────────────────────────────────────────────
-
 type CtaLinkProps = {
   href: string;
   label: string;
-  /** Variant — defaults to `primary`. */
   variant?: Variant;
-  /** Size — defaults to `md`. */
   size?: Size;
-  /** Optional icon, rendered to the left of the label. */
+  /** A pre-sized icon, left of the label. */
   icon?: ReactNode;
-  /**
-   * Whether the target is off-site. Off-site → plain anchor with
-   * `target="_blank"`; on-site → next-intl `Link`.
-   */
   external?: boolean;
-  /** Extra classes — appended last, so callers can override. */
+  /** Appended last, so it overrides. */
   className?: string;
 };
 

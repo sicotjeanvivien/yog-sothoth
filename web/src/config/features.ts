@@ -1,37 +1,7 @@
-// Feature flag system for the Yog-Sothoth dashboard.
-//
-// Flags are read from `NEXT_PUBLIC_FEATURE_*` environment variables.
-// Because Next.js inlines `NEXT_PUBLIC_*` values at build time on the
-// client, flipping a flag in production requires a rebuild and a
-// redeploy. This is a build-time toggle, not a runtime toggle.
-//
-// All flags default to `false`. Only the literal string "true" (case
-// sensitive) is treated as on; anything else, including missing
-// values, "1", "yes", "TRUE", etc., is treated as off. The strict
-// parser keeps configuration mistakes safe-by-default.
-//
-// IMPORTANT — client-side inlining requirement
-// --------------------------------------------
-// Next.js inlines `process.env.NEXT_PUBLIC_*` at build time only when
-// the access is a *literal* property reference (e.g.
-// `process.env.NEXT_PUBLIC_FEATURE_POOLS_LIST`). Dynamic accesses
-// like `process.env[name]` are not inlined and return `undefined`
-// on the client. The `RAW_VALUES` map below intentionally lists each
-// env var by hand so that every flag is reachable from Client
-// Components.
+// Feature flags, from `NEXT_PUBLIC_FEATURE_*`: inlined at build time, so flipping one needs a
+// rebuild. Only the literal "true" turns a flag on.
 
-/**
- * Status describing why a flag is on or off in v0.1.
- *
- * - `available-v0.1`: data is in TimescaleDB today, widget can ship
- * - `degraded-v0.1`: data is available but the rendering path uses
- *   a less-than-ideal mechanism (e.g. polling instead of WebSocket)
- * - `pending-aggregate`: needs a TimescaleDB continuous aggregate
- *   that is not created yet
- * - `pending-signals`: depends on Signal Engine work not built yet
- * - `pending-design`: scoring or formula not yet defined
- * - `pending-visual`: bespoke visualization not in scope for v0.1
- */
+/** Why a flag is on or off in v0.1. */
 export type FeatureStatus =
   | "available-v0.1"
   | "degraded-v0.1"
@@ -40,13 +10,8 @@ export type FeatureStatus =
   | "pending-design"
   | "pending-visual";
 
-/**
- * Single source of truth for every flag the app knows about. Adding
- * a flag here makes it both type-safe (autocompletion of `FeatureName`)
- * and discoverable (one file lists them all with their rationale).
- */
+/** Every flag the app knows, with its rationale. */
 export const FEATURE_REGISTRY = {
-  // ---- Pool data ----
   poolsList: {
     description: "List of pools observed by the indexer.",
     status: "available-v0.1",
@@ -69,7 +34,6 @@ export const FEATURE_REGISTRY = {
     defaultEnabled: true,
   },
 
-  // ---- Aggregated metrics (need continuous aggregates) ----
   tvlTotal: {
     description: "Global TVL across every observed pool.",
     status: "pending-aggregate",
@@ -101,7 +65,6 @@ export const FEATURE_REGISTRY = {
     defaultEnabled: false,
   },
 
-  // ---- Visualizations not in scope for v0.1 ----
   liquidityMap: {
     description: "Bespoke 'liquidity map' visualization of all pools.",
     status: "pending-visual",
@@ -118,7 +81,6 @@ export const FEATURE_REGISTRY = {
     defaultEnabled: false,
   },
 
-  // ---- Scoring / Signal Engine ----
   liquidityHealthScore: {
     description: "Pool health score (0-100). Formula not yet defined.",
     status: "pending-design",
@@ -136,17 +98,11 @@ export const FEATURE_REGISTRY = {
   },
 } as const;
 
-/** Union of every known flag name, derived from the registry. */
 export type FeatureName = keyof typeof FEATURE_REGISTRY;
 
 /**
- * Literal env-var accesses. Each entry MUST use the dotted form
- * `process.env.NEXT_PUBLIC_FEATURE_X` so that Next.js inlines the
- * value into the client bundle at build time.
- *
- * Keep the keys in sync with `FEATURE_REGISTRY`. The exhaustive type
- * `Record<FeatureName, ...>` makes TypeScript fail the build if a
- * flag is added to the registry but missing here.
+ * ⚠️ One literal `process.env.NEXT_PUBLIC_FEATURE_X` per flag: Next.js inlines only literal
+ * accesses, and `process.env[name]` is `undefined` on the client.
  */
 const RAW_VALUES: Record<FeatureName, string | undefined> = {
   poolsList: process.env.NEXT_PUBLIC_FEATURE_POOLS_LIST,
@@ -168,28 +124,12 @@ const RAW_VALUES: Record<FeatureName, string | undefined> = {
   signalsFeed: process.env.NEXT_PUBLIC_FEATURE_SIGNALS_FEED,
 };
 
-/**
- * Strict boolean parser: only the literal string "true" is treated
- * as enabled. Any other value, including undefined, returns false.
- *
- * Intentionally narrow to avoid the classic pitfall of "I typed
- * `True` with a capital T and the flag silently stayed off".
- */
+/** Only the literal "true" is on: `True` or `1` stay off. */
 export function parseStrictBoolean(raw: string | undefined): boolean {
   return raw === "true";
 }
 
-/**
- * Resolve the effective state of a feature flag.
- *
- * Resolution order:
- *   1. The matching `NEXT_PUBLIC_FEATURE_*` env var if it is set
- *      (any non-undefined value is considered an explicit override,
- *      even an empty string, which evaluates to `false`).
- *   2. The `defaultEnabled` value declared in the registry.
- *
- * Safe to call from both Server and Client Components.
- */
+/** The env var when set — even empty, which is off — else the registry's `defaultEnabled`. */
 export function isFeatureEnabled(flag: FeatureName): boolean {
   const raw = RAW_VALUES[flag];
   if (raw !== undefined) {

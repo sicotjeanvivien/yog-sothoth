@@ -1,14 +1,4 @@
-/**
- * Error state for the pools table.
- *
- * Receives the `kind` of the underlying `ApiClientError` and
- * shows the appropriate localised message. The four kinds align
- * with `ApiClientErrorKind` from `lib/api/errors`.
- *
- * No retry button in this commit — the page is a Server Component,
- * retry would need a client island that triggers a navigation
- * refresh; deferred to a later change.
- */
+/** The pools table's error state, one message per `ApiClientErrorKind`. No retry button. */
 
 import { getTranslations } from "next-intl/server";
 

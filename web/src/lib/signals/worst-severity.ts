@@ -1,8 +1,6 @@
 /**
- * Worst severity of a set of signals — drives the color/shape of the
- * pools-list signal indicator. Pure and shared so the ordering
- * (info < warning < critical, mirroring the Rust `Severity` enum's
- * escalation order) lives in exactly one place.
+ * The worst severity of a set of signals: info < warning < critical, the Rust `Severity`
+ * enum's order, in one place.
  */
 
 import type { SeverityResponse } from "@/lib/api/schema/zod.gen";

@@ -1,21 +1,6 @@
 /**
- * Overview page — protocol-wide KPI strip.
- *
- * Four scalar cards, stacked on mobile, from `GET /api/stats`:
- *
- *   - Total TVL   (+ coverage hint "N / M priced")
- *   - Volume 24h  (realized, trade-time valued; + coverage hint
- *                 "N / M hours priced" — the sum skips the hours it cannot
- *                 value, so the bare figure can be a sub-total)
- *   - Fees 24h    (realized trading fee revenue) — the differentiator. Shares
- *                 the volume's coverage exactly (one valuation), so it carries
- *                 no second hint; its ⓘ says so instead.
- *   - Pools       (observed; + discovery hint "+K discovered (24h)")
- *
- * USD values render `—` when null (nothing priceable / no activity in
- * the window) — the format helpers own the null check. The coverage and
- * discovery hints are composed here from the raw counters the API ships,
- * keeping presentation out of the endpoint.
+ * The Overview's KPI strip from `GET /api/stats`, with the coverage and discovery hints
+ * composed from the raw counters. Fees share the volume's valuation, so they carry no hint.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -30,9 +15,7 @@ import { StatCard } from "./stat-card";
 export async function OverviewStats({ stats }: { stats: StatsResponse }) {
   const t = await getTranslations("Dashboard.Overview.kpis");
 
-  // Same guard as every other coverage line — here over the GLOBAL counters
-  // (pool-hours across all pools) rather than one pool's. The KPI states the
-  // coverage even when complete; see `volumeCoverage`.
+  // Over the global counters, pool-hours across all pools.
   const coverage = volumeCoverage(stats);
 
   return (

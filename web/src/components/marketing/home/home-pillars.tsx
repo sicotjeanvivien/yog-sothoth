@@ -1,21 +1,6 @@
 /**
- * Homepage feature-pillars section.
- *
- * Four cards — Observe, Reconstruct, Analyze, Signal — in a
- * responsive grid below a short section heading.
- *
- * Card layout: two columns. The icon sits in its own square badge on
- * the LEFT; the title and description stack on the RIGHT. Each card
- * carries its own accent colour for the icon badge.
- *
- * Cards are purely descriptive — no "learn more" link.
- *
- * Static content, Server Component.
- *
- * # Anchor
- *
- * The section carries `id="features"`, so the hero's "See features"
- * button (href `/#features`) scrolls here.
+ * The homepage's four feature pillars, a Server Component. ⚠️ `id="features"` is the target
+ * of the hero's "See features" (`/#features`).
  */
 
 import { useTranslations } from "next-intl";
@@ -29,18 +14,10 @@ import {
   type IconProps,
 } from "@/components/shared/icon";
 
-// ── Pillar configuration ──────────────────────────────────────────────
-//
-// Ordered list of pillars. Each entry pairs a key (resolved against
-// the `Marketing.pillars.items` i18n namespace), an icon, and an
-// accent — the icon-badge colour. `accent` holds the Tailwind classes
-// (text colour + translucent fill + border tint) as a ready string,
-// so the card component stays a plain consumer.
 
 type Pillar = {
   key: string;
   icon: FC<IconProps>;
-  /** Icon-badge classes — text colour + translucent fill + border. */
   accent: string;
 };
 
@@ -67,8 +44,6 @@ const PILLARS: readonly Pillar[] = [
   },
 ] as const;
 
-// ── Section ───────────────────────────────────────────────────────────
-
 export function HomePillars() {
   const t = useTranslations("Marketing.pillars");
 
@@ -77,7 +52,6 @@ export function HomePillars() {
       id="features"
       className="mx-auto max-w-[1800px] scroll-mt-24 px-6 py-10 lg:px-12"
     >
-      {/* Section heading */}
       <div className="text-center">
         <p className="text-[14px] font-semibold tracking-[0.28em] text-slate-400 uppercase">
           {t("eyebrow")}
@@ -87,7 +61,6 @@ export function HomePillars() {
         </h2>
       </div>
 
-      {/* Cards grid */}
       <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {PILLARS.map((pillar) => (
           <PillarCard
@@ -102,20 +75,6 @@ export function HomePillars() {
   );
 }
 
-// ── Card ──────────────────────────────────────────────────────────────
-
-/**
- * A single pillar card — two columns.
- *
- *   ┌──────┬─────────────────────┐
- *   │ icon │ title               │
- *   │ badge│ description …       │
- *   └──────┴─────────────────────┘
- *
- * `flex` row: the icon badge keeps its size (`shrink-0`), the text
- * column takes the rest (`min-w-0` so long words wrap instead of
- * overflowing).
- */
 function PillarCard({
   pillarKey,
   Icon,
@@ -129,14 +88,12 @@ function PillarCard({
 
   return (
     <article className="flex gap-4 rounded-md border border-sothoth-500/15 bg-cosmos-900/60 p-5 transition-colors hover:border-sothoth-500/35">
-      {/* Left column — icon badge, per-card accent colour */}
       <div
         className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border ${accent}`}
       >
         <Icon size={24} />
       </div>
 
-      {/* Right column — title + description */}
       <div className="min-w-0">
         <h3 className="font-display text-[24px] font-semibold tracking-[0.04em] text-[#f1ecff]">
           {t(`${pillarKey}.title`)}

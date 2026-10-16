@@ -1,17 +1,6 @@
 /**
- * Fee-shape badge — how a pool's base fee behaves, plus a dynamic-fee pill.
- *
- * Renders one pill for the base-fee kind (constant / fee scheduler / rate
- * limiter) and, when present, a second pill flagging a volatility-based
- * dynamic fee on top. The two are orthogonal: a pool can run a scheduler *and*
- * a dynamic fee, so both pills can show at once.
- *
- * Prop-driven and free of server-only imports (labels are passed already
- * translated), so it renders in either the server detail panel or a client
- * tree. `baseFeeKind` is the opaque API string; an unknown or absent value
- * (pool seen before its `InitializePool`, or a future protocol's vocabulary we
- * have no label for) falls back to the em-dash — "factual or absent, never
- * fake". A dynamic fee can still show even when the base kind is unlabelled.
+ * The base-fee kind, and a dynamic-fee pill on top when there is one; labels come translated,
+ * so it renders in a server or a client tree. An unknown or absent kind is "—".
  */
 
 import type { ReactNode } from "react";
@@ -29,13 +18,10 @@ export function FeeTypeBadge({
 }: {
   baseFeeKind: string | null;
   hasDynamicFee: boolean | null;
-  /** Already-translated: `kinds` maps the API string to its label; `dynamic`
-   *  is the dynamic-fee pill text. */
   labels: { kinds: Record<string, string>; dynamic: string };
 }) {
   const kindLabel = baseFeeKind === null ? null : (labels.kinds[baseFeeKind] ?? null);
 
-  // Nothing decodable to show yet.
   if (kindLabel === null && hasDynamicFee !== true) {
     return <span className="text-slate-500">{DASH}</span>;
   }

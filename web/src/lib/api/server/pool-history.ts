@@ -1,10 +1,4 @@
-/**
- * High-level fetcher for `GET /api/pools/{address}/history`.
- *
- * Returns an hourly activity time-series (volume, fees, liquidity, claims —
- * all USD) for a pool over the last `days` days, ordered oldest → newest.
- * Not paginated: the window is bounded by `days`.
- */
+/** `GET /api/pools/{address}/history`: hourly USD activity over `days`, oldest first. */
 
 import { assertInBounds } from "../client/client-core";
 import { apiGet } from "../client/server";
@@ -18,8 +12,6 @@ import {
 const DEFAULT_DAYS = 7;
 
 /**
- * Fetch the hourly history for a pool.
- *
  * @throws TypeError if `address` is syntactically invalid.
  * @throws RangeError if `days` is outside the contract's bounds.
  * @throws ApiClientError on any transport, HTTP, or schema failure.

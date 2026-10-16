@@ -1,21 +1,6 @@
 /**
- * Generic pagination control for cursor-based paginated lists.
- *
- * Four navigation buttons (First / Previous / Next / Last) bound
- * to URL search params. Renders as a Server Component: all
- * navigation is driven by `<Link>` href changes, which trigger an
- * RSC re-render of the parent page.
- *
- * `paramPrefix` lets multiple paginations coexist on the same
- * page (typically the pool detail page, which paginates swaps and
- * liquidity events independently). Each instance gets its own
- * namespace of search params: `cursor` / `dir` / `position` for an
- * unprefixed instance, `swapsCursor` / `swapsDir` / ... for a
- * prefixed one.
- *
- * Boundary flags `isFirst` / `isLast` come straight from the API
- * response and drive the disabled state of the buttons. A single-
- * page result has both flags true and all four buttons disabled.
+ * First / Previous / Next / Last over cursor-paginated lists, as `<Link>`s: a Server
+ * Component. `paramPrefix` lets several coexist on a page (`swapsCursor`, `liqDir`…).
  */
 
 import { Link } from "@/i18n/navigation"; // adapt to your project's import
@@ -37,33 +22,15 @@ type PageView = {
 };
 
 type PaginationProps = {
-  /**
-   * The page metadata coming straight from a `PageResponse`. Only
-   * the navigation fields are read; `items` is intentionally not
-   * required so callers can pass a narrowed object.
-   */
+  /** A `PageResponse`'s navigation fields; `items` is not required. */
   page: PageView;
 
-  /**
-   * Current search params for this route. Used to preserve any
-   * params unrelated to this pagination (other paginations,
-   * filters, search query, etc.) when building the navigation
-   * hrefs.
-   */
+  /** Preserved in the hrefs: other paginations, filters, search. */
   searchParams: Record<string, string | string[] | undefined>;
 
-  /**
-   * Param namespace for this pagination instance. `""` means the
-   * params are unprefixed (`cursor`, `dir`, `position`). A non-empty
-   * prefix produces camelCase param names — e.g. `"swaps"` gives
-   * `swapsCursor`, `swapsDir`, `swapsPosition`.
-   */
+  /** `""` for `cursor`/`dir`/`position`; `"swaps"` gives `swapsCursor`, `swapsDir`… */
   paramPrefix?: string;
 
-  /**
-   * Base path for the navigation hrefs (typically the current
-   * route). Search params are appended.
-   */
   basePath: string;
 };
 
@@ -139,12 +106,7 @@ export async function Pagination({
   );
 }
 
-/**
- * One navigation button. Renders as a `<Link>` when active, or as
- * a disabled-styled `<span>` when not. Avoids using a `<button
- * disabled>` because the link semantics matter for keyboard nav
- * and screen readers when active.
- */
+/** A `<Link>` when active, a `<span>` when not: not a `<button disabled>`, for link semantics. */
 function NavButton({
   href,
   ariaLabel,

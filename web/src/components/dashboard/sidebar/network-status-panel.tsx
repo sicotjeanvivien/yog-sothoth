@@ -21,23 +21,14 @@ import type {
 /** How often the panel re-fetches the network status. */
 const POLL_INTERVAL_MS = 10_000;
 
-// ── Panel state ───────────────────────────────────────────────────────
-
 type Half<T> = { phase: "loading" } | { phase: "ready"; data: T } | { phase: "error" };
 
 const LOADING = { phase: "loading" } as const;
 
-// ── Component ─────────────────────────────────────────────────────────
-
 export function NetworkStatusPanel({
   collapsed = false,
 }: {
-  /**
-   * lg+ collapsed rail: the panel reduces to its status dot — the
-   * "is it alive" signal stays permanently visible, slot/latency
-   * come back on expand. Both variants render from the same polled
-   * state; visibility is pure CSS so the poll never restarts.
-   */
+  /** On the collapsed rail only the dot shows. ⚠️ CSS visibility, so the poll never restarts. */
   collapsed?: boolean;
 }) {
   const t = useTranslations("Dashboard.Sidebar.network");
@@ -121,11 +112,7 @@ function usePolled<T>(fetcher: () => Promise<T>): Half<T> {
   return state;
 }
 
-// ── State presentation ────────────────────────────────────────────────
-//
-// Violet means live (the accent marks the live state); the warning and
-// negative roles take over when the data lags or the API is gone. The
-// label always doubles the dot's colour.
+// The label always doubles the dot's colour.
 
 type Presentation = { dotClass: string; labelClass: string; labelKey: string };
 
@@ -164,8 +151,6 @@ const BY_FRESHNESS: Record<FreshnessStatusResponse, Presentation> = {
     labelKey: "stale",
   },
 };
-
-// ── Value formatting ──────────────────────────────────────────────────
 
 function networkValue(
   state: Half<NetworkResponse>,

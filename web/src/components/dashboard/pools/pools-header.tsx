@@ -1,14 +1,6 @@
 /**
- * Pools page header.
- *
- * Slim: title + ⓘ popover (the page description on demand) on the
- * left, the fee filter + search box on the right. Screen height
- * belongs to the table below, not to chrome.
- *
- * The fee-tier option list is fetched here (Server Component) and
- * degrades gracefully: if the call fails the filter renders with just
- * the "all fees" option rather than breaking the whole page — the pool
- * list itself has its own error handling upstream.
+ * The pools page header. If the fee tiers fail to load, the filter offers only "all fees"
+ * rather than break the page.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -34,9 +26,7 @@ export async function PoolsHeader() {
             {t("title")}
           </h1>
           <InfoPopover label={tShell("pageInfo")}>
-            {/* `description` is also the page's <meta description>; the
-                coverage caveat is a separate key so it reaches the reader
-                here without pushing the meta past its useful length. */}
+            {/* ⚠️ `description` is also the <meta description>: the caveat has its own key. */}
             {t("description")} {t("coverageNote")}
           </InfoPopover>
         </div>

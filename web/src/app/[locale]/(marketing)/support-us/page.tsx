@@ -1,19 +1,4 @@
-/**
- * Support us page.
- *
- * Three blocks, ordered from lowest-friction to highest-engagement:
- *
- *   1. Header — what this page is.
- *   2. Make it known — star + share (one click, free, visibility).
- *   3. Actions grid — feedback (left) + sponsor (right).
- *
- * At v0.1 the most useful contribution is visibility followed by
- * feedback; sponsoring is offered but not pushed.
- *
- * Pre-deployment review checklist:
- *   - confirm GitHub Sponsors page is set up at the URL referenced
- *   - confirm site canonical URL (in support-us-make-known.tsx)
- */
+/** The support page, from the cheapest help to the most engaged: visibility, feedback, sponsoring. */
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";

@@ -1,26 +1,13 @@
 import { PageDir, PagePosition } from "@/lib/api/type/pagination";
 
-/**
- * Build a search-param key with optional camelCase prefixing.
- *
- *   namespacedKey("",      "cursor") === "cursor"
- *   namespacedKey("swaps", "cursor") === "swapsCursor"
- *   namespacedKey("liq",   "dir")    === "liqDir"
- */
+/** `("", "cursor")` → `"cursor"`, `("swaps", "cursor")` → `"swapsCursor"`. */
 function namespacedKey(prefix: string, key: string): string {
   if (prefix.length === 0) return key;
   return prefix + key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 
-/**
- * Build the href for a navigation button.
- *
- * Preserves every search param that doesn't belong to this
- * pagination's namespace (other paginations, filters, search).
- * Clears the three params owned by this namespace, then sets only
- * the ones relevant to the target navigation.
- */
+/** Keeps every param outside this pagination's namespace and replaces its own three. */
 export function buildHref(
   basePath: string,
   searchParams: Record<string, string | string[] | undefined>,
@@ -33,7 +20,6 @@ export function buildHref(
 
   const next = new URLSearchParams();
 
-  // Carry over everything that isn't owned by this pagination.
   for (const [key, value] of Object.entries(searchParams)) {
     if (key === cursorKey || key === dirKey || key === positionKey) continue;
     if (value === undefined) continue;

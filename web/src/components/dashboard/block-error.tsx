@@ -1,21 +1,6 @@
 /**
- * Generic per-block error state.
- *
- * Used when one of the secondary fetches on a page fails — the
- * page itself is still functional (the critical data loaded), but
- * one section couldn't be assembled. The component sits in place
- * of the table, list, or chart that would normally render there.
- *
- * Receives:
- *   - `title`: localised section label (e.g. "Recent swaps") so
- *     the visitor knows which block failed
- *   - `kind`: the `ApiClientErrorKind` discriminator, used to pick
- *     the right localised message
- *
- * No retry button — same rationale as `PoolsError` on /pools: the
- * page is a Server Component, retry means a navigation refresh
- * which the visitor can trigger themselves. We may revisit this
- * later with a tiny Client island.
+ * The error state of one block whose secondary fetch failed, in place of its table or chart.
+ * No retry button: the page is a Server Component, and a refresh retries.
  */
 
 import { getTranslations } from "next-intl/server";

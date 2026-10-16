@@ -1,18 +1,7 @@
 /**
- * Pool protocol identifier → display label.
- *
- * Mapping is closed (a small switch) rather than reflective on the
- * string. Reasons:
- *
- *   - the indexer's set of protocols is finite and known here,
- *   - an unexpected value surfaces as `Unknown` instead of being
- *     blindly rendered with underscores,
- *   - i18n is easy to add later if we want localised protocol
- *     names — for now display labels are technical proper nouns
- *     ("Meteora DAMM v2") and stay in English regardless of UI
- *     locale.
- *
- * Add a case when a new protocol is wired through the indexer.
+ * A protocol id's display label, from a closed switch: an unknown value shows `Unknown`, not
+ * its underscores. Labels are proper nouns, in English whatever the locale. Add a case with
+ * each protocol the indexer gains.
  */
 
 export function formatProtocolLabel(protocol: string): string {
@@ -28,12 +17,7 @@ export function formatProtocolLabel(protocol: string): string {
   }
 }
 
-/**
- * Short protocol label — the product name without the platform prefix
- * ("DAMM v2" rather than "Meteora DAMM v2"). Meant to sit next to the
- * platform icon in dense cells, where the icon already carries the brand,
- * so repeating "Meteora" wastes horizontal space.
- */
+/** "DAMM v2", without the platform the icon beside it already names. */
 export function formatProtocolShortLabel(protocol: string): string {
   switch (protocol) {
     case "meteora_damm_v2":
@@ -47,11 +31,7 @@ export function formatProtocolShortLabel(protocol: string): string {
   }
 }
 
-/**
- * The platform a protocol belongs to — drives which brand icon a compact
- * protocol cell shows. `null` when we have no icon for it (the cell then
- * falls back to the full label).
- */
+/** The platform of the brand icon; `null` without one, and the cell shows the full label. */
 export function protocolPlatform(protocol: string): "meteora" | null {
   return protocol.startsWith("meteora_") ? "meteora" : null;
 }

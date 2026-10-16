@@ -1,21 +1,8 @@
 "use client";
 
 /**
- * Info popover — an ⓘ button that reveals contextual help on demand.
- *
- * The house pattern for "useful to whoever wonders, invisible to
- * everyone else": page descriptions, KPI definitions, detector
- * explanations… anywhere the dashboard needs to explain itself
- * without paying permanent screen height for it.
- *
- * Deliberately a *click-toggled popover*, not a hover tooltip: hover
- * doesn't exist on touch, so a hover-only bubble would make the help
- * unreachable on mobile. Closes on outside pointer-down or Escape.
- * Accessible: a real `<button>` carrying `aria-label` (the icon has
- * no text), `aria-expanded` and `aria-controls`.
- *
- * The panel resets its own typography — it may sit next to a display
- * heading and must not inherit its size/weight/tracking.
+ * An ⓘ button revealing help on demand. ⚠️ Click-toggled, not hover: hover does not exist on
+ * touch. The panel resets its typography, as it may sit next to a display heading.
  */
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -29,7 +16,6 @@ export function InfoPopover({
 }: {
   /** Accessible name of the ⓘ button (it renders no text). */
   label: string;
-  /** Panel content. */
   children: ReactNode;
   iconSize?: number;
 }) {
@@ -37,9 +23,7 @@ export function InfoPopover({
   const rootRef = useRef<HTMLSpanElement>(null);
   const panelId = useId();
 
-  // Global listeners only while open: outside pointer-down or Escape
-  // closes. `pointerdown` (not click) so the panel is gone before any
-  // other interaction the press initiates.
+  // `pointerdown`, not click: the panel is gone before what the press starts.
   useEffect(() => {
     if (!open) {
       return;

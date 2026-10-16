@@ -1,19 +1,4 @@
-/**
- * Support us — "Make it known" card.
- *
- * Full-width card encouraging the two lowest-friction support
- * actions: starring the GitHub repo and sharing the project on
- * social networks. Sits between the hero and the Feedback /
- * Sponsor grid because these are the cheapest ways to help and
- * also, at v0.1, probably the most useful for the project.
- *
- * Inside, a 2-column split:
- *   - Left  → Star on GitHub
- *   - Right → Share on X / LinkedIn (pre-filled text)
- *
- * The pre-filled share text lives in the i18n bundle so it can
- * change per locale.
- */
+/** The support page's "Make it known" card: star on GitHub, share on X or LinkedIn. */
 
 import { getTranslations } from "next-intl/server";
 
@@ -31,8 +16,6 @@ const CTA_SECONDARY_CLASS =
 export async function SupportUsMakeKnown() {
   const t = await getTranslations("SupportUs.makeKnown");
 
-  // Pre-built share URLs. Pulled here rather than inline so we can
-  // see the encoding shape at a glance.
   const shareText = t("shareText");
   const twitterShareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
     shareText,
@@ -46,7 +29,6 @@ export async function SupportUsMakeKnown() {
       <div className="mx-auto max-w-[128ch]">
         <article className="rounded-[6px] border border-sothoth-500/15 bg-cosmos-900/60 p-6 transition-colors hover:border-sothoth-500/35 lg:p-8">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-10">
-            {/* Left — Star on GitHub */}
             <div>
               <h2 className="font-display text-[18px] font-semibold tracking-[0.02em] text-[#f1ecff] lg:text-[20px]">
                 {t("star.title")}
@@ -67,7 +49,6 @@ export async function SupportUsMakeKnown() {
               </div>
             </div>
 
-            {/* Right — Share */}
             <div className="lg:border-l lg:border-sothoth-500/15 lg:pl-10">
               <h2 className="font-display text-[18px] font-semibold tracking-[0.02em] text-[#f1ecff] lg:text-[20px]">
                 {t("share.title")}

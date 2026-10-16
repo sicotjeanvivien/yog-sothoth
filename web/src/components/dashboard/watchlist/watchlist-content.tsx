@@ -1,22 +1,7 @@
 /**
- * Watchlist content — the client-rendered list of watched pools.
- *
- * Reads the pool addresses from the LocalStorage watchlist (`useWatchlist`)
- * and fetches each pool straight from the browser (`fetchPoolBrowser`) — no
- * server round-trip and no batch endpoint, which a small personal watchlist
- * doesn't warrant. When the list changes (a star toggled here or on a pool
- * page, in this tab or another) it reconciles: removed pools disappear
- * immediately, added ones are fetched.
- *
- * Renders the *shared* `PoolsTableRow` — same columns and look as `/pools` —
- * so the watchlist is visibly "your subset of the pools list". Removal is the
- * row's own watchlist star (in the actions cell); no bespoke control here.
- * `signalLabels` and `locale` are resolved client-side and passed to the row.
- *
- * States: a pre-hydration skeleton (the store reads "empty" until mounted, so
- * we must not flash the empty state), an empty state with a CTA to `/pools`,
- * and the table. Pools that fail to load (e.g. a 404) are omitted; if any
- * failed a discreet note says so rather than faking a row.
+ * The watched pools, fetched from the browser and rendered with the shared `PoolsTableRow`.
+ * ⚠️ A skeleton until mounted: the store reads empty before hydration, which must not flash
+ * the empty state. A pool that fails to load is omitted, and a note says so.
  */
 
 "use client";
@@ -49,8 +34,7 @@ export function WatchlistContent() {
   const locale = useLocale();
   const { addresses } = useWatchlist();
 
-  // `false` on the server / during hydration, `true` on the client — a
-  // mount flag without an effect, so no cascading-render lint.
+  // A mount flag without an effect: no cascading render.
   const mounted = useSyncExternalStore(
     noopSubscribe,
     () => true,
@@ -59,8 +43,7 @@ export function WatchlistContent() {
 
   const [pools, setPools] = useState<PoolResponse[]>([]);
   const [anyError, setAnyError] = useState(false);
-  // The address set the last fetch settled for; while it differs from the
-  // current one we're loading. Set only from the async callback.
+  // Loading while it differs from the current set; set only from the async callback.
   const [settledKey, setSettledKey] = useState<string | null>(null);
 
   const addressesKey = addresses.join(",");
@@ -103,8 +86,7 @@ export function WatchlistContent() {
     );
   }
 
-  // Render from the live address set so a removal reflects instantly, even
-  // before the refetch settles.
+  // From the live set, so a removal shows before the refetch settles.
   const byAddress = new Map(pools.map((p) => [p.poolAddress, p]));
   const visible = addresses
     .map((a) => byAddress.get(a))

@@ -1,19 +1,9 @@
 "use client";
 
 /**
- * Local filter chips of the signal feed — severity × detector.
- *
- * Toggle chips with live counts (computed on the loaded list, so they
- * update as the SSE stream feeds it). Multi-select within a dimension,
- * AND across dimensions; nothing active = nothing hidden (the empty
- * state of an alert feed must never filter silently) — the selection
- * model lives in `lib/signals/filter-signals.ts`.
- *
- * Severity chips are the fixed closed set, colored like the cards.
- * Detector chips are DERIVED from the signals actually present:
- * labelled by their category tag when known (Prix/Flux), by the raw
- * detector name otherwise — a new detector shows up in the filters
- * with no code change, consistent with the cards' fallback.
+ * The signal feed's filter chips, severity × detector, counted on the loaded list (the
+ * selection model is `lib/signals/filter-signals.ts`). Detector chips derive from the signals
+ * present: a new detector appears with no code change.
  */
 
 import { useTranslations } from "next-intl";
@@ -23,7 +13,6 @@ import type { SeverityResponse, SignalResponse } from "@/lib/api/schema/zod.gen"
 
 import { KNOWN_DETECTORS } from "./signal-display";
 
-// Active chip styling per severity — same hues as the cards.
 const SEVERITY_CHIP_ACTIVE: Record<SeverityResponse, string> = {
   info: "border-sky-400/40 bg-sky-400/10 text-sky-300",
   warning: "border-amber-400/40 bg-amber-400/10 text-amber-300",
@@ -40,11 +29,7 @@ const SEVERITIES: readonly SeverityResponse[] = ["critical", "warning", "info"];
 
 type Translate = ReturnType<typeof useTranslations>;
 
-/**
- * Distinct detectors of the loaded list, known ones first (in their
- * canonical order), unknown ones after, alphabetically — a stable
- * chip order however the feed is sorted.
- */
+/** Known detectors first in canonical order, then the unknown alphabetically: a stable order. */
 function presentDetectors(signals: readonly SignalResponse[]): string[] {
   const present = new Set(signals.map((s) => s.detector));
   const known = [...KNOWN_DETECTORS].filter((d) => present.has(d));
@@ -143,12 +128,8 @@ function FilterGroup({
 }
 
 /**
- * What each detector measures, in one ⓘ panel on the "Type" group —
- * one place instead of one per card (the tag repeats 50×, the concept
- * doesn't). Lists the KNOWN detectors present in the feed, in chip
- * order; an unknown detector has no explanation to offer and is
- * simply omitted. No threshold numbers in the copy — they are env
- * config, and each card already shows the threshold actually crossed.
+ * What each known detector present measures, in one ⓘ panel. No threshold in the copy: it is
+ * env config, and each card shows the threshold crossed.
  */
 function DetectorExplanations({
   signals,

@@ -1,13 +1,6 @@
 /**
- * `useWatchlist` — the client hook over the LocalStorage watchlist store.
- *
- * Backed by `useSyncExternalStore`, so it is SSR-safe (renders "empty" on the
- * server and the first client paint, then hydrates to the stored value without
- * a mismatch warning) and stays in sync across tabs and across every component
- * that uses it in the same tab.
- *
- * A future server-side watchlist can replace the store behind this hook
- * without touching the components that consume it.
+ * The client hook over the LocalStorage watchlist, through `useSyncExternalStore`: empty on
+ * the server and the first paint, then in sync across tabs and components.
  */
 
 "use client";
@@ -24,11 +17,8 @@ import {
 export type UseWatchlist = {
   /** The watched pool addresses (order = insertion order kept by the array). */
   addresses: readonly string[];
-  /** Whether a given pool address is on the watchlist. */
   has: (address: string) => boolean;
-  /** Add the address if absent, remove it if present. */
   toggle: (address: string) => void;
-  /** Remove an address (no-op if absent). */
   remove: (address: string) => void;
 };
 
@@ -44,8 +34,7 @@ export function useWatchlist(): UseWatchlist {
     [addresses],
   );
 
-  // Read the live snapshot inside the callbacks (not `addresses`) so they stay
-  // referentially stable and never operate on a stale closure.
+  // The live snapshot, not `addresses`: stable callbacks, no stale closure.
   const toggle = useCallback((address: string) => {
     const current = getSnapshot();
     setWatchlist(

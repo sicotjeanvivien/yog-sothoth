@@ -1,19 +1,6 @@
 /**
- * Format helpers for USD amounts coming from the API as strings.
- *
- * `formatUsdCompact`
- *   "845200000.50" → "$845.2M"
- *   "1280000.00"   → "$1.28M"
- *   "750.00"       → "$750"
- *   null / NaN     → "—"
- *
- * Not used in the current commit (TVL and 24h volume have yet to be
- * exposed by the API); kept here in advance because the format
- * convention matters and we want a single place to change it.
- *
- * Compact notation matches the convention used across DeFi
- * dashboards. Locale is forced to en-US so the decimal separator
- * stays a dot regardless of the visitor's locale.
+ * USD amounts from the API's decimal strings: `formatUsdCompact("845200000.50")` is
+ * `"$845.2M"`, a null or NaN is `"—"`. ⚠️ Locale forced to en-US, so the separator stays a dot.
  */
 
 const COMPACT_FORMATTER = new Intl.NumberFormat("en-US", {
@@ -30,11 +17,7 @@ const FORMATTER = new Intl.NumberFormat("en-US", {
   currency: "USD",
 });
 
-/**
- * Same rounding as `FORMATTER`, without the currency symbol or the thousands
- * separators, so the result parses straight back to a number. Only used to
- * learn how many cents a value *displays* as — see `displayedCents`.
- */
+/** `FORMATTER`'s rounding without symbol or separators, so it parses back — see `displayedCents`. */
 const CENTS_FORMATTER = new Intl.NumberFormat("en-US", {
   notation: "standard",
   minimumFractionDigits: 2,
@@ -67,28 +50,9 @@ export function formatUsd(value: string | null | undefined): string {
 }
 
 /**
- * Format shares of a total so that what is DISPLAYED adds up.
- *
- * Rounding each share to the cent independently does not preserve a sum. The
- * fee split of a real pool sheet: `0.3800 + 0.0950 + 1.4250` is exactly
- * `1.9000`, but the three round to `$0.38 + $0.10 + $1.43 = $1.91` under a
- * total displayed as `$1.90`. One cent, on a card that invites the reader to
- * check the arithmetic — and the more shares, the more often.
- *
- * The fix is the standard largest-remainder allocation: floor every share to
- * the cent, then hand the leftover cents to the shares whose discarded
- * fraction was biggest. Each displayed share stays within one cent of its true
- * value, and their sum is exactly the displayed total.
- *
- * ⚠️ **It refuses to manufacture additivity that the data does not have.**
- * If the shares do not already sum to the total (beyond half a cent of
- * float slack), every share is formatted plainly and the discrepancy stays
- * visible. Hiding it would turn a formatter into an assertion about the API,
- * which is exactly the class of defect this dashboard keeps finding: the
- * displayed number is only allowed to be a rounding of the real one.
- *
- * A null/non-finite total or share disables the adjustment for the whole
- * group, for the same reason — "we don't know" cannot be balanced against.
+ * Formats shares of a total so the displayed shares add up to the displayed total (largest
+ * remainder). ⚠️ Shares that do not already sum to the total, or any null or non-finite value, are
+ * formatted plainly: the discrepancy stays visible.
  */
 export function formatUsdShares(
   total: string | null | undefined,
@@ -109,27 +73,14 @@ export function formatUsdShares(
     values.push(value);
   }
 
-  // In cents, where the display lives. The target has to be the cents the
-  // TOTAL ROW SHOWS, not the cents a float multiplication computes: `Intl`
-  // rounds the shortest decimal representation half-expand, while `0.145 * 100`
-  // is `14.499999999999998` in binary and rounds DOWN. Balancing the shares
-  // against the second number would re-create, at exact half-cents, the very
-  // one-cent mismatch this function exists to remove — `$0.10 + $0.04` under a
-  // total rendered `$0.15`.
+  // ⚠️ The cents the total row shows, not `total * 100`: `0.145 * 100` rounds down in binary
+  // while `Intl` rounds half-expand.
   const totalCents = displayedCents(totalValue);
   const rawCents = values.map((v) => v * 100);
   const sumRaw = rawCents.reduce((a, b) => a + b, 0);
   const exactCents = totalValue * 100;
 
-  // The shares are a partition, or nothing below is allowed to run.
-  //
-  // The only slack this needs to absorb is `Number.parseFloat` on the decimal
-  // strings — the server computes the shares in NUMERIC, where the partition is
-  // exact. That error is a few ulps, so the tolerance is RELATIVE and tiny.
-  // ⚠️ It was half a cent, which is twelve orders of magnitude too generous:
-  // `["5.004", "4.992"]` under a `10.00` total is $0.004 of real API drift, and
-  // it slipped through to be silently redistributed into `$5.01 + $4.99` — the
-  // exact thing the doc-comment above promises not to do.
+  // ⚠️ A relative, tiny tolerance: it absorbs only `parseFloat`'s ulps, not real API drift.
   const slack = Math.max(1e-6, Math.abs(exactCents) * 1e-12);
   if (Math.abs(sumRaw - exactCents) > slack) {
     return plain(); // the shares are not a partition — say so by not hiding it
@@ -153,11 +104,7 @@ export function formatUsdShares(
   );
 }
 
-/**
- * How many cents this amount is *rendered* as — the same rounding `formatUsd`
- * applies, read back as an integer. Goes through the formatter rather than
- * reimplementing its rule, so the two cannot drift apart.
- */
+/** The cents this amount is rendered as, through the formatter itself so the two cannot drift. */
 function displayedCents(value: number): number {
   return Math.round(Number.parseFloat(CENTS_FORMATTER.format(value)) * 100);
 }

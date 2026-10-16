@@ -1,18 +1,6 @@
 /**
- * Empty state for a page emptied *by the traversal itself*.
- *
- * Distinct from the other two empties, and the distinction matters because
- * both alternatives would state something false:
- *
- *   - <PoolsEmpty />     "no pools observed yet" — but the index is full;
- *   - <PoolsNoResults /> "nothing matches your filters" — but they match
- *                        plenty, those pools just moved.
- *
- * What happened instead: every pool still ahead of the cursor became active
- * while the reader was reading, so all of them moved out of this anchored
- * listing (see <PoolsMovedNotice />, rendered directly above this and
- * carrying the way out — an empty page has no cursor of its own, so this
- * state would otherwise be a dead end).
+ * A page emptied by the traversal itself: every pool ahead moved out of the anchored listing.
+ * Neither "nothing observed" nor "no match"; `PoolsMovedNotice`, above it, is the way out.
  */
 
 import { getTranslations } from "next-intl/server";

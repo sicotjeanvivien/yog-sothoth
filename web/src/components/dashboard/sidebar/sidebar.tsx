@@ -1,21 +1,8 @@
 "use client";
 
 /**
- * Dashboard sidebar — the navigation rail: logo, menu, network status.
- *
- * Responsive state is NOT the sidebar's concern — `DashboardShell` owns
- * it and passes `isOpen`, `collapsed` and their callbacks.
- *
- * # Positioning — two modes at the lg breakpoint
- *
- *   >= lg : a permanent rail. `lg:sticky lg:top-0` keeps it pinned
- *           while the page scrolls — no ancestor may create an
- *           `overflow` scroll context, or sticky stops working.
- *   <  lg : an off-canvas drawer, `fixed` to the viewport and slid in
- *           when `isOpen`.
- *
- * Colours are the `dash-*` role tokens only; Cinzel is for the
- * wordmark alone.
+ * The dashboard's navigation rail; `DashboardShell` owns its responsive state. ⚠️ `lg:sticky`
+ * pins it only if no ancestor creates an `overflow` scroll context.
  */
 
 import Image from "next/image";
@@ -31,16 +18,11 @@ import { NetworkStatusPanel } from "./network-status-panel";
 import { SidebarNavList } from "./sidebar-nav-list";
 
 type SidebarProps = {
-  /** Whether the mobile drawer is open. Ignored on lg+. */
   isOpen: boolean;
-  /** Called when a nav link is clicked — lets the shell close the drawer. */
+  /** Lets the shell close the drawer on navigation. */
   onNavigate: () => void;
-  /**
-   * lg+ only: a narrow rail instead of the full one. The mobile drawer
-   * ignores it, so every `collapsed` style below is `lg:`-scoped.
-   */
+  /** A narrow rail. ⚠️ The drawer ignores it: every `collapsed` style is `lg:`-scoped. */
   collapsed: boolean;
-  /** Toggle `collapsed` (the shell owns the state and its cookie). */
   onToggleCollapsed: () => void;
 };
 
@@ -71,7 +53,6 @@ export function Sidebar({
   );
 }
 
-/** Logo and wordmark, linking to the site's home. */
 function Brand({ collapsed }: { collapsed: boolean }) {
   const t = useTranslations("Brand");
 
@@ -96,10 +77,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-/**
- * lg+ only — an off-canvas drawer has nothing to collapse. At the foot
- * of the rail, right-aligned, centered once collapsed.
- */
+/** `lg` and up only: a drawer has nothing to collapse. */
 function CollapseToggle({
   collapsed,
   onToggle,

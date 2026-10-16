@@ -1,25 +1,6 @@
 /**
- * Privacy — prose section.
- *
- * Nine stacked cards, each answering one question in plain prose,
- * prefixed with a small icon badge:
- *
- *   1. In short                   — InfoIcon
- *   2. Who is responsible         — UserCardIcon
- *   3. When you browse the site   — EyeIcon (reused from About)
- *   4. When you write to us       — MailIcon
- *   5. When you support (GitHub Sponsors, SOL donations) — UsersIcon
- *   6. Token logos                — ExternalLinkIcon
- *   7. Cookies                    — CookieIcon
- *   8. Your rights                — ShieldIcon
- *   9. Changes                    — RefreshIcon
- *
- * One card per processing, because GDPR article 13 asks the same
- * questions of each (purpose, legal basis, recipients, retention):
- * a card that mixes two processings cannot answer them separately.
- *
- * Constrained to a comfortable reading width. Copy lives under
- * `Privacy.prose` in `messages/{en,fr}.json`.
+ * The privacy page's prose: one card per processing, since GDPR article 13 asks the same
+ * questions of each. Copy under `Privacy.prose` in `messages/{en,fr}/privacy.json`.
  */
 
 import { getTranslations } from "next-intl/server";
@@ -54,13 +35,7 @@ const TITLE_CLASS =
 
 const BODY_CLASS = "mt-3 text-[17px] leading-[1.7] text-slate-300";
 
-// ── Card ordering ─────────────────────────────────────────────────────
-//
-// The reading flow mirrors what a visitor naturally asks:
-// "what's the short version?" → "who is responsible?" →
-// "what happens when I browse / write / donate?" → "who else sees
-// me?" → "what about cookies?" → "what are my rights?" → "what
-// happens if this changes?"
+
 
 type CardConfig = {
   key: string;
@@ -87,9 +62,6 @@ export async function PrivacyProse() {
       <div className="mx-auto max-w-[128ch] space-y-4">
         {CARDS.map(({ key, Icon }) => (
           <ProseCard key={key} Icon={Icon} title={t(`${key}.title`)}>
-            {/* Cards `responsible` and `rights` need an inline
-                mailto link — handled via t.rich. The other cards
-                are plain prose. */}
             {key === "responsible" || key === "rights"
               ? t.rich(`${key}.body`, {
                   email: (chunks) => (
@@ -106,13 +78,6 @@ export async function PrivacyProse() {
   );
 }
 
-// ── Sub-component ─────────────────────────────────────────────────────
-
-/**
- * One titled prose card with an icon badge on the left.
- * Body accepts arbitrary children so callers can pass plain strings
- * or rich-text fragments containing links.
- */
 function ProseCard({
   Icon,
   title,

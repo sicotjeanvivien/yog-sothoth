@@ -5,18 +5,9 @@ import type { zListPoolsQuery } from "../schema/zod.gen";
 // The values come from the contract: a value renamed server-side breaks the build here.
 type ListPoolsQuery = z.infer<typeof zListPoolsQuery>;
 
-/**
- * Traversal direction relative to a cursor.
- *
- * `next` moves further into the list (older pools), `prev` moves
- * back toward newer pools. Defaults to `next` server-side when
- * unspecified.
- */
+/** `next` moves further into the list, `prev` back; `next` when unspecified. */
 export type PageDir = NonNullable<ListPoolsQuery["dir"]>;
 
-/**
- * Absolute jump to a list boundary, ignoring any cursor.
- */
 export type PagePosition = NonNullable<ListPoolsQuery["position"]>;
 
 
@@ -39,10 +30,7 @@ export function buildSortValue(column: SortColumn, dir: SortDir): PoolSort {
   return `${column}_${dir}` as PoolSort;
 }
 
-/// Compute the target sort when the user clicks a column header.
-/// - Same column as current sort → flip direction.
-/// - Different column → start at desc (the "most recent first" intent
-///   is the most intuitive default for both timestamp columns).
+/// The sort a header click targets: the active column flips, another starts at `desc`.
 export function nextSort(current: PoolSort, clickedColumn: SortColumn): PoolSort {
   const { column: currentColumn, dir: currentDir } = parseSortValue(current);
   if (currentColumn === clickedColumn) {
